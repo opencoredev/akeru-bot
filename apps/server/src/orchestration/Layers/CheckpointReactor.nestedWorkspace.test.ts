@@ -29,6 +29,7 @@ describe("CheckpointReactor", () => {
       NodeFS.writeFileSync(filePath, "export const value = 1;\n");
       runGit(repositoryRoot, ["add", "."]);
       runGit(repositoryRoot, ["commit", "-m", "Add nested workspace"]);
+
       const harness = yield* Effect.promise(() =>
         createHarness({
           seedFilesystemCheckpoints: false,
@@ -37,6 +38,7 @@ describe("CheckpointReactor", () => {
           providerSessionCwd: workspaceRoot,
         }),
       );
+
       const threadId = ThreadId.make("thread-1");
       const turnId = asTurnId("turn-nested");
       const createdAt = "2026-01-01T00:00:00.000Z";
@@ -65,9 +67,11 @@ describe("CheckpointReactor", () => {
         payload: { state: "completed" },
       });
       yield* Effect.promise(harness.drain);
+
       const thread = (yield* Effect.promise(harness.readModel)).threads.find(
         (entry) => entry.id === threadId,
       );
+
       expect(thread?.checkpoints[0]).toMatchObject({
         status: "ready",
         files: [{ path: "apps/server/index.ts", additions: 1, deletions: 1 }],
@@ -89,9 +93,11 @@ describe("CheckpointReactor", () => {
       expect(NodeFS.readFileSync(filePath, "utf8")).toBe("export const value = 1;\n");
       expect(harness.provider.rollbackConversation).toHaveBeenCalledWith({ threadId, numTurns: 1 });
       expect(gitRefExists(repositoryRoot, checkpointRefForThreadTurn(threadId, 1))).toBe(false);
+
       const reverted = (yield* Effect.promise(harness.readModel)).threads.find(
         (entry) => entry.id === threadId,
       );
+
       expect(reverted?.checkpoints).toEqual([]);
     }),
   );
@@ -109,6 +115,7 @@ describe("CheckpointReactor", () => {
       NodeFS.writeFileSync(NodePath.join(siblingRoot, "page.ts"), "export const page = 1;\n");
       runGit(repositoryRoot, ["add", "."]);
       runGit(repositoryRoot, ["commit", "-m", "Add nested workspaces"]);
+
       const harness = yield* Effect.promise(() =>
         createHarness({
           seedFilesystemCheckpoints: false,
@@ -117,6 +124,7 @@ describe("CheckpointReactor", () => {
           providerSessionCwd: workspaceRoot,
         }),
       );
+
       const threadId = ThreadId.make("thread-1");
       const turnId = asTurnId("turn-nested-sibling");
       const createdAt = "2026-01-01T00:00:00.000Z";
@@ -147,9 +155,11 @@ describe("CheckpointReactor", () => {
         payload: { state: "completed" },
       });
       yield* Effect.promise(harness.drain);
+
       const thread = (yield* Effect.promise(harness.readModel)).threads.find(
         (entry) => entry.id === threadId,
       );
+
       expect(thread?.checkpoints[0]).toMatchObject({
         status: "ready",
         files: [{ path: "apps/server/index.ts", additions: 1, deletions: 1 }],

@@ -6,6 +6,7 @@ import { makeDrainableWorker } from "@akeru/shared/DrainableWorker";
 import { isTemporaryWorktreeBranch } from "@akeru/shared/git";
 import type { createContext } from "./Context.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
 export const createWorkspace = Effect.fn("makecheckpoint-reactor-Workspace")(function* ({
   resolveSessionRuntimeForThread,
   git,
@@ -24,6 +25,7 @@ export const createWorkspace = Effect.fn("makecheckpoint-reactor-Workspace")(fun
     event: Extract<ProviderRuntimeEvent, { type: "turn.completed" }>,
   ) {
     const sessionRuntime = yield* resolveSessionRuntimeForThread(event.threadId);
+
     if (Option.isNone(sessionRuntime)) {
       return;
     }
@@ -39,6 +41,7 @@ export const createWorkspace = Effect.fn("makecheckpoint-reactor-Workspace")(fun
         }).pipe(Effect.as(null)),
       ),
     );
+
     yield* followWorktreeBranchDrift({
       threadId: event.threadId,
       cwd: sessionRuntime.value.cwd,
@@ -61,6 +64,7 @@ export const createWorkspace = Effect.fn("makecheckpoint-reactor-Workspace")(fun
     // Detached HEAD has no branch to adopt; a temporary placeholder checkout
     // means the first-turn auto-rename is still in flight — don't race it.
     const checkedOutBranch = input.checkedOutBranch;
+
     if (checkedOutBranch === null || isTemporaryWorktreeBranch(checkedOutBranch)) {
       return;
     }
@@ -69,6 +73,7 @@ export const createWorkspace = Effect.fn("makecheckpoint-reactor-Workspace")(fun
       const thread = yield* projectionSnapshotQuery
         .getThreadShellById(input.threadId)
         .pipe(Effect.map(Option.getOrUndefined));
+
       if (
         !thread ||
         thread.branch === null ||
@@ -81,9 +86,11 @@ export const createWorkspace = Effect.fn("makecheckpoint-reactor-Workspace")(fun
       }
 
       const shell = yield* projectionSnapshotQuery.getShellSnapshot();
+
       const worktreeIsShared = shell.threads.some(
         (other) => other.id !== thread.id && other.worktreePath === thread.worktreePath,
       );
+
       if (worktreeIsShared) {
         return;
       }
@@ -108,6 +115,7 @@ export const createWorkspace = Effect.fn("makecheckpoint-reactor-Workspace")(fun
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.failCause(cause);
         }
+
         return Effect.logWarning("failed to follow worktree branch drift", {
           threadId: input.threadId,
           cause: Cause.pretty(cause),
@@ -132,5 +140,6 @@ export const createWorkspace = Effect.fn("makecheckpoint-reactor-Workspace")(fun
         ),
       ),
   );
+
   return { followBranchFromTurnCompletion, followWorktreeBranchDrift, statusRefreshWorker };
 });

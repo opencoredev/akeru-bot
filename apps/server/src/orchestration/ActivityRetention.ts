@@ -11,8 +11,10 @@ function isResolvableContextWindowActivity(activity: OrchestrationThreadActivity
   if (activity.kind !== "context-window.updated") {
     return false;
   }
+
   const payload = asRecord(activity.payload);
   const usedTokens = payload?.usedTokens;
+
   return typeof usedTokens === "number" && Number.isFinite(usedTokens) && usedTokens >= 0;
 }
 
@@ -32,14 +34,17 @@ export function dropStaleContextWindowActivities(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
 ): ReadonlyArray<OrchestrationThreadActivity> {
   const latestIndexByTurn = new Map<string | null, number>();
+
   for (let index = 0; index < activities.length; index += 1) {
     if (isResolvableContextWindowActivity(activities[index]!)) {
       latestIndexByTurn.set(activities[index]!.turnId, index);
     }
   }
+
   if (latestIndexByTurn.size === 0) {
     return activities;
   }
+
   return activities.filter(
     (activity, index) =>
       !isResolvableContextWindowActivity(activity) ||
@@ -55,26 +60,32 @@ export function dropStaleContextWindowActivities(
  */
 function toolLifecycleIdentity(activity: OrchestrationThreadActivity): string | null {
   const payload = asRecord(activity.payload);
+
   if (!payload) {
     return null;
   }
 
   const toolCallId =
     asTrimmedString(payload.toolCallId) ?? asTrimmedString(asRecord(payload.data)?.toolCallId);
+
   if (toolCallId) {
     return `id:${toolCallId}`;
   }
 
   const itemType = asTrimmedString(payload.itemType) ?? "";
+
   // Mirrors the clients' `normalizeCompactToolLabel`: a completion's title may
   // gain a trailing "complete"/"completed" the in-flight updates lack.
   const label = (asTrimmedString(payload.title) ?? activity.summary)
     .replace(/\s+(?:complete|completed)\s*$/iu, "")
     .trim();
+
   const detail = asTrimmedString(payload.detail) ?? "";
+
   if (itemType.length === 0 && label.length === 0 && detail.length === 0) {
     return null;
   }
+
   return [itemType, label, detail].join("\u001f");
 }
 
@@ -113,18 +124,24 @@ export function dropSupersededToolUpdatedActivities(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
 ): ReadonlyArray<OrchestrationThreadActivity> {
   const completionIndicesByKey = new Map<string, number>();
+
   for (let index = 0; index < activities.length; index += 1) {
     const activity = activities[index]!;
+
     if (activity.kind !== "tool.completed") {
       continue;
     }
+
     const identity = toolLifecycleIdentity(activity);
+
     if (!identity) {
       continue;
     }
+
     const key = `${activity.turnId ?? ""}\u0000${identity}`;
     completionIndicesByKey.set(key, index);
   }
+
   if (completionIndicesByKey.size === 0) {
     return activities;
   }
@@ -133,11 +150,15 @@ export function dropSupersededToolUpdatedActivities(
     if (activity.kind !== "tool.updated") {
       return true;
     }
+
     const identity = toolLifecycleIdentity(activity);
+
     if (!identity) {
       return true;
     }
+
     const indices = completionIndicesByKey.get(`${activity.turnId ?? ""}\u0000${identity}`);
+
     return indices === undefined || indices <= index;
   });
 }

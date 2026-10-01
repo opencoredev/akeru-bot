@@ -47,6 +47,7 @@ export const decideThreadMessages = Effect.fn("decideThreadMessages")(function* 
         command,
         threadId: command.threadId,
       });
+
       // An archived bot takes no new speech, but the tail of a reply already in
       // flight when it was archived still lands in the transcript. The web client
       // omits respondingBotId for user speech, so resolve it the way a turn would.
@@ -55,6 +56,7 @@ export const decideThreadMessages = Effect.fn("decideThreadMessages")(function* 
           thread.groupId === null || thread.groupId === undefined
             ? null
             : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+
         if (
           group === null &&
           thread.botId !== null &&
@@ -66,6 +68,7 @@ export const decideThreadMessages = Effect.fn("decideThreadMessages")(function* 
             detail: `Chat '${thread.id}' cannot address a different bot.`,
           });
         }
+
         yield* requireActiveResponder({
           readModel,
           command,
@@ -77,6 +80,7 @@ export const decideThreadMessages = Effect.fn("decideThreadMessages")(function* 
       } else if (command.respondingBotId !== undefined) {
         yield* requireBot({ readModel, command, botId: command.respondingBotId });
       }
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -100,13 +104,16 @@ export const decideThreadMessages = Effect.fn("decideThreadMessages")(function* 
         },
       };
     }
+
     case "thread.message.assistant.delta": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       const respondingBotId = yield* resolveAssistantMessageBot({ readModel, command, thread });
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -129,13 +136,16 @@ export const decideThreadMessages = Effect.fn("decideThreadMessages")(function* 
         },
       };
     }
+
     case "thread.message.assistant.complete": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       const respondingBotId = yield* resolveAssistantMessageBot({ readModel, command, thread });
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -157,37 +167,44 @@ export const decideThreadMessages = Effect.fn("decideThreadMessages")(function* 
         },
       };
     }
+
     case "thread.message.reaction.set": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       if (!thread.messages.some((message) => message.id === command.messageId)) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Message '${command.messageId}' is not visible in thread '${command.threadId}'.`,
         });
       }
+
       if (actor === undefined && command.botId === undefined) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: "Trusted bot reactions require a bot identity.",
         });
       }
+
       if (actor === undefined && thread.groupId != null) {
         const group = yield* requireGroup({
           readModel,
           command,
           groupId: thread.groupId,
         });
+
         const reactionBotId = thread.respondingBotId ?? group.bossBotId;
+
         if (reactionBotId === null || command.botId !== reactionBotId) {
           return yield* new OrchestrationCommandInvariantError({
             commandType: command.type,
             detail: `Bot '${command.botId}' cannot react in thread '${command.threadId}'.`,
           });
         }
+
         yield* requireActiveGroupMember({
           readModel,
           command,
@@ -200,6 +217,7 @@ export const decideThreadMessages = Effect.fn("decideThreadMessages")(function* 
           detail: `Bot '${command.botId}' cannot react in thread '${command.threadId}'.`,
         });
       }
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -218,12 +236,14 @@ export const decideThreadMessages = Effect.fn("decideThreadMessages")(function* 
         },
       };
     }
+
     case "thread.proposed-plan.upsert": {
       yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",

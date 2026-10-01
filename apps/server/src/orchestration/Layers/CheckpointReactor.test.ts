@@ -70,10 +70,12 @@ describe("CheckpointReactor", () => {
     });
 
     await waitForEvent(harness, (event) => event.type === "thread.turn-diff-completed");
+
     const thread = await waitForThread(
       harness,
       (entry) => entry.latestTurn?.turnId === "turn-1" && entry.checkpoints.length === 1,
     );
+
     expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
     expect(
       gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 0)),
@@ -107,6 +109,7 @@ describe("CheckpointReactor", () => {
       { id: "assistant-turn-1-latest", turnId: "turn-1", at: "2026-01-01T00:00:02.000Z" },
       { id: "assistant-other-turn", turnId: "turn-other", at: "2026-01-01T00:00:03.000Z" },
     ] as const;
+
     await harness.run(
       Effect.gen(function* () {
         yield* harness.engine.dispatch({
@@ -135,6 +138,7 @@ describe("CheckpointReactor", () => {
         yield* Effect.promise(() =>
           waitForGitRefExists(harness, harness.cwd, checkpointRefForThreadTurn(threadId, 0)),
         );
+
         for (const message of assistantMessages) {
           yield* harness.engine.dispatch({
             type: "thread.message.assistant.delta",
@@ -172,6 +176,7 @@ describe("CheckpointReactor", () => {
       harness,
       (event) => event.type === "thread.turn-diff-completed",
     );
+
     const diffCompleted = events.find((event) => event.type === "thread.turn-diff-completed");
     expect(
       diffCompleted?.type === "thread.turn-diff-completed"
@@ -186,6 +191,7 @@ describe("CheckpointReactor", () => {
       seedFilesystemCheckpoints: false,
       threadWorktreePath: null,
     });
+
     const createdAt = "2026-01-01T00:00:00.000Z";
 
     await testScope.runtime!.runPromise(

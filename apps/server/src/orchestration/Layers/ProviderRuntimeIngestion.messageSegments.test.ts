@@ -110,13 +110,16 @@ describe("ProviderRuntimeIngestion", () => {
           message.text === " second half",
       ),
     );
+
     const firstMessage = thread.messages.find(
       (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-buffered-request-append",
     );
+
     const resumedMessage = thread.messages.find(
       (entry: ProviderRuntimeTestMessage) =>
         entry.id === "assistant:item-buffered-request-append:segment:1",
     );
+
     expect(firstMessage?.text).toBe("first half");
     expect(firstMessage?.streaming).toBe(false);
     expect(resumedMessage?.text).toBe(" second half");
@@ -127,11 +130,13 @@ describe("ProviderRuntimeIngestion", () => {
         Effect.map((chunk) => Array.from(chunk)),
       ),
     );
+
     const assistantEvents = events.filter(
       (event): event is Extract<(typeof events)[number], { type: "thread.message-sent" }> =>
         event.type === "thread.message-sent" &&
         event.payload.messageId.startsWith("assistant:item-buffered-request-append"),
     );
+
     expect(assistantEvents).toHaveLength(4);
     expect(assistantEvents[0]?.payload.streaming).toBe(true);
     expect(assistantEvents[0]?.payload.text).toBe("first half");
@@ -242,6 +247,7 @@ describe("ProviderRuntimeIngestion", () => {
           message.text === " after approval",
       ),
     );
+
     expect(
       thread.messages.find(
         (message: ProviderRuntimeTestMessage) =>

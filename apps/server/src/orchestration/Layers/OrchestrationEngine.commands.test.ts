@@ -73,6 +73,7 @@ describe("OrchestrationEngine", () => {
         createdAt,
       }),
     );
+
     const turnStart = {
       type: "thread.turn.start" as const,
       commandId: CommandId.make("cmd-turn-start-maintenance"),
@@ -89,6 +90,7 @@ describe("OrchestrationEngine", () => {
     };
 
     expect(tryBeginMaintenance()).toBe(true);
+
     try {
       const sequenceBefore = await system.run(engine.latestSequence);
       await expect(system.run(engine.dispatch(turnStart))).rejects.toThrow(/installing an update/);
@@ -108,9 +110,11 @@ describe("OrchestrationEngine", () => {
 
     // The blocked command left no rejection receipt, so a retry is admitted.
     await system.run(engine.dispatch(turnStart));
+
     const thread = (await system.readModel()).threads.find(
       (entry) => entry.id === ThreadId.make("thread-maintenance"),
     );
+
     expect(thread?.messages.map((message) => message.id)).toContain(asMessageId("msg-maintenance"));
     await system.dispose();
   });
@@ -119,6 +123,7 @@ describe("OrchestrationEngine", () => {
     Effect.gen(function* () {
       const workerReachedBlocker = yield* Deferred.make<void>();
       const releaseBlocker = yield* Deferred.make<void>();
+
       const blockingProjectionPipeline: OrchestrationProjectionPipelineShape = {
         bootstrap: Effect.void,
         projectEvent: (event) =>
@@ -130,6 +135,7 @@ describe("OrchestrationEngine", () => {
         projectEventDeferred: (event) =>
           blockingProjectionPipeline.projectEvent(event).pipe(Effect.as(Effect.void)),
       };
+
       const engineLayer = OrchestrationEngineLive.pipe(
         Layer.provide(OrchestrationProjectionSnapshotQueryLive),
         Layer.provide(ThreadBackgroundLiveness.layer),
@@ -185,6 +191,7 @@ describe("OrchestrationEngine", () => {
             title: "Blocked",
           })
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Deferred.await(workerReachedBlocker);
 
         const caller = yield* engine
@@ -203,6 +210,7 @@ describe("OrchestrationEngine", () => {
             createdAt,
           })
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Fiber.interrupt(caller);
         // The worker still owns the queued turn, so an update cannot begin.
         expect(tryBeginMaintenance()).toBe(false);
@@ -216,9 +224,11 @@ describe("OrchestrationEngine", () => {
           threadId,
           title: "After",
         });
+
         const turnEvents = Array.from(yield* Stream.runCollect(engine.readEvents(0))).filter(
           (event) => event.commandId === CommandId.make("cmd-turn-start-interrupted"),
         );
+
         expect(turnEvents.length).toBeGreaterThan(0);
         expect(tryBeginMaintenance()).toBe(true);
         finishMaintenance();
@@ -369,6 +379,7 @@ describe("OrchestrationEngine", () => {
         Effect.map((chunk): OrchestrationEvent[] => Array.from(chunk)),
       ),
     );
+
     expect(events.map((event) => event.type)).toEqual([
       "project.created",
       "thread.created",
@@ -673,7 +684,9 @@ describe("OrchestrationEngine", () => {
     const events = await system.run(
       Stream.runCollect(engine.readEvents(0)).pipe(Effect.map((chunk) => Array.from(chunk))),
     );
+
     const withOrigin = events.find((event) => event.commandId === "cmd-origin-project-create");
+
     const withoutOrigin = events.find(
       (event) => event.commandId === "cmd-no-origin-project-create",
     );

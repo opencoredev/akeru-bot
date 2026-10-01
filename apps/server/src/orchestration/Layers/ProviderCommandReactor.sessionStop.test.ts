@@ -61,6 +61,7 @@ describe("ProviderCommandReactor", () => {
       botEngine: { provider: "codex", model: "gpt-5.6-sol" },
       secondBot: { engine: { provider: "codex", model: "gpt-5.6-codex-mini" } },
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.runEffect(
@@ -105,6 +106,7 @@ describe("ProviderCommandReactor", () => {
         (call[1] as { modelSelection?: ModelSelection }).modelSelection,
       ]),
     );
+
     expect(sessionModels["thread-1"]).toMatchObject({
       instanceId: ProviderInstanceId.make("codex"),
       model: "gpt-5.6-sol",
@@ -120,6 +122,7 @@ describe("ProviderCommandReactor", () => {
         (call[0] as { modelSelection?: ModelSelection }).modelSelection,
       ]),
     );
+
     expect(turnModels["thread-1"]).toMatchObject({ model: "gpt-5.6-sol" });
     expect(turnModels["thread-2"]).toMatchObject({ model: "gpt-5.6-codex-mini" });
   });

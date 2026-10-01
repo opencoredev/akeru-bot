@@ -2,6 +2,7 @@ import { ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type { createDependencies } from "./Dependencies.ts";
+
 export function createContext({
   agentController,
   projectionSnapshotQuery,
@@ -14,6 +15,7 @@ export function createContext({
   ): Effect.fn.Return<Option.Option<{ readonly threadId: ThreadId; readonly cwd: string }>> {
     const sessions = yield* agentController.listSessions();
     const session = sessions.find((entry) => entry.threadId === threadId);
+
     return session?.cwd
       ? Option.some({ threadId: session.threadId, cwd: session.cwd })
       : Option.none();
@@ -27,15 +29,19 @@ export function createContext({
     const runtime = yield* projectionSnapshotQuery
       .getThreadRuntimeContext(threadId)
       .pipe(Effect.map(Option.getOrUndefined));
+
     if (!runtime) {
       return undefined;
     }
+
     const context = yield* projectionSnapshotQuery
       .getThreadCheckpointContext(threadId)
       .pipe(Effect.map(Option.getOrUndefined));
+
     if (!context) {
       return undefined;
     }
+
     return {
       id: context.threadId,
       projectId: context.projectId,
@@ -45,5 +51,6 @@ export function createContext({
       projects: [{ id: context.projectId, workspaceRoot: context.workspaceRoot }],
     };
   });
+
   return { resolveSessionRuntimeForThread, resolveThreadCheckpointState };
 }

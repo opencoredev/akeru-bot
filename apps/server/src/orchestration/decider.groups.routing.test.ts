@@ -54,13 +54,16 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         command: startTurnCommand(),
         readModel,
       });
+
       const mentionedResult = yield* decideOrchestrationCommand({
         command: startTurnCommand(SPECIALIST_ID),
         readModel,
       });
+
       const defaultEvent = (Array.isArray(defaultResult) ? defaultResult : [defaultResult]).find(
         (event) => event.type === "thread.turn-start-requested",
       );
+
       const mentionedEvent = (
         Array.isArray(mentionedResult) ? mentionedResult : [mentionedResult]
       ).find((event) => event.type === "thread.turn-start-requested");
@@ -68,9 +71,11 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (defaultEvent?.type !== "thread.turn-start-requested") {
         throw new Error("Expected default turn start");
       }
+
       if (mentionedEvent?.type !== "thread.turn-start-requested") {
         throw new Error("Expected mentioned turn start");
       }
+
       expect(defaultEvent.payload.respondingBotId).toBe(BOSS_ID);
       expect(defaultEvent.payload.modelSelection).toEqual({
         instanceId: "boss-provider",
@@ -95,6 +100,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         groups: [makeGroup()],
         threads: [makeGroupThread()],
       });
+
       const responderFor = (text: string) =>
         decideOrchestrationCommand({
           command: {
@@ -107,9 +113,11 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
             const event = (Array.isArray(result) ? result : [result]).find(
               (entry) => entry.type === "thread.turn-start-requested",
             );
+
             if (event?.type !== "thread.turn-start-requested") {
               throw new Error("Expected turn start");
             }
+
             return event.payload.respondingBotId;
           }),
         );
@@ -122,6 +130,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
   it.effect("rejects a mention for a non-member or archived member", () =>
     Effect.gen(function* () {
       const outsiderId = BotId.make("bot-outsider");
+
       const base = makeReadModel({
         bots: [
           makeBot({ id: BOSS_ID, groupId: GROUP_ID }),
@@ -136,6 +145,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         command: startTurnCommand(outsiderId),
         readModel: base,
       }).pipe(Effect.flip);
+
       const archivedError = yield* decideOrchestrationCommand({
         command: startTurnCommand(SPECIALIST_ID),
         readModel: base,
@@ -147,6 +157,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       ) {
         throw new Error("Expected mention routing invariant errors");
       }
+
       expect(outsiderError.detail).toContain("not a member");
       expect(archivedError.detail).toContain("archived");
     }),
@@ -172,6 +183,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           updatedAt: NOW,
         },
       });
+
       const replayed = yield* projectEvent(createEmptyReadModel(NOW), event);
 
       expect(replayed.groups).toEqual([
@@ -197,7 +209,9 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         groups: [makeGroup()],
         threads: [makeGroupThread()],
       });
+
       const actor = { personId: PERSON_ID, displayName: "Member", canManageGroups: false };
+
       // The web composer resolves "@bot-specialist" to respondingBotId before it sends.
       const clientTurn = (messageId: string, text: string, respondingBotId?: BotId) =>
         Effect.gen(function* () {
@@ -213,17 +227,22 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
             senderPersonId: "person-forged",
             createdAt: NOW,
           });
+
           if (decoded.type !== "thread.turn.start") throw new Error("Expected a turn start");
+
           return applyAuthenticatedCommandActor(
             { ...decoded, message: { ...decoded.message, attachments: [] } },
             actor,
           );
         });
+
       const turnStart = (events: ReadonlyArray<Omit<OrchestrationEvent, "sequence">>) => {
         const event = events.find((entry) => entry.type === "thread.turn-start-requested");
+
         if (event?.type !== "thread.turn-start-requested") {
           throw new Error("Expected thread.turn-start-requested");
         }
+
         return event.payload;
       };
 
@@ -231,6 +250,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         model,
         yield* clientTurn("message-mention", "@bot-specialist check the logs", SPECIALIST_ID),
       );
+
       model = mentioned.readModel;
       expect(turnStart(mentioned.events)).toMatchObject({
         respondingBotId: SPECIALIST_ID,
@@ -245,6 +265,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         model,
         yield* clientTurn("message-plain", "Thanks @Leo, what next?"),
       );
+
       expect(turnStart(unmentioned.events)).toMatchObject({
         respondingBotId: BOSS_ID,
         modelSelection: { instanceId: "claudeAgent", model: "claude-opus-5-5" },
@@ -256,6 +277,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
   it.effect("attributes a server-authored group message to a named member bot", () =>
     Effect.gen(function* () {
       const outsiderId = BotId.make("bot-outsider");
+
       const base = makeReadModel({
         bots: [
           makeBot({ id: BOSS_ID, groupId: GROUP_ID }),
@@ -265,6 +287,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         groups: [makeGroup()],
         threads: [{ ...makeGroupThread(), respondingBotId: BOSS_ID }],
       });
+
       const message = (botId: BotId, type: "delta" | "complete") =>
         type === "delta"
           ? ({
@@ -303,6 +326,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         command: message(outsiderId, "delta"),
         readModel: base,
       }).pipe(Effect.flip);
+
       expect(outsiderError._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
@@ -313,6 +337,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
         threads: [{ ...makeGroupThread(), groupId: null, botId: BOSS_ID }],
       });
+
       const command = {
         type: "thread.message.assistant.delta",
         commandId: CommandId.make("cmd-direct-delta"),
@@ -321,10 +346,12 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         delta: "Hello",
         createdAt: NOW,
       } as const;
+
       const error = yield* decideOrchestrationCommand({
         command: { ...command, respondingBotId: SPECIALIST_ID },
         readModel: base,
       }).pipe(Effect.flip);
+
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
       const own = yield* applyCommand(base, { ...command, respondingBotId: BOSS_ID });
       expect(own.readModel.threads[0]?.messages[0]?.respondingBotId).toBe(BOSS_ID);

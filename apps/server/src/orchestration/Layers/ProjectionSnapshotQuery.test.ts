@@ -230,6 +230,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       `;
 
       let sequence = 5;
+
       for (const projector of Object.values(ORCHESTRATION_PROJECTOR_NAMES)) {
         yield* sql`
           INSERT INTO projection_state (
@@ -484,6 +485,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       const threadDetail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
       assert.equal(threadDetail._tag, "Some");
+
       if (threadDetail._tag === "Some") {
         assert.deepEqual(threadDetail.value, snapshot.threads[0]);
       }
@@ -492,7 +494,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         threadId: ThreadId.make("thread-1"),
         messageId: MessageId.make("message-1"),
       });
+
       assert.equal(turnStart._tag, "Some");
+
       if (turnStart._tag === "Some") {
         assert.equal(turnStart.value.message.role, "assistant");
         assert.equal(turnStart.value.message.text, "hello from projection");
@@ -507,6 +511,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const sql = yield* SqlClient.SqlClient;
 
       yield* sql`DELETE FROM orchestration_events`;
+
       const rows = yield* sql<{ readonly sequence: number }>`
         INSERT INTO orchestration_events (
           event_id, aggregate_kind, stream_id, stream_version, event_type, occurred_at,
@@ -543,6 +548,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         fromSequenceExclusive: rows[0]!.sequence,
         toSequenceInclusive: rows[3]!.sequence,
       });
+
       assert.deepStrictEqual(stats, {
         eventCount: 3,
         payloadBytes: 5043,

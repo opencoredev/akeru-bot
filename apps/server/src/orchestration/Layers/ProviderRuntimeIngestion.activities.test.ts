@@ -49,17 +49,21 @@ describe("ProviderRuntimeIngestion", () => {
         (activity: ProviderRuntimeTestActivity) => activity.id === "evt-tool-completed-with-data",
       ),
     );
+
     const activity = thread.activities.find(
       (entry: ProviderRuntimeTestActivity) => entry.id === "evt-tool-completed-with-data",
     );
+
     const payload =
       activity?.payload && typeof activity.payload === "object"
         ? (activity.payload as Record<string, unknown>)
         : undefined;
+
     const data =
       payload?.data && typeof payload.data === "object"
         ? (payload.data as Record<string, unknown>)
         : undefined;
+
     const rawOutput =
       data?.rawOutput && typeof data.rawOutput === "object"
         ? (data.rawOutput as Record<string, unknown>)
@@ -104,9 +108,11 @@ describe("ProviderRuntimeIngestion", () => {
         (activity: ProviderRuntimeTestActivity) => activity.id === "evt-command-completed",
       ),
     );
+
     const activity = thread.activities.find(
       (entry: ProviderRuntimeTestActivity) => entry.id === "evt-command-completed",
     );
+
     const payload =
       activity?.payload && typeof activity.payload === "object"
         ? (activity.payload as Record<string, unknown>)
@@ -146,9 +152,11 @@ describe("ProviderRuntimeIngestion", () => {
         (activity: ProviderRuntimeTestActivity) => activity.id === "evt-read-path-completed",
       ),
     );
+
     const activity = thread.activities.find(
       (entry: ProviderRuntimeTestActivity) => entry.id === "evt-read-path-completed",
     );
+
     const payload =
       activity?.payload && typeof activity.payload === "object"
         ? (activity.payload as Record<string, unknown>)
@@ -256,20 +264,24 @@ describe("ProviderRuntimeIngestion", () => {
     const planActivity = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-turn-plan-updated",
     );
+
     const planPayload =
       planActivity?.payload && typeof planActivity.payload === "object"
         ? (planActivity.payload as Record<string, unknown>)
         : undefined;
+
     expect(planActivity?.kind).toBe("turn.plan.updated");
     expect(Array.isArray(planPayload?.plan)).toBe(true);
 
     const toolUpdate = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-item-updated",
     );
+
     const toolUpdatePayload =
       toolUpdate?.payload && typeof toolUpdate.payload === "object"
         ? (toolUpdate.payload as Record<string, unknown>)
         : undefined;
+
     expect(toolUpdate?.kind).toBe("tool.updated");
     expect(toolUpdatePayload?.itemType).toBe("command_execution");
     expect(toolUpdatePayload?.status).toBe("inProgress");
@@ -278,16 +290,19 @@ describe("ProviderRuntimeIngestion", () => {
     const warning = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-runtime-warning",
     );
+
     const warningPayload =
       warning?.payload && typeof warning.payload === "object"
         ? (warning.payload as Record<string, unknown>)
         : undefined;
+
     expect(warning?.kind).toBe("runtime.warning");
     expect(warningPayload?.message).toBe("Provider got slow");
 
     const checkpoint = thread.checkpoints.find(
       (entry: ProviderRuntimeTestCheckpoint) => entry.turnId === "turn-p1",
     );
+
     expect(checkpoint?.status).toBe("missing");
     expect(checkpoint?.assistantMessageId).toBe("assistant:item-p1-assistant");
     expect(checkpoint?.checkpointRef).toBe("provider-diff:evt-turn-diff-updated");
@@ -298,6 +313,7 @@ describe("ProviderRuntimeIngestion", () => {
       const harness = yield* Effect.promise(() =>
         createHarness({ workspaceSubdirectory: "apps/server" }),
       );
+
       harness.emit({
         type: "turn.diff.updated",
         eventId: asEventId("evt-nested-diff"),
@@ -377,6 +393,7 @@ describe("ProviderRuntimeIngestion", () => {
     const usageActivity = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.kind === "context-window.updated",
     );
+
     expect(usageActivity).toBeDefined();
     expect(usageActivity?.payload).toMatchObject({
       usedTokens: 1075,
@@ -429,6 +446,7 @@ describe("ProviderRuntimeIngestion", () => {
     const usageActivity = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.kind === "context-window.updated",
     );
+
     expect(usageActivity?.payload).toMatchObject({
       usedTokens: 126,
       totalProcessedTokens: 11_839,
@@ -479,6 +497,7 @@ describe("ProviderRuntimeIngestion", () => {
     const usageActivity = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.kind === "context-window.updated",
     );
+
     expect(usageActivity?.payload).toMatchObject({
       usedTokens: 31_251,
       lastUsedTokens: 31_251,
@@ -514,6 +533,7 @@ describe("ProviderRuntimeIngestion", () => {
     const activity = thread.activities.find(
       (candidate: ProviderRuntimeTestActivity) => candidate.kind === "context-compaction",
     );
+
     expect(activity?.summary).toBe("Context compacted");
     expect(activity?.tone).toBe("info");
   });

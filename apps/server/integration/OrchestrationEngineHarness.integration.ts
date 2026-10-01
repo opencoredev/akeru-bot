@@ -1,6 +1,8 @@
 import { createIntegrationLayers } from "./test-support/IntegrationLayers.ts";
 import { initializeGitWorkspace } from "./test-support/IntegrationGit.ts";
+
 export { gitRefExists, gitShowFileAtRef } from "./test-support/IntegrationGit.ts";
+
 import {
   ApprovalRequestId,
   ProviderDriverKind,
@@ -128,26 +130,33 @@ export const makeOrchestrationIntegrationHarness = (
 
     const provider = options?.provider ?? ProviderDriverKind.make("codex");
     const useRealCodex = options?.realCodex === true;
+
     const adapterHarness = useRealCodex
       ? null
       : yield* makeTestProviderAdapterHarness({
           provider,
         });
+
     // Mastra-backed drivers run through AgentController's session seam rather
     // than the adapter's `sendTurn`, so fake the Mastra harness too; otherwise
     // the controller boots the real Mastra stack and makes live model calls.
     const mastraHarness =
       useRealCodex || !usesMastraCode(provider) ? null : makeTestMastraHarness();
+
     const rootDir = yield* fileSystem.makeTempDirectoryScoped({
       prefix: "t3-orchestration-integration-",
     });
+
     const workspaceDir = path.join(rootDir, "workspace");
+
     const { stateDir, dbPath } = yield* deriveServerPaths(rootDir, undefined).pipe(
       Effect.provideService(Path.Path, path),
     );
+
     yield* fileSystem.makeDirectory(workspaceDir, { recursive: true });
     yield* fileSystem.makeDirectory(stateDir, { recursive: true });
     yield* initializeGitWorkspace(workspaceDir);
+
     const layer = createIntegrationLayers({
       adapterHarness,
       mastraHarness,
@@ -158,36 +167,46 @@ export const makeOrchestrationIntegrationHarness = (
     });
 
     const runtime = ManagedRuntime.make(layer);
+
     const engine = yield* tryRuntimePromise("load OrchestrationEngine service", () =>
       runtime.runPromise(Effect.service(OrchestrationEngineService)),
     ).pipe(Effect.orDie);
+
     const reactor = yield* tryRuntimePromise("load OrchestrationReactor service", () =>
       runtime.runPromise(Effect.service(OrchestrationReactor)),
     ).pipe(Effect.orDie);
+
     const providerRuntimeIngestion = yield* tryRuntimePromise(
       "load ProviderRuntimeIngestion service",
       () => runtime.runPromise(Effect.service(ProviderRuntimeIngestionService)),
     ).pipe(Effect.orDie);
+
     const providerCommands = yield* tryRuntimePromise("load ProviderCommandReactor service", () =>
       runtime.runPromise(Effect.service(ProviderCommandReactor)),
     ).pipe(Effect.orDie);
+
     const checkpointReactor = yield* tryRuntimePromise("load CheckpointReactor service", () =>
       runtime.runPromise(Effect.service(CheckpointReactor)),
     ).pipe(Effect.orDie);
+
     const snapshotQuery = yield* tryRuntimePromise("load ProjectionSnapshotQuery service", () =>
       runtime.runPromise(Effect.service(ProjectionSnapshotQuery)),
     ).pipe(Effect.orDie);
+
     const checkpointStore = yield* tryRuntimePromise("load CheckpointStore service", () =>
       runtime.runPromise(Effect.service(CheckpointStore.CheckpointStore)),
     ).pipe(Effect.orDie);
+
     const checkpointRepository = yield* tryRuntimePromise(
       "load ProjectionCheckpointRepository service",
       () => runtime.runPromise(Effect.service(ProjectionCheckpointRepository)),
     ).pipe(Effect.orDie);
+
     const pendingApprovalRepository = yield* tryRuntimePromise(
       "load ProjectionPendingApprovalRepository service",
       () => runtime.runPromise(Effect.service(ProjectionPendingApprovalRepository)),
     ).pipe(Effect.orDie);
+
     const runtimeReceiptBus = yield* tryRuntimePromise("load RuntimeReceiptBus service", () =>
       runtime.runPromise(Effect.service(RuntimeReceiptBus)),
     ).pipe(Effect.orDie);
@@ -195,9 +214,11 @@ export const makeOrchestrationIntegrationHarness = (
     const scope = yield* Scope.make("sequential");
     const receipts = createObservationHistory<OrchestrationRuntimeReceipt>();
     const events = createObservationHistory<OrchestrationEvent>();
+
     const receiptStream = yield* runtimeReceiptBus.subscribeEventsForTest!.pipe(
       Scope.provide(scope),
     );
+
     const eventStream = yield* engine.subscribeDomainEvents.pipe(Scope.provide(scope));
     yield* Stream.runForEach(receiptStream, receipts.publish).pipe(Effect.forkIn(scope));
     yield* Stream.runForEach(eventStream, events.publish).pipe(Effect.forkIn(scope));
@@ -287,6 +308,7 @@ export const makeOrchestrationIntegrationHarness = (
     const agentController = yield* tryRuntimePromise("load AgentController service", () =>
       runtime.runPromise(Effect.service(AgentController)),
     ).pipe(Effect.orDie);
+
     // Turn fixtures and spies keep the adapter harness surface, but a
     // Mastra-backed provider's sessions live in the Mastra stub, so read and
     // queue through it. `stopAll` stops every controller session, the Mastra
@@ -323,10 +345,12 @@ export const makeOrchestrationIntegrationHarness = (
         : adapterHarness;
 
     let disposed = false;
+
     const dispose = Effect.gen(function* () {
       if (disposed) {
         return;
       }
+
       disposed = true;
 
       const shutdown = Effect.gen(function* () {

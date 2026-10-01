@@ -18,6 +18,7 @@ import type { createFailures } from "./Failures.ts";
 import type { createWorkspace } from "./Workspace.ts";
 import type { createDelegations } from "./Delegations.ts";
 import type { createSession } from "./Session.ts";
+
 export function createTurns({
   hasHandledTurnRequestRecently,
   resolveThreadShell,
@@ -67,11 +68,13 @@ export function createTurns({
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) {
     const key = turnRequestKeyForEvent(event);
+
     if (yield* hasHandledTurnRequestRecently(key)) {
       return;
     }
 
     const thread = yield* resolveThreadShell(event.payload.threadId);
+
     if (!thread) {
       return;
     }
@@ -80,6 +83,7 @@ export function createTurns({
       threadId: thread.id,
       messageId: event.payload.messageId,
     });
+
     if (Option.isNone(turnStart) || turnStart.value.message.role !== "user") {
       yield* appendProviderFailureActivity({
         threadId: event.payload.threadId,
@@ -97,13 +101,16 @@ export function createTurns({
           ),
         ),
       );
+
       return;
     }
+
     const { message, hasOtherUserMessages } = turnStart.value;
 
     yield* ensureThreadWorktree(thread);
 
     const isFirstUserMessageTurn = !hasOtherUserMessages;
+
     if (isFirstUserMessageTurn) {
       const generationInput = {
         messageText: message.text,
@@ -122,7 +129,9 @@ export function createTurns({
       if (Cause.hasInterruptsOnly(cause)) {
         return Effect.void;
       }
+
       const { detail, unavailability } = formatFailure(cause);
+
       // The failure activity lands before the session error clears the pending
       // turn start, so a restart either replays the turn start or finds the
       // failure and releases the results this turn acknowledged.
@@ -166,13 +175,16 @@ export function createTurns({
       );
 
     const respondingBotId = resolveControllerBotId(thread);
+
     const respondingBot =
       respondingBotId === null
         ? undefined
         : yield* projectionBotRepository
             .getById({ botId: respondingBotId })
             .pipe(Effect.map(Option.getOrUndefined));
+
     const reservationId = AkeruUsageReservationId.make(`turn:${event.eventId}`);
+
     const reserved =
       respondingBotId === null
         ? true
@@ -204,6 +216,7 @@ export function createTurns({
               Effect.as(true),
               Effect.catchCause((cause) => handleTurnStartFailure(cause).pipe(Effect.as(false))),
             );
+
     if (!reserved) return;
 
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
@@ -233,6 +246,7 @@ export function createTurns({
     if (Option.isNone(sendTurnRequest)) {
       return;
     }
+
     // A channel turn's reply goes to an external sender who sees no work cards.
     const delegationResults = yield* readDelegationResults(event, {
       channel: message.channelOrigin != null,
@@ -249,6 +263,7 @@ export function createTurns({
         ).pipe(Effect.andThen(handleTurnStartFailure(cause)), Effect.as(Option.none<string>())),
       ),
     );
+
     if (Option.isNone(delegationResults)) {
       return;
     }
@@ -300,10 +315,13 @@ export function createTurns({
     event: Extract<ProviderIntentEvent, { type: "thread.turn-interrupt-requested" }>,
   ) {
     const thread = yield* resolveThreadShell(event.payload.threadId);
+
     if (!thread) {
       return;
     }
+
     const session = thread.session;
+
     if (!session || session.status === "stopped") {
       return yield* appendProviderFailureActivity({
         threadId: event.payload.threadId,
@@ -321,9 +339,11 @@ export function createTurns({
       }
 
       const detail = formatFailureDetail(cause);
+
       return Effect.gen(function* () {
         const latestThread = yield* resolveThreadShell(event.payload.threadId);
         const latestSession = latestThread?.session;
+
         if (
           !latestSession ||
           latestSession.status === "stopped" ||
@@ -340,6 +360,7 @@ export function createTurns({
             if (Cause.hasInterruptsOnly(stopCause)) {
               return Effect.interrupt;
             }
+
             return Effect.logWarning(
               "provider command reactor failed to stop session after interrupt failure",
               {
@@ -352,6 +373,7 @@ export function createTurns({
         );
         const stoppedThread = yield* resolveThreadShell(event.payload.threadId);
         const stoppedSession = stoppedThread?.session;
+
         if (
           !stoppedSession ||
           stoppedSession.status === "stopped" ||
@@ -398,6 +420,7 @@ export function createTurns({
     readonly attachments?: ReadonlyArray<ChatAttachment>;
   }) {
     const thread = yield* resolveThreadShell(input.threadId);
+
     if (!thread) return;
     yield* buildSendTurnRequestForThread({
       threadId: thread.id,
@@ -412,6 +435,7 @@ export function createTurns({
     event: Extract<ProviderIntentEvent, { type: "thread.turn-resume-requested" }>,
   ) {
     const key = turnRequestKeyForEvent(event);
+
     if (yield* hasHandledTurnRequestRecently(key)) {
       return;
     }
@@ -419,10 +443,13 @@ export function createTurns({
     const detail = Option.getOrUndefined(
       yield* projectionSnapshotQuery.getThreadDetailById(event.payload.threadId),
     );
+
     const failedBeforeProviderAccepted = detail?.latestTurn === null;
+
     const originalRequest = failedBeforeProviderAccepted
       ? detail.messages.findLast((message) => message.role === "user")
       : undefined;
+
     yield* resumeInterruptedTurn({
       threadId: event.payload.threadId,
       createdAt: event.payload.createdAt,
@@ -462,11 +489,13 @@ export function createTurns({
     restrictiveSessionCleanupConfirmed: boolean,
   ) {
     const thread = yield* resolveThreadShell(event.payload.threadId);
+
     if (!thread) {
       return;
     }
 
     const now = event.payload.createdAt;
+
     if (
       thread.session &&
       thread.session.status !== "stopped" &&
@@ -493,6 +522,7 @@ export function createTurns({
       createdAt: now,
     });
   });
+
   return {
     processTurnStartRequested,
     processTurnInterruptRequested,

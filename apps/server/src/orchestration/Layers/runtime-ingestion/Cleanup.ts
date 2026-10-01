@@ -5,6 +5,7 @@ import * as Option from "effect/Option";
 import type { createMessages } from "./Messages.ts";
 import type { createPlans } from "./Plans.ts";
 import type { createTasks } from "./Tasks.ts";
+
 export function createCleanup({
   turnMessageIdsByTurnKey,
   assistantSegmentStateByTurnKey,
@@ -38,6 +39,7 @@ export function createCleanup({
             }
 
             const messageIds = yield* Cache.getOption(turnMessageIdsByTurnKey, key);
+
             if (Option.isSome(messageIds)) {
               yield* Effect.forEach(messageIds.value, clearAssistantMessageState, {
                 concurrency: 1,
@@ -71,5 +73,6 @@ export function createCleanup({
         { concurrency: 1 },
       ).pipe(Effect.asVoid);
     });
+
   return { clearTurnStateForSession };
 }

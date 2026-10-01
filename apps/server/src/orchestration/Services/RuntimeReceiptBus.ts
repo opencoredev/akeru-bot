@@ -28,6 +28,7 @@ export const CheckpointBaselineCapturedReceipt = Schema.Struct({
   checkpointRef: CheckpointRef,
   createdAt: IsoDateTime,
 });
+
 export type CheckpointBaselineCapturedReceipt = typeof CheckpointBaselineCapturedReceipt.Type;
 
 export const CheckpointDiffFinalizedReceipt = Schema.Struct({
@@ -39,6 +40,7 @@ export const CheckpointDiffFinalizedReceipt = Schema.Struct({
   status: Schema.Literals(["ready", "missing", "error"]),
   createdAt: IsoDateTime,
 });
+
 export type CheckpointDiffFinalizedReceipt = typeof CheckpointDiffFinalizedReceipt.Type;
 
 export const TurnProcessingQuiescedReceipt = Schema.Struct({
@@ -48,6 +50,7 @@ export const TurnProcessingQuiescedReceipt = Schema.Struct({
   checkpointTurnCount: NonNegativeInt,
   createdAt: IsoDateTime,
 });
+
 export type TurnProcessingQuiescedReceipt = typeof TurnProcessingQuiescedReceipt.Type;
 
 export const OrchestrationRuntimeReceipt = Schema.Union([
@@ -55,6 +58,7 @@ export const OrchestrationRuntimeReceipt = Schema.Union([
   CheckpointDiffFinalizedReceipt,
   TurnProcessingQuiescedReceipt,
 ]);
+
 export type OrchestrationRuntimeReceipt = typeof OrchestrationRuntimeReceipt.Type;
 
 export interface RuntimeReceiptBusShape {

@@ -37,11 +37,13 @@ for (const provider of MASTRA_PROVIDERS) {
               model: modelFor(provider, "a"),
             },
           });
+
           const first = yield* harness.waitForThread(
             THREAD_ID,
             (entry) =>
               entry.session?.providerName === label && entry.latestTurn?.state === "completed",
           );
+
           const firstTurnId = first.latestTurn!.turnId;
           const switchesAfterFirstTurn = harness.mastraHarness!.getModelSwitches(THREAD_ID).length;
 
@@ -65,6 +67,7 @@ for (const provider of MASTRA_PROVIDERS) {
               entry.latestTurn.turnId !== firstTurnId &&
               entry.latestTurn.state === "completed",
           );
+
           // A turn's model reaches the Mastra session, not the persisted
           // thread selection, which only thread.meta.update changes.
           // Some providers use one model id for "a" and "b", so require a new
@@ -72,6 +75,7 @@ for (const provider of MASTRA_PROVIDERS) {
           const secondTurnSwitches = harness
             .mastraHarness!.getModelSwitches(THREAD_ID)
             .slice(switchesAfterFirstTurn);
+
           assert.equal(secondTurnSwitches.at(-1)?.endsWith(modelFor(provider, "b")), true);
         }),
       provider,
@@ -140,12 +144,14 @@ for (const provider of MASTRA_PROVIDERS) {
                 ) === approvalId,
             ),
           );
+
           const approvalResponses = yield* observeAfterProviderDrain(
             harness,
             () => harness.adapterHarness!.getApprovalResponses(THREAD_ID),
             (responses) => responses.length === 1,
             `${label} approval response`,
           );
+
           assert.equal(approvalResponses[0]?.decision, "decline");
 
           yield* harness.adapterHarness!.queueTurnResponse(THREAD_ID, {
@@ -171,12 +177,14 @@ for (const provider of MASTRA_PROVIDERS) {
             threadId: THREAD_ID,
             createdAt: nowIso(),
           });
+
           const interrupts = yield* observeAfterProviderDrain(
             harness,
             () => harness.adapterHarness!.getInterruptCalls(THREAD_ID),
             (calls) => calls.length >= 1,
             `${label} cancellation`,
           );
+
           assert.equal(interrupts.length >= 1, true);
         }),
       provider,
@@ -212,13 +220,16 @@ for (const provider of MASTRA_PROVIDERS) {
             messageId: `msg-${label}-restart-2`,
             text: "after restart",
           });
+
           const starts = yield* observeAfterProviderDrain(
             harness,
             () => harness.adapterHarness!.getStartCount(),
             (count) => count === 2,
             `${label} recovery start`,
           );
+
           assert.equal(starts, 2);
+
           const recovered = yield* harness.waitForThread(
             THREAD_ID,
             (entry) =>
@@ -228,6 +239,7 @@ for (const provider of MASTRA_PROVIDERS) {
                   message.role === "assistant" && message.text.includes(`${label}-after response`),
               ),
           );
+
           assert.equal(recovered.session?.providerName, label);
         }),
       provider,

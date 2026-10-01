@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { buildGeneratedWorktreeBranchName } from "./Fields.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
 export function createWorkspace({
   projectionSnapshotQuery,
   fileSystem,
@@ -42,17 +43,23 @@ export function createWorkspace({
     readonly worktreePath: string | null;
   }) {
     const { worktreePath, branch } = thread;
+
     if (!worktreePath || !branch) {
       return;
     }
+
     const exists = yield* fileSystem.exists(worktreePath).pipe(Effect.orElseSucceed(() => true));
+
     if (exists) {
       return;
     }
+
     const project = yield* resolveProject(thread.projectId);
+
     if (!project) {
       return;
     }
+
     const cwd = project.workspaceRoot;
     yield* Effect.logWarning("provider command reactor recreating missing worktree", {
       threadId: thread.id,
@@ -87,6 +94,7 @@ export function createWorkspace({
     if (!input.branch || !input.worktreePath) {
       return;
     }
+
     if (!isTemporaryWorktreeBranch(input.branch)) {
       return;
     }
@@ -106,9 +114,11 @@ export function createWorkspace({
         ...(attachments.length > 0 ? { attachments } : {}),
         modelSelection,
       });
+
       if (!generated) return;
 
       const targetBranch = buildGeneratedWorktreeBranchName(generated.branch);
+
       if (targetBranch === oldBranch) return;
 
       const renamed = yield* gitWorkflow.renameBranch({ cwd, oldBranch, newBranch: targetBranch });
@@ -130,5 +140,6 @@ export function createWorkspace({
       ),
     );
   });
+
   return { resolveProject, ensureThreadWorktree, maybeGenerateAndRenameWorktreeBranchForFirstTurn };
 }

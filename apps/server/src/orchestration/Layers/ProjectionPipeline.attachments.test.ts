@@ -72,6 +72,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-base-")))(
             FROM projection_thread_messages
             WHERE message_id = 'message-attachments'
           `;
+
         assert.equal(rows.length, 1);
         // @effect-diagnostics-next-line preferSchemaOverJson:off
         assert.deepEqual(JSON.parse(rows[0]?.attachmentsJson ?? "null"), [
@@ -146,6 +147,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-atta
             FROM projection_thread_messages
             WHERE message_id = 'message-attachments-safe'
           `;
+
         assert.equal(rows.length, 1);
         // @effect-diagnostics-next-line preferSchemaOverJson:off
         assert.deepEqual(JSON.parse(rows[0]?.attachmentsJson ?? "null"), [
@@ -291,6 +293,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
           FROM projection_thread_messages
           WHERE message_id = 'message-clear-attachments'
         `;
+
         assert.equal(rows.length, 1);
         // @effect-diagnostics-next-line preferSchemaOverJson:off
         assert.deepEqual(JSON.parse(rows[0]?.attachmentsJson ?? "null"), []);
@@ -427,6 +430,7 @@ it.layer(
               FROM projection_thread_messages
               WHERE message_id = 'message-overwrite'
             `;
+
       assert.equal(rows.length, 1);
       // @effect-diagnostics-next-line preferSchemaOverJson:off
       assert.deepEqual(JSON.parse(rows[0]?.attachmentsJson ?? "null"), [
@@ -546,6 +550,7 @@ it.layer(
           },
         }),
       );
+
       assert.equal(result._tag, "Failure");
 
       const rows = yield* sql<{
@@ -555,6 +560,7 @@ it.layer(
         FROM projection_thread_messages
         WHERE message_id = 'message-rollback'
       `;
+
       assert.equal(rows[0]?.count ?? 0, 0);
 
       const { attachmentsDir } = yield* ServerConfig;

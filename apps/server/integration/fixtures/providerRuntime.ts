@@ -2,9 +2,13 @@ import { EventId, ProviderDriverKind, RuntimeRequestId } from "@akeru/contracts"
 import type { LegacyProviderRuntimeEvent } from "../TestProviderAdapter.integration.ts";
 
 const PROVIDER = ProviderDriverKind.make("codex");
+
 const SESSION_ID = "fixture-session";
+
 const THREAD_ID = "fixture-thread";
+
 const TURN_ID = "fixture-turn";
+
 const REQUEST_ID = RuntimeRequestId.make("req-1");
 
 function baseEvent(

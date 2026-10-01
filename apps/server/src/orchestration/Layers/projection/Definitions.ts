@@ -96,7 +96,9 @@ export function extractActivityRequestId(payload: unknown): ApprovalRequestId | 
   if (typeof payload !== "object" || payload === null) {
     return null;
   }
+
   const requestId = (payload as Record<string, unknown>).requestId;
+
   return typeof requestId === "string" ? ApprovalRequestId.make(requestId) : null;
 }
 
@@ -104,6 +106,7 @@ export function isStalePendingApprovalFailureDetail(detail: string | null): bool
   if (detail === null) {
     return false;
   }
+
   return (
     detail.includes("stale pending approval request") ||
     detail.includes("unknown pending approval request") ||
@@ -134,6 +137,7 @@ export function derivePendingUserInputCountFromActivities(
   activities: ReadonlyArray<ProjectionThreadActivity>,
 ): number {
   const openRequestIds = new Set<string>();
+
   const ordered = [...activities].toSorted(
     (left, right) =>
       left.createdAt.localeCompare(right.createdAt) ||
@@ -142,13 +146,16 @@ export function derivePendingUserInputCountFromActivities(
 
   for (const activity of ordered) {
     const requestId = extractActivityRequestId(activity.payload);
+
     if (requestId === null) {
       continue;
     }
+
     const payload =
       typeof activity.payload === "object" && activity.payload !== null
         ? (activity.payload as Record<string, unknown>)
         : null;
+
     const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : null;
 
     if (activity.kind === "user-input.requested") {
@@ -191,6 +198,7 @@ export function retainProjectionActivitiesAfterRevert(
       )
       .flatMap((turn) => (turn.turnId === null ? [] : [turn.turnId])),
   );
+
   return activities.filter(
     (activity) => activity.turnId === null || retainedTurnIds.has(activity.turnId),
   );
@@ -211,10 +219,12 @@ export function retainProjectionProposedPlansAfterRevert(
       )
       .flatMap((turn) => (turn.turnId === null ? [] : [turn.turnId])),
   );
+
   return proposedPlans.filter(
     (proposedPlan) => proposedPlan.turnId === null || retainedTurnIds.has(proposedPlan.turnId),
   );
 }
+
 export interface ProjectionDependencies {
   readonly sql: SqlClient.SqlClient;
   readonly eventStore: OrchestrationEventStore["Service"];

@@ -179,6 +179,7 @@ describe("ProviderCommandReactor", () => {
     const failureActivity = thread?.activities.find(
       (activity) => activity.kind === "provider.approval.respond.failed",
     );
+
     expect(failureActivity).toBeDefined();
     expect(failureActivity?.payload).toMatchObject({
       requestId: "approval-request-1",
@@ -192,6 +193,7 @@ describe("ProviderCommandReactor", () => {
         activity.payload !== null &&
         (activity.payload as Record<string, unknown>).requestId === "approval-request-1",
     );
+
     expect(resolvedActivity).toBeUndefined();
     expect(thread?.messages).toContainEqual(
       expect.objectContaining({
@@ -291,6 +293,7 @@ describe("ProviderCommandReactor", () => {
     const failureActivity = thread?.activities.find(
       (activity) => activity.kind === "provider.user-input.respond.failed",
     );
+
     expect(failureActivity).toBeDefined();
     expect(failureActivity?.payload).toMatchObject({
       requestId: "user-input-request-1",
@@ -304,6 +307,7 @@ describe("ProviderCommandReactor", () => {
         activity.payload !== null &&
         (activity.payload as Record<string, unknown>).requestId === "user-input-request-1",
     );
+
     expect(resolvedActivity).toBeUndefined();
     expect(thread?.messages).toContainEqual(
       expect.objectContaining({

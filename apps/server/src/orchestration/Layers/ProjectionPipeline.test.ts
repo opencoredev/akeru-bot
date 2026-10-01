@@ -109,6 +109,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
           scripts_json AS "scriptsJson"
         FROM projection_projects
       `;
+
       assert.deepEqual(projectRows, [
         { projectId: "project-1", title: "Project 1", scriptsJson: "[]" },
       ]);
@@ -122,6 +123,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
           text
         FROM projection_thread_messages
       `;
+
       assert.deepEqual(messageRows, [{ messageId: "message-1", text: "hello" }]);
 
       const stateRows = yield* sql<{
@@ -134,7 +136,9 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_state
         ORDER BY projector ASC
       `;
+
       assert.equal(stateRows.length, Object.keys(ORCHESTRATION_PROJECTOR_NAMES).length);
+
       for (const row of stateRows) {
         assert.equal(row.lastAppliedSequence, 3);
       }
@@ -176,6 +180,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       let threadShellUpdates = yield* sql<{ readonly count: number }>`
         SELECT count FROM thread_shell_updates
       `;
+
       assert.deepEqual(threadShellUpdates, [{ count: 1 }]);
 
       yield* sql`UPDATE thread_shell_updates SET count = 0`;
@@ -243,6 +248,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_threads
         WHERE thread_id = 'thread-1'
       `;
+
       assert.deepEqual(settledRows, [
         { settledOverride: "settled", settledAt: "2026-01-01T00:00:01.000Z", unsettledAt: null },
       ]);
@@ -277,6 +283,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_threads
         WHERE thread_id = 'thread-1'
       `;
+
       // The un-settle stamps the active-list re-entry time so clients can
       // surface the thread at the top of the list.
       assert.deepEqual(unsettledRows, [

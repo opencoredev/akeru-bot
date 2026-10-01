@@ -34,6 +34,7 @@ export function projectThreadLifecycle(
           event.type,
           "payload",
         );
+
         const thread: OrchestrationThread = yield* decodeForEvent(
           OrchestrationThread,
           {
@@ -68,7 +69,9 @@ export function projectThreadLifecycle(
           event.type,
           "thread",
         );
+
         const existing = nextBase.threads.find((entry) => entry.id === thread.id);
+
         return {
           ...nextBase,
           threads: existing
@@ -141,6 +144,7 @@ export function projectThreadLifecycle(
       return decodeForEvent(ThreadUnsettledPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
           const existing = findProjectedThread(nextBase.threads, payload.threadId);
+
           return {
             ...nextBase,
             threads: updateThread(nextBase.threads, payload.threadId, {
@@ -269,7 +273,9 @@ export function projectThreadLifecycle(
       ).pipe(
         Effect.map((payload) => {
           const thread = findProjectedThread(nextBase.threads, payload.threadId);
+
           if (!thread) return nextBase;
+
           return {
             ...nextBase,
             threads: updateThread(nextBase.threads, payload.threadId, {

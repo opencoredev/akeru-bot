@@ -60,15 +60,18 @@ it.live("runs a single turn end-to-end and persists checkpoint state in sqlite +
         messageId: "msg-user-single",
         text: "Say hello",
       });
+
       const finalizedReceipt = yield* harness.waitForReceipt(
         (receipt): receipt is CheckpointDiffFinalizedReceipt =>
           receipt.type === "checkpoint.diff.finalized" &&
           receipt.threadId === THREAD_ID &&
           receipt.checkpointTurnCount === 1,
       );
+
       if (finalizedReceipt.type !== "checkpoint.diff.finalized") {
         throw new Error("Expected checkpoint.diff.finalized receipt.");
       }
+
       assert.equal(finalizedReceipt.status, "ready");
       yield* harness.waitForReceipt(
         (receipt): receipt is TurnProcessingQuiescedReceipt =>
@@ -86,12 +89,14 @@ it.live("runs a single turn end-to-end and persists checkpoint state in sqlite +
           ) &&
           entry.checkpoints.length === 1,
       );
+
       assert.equal(thread.checkpoints[0]?.status, "ready");
       assert.equal(thread.checkpoints[0]?.checkpointTurnCount, 1);
 
       const checkpointRows = yield* harness.checkpointRepository.listByThreadId({
         threadId: THREAD_ID,
       });
+
       assert.equal(checkpointRows.length, 1);
       assert.equal(checkpointRows[0]?.checkpointTurnCount, 1);
       assert.equal(checkpointRows[0]?.status, "ready");
@@ -212,15 +217,18 @@ it.live("runs multi-turn file edits and persists checkpoint diffs", () =>
         messageId: "msg-user-multi-2",
         text: "Make second edit",
       });
+
       const secondReceipt = yield* harness.waitForReceipt(
         (receipt): receipt is CheckpointDiffFinalizedReceipt =>
           receipt.type === "checkpoint.diff.finalized" &&
           receipt.threadId === THREAD_ID &&
           receipt.checkpointTurnCount === 2,
       );
+
       if (secondReceipt.type !== "checkpoint.diff.finalized") {
         throw new Error("Expected checkpoint.diff.finalized receipt.");
       }
+
       assert.equal(secondReceipt.status, "ready");
       yield* harness.waitForReceipt(
         (receipt): receipt is TurnProcessingQuiescedReceipt =>
@@ -236,9 +244,11 @@ it.live("runs multi-turn file edits and persists checkpoint diffs", () =>
           entry.checkpoints.length === 2 &&
           entry.checkpoints.some((checkpoint) => checkpoint.checkpointTurnCount === 2),
       );
+
       const secondCheckpoint = secondTurnThread.checkpoints.find(
         (checkpoint) => checkpoint.checkpointTurnCount === 2,
       );
+
       assert.equal(
         secondCheckpoint?.files.some((file) => file.path === "README.md"),
         true,
@@ -247,6 +257,7 @@ it.live("runs multi-turn file edits and persists checkpoint diffs", () =>
       const checkpointRows = yield* harness.checkpointRepository.listByThreadId({
         threadId: THREAD_ID,
       });
+
       assert.deepEqual(
         checkpointRows.map((row) => row.checkpointTurnCount),
         [1, 2],
@@ -259,6 +270,7 @@ it.live("runs multi-turn file edits and persists checkpoint diffs", () =>
         fallbackFromToHead: false,
         ignoreWhitespace: false,
       });
+
       assert.equal(incrementalDiff.includes("README.md"), true);
 
       const fullDiff = yield* harness.checkpointStore.diffCheckpoints({
@@ -268,6 +280,7 @@ it.live("runs multi-turn file edits and persists checkpoint diffs", () =>
         fallbackFromToHead: false,
         ignoreWhitespace: false,
       });
+
       assert.equal(fullDiff.includes("README.md"), true);
 
       assert.equal(
@@ -350,6 +363,7 @@ it.live("records failed turn runtime state and checkpoint status as error", () =
           entry.activities.some((activity) => activity.kind === "runtime.error") &&
           entry.checkpoints.length === 1,
       );
+
       assert.equal(thread.session?.status, "error");
       assert.equal(thread.checkpoints[0]?.status, "error");
 
@@ -357,10 +371,13 @@ it.live("records failed turn runtime state and checkpoint status as error", () =
         threadId: THREAD_ID,
         checkpointTurnCount: 1,
       });
+
       assert.equal(Option.isSome(checkpointRow), true);
+
       if (Option.isSome(checkpointRow)) {
         assert.equal(checkpointRow.value.status, "error");
       }
+
       assert.equal(
         gitRefExists(harness.workspaceDir, checkpointRefForThreadTurn(THREAD_ID, 1)),
         true,
@@ -495,10 +512,12 @@ it.live("reverts to an earlier checkpoint and trims checkpoint projections + git
           entry.checkpoints.some((checkpoint) => checkpoint.checkpointTurnCount === 2),
         8000,
       );
+
       // Mastra-backed providers assign their own turn ids, so read them back.
       const turnIdAt = (turnCount: number) =>
         beforeRevert.checkpoints.find((checkpoint) => checkpoint.checkpointTurnCount === turnCount)
           ?.turnId;
+
       const firstTurnId = turnIdAt(1);
       const secondTurnId = turnIdAt(2);
 
@@ -511,11 +530,13 @@ it.live("reverts to an earlier checkpoint and trims checkpoint projections + git
       });
 
       yield* harness.waitForDomainEvent((event) => event.type === "thread.reverted");
+
       const revertedThread = yield* harness.waitForThread(
         THREAD_ID,
         (entry) =>
           entry.checkpoints.length === 1 && entry.checkpoints[0]?.checkpointTurnCount === 1,
       );
+
       assert.equal(revertedThread.checkpoints[0]?.checkpointTurnCount, 1);
       assert.deepEqual(
         revertedThread.messages.map((message) => ({ role: message.role, text: message.text })),
@@ -555,6 +576,7 @@ it.live("reverts to an earlier checkpoint and trims checkpoint projections + git
       const checkpointRows = yield* harness.checkpointRepository.listByThreadId({
         threadId: THREAD_ID,
       });
+
       assert.equal(checkpointRows.length, 1);
     }),
   ),
@@ -583,9 +605,11 @@ it.live(
               activity.payload !== null,
           ),
         );
+
         const failureActivity = thread.activities.find(
           (activity) => activity.kind === "checkpoint.revert.failed",
         );
+
         assert.equal(failureActivity !== undefined, true);
         assert.equal(
           String(

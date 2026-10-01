@@ -111,11 +111,14 @@ describe("ProviderRuntimeIngestion", () => {
       2_000,
       sourceThreadId,
     );
+
     const sourcePlan = sourceThreadWithPlan.proposedPlans.find(
       (entry: ProviderRuntimeTestProposedPlan) =>
         entry.id === "plan:thread-plan:turn:turn-plan-source",
     );
+
     expect(sourcePlan).toBeDefined();
+
     if (!sourcePlan) {
       throw new Error("Expected source plan to exist.");
     }
@@ -153,9 +156,11 @@ describe("ProviderRuntimeIngestion", () => {
     await harness.drain();
 
     const readModel = await harness.readModel();
+
     const sourceThreadAfterRejectedStart = readModel.threads.find(
       (entry) => entry.id === sourceThreadId,
     );
+
     expect(
       sourceThreadAfterRejectedStart?.proposedPlans.find((entry) => entry.id === sourcePlan.id),
     ).toMatchObject({
@@ -166,6 +171,7 @@ describe("ProviderRuntimeIngestion", () => {
     const targetThreadAfterRejectedStart = readModel.threads.find(
       (entry) => entry.id === targetThreadId,
     );
+
     expect(targetThreadAfterRejectedStart?.session?.status).toBe("running");
     expect(targetThreadAfterRejectedStart?.session?.activeTurnId).toBe(activeTurnId);
   });
@@ -273,11 +279,14 @@ describe("ProviderRuntimeIngestion", () => {
       2_000,
       sourceThreadId,
     );
+
     const sourcePlan = sourceThreadWithPlan.proposedPlans.find(
       (entry: ProviderRuntimeTestProposedPlan) =>
         entry.id === "plan:thread-plan:turn:turn-plan-source",
     );
+
     expect(sourcePlan).toBeDefined();
+
     if (!sourcePlan) {
       throw new Error("Expected source plan to exist.");
     }
@@ -325,9 +334,11 @@ describe("ProviderRuntimeIngestion", () => {
     await harness.drain();
 
     const readModel = await harness.readModel();
+
     const sourceThreadAfterUnrelatedStart = readModel.threads.find(
       (entry) => entry.id === sourceThreadId,
     );
+
     expect(
       sourceThreadAfterUnrelatedStart?.proposedPlans.find((entry) => entry.id === sourcePlan.id),
     ).toMatchObject({
@@ -395,10 +406,12 @@ describe("ProviderRuntimeIngestion", () => {
           proposedPlan.id === "plan:thread-1:turn:turn-plan-buffer",
       ),
     );
+
     const proposedPlan = thread.proposedPlans.find(
       (entry: ProviderRuntimeTestProposedPlan) =>
         entry.id === "plan:thread-1:turn:turn-plan-buffer",
     );
+
     expect(proposedPlan?.planMarkdown).toBe("## Buffered plan\n\n- first\n- second");
   });
 });

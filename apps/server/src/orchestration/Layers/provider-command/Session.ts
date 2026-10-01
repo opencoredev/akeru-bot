@@ -34,6 +34,7 @@ import type { createDependencies } from "./Dependencies.ts";
 import type { createFailures } from "./Failures.ts";
 import type { createWorkspace } from "./Workspace.ts";
 import type { createMentions } from "./Mentions.ts";
+
 export function createSession({
   resolveThreadShell,
   threadsAwaitingRestrictiveSessionCleanup,
@@ -79,20 +80,25 @@ export function createSession({
   const reconcileRestrictiveSessionCleanup = Effect.fn("reconcileRestrictiveSessionCleanup")(
     function* (threadId: ThreadId) {
       const thread = yield* resolveThreadShell(threadId);
+
       const persistedCleanupRequired =
         thread?.runtimeMode === "approval-required" &&
         thread.session?.runtimeMode === "full-access" &&
         thread.session.status === "error";
+
       if (!threadsAwaitingRestrictiveSessionCleanup.has(threadId) && !persistedCleanupRequired) {
         return false;
       }
 
       threadsAwaitingRestrictiveSessionCleanup.add(threadId);
+
       const activeSession = (yield* agentController.listSessions()).find(
         (session) => session.threadId === threadId,
       );
+
       if (activeSession === undefined) {
         threadsAwaitingRestrictiveSessionCleanup.delete(threadId);
+
         return true;
       }
 
@@ -101,6 +107,7 @@ export function createSession({
           if (Cause.hasInterruptsOnly(cause)) {
             return Effect.interrupt;
           }
+
           return Effect.logWarning(
             "provider command reactor failed to interrupt quarantined session",
             {
@@ -110,18 +117,23 @@ export function createSession({
           );
         }),
       );
+
       const sessionAfterInterrupt = (yield* agentController.listSessions()).find(
         (session) => session.threadId === threadId,
       );
+
       if (sessionAfterInterrupt === undefined) {
         threadsAwaitingRestrictiveSessionCleanup.delete(threadId);
+
         return true;
       }
+
       yield* agentController.stopSession({ threadId });
 
       const remainingSession = (yield* agentController.listSessions()).find(
         (session) => session.threadId === threadId,
       );
+
       if (remainingSession !== undefined) {
         return yield* new ProviderAdapterRequestError({
           provider: providerErrorLabel(remainingSession.provider),
@@ -129,7 +141,9 @@ export function createSession({
           detail: `Provider session '${threadId}' is still active after a restrictive runtime mode update failed.`,
         });
       }
+
       threadsAwaitingRestrictiveSessionCleanup.delete(threadId);
+
       return true;
     },
   );
@@ -143,22 +157,26 @@ export function createSession({
     },
   ) {
     const thread = yield* resolveThreadShell(threadId);
+
     if (!thread) {
       return yield* Effect.die(new Error(`Thread '${threadId}' was not found in read model.`));
     }
 
     const desiredRuntimeMode = thread.runtimeMode;
     const requestedModelSelection = options?.modelSelection;
+
     const resolveActiveSession = (threadId: ThreadId) =>
       agentController
         .listSessions()
         .pipe(Effect.map((sessions) => sessions.find((session) => session.threadId === threadId)));
 
     const activeSession = yield* resolveActiveSession(threadId);
+
     const activeThreadSession =
       thread.session !== null && thread.session.status !== "stopped" && activeSession
         ? thread.session
         : null;
+
     if (
       activeThreadSession !== null &&
       activeSession !== undefined &&
@@ -171,21 +189,26 @@ export function createSession({
         detail: `Thread '${threadId}' has an active provider session without a provider instance id.`,
       });
     }
+
     const currentInstanceId =
       activeThreadSession !== null &&
       activeSession !== undefined &&
       activeSession.providerInstanceId !== undefined
         ? activeSession.providerInstanceId
         : thread.modelSelection.instanceId;
+
     const desiredEngine = yield* resolveControllerEngine(
       thread,
       requestedModelSelection ?? thread.modelSelection,
     );
+
     const desiredModelSelection = desiredEngine.modelSelection;
     const desiredInstanceId = desiredModelSelection.instanceId;
+
     const effectiveRequestedModelSelection = desiredEngine.configured
       ? desiredModelSelection
       : requestedModelSelection;
+
     const currentEngine =
       currentInstanceId === desiredInstanceId
         ? desiredEngine
@@ -193,9 +216,11 @@ export function createSession({
             instanceId: currentInstanceId,
             model: activeSession?.model ?? thread.modelSelection.model,
           });
+
     const currentInfo = currentEngine.routing;
     const desiredInfo = desiredEngine.routing;
     const desiredDriverKind = desiredInfo.driverKind;
+
     if (!isProviderDriverKind(desiredDriverKind)) {
       return yield* new ProviderAdapterRequestError({
         provider: providerErrorLabel(String(desiredDriverKind)),
@@ -203,7 +228,9 @@ export function createSession({
         detail: `Requested provider instance '${desiredInstanceId}' uses unknown provider driver '${desiredDriverKind}'. The driver is not installed in this build.`,
       });
     }
+
     const preferredProvider: ProviderDriverKind = desiredDriverKind;
+
     if (options?.pendingTurnStart === true && thread.session?.status !== "running") {
       yield* setThreadSession({
         threadId,
@@ -221,6 +248,7 @@ export function createSession({
         createdAt,
       });
     }
+
     if (thread.session !== null) {
       yield* rejectStartedThreadModelChangeIfRequired({
         threadId,
@@ -235,21 +263,26 @@ export function createSession({
         requestedModelSelection: effectiveRequestedModelSelection,
       });
     }
+
     const providerChanged = currentInfo.driverKind !== desiredInfo.driverKind;
     const project = yield* resolveProject(thread.projectId);
+
     const legacyWorkspaceOwnerProjectId = project
       ? yield* projectionSnapshotQuery.getOriginalProjectIdByWorkspaceRoot(project.workspaceRoot)
       : Option.none<ProjectId>();
+
     const mcpServers = yield* resolveControllerMcpServers(thread);
     const serverSettings = yield* serverSettingsService.getSettings;
     const botSandboxBrowserSharing = serverSettings.botSandboxBrowserSharing;
     const respondingBotId = resolveControllerBotId(thread);
+
     const respondingBot =
       respondingBotId === null
         ? undefined
         : yield* projectionBotRepository
             .getById({ botId: respondingBotId })
             .pipe(Effect.map(Option.getOrUndefined));
+
     const respondingGroup =
       thread.groupId == null
         ? undefined
@@ -258,7 +291,9 @@ export function createSession({
           : (yield* projectionSnapshotQuery.getCommandReadModel()).groups.find(
               (group) => group.id === thread.groupId,
             );
+
     const effectiveSandbox = respondingBot?.sandbox ?? serverSettings.sandbox.defaultProvider;
+
     const sandboxEnvironment =
       effectiveSandbox === "local"
         ? undefined
@@ -268,10 +303,12 @@ export function createSession({
               variable.value,
             ]),
           );
+
     if (effectiveSandbox !== "local") {
       const missingCredential = SANDBOX_PROVIDER_CREDENTIALS[effectiveSandbox].find(
         (credential) => !(sandboxEnvironment?.[credential.name] ?? "").trim(),
       );
+
       if (missingCredential) {
         return yield* new ProviderAdapterRequestError({
           provider: providerErrorLabel(preferredProvider),
@@ -280,10 +317,12 @@ export function createSession({
         });
       }
     }
+
     const effectiveCwd = resolveThreadWorkspaceCwd({
       thread,
       projects: project ? [project] : [],
     });
+
     const botWorkspaceKey = botWorkspaceResourceKey({
       resourceScope: botRuntimeResourceScope({
         sharing: botSandboxBrowserSharing,
@@ -351,6 +390,7 @@ export function createSession({
             detail: `Provider session '${session.threadId}' started without a provider instance id.`,
           });
         }
+
         yield* setThreadSession({
           threadId,
           session: {
@@ -374,34 +414,44 @@ export function createSession({
 
     const existingSessionThreadId =
       thread.session && thread.session.status !== "stopped" && activeSession ? thread.id : null;
+
     if (existingSessionThreadId) {
       const runtimeModeChanged = thread.runtimeMode !== thread.session?.runtimeMode;
       const cwdChanged = effectiveCwd !== activeSession?.cwd;
       const sessionModelSwitch = desiredEngine.capabilities.sessionModelSwitch;
+
       const modelChanged =
         effectiveRequestedModelSelection !== undefined &&
         effectiveRequestedModelSelection.model !== activeSession?.model;
+
       const instanceChanged =
         effectiveRequestedModelSelection !== undefined &&
         activeSession?.providerInstanceId !== effectiveRequestedModelSelection.instanceId;
+
       const shouldRestartForModelChange = modelChanged && sessionModelSwitch === "unsupported";
       const previousModelSelection = threadModelSelections.get(threadId);
+
       const shouldRestartForModelSelectionChange =
         preferredProvider === "claudeAgent" &&
         effectiveRequestedModelSelection !== undefined &&
         !Equal.equals(previousModelSelection, effectiveRequestedModelSelection);
+
       const previousMcpServers = threadMcpServers.get(threadId);
+
       const mcpServersChanged = previousMcpServers
         ? !Equal.equals(previousMcpServers, mcpServers)
         : !Equal.equals(
             activeSession?.mcpServerIds ?? [],
             mcpServers.map((server) => server.id),
           );
+
       const previousBotWorkspaceKey = threadBotWorkspaceKeys.get(threadId);
+
       const botWorkspaceChanged =
         previousBotWorkspaceKey !== undefined && previousBotWorkspaceKey !== botWorkspaceKey;
 
       const activeTurnId = activeSession?.activeTurnId;
+
       if (botWorkspaceChanged && activeTurnId !== undefined) {
         yield* Effect.logInfo("provider command reactor deferred bot workspace migration", {
           threadId,
@@ -409,6 +459,7 @@ export function createSession({
           previousBotWorkspaceKey,
           botWorkspaceKey,
         });
+
         return { threadId: existingSessionThreadId, engine: desiredEngine };
       }
 
@@ -423,6 +474,7 @@ export function createSession({
       ) {
         threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
         threadMcpServers.set(threadId, mcpServers);
+
         return { threadId: existingSessionThreadId, engine: desiredEngine };
       }
 
@@ -430,6 +482,7 @@ export function createSession({
         shouldRestartForModelChange || providerChanged || botWorkspaceChanged
           ? undefined
           : (activeSession?.resumeCursor ?? undefined);
+
       yield* Effect.logInfo("provider command reactor restarting provider session", {
         threadId,
         existingSessionThreadId,
@@ -452,12 +505,15 @@ export function createSession({
         botWorkspaceChanged,
         hasResumeCursor: resumeCursor !== undefined,
       });
+
       if (mcpServersChanged || providerChanged) {
         yield* agentController.stopSession({ threadId });
       }
+
       const restartedSession = yield* startProviderSession(
         resumeCursor !== undefined ? { resumeCursor } : undefined,
       );
+
       yield* Effect.logInfo("provider command reactor restarted provider session", {
         threadId,
         previousSessionId: existingSessionThreadId,
@@ -469,6 +525,7 @@ export function createSession({
       yield* bindSessionToThread(restartedSession);
       threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
       threadMcpServers.set(threadId, mcpServers);
+
       return { threadId: restartedSession.threadId, engine: desiredEngine };
     }
 
@@ -482,19 +539,24 @@ export function createSession({
           ),
         )
       : Option.none();
+
     const resumableBinding = Option.getOrUndefined(persistedBinding);
+
     const resumeCursor =
       resumableBinding?.provider === preferredProvider &&
       resumableBinding.providerInstanceId === desiredInstanceId &&
       resumableBinding.resumeCursor != null
         ? resumableBinding.resumeCursor
         : undefined;
+
     const startedSession = yield* startProviderSession(
       resumeCursor === undefined ? undefined : { resumeCursor },
     );
+
     yield* bindSessionToThread(startedSession);
     threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
     threadMcpServers.set(threadId, mcpServers);
+
     return { threadId: startedSession.threadId, engine: desiredEngine };
   });
 
@@ -508,27 +570,34 @@ export function createSession({
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThreadShell(input.threadId);
+
     if (!thread) {
       return yield* Effect.die(
         new Error(`Thread '${input.threadId}' was not found in read model.`),
       );
     }
+
     const ensured = yield* ensureSessionForThread(input.threadId, input.createdAt, {
       ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
       pendingTurnStart: true,
     });
+
     if (input.modelSelection !== undefined || ensured.engine.configured) {
       threadModelSelections.set(input.threadId, ensured.engine.modelSelection);
     }
+
     const normalizedInput = toNonEmptyProviderInput(
       yield* expandComposerMentions(input.threadId, input.messageText),
     );
+
     const normalizedAttachments = input.attachments ?? [];
+
     const activeSession = yield* agentController
       .listSessions()
       .pipe(
         Effect.map((sessions) => sessions.find((session) => session.threadId === input.threadId)),
       );
+
     const sessionModelSwitch =
       activeSession === undefined
         ? "in-session"
@@ -544,7 +613,9 @@ export function createSession({
                 instanceId: activeSession.providerInstanceId,
                 model: activeSession.model ?? thread.modelSelection.model,
               })).capabilities.sessionModelSwitch;
+
     const requestedModelSelection = ensured.engine.modelSelection;
+
     const modelForTurn =
       sessionModelSwitch === "unsupported" && input.modelSelection === undefined
         ? activeSession?.model !== undefined
@@ -567,6 +638,7 @@ export function createSession({
       ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
     };
   });
+
   return {
     reconcileRestrictiveSessionCleanup,
     ensureSessionForThread,

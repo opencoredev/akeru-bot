@@ -20,6 +20,7 @@ import {
 } from "./Fields.ts";
 import type { createDependencies } from "./Dependencies.ts";
 import type { createContext } from "./Context.ts";
+
 export function createFailures({
   agentController,
   projectionBotRepository,
@@ -47,6 +48,7 @@ export function createFailures({
     detail: string,
   ) => {
     const botId = resolveControllerBotId(thread);
+
     return (
       botId === null
         ? Effect.succeed(undefined)
@@ -112,12 +114,16 @@ export function createFailures({
     readonly providerFailed?: boolean;
   }) {
     const thread = yield* resolveThreadDetail(input.threadId);
+
     if (!thread) return;
+
     const messageId = MessageId.make(
       `assistant:user-input-response-failed:${input.threadId}:${input.requestId}`,
     );
+
     if (thread.messages.some((message) => message.id === messageId)) return;
     const turnId = thread.session?.activeTurnId ?? undefined;
+
     const text = input.providerFailed
       ? "I could not continue that request because the provider failed. Check the provider, then send it again."
       : "I could not continue that request because the bot session restarted. Send it again.";
@@ -149,12 +155,16 @@ export function createFailures({
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThreadDetail(input.threadId);
+
     if (!thread) return;
+
     const messageId = MessageId.make(
       `assistant:approval-response-failed:${input.threadId}:${input.requestId}`,
     );
+
     if (thread.messages.some((message) => message.id === messageId)) return;
     const turnId = thread.session?.activeTurnId ?? undefined;
+
     const text =
       "I could not continue that approval because the bot session restarted. Send it again.";
 
@@ -180,23 +190,30 @@ export function createFailures({
   const formatFailureDetail = (cause: Cause.Cause<unknown>): string => {
     const failReason = cause.reasons.find(Cause.isFailReason);
     const capError = isBotUsageCapExceeded(failReason?.error) ? failReason.error : undefined;
+
     if (capError) return capError.message;
+
     const composioError = isComposioOperationError(failReason?.error)
       ? failReason.error
       : undefined;
+
     if (composioError) return composioError.message;
+
     return readableErrorDetail(failReason ? failReason.error : Cause.squash(cause));
   };
 
   const formatFailure = (cause: Cause.Cause<unknown>) => {
     const detail = formatFailureDetail(cause);
     const failReason = cause.reasons.find(Cause.isFailReason);
+
     if (isBotUsageCapExceeded(failReason?.error)) {
       return { detail, unavailability: "usage-cap" as const };
     }
+
     const provider = isProviderAdapterRequestError(failReason?.error)
       ? failReason.error.provider
       : "unknown";
+
     return { detail, unavailability: providerUnavailabilityFromDetail(provider, detail) } as const;
   };
 
@@ -224,9 +241,11 @@ export function createFailures({
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThreadShell(input.threadId);
+
     if (!thread) {
       return;
     }
+
     const session = thread.session;
     yield* setThreadSession({
       threadId: input.threadId,
@@ -248,6 +267,7 @@ export function createFailures({
       createdAt: input.createdAt,
     });
   });
+
   return {
     failDelegation,
     failDelegationStart,

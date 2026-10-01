@@ -11,6 +11,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type { createDependencies } from "./Dependencies.ts";
+
 export function createMentions({
   serverSettingsService,
   projectionSnapshotQuery,
@@ -28,9 +29,11 @@ export function createMentions({
     messageText: string,
   ) {
     const references = collectComposerMentionReferences(messageText);
+
     if (!references.browser && references.threadIds.length === 0) {
       return messageText;
     }
+
     const browser = !references.browser
       ? null
       : (yield* serverSettingsService.getSettings.pipe(
@@ -39,14 +42,18 @@ export function createMentions({
           ))
         ? ("enabled" as const)
         : ("disabled" as const);
+
     const threads: ThreadMentionSource[] = [];
+
     // Hidden or missing chats do not use up a context slot, but every lookup
     // counts toward a separate cap so a prompt cannot force unbounded reads.
     const mentionedIds = references.threadIds
       .filter((id) => id !== threadId)
       .slice(0, THREAD_MENTION_MAX_LOOKUPS);
+
     for (const mentionedId of mentionedIds) {
       if (threads.length >= THREAD_MENTION_MAX_THREADS) break;
+
       const snapshot = yield* projectionSnapshotQuery
         .getThreadDetailSnapshot(ThreadId.make(mentionedId), {
           turnLimit: THREAD_MENTION_TURN_LIMIT,
@@ -61,6 +68,7 @@ export function createMentions({
             }).pipe(Effect.as(undefined)),
           ),
         );
+
       // Mentioned chats resolve within this environment; hidden chats are excluded.
       if (snapshot === undefined || isHiddenComposerThread(snapshot.thread)) continue;
       threads.push({
@@ -69,7 +77,9 @@ export function createMentions({
         messages: snapshot.thread.messages,
       });
     }
+
     return appendComposerMentionContext(messageText, { browser, threads });
   });
+
   return { expandComposerMentions };
 }

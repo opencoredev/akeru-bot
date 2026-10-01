@@ -19,6 +19,7 @@ describe("ProviderCommandReactor", () => {
     async ({ enableAgentBrowserAccess, browserText }) => {
       const harness = await createHarness({ enableAgentBrowserAccess });
       const now = "2026-01-01T00:00:00.000Z";
+
       const startTurn = (threadId: string, messageId: string, text: string) =>
         harness.run(
           harness.engine.dispatch({
@@ -70,8 +71,10 @@ describe("ProviderCommandReactor", () => {
   it("never expands archived, deleted, background, or unknown chats", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
+
     const dispatch = (command: Parameters<typeof harness.engine.dispatch>[0]) =>
       harness.run(harness.engine.dispatch(command));
+
     const createWithMessage = async (threadId: string, title: string, sent: number) => {
       await dispatch({
         type: "thread.create",
@@ -119,8 +122,10 @@ describe("ProviderCommandReactor", () => {
 
     // Four excluded mentions come first, so a valid fifth one needs a free context slot.
     await createWithMessage("thread-visible", "Visible plan", 4);
+
     const prompt =
       "see @chat:thread-archived @chat:thread-deleted @chat:delegation-thread-worker @chat:thread-missing @chat:thread-visible";
+
     await dispatch({
       type: "thread.turn.start",
       commandId: CommandId.make("cmd-turn-mentioning"),

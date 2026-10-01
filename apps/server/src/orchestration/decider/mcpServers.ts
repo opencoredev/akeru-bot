@@ -37,6 +37,7 @@ export const decideMcpServers = Effect.fn("decideMcpServers")(function* ({
         command,
         mcpServerId: command.mcpServerId,
       });
+
       const mcpServer =
         command.transport === "stdio"
           ? {
@@ -70,13 +71,16 @@ export const decideMcpServers = Effect.fn("decideMcpServers")(function* ({
         payload: { mcpServer },
       };
     }
+
     case "mcp-server.update": {
       const existing = yield* requireMcpServer({
         readModel,
         command,
         mcpServerId: command.mcpServerId,
       });
+
       const occurredAt = yield* nowIso;
+
       const mcpServer =
         command.transport === "stdio"
           ? {
@@ -116,15 +120,18 @@ export const decideMcpServers = Effect.fn("decideMcpServers")(function* ({
         payload: { mcpServer },
       };
     }
+
     case "mcp-server.instructions.set": {
       const existing = yield* requireMcpServer({
         readModel,
         command,
         mcpServerId: command.mcpServerId,
       });
+
       const occurredAt = yield* nowIso;
       const { instructions: _previous, ...rest } = existing;
       const instructions = command.instructions.trim();
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "mcp-server",
@@ -142,6 +149,7 @@ export const decideMcpServers = Effect.fn("decideMcpServers")(function* ({
         },
       };
     }
+
     case "mcp-server.delete": {
       yield* requireMcpServer({
         readModel,
@@ -149,6 +157,7 @@ export const decideMcpServers = Effect.fn("decideMcpServers")(function* ({
         mcpServerId: command.mcpServerId,
       });
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "mcp-server",
@@ -163,6 +172,7 @@ export const decideMcpServers = Effect.fn("decideMcpServers")(function* ({
         },
       };
     }
+
     case "mcp-server.enable":
     case "mcp-server.disable": {
       const existing = yield* requireMcpServer({
@@ -170,8 +180,10 @@ export const decideMcpServers = Effect.fn("decideMcpServers")(function* ({
         command,
         mcpServerId: command.mcpServerId,
       });
+
       const occurredAt = yield* nowIso;
       const enabled = command.type === "mcp-server.enable";
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "mcp-server",

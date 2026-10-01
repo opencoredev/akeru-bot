@@ -29,6 +29,7 @@ describe("CheckpointReactor", () => {
   afterEach(testScope.dispose);
   it("refreshes local git status state on turn completion using the session cwd", async () => {
     const gitStatusRefreshCalls: string[] = [];
+
     const harness = await createHarness({
       seedFilesystemCheckpoints: false,
       gitStatusRefreshCalls,
@@ -53,6 +54,7 @@ describe("CheckpointReactor", () => {
     Effect.gen(function* () {
       const lookupStarted = yield* Deferred.make<void>();
       const finishLookup = yield* Deferred.make<void>();
+
       const harness = yield* Effect.promise(() =>
         createHarness({
           seedFilesystemCheckpoints: false,
@@ -61,6 +63,7 @@ describe("CheckpointReactor", () => {
           ),
         }),
       );
+
       NodeFS.writeFileSync(NodePath.join(harness.cwd, "README.md"), "completed turn\n");
       harness.provider.emit({
         type: "turn.completed",
@@ -212,6 +215,7 @@ describe("CheckpointReactor", () => {
       seedFilesystemCheckpoints: false,
       threadWorktreePath: null,
     });
+
     const createdAt = "2026-01-01T00:00:00.000Z";
 
     await harness.run(

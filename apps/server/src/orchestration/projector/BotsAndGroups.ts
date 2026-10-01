@@ -49,7 +49,9 @@ export function projectBotsAndGroups(
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
           };
+
           const existing = nextBase.bots.some((entry) => entry.id === payload.botId);
+
           return {
             ...nextBase,
             bots: existing
@@ -128,7 +130,9 @@ export function projectBotsAndGroups(
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
           };
+
           const existing = nextBase.groups.some((entry) => entry.id === payload.groupId);
+
           return {
             ...nextBase,
             groups: existing
@@ -152,7 +156,9 @@ export function projectBotsAndGroups(
       return decodeForEvent(GroupMemberAssignedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
           const group = nextBase.groups.find((entry) => entry.id === payload.groupId);
+
           if (!group) return nextBase;
+
           const members = group.members.some(
             (member) => isGroupBotMember(member) && member.botId === payload.member.botId,
           )
@@ -162,6 +168,7 @@ export function projectBotsAndGroups(
                   : member,
               )
             : [...group.members, payload.member];
+
           return {
             ...nextBase,
             groups: updateGroup(nextBase.groups, payload.groupId, {
@@ -196,13 +203,16 @@ export function projectBotsAndGroups(
       return decodeForEvent(GroupPersonAssignedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
           const group = nextBase.groups.find((entry) => entry.id === payload.groupId);
+
           if (!group) return nextBase;
+
           const members = [
             ...group.members.filter(
               (member) => member.kind !== "person" || member.personId !== payload.person.personId,
             ),
             payload.person,
           ];
+
           return {
             ...nextBase,
             groups: updateGroup(nextBase.groups, payload.groupId, {
@@ -236,14 +246,18 @@ export function projectBotsAndGroups(
       return decodeForEvent(GroupBossSetPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
           const group = nextBase.groups.find((entry) => entry.id === payload.groupId);
+
           if (!group) return nextBase;
+
           let members = group.members.filter(
             (member) => !isGroupBotMember(member) || member.botId !== payload.bossBotId,
           );
+
           if (payload.previousBossBotId !== null) {
             members = members.filter(
               (member) => !isGroupBotMember(member) || member.botId !== payload.previousBossBotId,
             );
+
             if (payload.previousBossRole === "specialist") {
               members = [
                 ...members,
@@ -251,7 +265,9 @@ export function projectBotsAndGroups(
               ];
             }
           }
+
           members = [...members, { kind: "bot", botId: payload.bossBotId, role: "boss" }];
+
           return {
             ...nextBase,
             groups: updateGroup(nextBase.groups, payload.groupId, {

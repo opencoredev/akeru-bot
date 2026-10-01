@@ -35,6 +35,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected group creation invariant error");
       }
+
       expect(error.detail).toContain("requires a boss");
     }),
   );
@@ -55,10 +56,12 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
         }),
       });
+
       const events = Array.isArray(result) ? result : [result];
 
       expect(events.map((event) => event.type)).toEqual(["group.created"]);
       const created = events[0];
+
       if (created?.type !== "group.created") throw new Error("Expected group.created");
       expect(created.payload.bossBotId).toBe(BOSS_ID);
       expect(created.payload.members).toEqual([
@@ -86,6 +89,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected minimum group size invariant error");
       }
+
       expect(error.detail).toContain("at least two active bots");
     }),
   );
@@ -97,6 +101,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         personId: AuthSessionId.make("person-creator"),
         displayName: "Creator",
       };
+
       const result = yield* decideOrchestrationCommand({
         command: {
           type: "group.create",
@@ -112,6 +117,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
         }),
       });
+
       const events = Array.isArray(result) ? result : [result];
       const created = events.find((event) => event.type === "group.created");
 
@@ -123,6 +129,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
   it.effect("assigns one bot to several groups", () =>
     Effect.gen(function* () {
       const otherGroupId = GroupId.make("group-other");
+
       const result = yield* decideOrchestrationCommand({
         command: {
           type: "group.member.assign",
@@ -145,6 +152,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           ],
         }),
       });
+
       const events = Array.isArray(result) ? result : [result];
 
       expect(events.map((event) => event.type)).toEqual(["group.member-assigned"]);
@@ -168,6 +176,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected boss archive invariant error");
       }
+
       expect(error.detail).toContain("Set a new boss before archiving it");
     }),
   );
@@ -189,6 +198,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected minimum group size invariant error");
       }
+
       expect(error.detail).toContain("at least two active bots");
     }),
   );
@@ -196,6 +206,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
   it.effect("rejects a legacy bot group move that would leave one active bot", () =>
     Effect.gen(function* () {
       const targetGroupId = GroupId.make("group-target");
+
       const error = yield* decideOrchestrationCommand({
         command: {
           type: "bot.update",
@@ -225,6 +236,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected minimum group size invariant error");
       }
+
       expect(error.detail).toContain("at least two active bots");
     }),
   );
@@ -243,12 +255,14 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           threads: [makeGroupThread()],
         }),
       });
+
       const events = Array.isArray(result) ? result : [result];
       const ownership = events.find((event) => event.type === "thread.ownership-updated");
 
       if (ownership?.type !== "thread.ownership-updated") {
         throw new Error("Expected thread.ownership-updated");
       }
+
       expect(ownership.payload).toMatchObject({ botId: null, groupId: null });
     }),
   );
@@ -278,6 +292,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected archived bot invariant error");
       }
+
       expect(error.detail).toContain("is archived");
     }),
   );
@@ -300,6 +315,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected last boss invariant error");
       }
+
       expect(error.detail).toContain("last boss");
       expect(error.detail).toContain("group.boss.set");
     }),
@@ -323,6 +339,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected minimum group size invariant error");
       }
+
       expect(error.detail).toContain("at least two active bots");
     }),
   );
@@ -346,6 +363,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected minimum group size invariant error");
       }
+
       expect(error.detail).toContain("at least two active bots");
     }),
   );
@@ -377,10 +395,12 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           ],
         }),
       });
+
       const events = Array.isArray(result) ? result : [result];
 
       expect(events.map((event) => event.type)).toEqual(["group.boss-set"]);
       const bossSet = events[0];
+
       if (bossSet?.type !== "group.boss-set") throw new Error("Expected group.boss-set");
       expect(bossSet.payload.previousBossRole).toBe("unassigned");
     }),
@@ -390,6 +410,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
     Effect.gen(function* () {
       const groupState = (model: OrchestrationReadModel) =>
         model.groups.find((group) => group.id === GROUP_ID);
+
       let model = makeReadModel({
         bots: [
           makeBot({ id: BOSS_ID }),
@@ -499,6 +520,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         groupId: GROUP_ID,
         personId: PERSON_ID,
       };
+
       const { readModel } = yield* applyCommand(
         makeReadModel({
           bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
@@ -508,12 +530,15 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       );
 
       expect(readModel.groups[0]?.members.some((member) => member.kind === "person")).toBe(false);
+
       const error = yield* decideOrchestrationCommand({ command: leave, readModel }).pipe(
         Effect.flip,
       );
+
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected group leave invariant error");
       }
+
       expect(error.detail).toContain("not a member");
     }),
   );
@@ -528,6 +553,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
         startTurnCommand(SPECIALIST_ID),
       );
+
       expect(mentioned.readModel.threads[0]?.respondingBotId).toBe(SPECIALIST_ID);
 
       const { readModel } = yield* applyCommand(mentioned.readModel, {

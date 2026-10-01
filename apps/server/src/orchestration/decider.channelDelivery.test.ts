@@ -17,7 +17,9 @@ import type { OrchestrationProjectorDecodeError } from "./Errors.ts";
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
 
 const NOW = "2026-01-01T00:00:00.000Z";
+
 const THREAD_ID = ThreadId.make("thread-channel-delivery");
+
 const MESSAGE_ID = MessageId.make("message-channel-delivery");
 
 const baseCommand = {
@@ -82,6 +84,7 @@ const makeReadModel = (
         updatedAt: NOW,
       },
     });
+
     for (const [index, message] of messages.entries()) {
       model = yield* projectEvent(model, {
         sequence: 3 + index,
@@ -105,6 +108,7 @@ const makeReadModel = (
           updatedAt: NOW,
         },
       });
+
       if (message.channelDelivery !== undefined) {
         model = yield* projectEvent(model, {
           sequence: 3 + messages.length + index,
@@ -126,6 +130,7 @@ const makeReadModel = (
         });
       }
     }
+
     return model;
   });
 
@@ -139,6 +144,7 @@ it.layer(NodeServices.layer)("channel delivery decider", (it) => {
         command: baseCommand,
         readModel,
       });
+
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events.map((event) => event.type)).toEqual(["thread.channel-delivery-set"]);
       expect(events[0]).toMatchObject({
@@ -150,9 +156,11 @@ it.layer(NodeServices.layer)("channel delivery decider", (it) => {
   it.effect("rejects a user message that is visible in the command model", () =>
     Effect.gen(function* () {
       const readModel = yield* makeReadModel([{ role: "user" }]);
+
       const error = yield* Effect.flip(
         decideOrchestrationCommand({ command: baseCommand, readModel }),
       );
+
       expect(error).toMatchObject({
         _tag: "OrchestrationCommandInvariantError",
         commandType: "thread.channel-delivery.set",
@@ -163,10 +171,12 @@ it.layer(NodeServices.layer)("channel delivery decider", (it) => {
   it.effect("emits nothing when the message already holds the same delivery state", () =>
     Effect.gen(function* () {
       const readModel = yield* makeReadModel([{ role: "assistant", channelDelivery: "unknown" }]);
+
       const decided = yield* decideOrchestrationCommand({
         command: baseCommand,
         readModel,
       });
+
       expect(decided).toEqual([]);
     }),
   );
@@ -174,10 +184,12 @@ it.layer(NodeServices.layer)("channel delivery decider", (it) => {
   it.effect("emits for an assistant message whose delivery differs", () =>
     Effect.gen(function* () {
       const readModel = yield* makeReadModel([{ role: "assistant", channelDelivery: "pending" }]);
+
       const decided = yield* decideOrchestrationCommand({
         command: baseCommand,
         readModel,
       });
+
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events.map((event) => event.type)).toEqual(["thread.channel-delivery-set"]);
     }),

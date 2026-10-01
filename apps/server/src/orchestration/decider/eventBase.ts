@@ -36,15 +36,19 @@ export const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 export function userInputAnswerText(answers: Record<string, unknown>): string | null {
   const values = Object.values(answers).flatMap((answer) => {
     if (typeof answer === "string") return [answer];
+
     if (Array.isArray(answer)) {
       return answer.filter((value): value is string => typeof value === "string");
     }
+
     return [];
   });
+
   const text = values
     .map((value) => value.trim())
     .filter(Boolean)
     .join("\n");
+
   return text.length > 0 ? text : null;
 }
 
@@ -85,6 +89,7 @@ export function hasSameDelegationOwnership(
 ): boolean {
   const { phase: _currentPhase, updatedAt: _currentUpdatedAt, ...currentOwnership } = current;
   const { phase: _nextPhase, updatedAt: _nextUpdatedAt, ...nextOwnership } = next;
+
   return NodeUtil.isDeepStrictEqual(currentOwnership, nextOwnership);
 }
 
@@ -100,7 +105,9 @@ export function hasSameDelegationOwnership(
  */
 export function isStaleRequestFailureDetail(payload: Record<string, unknown> | null): boolean {
   const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : null;
+
   if (detail === null) return false;
+
   return (
     detail.includes("stale pending approval request") ||
     detail.includes("unknown pending approval request") ||
@@ -123,13 +130,17 @@ export function hasOpenBlockingRequest(thread: {
   readonly activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>;
 }): boolean {
   const openRequestIds = new Set<string>();
+
   for (const activity of thread.activities) {
     const payload =
       typeof activity.payload === "object" && activity.payload !== null
         ? (activity.payload as Record<string, unknown>)
         : null;
+
     const requestId = typeof payload?.requestId === "string" ? payload.requestId : null;
+
     if (requestId === null) continue;
+
     if (activity.kind === "approval.requested" || activity.kind === "user-input.requested") {
       openRequestIds.add(requestId);
     } else if (activity.kind === "approval.resolved" || activity.kind === "user-input.resolved") {
@@ -142,6 +153,7 @@ export function hasOpenBlockingRequest(thread: {
       openRequestIds.delete(requestId);
     }
   }
+
   return openRequestIds.size > 0;
 }
 
@@ -180,6 +192,7 @@ export function threadHasQueuedTurnStart(
       message.role === "user" ? Math.max(latest, Date.parse(message.createdAt)) : latest,
     Number.NEGATIVE_INFINITY,
   );
+
   const latestTurnAtMs =
     thread.latestTurn === null
       ? Number.NEGATIVE_INFINITY
@@ -192,7 +205,9 @@ export function threadHasQueuedTurnStart(
             candidate == null ? Number.NEGATIVE_INFINITY : Date.parse(candidate),
           ),
         );
+
   const queuedAgeMs = Date.parse(occurredAt) - latestUserMessageAtMs;
+
   return (
     thread.session?.status !== "error" &&
     Number.isFinite(latestUserMessageAtMs) &&
@@ -208,6 +223,7 @@ export function activeGroupBotIds(
   const activeBotIds = new Set(
     readModel.bots.filter((bot) => bot.archivedAt === null).map((bot) => bot.id),
   );
+
   return new Set(
     group.members
       .filter(isGroupBotMember)
@@ -226,6 +242,7 @@ export function requireActiveResponder(input: {
 }) {
   if (input.botId === null || input.botId === undefined) return Effect.void;
   const botId = input.botId;
+
   return input.groupId === null || input.groupId === undefined
     ? Effect.asVoid(requireBotNotArchived({ ...input, botId }))
     : Effect.asVoid(requireActiveGroupMember({ ...input, groupId: input.groupId, botId }));
@@ -244,19 +261,23 @@ export const resolveAssistantMessageBot = Effect.fn("resolveAssistantMessageBot"
     readonly thread: OrchestrationReadModel["threads"][number];
   }) {
     const botId = input.command.respondingBotId;
+
     if (botId === undefined) return input.thread.respondingBotId ?? null;
+
     if (input.thread.groupId === null && input.thread.botId !== botId) {
       return yield* new OrchestrationCommandInvariantError({
         commandType: input.command.type,
         detail: `Bot '${botId}' cannot post in thread '${input.thread.id}'.`,
       });
     }
+
     yield* requireActiveResponder({
       readModel: input.readModel,
       command: input.command,
       groupId: input.thread.groupId,
       botId,
     });
+
     return botId;
   },
 );

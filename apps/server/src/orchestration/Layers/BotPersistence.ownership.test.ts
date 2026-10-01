@@ -25,10 +25,12 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const missingBotId = BotId.make("bot-missing");
       const missingGroupId = GroupId.make("group-missing");
       const createdAt = "2026-01-03T00:00:00.000Z";
+
       const modelSelection = {
         instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5.6",
       };
+
       const makeBotCreate = (input: { readonly botId: BotId; readonly groupId: GroupId | null }) =>
         engine.dispatch({
           type: "bot.create",
@@ -88,6 +90,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
           }),
         ),
       ]);
+
       assert.deepEqual(
         missingBotResults.map((result) => result._tag),
         ["Failure", "Failure", "Failure"],
@@ -107,6 +110,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         commandId: CommandId.make("cmd-archive-owner"),
         botId,
       });
+
       const archivedOwnerResult = yield* Effect.result(
         engine.dispatch({
           type: "thread.create",
@@ -123,6 +127,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
           createdAt,
         }),
       );
+
       assert.equal(archivedOwnerResult._tag, "Failure");
     }),
   );
@@ -139,6 +144,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const threadId = ThreadId.make("thread-group-routing");
       const personId = AuthSessionId.make("person-routing");
       const createdAt = "2026-01-04T00:00:00.000Z";
+
       const modelSelection = {
         instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5.6",
@@ -153,6 +159,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         defaultModelSelection: modelSelection,
         createdAt,
       });
+
       for (const botId of [bossBotId, specialistBotId]) {
         yield* engine.dispatch({
           type: "bot.create",
@@ -169,6 +176,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
           createdAt,
         });
       }
+
       yield* engine.dispatch({
         type: "group.create",
         commandId: CommandId.make("cmd-routing-group"),
@@ -214,12 +222,15 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const thread = (yield* snapshots.getShellSnapshot()).threads.find(
         (entry) => entry.id === threadId,
       );
+
       assert.equal(thread?.respondingBotId, specialistBotId);
+
       const turnRows = yield* sql<{ readonly respondingBotId: string | null }>`
         SELECT responding_bot_id AS "respondingBotId"
         FROM projection_turns
         WHERE thread_id = ${threadId}
       `;
+
       assert.deepEqual(turnRows, [{ respondingBotId: specialistBotId }]);
 
       yield* engine.dispatch({
@@ -241,6 +252,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const specialistBotId = BotId.make("bot-owner-specialist");
       const groupId = GroupId.make("group-owner");
       const createdAt = "2026-01-02T00:00:00.000Z";
+
       const modelSelection = {
         instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5.6",
@@ -321,6 +333,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       const invalidOwnership = yield* Effect.result(
         createThread({ threadId: ThreadId.make("thread-invalid"), botId, groupId }),
       );
+
       assert.equal(invalidOwnership._tag, "Failure");
 
       const ownership = (yield* snapshots.getShellSnapshot()).threads.map((thread) => ({
@@ -328,6 +341,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         botId: thread.botId ?? null,
         groupId: thread.groupId ?? null,
       }));
+
       assert.deepEqual(ownership, [
         { id: ThreadId.make("thread-bot"), botId, groupId: null },
         { id: ThreadId.make("thread-group"), botId: null, groupId },
@@ -340,6 +354,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         WHERE event_type = 'thread.created'
           AND stream_id = ${ThreadId.make("thread-unowned")}
       `;
+
       const historicalRows = yield* sql<{
         readonly botIdType: string | null;
         readonly groupIdType: string | null;
@@ -351,6 +366,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         WHERE event_type = 'thread.created'
           AND stream_id = ${ThreadId.make("thread-unowned")}
       `;
+
       assert.deepEqual(historicalRows, [{ botIdType: null, groupIdType: null }]);
 
       yield* sql`DELETE FROM projection_threads`;
@@ -358,6 +374,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
       yield* projectionPipeline.bootstrap;
 
       const rebuilt = yield* snapshots.getSnapshot();
+
       const rebuiltOwnership = rebuilt.threads
         .filter((thread) => thread.deletedAt === null)
         .map((thread) => ({
@@ -365,10 +382,13 @@ it.layer(TestLayer)("bot persistence", (it) => {
           botId: thread.botId ?? null,
           groupId: thread.groupId ?? null,
         }));
+
       assert.deepEqual(rebuiltOwnership, ownership);
+
       const rebuiltHistoricalThread = rebuilt.threads.find(
         (thread) => thread.id === ThreadId.make("thread-unowned"),
       );
+
       assert.equal(rebuiltHistoricalThread?.botId, null);
       assert.equal(rebuiltHistoricalThread?.groupId, null);
     }),

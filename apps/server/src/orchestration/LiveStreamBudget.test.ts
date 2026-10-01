@@ -28,6 +28,7 @@ describe("LiveStreamBudget", () => {
                 ),
               ),
             );
+
             expect(yield* pull).toEqual([{ text: "first" }]);
             // The other two items are in the source's pull state, not its queue.
             expect(yield* Queue.size(queue)).toBe(0);

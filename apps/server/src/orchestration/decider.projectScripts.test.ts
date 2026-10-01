@@ -34,6 +34,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
       const initial = createEmptyReadModel(now);
+
       const readModel = yield* projectEvent(initial, {
         sequence: 1,
         eventId: asEventId("evt-project-create-scripts"),
@@ -85,6 +86,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
   it.effect("propagates a project favicon path in project.meta.update", () =>
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
+
       const readModel = yield* projectEvent(createEmptyReadModel(now), {
         sequence: 1,
         eventId: asEventId("evt-project-create-favicon"),
@@ -127,6 +129,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
       const initial = createEmptyReadModel(now);
+
       const readModel = yield* projectEvent(initial, {
         sequence: 1,
         eventId: asEventId("evt-project-create"),
@@ -173,6 +176,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
       const initial = createEmptyReadModel(now);
+
       const withProject = yield* projectEvent(initial, {
         sequence: 1,
         eventId: asEventId("evt-project-create-deleted-root"),
@@ -194,6 +198,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
           updatedAt: now,
         },
       });
+
       const readModel = yield* projectEvent(withProject, {
         sequence: 2,
         eventId: asEventId("evt-project-delete-root"),
@@ -232,6 +237,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
       const initial = createEmptyReadModel(now);
+
       const withFirstProject = yield* projectEvent(initial, {
         sequence: 1,
         eventId: asEventId("evt-project-create-first"),
@@ -253,6 +259,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
           updatedAt: now,
         },
       });
+
       const readModel = yield* projectEvent(withFirstProject, {
         sequence: 2,
         eventId: asEventId("evt-project-create-second"),

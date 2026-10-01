@@ -71,6 +71,7 @@ describe("ProviderCommandReactor", () => {
         const harness = yield* Effect.promise(() =>
           createHarness({ requiresNewThreadForModelChange: true }),
         );
+
         const now = "2026-01-01T00:00:00.000Z";
 
         yield* harness.engine.dispatch({
@@ -114,9 +115,11 @@ describe("ProviderCommandReactor", () => {
         yield* Effect.promise(() =>
           harness.waitFor(async () => {
             const readModel = await harness.readModel();
+
             const thread = readModel.threads.find(
               (entry) => entry.id === ThreadId.make("thread-1"),
             );
+
             return (
               thread?.activities.some(
                 (activity) => activity.kind === "provider.turn.start.failed",
@@ -145,6 +148,7 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness({
       threadModelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.run(
@@ -304,6 +308,7 @@ describe("ProviderCommandReactor", () => {
         model: "claude-sonnet-4-6",
       },
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.run(
@@ -378,6 +383,7 @@ describe("ProviderCommandReactor", () => {
         model: "claude-sonnet-4-6",
       },
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.run(
@@ -511,6 +517,7 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness({
       botEngine: { provider: "codex", model: "gpt-5-codex" },
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.run(
@@ -743,6 +750,7 @@ describe("ProviderCommandReactor", () => {
         harness.waitFor(async () => {
           const readModel = await harness.readModel();
           const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+
           return (
             thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed") ??
             false

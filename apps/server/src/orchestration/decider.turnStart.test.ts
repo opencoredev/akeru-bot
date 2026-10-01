@@ -17,6 +17,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
       const initial = createEmptyReadModel(now);
+
       const withProject = yield* projectEvent(initial, {
         sequence: 1,
         eventId: asEventId("evt-project-create"),
@@ -38,6 +39,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
           updatedAt: now,
         },
       });
+
       const readModel = yield* projectEvent(withProject, {
         sequence: 2,
         eventId: asEventId("evt-thread-create"),
@@ -95,9 +97,11 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
       const turnStartEvent = events[1];
       expect(turnStartEvent?.type).toBe("thread.turn-start-requested");
       expect(turnStartEvent?.causationEventId).toBe(events[0]?.eventId ?? null);
+
       if (turnStartEvent?.type !== "thread.turn-start-requested") {
         return;
       }
+
       expect(turnStartEvent.payload).toMatchObject({
         threadId: ThreadId.make("thread-1"),
         messageId: asMessageId("message-user-1"),

@@ -11,6 +11,7 @@ import type { createContext } from "./Context.ts";
 import type { createSession } from "./Session.ts";
 import type { createTurns } from "./Turns.ts";
 import type { createRequests } from "./Requests.ts";
+
 export const createRouting = Effect.fn("makeprovider-command-Routing")(function* ({
   agentController,
   appendProviderFailureActivity,
@@ -74,28 +75,35 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
     yield* increment(orchestrationEventsProcessedTotal, {
       eventType: event.type,
     });
+
     switch (event.type) {
       case "delegation.updated": {
         const delegation = event.payload.delegation;
+
         if (delegation.phase._tag === "Canceled" && delegation.phase.childThreadId !== null) {
           yield* agentController.interruptTurn({
             threadId: delegation.phase.childThreadId,
             ...(delegation.phase.childTurnId ? { turnId: delegation.phase.childTurnId } : {}),
           });
         }
+
         return;
       }
+
       case "delegation.retry-requested": {
         // The decider already checked phase and cap; the runtime starts a fresh
         // record that points back at the original, which stays untouched.
         const { delegationId, parentThreadId } = event.payload;
         const dispatchDelegation = agentController.dispatchDelegation;
+
         if (!dispatchDelegation) {
           yield* Effect.logWarning("delegation retry requested without a delegation runtime", {
             delegationId,
           });
+
           return;
         }
+
         yield* dispatchDelegation({ _tag: "Retry", delegationId }).pipe(
           Effect.catchTag("AgentControllerRuntimeError", (error) =>
             appendProviderFailureActivity({
@@ -108,16 +116,21 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
             }),
           ),
         );
+
         return;
       }
+
       case "thread.meta-updated":
         yield* threadTitleRegenerationWorker.enqueue(event);
+
         return;
       case "thread.runtime-mode-set": {
         const thread = yield* resolveThreadShell(event.payload.threadId);
+
         if (!thread?.session || thread.session.status === "stopped") {
           return;
         }
+
         const session = thread.session;
         const cachedModelSelection = threadModelSelections.get(event.payload.threadId);
         yield* ensureSessionForThread(
@@ -129,12 +142,16 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
             if (Cause.hasInterruptsOnly(cause)) {
               return Effect.interrupt;
             }
+
             const detail = formatFailureDetail(cause);
+
             const restrictsActiveSession =
               session.runtimeMode === "full-access" && thread.runtimeMode === "approval-required";
+
             if (restrictsActiveSession) {
               threadsAwaitingRestrictiveSessionCleanup.add(thread.id);
             }
+
             const reportFailure = setThreadSessionErrorOnTurnStartFailure({
               threadId: thread.id,
               detail,
@@ -151,6 +168,7 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
                 }),
               ),
             );
+
             return Effect.exit(
               restrictsActiveSession ? reconcileRestrictiveSessionCleanup(thread.id) : Effect.void,
             ).pipe(
@@ -164,25 +182,33 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
             );
           }),
         );
+
         return;
       }
+
       case "thread.turn-start-requested":
         yield* processTurnStartRequested(event);
+
         return;
       case "thread.turn-resume-requested":
         yield* processTurnResumeRequested(event);
+
         return;
       case "thread.turn-interrupt-requested":
         yield* processTurnInterruptRequested(event);
+
         return;
       case "thread.approval-response-requested":
         yield* processApprovalResponseRequested(event);
+
         return;
       case "thread.user-input-response-requested":
         yield* processUserInputResponseRequested(event);
+
         return;
       case "thread.session-stop-requested":
         yield* processSessionStopRequested(event, restrictiveSessionCleanupConfirmed);
+
         return;
     }
   });
@@ -202,6 +228,7 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.interrupt;
         }
+
         return Effect.logWarning("provider command reactor failed to process event", {
           eventType: event.type,
           cause: Cause.pretty(cause),
@@ -225,6 +252,7 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
 
   const enqueueProviderCommand = (event: ProviderIntentEvent) =>
     worker.enqueue(providerCommandLaneKey(event), event);
+
   return {
     processDomainEvent,
     processDomainEventSafely,

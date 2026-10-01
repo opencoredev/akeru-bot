@@ -14,12 +14,15 @@ export function createTurns({
       yield* projectionThreadSessionRepository.deleteByThreadId({
         threadId: event.payload.threadId,
       });
+
       return;
     }
+
     if (event.type === "thread.turn-resume-requested") {
       const existing = yield* projectionThreadSessionRepository.getByThreadId({
         threadId: event.payload.threadId,
       });
+
       if (Option.isNone(existing)) return;
       yield* projectionThreadSessionRepository.upsert({
         ...existing.value,
@@ -27,11 +30,14 @@ export function createTurns({
         lastError: null,
         updatedAt: event.payload.createdAt,
       });
+
       return;
     }
+
     if (event.type !== "thread.session-set") {
       return;
     }
+
     yield* projectionThreadSessionRepository.upsert({
       threadId: event.payload.threadId,
       status: event.payload.session.status,
@@ -53,6 +59,7 @@ export function createTurns({
         yield* projectionTurnRepository.deleteByThreadId({
           threadId: event.payload.threadId,
         });
+
         return;
 
       case "thread.turn-start-requested": {
@@ -64,11 +71,13 @@ export function createTurns({
           sourceProposedPlanId: event.payload.sourceProposedPlan?.planId ?? null,
           requestedAt: event.payload.createdAt,
         });
+
         return;
       }
 
       case "thread.session-set": {
         const turnId = event.payload.session.activeTurnId;
+
         if (turnId === null || event.payload.session.status !== "running") {
           if (
             event.payload.session.status === "error" ||
@@ -79,16 +88,20 @@ export function createTurns({
               threadId: event.payload.threadId,
             });
           }
+
           // Leaving the "running" session status is the turn-end signal:
           // settle still-running turns so their duration reflects the whole
           // turn rather than the last assistant message.
           const settledTurnState = settledTurnStateForSessionStatus(event.payload.session.status);
+
           if (settledTurnState === null) {
             return;
           }
+
           const existingTurns = yield* projectionTurnRepository.listByThreadId({
             threadId: event.payload.threadId,
           });
+
           yield* Effect.forEach(
             existingTurns.filter((turn) => turn.turnId !== null && turn.state === "running"),
             (turn) =>
@@ -105,6 +118,7 @@ export function createTurns({
                   }),
             { concurrency: 1 },
           );
+
           return;
         }
 
@@ -114,6 +128,7 @@ export function createTurns({
         const otherRunningTurns = yield* projectionTurnRepository.listByThreadId({
           threadId: event.payload.threadId,
         });
+
         yield* Effect.forEach(
           otherRunningTurns.filter(
             (turn) => turn.turnId !== null && turn.turnId !== turnId && turn.state === "running",
@@ -134,14 +149,17 @@ export function createTurns({
           threadId: event.payload.threadId,
           turnId,
         });
+
         const pendingTurnStart = yield* projectionTurnRepository.getPendingTurnStartByThreadId({
           threadId: event.payload.threadId,
         });
+
         if (Option.isSome(existingTurn)) {
           const nextState =
             existingTurn.value.state === "completed" || existingTurn.value.state === "error"
               ? existingTurn.value.state
               : "running";
+
           yield* projectionTurnRepository.upsertByTurnId({
             ...existingTurn.value,
             state: nextState,
@@ -207,6 +225,7 @@ export function createTurns({
         yield* projectionTurnRepository.deletePendingTurnStartByThreadId({
           threadId: event.payload.threadId,
         });
+
         return;
       }
 
@@ -214,6 +233,7 @@ export function createTurns({
         if (event.payload.turnId === null || event.payload.role !== "assistant") {
           return;
         }
+
         // A completed assistant message only settles the turn once the
         // session is no longer running it — providers may emit several
         // assistant messages per turn (commentary between tool calls), and
@@ -222,15 +242,19 @@ export function createTurns({
         const session = yield* projectionThreadSessionRepository.getByThreadId({
           threadId: event.payload.threadId,
         });
+
         const turnStillRunning =
           Option.isSome(session) &&
           session.value.status === "running" &&
           session.value.activeTurnId === event.payload.turnId;
+
         const settlesTurn = !event.payload.streaming && !turnStillRunning;
+
         const existingTurn = yield* projectionTurnRepository.getByTurnId({
           threadId: event.payload.threadId,
           turnId: event.payload.turnId,
         });
+
         if (Option.isSome(existingTurn)) {
           yield* projectionTurnRepository.upsertByTurnId({
             ...existingTurn.value,
@@ -250,8 +274,10 @@ export function createTurns({
             startedAt: existingTurn.value.startedAt ?? event.payload.createdAt,
             requestedAt: existingTurn.value.requestedAt ?? event.payload.createdAt,
           });
+
           return;
         }
+
         yield* projectionTurnRepository.upsertByTurnId({
           turnId: event.payload.turnId,
           threadId: event.payload.threadId,
@@ -269,6 +295,7 @@ export function createTurns({
           checkpointStatus: null,
           checkpointFiles: [],
         });
+
         return;
       }
 
@@ -276,10 +303,12 @@ export function createTurns({
         if (event.payload.turnId === undefined) {
           return;
         }
+
         const existingTurn = yield* projectionTurnRepository.getByTurnId({
           threadId: event.payload.threadId,
           turnId: event.payload.turnId,
         });
+
         if (Option.isSome(existingTurn)) {
           yield* projectionTurnRepository.upsertByTurnId({
             ...existingTurn.value,
@@ -288,8 +317,10 @@ export function createTurns({
             startedAt: existingTurn.value.startedAt ?? event.payload.createdAt,
             requestedAt: existingTurn.value.requestedAt ?? event.payload.createdAt,
           });
+
           return;
         }
+
         yield* projectionTurnRepository.upsertByTurnId({
           turnId: event.payload.turnId,
           threadId: event.payload.threadId,
@@ -307,6 +338,7 @@ export function createTurns({
           checkpointStatus: null,
           checkpointFiles: [],
         });
+
         return;
       }
 
@@ -316,14 +348,17 @@ export function createTurns({
         const session = yield* projectionThreadSessionRepository.getByThreadId({
           threadId: event.payload.threadId,
         });
+
         const turnStillRunning =
           Option.isSome(session) &&
           session.value.status === "running" &&
           session.value.activeTurnId === event.payload.turnId;
+
         const existingTurn = yield* projectionTurnRepository.getByTurnId({
           threadId: event.payload.threadId,
           turnId: event.payload.turnId,
         });
+
         const nextState = event.payload.status === "error" ? "error" : "completed";
         yield* projectionTurnRepository.clearCheckpointTurnConflict({
           threadId: event.payload.threadId,
@@ -347,8 +382,10 @@ export function createTurns({
             requestedAt: existingTurn.value.requestedAt ?? event.payload.completedAt,
             completedAt: event.payload.completedAt,
           });
+
           return;
         }
+
         yield* projectionTurnRepository.upsertByTurnId({
           turnId: event.payload.turnId,
           threadId: event.payload.threadId,
@@ -366,6 +403,7 @@ export function createTurns({
           checkpointStatus: event.payload.status,
           checkpointFiles: event.payload.files,
         });
+
         return;
       }
 
@@ -373,12 +411,14 @@ export function createTurns({
         const existingTurns = yield* projectionTurnRepository.listByThreadId({
           threadId: event.payload.threadId,
         });
+
         const keptTurns = existingTurns.filter(
           (turn) =>
             turn.turnId !== null &&
             turn.checkpointTurnCount !== null &&
             turn.checkpointTurnCount <= event.payload.turnCount,
         );
+
         yield* projectionTurnRepository.deleteByThreadId({
           threadId: event.payload.threadId,
         });
@@ -393,6 +433,7 @@ export function createTurns({
                 }),
           { concurrency: 1 },
         ).pipe(Effect.asVoid);
+
         return;
       }
 
@@ -402,5 +443,6 @@ export function createTurns({
   });
 
   const applyCheckpointsProjection: ProjectorDefinition["apply"] = () => Effect.void;
+
   return { applyThreadSessionsProjection, applyThreadTurnsProjection, applyCheckpointsProjection };
 }

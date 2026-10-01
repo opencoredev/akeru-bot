@@ -33,6 +33,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel("settled"),
       });
+
       const turnEvents = Array.isArray(turnResult) ? turnResult : [turnResult];
       expect(turnEvents.map((event) => event.type)).toEqual([
         "thread.unsettled",
@@ -52,6 +53,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         // back to neutral.
         readModel: makeReadModel("active"),
       });
+
       const sessionEvents = Array.isArray(sessionResult) ? sessionResult : [sessionResult];
       expect(sessionEvents.map((event) => event.type)).toEqual([
         "thread.unsettled",
@@ -79,6 +81,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel("active"),
       });
+
       const turnEvents = Array.isArray(turnResult) ? turnResult : [turnResult];
       // Activity resets the active override to neutral.
       expect(turnEvents.map((event) => event.type)).toEqual([
@@ -105,6 +108,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel("active"),
       });
+
       const activityEvents = Array.isArray(activityResult) ? activityResult : [activityResult];
       expect(activityEvents.map((event) => event.type)).toEqual([
         "thread.unsettled",
@@ -133,6 +137,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel("settled"),
       });
+
       const events = Array.isArray(result) ? result : [result];
       expect(events.map((event) => event.type)).toEqual([
         "thread.unsettled",
@@ -154,6 +159,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           },
           readModel: makeReadModel("settled"),
         });
+
         const events = Array.isArray(result) ? result : [result];
         expect(events.map((event) => event.type)).toEqual(["thread.session-set"]);
       }
@@ -180,6 +186,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel("settled"),
       });
+
       const approvalEvents = Array.isArray(approvalResult) ? approvalResult : [approvalResult];
       expect(approvalEvents.map((event) => event.type)).toEqual([
         "thread.unsettled",
@@ -204,6 +211,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel("settled"),
       });
+
       const routineEvents = Array.isArray(routineResult) ? routineResult : [routineResult];
       expect(routineEvents.map((event) => event.type)).toEqual(["thread.activity-appended"]);
     }),
@@ -225,6 +233,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         command: stopCommand("cmd-stop-settled-idle"),
         readModel: makeReadModel("settled", null, createSession("ready")),
       });
+
       const stoppedEvents = Array.isArray(stopped) ? stopped : [stopped];
       expect(stoppedEvents.map((event) => event.type)).toEqual(["thread.session-stop-requested"]);
 
@@ -234,6 +243,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         command: stopCommand("cmd-stop-unsettled"),
         readModel: makeReadModel(null, null, createSession("starting")),
       }).pipe(Effect.flip);
+
       expect(unsettledError._tag).toBe("OrchestrationCommandInvariantError");
 
       // Still settled but the session is already coming alive: same drop.
@@ -241,6 +251,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         command: stopCommand("cmd-stop-session-alive"),
         readModel: makeReadModel("settled", null, createSession("starting")),
       }).pipe(Effect.flip);
+
       expect(aliveError._tag).toBe("OrchestrationCommandInvariantError");
 
       // Without the flag the stop stays unconditional (archive, stop button).
@@ -253,6 +264,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel(null, null, createSession("starting")),
       });
+
       const unconditionalEvents = Array.isArray(unconditional) ? unconditional : [unconditional];
       expect(unconditionalEvents.map((event) => event.type)).toEqual([
         "thread.session-stop-requested",
@@ -286,15 +298,18 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           },
           readModel: makeReadModel(null),
         });
+
         const events = Array.isArray(result) ? result : [result];
         expect(events.map((event) => event.type)).toEqual(["thread.activity-appended"]);
 
         const appended = events[0]!;
         assert.equal(appended.type, "thread.activity-appended");
+
         const projected = yield* projectEvent(makeReadModel(null), {
           ...appended,
           sequence: 1,
         } as OrchestrationEvent).pipe(Effect.orDie);
+
         const activity = projected.threads[0]?.activities[0];
         expect(activity?.kind).toBe("memory.observation.dropped");
         expect(activity?.tone).toBe("error");

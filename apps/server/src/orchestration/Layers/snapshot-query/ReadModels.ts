@@ -209,21 +209,27 @@ export function createReadModels({
               for (const row of projectRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of botRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of groupRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of delegationRows) {
                 updatedAt = maxIso(updatedAt, row.delegation.updatedAt);
               }
+
               for (const mcpServer of mcpServers) {
                 updatedAt = maxIso(updatedAt, mcpServer.updatedAt);
               }
+
               for (const row of threadRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of stateRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
@@ -298,15 +304,19 @@ export function createReadModels({
 
               for (const row of latestTurnRows) {
                 updatedAt = maxIso(updatedAt, row.requestedAt);
+
                 if (row.startedAt !== null) {
                   updatedAt = maxIso(updatedAt, row.startedAt);
                 }
+
                 if (row.completedAt !== null) {
                   updatedAt = maxIso(updatedAt, row.completedAt);
                 }
+
                 if (latestTurnByThread.has(row.threadId)) {
                   continue;
                 }
+
                 latestTurnByThread.set(row.threadId, mapLatestTurn(row));
               }
 
@@ -396,6 +406,7 @@ export function createReadModels({
           if (isPersistenceError(error)) {
             return error;
           }
+
           return toPersistenceSqlError("ProjectionSnapshotQuery.getSnapshot:query")(error);
         }),
       );
@@ -506,9 +517,11 @@ export function createReadModels({
 
               for (let index = 0; index < projectRows.length; index += 1) {
                 const row = projectRows[index];
+
                 if (!row) {
                   continue;
                 }
+
                 updatedAt = maxIso(updatedAt, row.updatedAt);
                 projects.push({
                   id: row.projectId,
@@ -523,84 +536,113 @@ export function createReadModels({
                   deletedAt: row.deletedAt,
                 });
               }
+
               for (const row of botRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of groupRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of delegationRows) {
                 updatedAt = maxIso(updatedAt, row.delegation.updatedAt);
               }
+
               for (const mcpServer of mcpServers) {
                 updatedAt = maxIso(updatedAt, mcpServer.updatedAt);
               }
+
               for (let index = 0; index < threadRows.length; index += 1) {
                 const row = threadRows[index];
+
                 if (!row) {
                   continue;
                 }
+
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (let index = 0; index < proposedPlanRows.length; index += 1) {
                 const row = proposedPlanRows[index];
+
                 if (!row) {
                   continue;
                 }
+
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (let index = 0; index < sessionRows.length; index += 1) {
                 const row = sessionRows[index];
+
                 if (!row) {
                   continue;
                 }
+
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (let index = 0; index < latestTurnRows.length; index += 1) {
                 const row = latestTurnRows[index];
+
                 if (!row) {
                   continue;
                 }
+
                 updatedAt = maxIso(updatedAt, row.requestedAt);
+
                 if (row.startedAt !== null) {
                   updatedAt = maxIso(updatedAt, row.startedAt);
                 }
+
                 if (row.completedAt !== null) {
                   updatedAt = maxIso(updatedAt, row.completedAt);
                 }
               }
+
               for (let index = 0; index < stateRows.length; index += 1) {
                 const row = stateRows[index];
+
                 if (!row) {
                   continue;
                 }
+
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
 
               const latestTurnByThread = new Map<string, OrchestrationLatestTurn>();
+
               for (let index = 0; index < latestTurnRows.length; index += 1) {
                 const row = latestTurnRows[index];
+
                 if (!row) {
                   continue;
                 }
+
                 latestTurnByThread.set(row.threadId, mapLatestTurn(row));
               }
+
               const proposedPlansByThread = new Map<string, Array<OrchestrationProposedPlan>>();
               const sessionByThread = new Map<string, OrchestrationSession>();
 
               for (let index = 0; index < sessionRows.length; index += 1) {
                 const row = sessionRows[index];
+
                 if (!row) {
                   continue;
                 }
+
                 sessionByThread.set(row.threadId, mapSessionRow(row));
               }
 
               for (let index = 0; index < proposedPlanRows.length; index += 1) {
                 const row = proposedPlanRows[index];
+
                 if (!row) {
                   continue;
                 }
+
                 const threadProposedPlans = proposedPlansByThread.get(row.threadId) ?? [];
                 threadProposedPlans.push(mapProposedPlanRow(row));
                 proposedPlansByThread.set(row.threadId, threadProposedPlans);
@@ -608,9 +650,11 @@ export function createReadModels({
 
               for (let index = 0; index < threadRows.length; index += 1) {
                 const row = threadRows[index];
+
                 if (!row) {
                   continue;
                 }
+
                 threads.push({
                   id: row.threadId,
                   projectId: row.projectId,
@@ -668,8 +712,10 @@ export function createReadModels({
           if (isPersistenceError(error)) {
             return error;
           }
+
           return toPersistenceSqlError("ProjectionSnapshotQuery.getCommandReadModel:query")(error);
         }),
       );
+
   return { getSnapshot, getCommandReadModel };
 }

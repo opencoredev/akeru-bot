@@ -520,6 +520,7 @@ pending_approval_requests AS (
         LIMIT ${THREAD_DETAIL_ACTIVITY_LIMIT}
       `,
   });
+
   return {
     listThreadActivityRowsByThread,
     listThreadActivityIdsByThread,

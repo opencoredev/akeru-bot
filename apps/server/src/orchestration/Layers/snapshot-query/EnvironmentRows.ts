@@ -612,6 +612,7 @@ export function createEnvironmentRows({ sql }: Pick<ProjectionSnapshotDependenci
         FROM projection_state
       `,
   });
+
   return {
     listProjectRows,
     listBotRows,

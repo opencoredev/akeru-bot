@@ -22,10 +22,12 @@ import { createTurns } from "./provider-command/Turns.ts";
 import { createRequests } from "./provider-command/Requests.ts";
 import { createRouting } from "./provider-command/Routing.ts";
 import { createRecovery } from "./provider-command/Recovery.ts";
+
 export {
   type KeyedDrainableWorker,
   makeKeyedDrainableWorker,
 } from "./provider-command/KeyedDrainableWorker.ts";
+
 export {
   type ControllerThreadIdentity,
   type ControllerEngineThread,
@@ -57,6 +59,7 @@ const make = Effect.gen(function* () {
     threadMcpServers,
     threadsAwaitingRestrictiveSessionCleanup,
   } = yield* createDependencies();
+
   const { resolveProject, ensureThreadWorktree, maybeGenerateAndRenameWorktreeBranchForFirstTurn } =
     createWorkspace({
       projectionSnapshotQuery,
@@ -67,6 +70,7 @@ const make = Effect.gen(function* () {
       orchestrationEngine,
       serverCommandId,
     });
+
   const {
     resolveThreadShell,
     resolveThreadDetail,
@@ -82,10 +86,12 @@ const make = Effect.gen(function* () {
     composio,
     providerRegistry,
   });
+
   const { expandComposerMentions } = createMentions({
     serverSettingsService,
     projectionSnapshotQuery,
   });
+
   const {
     findInterruptedThreadTitleRegenerations,
     clearInterruptedThreadTitleRegenerations,
@@ -100,8 +106,10 @@ const make = Effect.gen(function* () {
     serverCommandId,
     projectionSnapshotQuery,
   });
+
   const { dispatchDelegationRelease, releaseDelegationResults, readDelegationResults } =
     createDelegations({ serverCommandId, orchestrationEngine, projectionSnapshotQuery });
+
   const {
     failDelegation,
     failDelegationStart,
@@ -121,6 +129,7 @@ const make = Effect.gen(function* () {
     resolveThreadDetail,
     resolveThreadShell,
   });
+
   const {
     reconcileRestrictiveSessionCleanup,
     ensureSessionForThread,
@@ -144,6 +153,7 @@ const make = Effect.gen(function* () {
     providerSessionDirectory,
     expandComposerMentions,
   });
+
   const {
     processTurnStartRequested,
     processTurnInterruptRequested,
@@ -170,6 +180,7 @@ const make = Effect.gen(function* () {
     formatFailureDetail,
     setThreadSession,
   });
+
   const { processApprovalResponseRequested, processUserInputResponseRequested } = createRequests({
     resolveThreadShell,
     appendProviderFailureActivity,
@@ -179,6 +190,7 @@ const make = Effect.gen(function* () {
     setThreadSession,
     appendUserInputFailureReply,
   });
+
   const { worker, enqueueProviderCommand } = yield* createRouting({
     agentController,
     appendProviderFailureActivity,
@@ -197,6 +209,7 @@ const make = Effect.gen(function* () {
     processUserInputResponseRequested,
     processSessionStopRequested,
   });
+
   const { recoverStartupProviderWork } = createRecovery({
     orchestrationEngine,
     serverEventId,
@@ -209,6 +222,7 @@ const make = Effect.gen(function* () {
     setThreadSessionErrorOnTurnStartFailure,
     formatFailureDetail,
   });
+
   // Highest event sequence the subscriber has handed to the worker, so drain
   // can wait for published events that are still in the subscription buffer.
   const seenSequence = yield* SubscriptionRef.make(0);
@@ -227,9 +241,11 @@ const make = Effect.gen(function* () {
     const baselineSequence = yield* orchestrationEngine.latestSequence;
     const liveEvents = yield* orchestrationEngine.subscribeDomainEvents;
     const replayThrough = yield* orchestrationEngine.latestSequence;
+
     if (replayThrough === baselineSequence) {
       return { domainEvents: liveEvents, baselineSequence };
     }
+
     const gapEvents = yield* Stream.runCollect(
       orchestrationEngine.readEvents(
         baselineSequence,
@@ -240,6 +256,7 @@ const make = Effect.gen(function* () {
       Effect.retry(Schedule.max([Schedule.exponential("100 millis"), Schedule.recurs(3)])),
       Effect.orDie,
     );
+
     return {
       domainEvents: Stream.fromIterable(gapEvents).pipe(
         Stream.concat(liveEvents.pipe(Stream.filter((event) => event.sequence > replayThrough))),
@@ -250,21 +267,25 @@ const make = Effect.gen(function* () {
 
   const start: ProviderCommandReactorShape["start"] = Effect.fn("start")(function* () {
     yield* SubscriptionRef.set(started, true);
+
     const interruptedTitleRegenerations = yield* findInterruptedThreadTitleRegenerations().pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.interrupt;
         }
+
         return Effect.logWarning(
           "provider command reactor failed to find interrupted title regenerations",
           { cause: Cause.pretty(cause) },
         ).pipe(Effect.as([]));
       }),
     );
+
     const processEvent = Effect.fn("processEvent")(function* (event: OrchestrationEvent) {
       yield* enqueueProviderIntent(event);
       yield* noteSeen(event.sequence);
     });
+
     const enqueueProviderIntent = Effect.fn("enqueueProviderIntent")(function* (
       event: OrchestrationEvent,
     ) {
@@ -308,6 +329,7 @@ const make = Effect.gen(function* () {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.interrupt;
         }
+
         return Effect.logWarning(
           "provider command reactor failed to clear interrupted title regenerations",
           {
@@ -316,7 +338,9 @@ const make = Effect.gen(function* () {
         );
       }),
     );
+
     const activation = yield* ServerActivation;
+
     if (activation === undefined) {
       yield* clearInterrupted;
     } else {
@@ -333,15 +357,18 @@ const make = Effect.gen(function* () {
         const target = (yield* SubscriptionRef.get(started))
           ? yield* orchestrationEngine.latestSequence
           : 0;
+
         yield* SubscriptionRef.changes(seenSequence).pipe(
           Stream.filter((seen) => seen >= target),
           Stream.runHead,
         );
         yield* worker.drain;
         yield* threadTitleRegenerationWorker.drain;
+
         if (target === 0 || (yield* orchestrationEngine.latestSequence) === target) return;
       }
     }),
   } satisfies ProviderCommandReactorShape;
 });
+
 export const ProviderCommandReactorLive = Layer.effect(ProviderCommandReactor, make);

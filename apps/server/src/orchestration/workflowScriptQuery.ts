@@ -64,6 +64,7 @@ export const readWorkflowScript = Effect.fn("orchestration.readWorkflowScript")(
       new OrchestrationGetWorkflowScriptError({ reason: "outside-root", scriptPath: resolved }),
     );
   }
+
   if (NodePath.extname(resolved) !== ".js") {
     return yield* Effect.fail(
       new OrchestrationGetWorkflowScriptError({ reason: "not-js", scriptPath: resolved }),
@@ -79,21 +80,27 @@ export const readWorkflowScript = Effect.fn("orchestration.readWorkflowScript")(
   const read = yield* Effect.tryPromise({
     try: async () => {
       const handle = await NodeFSP.open(resolved, "r");
+
       try {
         const stat = await handle.stat();
+
         if (!stat.isFile()) {
           return { failure: "not-regular-file" as const };
         }
+
         // The opened inode must be the same one realpath resolved to: a
         // process swapping the path between realpath and open changes the
         // inode, which this comparison catches.
         const pathStat = await NodeFSP.lstat(resolved);
+
         if (stat.ino !== pathStat.ino || stat.dev !== pathStat.dev) {
           return { failure: "changed-during-read" as const };
         }
+
         const truncated = stat.size > SCRIPT_BYTE_CAP;
         const buffer = Buffer.alloc(Math.min(stat.size, SCRIPT_BYTE_CAP));
         const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+
         return {
           contents: buffer.subarray(0, bytesRead).toString("utf8"),
           truncated,
@@ -109,6 +116,7 @@ export const readWorkflowScript = Effect.fn("orchestration.readWorkflowScript")(
         cause,
       }),
   });
+
   if ("failure" in read) {
     return yield* new OrchestrationGetWorkflowScriptError({
       reason: read.failure,

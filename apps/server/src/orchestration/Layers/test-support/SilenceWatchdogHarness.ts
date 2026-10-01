@@ -100,6 +100,7 @@ export function makeSilenceWatchdogHarness() {
   function makeTempDir(prefix: string): string {
     const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), prefix));
     tempDirs.push(dir);
+
     return dir;
   }
 
@@ -117,6 +118,7 @@ export function makeSilenceWatchdogHarness() {
     const interruptCalls: Array<{ threadId: ThreadId; turnId: TurnId }> = [];
 
     const unsupported = () => Effect.die(new Error("Unsupported provider call in test")) as never;
+
     const service: AgentControllerShape = {
       authenticateMcpServer: () => unsupported(),
       resolveEngine: () => unsupported(),
@@ -152,10 +154,12 @@ export function makeSilenceWatchdogHarness() {
       Layer.provide(RepositoryIdentityResolver.layer),
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const projectionSnapshotLayer = OrchestrationProjectionSnapshotQueryLive.pipe(
       Layer.provide(RepositoryIdentityResolver.layer),
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const layer = ProviderRuntimeIngestionLive.pipe(
       Layer.provideMerge(orchestrationLayer),
       Layer.provideMerge(projectionSnapshotLayer),
@@ -173,6 +177,7 @@ export function makeSilenceWatchdogHarness() {
       Layer.provideMerge(NodeServices.layer),
       Layer.provideMerge(TestClock.layer()),
     );
+
     runtime = ManagedRuntime.make(layer);
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
     const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
@@ -196,6 +201,7 @@ export function makeSilenceWatchdogHarness() {
       },
       createdAt,
     });
+
     if (options.botOwned) {
       await dispatch({
         type: "bot.create",
@@ -215,6 +221,7 @@ export function makeSilenceWatchdogHarness() {
         createdAt,
       });
     }
+
     await dispatch({
       type: "thread.create",
       commandId: CommandId.make("cmd-watchdog-thread-create"),
@@ -259,8 +266,10 @@ export function makeSilenceWatchdogHarness() {
     const readModel = () => Effect.runPromise(snapshotQuery.getSnapshot());
     const serverConfig = await runtime!.runPromise(Effect.service(ServerConfig));
     const botInbox = new BotInboxService(NodePath.join(serverConfig.secretsDir, "bot-inbox.json"));
+
     const botInboxList = () => {
       botInbox.reload();
+
       return botInbox.list();
     };
 
@@ -275,6 +284,7 @@ export function makeSilenceWatchdogHarness() {
         payload: {},
       });
     };
+
     const emitReasoning = (turnId: string, id: string) => {
       emit({
         type: "content.delta",
@@ -286,6 +296,7 @@ export function makeSilenceWatchdogHarness() {
         payload: { streamKind: "reasoning_text", delta: "thinking" },
       });
     };
+
     const emitTurnEnded = (turnId: string, kind: "completed" | "interrupted" | "aborted") => {
       emit(
         kind === "aborted"
@@ -338,19 +349,25 @@ export function makeSilenceWatchdogHarness() {
 
   const silentKinds = (activities: ReadonlyArray<TestActivity>) =>
     activities.map((activity) => activity.kind);
+
   const dispose = async () => {
     if (scope) {
       await Effect.runPromise(Scope.close(scope, Exit.void));
     }
+
     scope = null;
+
     if (runtime) {
       await runtime.dispose();
     }
+
     runtime = null;
+
     for (const dir of tempDirs.splice(0)) {
       NodeFS.rmSync(dir, { recursive: true, force: true });
     }
   };
+
   return {
     makeTempDir,
     createHarness,

@@ -26,7 +26,9 @@ import { createTasks } from "./runtime-ingestion/Tasks.ts";
 import { createCleanup } from "./runtime-ingestion/Cleanup.ts";
 import { createAdmission } from "./runtime-ingestion/Admission.ts";
 import { createEvents } from "./runtime-ingestion/Events.ts";
+
 export { runtimeEventToActivities } from "./runtime-ingestion/ActivityMapping.ts";
+
 export { findTaskTitleInActivities } from "./runtime-ingestion/EventFields.ts";
 
 const make = Effect.gen(function* () {
@@ -47,12 +49,14 @@ const make = Effect.gen(function* () {
     channelRuntime,
     botInbox,
   } = yield* createDependencies();
+
   const {
     channelStatusWorker,
     automaticChannelReplyWorker,
     channelWaitingRequests,
     clearChannelWaitingRequests,
   } = yield* createChannels({ channelRuntime });
+
   const {
     silenceWatchdogs,
     silenceWaitingRequests,
@@ -62,6 +66,7 @@ const make = Effect.gen(function* () {
     resolveSilenceIncidents,
     startTurnSilenceWatchdog,
   } = yield* createWatchdogs({ botInbox, orchestrationEngine, projectionSnapshotQuery });
+
   const {
     providerCommandId,
     resolveNativeUserInputForTerminalTurn,
@@ -78,6 +83,7 @@ const make = Effect.gen(function* () {
     projectionThreadMessages,
     botInbox,
   });
+
   const {
     turnMessageIdsByTurnKey,
     assistantSegmentStateByTurnKey,
@@ -94,6 +100,7 @@ const make = Effect.gen(function* () {
     finalizeAssistantMessage,
     finalizeActiveAssistantSegmentForTurn,
   } = yield* createMessages({ orchestrationEngine, providerCommandId });
+
   const {
     bufferedProposedPlanById,
     appendBufferedProposedPlan,
@@ -110,8 +117,10 @@ const make = Effect.gen(function* () {
     resolveThreadDetail,
     crypto,
   });
+
   const { taskDescriptionByTaskKey, rememberTaskDescription, lookupTaskDescription } =
     yield* createTasks();
+
   const { clearTurnStateForSession } = createCleanup({
     turnMessageIdsByTurnKey,
     assistantSegmentStateByTurnKey,
@@ -119,6 +128,7 @@ const make = Effect.gen(function* () {
     taskDescriptionByTaskKey,
     clearAssistantMessageState,
   });
+
   const { prepareRuntimeEvent } = createAdmission({
     resolveThreadRuntimeContextForEvent,
     silenceWatchdogs,
@@ -140,6 +150,7 @@ const make = Effect.gen(function* () {
     orchestrationEngine,
     providerCommandId,
   });
+
   const { processRuntimeEvent } = createEvents({
     prepareRuntimeEvent,
     getOrCreateAssistantMessageId,
@@ -174,12 +185,15 @@ const make = Effect.gen(function* () {
     channelRuntime,
     automaticChannelReplyWorker,
   });
+
   const processDomainEvent = Effect.fn("ProviderRuntimeIngestion.processChannelSession")(function* (
     event: ChannelSessionDomainEvent,
   ) {
     const { session, threadId } = event.payload;
+
     if (!channelRuntime || (session.status !== "error" && session.status !== "stopped")) return;
     const thread = yield* resolveThreadDetail(threadId);
+
     if (
       thread?.session?.updatedAt !== session.updatedAt ||
       thread.session.status !== session.status
@@ -187,6 +201,7 @@ const make = Effect.gen(function* () {
       return;
     clearChannelWaitingRequests(threadId);
     const request = thread.messages.findLast((message) => message.role === "user");
+
     if (!request?.channelOrigin) return;
     yield* channelStatusWorker.enqueue({
       threadId,
@@ -205,6 +220,7 @@ const make = Effect.gen(function* () {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.failCause(cause);
         }
+
         return Effect.logWarning("provider runtime ingestion failed to process event", {
           source: input.source,
           eventId: input.event.eventId,
@@ -228,10 +244,13 @@ const make = Effect.gen(function* () {
           if (event.type === "thread.deleted" || event.type === "thread.archived") {
             deltaRuntimeContextByThread.delete(String(event.payload.threadId));
           }
+
           if (event.type !== "thread.session-set") {
             return Effect.void;
           }
+
           deltaRuntimeContextByThread.delete(String(event.payload.threadId));
+
           return worker.enqueue({ source: "domain", event });
         }),
       );
@@ -247,6 +266,7 @@ const make = Effect.gen(function* () {
     ),
   } satisfies ProviderRuntimeIngestionShape;
 });
+
 export const ProviderRuntimeIngestionLive = Layer.effect(
   ProviderRuntimeIngestionService,
   make,

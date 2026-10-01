@@ -144,6 +144,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_thread_messages
         WHERE message_id = 'assistant-empty'
       `;
+
       assert.equal(messageRows.length, 1);
       assert.equal(messageRows[0]?.text, "Hello world");
       assert.isFalse(Boolean(messageRows[0]?.isStreaming));

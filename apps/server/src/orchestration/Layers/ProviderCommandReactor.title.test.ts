@@ -228,9 +228,11 @@ describe("ProviderCommandReactor", () => {
 
     expect(harness.generateThreadTitle).toHaveBeenCalledTimes(1);
     const input = harness.generateThreadTitle.mock.calls[0]?.[0];
+
     if (!input) {
       throw new Error("Expected a title generation input");
     }
+
     const message = input.message;
     expect(message.startsWith("USER:\nReview subagent monitoring risks.")).toBe(true);
     expect(message).toContain("[First user message truncated]");
@@ -368,6 +370,7 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness({
       titleRegenerationCompletionDispatchFailures: 1,
     });
+
     const now = "2026-01-01T00:00:00.000Z";
     harness.generateThreadTitle
       .mockReturnValueOnce(Effect.succeed({ title: "Title lost to completion failure" }))

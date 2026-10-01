@@ -6,6 +6,7 @@ import { projectBotsAndGroups } from "./projector/BotsAndGroups.ts";
 import { projectThreadLifecycle } from "./projector/ThreadLifecycle.ts";
 import { projectThreadMessages } from "./projector/ThreadMessages.ts";
 import { projectThreadHistory } from "./projector/ThreadHistory.ts";
+
 export { findProjectedThread } from "./projector/Updates.ts";
 
 export function createEmptyReadModel(nowIso: string): OrchestrationReadModel {

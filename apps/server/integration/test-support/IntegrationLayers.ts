@@ -100,6 +100,7 @@ export function createIntegrationLayers({
     Effect.gen(function* () {
       const codexSettings = yield* decodeCodexSettings({});
       const codexAdapter = yield* makeCodexAdapter(codexSettings);
+
       return makeAdapterRegistryMock({
         [ProviderDriverKind.make("codex")]: codexAdapter,
       });
@@ -245,5 +246,6 @@ export function createIntegrationLayers({
     Layer.provideMerge(ServerConfig.layerTest(workspaceDir, rootDir)),
     Layer.provideMerge(NodeServices.layer),
   );
+
   return layer;
 }

@@ -64,6 +64,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             messageId: MessageId.make(messageId),
           })
           .pipe(Effect.map(Option.getOrThrow));
+
       assert.deepEqual((yield* read("message-channel")).message.channelOrigin, {
         provider: "telegram",
         externalThreadId: "chat-1",
@@ -192,7 +193,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const context = yield* snapshotQuery.getThreadCheckpointContext(
         ThreadId.make("thread-context"),
       );
+
       assert.equal(context._tag, "Some");
+
       if (context._tag === "Some") {
         assert.deepEqual(context.value, {
           threadId: ThreadId.make("thread-context"),
@@ -348,6 +351,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const threadDetail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
 
       assert.equal(threadDetail._tag, "Some");
+
       if (threadDetail._tag === "Some") {
         assert.deepEqual(threadDetail.value.activities, snapshot.threads[0]?.activities ?? []);
       }
@@ -513,6 +517,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       const threadShell = yield* snapshotQuery.getThreadShellById(ThreadId.make("thread-1"));
       assert.equal(threadShell._tag, "Some");
+
       if (threadShell._tag === "Some") {
         assert.equal(threadShell.value.latestTurn?.turnId, asTurnId("turn-running"));
         assert.equal(threadShell.value.latestTurn?.state, "running");
@@ -522,6 +527,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       const threadDetail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
       assert.equal(threadDetail._tag, "Some");
+
       if (threadDetail._tag === "Some") {
         assert.equal(threadDetail.value.latestTurn?.turnId, asTurnId("turn-running"));
         assert.equal(threadDetail.value.latestTurn?.state, "running");

@@ -38,9 +38,11 @@ describe("ProviderRuntimeIngestion", () => {
           proposedPlan.id === "plan:thread-1:turn:turn-plan-final",
       ),
     );
+
     const proposedPlan = thread.proposedPlans.find(
       (entry: ProviderRuntimeTestProposedPlan) => entry.id === "plan:thread-1:turn:turn-plan-final",
     );
+
     expect(proposedPlan?.planMarkdown).toBe(
       "## Ship plan\n\n- wire projection\n- render follow-up",
     );
@@ -157,11 +159,14 @@ describe("ProviderRuntimeIngestion", () => {
       2_000,
       sourceThreadId,
     );
+
     const sourcePlan = sourceThreadWithPlan.proposedPlans.find(
       (entry: ProviderRuntimeTestProposedPlan) =>
         entry.id === "plan:thread-plan:turn:turn-plan-source",
     );
+
     expect(sourcePlan).toBeDefined();
+
     if (!sourcePlan) {
       throw new Error("Expected source plan to exist.");
     }
@@ -197,6 +202,7 @@ describe("ProviderRuntimeIngestion", () => {
       2_000,
       sourceThreadId,
     );
+
     expect(
       sourceThreadBeforeStart.proposedPlans.find((entry) => entry.id === sourcePlan.id),
     ).toMatchObject({
@@ -225,6 +231,7 @@ describe("ProviderRuntimeIngestion", () => {
       2_000,
       sourceThreadId,
     );
+
     expect(
       sourceThreadAfterStart.proposedPlans.find((entry) => entry.id === sourcePlan.id),
     ).toMatchObject({

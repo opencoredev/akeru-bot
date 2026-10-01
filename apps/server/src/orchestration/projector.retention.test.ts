@@ -59,6 +59,7 @@ describe("orchestration projector", () => {
             },
           }),
       );
+
       const afterMessages = yield* Effect.reduce(messageEvents, () => afterCreate, projectEvent);
 
       const checkpointEvents: ReadonlyArray<OrchestrationEvent> = Array.from(
@@ -83,6 +84,7 @@ describe("orchestration projector", () => {
             },
           }),
       );
+
       const finalState = yield* Effect.reduce(checkpointEvents, () => afterMessages, projectEvent);
 
       const thread = finalState.threads[0];
@@ -99,6 +101,7 @@ describe("orchestration projector", () => {
     Effect.gen(function* () {
       const createdAt = "2026-03-02T10:00:00.000Z";
       let sequence = 0;
+
       const event = (type: OrchestrationEvent["type"], payload: unknown) =>
         makeEvent({
           sequence: ++sequence,
@@ -109,6 +112,7 @@ describe("orchestration projector", () => {
           commandId: null,
           payload,
         });
+
       const activity = (id: string, at: string, summary = id) =>
         event("thread.activity-appended", {
           threadId: "thread-order",
@@ -122,6 +126,7 @@ describe("orchestration projector", () => {
             createdAt: at,
           },
         });
+
       const message = (id: string, text: string, streaming: boolean) =>
         event("thread.message-sent", {
           threadId: "thread-order",
@@ -155,6 +160,7 @@ describe("orchestration projector", () => {
         message("message-2", "second", false),
         message("message-1", "part", true),
       ];
+
       const state = yield* Effect.reduce(
         events,
         () => createEmptyReadModel(createdAt),

@@ -86,10 +86,12 @@ describe("ProviderRuntimeIngestion", () => {
     const started = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-task-started",
     );
+
     const progress = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) =>
         activity.id === "task-progress:thread-1:turn-task-1",
     );
+
     const completed = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-task-completed",
     );
@@ -98,6 +100,7 @@ describe("ProviderRuntimeIngestion", () => {
       progress?.payload && typeof progress.payload === "object"
         ? (progress.payload as Record<string, unknown>)
         : undefined;
+
     const completedPayload =
       completed?.payload && typeof completed.payload === "object"
         ? (completed.payload as Record<string, unknown>)
@@ -175,6 +178,7 @@ describe("ProviderRuntimeIngestion", () => {
       (activity: ProviderRuntimeTestActivity) =>
         activity.id === "task-progress:thread-1:named-task-1",
     );
+
     const completed = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-named-task-completed",
     );
@@ -183,6 +187,7 @@ describe("ProviderRuntimeIngestion", () => {
       progress?.payload && typeof progress.payload === "object"
         ? (progress.payload as Record<string, unknown>)
         : undefined;
+
     const completedPayload =
       completed?.payload && typeof completed.payload === "object"
         ? (completed.payload as Record<string, unknown>)
@@ -236,6 +241,7 @@ describe("ProviderRuntimeIngestion", () => {
     const completed = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-fast-task-completed",
     );
+
     const completedPayload =
       completed?.payload && typeof completed.payload === "object"
         ? (completed.payload as Record<string, unknown>)
@@ -303,6 +309,7 @@ describe("ProviderRuntimeIngestion", () => {
     const completed = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-swept-task-completed",
     );
+
     const completedPayload =
       completed?.payload && typeof completed.payload === "object"
         ? (completed.payload as Record<string, unknown>)

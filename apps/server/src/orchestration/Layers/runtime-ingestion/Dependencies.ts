@@ -51,6 +51,7 @@ export const createDependencies = Effect.fn("makeRuntimeDependencies")(function*
   const serverConfig = yield* ServerConfig;
 
   const botInbox = BotInboxService.forSecretsDir(serverConfig.secretsDir);
+
   return {
     threadBackgroundLiveness,
     threadPlanProgress,

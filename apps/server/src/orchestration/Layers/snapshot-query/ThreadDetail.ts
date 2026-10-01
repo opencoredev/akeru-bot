@@ -124,9 +124,11 @@ export function createThreadDetail({
         ),
       ),
     ]);
+
     const activityIds = [
       ...new Set([...activityIdRows, ...pinnedActivityIdRows].map(({ activityId }) => activityId)),
     ];
+
     const activities: OrchestrationThreadActivity[] = [];
 
     for (
@@ -138,6 +140,7 @@ export function createThreadDetail({
         offset,
         offset + THREAD_DETAIL_ACTIVITY_PAYLOAD_BATCH_SIZE,
       );
+
       const batchRows = yield* listThreadActivityRowsByIds({ activityIds: batchIds }).pipe(
         Effect.mapError(
           toPersistenceSqlOrDecodeError(
@@ -146,6 +149,7 @@ export function createThreadDetail({
           ),
         ),
       );
+
       for (const row of batchRows) {
         activities.push(projectActivityPayload(mapThreadActivityRow(row)));
       }
@@ -372,10 +376,13 @@ export function createThreadDetail({
             const thread = yield* getThreadDetailByIdBounded(threadId, undefined, {
               mode: "client",
             });
+
             if (Option.isNone(thread)) {
               return Option.none<OrchestrationThreadDetailSnapshot>();
             }
+
             const { snapshotSequence } = yield* getSnapshotSequence();
+
             return Option.some({ snapshotSequence, thread: thread.value });
           }
 
@@ -386,6 +393,7 @@ export function createThreadDetail({
             window.beforeCursor === undefined
               ? null
               : decodeThreadDetailPageCursor(window.beforeCursor);
+
           const cursor = decodedCursor?.threadId === threadId ? decodedCursor : null;
 
           const windowRows = yield* listTurnWindowRows({
@@ -404,6 +412,7 @@ export function createThreadDetail({
           );
 
           const oldest = windowRows[0];
+
           // An empty window (no turns before the cursor, or a thread with no
           // turns at all) still returns thread metadata with empty collections
           // for turn-linked rows; turnless rows are bounded to the same empty
@@ -418,6 +427,7 @@ export function createThreadDetail({
                   beforeAnchorAt: cursor?.beforeAnchorAt ?? ANCHOR_UNBOUNDED,
                   beforeTurnKey: cursor?.beforeTurnId ?? "",
                 };
+
           // Empty window behind a cursor: nothing older remains.
           const emptyBounds =
             oldest === undefined && cursor !== null
@@ -427,6 +437,7 @@ export function createThreadDetail({
           const thread = yield* getThreadDetailByIdBounded(threadId, emptyBounds ?? bounds, {
             mode: "client",
           });
+
           if (Option.isNone(thread)) {
             return Option.none<OrchestrationThreadDetailSnapshot>();
           }
@@ -449,6 +460,7 @@ export function createThreadDetail({
             )).length > 0;
 
           const { snapshotSequence } = yield* getSnapshotSequence();
+
           const watermarkRow = yield* getThreadEventWatermarkRow({
             threadId,
             maxSequence: snapshotSequence,
@@ -460,10 +472,12 @@ export function createThreadDetail({
               ),
             ),
           );
+
           const threadSequence = Option.match(watermarkRow, {
             onNone: () => 0,
             onSome: (row) => row.threadSequence ?? 0,
           });
+
           return Option.some({
             snapshotSequence,
             thread: thread.value,
@@ -492,6 +506,7 @@ export function createThreadDetail({
               ),
         ),
       );
+
   return {
     listProjectedThreadActivities,
     getThreadDetailByIdBounded,

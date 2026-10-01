@@ -16,9 +16,11 @@ describe("ProviderCommandReactor", () => {
   afterEach(testScope.dispose);
   it("retries the original request when session startup failed before provider acceptance", async () => {
     let attempts = 0;
+
     const harness = await createHarness({
       startSessionEffect: (session) => {
         attempts += 1;
+
         return attempts === 1
           ? Effect.fail(
               new ProviderAdapterRequestError({
@@ -31,6 +33,7 @@ describe("ProviderCommandReactor", () => {
           : Effect.succeed(session);
       },
     });
+
     const now = "2026-01-01T00:00:00.000Z";
     await harness.runEffect(
       harness.engine.dispatch({
@@ -75,6 +78,7 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness({
       botEngine: { provider, model },
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.run(
@@ -168,6 +172,7 @@ describe("ProviderCommandReactor", () => {
           botUsageCap: { unit: "tokens", limit: 1_000 },
         }),
       );
+
       const dispatchTurn = (suffix: string) =>
         harness.engine.dispatch({
           type: "thread.turn.start",
@@ -212,6 +217,7 @@ describe("ProviderCommandReactor", () => {
           botUsageCap: { unit: "tokens", limit: 1_000 },
         }),
       );
+
       harness.sendTurn.mockImplementation(() => Effect.die("dispatch failed"));
 
       yield* harness.engine.dispatch({
@@ -299,9 +305,11 @@ describe("ProviderCommandReactor", () => {
 
     await harness.waitFor(() => harness.resolveEngine.mock.calls.length === 1);
     await harness.drain();
+
     const thread = (await harness.readModel()).threads.find(
       (entry) => entry.id === ThreadId.make("thread-1"),
     );
+
     expect(thread?.activities).toContainEqual(
       expect.objectContaining({
         kind: "provider.turn.start.failed",
@@ -346,9 +354,11 @@ describe("ProviderCommandReactor", () => {
       threadId: ThreadId.make("thread-1"),
       error: `Configured bot could not start: ${detail}`,
     });
+
     const thread = (await harness.readModel()).threads.find(
       (entry) => entry.id === ThreadId.make("thread-1"),
     );
+
     expect(
       thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed")
         ?.payload,
@@ -385,9 +395,11 @@ describe("ProviderCommandReactor", () => {
     );
 
     await harness.drain();
+
     const thread = (await harness.readModel()).threads.find(
       (entry) => entry.id === ThreadId.make("thread-1"),
     );
+
     expect(thread?.activities).toContainEqual(
       expect.objectContaining({
         kind: "provider.turn.start.failed",
@@ -405,11 +417,13 @@ describe("ProviderCommandReactor", () => {
   effectIt.effect("projects starting before a slow provider session finishes", () =>
     Effect.gen(function* () {
       const releaseStart = yield* Deferred.make<void>();
+
       const harness = yield* Effect.promise(() =>
         createHarness({
           startSessionEffect: (session) => Deferred.await(releaseStart).pipe(Effect.as(session)),
         }),
       );
+
       const now = "2026-01-01T00:00:00.000Z";
 
       yield* harness.engine.dispatch({
@@ -445,6 +459,7 @@ describe("ProviderCommandReactor", () => {
   effectIt.effect("settles a failed provider startup and allows a clean retry", () =>
     Effect.gen(function* () {
       let failStartup = true;
+
       const harness = yield* Effect.promise(() =>
         createHarness({
           startSessionEffect: (session) =>
@@ -459,6 +474,7 @@ describe("ProviderCommandReactor", () => {
               : Effect.succeed(session),
         }),
       );
+
       const now = "2026-01-01T00:00:00.000Z";
 
       yield* harness.engine.dispatch({
@@ -479,6 +495,7 @@ describe("ProviderCommandReactor", () => {
       yield* Effect.promise(() =>
         harness.waitFor(async () => {
           const readModel = await harness.readModel();
+
           return (
             readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.session
               ?.status === "error"

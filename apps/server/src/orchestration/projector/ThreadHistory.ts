@@ -57,8 +57,10 @@ export function projectThreadHistory(
       ).pipe(
         Effect.map((payload) => {
           const thread = findProjectedThread(nextBase.threads, payload.threadId);
+
           if (!thread?.session) return nextBase;
           const { unavailability: _staleUnavailability, ...session } = thread.session;
+
           return {
             ...nextBase,
             threads: updateThread(nextBase.threads, payload.threadId, {
@@ -81,7 +83,9 @@ export function projectThreadHistory(
           event.type,
           "payload",
         );
+
         const thread = findProjectedThread(nextBase.threads, payload.threadId);
+
         if (!thread) {
           return nextBase;
         }
@@ -96,6 +100,7 @@ export function projectThreadHistory(
         // Leaving the "running" session status is the turn-end signal: settle
         // a still-running latest turn so its duration reflects the whole turn.
         const settledTurnState = settledTurnStateForSessionStatus(session.status);
+
         return {
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, {
@@ -148,7 +153,9 @@ export function projectThreadHistory(
           event.type,
           "payload",
         );
+
         const thread = findProjectedThread(nextBase.threads, payload.threadId);
+
         if (!thread) {
           return nextBase;
         }
@@ -174,6 +181,7 @@ export function projectThreadHistory(
         // per turn; without this guard later placeholders would clobber the
         // real capture dispatched by CheckpointReactor.
         const existing = thread.checkpoints.find((entry) => entry.turnId === checkpoint.turnId);
+
         if (existing && existing.status !== "missing" && checkpoint.status === "missing") {
           return nextBase;
         }
@@ -223,6 +231,7 @@ export function projectThreadHistory(
       return decodeForEvent(ThreadRevertedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
           const thread = findProjectedThread(nextBase.threads, payload.threadId);
+
           if (!thread) {
             return nextBase;
           }
@@ -231,19 +240,24 @@ export function projectThreadHistory(
             .filter((entry) => entry.checkpointTurnCount <= payload.turnCount)
             .toSorted((left, right) => left.checkpointTurnCount - right.checkpointTurnCount)
             .slice(-MAX_THREAD_CHECKPOINTS);
+
           const retainedTurnIds = new Set(checkpoints.map((checkpoint) => checkpoint.turnId));
+
           const messages = retainThreadMessagesAfterRevert(
             thread.messages,
             retainedTurnIds,
             payload.turnCount,
           ).slice(-MAX_THREAD_MESSAGES);
+
           const proposedPlans = retainThreadProposedPlansAfterRevert(
             thread.proposedPlans,
             retainedTurnIds,
           ).slice(-200);
+
           const activities = retainThreadActivitiesAfterRevert(thread.activities, retainedTurnIds);
 
           const latestCheckpoint = checkpoints.at(-1) ?? null;
+
           const latestTurn =
             latestCheckpoint === null
               ? null
@@ -278,22 +292,26 @@ export function projectThreadHistory(
       ).pipe(
         Effect.map((payload) => {
           const thread = findProjectedThread(nextBase.threads, payload.threadId);
+
           if (!thread) {
             return nextBase;
           }
 
           // Activities stay sorted, so an in-order new activity is a plain append.
           const lastActivity = thread.activities.at(-1);
+
           const appendsInOrder =
             (lastActivity === undefined ||
               compareThreadActivities(lastActivity, payload.activity) <= 0) &&
             !thread.activities.some((entry) => entry.id === payload.activity.id);
+
           const sortedActivities = appendsInOrder
             ? [...thread.activities, payload.activity]
             : [
                 ...thread.activities.filter((entry) => entry.id !== payload.activity.id),
                 payload.activity,
               ].toSorted(compareThreadActivities);
+
           const activities =
             sortedActivities.length > MAX_THREAD_ACTIVITIES
               ? sortedActivities.slice(-MAX_THREAD_ACTIVITIES)

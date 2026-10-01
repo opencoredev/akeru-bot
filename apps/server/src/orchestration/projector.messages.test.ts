@@ -142,6 +142,7 @@ describe("orchestration projector", () => {
           },
         }),
       );
+
       expect(withMessage.threads[0]?.messages[0]?.channelDelivery).toBeUndefined();
 
       const withDelivery = yield* projectEvent(

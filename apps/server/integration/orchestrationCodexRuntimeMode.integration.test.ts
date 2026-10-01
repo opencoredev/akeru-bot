@@ -71,6 +71,7 @@ it.live.skipIf(!process.env.CODEX_BINARY_PATH)(
             ),
           180_000,
         );
+
         assert.equal(firstThread.session?.threadId, "thread-1");
 
         yield* harness.engine.dispatch({
@@ -99,6 +100,7 @@ it.live.skipIf(!process.env.CODEX_BINARY_PATH)(
             ),
           180_000,
         );
+
         assert.equal(secondThread.session?.threadId, "thread-1");
       }),
     ),

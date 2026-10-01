@@ -33,15 +33,18 @@ const make = Effect.gen(function* () {
     startedTurns,
     pending,
   } = yield* createDependencies();
+
   const { appendRevertFailureActivity, appendCaptureFailureActivity } = createFailures({
     serverCommandId,
     serverEventId,
     orchestrationEngine,
   });
+
   const { resolveSessionRuntimeForThread, resolveThreadCheckpointState } = createContext({
     agentController,
     projectionSnapshotQuery,
   });
+
   const {
     captureCheckpointFromTurnCompletion,
     ensurePreTurnBaselineFromTurnStart,
@@ -58,6 +61,7 @@ const make = Effect.gen(function* () {
     randomUUID,
     resolveThreadCheckpointState,
   });
+
   const { statusRefreshWorker } = yield* createWorkspace({
     resolveSessionRuntimeForThread,
     git,
@@ -65,6 +69,7 @@ const make = Effect.gen(function* () {
     orchestrationEngine,
     serverCommandId,
   });
+
   const { handleRevertRequested } = createRevert({
     resolveThreadCheckpointState,
     appendRevertFailureActivity,
@@ -75,10 +80,12 @@ const make = Effect.gen(function* () {
     orchestrationEngine,
     serverCommandId,
   });
+
   const processDomainEvent = Effect.fn("processDomainEvent")(function* (event: OrchestrationEvent) {
     if (event.type === "thread.turn-start-requested" || event.type === "thread.message-sent") {
       if (event.type === "thread.turn-start-requested") pending.add(event.payload.threadId);
       yield* ensurePreTurnBaselineFromDomainTurnStart(event);
+
       return;
     }
 
@@ -104,37 +111,49 @@ const make = Effect.gen(function* () {
     if (event.type === "session.exited") {
       startedTurns.delete(event.threadId);
       pending.delete(event.threadId);
+
       return;
     }
 
     if (event.type === "turn.started") {
       const turnId = toTurnId(event.turnId);
+
       const activeTurnId = (yield* agentController.listSessions()).find((session) =>
         sameId(session.threadId, event.threadId),
       )?.activeTurnId;
+
       const mayReplace = pending.has(event.threadId) && sameId(activeTurnId, turnId);
+
       if (turnId !== null && (!startedTurns.has(event.threadId) || mayReplace)) {
         startedTurns.set(event.threadId, turnId);
         pending.delete(event.threadId);
       }
+
       yield* ensurePreTurnBaselineFromTurnStart(event);
+
       return;
     }
 
     if (event.type === "turn.completed" || event.type === "turn.aborted") {
       const turnId = toTurnId(event.turnId);
+
       const thread = yield* projectionSnapshotQuery
         .getThreadRuntimeContext(event.threadId)
         .pipe(Effect.map(Option.getOrUndefined));
+
       const startedTurnId = startedTurns.get(event.threadId);
       const isTrackedTurn = sameId(startedTurnId, turnId);
+
       if (isTrackedTurn) startedTurns.delete(event.threadId);
+
       if (event.type === "turn.completed") {
         yield* statusRefreshWorker.enqueue(event);
       }
+
       if (isTrackedTurn || sameId(thread?.session?.activeTurnId, turnId)) {
         pending.delete(event.threadId);
       }
+
       if (
         event.type === "turn.aborted" &&
         !isTrackedTurn &&
@@ -142,6 +161,7 @@ const make = Effect.gen(function* () {
       ) {
         return;
       }
+
       yield* captureCheckpointFromTurnCompletion(event).pipe(
         Effect.catch((error) =>
           Effect.flatMap(nowIso, (createdAt) =>
@@ -154,6 +174,7 @@ const make = Effect.gen(function* () {
           ),
         ),
       );
+
       return;
     }
   });
@@ -173,6 +194,7 @@ const make = Effect.gen(function* () {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.failCause(cause);
         }
+
         return Effect.logWarning("checkpoint reactor failed to process input", {
           source: input.source,
           eventType: input.event.type,
@@ -193,6 +215,7 @@ const make = Effect.gen(function* () {
         ) {
           return Effect.void;
         }
+
         return worker.enqueue({ source: "domain", event });
       }),
     );
@@ -207,6 +230,7 @@ const make = Effect.gen(function* () {
         ) {
           return Effect.void;
         }
+
         return worker.enqueue({ source: "runtime", event });
       }),
     );
@@ -217,4 +241,5 @@ const make = Effect.gen(function* () {
     drain: worker.drain.pipe(Effect.andThen(statusRefreshWorker.drain)),
   } satisfies CheckpointReactorShape;
 });
+
 export const CheckpointReactorLive = Layer.effect(CheckpointReactor, make);

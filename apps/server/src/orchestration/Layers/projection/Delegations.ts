@@ -10,8 +10,10 @@ export function createDelegations({ sql }: Pick<ProjectionDependencies, "sql">) 
     if (event.type !== "delegation.created" && event.type !== "delegation.updated") {
       return Effect.void;
     }
+
     const delegation = event.payload.delegation;
     const recordJson = JSON.stringify(delegation);
+
     return Effect.gen(function* () {
       yield* sql`
           INSERT INTO projection_delegations (delegation_id, record_json)
@@ -22,10 +24,12 @@ export function createDelegations({ sql }: Pick<ProjectionDependencies, "sql">) 
           ON CONFLICT (delegation_id) DO UPDATE SET
             record_json = excluded.record_json
         `;
+
       // Children created before thread.created carried parent links get
       // them from their delegation record, whichever projector runs first.
       const childThreadId =
         "childThreadId" in delegation.phase ? delegation.phase.childThreadId : null;
+
       if (childThreadId !== null) {
         yield* sql`
             UPDATE projection_threads
@@ -61,5 +65,6 @@ export function createDelegations({ sql }: Pick<ProjectionDependencies, "sql">) 
       })),
       Effect.mapError(toPersistenceSqlError("ProjectionPipeline.delegationParentLink:query")),
     );
+
   return { applyDelegationsProjection, delegationParentLink };
 }

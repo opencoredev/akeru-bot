@@ -43,6 +43,7 @@ export function createCommandContext({
                 )(error),
           ),
         );
+
       return {
         messages: messages.map((message) => ({
           id: message.messageId,
@@ -61,6 +62,7 @@ export function createCommandContext({
   const getCommandMessage = Effect.fn("ProjectionSnapshotQuery.getCommandMessage")(
     function* (input: { readonly threadId: ThreadId; readonly messageId: MessageId }) {
       const message = yield* commandMessageRepository.getByMessageId(input);
+
       return Option.flatMap(message, (row) =>
         row.threadId === input.threadId
           ? Option.some({
@@ -78,5 +80,6 @@ export function createCommandContext({
       );
     },
   );
+
   return { getThreadCommandContext, getCommandMessage };
 }

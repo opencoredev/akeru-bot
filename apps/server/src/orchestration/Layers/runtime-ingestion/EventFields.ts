@@ -39,28 +39,35 @@ export function findTaskTitleInActivities(
   if (!activities) {
     return undefined;
   }
+
   for (let index = activities.length - 1; index >= 0; index -= 1) {
     const activity = activities[index];
+
     if (!activity || (activity.kind !== "task.started" && activity.kind !== "task.progress")) {
       continue;
     }
+
     const payload =
       activity.payload && typeof activity.payload === "object"
         ? (activity.payload as { taskId?: unknown; title?: unknown; detail?: unknown })
         : undefined;
+
     if (payload?.taskId !== taskId) {
       continue;
     }
+
     const title =
       typeof payload.title === "string"
         ? payload.title
         : activity.kind === "task.started" && typeof payload.detail === "string"
           ? payload.detail
           : undefined;
+
     if (title && title.trim().length > 0) {
       return title;
     }
   }
+
   return undefined;
 }
 
@@ -102,6 +109,7 @@ export const decodeRuntimeChatAttachment = Schema.decodeUnknownOption(
 export function runtimeChatAttachment(event: ProviderRuntimeEvent) {
   if (event.type !== "item.completed") return undefined;
   const data = decodeRuntimeChatAttachment(event.payload.data);
+
   return Option.isSome(data) ? data.value.chatAttachment : undefined;
 }
 
@@ -117,14 +125,19 @@ export const decodeCreateRoutineInput = Schema.decodeUnknownExit(
 
 export function boundedApprovalArgs(toolName: string | undefined, args: unknown): unknown {
   if (args === undefined) return undefined;
+
   if (toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME) {
     const decoded = decodeProductFeedbackToolDraft(args);
+
     return Exit.isSuccess(decoded) ? decoded.value : undefined;
   }
+
   if (toolName === AKERU_CREATE_ROUTINE_TOOL_NAME) {
     const decoded = decodeCreateRoutineInput(args);
+
     return Exit.isSuccess(decoded) ? decoded.value : undefined;
   }
+
   return undefined;
 }
 
@@ -152,6 +165,7 @@ export function sameId(left: string | null | undefined, right: string | null | u
   if (left === null || left === undefined || right === null || right === undefined) {
     return false;
   }
+
   return left === right;
 }
 
@@ -164,6 +178,7 @@ export function hasCheckpointForTurn(
       return true;
     }
   }
+
   return false;
 }
 
@@ -171,12 +186,15 @@ export function maxCheckpointTurnCount(
   checkpoints: ReadonlyArray<OrchestrationCheckpointSummary>,
 ): number {
   let maxTurnCount = 0;
+
   for (let index = 0; index < checkpoints.length; index += 1) {
     const checkpoint = checkpoints[index];
+
     if (checkpoint && checkpoint.checkpointTurnCount > maxTurnCount) {
       maxTurnCount = checkpoint.checkpointTurnCount;
     }
   }
+
   return maxTurnCount;
 }
 
@@ -188,9 +206,11 @@ export function normalizeProposedPlanMarkdown(
   planMarkdown: string | undefined,
 ): string | undefined {
   const trimmed = planMarkdown?.trim();
+
   if (!trimmed) {
     return undefined;
   }
+
   return trimmed;
 }
 
@@ -204,12 +224,15 @@ export function proposedPlanIdForTurn(threadId: ThreadId, turnId: TurnId): strin
 
 export function proposedPlanIdFromEvent(event: ProviderRuntimeEvent, threadId: ThreadId): string {
   const turnId = toTurnId(event.turnId);
+
   if (turnId) {
     return proposedPlanIdForTurn(threadId, turnId);
   }
+
   if (event.itemId) {
     return `plan:${threadId}:item:${event.itemId}`;
   }
+
   return `plan:${threadId}:event:${event.eventId}`;
 }
 
@@ -229,6 +252,7 @@ export function buildContextWindowActivityPayload(
   if (event.type !== "thread.token-usage.updated" || event.payload.usage.usedTokens <= 0) {
     return undefined;
   }
+
   return event.payload.usage;
 }
 
@@ -307,6 +331,7 @@ function taskLinkageActivityFields(payload: Record<string, unknown>): Record<str
       agentId: typeof payload.agentId === "string" ? payload.agentId : undefined,
     }),
   };
+
   for (const key of [
     "taskType",
     "agentId",
@@ -334,5 +359,6 @@ function taskLinkageActivityFields(payload: Record<string, unknown>): Record<str
       fields[key] = payload[key];
     }
   }
+
   return fields;
 }

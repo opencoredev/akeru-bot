@@ -532,6 +532,7 @@ export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "
       ORDER BY created_at DESC, message_id DESC LIMIT 1
     `,
   });
+
   return {
     readProjectionCounts,
     readEventReplayStats,

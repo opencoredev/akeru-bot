@@ -117,6 +117,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-owne
         FROM projection_thread_messages
         WHERE message_id = 'message-delivery'
       `;
+
         assert.deepEqual(rows, [{ channelDelivery: "sent" }]);
       }),
     );
@@ -186,6 +187,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-owne
           FROM projection_threads
           WHERE thread_id = ${threadId}
         `;
+
         assert.deepEqual(rows, [{ botId: null, groupId: null, respondingBotId: null }]);
       }),
     );

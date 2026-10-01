@@ -17,6 +17,7 @@ import type { createWatchdogs } from "./Watchdogs.ts";
 import type { createDependencies } from "./Dependencies.ts";
 import type { createChannels } from "./Channels.ts";
 import type { createPlans } from "./Plans.ts";
+
 export function createAdmission({
   resolveThreadRuntimeContextForEvent,
   silenceWatchdogs,
@@ -66,8 +67,10 @@ export function createAdmission({
   const prepareRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
       const thread = yield* resolveThreadRuntimeContextForEvent(event);
+
       if (!thread) return;
       const eventTurnId = toTurnId(event.turnId);
+
       // turn.started starts its watchdog only once the lifecycle accepts it, below.
       if (
         eventTurnId &&
@@ -77,13 +80,18 @@ export function createAdmission({
       ) {
         // A turn ending disposes its watchdog below; it is not output resuming.
         const handle = silenceWatchdogs.get(providerTurnKey(thread.id, eventTurnId));
+
         if (handle) yield* handle.touch;
       }
+
       if (event.type === "content.delta" && event.payload.streamKind !== "assistant_text") return;
+
       if (event.type === "request.opened" || event.type === "request.resolved") {
         yield* syncApprovalInbox(event, thread);
       }
+
       const now = event.createdAt;
+
       if (
         event.type === "session.exited" ||
         (event.type === "session.state.changed" &&
@@ -101,8 +109,10 @@ export function createAdmission({
         // another turn's silent run.
         yield* stopSilenceWatchdog(thread.id, eventTurnId);
       }
+
       const watchedTurnKey = eventTurnId ? providerTurnKey(thread.id, eventTurnId) : undefined;
       const activeWatchdog = watchedTurnKey ? silenceWatchdogs.get(watchedTurnKey) : undefined;
+
       if (
         watchedTurnKey &&
         activeWatchdog &&
@@ -111,6 +121,7 @@ export function createAdmission({
         const waiting = silenceWaitingRequests.get(watchedTurnKey) ?? new Set<string>();
         silenceWaitingRequests.set(watchedTurnKey, waiting);
         const requestId = event.requestId === undefined ? undefined : String(event.requestId);
+
         if (requestId === undefined || !waiting.has(requestId)) {
           if (requestId !== undefined) waiting.add(requestId);
           yield* activeWatchdog.suspend;
@@ -121,6 +132,7 @@ export function createAdmission({
         (event.type === "request.resolved" || event.type === "user-input.resolved")
       ) {
         const requestId = event.requestId === undefined ? undefined : String(event.requestId);
+
         if (
           requestId === undefined ||
           silenceWaitingRequests.get(watchedTurnKey)?.delete(requestId) === true
@@ -128,12 +140,16 @@ export function createAdmission({
           yield* activeWatchdog.resume;
         }
       }
+
       const respondingBotId = resolveControllerBotId(thread);
       const activeTurnId = thread.session?.activeTurnId ?? null;
+
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
+
       // Requests do not always carry a turn id; they then belong to the active turn.
       const waitingTurnId = eventTurnId ?? activeTurnId ?? undefined;
+
       if (
         channelRuntime &&
         waitingTurnId &&
@@ -141,12 +157,15 @@ export function createAdmission({
         (event.type === "request.opened" || event.type === "user-input.requested")
       ) {
         const waitingKey = providerTurnKey(thread.id, waitingTurnId);
+
         const open = channelWaitingRequests.get(waitingKey) ?? {
           turnId: waitingTurnId,
           requestIds: new Set<string>(),
         };
+
         open.requestIds.add(event.requestId ?? event.eventId);
         channelWaitingRequests.set(waitingKey, open);
+
         if (open.requestIds.size === 1) {
           yield* channelStatusWorker.enqueue({
             threadId: thread.id,
@@ -160,13 +179,18 @@ export function createAdmission({
       ) {
         // Resolutions do not always carry a turn id, so match the pending request instead.
         const requestId = event.requestId;
+
         for (const [waitingKey, open] of channelWaitingRequests) {
           if (!waitingKey.startsWith(`${thread.id}:`)) continue;
+
           if (eventTurnId && !sameId(open.turnId, eventTurnId)) continue;
+
           if (requestId && !open.requestIds.has(requestId)) continue;
           // Without a request id, one resolution answers one request, never all of them.
           const resolved = requestId ?? open.requestIds.values().next().value;
+
           if (resolved !== undefined) open.requestIds.delete(resolved);
+
           if (open.requestIds.size > 0) continue;
           channelWaitingRequests.delete(waitingKey);
           yield* channelStatusWorker.enqueue({
@@ -181,6 +205,7 @@ export function createAdmission({
       ) {
         channelWaitingRequests.delete(providerTurnKey(thread.id, eventTurnId));
       }
+
       if (
         event.type === "session.exited" ||
         (event.type === "session.state.changed" &&
@@ -188,6 +213,7 @@ export function createAdmission({
       ) {
         clearChannelWaitingRequests(thread.id);
       }
+
       const needsPendingTurnStart =
         event.type === "session.exited" ||
         event.type === "session.started" ||
@@ -197,17 +223,22 @@ export function createAdmission({
         event.type === "turn.started" ||
         event.type === "turn.aborted" ||
         event.type === "turn.completed";
+
       const pendingTurnStart = needsPendingTurnStart
         ? yield* projectionTurnRepository.getPendingTurnStartByThreadId({ threadId: thread.id })
         : Option.none();
+
       const expectedPendingTurnId = Option.isSome(pendingTurnStart)
         ? yield* getExpectedProviderTurnIdForThread(thread.id)
         : undefined;
+
       const eventMatchesPendingTurn =
         Option.isSome(pendingTurnStart) && sameId(expectedPendingTurnId, eventTurnId);
+
       const canReconcileUsage = Option.isSome(pendingTurnStart)
         ? eventMatchesPendingTurn
         : !conflictsWithActiveTurn;
+
       if (
         respondingBotId !== null &&
         eventTurnId !== undefined &&
@@ -243,6 +274,7 @@ export function createAdmission({
             ),
           );
       }
+
       if (
         respondingBotId !== null &&
         eventTurnId !== undefined &&
@@ -257,6 +289,7 @@ export function createAdmission({
               (event.payload.stopReason !== null &&
                 event.payload.stopReason !== undefined &&
                 /cancel|abort|interrupt|killed|stopped/i.test(event.payload.stopReason))));
+
         yield* botUsageLedger
           .finalizeForTurn({
             botId: respondingBotId,
@@ -276,9 +309,12 @@ export function createAdmission({
             ),
           );
       }
+
       const hasPendingTurnStart =
         Option.isSome(pendingTurnStart) && thread.session?.status === "starting";
+
       const missingTurnForActiveTurn = activeTurnId !== null && eventTurnId === undefined;
+
       // A turn.started that conflicts with the active turn is legitimate when
       // the server itself has a turn start pending for this thread AND the
       // provider session already tracks the event's turn as its active turn:
@@ -287,10 +323,12 @@ export function createAdmission({
       // turn.started for some other turn id still gets rejected.
       const conflictingTurnStartIsPendingTurnStart =
         event.type === "turn.started" && conflictsWithActiveTurn ? eventMatchesPendingTurn : false;
+
       const shouldApplyThreadLifecycle = (() => {
         if (!STRICT_PROVIDER_LIFECYCLE_GUARD) {
           return true;
         }
+
         switch (event.type) {
           case "session.exited":
             return true;
@@ -303,13 +341,16 @@ export function createAdmission({
             if (conflictsWithActiveTurn || missingTurnForActiveTurn) {
               return false;
             }
+
             // Only the active turn may close the lifecycle state.
             if (activeTurnId !== null && eventTurnId !== undefined) {
               return sameId(activeTurnId, eventTurnId);
             }
+
             if (Option.isSome(pendingTurnStart)) {
               return eventMatchesPendingTurn;
             }
+
             // No active turn tracked: accept only completions that name their
             // turn (covers a real completion whose turn.started was lost). An
             // untargeted completion cannot prove it belongs to any turn this
@@ -322,6 +363,7 @@ export function createAdmission({
             return true;
         }
       })();
+
       // Stale turn events must not start watchdogs or close another turn's silent run.
       if (event.type === "turn.started" && eventTurnId && shouldApplyThreadLifecycle) {
         yield* startTurnSilenceWatchdog(thread, eventTurnId, event.provider);
@@ -333,10 +375,12 @@ export function createAdmission({
       ) {
         yield* resolveSilenceIncidents(thread.id);
       }
+
       const acceptedTurnStartedSourcePlan =
         event.type === "turn.started" && shouldApplyThreadLifecycle
           ? yield* getSourceProposedPlanReferenceForAcceptedTurnStart(thread.id, eventTurnId)
           : null;
+
       if (
         event.type === "session.started" ||
         event.type === "session.state.changed" ||
@@ -349,8 +393,10 @@ export function createAdmission({
           switch (event.type) {
             case "session.state.changed": {
               const runtimeStatus = orchestrationSessionStatusFromRuntimeState(event.payload.state);
+
               return hasPendingTurnStart && runtimeStatus === "ready" ? "starting" : runtimeStatus;
             }
+
             case "turn.started":
               return "running";
             case "session.exited":
@@ -366,6 +412,7 @@ export function createAdmission({
               return activeTurnId !== null ? "running" : hasPendingTurnStart ? "starting" : "ready";
           }
         })();
+
         const nextActiveTurnId =
           event.type === "turn.started"
             ? (eventTurnId ?? null)
@@ -377,6 +424,7 @@ export function createAdmission({
                   )
                 ? null
                 : activeTurnId;
+
         const lastError =
           event.type === "session.state.changed" && event.payload.state === "error"
             ? (event.payload.reason ?? thread.session?.lastError ?? "Provider session error")
@@ -429,6 +477,7 @@ export function createAdmission({
           });
         }
       }
+
       return {
         thread,
         eventTurnId,
@@ -439,5 +488,6 @@ export function createAdmission({
         shouldApplyThreadLifecycle,
       };
     });
+
   return { prepareRuntimeEvent };
 }

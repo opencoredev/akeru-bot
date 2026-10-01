@@ -40,13 +40,16 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: LATER,
       });
+
       const ACK = "2026-08-31T12:05:00.000Z";
       const acknowledged = acknowledgeAkeruDelegation(completed, ACK);
+
       const event = yield* decideOne(makeReadModel([completed]), {
         type: "delegation.state.set",
         commandId: CommandId.make("command-ack"),
         delegation: acknowledged,
       });
+
       expect(event.payload.delegation.phase).toMatchObject({ acknowledgedAt: ACK });
 
       const rewritten = yield* decideOrchestrationCommand({
@@ -66,6 +69,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           },
         },
       }).pipe(Effect.flip);
+
       expect(String(rewritten)).toContain("without a state transition");
 
       const reacknowledged = yield* decideOrchestrationCommand({
@@ -76,6 +80,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           delegation: acknowledgeAkeruDelegation(completed, "2026-08-31T12:06:00.000Z"),
         },
       }).pipe(Effect.flip);
+
       expect(String(reacknowledged)).toContain("without a state transition");
     }),
   );
@@ -94,13 +99,16 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: LATER,
       });
+
       const acknowledged = acknowledgeAkeruDelegation(completed, "2026-08-31T12:05:00.000Z");
       const released = releaseAkeruDelegationAcknowledgement(acknowledged);
+
       const event = yield* decideOne(makeReadModel([acknowledged]), {
         type: "delegation.state.set",
         commandId: CommandId.make("command-release"),
         delegation: released,
       });
+
       expect(event.payload.delegation.phase).toMatchObject({ acknowledgedAt: null });
 
       const rewritten = yield* decideOrchestrationCommand({
@@ -117,6 +125,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           },
         },
       }).pipe(Effect.flip);
+
       expect(String(rewritten)).toContain("without a state transition");
     }),
   );
@@ -135,6 +144,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: LATER,
       });
+
       const failed = makeDelegation({
         delegationId: DelegationId.make("delegation-failed"),
         phase: {
@@ -148,6 +158,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: LATER,
       });
+
       const running = makeDelegation({
         delegationId: DelegationId.make("delegation-running"),
         phase: {
@@ -158,7 +169,9 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           progress: null,
         },
       });
+
       let readModel = makeReadModel([completed, failed, running]);
+
       const turn = (index: number) =>
         Effect.gen(function* () {
           const decided = yield* decideOrchestrationCommand({
@@ -178,14 +191,18 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
               createdAt: `2026-08-31T12:1${index}:00.000Z`,
             },
           });
+
           const events = Array.isArray(decided) ? decided : [decided];
+
           for (const event of events) {
             readModel = yield* projectEvent(readModel, {
               ...event,
               sequence: readModel.snapshotSequence + 1,
             } as OrchestrationEvent);
           }
+
           const requested = events.find((event) => event.type === "thread.turn-start-requested");
+
           return {
             ids:
               requested?.type === "thread.turn-start-requested"
@@ -225,6 +242,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: LATER,
       });
+
       const decided = yield* decideOrchestrationCommand({
         readModel: makeReadModel([completed]),
         command: {
@@ -242,6 +260,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           createdAt: "2026-08-31T12:10:00.000Z",
         },
       });
+
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events.some((event) => event.type === "delegation.updated")).toBe(false);
     }),
@@ -250,12 +269,14 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
   it.effect("never lets a delegated child thread carry a channel origin", () =>
     Effect.gen(function* () {
       const base = makeReadModel();
+
       const readModel: OrchestrationReadModel = {
         ...base,
         threads: base.threads.map((thread) =>
           thread.id === CHILD_THREAD_ID ? { ...thread, parentThreadId: PARENT_THREAD_ID } : thread,
         ),
       };
+
       const start = (threadId: ThreadId) =>
         decideOrchestrationCommand({
           readModel,

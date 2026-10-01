@@ -63,6 +63,7 @@ describe("ProviderCommandReactor", () => {
         worktreePath: null,
         createdAt: now,
       });
+
       const queued = {
         delegationId,
         parentDelegationId: null,
@@ -94,11 +95,13 @@ describe("ProviderCommandReactor", () => {
         createdAt: now,
         updatedAt: now,
       };
+
       yield* harness.engine.dispatch({
         type: "delegation.create",
         commandId: CommandId.make("cmd-release-create"),
         delegation: queued,
       });
+
       const running = {
         _tag: "Running" as const,
         childThreadId,
@@ -106,6 +109,7 @@ describe("ProviderCommandReactor", () => {
         startedAt: now,
         progress: null,
       };
+
       yield* harness.engine.dispatch({
         type: "delegation.state.set",
         commandId: CommandId.make("cmd-release-running"),
@@ -198,6 +202,7 @@ describe("ProviderCommandReactor", () => {
         worktreePath: null,
         createdAt: now,
       });
+
       const queued = {
         delegationId,
         parentDelegationId: null,
@@ -229,11 +234,13 @@ describe("ProviderCommandReactor", () => {
         createdAt: now,
         updatedAt: now,
       };
+
       yield* harness.engine.dispatch({
         type: "delegation.create",
         commandId: CommandId.make("cmd-unread-create"),
         delegation: queued,
       });
+
       const running = {
         _tag: "Running" as const,
         childThreadId,
@@ -241,6 +248,7 @@ describe("ProviderCommandReactor", () => {
         startedAt: now,
         progress: null,
       };
+
       yield* harness.engine.dispatch({
         type: "delegation.state.set",
         commandId: CommandId.make("cmd-unread-running"),
@@ -338,6 +346,7 @@ describe("ProviderCommandReactor", () => {
         worktreePath: null,
         createdAt: now,
       });
+
       const queued = {
         delegationId,
         parentDelegationId: null,
@@ -369,11 +378,13 @@ describe("ProviderCommandReactor", () => {
         createdAt: now,
         updatedAt: now,
       };
+
       yield* harness.engine.dispatch({
         type: "delegation.create",
         commandId: CommandId.make("cmd-unreleased-create"),
         delegation: queued,
       });
+
       const running = {
         _tag: "Running" as const,
         childThreadId,
@@ -381,6 +392,7 @@ describe("ProviderCommandReactor", () => {
         startedAt: now,
         progress: null,
       };
+
       yield* harness.engine.dispatch({
         type: "delegation.state.set",
         commandId: CommandId.make("cmd-unreleased-running"),
@@ -451,6 +463,7 @@ describe("ProviderCommandReactor", () => {
       const harness = yield* Effect.promise(() =>
         createHarness({ botEngine: null, startReactor: false }),
       );
+
       const now = "2026-01-01T00:00:00.000Z";
       const parentBotId = BotId.make("bot-1");
       const childBotId = BotId.make("bot-child");
@@ -486,6 +499,7 @@ describe("ProviderCommandReactor", () => {
         worktreePath: null,
         createdAt: now,
       });
+
       const queued = {
         delegationId,
         parentDelegationId: null,
@@ -517,11 +531,13 @@ describe("ProviderCommandReactor", () => {
         createdAt: now,
         updatedAt: now,
       };
+
       yield* harness.engine.dispatch({
         type: "delegation.create",
         commandId: CommandId.make("cmd-restart-create"),
         delegation: queued,
       });
+
       const running = {
         _tag: "Running" as const,
         childThreadId,
@@ -529,6 +545,7 @@ describe("ProviderCommandReactor", () => {
         startedAt: now,
         progress: null,
       };
+
       yield* harness.engine.dispatch({
         type: "delegation.state.set",
         commandId: CommandId.make("cmd-restart-running"),
@@ -574,6 +591,7 @@ describe("ProviderCommandReactor", () => {
       // before it stops, which cancels the background retry.
       const firstScope = yield* Scope.make("sequential");
       yield* Effect.promise(() => harness.startReactor(firstScope));
+
       const failed = yield* awaitDomainEvent(
         harness.engine,
         (event) =>
@@ -581,6 +599,7 @@ describe("ProviderCommandReactor", () => {
           event.payload.threadId === ThreadId.make("thread-1") &&
           event.payload.session.status === "error",
       );
+
       harness.failNextDelegationReleases(Number.MAX_SAFE_INTEGER);
       harness.sendTurn.mockImplementationOnce(() => Effect.die("dispatch failed"));
       yield* startTurn("failed", "2026-01-01T00:00:02.000Z");

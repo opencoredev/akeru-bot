@@ -19,6 +19,7 @@ export function canManageGroupPeople(
   if (command.type !== "group.person.assign" && command.type !== "group.person.unassign") {
     return true;
   }
+
   return [...scopes].includes(AuthAccessWriteScope);
 }
 
@@ -27,11 +28,15 @@ export function applyKnownGroupPerson(
   clientSessions: ReadonlyArray<AuthClientSession>,
 ): OrchestrationCommand | null {
   if (command.type === "group.person.unassign") return command;
+
   if (command.type !== "group.person.assign") return command;
+
   const clientSession = clientSessions.find(
     (candidate) => candidate.sessionId === command.person.personId,
   );
+
   if (!clientSession) return null;
+
   return {
     ...command,
     person: {

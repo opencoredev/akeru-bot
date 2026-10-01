@@ -3,10 +3,12 @@ import {
   normalizeFixtureEvent,
   type LegacyProviderRuntimeEvent,
 } from "../../test-support/ProviderFixtureEvents.ts";
+
 export type {
   LegacyProviderRuntimeEvent,
   FixtureProviderRuntimeEvent,
 } from "../../test-support/ProviderFixtureEvents.ts";
+
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -95,6 +97,7 @@ export function createAgentControllerHarness() {
   const runtimeSessions: ProviderSession[] = [];
 
   const unsupported = () => Effect.die(new Error("Unsupported provider call in test")) as never;
+
   const service: AgentControllerShape = {
     authenticateMcpServer: () => unsupported(),
     resolveEngine: () => unsupported(),
@@ -115,10 +118,13 @@ export function createAgentControllerHarness() {
 
   const setSession = (session: ProviderSession): void => {
     const existingIndex = runtimeSessions.findIndex((entry) => entry.threadId === session.threadId);
+
     if (existingIndex >= 0) {
       runtimeSessions[existingIndex] = session;
+
       return;
     }
+
     runtimeSessions.push(session);
   };
 
@@ -130,6 +136,7 @@ export function createAgentControllerHarness() {
     // SAFETY: Only malformed-event tests use this boundary to exercise handler isolation.
     Effect.runSync(PubSub.publish(runtimeEventPubSub, event as ProviderRuntimeEvent));
   };
+
   return {
     service,
     emitUnsafe,
@@ -185,6 +192,7 @@ export function createRuntimeIngestionHarness() {
   function makeTempDir(prefix: string): string {
     const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), prefix));
     tempDirs.push(dir);
+
     return dir;
   }
 
@@ -205,9 +213,11 @@ export function createRuntimeIngestionHarness() {
     const provider = createAgentControllerHarness();
     let startTransport: ChannelRuntime.ChannelRuntimeDependencies["startTransport"];
     let nextChannelId = 0;
+
     const channelRuntimeLayer = Layer.unwrap(
       Effect.gen(function* () {
         const snapshotQuery = yield* ProjectionSnapshotQuery;
+
         return ChannelRuntime.ChannelRuntime.layerWith({
           engine: yield* OrchestrationEngineService,
           secretStore: yield* ServerSecretStore.ServerSecretStore,
@@ -231,6 +241,7 @@ export function createRuntimeIngestionHarness() {
         });
       }),
     );
+
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionSnapshotQueryLive),
       Layer.provide(OrchestrationProjectionPipelineLive),
@@ -239,10 +250,12 @@ export function createRuntimeIngestionHarness() {
       Layer.provide(RepositoryIdentityResolver.layer),
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const projectionSnapshotLayer = OrchestrationProjectionSnapshotQueryLive.pipe(
       Layer.provide(RepositoryIdentityResolver.layer),
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const layer = ProviderRuntimeIngestionLive.pipe(
       Layer.provideMerge(channelRuntimeLayer),
       Layer.provideMerge(orchestrationLayer),
@@ -262,15 +275,18 @@ export function createRuntimeIngestionHarness() {
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), workspaceRoot)),
       Layer.provideMerge(NodeServices.layer),
     );
+
     runtime = ManagedRuntime.make(layer);
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
     const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
     const ingestion = await runtime.runPromise(Effect.service(ProviderRuntimeIngestionService));
     scope = await Effect.runPromise(Scope.make("sequential"));
     const observations = createObservationHistory<void>();
+
     const domainEvents = await runtime.runPromise(
       engine.subscribeDomainEvents.pipe(Scope.provide(scope)),
     );
+
     await runtime.runPromise(
       Stream.runForEach(domainEvents, () => observations.publish(undefined)).pipe(
         Effect.forkIn(scope),
@@ -293,6 +309,7 @@ export function createRuntimeIngestionHarness() {
       },
       createdAt,
     });
+
     if (options?.botOwned) {
       await dispatch({
         type: "bot.create",
@@ -312,6 +329,7 @@ export function createRuntimeIngestionHarness() {
         createdAt,
       });
     }
+
     await dispatch({
       type: "thread.create",
       commandId: CommandId.make("cmd-thread-create"),
@@ -372,8 +390,10 @@ export function createRuntimeIngestionHarness() {
         let inbound:
           | Parameters<NonNullable<ChannelRuntime.ChannelRuntimeDependencies["startTransport"]>>[1]
           | undefined;
+
         startTransport = async (_input, onMessage) => {
           inbound = onMessage;
+
           return {
             externalIdentity: "test-channel",
             runtime: {
@@ -383,6 +403,7 @@ export function createRuntimeIngestionHarness() {
             },
           };
         };
+
         await withChannels((channels) =>
           channels.connect({
             type: "channel.connect",
@@ -401,6 +422,7 @@ export function createRuntimeIngestionHarness() {
                   } as const)),
           }),
         );
+
         return {
           inbound: (message: Parameters<NonNullable<typeof inbound>>[0]) => inbound!(message),
         };
@@ -420,6 +442,7 @@ export function createRuntimeIngestionHarness() {
             snapshotQuery.getSnapshot(),
             (snapshot) => {
               const thread = snapshot.threads.find((entry) => entry.id === threadId);
+
               return thread !== undefined && predicate(thread);
             },
             "runtime thread state",
@@ -493,19 +516,25 @@ export function createRuntimeIngestionHarness() {
       },
     };
   }
+
   const dispose = async () => {
     if (scope) {
       await Effect.runPromise(Scope.close(scope, Exit.void));
     }
+
     scope = null;
+
     if (runtime) {
       await runtime.dispose();
     }
+
     runtime = null;
+
     for (const dir of tempDirs.splice(0)) {
       NodeFS.rmSync(dir, { recursive: true, force: true });
     }
   };
+
   return {
     makeTempDir,
     createHarness,

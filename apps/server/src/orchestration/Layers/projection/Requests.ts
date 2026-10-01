@@ -26,6 +26,7 @@ export function createRequests({
         yield* projectionThreadActivityRepository.deleteByThreadId({
           threadId: event.payload.threadId,
         });
+
         return;
 
       case "thread.activity-appended":
@@ -42,32 +43,39 @@ export function createRequests({
             : {}),
           createdAt: event.payload.activity.createdAt,
         });
+
         return;
 
       case "thread.reverted": {
         const existingRows = yield* projectionThreadActivityRepository.listByThreadId({
           threadId: event.payload.threadId,
         });
+
         if (existingRows.length === 0) {
           return;
         }
+
         const existingTurns = yield* projectionTurnRepository.listByThreadId({
           threadId: event.payload.threadId,
         });
+
         const keptRows = retainProjectionActivitiesAfterRevert(
           existingRows,
           existingTurns,
           event.payload.turnCount,
         );
+
         if (keptRows.length === existingRows.length) {
           return;
         }
+
         yield* projectionThreadActivityRepository.deleteByThreadId({
           threadId: event.payload.threadId,
         });
         yield* Effect.forEach(keptRows, projectionThreadActivityRepository.upsert, {
           concurrency: 1,
         }).pipe(Effect.asVoid);
+
         return;
       }
 
@@ -84,6 +92,7 @@ export function createRequests({
         yield* projectionPendingApprovalRepository.deleteByThreadId({
           threadId: event.payload.threadId,
         });
+
         return;
 
       case "thread.activity-appended": {
@@ -91,35 +100,47 @@ export function createRequests({
           extractActivityRequestId(event.payload.activity.payload) ??
           event.metadata.requestId ??
           null;
+
         if (requestId === null) {
           return;
         }
+
         const existingRow = yield* projectionPendingApprovalRepository.getByRequestId({
           requestId,
         });
+
         if (event.payload.activity.kind === "approval.resolved") {
           yield* projectionPendingApprovalRepository.deleteByRequestId({ requestId });
+
           return;
         }
+
         if (event.payload.activity.kind === "provider.approval.respond.failed") {
           const payload =
             typeof event.payload.activity.payload === "object" &&
             event.payload.activity.payload !== null
               ? (event.payload.activity.payload as Record<string, unknown>)
               : null;
+
           const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : null;
+
           if (isStalePendingApprovalFailureDetail(detail)) {
             if (Option.isNone(existingRow)) {
               return;
             }
+
             if (existingRow.value.status === "resolved") {
               return;
             }
+
             yield* projectionPendingApprovalRepository.deleteByRequestId({ requestId });
+
             return;
           }
+
           return;
         }
+
         // Only approval-requested activities should create pending-approval
         // rows.  Other activity kinds that happen to carry a requestId
         // (e.g. user-input.requested / user-input.resolved) must not
@@ -128,9 +149,11 @@ export function createRequests({
         if (event.payload.activity.kind !== "approval.requested") {
           return;
         }
+
         if (Option.isSome(existingRow) && existingRow.value.status === "resolved") {
           return;
         }
+
         yield* projectionPendingApprovalRepository.upsert({
           requestId,
           threadId: event.payload.threadId,
@@ -142,6 +165,7 @@ export function createRequests({
             : event.payload.activity.createdAt,
           resolvedAt: null,
         });
+
         return;
       }
 
@@ -154,5 +178,6 @@ export function createRequests({
         return;
     }
   });
+
   return { applyThreadActivitiesProjection, applyPendingApprovalsProjection };
 }

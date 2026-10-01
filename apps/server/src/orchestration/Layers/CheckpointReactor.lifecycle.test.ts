@@ -100,6 +100,7 @@ describe("CheckpointReactor", () => {
       harness,
       (entry) => entry.latestTurn?.turnId === "turn-main" && entry.checkpoints.length === 1,
     );
+
     expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
   });
 
@@ -108,6 +109,7 @@ describe("CheckpointReactor", () => {
       seedFilesystemCheckpoints: false,
       providerName: ProviderDriverKind.make("claudeAgent"),
     });
+
     const createdAt = "2026-01-01T00:00:00.000Z";
 
     await harness.run(
@@ -154,6 +156,7 @@ describe("CheckpointReactor", () => {
     });
 
     await waitForEvent(harness, (event) => event.type === "thread.turn-diff-completed");
+
     const thread = await waitForThread(
       harness,
       (entry) => entry.latestTurn?.turnId === "turn-claude-1" && entry.checkpoints.length === 1,
@@ -172,6 +175,7 @@ describe("CheckpointReactor", () => {
         const harness = yield* Effect.promise(() =>
           createHarness({ seedFilesystemCheckpoints: false }),
         );
+
         const threadId = ThreadId.make("thread-1");
         const turnId = asTurnId("turn-1");
         const assistantMessageId = MessageId.make("assistant:mid-turn");
@@ -257,9 +261,11 @@ describe("CheckpointReactor", () => {
           turnId,
         });
         yield* Effect.promise(harness.drain);
+
         const thread = (yield* Effect.promise(harness.readModel)).threads.find(
           (entry) => entry.id === threadId,
         );
+
         expect(thread?.checkpoints).toHaveLength(1);
         expect(thread?.checkpoints[0]?.status).toBe("ready");
         expect(thread?.latestTurn?.state).toBe(
@@ -297,9 +303,11 @@ describe("CheckpointReactor", () => {
           turnId: followUpTurnId,
           checkpointTurnCount: 2,
         });
+
         const followUp = (yield* Effect.promise(harness.readModel)).threads.find(
           (entry) => entry.id === threadId,
         );
+
         expect(
           followUp?.checkpoints.find((checkpoint) => checkpoint.turnId === followUpTurnId),
         ).toMatchObject({ checkpointTurnCount: 2, files: [] });
@@ -331,6 +339,7 @@ describe("CheckpointReactor", () => {
       const harness = yield* Effect.promise(() =>
         createHarness({ seedFilesystemCheckpoints: false }),
       );
+
       harness.provider.emit({
         type: "turn.completed",
         eventId: EventId.make("evt-turn-completed-missing-baseline"),
@@ -370,8 +379,10 @@ describe("CheckpointReactor", () => {
       const harness = yield* Effect.promise(() =>
         createHarness({ initializeGit: false, seedFilesystemCheckpoints: false }),
       );
+
       const threadId = ThreadId.make("thread-1");
       const createdAt = "2026-01-01T00:00:00.000Z";
+
       const emit = (type: "turn.started" | "turn.completed", turn: number) =>
         harness.provider.emit(
           type === "turn.started"
@@ -393,6 +404,7 @@ describe("CheckpointReactor", () => {
                 payload: { state: "completed" },
               },
         );
+
       emit("turn.started", 1);
       yield* Effect.promise(harness.drain);
       NodeFS.writeFileSync(NodePath.join(harness.cwd, "README.md"), "before git\n");
@@ -404,7 +416,9 @@ describe("CheckpointReactor", () => {
         emit("turn.started", 2);
         yield* Effect.promise(harness.drain);
       }
+
       runGit(harness.cwd, ["init", "--initial-branch=main"]);
+
       if (commit) {
         runGit(harness.cwd, ["add", "."]);
         runGit(harness.cwd, [
@@ -417,6 +431,7 @@ describe("CheckpointReactor", () => {
           "Initial",
         ]);
       }
+
       if (timing === "between turns") {
         yield* harness.engine.dispatch({
           type: "thread.turn.start",
@@ -439,6 +454,7 @@ describe("CheckpointReactor", () => {
         emit("turn.started", 2);
         yield* Effect.promise(harness.drain);
       }
+
       NodeFS.writeFileSync(NodePath.join(harness.cwd, "README.md"), "after git\n");
       emit("turn.completed", 2);
       expect(yield* harness.nextReceipt).toMatchObject({
@@ -525,12 +541,14 @@ describe("CheckpointReactor", () => {
     const nonRepositorySessionCwd = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "t3-checkpoint-runtime-non-repo-"),
     );
+
     tempDirs.push(nonRepositorySessionCwd);
 
     const harness = await createHarness({
       seedFilesystemCheckpoints: false,
       providerSessionCwd: nonRepositorySessionCwd,
     });
+
     const createdAt = "2026-01-01T00:00:00.000Z";
 
     await harness.run(

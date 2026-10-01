@@ -84,11 +84,13 @@ describe("OrchestrationEngine", () => {
     );
 
     expect(result.sequence).toBe(2);
+
     const eventsAfterRetry = await runtime.runPromise(
       Stream.runCollect(engine.readEvents(0)).pipe(
         Effect.map((chunk): OrchestrationEvent[] => Array.from(chunk)),
       ),
     );
+
     expect(eventsAfterRetry.map((event) => event.type)).toEqual([
       "project.created",
       "thread.created",
@@ -157,6 +159,7 @@ describe("OrchestrationEngine", () => {
         Effect.map((chunk): OrchestrationEvent[] => Array.from(chunk)),
       ),
     );
+
     expect(eventsAfterFailure.map((event) => event.type)).toEqual([
       "project.created",
       "thread.created",
@@ -170,6 +173,7 @@ describe("OrchestrationEngine", () => {
         Effect.map((chunk): OrchestrationEvent[] => Array.from(chunk)),
       ),
     );
+
     expect(eventsAfterRetry.map((event) => event.type)).toEqual([
       "project.created",
       "thread.created",
@@ -326,6 +330,7 @@ describe("OrchestrationEngine", () => {
         createdAt,
       }),
     );
+
     for (const threadId of ["thread-conflict-a", "thread-conflict-b"]) {
       await system.run(
         engine.dispatch({
@@ -384,9 +389,11 @@ describe("OrchestrationEngine", () => {
     ).rejects.toThrow("already used for thread 'thread-conflict-a'");
 
     const readModel = await system.readModel();
+
     const targetThread = readModel.threads.find(
       (candidate) => candidate.id === "thread-conflict-b",
     );
+
     expect(targetThread?.messages.filter((message) => message.role === "user")).toHaveLength(0);
 
     await system.dispose();

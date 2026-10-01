@@ -2,10 +2,12 @@ import {
   normalizeFixtureEvent,
   type FixtureProviderRuntimeEvent,
 } from "../src/orchestration/test-support/ProviderFixtureEvents.ts";
+
 export type {
   LegacyProviderRuntimeEvent,
   FixtureProviderRuntimeEvent,
 } from "../src/orchestration/test-support/ProviderFixtureEvents.ts";
+
 import {
   ApprovalRequestId,
   EventId,
@@ -103,6 +105,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
     const sessions = new Map<ThreadId, SessionState>();
     const queuedResponsesForNextSession: TestTurnResponse[] = [];
     const interruptCallsBySession = new Map<ThreadId, Array<TurnId | undefined>>();
+
     const approvalResponsesBySession = new Map<
       ThreadId,
       Array<{
@@ -113,8 +116,10 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
     >();
 
     const emit = (event: ProviderRuntimeEvent) => Queue.offer(runtimeEvents, event);
+
     const nextEventId = (threadId: ThreadId) => {
       eventCount += 1;
+
       return EventId.make(`test-provider:${provider}:${threadId}:${eventCount}`);
     };
 
@@ -163,6 +168,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
     const sendTurn: ProviderAdapterShape<ProviderAdapterError>["sendTurn"] = (input) =>
       Effect.gen(function* () {
         const state = sessions.get(input.threadId);
+
         if (!state) {
           return yield* missingSessionEffect(provider, input.threadId);
         }
@@ -172,6 +178,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
         const turnId = TurnId.make(`turn-${turnCount}`);
 
         const response = state.queuedResponses.shift();
+
         if (!response) {
           return yield* new ProviderAdapterValidationError({
             provider,
@@ -182,6 +189,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
 
         const assistantDeltas: string[] = [];
         const deferredTurnCompletedEvents: ProviderRuntimeEvent[] = [];
+
         for (const fixtureEvent of response.events) {
           const rawEvent = {
             ...fixtureEvent,
@@ -194,17 +202,21 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
 
           const runtimeEvent = normalizeFixtureEvent(rawEvent);
           const runtimeType = (runtimeEvent as { type: string }).type;
+
           if (runtimeType === "content.delta") {
             const payload = runtimeEvent.payload as { delta?: unknown } | undefined;
+
             if (typeof payload?.delta === "string") {
               assistantDeltas.push(payload.delta);
             }
           } else if (runtimeType === "message.delta") {
             const legacyDelta = (runtimeEvent as { delta?: unknown }).delta;
+
             if (typeof legacyDelta === "string") {
               assistantDeltas.push(legacyDelta);
             }
           }
+
           if (runtimeEvent.type === "turn.completed") {
             deferredTurnCompletedEvents.push(runtimeEvent);
             continue;
@@ -221,7 +233,9 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
           type: "userMessage",
           content: [{ type: "text", text: input.input }],
         } as const;
+
         const assistantText = assistantDeltas.join("");
+
         const nextItems: Array<unknown> =
           assistantText.length > 0
             ? [userItem, { type: "agentMessage", text: assistantText }]
@@ -309,9 +323,11 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
 
     const readThread: ProviderAdapterShape<ProviderAdapterError>["readThread"] = (threadId) => {
       const state = sessions.get(threadId);
+
       if (!state) {
         return missingSessionEffect(provider, threadId);
       }
+
       return Effect.succeed(state.snapshot);
     };
 
@@ -320,9 +336,11 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
       numTurns,
     ) => {
       const state = sessions.get(threadId);
+
       if (!state) {
         return missingSessionEffect(provider, threadId);
       }
+
       if (!Number.isInteger(numTurns) || numTurns < 0 || numTurns > state.snapshot.turns.length) {
         return Effect.fail(
           new ProviderAdapterValidationError({
@@ -340,6 +358,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
           turns: state.snapshot.turns.slice(0, state.snapshot.turns.length - numTurns),
         };
         state.turnCount = state.snapshot.turns.length;
+
         return state.snapshot;
       });
     };
@@ -391,9 +410,11 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
 
     const getRollbackCalls = (threadId: ThreadId): ReadonlyArray<number> => {
       const state = sessions.get(threadId);
+
       if (!state) {
         return [];
       }
+
       return [...state.rollbackCalls];
     };
 
@@ -401,9 +422,11 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
 
     const getInterruptCalls = (threadId: ThreadId): ReadonlyArray<TurnId | undefined> => {
       const calls = interruptCallsBySession.get(threadId);
+
       if (!calls) {
         return [];
       }
+
       return [...calls];
     };
 
@@ -418,9 +441,11 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
       readonly decision: ProviderApprovalDecision;
     }> => {
       const responses = approvalResponsesBySession.get(threadId);
+
       if (!responses) {
         return [];
       }
+
       return [...responses];
     };
 

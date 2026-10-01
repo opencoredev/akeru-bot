@@ -53,6 +53,7 @@ import {
   asMessageId,
   asTurnId,
 } from "./ProviderCommandFixtures.ts";
+
 export * from "./ProviderCommandFixtures.ts";
 
 export function createProviderCommandHarness() {
@@ -69,11 +70,14 @@ export function createProviderCommandHarness() {
 
   async function createHarness(input?: ProviderCommandHarnessOptions) {
     const now = "2026-01-01T00:00:00.000Z";
+
     const baseDir =
       input?.baseDir ?? NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-reactor-"));
+
     createdBaseDirs.add(baseDir);
     const { stateDir } = deriveServerPathsSync(baseDir, undefined);
     createdStateDirs.add(stateDir);
+
     const {
       runtimeSessions,
       modelSelection,
@@ -105,7 +109,9 @@ export function createProviderCommandHarness() {
       Layer.provide(RepositoryIdentityResolver.layer),
       Layer.provide(SqlitePersistenceMemory),
     );
+
     let failingCommandReadModelReads = 0;
+
     const projectionSnapshotLayer = Layer.effect(
       ProjectionSnapshotQuery,
       ProjectionSnapshotQuery.pipe(
@@ -115,6 +121,7 @@ export function createProviderCommandHarness() {
             Effect.suspend(() => {
               if (failingCommandReadModelReads === 0) return query.getCommandReadModel();
               failingCommandReadModelReads -= 1;
+
               return Effect.fail(
                 new PersistenceSqlError({
                   operation: "ProjectionSnapshotQuery.getCommandReadModel:test",
@@ -134,13 +141,16 @@ export function createProviderCommandHarness() {
         ),
       ),
     );
+
     let titleRegenerationCompletionDispatchAttempts = 0;
     let failingDelegationReleases = 0;
     let sequenceReads = 0;
+
     const reactorOrchestrationLayer = Layer.effect(
       OrchestrationEngineService,
       Effect.gen(function* () {
         const engine = yield* OrchestrationEngineService;
+
         return {
           readEvents:
             input?.failStartupReplay === true
@@ -151,6 +161,7 @@ export function createProviderCommandHarness() {
           dispatch: (command) => {
             if (command.type === "thread.title.regeneration.complete") {
               titleRegenerationCompletionDispatchAttempts += 1;
+
               if (
                 titleRegenerationCompletionDispatchAttempts <=
                 (input?.titleRegenerationCompletionDispatchFailures ?? 0)
@@ -158,12 +169,14 @@ export function createProviderCommandHarness() {
                 return Effect.die(new Error("Injected title regeneration completion failure"));
               }
             }
+
             if (
               command.type === "delegation.state.set" &&
               command.commandId.startsWith("server:delegation-release:") &&
               failingDelegationReleases > 0
             ) {
               failingDelegationReleases -= 1;
+
               return Effect.fail(
                 new PersistenceSqlError({
                   operation: "OrchestrationEngine.dispatch:test",
@@ -171,6 +184,7 @@ export function createProviderCommandHarness() {
                 }),
               );
             }
+
             return engine.dispatch(command);
           },
           get streamDomainEvents() {
@@ -195,6 +209,7 @@ export function createProviderCommandHarness() {
                         const resume = Array.from(events).findLast(
                           (event) => event.type === "thread.turn-resume-requested",
                         );
+
                         return resume
                           ? Stream.concat(Stream.make(resume, resume), liveEvents)
                           : liveEvents;
@@ -208,8 +223,10 @@ export function createProviderCommandHarness() {
               ? engine.latestSequence
               : Effect.suspend(() => {
                   sequenceReads += 1;
+
                   if (sequenceReads !== input.commitDuringSequenceRead)
                     return engine.latestSequence;
+
                   // The first read precedes the reactor's subscription, so a commit
                   // after it lands in the gap. The second read follows the
                   // subscription, so a commit before it is buffered and counted.
@@ -221,6 +238,7 @@ export function createProviderCommandHarness() {
                       regenerateTitle: true,
                     })
                     .pipe(Effect.orDie);
+
                   const titleUpdates = Effect.forEach(
                     Array.from(
                       { length: input.titleUpdatesBeforeStartupCommit ?? 0 },
@@ -237,6 +255,7 @@ export function createProviderCommandHarness() {
                         .pipe(Effect.orDie),
                     { discard: true },
                   ).pipe(Effect.andThen(commit));
+
                   return sequenceReads === 1
                     ? engine.latestSequence.pipe(Effect.tap(() => titleUpdates))
                     : titleUpdates.pipe(Effect.andThen(engine.latestSequence));
@@ -244,6 +263,7 @@ export function createProviderCommandHarness() {
         } satisfies OrchestrationEngineService["Service"];
       }),
     ).pipe(Layer.provide(orchestrationLayer));
+
     const botUsageLedgerLayer = Layer.effect(
       BotUsageLedger,
       BotUsageLedger.pipe(
@@ -256,6 +276,7 @@ export function createProviderCommandHarness() {
         })),
       ),
     ).pipe(Layer.provide(BotUsageLedgerLive.pipe(Layer.provide(SqlitePersistenceMemory))));
+
     const layer = ProviderCommandReactorLive.pipe(
       Layer.provideMerge(reactorOrchestrationLayer),
       Layer.provideMerge(projectionSnapshotLayer),
@@ -293,6 +314,7 @@ export function createProviderCommandHarness() {
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), baseDir)),
       Layer.provideMerge(NodeServices.layer),
     );
+
     const managedRuntime = ManagedRuntime.make(layer);
     runtime = managedRuntime;
 
@@ -312,6 +334,7 @@ export function createProviderCommandHarness() {
         createdAt: now,
       }),
     );
+
     if (input?.botEngine !== undefined) {
       await Effect.runPromise(
         engine.dispatch({
@@ -330,6 +353,7 @@ export function createProviderCommandHarness() {
         }),
       );
     }
+
     if (input?.secondBot !== undefined) {
       await Effect.runPromise(
         engine.dispatch({
@@ -366,6 +390,7 @@ export function createProviderCommandHarness() {
         }),
       );
     }
+
     await Effect.runPromise(
       engine.dispatch({
         type: "thread.create",
@@ -410,6 +435,7 @@ export function createProviderCommandHarness() {
             createdAt: now,
           });
         }
+
         if (input?.runningTurnBeforeReactor === true || input?.resumeBeforeReactor === true) {
           yield* engine.dispatch({
             type: "thread.session.set",
@@ -428,6 +454,7 @@ export function createProviderCommandHarness() {
             },
             createdAt: now,
           });
+
           if (input.pendingRequestBeforeReactor) {
             const requestId = `${input.pendingRequestBeforeReactor}-before-restart`;
             yield* engine.dispatch({
@@ -466,6 +493,7 @@ export function createProviderCommandHarness() {
             });
           }
         }
+
         if (input?.resumeBeforeReactor === true) {
           yield* engine.dispatch({
             type: "thread.session.set",
@@ -493,6 +521,7 @@ export function createProviderCommandHarness() {
         }
       }),
     );
+
     if (input?.titleRegenerationBeforeStart === "two") {
       await Effect.runPromise(
         engine.dispatch({
@@ -510,12 +539,14 @@ export function createProviderCommandHarness() {
         }),
       );
     }
+
     const titleRegenerationThreadIds =
       input?.titleRegenerationBeforeStart === "two"
         ? [ThreadId.make("thread-1"), ThreadId.make("thread-2")]
         : input?.titleRegenerationBeforeStart === "one"
           ? [ThreadId.make("thread-1")]
           : [];
+
     for (const [index, threadId] of titleRegenerationThreadIds.entries()) {
       await Effect.runPromise(
         engine.dispatch({
@@ -530,17 +561,21 @@ export function createProviderCommandHarness() {
     }
 
     scope = await Effect.runPromise(Scope.make("sequential"));
+
     const domainEvents = await runtime.runPromise(
       engine.subscribeDomainEvents.pipe(Scope.provide(scope)),
     );
+
     await runtime.runPromise(
       Stream.runForEach(domainEvents, () => observations.publish(undefined)).pipe(
         Effect.forkIn(scope),
       ),
     );
+
     if (input?.startReactor !== false) {
       await Effect.runPromise(reactor.start().pipe(Scope.provide(scope)));
     }
+
     const drain = () => Effect.runPromise(reactor.drain);
 
     return {
@@ -581,6 +616,7 @@ export function createProviderCommandHarness() {
             const context = yield* Layer.build(Layer.fresh(ProviderCommandReactorLive));
             const started = Context.get(context, ProviderCommandReactor);
             yield* started.start();
+
             return started;
           }).pipe(Scope.provide(reactorScope)),
         ),
@@ -599,24 +635,33 @@ export function createProviderCommandHarness() {
       },
     };
   }
+
   const dispose = async () => {
     if (scope) {
       await Effect.runPromise(Scope.close(scope, Exit.void));
     }
+
     scope = null;
+
     if (runtime) {
       await runtime.dispose();
     }
+
     runtime = null;
+
     for (const stateDir of createdStateDirs) {
       NodeFS.rmSync(stateDir, { recursive: true, force: true });
     }
+
     createdStateDirs.clear();
+
     for (const baseDir of createdBaseDirs) {
       NodeFS.rmSync(baseDir, { recursive: true, force: true });
     }
+
     createdBaseDirs.clear();
   };
+
   return {
     createHarness,
     dispose,

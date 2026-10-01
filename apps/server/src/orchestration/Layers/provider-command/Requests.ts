@@ -11,6 +11,7 @@ import {
 import type { createContext } from "./Context.ts";
 import type { createFailures } from "./Failures.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
 export function createRequests({
   resolveThreadShell,
   appendProviderFailureActivity,
@@ -35,10 +36,13 @@ export function createRequests({
     event: Extract<ProviderIntentEvent, { type: "thread.approval-response-requested" }>,
   ) {
     const thread = yield* resolveThreadShell(event.payload.threadId);
+
     if (!thread) {
       return;
     }
+
     const session = thread.session;
+
     if (!session || session.status === "stopped") {
       yield* appendProviderFailureActivity({
         threadId: event.payload.threadId,
@@ -49,6 +53,7 @@ export function createRequests({
         createdAt: event.payload.createdAt,
         requestId: event.payload.requestId,
       });
+
       return yield* appendApprovalFailureReply({
         threadId: event.payload.threadId,
         requestId: event.payload.requestId,
@@ -67,6 +72,7 @@ export function createRequests({
           const detail = isUnknownPendingApprovalRequestError(cause)
             ? stalePendingRequestDetail("approval", event.payload.requestId)
             : formatFailureDetail(cause);
+
           return Effect.gen(function* () {
             yield* Effect.logWarning("provider approval response failed", {
               threadId: event.payload.threadId,
@@ -107,10 +113,13 @@ export function createRequests({
       event: Extract<ProviderIntentEvent, { type: "thread.user-input-response-requested" }>,
     ) {
       const thread = yield* resolveThreadShell(event.payload.threadId);
+
       if (!thread) {
         return;
       }
+
       const hasSession = thread.session && thread.session.status !== "stopped";
+
       if (!hasSession) {
         yield* appendProviderFailureActivity({
           threadId: event.payload.threadId,
@@ -121,6 +130,7 @@ export function createRequests({
           createdAt: event.payload.createdAt,
           requestId: event.payload.requestId,
         });
+
         return yield* appendUserInputFailureReply({
           threadId: event.payload.threadId,
           requestId: event.payload.requestId,
@@ -139,12 +149,14 @@ export function createRequests({
             const retryable = isRetryableUserInputResponseError(cause);
             const providerFailed = !retryable && !isUnknownPendingUserInputRequestError(cause);
             const failureDetail = formatFailureDetail(cause);
+
             // The stale marker closes the question; a provider failure keeps its real cause.
             const detail = retryable
               ? failureDetail
               : providerFailed
                 ? `Stale pending user-input request: ${event.payload.requestId}. ${failureDetail}`
                 : stalePendingRequestDetail("user-input", event.payload.requestId);
+
             return Effect.gen(function* () {
               yield* Effect.logWarning("provider user input response failed", {
                 threadId: event.payload.threadId,
@@ -159,6 +171,7 @@ export function createRequests({
                 createdAt: event.payload.createdAt,
                 requestId: event.payload.requestId,
               });
+
               // The controller restored the question in its live turn, so it can be answered again.
               if (retryable) return;
               yield* appendUserInputFailureReply({
@@ -167,6 +180,7 @@ export function createRequests({
                 createdAt: event.payload.createdAt,
                 providerFailed,
               });
+
               if (thread.session) {
                 yield* setThreadSession({
                   threadId: event.payload.threadId,
@@ -185,5 +199,6 @@ export function createRequests({
         );
     },
   );
+
   return { processApprovalResponseRequested, processUserInputResponseRequested };
 }

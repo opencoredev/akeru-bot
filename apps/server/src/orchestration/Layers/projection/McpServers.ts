@@ -13,15 +13,18 @@ export function createMcpServers({
       case "mcp-server.enabled":
       case "mcp-server.disabled":
         yield* projectionMcpServerRepository.upsert(event.payload.mcpServer);
+
         return;
       case "mcp-server.deleted":
         yield* projectionMcpServerRepository.deleteById({
           mcpServerId: event.payload.mcpServerId,
         });
+
         return;
       default:
         return;
     }
   });
+
   return { applyMcpServersProjection };
 }

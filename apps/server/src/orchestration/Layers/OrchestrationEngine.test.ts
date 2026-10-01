@@ -36,6 +36,7 @@ import {
 describe("OrchestrationEngine", () => {
   it("bootstraps command handling from persisted projections without reading the full snapshot", async () => {
     let nextSequence = 8;
+
     const eventStore: OrchestrationEventStoreShape = {
       append: (event) =>
         Effect.sync(() => {
@@ -43,7 +44,9 @@ describe("OrchestrationEngine", () => {
             ...event,
             sequence: nextSequence,
           } as OrchestrationEvent;
+
           nextSequence += 1;
+
           return savedEvent;
         }),
       readFromSequence: () => Stream.empty,
@@ -108,6 +111,7 @@ describe("OrchestrationEngine", () => {
         },
       ],
     };
+
     const commandReadModel = {
       ...projectionSnapshot,
       threads: projectionSnapshot.threads.map((thread) => ({
@@ -118,6 +122,7 @@ describe("OrchestrationEngine", () => {
         checkpoints: [],
       })),
     };
+
     let fullSnapshotReadCount = 0;
 
     const layer = OrchestrationEngineLive.pipe(
@@ -127,6 +132,7 @@ describe("OrchestrationEngine", () => {
           getSnapshot: () =>
             Effect.sync(() => {
               fullSnapshotReadCount += 1;
+
               return projectionSnapshot;
             }),
           getShellSnapshot: () =>
@@ -184,6 +190,7 @@ describe("OrchestrationEngine", () => {
 
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
     expect(await runtime.runPromise(engine.latestSequence)).toBe(7);
+
     const result = await runtime.runPromise(
       engine.dispatch({
         type: "thread.meta.update",

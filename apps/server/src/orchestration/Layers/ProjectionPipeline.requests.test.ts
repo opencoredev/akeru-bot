@@ -20,6 +20,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       const projectionPipeline = yield* OrchestrationProjectionPipeline;
       const eventStore = yield* OrchestrationEventStore;
       const sql = yield* SqlClient.SqlClient;
+
       const appendAndProject = (event: Parameters<typeof eventStore.append>[0]) =>
         eventStore
           .append(event)
@@ -139,6 +140,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_pending_approvals
         WHERE request_id = 'approval-request-stale-1'
       `;
+
       assert.deepEqual(approvalRows, []);
 
       const threadRows = yield* sql<{
@@ -148,6 +150,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_threads
         WHERE thread_id = 'thread-stale-approval'
       `;
+
       assert.deepEqual(threadRows, [{ pendingApprovalCount: 0 }]);
     }),
   );
@@ -159,6 +162,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       const projectionPipeline = yield* OrchestrationProjectionPipeline;
       const eventStore = yield* OrchestrationEventStore;
       const sql = yield* SqlClient.SqlClient;
+
       const appendAndProject = (event: Parameters<typeof eventStore.append>[0]) =>
         eventStore
           .append(event)
@@ -286,6 +290,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_threads
         WHERE thread_id = 'thread-stale-user-input'
       `;
+
       assert.deepEqual(threadRows, [{ pendingUserInputCount: 0 }]);
     }),
   );
@@ -297,6 +302,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       const projectionPipeline = yield* OrchestrationProjectionPipeline;
       const eventStore = yield* OrchestrationEventStore;
       const sql = yield* SqlClient.SqlClient;
+
       const appendAndProject = (event: Parameters<typeof eventStore.append>[0]) =>
         eventStore
           .append(event)
@@ -451,6 +457,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         )
         ORDER BY request_id
       `;
+
       assert.deepEqual(approvalRows, [
         {
           requestId: "approval-request-nonstale-existing",
@@ -468,6 +475,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_threads
         WHERE thread_id = 'thread-nonstale-approval'
       `;
+
       assert.deepEqual(threadRows, [{ pendingApprovalCount: 1 }]);
     }),
   );

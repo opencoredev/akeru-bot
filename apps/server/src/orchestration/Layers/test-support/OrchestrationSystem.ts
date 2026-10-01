@@ -29,6 +29,7 @@ export async function createOrchestrationSystem() {
   const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
     prefix: "t3-orchestration-engine-test-",
   });
+
   const orchestrationLayer = Layer.mergeAll(
     OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionSnapshotQueryLive),
@@ -45,9 +46,11 @@ export async function createOrchestrationSystem() {
     Layer.provideMerge(ServerConfigLayer),
     Layer.provideMerge(NodeServices.layer),
   );
+
   const runtime = ManagedRuntime.make(orchestrationLayer);
   const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
   const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
+
   return {
     engine,
     readModel: () => runtime.runPromise(snapshotQuery.getSnapshot()),

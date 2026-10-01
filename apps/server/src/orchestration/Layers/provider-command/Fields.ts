@@ -58,11 +58,13 @@ export // A failure category describes the failure that set it. Session updates 
 // outlives its failure.
 function withoutUnavailability(session: OrchestrationSession): OrchestrationSession {
   const { unavailability: _unavailability, ...rest } = session;
+
   return rest;
 }
 
 export function toNonEmptyProviderInput(value: string | undefined): string | undefined {
   const normalized = value?.trim();
+
   return normalized && normalized.length > 0 ? normalized : undefined;
 }
 
@@ -120,6 +122,7 @@ export const PROVIDER_COMMAND_CONCURRENCY = 4;
 
 export function providerErrorLabel(value: string | undefined): string {
   const normalized = value?.trim();
+
   return normalized && normalized.length > 0 ? normalized : "unknown";
 }
 
@@ -137,6 +140,7 @@ export function findProviderAdapterRequestError(
   cause: Cause.Cause<AgentControllerError>,
 ): ProviderAdapterRequestError | undefined {
   const failReason = cause.reasons.find(Cause.isFailReason);
+
   return isProviderAdapterRequestError(failReason?.error) ? failReason.error : undefined;
 }
 
@@ -144,15 +148,19 @@ export function isUnknownPendingApprovalRequestError(
   cause: Cause.Cause<AgentControllerError>,
 ): boolean {
   const error = findProviderAdapterRequestError(cause);
+
   if (error) {
     const detail = error.detail.toLowerCase();
+
     return (
       detail.includes("unknown pending approval request") ||
       detail.includes("unknown pending permission request") ||
       detail.includes("unknown pending codex approval request")
     );
   }
+
   const message = Cause.pretty(cause).toLowerCase();
+
   return (
     message.includes("unknown pending approval request") ||
     message.includes("unknown pending permission request") ||
@@ -164,15 +172,19 @@ export function isUnknownPendingUserInputRequestError(
   cause: Cause.Cause<AgentControllerError>,
 ): boolean {
   const error = findProviderAdapterRequestError(cause);
+
   if (error) {
     const detail = error.detail.toLowerCase();
+
     return (
       detail.includes("unknown pending user-input request") ||
       detail.includes("unknown pending user input request") ||
       detail.includes("unknown pending codex user input request")
     );
   }
+
   const message = Cause.pretty(cause).toLowerCase();
+
   return (
     message.includes("unknown pending user-input request") ||
     message.includes("unknown pending user input request") ||
@@ -184,6 +196,7 @@ export function isRetryableUserInputResponseError(
   cause: Cause.Cause<AgentControllerError>,
 ): boolean {
   const error = cause.reasons.find(Cause.isFailReason)?.error;
+
   return (
     (error?._tag === "AgentControllerRuntimeError" ||
       error?._tag === "ProviderAdapterRequestError") &&
@@ -216,5 +229,6 @@ export function buildGeneratedWorktreeBranchName(raw: string): string {
     .replace(/[./_-]+$/g, "");
 
   const safeFragment = branchFragment.length > 0 ? branchFragment : "update";
+
   return `${WORKTREE_BRANCH_PREFIX}/${safeFragment}`;
 }

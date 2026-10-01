@@ -150,6 +150,7 @@ it.live("reverts claudeAgent turns and rolls back provider conversation state", 
           (entry) =>
             entry.checkpoints.length === 1 && entry.checkpoints[0]?.checkpointTurnCount === 1,
         );
+
         assert.equal(revertedThread.checkpoints[0]?.checkpointTurnCount, 1);
         assert.equal(
           gitRefExists(harness.workspaceDir, checkpointRefForThreadTurn(THREAD_ID, 1)),

@@ -69,12 +69,14 @@ export const decideProjects = Effect.fn("decideProjects")(function* ({
         },
       };
     }
+
     case "project.meta.update": {
       yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+
       if (command.workspaceRoot !== undefined) {
         yield* requireProjectWorkspaceRootAbsent({
           readModel,
@@ -83,7 +85,9 @@ export const decideProjects = Effect.fn("decideProjects")(function* ({
           exceptProjectId: command.projectId,
         });
       }
+
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "project",
@@ -108,21 +112,25 @@ export const decideProjects = Effect.fn("decideProjects")(function* ({
         },
       };
     }
+
     case "project.delete": {
       yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+
       const activeThreads = listThreadsByProjectId(readModel, command.projectId).filter(
         (thread) => thread.deletedAt === null,
       );
+
       if (activeThreads.length > 0 && command.force !== true) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Project '${command.projectId}' is not empty and cannot be deleted without force=true.`,
         });
       }
+
       if (activeThreads.length > 0) {
         return yield* decideCommandSequence({
           readModel,
@@ -145,6 +153,7 @@ export const decideProjects = Effect.fn("decideProjects")(function* ({
       }
 
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "project",

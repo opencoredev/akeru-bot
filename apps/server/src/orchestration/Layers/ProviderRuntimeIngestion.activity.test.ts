@@ -18,6 +18,7 @@ const base = {
 describe("runtimeEventToActivities task progress", () => {
   it("persists usage independently from replaceable activity", () => {
     const taskId = RuntimeTaskId.make("agent-1");
+
     const usageOnly = {
       ...base,
       type: "task.progress",
@@ -28,6 +29,7 @@ describe("runtimeEventToActivities task progress", () => {
         typedUsage: { totalTokens: 73_700_000 },
       },
     } satisfies ProviderRuntimeEvent;
+
     const command = {
       ...base,
       type: "task.progress",
@@ -82,11 +84,13 @@ describe("runtimeEventToActivities task progress", () => {
     expect(usagePayload).not.toHaveProperty("status");
   });
 });
+
 describe("runtimeEventToActivities tool streaming persistence", () => {
   const accumulatedStdout = [
     "first line of output",
     ...Array.from({ length: 500 }, (_, index) => `Capturing frame ${index}/9028`),
   ].join("\n");
+
   const streamingData = {
     toolCallId: "tool-call-1",
     kind: "execute",

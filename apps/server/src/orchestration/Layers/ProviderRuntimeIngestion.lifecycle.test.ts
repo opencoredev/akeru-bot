@@ -28,24 +28,28 @@ describe("ProviderRuntimeIngestion", () => {
       const releaseAccepted = Promise.withResolvers<void>();
       const terminalPersisted = Promise.withResolvers<void>();
       const signals = new Set<string>();
+
       const channel = await harness.connectChannel(async () => {}, provider, {
         add: async (_thread, _message, emoji) => {
           if (emoji === "eyes") {
             accepted.resolve();
             await releaseAccepted.promise;
           }
+
           signals.add(emoji);
         },
         remove: async (_thread, _message, emoji) => {
           signals.delete(emoji);
         },
       });
+
       const threadId = ChannelRuntime.channelThreadId(
         BotId.make("bot-akeru"),
         asProjectId("project-1"),
         provider,
         `${provider}:race`,
       );
+
       await harness.run(
         forkParked(
           Stream.runForEach(harness.engine.streamDomainEvents, (event) =>
@@ -60,18 +64,22 @@ describe("ProviderRuntimeIngestion", () => {
           ),
         ).pipe(Scope.provide(testScope.scope!)),
       );
+
       const inbound = channel.inbound({
         externalThreadId: `${provider}:race`,
         externalMessageId: "race-request",
         text: "Question",
       });
+
       await accepted.promise;
+
       const base = {
         provider: ProviderDriverKind.make("codex"),
         threadId,
         turnId: asTurnId("race-turn"),
         createdAt: "2026-01-01T00:00:02.000Z",
       };
+
       try {
         harness.emit({
           ...base,
@@ -91,6 +99,7 @@ describe("ProviderRuntimeIngestion", () => {
       } finally {
         releaseAccepted.resolve();
       }
+
       await inbound;
       await harness.drain();
       expect([...signals]).toEqual(["check"]);
@@ -112,6 +121,7 @@ describe("ProviderRuntimeIngestion", () => {
       const signals = new Set<string>();
       const calls: string[] = [];
       const posts: string[] = [];
+
       const channel = await harness.connectChannel(
         async (_target, text) => {
           posts.push(text);
@@ -128,26 +138,32 @@ describe("ProviderRuntimeIngestion", () => {
           },
         },
       );
+
       const message = {
         externalThreadId: `${provider}:owner`,
         externalMessageId: "request-1",
         text: "Question",
       };
+
       await channel.inbound(message);
       expect([...signals]).toEqual(provider === "telegram" ? [] : ["eyes"]);
+
       const threadId = ChannelRuntime.channelThreadId(
         BotId.make("bot-akeru"),
         asProjectId("project-1"),
         provider,
         message.externalThreadId,
       );
+
       const turnId = asTurnId("status-turn");
+
       const base = {
         provider: ProviderDriverKind.make("codex"),
         threadId,
         turnId,
         createdAt: "2026-01-01T00:00:02.000Z",
       };
+
       harness.emit({
         ...base,
         eventId: asEventId("status-started"),
@@ -155,6 +171,7 @@ describe("ProviderRuntimeIngestion", () => {
         payload: {},
       });
       await harness.drain();
+
       const terminal =
         state === "aborted"
           ? {
@@ -183,6 +200,7 @@ describe("ProviderRuntimeIngestion", () => {
                   type: "turn.completed" as const,
                   payload: { state } as const,
                 };
+
       harness.emit(terminal);
       await harness.drain();
       expect([...signals]).toEqual(
@@ -198,6 +216,7 @@ describe("ProviderRuntimeIngestion", () => {
       expect(calls).toEqual(completedCalls);
       await harness.disconnectChannel(BotId.make("bot-akeru"), provider);
       expect([...signals]).toEqual([]);
+
       if (provider === "telegram") expect(calls).toEqual([]);
     },
   );
@@ -240,6 +259,7 @@ describe("ProviderRuntimeIngestion", () => {
         entry.session?.activeTurnId === null &&
         entry.session?.lastError === "turn failed",
     );
+
     expect(thread.session?.status).toBe("error");
     expect(thread.session?.lastError).toBe("turn failed");
   });
@@ -558,6 +578,7 @@ describe("ProviderRuntimeIngestion", () => {
       2_000,
       threadId,
     );
+
     expect(threadAfterSteer.session?.activeTurnId).toBe(newTurnId);
     expect(threadAfterSteer.latestTurn?.turnId).toBe(newTurnId);
     expect(threadAfterSteer.latestTurn?.state).toBe("running");

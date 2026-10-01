@@ -66,6 +66,7 @@ describe("ProviderCommandReactor", () => {
             worktreePath: null,
             createdAt: now,
           });
+
           const queued = {
             delegationId,
             parentDelegationId: null,
@@ -97,6 +98,7 @@ describe("ProviderCommandReactor", () => {
             createdAt: now,
             updatedAt: now,
           };
+
           yield* harness.engine.dispatch({
             type: "delegation.create",
             commandId: CommandId.make(`cmd-delegation-create-${suffix}`),
@@ -116,6 +118,7 @@ describe("ProviderCommandReactor", () => {
               },
             },
           });
+
           return { delegationId, childThreadId, childTurnId };
         });
 
@@ -161,6 +164,7 @@ describe("ProviderCommandReactor", () => {
             ),
         }),
       );
+
       const now = "2026-01-01T00:00:00.000Z";
       const later = "2026-01-01T00:00:01.000Z";
       const parentBotId = BotId.make("bot-1");
@@ -196,6 +200,7 @@ describe("ProviderCommandReactor", () => {
         worktreePath: null,
         createdAt: now,
       });
+
       const queued = {
         delegationId,
         parentDelegationId: null,
@@ -227,6 +232,7 @@ describe("ProviderCommandReactor", () => {
         createdAt: now,
         updatedAt: now,
       };
+
       yield* harness.engine.dispatch({
         type: "delegation.create",
         commandId: CommandId.make("cmd-stopped-child-create"),
@@ -257,9 +263,11 @@ describe("ProviderCommandReactor", () => {
       yield* Effect.promise(() => harness.drain());
 
       expect(harness.interruptTurn).toHaveBeenCalledWith({ threadId: childThreadId });
+
       const delegation = (yield* Effect.promise(() => harness.readModel())).delegations.find(
         (entry) => entry.delegationId === delegationId,
       );
+
       expect(delegation?.phase).toMatchObject({
         _tag: "Canceled",
         childThreadId,
@@ -287,12 +295,14 @@ describe("ProviderCommandReactor", () => {
               phase: "running" as const,
             }),
       );
+
       const harness = yield* Effect.promise(() =>
         createHarness({
           botEngine: null,
           dispatchDelegation: dispatchDelegation as AgentControllerShape["dispatchDelegation"],
         }),
       );
+
       const now = "2026-01-01T00:00:00.000Z";
       const later = "2026-01-01T00:00:01.000Z";
       const parentBotId = BotId.make("bot-1");
@@ -311,6 +321,7 @@ describe("ProviderCommandReactor", () => {
         groupId: null,
         createdAt: now,
       });
+
       const createFailed = (suffix: string) =>
         Effect.gen(function* () {
           const queued = {
@@ -344,6 +355,7 @@ describe("ProviderCommandReactor", () => {
             createdAt: now,
             updatedAt: now,
           };
+
           yield* harness.engine.dispatch({
             type: "delegation.create",
             commandId: CommandId.make(`cmd-retry-create-${suffix}`),
@@ -365,6 +377,7 @@ describe("ProviderCommandReactor", () => {
               },
             },
           });
+
           return queued.delegationId;
         });
 
@@ -388,9 +401,11 @@ describe("ProviderCommandReactor", () => {
         createdAt: later,
       });
       yield* Effect.promise(() => harness.drain());
+
       const parentThread = (yield* Effect.promise(() => harness.readModel())).threads.find(
         (thread) => thread.id === ThreadId.make("thread-1"),
       );
+
       expect(
         parentThread?.activities.find((activity) => activity.kind === "delegation.retry.failed"),
       ).toMatchObject({

@@ -29,13 +29,16 @@ export function createRoutines({ sql }: Pick<ProjectionDependencies, "sql">) {
             description = excluded.description,
             updated_at = excluded.updated_at
         `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.routines:assignment")));
+
       return;
     }
+
     if (event.type === "skill-assignment.unassigned") {
       yield* sql`
           DELETE FROM projection_routine_skill_assignments
           WHERE assignment_id = ${event.payload.assignmentId}
         `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.routines:unassign")));
+
       return;
     }
 
@@ -124,5 +127,6 @@ export function createRoutines({ sql }: Pick<ProjectionDependencies, "sql">) {
           updated_at = excluded.updated_at
       `.pipe(Effect.mapError(toPersistenceSqlError("ProjectionPipeline.routines:run")));
   });
+
   return { applyRoutinesProjection };
 }

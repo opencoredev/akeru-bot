@@ -9,6 +9,7 @@ import {
   providerErrorLabelFromInstanceHint,
 } from "./Fields.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
 export function createContext({
   projectionSnapshotQuery,
   agentController,
@@ -45,13 +46,16 @@ export function createContext({
     fallback: ModelSelection,
   ) {
     const respondingBotId = resolveControllerBotId(thread);
+
     const bot =
       respondingBotId == null
         ? undefined
         : yield* projectionBotRepository
             .getById({ botId: respondingBotId })
             .pipe(Effect.map(Option.getOrUndefined));
+
     const engine = bot?.engine ?? null;
+
     const selection = yield* agentController.resolveEngine({
       threadId: thread.id,
       engine,
@@ -60,6 +64,7 @@ export function createContext({
       mode: "default",
       botConversation: thread.botId != null || thread.groupId != null,
     });
+
     return { ...selection, configured: engine !== null };
   });
 
@@ -67,17 +72,21 @@ export function createContext({
     thread: ControllerThreadIdentity,
   ) {
     const respondingBotId = resolveControllerBotId(thread);
+
     const bot =
       respondingBotId === null
         ? undefined
         : yield* projectionBotRepository
             .getById({ botId: respondingBotId })
             .pipe(Effect.map(Option.getOrUndefined));
+
     const servers = yield* projectionMcpServerRepository.listAll();
     const resolved = resolveBotMcpServers(servers, bot?.disabledMcpServerIds ?? []);
+
     const composioServer = Option.isSome(composio)
       ? yield* composio.value.resolveRuntimeMcpServer(thread.id)
       : undefined;
+
     return composioServer ? [...resolved, composioServer] : resolved;
   });
 
@@ -87,6 +96,7 @@ export function createContext({
     readonly requestedModelSelection: ModelSelection | undefined;
   }) {
     const requestedModelSelection = input.requestedModelSelection;
+
     if (
       requestedModelSelection === undefined ||
       (input.currentModelSelection.instanceId === requestedModelSelection.instanceId &&
@@ -94,15 +104,19 @@ export function createContext({
     ) {
       return;
     }
+
     const providers = yield* providerRegistry.getProviders;
+
     const requiresNewThread =
       providers.find((snapshot) => snapshot.instanceId === input.currentModelSelection.instanceId)
         ?.requiresNewThreadForModelChange === true ||
       providers.find((snapshot) => snapshot.instanceId === requestedModelSelection.instanceId)
         ?.requiresNewThreadForModelChange === true;
+
     if (!requiresNewThread) {
       return;
     }
+
     return yield* new ProviderAdapterRequestError({
       provider: providerErrorLabelFromInstanceHint({
         instanceId: String(requestedModelSelection.instanceId),
@@ -112,6 +126,7 @@ export function createContext({
       detail: `Thread '${input.threadId}' cannot switch models after the conversation has started. Start a new chat to use '${requestedModelSelection.model}'.`,
     });
   });
+
   return {
     resolveThreadShell,
     resolveThreadDetail,

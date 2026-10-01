@@ -27,6 +27,7 @@ function makeEvent(input: {
 it.effect("projects pin lifecycle events", () =>
   Effect.gen(function* () {
     const now = "2026-01-01T00:00:00.000Z";
+
     const created = yield* projectEvent(
       createEmptyReadModel(now),
       makeEvent({
@@ -46,6 +47,7 @@ it.effect("projects pin lifecycle events", () =>
         },
       }),
     );
+
     expect(created.threads[0]?.pinnedAt ?? null).toBeNull();
 
     const pinned = yield* projectEvent(
@@ -56,6 +58,7 @@ it.effect("projects pin lifecycle events", () =>
         payload: { threadId: ThreadId.make("thread-1"), pinnedAt: now, updatedAt: now },
       }),
     );
+
     expect(pinned.threads[0]?.pinnedAt).toBe(now);
 
     const unpinned = yield* projectEvent(
@@ -66,6 +69,7 @@ it.effect("projects pin lifecycle events", () =>
         payload: { threadId: ThreadId.make("thread-1"), updatedAt: now },
       }),
     );
+
     expect(unpinned.threads[0]?.pinnedAt).toBeNull();
   }),
 );
@@ -73,6 +77,7 @@ it.effect("projects pin lifecycle events", () =>
 it.effect("projects pin order key lifecycle", () =>
   Effect.gen(function* () {
     const now = "2026-01-01T00:00:00.000Z";
+
     const created = yield* projectEvent(
       createEmptyReadModel(now),
       makeEvent({
@@ -92,6 +97,7 @@ it.effect("projects pin order key lifecycle", () =>
         },
       }),
     );
+
     expect(created.threads[0]?.pinOrderKey ?? null).toBeNull();
 
     // Fresh pin carries the client's slot in the arranged order.
@@ -108,6 +114,7 @@ it.effect("projects pin order key lifecycle", () =>
         },
       }),
     );
+
     expect(pinned.threads[0]?.pinOrderKey).toBe("g");
 
     // Re-pins and events from pre-reorder servers omit the field entirely;
@@ -120,6 +127,7 @@ it.effect("projects pin order key lifecycle", () =>
         payload: { threadId: ThreadId.make("thread-1"), pinnedAt: now, updatedAt: now },
       }),
     );
+
     expect(repinned.threads[0]?.pinOrderKey).toBe("g");
 
     // A drag persists the new slot.
@@ -131,6 +139,7 @@ it.effect("projects pin order key lifecycle", () =>
         payload: { threadId: ThreadId.make("thread-1"), orderKey: "m", updatedAt: now },
       }),
     );
+
     expect(reordered.threads[0]?.pinOrderKey).toBe("m");
 
     // Unpin clears the slot: re-pinning is "pin again", not "restore an
@@ -143,6 +152,7 @@ it.effect("projects pin order key lifecycle", () =>
         payload: { threadId: ThreadId.make("thread-1"), updatedAt: now },
       }),
     );
+
     expect(unpinned.threads[0]?.pinOrderKey).toBeNull();
   }),
 );

@@ -22,15 +22,18 @@ export function createProjects({
           updatedAt: event.payload.updatedAt,
           deletedAt: null,
         });
+
         return;
 
       case "project.meta-updated": {
         const existingRow = yield* projectionProjectRepository.getById({
           projectId: event.payload.projectId,
         });
+
         if (Option.isNone(existingRow)) {
           return;
         }
+
         yield* projectionProjectRepository.upsert({
           ...existingRow.value,
           ...(event.payload.title !== undefined ? { title: event.payload.title } : {}),
@@ -49,6 +52,7 @@ export function createProjects({
           ...(event.payload.scripts !== undefined ? { scripts: event.payload.scripts } : {}),
           updatedAt: event.payload.updatedAt,
         });
+
         return;
       }
 
@@ -56,14 +60,17 @@ export function createProjects({
         const existingRow = yield* projectionProjectRepository.getById({
           projectId: event.payload.projectId,
         });
+
         if (Option.isNone(existingRow)) {
           return;
         }
+
         yield* projectionProjectRepository.upsert({
           ...existingRow.value,
           deletedAt: event.payload.deletedAt,
           updatedAt: event.payload.deletedAt,
         });
+
         return;
       }
 
@@ -71,5 +78,6 @@ export function createProjects({
         return;
     }
   });
+
   return { applyProjectsProjection };
 }

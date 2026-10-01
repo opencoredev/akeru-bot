@@ -29,7 +29,9 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: LATER,
       });
+
       const readModel = makeReadModel([failed]);
+
       const decided = yield* decideOrchestrationCommand({
         readModel,
         command: {
@@ -39,6 +41,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           createdAt: LATER,
         },
       });
+
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
@@ -47,10 +50,12 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         aggregateId: failed.delegationId,
         payload: { delegationId: failed.delegationId, parentThreadId: PARENT_THREAD_ID },
       });
+
       const projected = yield* projectEvent(readModel, {
         ...events[0]!,
         sequence: readModel.snapshotSequence + 1,
       });
+
       expect(projected.delegations).toEqual([failed]);
     }),
   );
@@ -66,6 +71,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           progress: null,
         },
       });
+
       const openError = yield* decideOrchestrationCommand({
         readModel: makeReadModel([running]),
         command: {
@@ -75,6 +81,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           createdAt: LATER,
         },
       }).pipe(Effect.flip);
+
       expect(String(openError)).toContain("Only failed or canceled bot work can be retried.");
 
       const canceled = makeDelegation({
@@ -88,9 +95,11 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           canceledBy: "user",
         },
       });
+
       const active = [1, 2, 3].map((index) =>
         makeDelegation({ delegationId: DelegationId.make(`delegation-active-${index}`) }),
       );
+
       const capError = yield* decideOrchestrationCommand({
         readModel: makeReadModel([canceled, ...active]),
         command: {
@@ -100,6 +109,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           createdAt: LATER,
         },
       }).pipe(Effect.flip);
+
       expect(String(capError)).toContain(
         "This bot already has 3 bot work items running. Wait for one to finish, then retry.",
       );
@@ -108,6 +118,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         delegationId: DelegationId.make("delegation-retry-of-canceled"),
         retryOfDelegationId: canceled.delegationId,
       });
+
       const supersededError = yield* decideOrchestrationCommand({
         readModel: makeReadModel([canceled, successor]),
         command: {
@@ -117,6 +128,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           createdAt: LATER,
         },
       }).pipe(Effect.flip);
+
       expect(String(supersededError)).toContain(
         "This bot work was already retried. Use the newer card instead.",
       );

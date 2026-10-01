@@ -19,6 +19,7 @@ describe("OrchestrationReactor", () => {
     if (runtime) {
       await runtime.dispose();
     }
+
     runtime = null;
   });
 
@@ -31,6 +32,7 @@ describe("OrchestrationReactor", () => {
           Layer.succeed(ProviderRuntimeIngestionService, {
             start: () => {
               started.push("provider-runtime-ingestion");
+
               return Effect.void;
             },
             drain: Effect.void,
@@ -40,6 +42,7 @@ describe("OrchestrationReactor", () => {
           Layer.succeed(ProviderCommandReactor, {
             start: () => {
               started.push("provider-command-reactor");
+
               return Effect.void;
             },
             drain: Effect.void,
@@ -49,6 +52,7 @@ describe("OrchestrationReactor", () => {
           Layer.succeed(CheckpointReactor, {
             start: () => {
               started.push("checkpoint-reactor");
+
               return Effect.void;
             },
             drain: Effect.void,
@@ -58,6 +62,7 @@ describe("OrchestrationReactor", () => {
           Layer.succeed(ThreadDeletionReactor, {
             start: () => {
               started.push("thread-deletion-reactor");
+
               return Effect.void;
             },
             drain: Effect.void,

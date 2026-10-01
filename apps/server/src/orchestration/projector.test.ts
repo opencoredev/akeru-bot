@@ -11,6 +11,7 @@ describe("orchestration projector", () => {
     () =>
       Effect.gen(function* () {
         const now = "2026-01-01T00:00:00.000Z";
+
         const seeded = yield* projectEvent(
           createEmptyReadModel(now),
           makeEvent({
@@ -33,19 +34,24 @@ describe("orchestration projector", () => {
             },
           }),
         );
+
         let identityReads = 0;
+
         const threads = Array.from({ length: 2000 }, (_, i) => ({
           ...seeded.threads[0]!,
           get id() {
             identityReads += 1;
+
             return ThreadId.make(`indexed-${i}`);
           },
           deletedAt: i === 0 ? now : null,
           archivedAt: i === 1 ? now : null,
         }));
+
         const target = ThreadId.make("indexed-1999");
         expect(findProjectedThread(threads, target)).toBe(threads[1999]);
         identityReads = 0;
+
         const patched = yield* projectEvent(
           { ...seeded, threads },
           makeEvent({
@@ -58,6 +64,7 @@ describe("orchestration projector", () => {
             payload: { threadId: target, title: "After", updatedAt: now },
           }),
         );
+
         expect(findProjectedThread(patched.threads, target)?.title).toBe("After");
         expect(findProjectedThread(patched.threads, ThreadId.make("indexed-0"))?.deletedAt).toBe(
           now,
@@ -178,6 +185,7 @@ describe("orchestration projector", () => {
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
       const later = "2026-01-01T00:00:01.000Z";
+
       const created = yield* projectEvent(
         createEmptyReadModel(now),
         makeEvent({
@@ -221,6 +229,7 @@ describe("orchestration projector", () => {
           },
         }),
       );
+
       expect(archived.threads[0]?.archivedAt).toBe(later);
 
       const unarchived = yield* projectEvent(
@@ -238,6 +247,7 @@ describe("orchestration projector", () => {
           },
         }),
       );
+
       expect(unarchived.threads[0]?.archivedAt).toBeNull();
     }),
   );

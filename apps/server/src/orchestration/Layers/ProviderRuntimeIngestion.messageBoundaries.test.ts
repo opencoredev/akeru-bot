@@ -77,9 +77,11 @@ describe("ProviderRuntimeIngestion", () => {
           message.id === "assistant:item-buffered" && !message.streaming,
       ),
     );
+
     const message = thread.messages.find(
       (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-buffered",
     );
+
     expect(message?.text).toBe("buffer me");
     expect(message?.streaming).toBe(false);
   });
@@ -138,9 +140,11 @@ describe("ProviderRuntimeIngestion", () => {
           message.text === "visible before approval",
       ),
     );
+
     const message = thread.messages.find(
       (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-buffered-request-flush",
     );
+
     expect(message?.streaming).toBe(false);
   });
 
@@ -204,10 +208,12 @@ describe("ProviderRuntimeIngestion", () => {
           message.text === "visible before user input",
       ),
     );
+
     const message = thread.messages.find(
       (entry: ProviderRuntimeTestMessage) =>
         entry.id === "assistant:item-buffered-user-input-flush",
     );
+
     expect(message?.streaming).toBe(false);
   });
 
@@ -263,6 +269,7 @@ describe("ProviderRuntimeIngestion", () => {
         (activity: ProviderRuntimeTestActivity) => activity.kind === "approval.requested",
       ),
     );
+
     expect(
       thread.messages.some(
         (message: ProviderRuntimeTestMessage) =>

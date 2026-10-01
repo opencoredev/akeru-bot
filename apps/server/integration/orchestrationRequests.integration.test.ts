@@ -56,6 +56,7 @@ it.live("tracks approval requests and resolves pending approvals on user respons
       const thread = yield* harness.waitForThread(THREAD_ID, (entry) =>
         entry.activities.some((activity) => activity.kind === "approval.requested"),
       );
+
       assert.equal(
         thread.activities.some((activity) => activity.kind === "approval.requested"),
         true,
@@ -65,6 +66,7 @@ it.live("tracks approval requests and resolves pending approvals on user respons
         "req-approval-1",
         (row) => row.status === "pending" && row.decision === null,
       );
+
       assert.equal(pendingRow.status, "pending");
 
       yield* harness.engine.dispatch({
@@ -93,6 +95,7 @@ it.live("tracks approval requests and resolves pending approvals on user respons
         (responses) => responses.length === 1,
         "provider approval response",
       );
+
       assert.equal(approvalResponses.length, 1);
       assert.equal(approvalResponses[0]?.requestId, "req-approval-1");
       assert.equal(approvalResponses[0]?.decision, "accept");
@@ -159,6 +162,7 @@ it.live("forwards claudeAgent approval responses to the provider session", () =>
         const thread = yield* harness.waitForThread(THREAD_ID, (entry) =>
           entry.activities.some((activity) => activity.kind === "approval.requested"),
         );
+
         assert.equal(thread.session?.threadId, "thread-1");
 
         yield* harness.engine.dispatch({
@@ -186,6 +190,7 @@ it.live("forwards claudeAgent approval responses to the provider session", () =>
           (responses) => responses.length === 1,
           "claude provider approval response",
         );
+
         assert.equal(approvalResponses[0]?.decision, "accept");
       }),
     CLAUDE_AGENT_PROVIDER,
@@ -250,6 +255,7 @@ it.live("forwards thread.turn.interrupt to claudeAgent provider sessions", () =>
           THREAD_ID,
           (entry) => entry.session?.threadId === "thread-1",
         );
+
         assert.equal(thread.session?.threadId, "thread-1");
 
         yield* harness.engine.dispatch({
@@ -268,6 +274,7 @@ it.live("forwards thread.turn.interrupt to claudeAgent provider sessions", () =>
           (calls) => calls.length === 1,
           "claude provider interrupt call",
         );
+
         assert.equal(interruptCalls.length, 1);
       }),
     CLAUDE_AGENT_PROVIDER,

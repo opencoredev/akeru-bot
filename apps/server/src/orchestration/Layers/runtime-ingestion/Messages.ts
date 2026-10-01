@@ -16,6 +16,7 @@ import {
 } from "./EventFields.ts";
 import type { createDependencies } from "./Dependencies.ts";
 import type { createContext } from "./Context.ts";
+
 export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
   orchestrationEngine,
   providerCommandId,
@@ -55,6 +56,7 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
             onSome: (ids) => {
               const nextIds = new Set(ids);
               nextIds.add(messageId);
+
               return nextIds;
             },
           }),
@@ -70,9 +72,11 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
           onSome: (ids) => {
             const nextIds = new Set(ids);
             nextIds.delete(messageId);
+
             if (nextIds.size === 0) {
               return Cache.invalidate(turnMessageIdsByTurnKey, providerTurnKey(threadId, turnId));
             }
+
             return Cache.set(turnMessageIdsByTurnKey, providerTurnKey(threadId, turnId), nextIds);
           },
         }),
@@ -127,6 +131,7 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
             onSome: (state) => {
               const segmentIndex = state.baseKey === input.baseKey ? state.nextSegmentIndex : 0;
               const messageId = assistantSegmentMessageId(input.baseKey, segmentIndex);
+
               return {
                 baseKey: input.baseKey,
                 nextSegmentIndex: state.baseKey === input.baseKey ? state.nextSegmentIndex + 1 : 1,
@@ -134,7 +139,9 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
               } satisfies AssistantSegmentState;
             },
           });
+
           yield* setAssistantSegmentStateForTurn(input.threadId, input.turnId, nextState);
+
           return nextState.activeMessageId!;
         }),
       ),
@@ -154,6 +161,7 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
         input.threadId,
         input.turnId,
       );
+
       if (Option.isSome(activeMessageId)) {
         return activeMessageId.value;
       }
@@ -173,13 +181,16 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
             onNone: () => delta,
             onSome: (text) => `${text}${delta}`,
           });
+
           if (nextText.length <= MAX_BUFFERED_ASSISTANT_CHARS) {
             yield* Cache.set(bufferedAssistantTextByMessageId, messageId, nextText);
+
             return "";
           }
 
           // Safety valve: flush full buffered text as an assistant delta to cap memory.
           yield* Cache.invalidate(bufferedAssistantTextByMessageId, messageId);
+
           return nextText;
         }),
       ),
@@ -210,6 +221,7 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
   }) =>
     Effect.gen(function* () {
       const bufferedText = yield* takeBufferedAssistantText(input.messageId);
+
       if (!hasRenderableAssistantText(bufferedText)) {
         return false;
       }
@@ -223,6 +235,7 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
         ...(input.turnId ? { turnId: input.turnId } : {}),
         createdAt: input.createdAt,
       });
+
       return true;
     });
 
@@ -238,6 +251,7 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
         input.threadId,
         input.turnId,
       );
+
       const flushedMessageIds = new Set<MessageId>();
       yield* Effect.forEach(
         assistantMessageIds,
@@ -256,6 +270,7 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
           ),
         { concurrency: 1 },
       ).pipe(Effect.asVoid);
+
       return flushedMessageIds;
     });
 
@@ -272,12 +287,14 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
   }) =>
     Effect.gen(function* () {
       const bufferedText = yield* takeBufferedAssistantText(input.messageId);
+
       const text =
         bufferedText.length > 0
           ? bufferedText
           : (input.fallbackText?.trim().length ?? 0) > 0
             ? input.fallbackText!
             : "";
+
       const hasRenderableText = hasRenderableAssistantText(text);
 
       if (hasRenderableText) {
@@ -302,7 +319,9 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
           createdAt: input.createdAt,
         });
       }
+
       yield* clearAssistantMessageState(input.messageId);
+
       return Boolean(input.hasProjectedMessage || hasRenderableText);
     });
 
@@ -321,6 +340,7 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
         input.threadId,
         input.turnId,
       );
+
       if (Option.isNone(activeMessageId)) {
         return;
       }
@@ -340,6 +360,7 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
       yield* forgetAssistantMessageId(input.threadId, input.turnId, activeMessageId.value);
 
       const state = yield* getAssistantSegmentStateForTurn(input.threadId, input.turnId);
+
       if (Option.isSome(state)) {
         yield* setAssistantSegmentStateForTurn(input.threadId, input.turnId, {
           ...state.value,
@@ -347,6 +368,7 @@ export const createMessages = Effect.fn("makeRuntimeMessages")(function* ({
         });
       }
     });
+
   return {
     turnMessageIdsByTurnKey,
     bufferedAssistantTextByMessageId,

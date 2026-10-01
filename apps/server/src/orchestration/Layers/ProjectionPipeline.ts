@@ -57,6 +57,7 @@ import { makeThreads } from "./projection/Threads.ts";
 import { createMessages } from "./projection/Messages.ts";
 import { createRequests } from "./projection/Requests.ts";
 import { createTurns } from "./projection/Turns.ts";
+
 export { ORCHESTRATION_PROJECTOR_NAMES } from "./projection/Definitions.ts";
 
 const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjectionPipeline")(
@@ -84,6 +85,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     const { applyDelegationsProjection, delegationParentLink } = createDelegations({ sql });
     const { applyRoutinesProjection } = createRoutines({ sql });
     const { applyMcpServersProjection } = createMcpServers({ projectionMcpServerRepository });
+
     const { applyThreadsProjection } = makeThreads({
       projectionThreadRepository,
       projectionThreadMessageRepository,
@@ -94,21 +96,25 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       eventStore,
       projectionTurnRepository,
     });
+
     const { applyThreadMessagesProjection, applyThreadProposedPlansProjection } = createMessages({
       projectionThreadMessageRepository,
       projectionTurnRepository,
       projectionThreadProposedPlanRepository,
     });
+
     const { applyThreadActivitiesProjection, applyPendingApprovalsProjection } = createRequests({
       projectionThreadActivityRepository,
       projectionTurnRepository,
       projectionPendingApprovalRepository,
     });
+
     const {
       applyThreadSessionsProjection,
       applyThreadTurnsProjection,
       applyCheckpointsProjection,
     } = createTurns({ projectionThreadSessionRepository, projectionTurnRepository });
+
     const projectors: ReadonlyArray<ProjectorDefinition> = [
       {
         name: ORCHESTRATION_PROJECTOR_NAMES.projects,
@@ -286,6 +292,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         }
 
         const deletedThreadIds = new Set<string>();
+
         for (const threadId of sideEffects.deletedThreadIds) {
           const recreatedLater = yield* eventStore.hasEventAfter({
             aggregateKind: "thread",
@@ -293,6 +300,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             type: "thread.created",
             sequenceExclusive: event.sequence,
           });
+
           if (!recreatedLater) {
             deletedThreadIds.add(threadId);
           }
@@ -300,10 +308,12 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
 
         // Later events in the same transaction can add attachment references.
         const prunedThreadRelativePaths = new Map<string, Set<string>>();
+
         for (const threadId of sideEffects.prunedThreadRelativePaths.keys()) {
           const messages = yield* projectionThreadMessageRepository.listByThreadId({
             threadId: ThreadId.make(threadId),
           });
+
           prunedThreadRelativePaths.set(
             threadId,
             collectThreadAttachmentRelativePaths(threadId, messages),
@@ -338,6 +348,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       if (projectorHandlesEvent(projector, event)) {
         yield* projector.apply(event, attachmentSideEffects);
       }
+
       yield* projectionStateRepository.upsert({
         projector: projector.name,
         lastAppliedSequence: event.sequence,
@@ -382,6 +393,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             deletedThreadIds: new Set<string>(),
             prunedThreadRelativePaths: new Map<string, Set<string>>(),
           };
+
           // Every cursor still advances to this event, so resume and snapshot
           // sequences match running each projector; only no-op applies are skipped.
           yield* sql.withTransaction(
@@ -391,6 +403,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
                   yield* projector.apply(event, attachmentSideEffects);
                 }
               }
+
               yield* projectionStateRepository.upsertMany(
                 projectors.map((projector) => ({
                   projector: projector.name,
@@ -400,6 +413,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               );
             }),
           );
+
           // Return the cleanup effect so the caller runs it after the outer transaction commits.
           // @effect-diagnostics-next-line returnEffectInGen:off
           return applyAttachmentSideEffects(event, attachmentSideEffects);
@@ -445,6 +459,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     } satisfies OrchestrationProjectionPipelineShape;
   },
 );
+
 export const OrchestrationProjectionPipelineLive = Layer.effect(
   OrchestrationProjectionPipeline,
   makeOrchestrationProjectionPipeline(),

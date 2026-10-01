@@ -29,6 +29,7 @@ it("keeps completions and later in-flight updates for reused identities", () => 
     tool("third-update", "tool.updated", "call"),
     tool("different-turn", "tool.updated", "call", "turn-2"),
   ];
+
   expect(dropSupersededToolUpdatedActivities(rows).map((row) => row.id)).toEqual([
     "first-completion",
     "parallel-update",
@@ -46,5 +47,6 @@ it("collapses interleaved calls within their own turns", () => {
     tool("b-completion", "tool.completed", "b"),
     tool("next-turn", "tool.updated", "a", "turn-2"),
   ];
+
   expect(dropSupersededToolUpdatedActivities(rows)).toEqual(rows.slice(2));
 });

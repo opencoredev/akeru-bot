@@ -38,6 +38,7 @@ export async function createStorageFailureSystem() {
     append(event) {
       if (shouldFailFirstAppend && event.commandId === CommandId.make("cmd-flaky-1")) {
         shouldFailFirstAppend = false;
+
         return Effect.fail(
           new PersistenceSqlError({
             operation: "test.append",
@@ -45,12 +46,15 @@ export async function createStorageFailureSystem() {
           }),
         );
       }
+
       const savedEvent = {
         ...event,
         sequence: nextSequence,
       } as StoredEvent;
+
       nextSequence += 1;
       events.push(savedEvent);
+
       return Effect.succeed(savedEvent);
     },
     readFromSequence(sequenceExclusive) {
@@ -90,6 +94,7 @@ export async function createStorageFailureSystem() {
   );
 
   const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
+
   return { runtime, engine };
 }
 
@@ -105,6 +110,7 @@ export async function createProjectionFailureSystem() {
         event.type === "thread.turn-start-requested"
       ) {
         shouldFailRequestedProjection = false;
+
         return Effect.fail(
           new PersistenceSqlError({
             operation: "test.projection",
@@ -112,6 +118,7 @@ export async function createProjectionFailureSystem() {
           }),
         );
       }
+
       return Effect.void;
     },
     projectEventDeferred: (event) =>
@@ -133,6 +140,7 @@ export async function createProjectionFailureSystem() {
   );
 
   const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
+
   return { runtime, engine };
 }
 
@@ -149,8 +157,10 @@ export async function createNonTransactionalSystem() {
         ...event,
         sequence: nextSequence,
       } as StoredEvent;
+
       nextSequence += 1;
       events.push(savedEvent);
+
       return Effect.succeed(savedEvent);
     },
     readFromSequence(sequenceExclusive) {
@@ -180,6 +190,7 @@ export async function createNonTransactionalSystem() {
         event.commandId === CommandId.make("cmd-thread-archive-sync-fail")
       ) {
         shouldFailProjection = false;
+
         return Effect.fail(
           new PersistenceSqlError({
             operation: "test.projection",
@@ -187,6 +198,7 @@ export async function createNonTransactionalSystem() {
           }),
         );
       }
+
       return Effect.void;
     },
     projectEventDeferred: (event) =>
@@ -208,5 +220,6 @@ export async function createNonTransactionalSystem() {
   );
 
   const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
+
   return { runtime, engine };
 }

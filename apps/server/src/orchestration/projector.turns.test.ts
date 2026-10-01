@@ -9,6 +9,7 @@ describe("orchestration projector", () => {
   it.effect("clears a failed session's category when the turn resumes", () =>
     Effect.gen(function* () {
       const at = "2026-02-23T08:00:00.000Z";
+
       const created = yield* projectEvent(
         createEmptyReadModel(at),
         makeEvent({
@@ -31,6 +32,7 @@ describe("orchestration projector", () => {
           },
         }),
       );
+
       const failed = yield* projectEvent(
         created,
         makeEvent({
@@ -55,6 +57,7 @@ describe("orchestration projector", () => {
           },
         }),
       );
+
       expect(failed.threads[0]?.session?.unavailability).toBe("limit-reached");
 
       const resumed = yield* projectEvent(
@@ -69,6 +72,7 @@ describe("orchestration projector", () => {
           payload: { threadId: "thread-1", createdAt: at },
         }),
       );
+
       const session = resumed.threads[0]?.session;
       expect(session?.status).toBe("starting");
       expect(session?.lastError).toBeNull();
@@ -108,6 +112,7 @@ describe("orchestration projector", () => {
       );
 
       const settledAt = "2026-02-23T08:01:00.000Z";
+
       const [afterRunning, afterReady] = yield* Effect.flatMap(
         projectEvent(
           afterCreate,
@@ -188,6 +193,7 @@ describe("orchestration projector", () => {
         const createdAt = "2026-02-23T08:00:00.000Z";
         const startedAt = "2026-02-23T08:00:05.000Z";
         const settledAt = "2026-02-23T08:01:00.000Z";
+
         const afterCreate = yield* projectEvent(
           createEmptyReadModel(createdAt),
           makeEvent({
@@ -213,6 +219,7 @@ describe("orchestration projector", () => {
             },
           }),
         );
+
         const afterRunning = yield* projectEvent(
           afterCreate,
           makeEvent({
@@ -238,6 +245,7 @@ describe("orchestration projector", () => {
             },
           }),
         );
+
         const afterSettled = yield* projectEvent(
           afterRunning,
           makeEvent({
@@ -263,6 +271,7 @@ describe("orchestration projector", () => {
             },
           }),
         );
+
         const afterCheckpoint = yield* projectEvent(
           afterSettled,
           makeEvent({
@@ -293,6 +302,7 @@ describe("orchestration projector", () => {
   it.effect("does not treat a missing checkpoint as an interruption", () =>
     Effect.gen(function* () {
       const createdAt = "2026-02-23T08:00:00.000Z";
+
       const afterCreate = yield* projectEvent(
         createEmptyReadModel(createdAt),
         makeEvent({
@@ -318,6 +328,7 @@ describe("orchestration projector", () => {
           },
         }),
       );
+
       const afterCheckpoint = yield* projectEvent(
         afterCreate,
         makeEvent({

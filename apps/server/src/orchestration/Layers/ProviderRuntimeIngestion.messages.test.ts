@@ -58,6 +58,7 @@ describe("ProviderRuntimeIngestion", () => {
           message.text === "I finished without a text response. Please try again.",
       ),
     );
+
     expect(thread.messages.filter((message) => message.turnId === turnId)).toHaveLength(1);
   });
 
@@ -90,6 +91,7 @@ describe("ProviderRuntimeIngestion", () => {
           message.text === "I cannot complete the request. Check the error details.",
       ),
     );
+
     expect(thread.messages.filter((message) => message.turnId === turnId)).toHaveLength(1);
   });
 
@@ -143,9 +145,11 @@ describe("ProviderRuntimeIngestion", () => {
           message.id === "assistant:item-1" && !message.streaming,
       ),
     );
+
     const message = thread.messages.find(
       (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-1",
     );
+
     expect(message?.text).toBe("hello world");
     expect(message?.streaming).toBe(false);
   });
@@ -209,6 +213,7 @@ describe("ProviderRuntimeIngestion", () => {
           message.id === "provider-attachment-evt-preview-screenshot" && !message.streaming,
       ),
     );
+
     expect(
       thread.messages.find(
         (message: ProviderRuntimeTestMessage) =>
@@ -243,6 +248,7 @@ describe("ProviderRuntimeIngestion", () => {
       threadId,
       turnId,
     });
+
     for (const [itemId, text] of [
       ["reply-before-tools", "I'll check that now."],
       ["status-after-tool", "I found the relevant setting."],
@@ -276,6 +282,7 @@ describe("ProviderRuntimeIngestion", () => {
         ),
       ),
     );
+
     expect(
       thread.messages
         .filter((message: ProviderRuntimeTestMessage) => message.turnId === turnId)
@@ -309,9 +316,11 @@ describe("ProviderRuntimeIngestion", () => {
           message.id === "assistant:item-no-delta" && !message.streaming,
       ),
     );
+
     const message = thread.messages.find(
       (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-no-delta",
     );
+
     expect(message?.text).toBe("assistant-only final text");
     expect(message?.streaming).toBe(false);
   });
@@ -375,9 +384,11 @@ describe("ProviderRuntimeIngestion", () => {
           message.text === "hello live",
       ),
     );
+
     const liveMessage = liveThread.messages.find(
       (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-streaming-mode",
     );
+
     expect(liveMessage?.streaming).toBe(true);
 
     harness.emit({
@@ -401,9 +412,11 @@ describe("ProviderRuntimeIngestion", () => {
           message.id === "assistant:item-streaming-mode" && !message.streaming,
       ),
     );
+
     const finalMessage = finalThread.messages.find(
       (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-streaming-mode",
     );
+
     expect(finalMessage?.text).toBe("hello live");
     expect(finalMessage?.streaming).toBe(false);
   });
@@ -461,9 +474,11 @@ describe("ProviderRuntimeIngestion", () => {
           message.id === "assistant:item-buffer-spill" && !message.streaming,
       ),
     );
+
     const message = thread.messages.find(
       (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-buffer-spill",
     );
+
     expect(message?.text.length).toBe(oversizedText.length);
     expect(message?.text).toBe(oversizedText);
     expect(message?.streaming).toBe(false);
@@ -546,15 +561,18 @@ describe("ProviderRuntimeIngestion", () => {
         );
 
         const events = yield* Stream.runCollect(harness.engine.readEvents(0));
+
         const completionEvents = events.filter((event) => {
           if (event.type !== "thread.message-sent") {
             return false;
           }
+
           return (
             event.payload.messageId === "assistant:item-complete-dedup" &&
             event.payload.streaming === false
           );
         });
+
         expect(completionEvents).toHaveLength(1);
       }),
   );

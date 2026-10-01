@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import { makeDrainableWorker } from "@akeru/shared/DrainableWorker";
 import * as ChannelRuntime from "../../../channels/ChannelRuntime.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
 export const createChannels = Effect.fn("makeRuntimeChannels")(function* ({
   channelRuntime,
 }: Pick<Effect.Success<ReturnType<typeof createDependencies>>, "channelRuntime">) {
@@ -36,6 +37,7 @@ export const createChannels = Effect.fn("makeRuntimeChannels")(function* ({
       if (!channelRuntime) {
         return Effect.void;
       }
+
       return channelRuntime.sendChannelMessage(input).pipe(
         Effect.asVoid,
         Effect.catchCause((cause) =>
@@ -57,6 +59,7 @@ export const createChannels = Effect.fn("makeRuntimeChannels")(function* ({
       if (key.startsWith(`${threadId}:`)) channelWaitingRequests.delete(key);
     }
   };
+
   return {
     channelStatusWorker,
     automaticChannelReplyWorker,

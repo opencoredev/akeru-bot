@@ -19,6 +19,7 @@ import { startSilenceWatchdog, type SilenceWatchdogHandle } from "../../SilenceW
 import { resolveControllerBotId } from "../ProviderCommandReactor.ts";
 import { providerTurnKey } from "./EventFields.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
 export const createWatchdogs = Effect.fn("makeRuntimeWatchdogs")(function* ({
   botInbox,
   orchestrationEngine,
@@ -39,9 +40,11 @@ export const createWatchdogs = Effect.fn("makeRuntimeWatchdogs")(function* ({
   const stopSilenceWatchdog = (threadId: ThreadId, turnId: TurnId) => {
     const key = providerTurnKey(threadId, turnId);
     const handle = silenceWatchdogs.get(key);
+
     if (!handle) return Effect.void;
     silenceWatchdogs.delete(key);
     silenceWaitingRequests.delete(key);
+
     return handle.stop;
   };
 
@@ -89,6 +92,7 @@ export const createWatchdogs = Effect.fn("makeRuntimeWatchdogs")(function* ({
       const botId = resolveControllerBotId(thread);
       const incidentKey = silenceIncidentKey(thread.id, turnId);
       const providerName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+
       const appendSilenceActivity = (input: {
         readonly id: string;
         readonly kind: string;
@@ -121,6 +125,7 @@ export const createWatchdogs = Effect.fn("makeRuntimeWatchdogs")(function* ({
             }),
           ),
         );
+
       const handle = yield* startSilenceWatchdog({
         callbacks: {
           onSilent: (lastActivityAtMs) =>
@@ -130,15 +135,18 @@ export const createWatchdogs = Effect.fn("makeRuntimeWatchdogs")(function* ({
                   provider,
                   lastActivityAt: DateTime.formatIso(DateTime.makeUnsafe(lastActivityAtMs)),
                 };
+
                 yield* appendSilenceActivity({
                   id: `silence-watchdog:silent:${thread.id}:${turnId}:${lastActivityAtMs}`,
                   kind: THREAD_SILENT_RUN_ACTIVITY_KIND,
                   summary: `No response from ${providerName}`,
                   payload,
                 });
+
                 if (botId === null) return;
                 const snapshot = yield* projectionSnapshotQuery.getShellSnapshot();
                 const bot = snapshot.bots.find((candidate) => candidate.id === botId);
+
                 if (!bot) return;
                 // Keyed by chat and turn: a later silent window reopens the same item.
                 yield* Effect.sync(() =>
@@ -177,8 +185,10 @@ export const createWatchdogs = Effect.fn("makeRuntimeWatchdogs")(function* ({
           ),
         },
       });
+
       silenceWatchdogs.set(providerTurnKey(thread.id, turnId), handle);
     });
+
   return {
     silenceWatchdogs,
     silenceWaitingRequests,

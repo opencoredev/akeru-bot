@@ -160,6 +160,7 @@ describe("OrchestrationEngine", () => {
     const thread = (await system.readModel()).threads.find(
       (entry) => entry.id === "thread-turn-diff",
     );
+
     expect(thread?.checkpoints).toEqual([
       {
         turnId: asTurnId("turn-1"),

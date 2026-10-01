@@ -39,6 +39,7 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
         command,
         threadId: command.threadId,
       });
+
       // Server-side twin of the client's canSettle session check: a stale
       // or raced client must not settle a thread whose session is coming
       // alive or working.
@@ -50,6 +51,7 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
           }),
         );
       }
+
       // Pending approval / user-input requests are blocked-on-you work: a
       // raced or stale client must not park them behind a settled override
       // that would surface only after the request resolves.
@@ -61,7 +63,9 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
           }),
         );
       }
+
       const occurredAt = yield* nowIso;
+
       // Settling inside the adoption window would hide just-requested work.
       if (threadHasQueuedTurnStart(thread, occurredAt)) {
         return yield* Effect.fail(
@@ -71,10 +75,12 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
           }),
         );
       }
+
       // Settling an already-settled thread re-emits with the original
       // settledAt: the engine rejects zero-event commands, and bulk-settle /
       // double-click must stay silent no-ops rather than surface errors.
       const alreadySettled = thread.settledOverride === "settled" && thread.settledAt !== null;
+
       const settledEvent = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -92,9 +98,11 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
           updatedAt: alreadySettled ? thread.updatedAt : occurredAt,
         },
       };
+
       // Settling is "I'm done with this": clear states that would keep the
       // row pinned or snoozed instead of showing the new settled state.
       const companionEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
+
       if (thread.pinnedAt != null) {
         companionEvents.push({
           ...(yield* withEventBase({
@@ -110,6 +118,7 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
           },
         });
       }
+
       if (thread.snoozedUntil != null) {
         companionEvents.push({
           ...(yield* withEventBase({
@@ -126,19 +135,23 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
           },
         });
       }
+
       return companionEvents.length > 0 ? [settledEvent, ...companionEvents] : settledEvent;
     }
+
     case "thread.unsettle": {
       const thread = yield* requireThreadNotArchived({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       // Idempotent by re-emission (see thread.settle): reducing the event a
       // second time lands on the same override state. A re-emission keeps
       // the existing updatedAt so duplicates do not churn ordering.
       const alreadyPinnedActive = thread.settledOverride === "active";
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -154,13 +167,16 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
         },
       };
     }
+
     case "thread.snooze": {
       const thread = yield* requireThreadNotArchived({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       const occurredAt = yield* nowIso;
+
       // A wake time in the past would create a thread that is snoozed and
       // woken at once — the row would never leave the inbox but still carry
       // snooze state. Reject instead of silently normalizing. The negated
@@ -175,6 +191,7 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
           }),
         );
       }
+
       // Blocked-on-you work must not be snoozed away: a pending approval or
       // user-input request is the agent waiting on the user, and hiding it
       // defeats the request. (A running session IS snoozable — snooze only
@@ -187,6 +204,7 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
           }),
         );
       }
+
       // A queued turn start — a user message no turn has adopted yet — is
       // invisible pending work: no session, no pending flags. Snoozing in
       // that window would hide a just-requested turn exactly the way settle
@@ -199,6 +217,7 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
           }),
         );
       }
+
       // Re-snoozing an already-snoozed thread to the SAME wake time is a
       // duplicate (double-click, raced clients): re-emit with the original
       // timestamps so the projection is a no-op. A different wake time is a
@@ -207,6 +226,7 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
         thread.snoozedUntil === command.snoozedUntil && thread.snoozedAt != null
           ? thread.snoozedAt
           : null;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -223,17 +243,20 @@ export const decideThreadVisibility = Effect.fn("decideThreadVisibility")(functi
         },
       };
     }
+
     case "thread.unsnooze": {
       const thread = yield* requireThreadNotArchived({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       // Idempotent by re-emission (see thread.settle): waking a thread that
       // is not snoozed lands on the same null state without churning
       // updatedAt.
       const alreadyAwake = thread.snoozedUntil == null;
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",

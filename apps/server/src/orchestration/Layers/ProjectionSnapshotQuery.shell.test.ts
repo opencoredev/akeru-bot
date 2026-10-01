@@ -20,6 +20,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
       const sql = yield* SqlClient.SqlClient;
+
       const record = {
         delegationId: "delegation-shell",
         parentDelegationId: null,
@@ -54,6 +55,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         startedAt: null,
         completedAt: null,
       };
+
       const recordJson = yield* decodeDelegationRecord(record).pipe(
         Effect.flatMap(encodeDelegationRecordJson),
       );
@@ -79,6 +81,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
       const sql = yield* SqlClient.SqlClient;
+
       const makeRecord = (index: number, overrides: Record<string, unknown>) => ({
         delegationId: `delegation-${String(index).padStart(3, "0")}`,
         parentDelegationId: null,
@@ -114,7 +117,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         completedAt: null,
         ...overrides,
       });
+
       const terminalCount = SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD + 5;
+
       const records = [
         // The oldest delegation is still running, so it survives the cap.
         makeRecord(0, { state: "running", result: null }),
@@ -128,10 +133,12 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       ];
 
       yield* sql`DELETE FROM projection_delegations`;
+
       for (const record of records) {
         const recordJson = yield* decodeDelegationRecord(record).pipe(
           Effect.flatMap(encodeDelegationRecordJson),
         );
+
         yield* sql`
           INSERT INTO projection_delegations (delegation_id, record_json)
           VALUES (${record.delegationId}, ${recordJson})
@@ -139,25 +146,31 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       }
 
       const snapshot = yield* snapshotQuery.getShellSnapshot();
+
       const parentIds = snapshot.delegations
         .filter((delegation) => delegation.parentThreadId === "thread-parent")
         .map((delegation) => delegation.delegationId);
+
       const newestTerminalIds = Array.from(
         { length: SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD },
         (_, offset) =>
           `delegation-${String(terminalCount - SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD + offset + 1).padStart(3, "0")}`,
       );
+
       assert.deepEqual(parentIds, ["delegation-000", ...newestTerminalIds]);
 
       const failed = snapshot.delegations.find(
         (delegation) => delegation.delegationId === "delegation-050",
       );
+
       const failure = failed?.phase._tag === "Failed" ? failed.phase.failure : undefined;
       assert.equal(failure?.message.length, SHELL_DELEGATION_TEXT_MAX_CHARS);
       assert.isTrue(failure?.message.endsWith("…"));
+
       const completed = snapshot.delegations.find(
         (delegation) => delegation.delegationId === "delegation-025",
       );
+
       assert.equal(
         completed?.phase._tag === "Completed" ? completed.phase.result.summary : undefined,
         "Done 25",
@@ -231,6 +244,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       const detail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
       assert.equal(detail._tag, "Some");
+
       if (detail._tag === "Some") {
         const byId = new Map(detail.value.messages.map((message) => [message.id, message]));
         assert.equal(byId.get(asMessageId("message-unknown"))?.channelDelivery, "unknown");
@@ -463,9 +477,11 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       // And the full command read model carries them too.
       const readModel = yield* snapshotQuery.getCommandReadModel();
+
       const thread = readModel.threads.find(
         (candidate) => candidate.id === ThreadId.make("thread-settled"),
       );
+
       assert.equal(thread?.settledOverride, "settled");
       assert.equal(thread?.settledAt, "2026-04-06T00:00:04.000Z");
     }),

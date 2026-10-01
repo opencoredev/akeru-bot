@@ -9,6 +9,7 @@ import {
   shouldRefreshThreadShellSummary,
 } from "./Definitions.ts";
 import type { createDelegations } from "./Delegations.ts";
+
 export function makeThreads({
   projectionThreadRepository,
   projectionThreadMessageRepository,
@@ -35,6 +36,7 @@ export function makeThreads({
     const existingRow = yield* projectionThreadRepository.getById({
       threadId,
     });
+
     if (Option.isNone(existingRow)) {
       return;
     }
@@ -71,6 +73,7 @@ export function makeThreads({
                 parentDelegationId: event.payload.parentDelegationId ?? null,
               }
             : yield* delegationParentLink(event.payload.threadId);
+
           yield* projectionThreadRepository.upsert({
             threadId: event.payload.threadId,
             projectId: event.payload.projectId,
@@ -104,6 +107,7 @@ export function makeThreads({
             hasActionableProposedPlan: 0,
             deletedAt: null,
           });
+
           return;
         }
 
@@ -111,6 +115,7 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) return;
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
@@ -119,6 +124,7 @@ export function makeThreads({
             respondingBotId: event.payload.botId,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -126,9 +132,11 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             archivedAt: event.payload.archivedAt,
@@ -136,6 +144,7 @@ export function makeThreads({
             titleRegenerationStartedAt: null,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -143,14 +152,17 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             archivedAt: null,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -158,9 +170,11 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             settledOverride: "settled",
@@ -168,6 +182,7 @@ export function makeThreads({
             unsettledAt: null,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -175,9 +190,11 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             settledOverride: event.payload.reason === "user" ? "active" : null,
@@ -191,6 +208,7 @@ export function makeThreads({
                 : event.payload.updatedAt,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -198,15 +216,18 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             snoozedUntil: event.payload.snoozedUntil,
             snoozedAt: event.payload.snoozedAt,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -214,15 +235,18 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             snoozedUntil: null,
             snoozedAt: null,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -230,9 +254,11 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             pinnedAt: event.payload.pinnedAt,
@@ -241,6 +267,7 @@ export function makeThreads({
               : {}),
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -248,15 +275,18 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             pinnedAt: null,
             pinOrderKey: null,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -264,14 +294,17 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             pinOrderKey: event.payload.orderKey,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -279,9 +312,11 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             ...(event.payload.title !== undefined ? { title: event.payload.title } : {}),
@@ -303,6 +338,7 @@ export function makeThreads({
               : {}),
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -310,14 +346,17 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             runtimeMode: event.payload.runtimeMode,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -325,14 +364,17 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             interactionMode: event.payload.interactionMode,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
@@ -346,20 +388,25 @@ export function makeThreads({
             type: "thread.created",
             sequenceExclusive: event.sequence,
           });
+
           if (!recreatedLater) {
             attachmentSideEffects.deletedThreadIds.add(event.payload.threadId);
           }
+
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             deletedAt: event.payload.deletedAt,
             updatedAt: event.payload.deletedAt,
           });
+
           return;
         }
 
@@ -367,12 +414,14 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) return;
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             respondingBotId: event.payload.respondingBotId ?? null,
             updatedAt: event.occurredAt,
           });
+
           return;
         }
 
@@ -383,9 +432,11 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           const previousLatest = existingRow.value.latestUserMessageAt;
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
@@ -396,6 +447,7 @@ export function makeThreads({
                 ? event.payload.createdAt
                 : previousLatest,
           });
+
           return;
         }
 
@@ -407,16 +459,20 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             updatedAt: event.occurredAt,
           });
+
           if (shouldRefreshThreadShellSummary(event)) {
             yield* refreshThreadShellSummary(event.payload.threadId);
           }
+
           return;
         }
 
@@ -424,9 +480,11 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             // activeTurnId describes current work; a terminal session must not erase history.
@@ -434,6 +492,7 @@ export function makeThreads({
             updatedAt: event.occurredAt,
           });
           yield* refreshThreadShellSummary(event.payload.threadId);
+
           return;
         }
 
@@ -441,15 +500,18 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
+
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             latestTurnId: event.payload.turnId,
             updatedAt: event.occurredAt,
           });
           yield* refreshThreadShellSummary(event.payload.threadId);
+
           return;
         }
 
@@ -457,6 +519,7 @@ export function makeThreads({
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
           });
+
           if (Option.isNone(existingRow)) {
             return;
           }
@@ -464,10 +527,13 @@ export function makeThreads({
           const retainedTurns = yield* projectionTurnRepository.listByThreadId({
             threadId: event.payload.threadId,
           });
+
           let latestTurnId: ProjectionTurn["turnId"] = null;
           let latestCheckpointTurnCount = -1;
+
           for (let index = 0; index < retainedTurns.length; index += 1) {
             const turn = retainedTurns[index];
+
             if (
               !turn ||
               turn.turnId === null ||
@@ -476,6 +542,7 @@ export function makeThreads({
             ) {
               continue;
             }
+
             if (turn.checkpointTurnCount > latestCheckpointTurnCount) {
               latestCheckpointTurnCount = turn.checkpointTurnCount;
               latestTurnId = turn.turnId;
@@ -488,6 +555,7 @@ export function makeThreads({
             updatedAt: event.occurredAt,
           });
           yield* refreshThreadShellSummary(event.payload.threadId);
+
           return;
         }
 
@@ -496,5 +564,6 @@ export function makeThreads({
       }
     },
   );
+
   return { refreshThreadShellSummary, applyThreadsProjection };
 }

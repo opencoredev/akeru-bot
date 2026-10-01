@@ -110,6 +110,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_turns
         WHERE thread_id = ${threadId} AND turn_id = ${turnId}
       `;
+
       assert.deepEqual(runningRows, [{ state: "running", completedAt: null }]);
 
       // The session leaving "running" is the turn-end signal.
@@ -147,6 +148,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_turns
         WHERE thread_id = ${threadId} AND turn_id = ${turnId}
       `;
+
       assert.deepEqual(settledRows, [
         { state: "completed", completedAt: "2026-01-01T00:01:00.000Z" },
       ]);
@@ -156,6 +158,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         FROM projection_threads
         WHERE thread_id = ${threadId}
       `;
+
       assert.deepEqual(threadRows, [{ latestTurnId: turnId }]);
     }),
   );
@@ -240,6 +243,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         WHERE thread_id = ${threadId}
         ORDER BY requested_at
       `;
+
       assert.deepEqual(rows, [
         { turnId: oldTurnId, state: "completed", completedAt: "2026-01-01T00:00:30.000Z" },
         { turnId: newTurnId, state: "running", completedAt: null },
@@ -256,6 +260,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         const projectionPipeline = yield* OrchestrationProjectionPipeline;
         const eventStore = yield* OrchestrationEventStore;
         const sql = yield* SqlClient.SqlClient;
+
         const appendAndProject = (event: Parameters<typeof eventStore.append>[0]) =>
           eventStore
             .append(event)
@@ -388,6 +393,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
           checkpoint_turn_count ASC,
           requested_at ASC
       `;
+
         assert.deepEqual(turnRows, [
           { turnId: "turn-completed", checkpointTurnCount: 1, status: "completed" },
           { turnId: "turn-interrupted", checkpointTurnCount: null, status: "interrupted" },

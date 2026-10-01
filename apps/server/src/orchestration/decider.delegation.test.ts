@@ -23,6 +23,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
   it.effect("creates and projects the full delegation record", () =>
     Effect.gen(function* () {
       const delegation = makeDelegation();
+
       const event = yield* decideOne(makeReadModel(), {
         type: "delegation.create",
         commandId: CommandId.make("command-create"),
@@ -44,6 +45,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
     Effect.gen(function* () {
       let readModel = makeReadModel([makeDelegation()]);
       const states: string[] = ["queued"];
+
       const update = Effect.fn("updateDelegationState")(function* (
         delegation: AkeruDelegationRecord,
         commandId: string,
@@ -53,6 +55,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           commandId: CommandId.make(commandId),
           delegation,
         });
+
         readModel = yield* project(readModel, event);
         states.push(delegation.phase._tag.toLowerCase());
       });
@@ -67,6 +70,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: LATER,
       });
+
       yield* update(running, "command-running");
       yield* update(
         {
@@ -117,11 +121,13 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: LATER,
       });
+
       const failedEvent = yield* decideOne(makeReadModel([makeDelegation()]), {
         type: "delegation.state.set",
         commandId: CommandId.make("command-failed"),
         delegation: failed,
       });
+
       expect(failedEvent.payload.delegation.phase._tag).toBe("Failed");
 
       const cancelEvent = yield* decideOne(makeReadModel([makeDelegation()]), {
@@ -131,6 +137,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         keep: false,
         createdAt: LATER,
       });
+
       expect(cancelEvent.payload.delegation.phase._tag).toBe("Canceled");
 
       const keepEvent = yield* decideOne(makeReadModel([makeDelegation()]), {
@@ -140,9 +147,11 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         keep: true,
         createdAt: LATER,
       });
+
       expect(keepEvent.payload.delegation).toMatchObject({ phase: { _tag: "Queued" }, keep: true });
 
       const canceledModel = yield* project(makeReadModel([makeDelegation()]), cancelEvent);
+
       const repeated = yield* decideOne(canceledModel, {
         type: "delegation.cancel",
         commandId: CommandId.make("command-cancel-again"),
@@ -150,6 +159,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         keep: false,
         createdAt: "2026-08-31T12:03:00.000Z",
       });
+
       expect(repeated.payload.delegation).toEqual(cancelEvent.payload.delegation);
     }),
   );
@@ -166,6 +176,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: LATER,
       });
+
       const assigned = makeDelegation({
         phase: {
           _tag: "Running",
@@ -176,11 +187,13 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: "2026-08-31T12:02:00.000Z",
       });
+
       const assignedEvent = yield* decideOne(makeReadModel([running]), {
         type: "delegation.state.set",
         commandId: CommandId.make("command-assign-child-turn"),
         delegation: assigned,
       });
+
       expect(assignedEvent.payload.delegation).toEqual(assigned);
 
       const cancelEvent = yield* decideOne(makeReadModel([assigned]), {
@@ -190,6 +203,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         keep: false,
         createdAt: NOW,
       });
+
       expect(cancelEvent.payload.delegation).toMatchObject({
         updatedAt: assigned.updatedAt,
         phase: { _tag: "Canceled", completedAt: assigned.updatedAt },
@@ -200,6 +214,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
   it.effect("rejects cycles, bad depth, missing records, and excess concurrency", () =>
     Effect.gen(function* () {
       const parent = makeDelegation();
+
       const cycle = makeDelegation({
         delegationId: DelegationId.make("delegation-cycle"),
         parentDelegationId: parent.delegationId,
@@ -210,6 +225,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         depth: 2,
         billedBotId: PARENT_BOT_ID,
       });
+
       const cycleError = yield* decideOrchestrationCommand({
         readModel: makeReadModel([parent]),
         command: {
@@ -218,6 +234,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           delegation: cycle,
         },
       }).pipe(Effect.flip);
+
       expect(String(cycleError)).toContain("cycle");
 
       const depthError = yield* decideOrchestrationCommand({
@@ -228,6 +245,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           delegation: makeDelegation({ depth: 2 }),
         },
       }).pipe(Effect.flip);
+
       expect(String(depthError)).toContain("ancestor chain or depth");
 
       const missingError = yield* decideOrchestrationCommand({
@@ -238,6 +256,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           delegation: makeDelegation({ childBotId: BotId.make("bot-missing") }),
         },
       }).pipe(Effect.flip);
+
       expect(String(missingError)).toContain("bot-missing");
 
       const archivedChildError = yield* decideOrchestrationCommand({
@@ -255,11 +274,13 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           delegation: makeDelegation(),
         },
       }).pipe(Effect.flip);
+
       expect(String(archivedChildError)).toContain("archived");
 
       const active = [1, 2, 3].map((index) =>
         makeDelegation({ delegationId: DelegationId.make(`delegation-${index}`) }),
       );
+
       const concurrencyError = yield* decideOrchestrationCommand({
         readModel: makeReadModel(active),
         command: {
@@ -268,6 +289,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           delegation: makeDelegation({ delegationId: DelegationId.make("delegation-4") }),
         },
       }).pipe(Effect.flip);
+
       expect(String(concurrencyError)).toContain("3 active delegations");
     }),
   );
@@ -275,6 +297,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
   it.effect("rejects illegal transitions and ownership changes", () =>
     Effect.gen(function* () {
       const queued = makeDelegation();
+
       const completed = makeDelegation({
         phase: {
           _tag: "Completed",
@@ -291,6 +314,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
         },
         updatedAt: LATER,
       });
+
       const transitionError = yield* decideOrchestrationCommand({
         readModel: makeReadModel([queued]),
         command: {
@@ -299,6 +323,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           delegation: completed,
         },
       }).pipe(Effect.flip);
+
       expect(String(transitionError)).toContain("cannot transition");
 
       const ownershipError = yield* decideOrchestrationCommand({
@@ -312,6 +337,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           }),
         },
       }).pipe(Effect.flip);
+
       expect(String(ownershipError)).toContain("immutable");
 
       const running = makeDelegation({
@@ -323,6 +349,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           progress: null,
         },
       });
+
       const mismatchError = yield* decideOrchestrationCommand({
         readModel: makeReadModel([running]),
         command: {
@@ -341,6 +368,7 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           },
         },
       }).pipe(Effect.flip);
+
       expect(String(mismatchError)).toContain("result must come from its child");
     }),
   );

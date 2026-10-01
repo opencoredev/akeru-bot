@@ -13,6 +13,7 @@ it.effect(
   "ProjectionSnapshotQuery dedupes repository identity resolution by workspace root and skips deleted projects for shell snapshots",
   () => {
     const resolveCalls: string[] = [];
+
     const layer = OrchestrationProjectionSnapshotQueryLive.pipe(
       Layer.provide(ThreadBackgroundLiveness.layer),
       Layer.provide(ThreadPlanProgress.layer),
@@ -21,6 +22,7 @@ it.effect(
           resolve: (cwd: string) =>
             Effect.sync(() => {
               resolveCalls.push(cwd);
+
               return {
                 canonicalKey: `github.com/acme${cwd}`,
                 locator: {

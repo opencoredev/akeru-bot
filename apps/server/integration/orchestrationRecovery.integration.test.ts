@@ -75,6 +75,7 @@ it.live("starts a claudeAgent session on first turn when provider is requested",
               (message) => message.role === "assistant" && message.text === "Claude first turn.\n",
             ),
         );
+
         assert.equal(thread.session?.providerName, "claudeAgent");
       }),
     CLAUDE_AGENT_PROVIDER,
@@ -207,6 +208,7 @@ it.live("recovers claudeAgent sessions after provider stopAll using persisted re
             ) &&
             !entry.activities.some((activity) => activity.kind === "provider.turn.start.failed"),
         );
+
         assert.equal(recoveredThread.session?.providerName, "claudeAgent");
         assert.equal(recoveredThread.session?.threadId, "thread-1");
       }),

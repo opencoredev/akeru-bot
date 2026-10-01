@@ -8,6 +8,7 @@ import * as Schedule from "effect/Schedule";
 import { delegationResultsContext } from "../../../provider/delegationResultsContext.ts";
 import { type ProviderIntentEvent } from "./Fields.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
 export function createDelegations({
   serverCommandId,
   orchestrationEngine,
@@ -34,7 +35,9 @@ export function createDelegations({
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) => {
     const delegationIds = event.payload.acknowledgedDelegationIds ?? [];
+
     if (delegationIds.length === 0) return Effect.void;
+
     return projectionSnapshotQuery.getCommandReadModel().pipe(
       Effect.flatMap((readModel) =>
         Effect.forEach(
@@ -96,7 +99,9 @@ export function createDelegations({
     options: { readonly channel: boolean },
   ) => {
     const delegationIds = event.payload.acknowledgedDelegationIds ?? [];
+
     if (delegationIds.length === 0) return Effect.succeed("");
+
     return projectionSnapshotQuery.getCommandReadModel().pipe(
       Effect.retry({ times: 1 }),
       Effect.map((readModel) =>
@@ -118,6 +123,7 @@ export function createDelegations({
       ),
     );
   };
+
   return {
     dispatchDelegationRelease,
     releaseDelegationResultsNow,

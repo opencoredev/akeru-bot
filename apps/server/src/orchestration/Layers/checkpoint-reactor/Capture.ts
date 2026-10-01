@@ -19,6 +19,7 @@ import { toTurnId, sameId, checkpointStatusFromRuntime } from "./Fields.ts";
 import type { createDependencies } from "./Dependencies.ts";
 import type { createContext } from "./Context.ts";
 import type { createFailures } from "./Failures.ts";
+
 export function createCapture({
   projectionSnapshotQuery,
   resolveSessionRuntimeForThread,
@@ -54,9 +55,11 @@ export function createCapture({
         yield* projectionSnapshotQuery.getLatestAssistantMessageIdForTurn(threadId, turnId),
       );
     }
+
     const thread = yield* projectionSnapshotQuery
       .getThreadDetailById(threadId, { activityKinds: [] })
       .pipe(Effect.map(Option.getOrUndefined));
+
     return thread?.messages
       .toReversed()
       .find((entry) => entry.role === "assistant" && entry.turnId === turnId)?.id;
@@ -73,6 +76,7 @@ export function createCapture({
     readonly preferSessionRuntime: boolean;
   }): Effect.fn.Return<string | undefined, CheckpointStoreError> {
     const fromSession = yield* resolveSessionRuntimeForThread(input.threadId);
+
     const fromThread = resolveThreadWorkspaceCwd({
       thread: input.thread,
       projects: input.projects,
@@ -92,9 +96,11 @@ export function createCapture({
     if (!cwd) {
       return undefined;
     }
+
     if (!(yield* checkpointStore.isGitRepository(cwd))) {
       return undefined;
     }
+
     return cwd;
   });
 
@@ -118,6 +124,7 @@ export function createCapture({
       cwd: input.cwd,
       checkpointRef: fromCheckpointRef,
     });
+
     if (!fromCheckpointExists) {
       yield* Effect.logWarning("checkpoint capture missing pre-turn baseline", {
         threadId: input.threadId,
@@ -235,11 +242,13 @@ export function createCapture({
   const captureCheckpointFromTurnCompletion = Effect.fn("captureCheckpointFromTurnCompletion")(
     function* (event: Extract<ProviderRuntimeEvent, { type: "turn.completed" | "turn.aborted" }>) {
       const turnId = toTurnId(event.turnId);
+
       if (!turnId) {
         return;
       }
 
       const thread = yield* resolveThreadCheckpointState(event.threadId);
+
       if (!thread) {
         return;
       }
@@ -261,12 +270,14 @@ export function createCapture({
       }
 
       const projects = thread.projects;
+
       const checkpointCwd = yield* resolveCheckpointCwd({
         threadId: thread.id,
         thread,
         projects,
         preferSessionRuntime: true,
       });
+
       if (!checkpointCwd) {
         return;
       }
@@ -276,10 +287,12 @@ export function createCapture({
       const existingPlaceholder = thread.checkpoints.find(
         (checkpoint) => checkpoint.turnId === turnId && checkpoint.status === "missing",
       );
+
       const currentTurnCount = thread.checkpoints.reduce(
         (maxTurnCount, checkpoint) => Math.max(maxTurnCount, checkpoint.checkpointTurnCount),
         0,
       );
+
       const nextTurnCount = existingPlaceholder
         ? existingPlaceholder.checkpointTurnCount
         : currentTurnCount + 1;
@@ -302,22 +315,26 @@ export function createCapture({
   const ensurePreTurnBaselineFromTurnStart = Effect.fn("ensurePreTurnBaselineFromTurnStart")(
     function* (event: Extract<ProviderRuntimeEvent, { type: "turn.started" }>) {
       const turnId = toTurnId(event.turnId);
+
       if (!turnId) {
         return;
       }
 
       const thread = yield* resolveThreadCheckpointState(event.threadId);
+
       if (!thread) {
         return;
       }
 
       const projects = thread.projects;
+
       const checkpointCwd = yield* resolveCheckpointCwd({
         threadId: thread.id,
         thread,
         projects,
         preferSessionRuntime: false,
       });
+
       if (!checkpointCwd) {
         return;
       }
@@ -326,11 +343,14 @@ export function createCapture({
         (maxTurnCount, checkpoint) => Math.max(maxTurnCount, checkpoint.checkpointTurnCount),
         0,
       );
+
       const baselineCheckpointRef = checkpointRefForThreadTurn(thread.id, currentTurnCount);
+
       const baselineExists = yield* checkpointStore.hasCheckpointRef({
         cwd: checkpointCwd,
         checkpointRef: baselineCheckpointRef,
       });
+
       if (baselineExists) {
         return;
       }
@@ -359,6 +379,7 @@ export function createCapture({
   ) {
     if (event.type === "thread.message-sent") {
       if (event.metadata?.importedHistory === true) return;
+
       if (
         event.payload.role !== "user" ||
         event.payload.streaming ||
@@ -370,17 +391,20 @@ export function createCapture({
 
     const threadId = event.payload.threadId;
     const thread = yield* resolveThreadCheckpointState(threadId);
+
     if (!thread) {
       return;
     }
 
     const projects = thread.projects;
+
     const checkpointCwd = yield* resolveCheckpointCwd({
       threadId,
       thread,
       projects,
       preferSessionRuntime: false,
     });
+
     if (!checkpointCwd) {
       return;
     }
@@ -389,11 +413,14 @@ export function createCapture({
       (maxTurnCount, checkpoint) => Math.max(maxTurnCount, checkpoint.checkpointTurnCount),
       0,
     );
+
     const baselineCheckpointRef = checkpointRefForThreadTurn(threadId, currentTurnCount);
+
     const baselineExists = yield* checkpointStore.hasCheckpointRef({
       cwd: checkpointCwd,
       checkpointRef: baselineCheckpointRef,
     });
+
     if (baselineExists) {
       return;
     }
@@ -410,6 +437,7 @@ export function createCapture({
       createdAt: event.occurredAt,
     });
   });
+
   return {
     resolveTurnAssistantMessageId,
     resolveCheckpointCwd,

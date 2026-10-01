@@ -158,45 +158,58 @@ export function createShellSnapshots({
           ]) =>
             Effect.gen(function* () {
               let updatedAt: string | null = null;
+
               for (const row of projectRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of botRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of groupRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of delegationRows) {
                 updatedAt = maxIso(updatedAt, row.delegation.updatedAt);
               }
+
               for (const mcpServer of mcpServers) {
                 updatedAt = maxIso(updatedAt, mcpServer.updatedAt);
               }
+
               for (const row of threadRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of sessionRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of latestTurnRows) {
                 updatedAt = maxIso(updatedAt, row.requestedAt);
+
                 if (row.startedAt !== null) {
                   updatedAt = maxIso(updatedAt, row.startedAt);
                 }
+
                 if (row.completedAt !== null) {
                   updatedAt = maxIso(updatedAt, row.completedAt);
                 }
               }
+
               for (const row of stateRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
 
               const repositoryIdentities =
                 yield* resolveRepositoryIdentitiesForProjects(projectRows);
+
               const latestTurnByThread = new Map(
                 latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
               );
+
               const sessionByThread = new Map(
                 sessionRows.map((row) => [row.threadId, mapSessionRow(row)] as const),
               );
@@ -277,6 +290,7 @@ export function createShellSnapshots({
           if (isPersistenceError(error)) {
             return error;
           }
+
           return toPersistenceSqlError("ProjectionSnapshotQuery.getShellSnapshot:query")(error);
         }),
       );
@@ -348,41 +362,53 @@ export function createShellSnapshots({
           ([projectRows, botRows, groupRows, threadRows, sessionRows, latestTurnRows, stateRows]) =>
             Effect.gen(function* () {
               let updatedAt: string | null = null;
+
               for (const row of projectRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of botRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of groupRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of threadRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of sessionRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
+
               for (const row of latestTurnRows) {
                 updatedAt = maxIso(updatedAt, row.requestedAt);
+
                 if (row.startedAt !== null) {
                   updatedAt = maxIso(updatedAt, row.startedAt);
                 }
+
                 if (row.completedAt !== null) {
                   updatedAt = maxIso(updatedAt, row.completedAt);
                 }
               }
+
               for (const row of stateRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
               }
 
               const activeProjectIds = new Set(threadRows.map((row) => row.projectId));
+
               const repositoryIdentities = yield* resolveRepositoryIdentitiesForProjects(
                 projectRows.filter((row) => activeProjectIds.has(row.projectId)),
               );
+
               const latestTurnByThread = new Map(
                 latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
               );
+
               const sessionByThread = new Map(
                 sessionRows.map((row) => [row.threadId, mapSessionRow(row)] as const),
               );
@@ -455,10 +481,12 @@ export function createShellSnapshots({
           if (isPersistenceError(error)) {
             return error;
           }
+
           return toPersistenceSqlError("ProjectionSnapshotQuery.getArchivedShellSnapshot:query")(
             error,
           );
         }),
       );
+
   return { getShellSnapshot, getArchivedShellSnapshot };
 }

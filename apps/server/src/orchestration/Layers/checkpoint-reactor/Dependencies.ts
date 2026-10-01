@@ -36,6 +36,7 @@ export const createDependencies = Effect.fn("makecheckpoint-reactor-Dependencies
   const startedTurns = new Map<ThreadId, TurnId>();
 
   const pending = new Set<ThreadId>();
+
   return {
     crypto,
     randomUUID,

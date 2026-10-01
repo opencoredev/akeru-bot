@@ -27,6 +27,7 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
         provider: ProviderDriverKind.make(driver),
         botOwned: true,
       });
+
       const turnId = asTurnId(`turn-silent-${driver}`);
       harness.emitTurnStarted(turnId);
       await harness.drain();
@@ -94,6 +95,7 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
       harness.emitReasoning(turnId, `window-${window}`);
       await harness.drain();
     }
+
     await harness.adjustClock(SILENT_MS);
     await harness.drain();
 

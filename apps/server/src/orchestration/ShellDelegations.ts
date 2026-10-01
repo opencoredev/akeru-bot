@@ -14,6 +14,7 @@ function truncateShellText(text: string): string {
 /** Caps a delegation's free-form result, failure, or blocked text for shell payloads. */
 export function toShellDelegation(delegation: AkeruDelegationRecord): AkeruDelegationRecord {
   const phase = delegation.phase;
+
   switch (phase._tag) {
     case "Completed":
       return phase.result.summary.length <= SHELL_DELEGATION_TEXT_MAX_CHARS

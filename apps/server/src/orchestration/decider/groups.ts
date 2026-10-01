@@ -47,6 +47,7 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
   switch (command.type) {
     case "group.create": {
       yield* requireGroupAbsent({ readModel, command, groupId: command.groupId });
+
       if (command.bossBotId === undefined) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -60,9 +61,11 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
         command.bossBotId,
         ...new Set((command.specialistBotIds ?? []).filter((botId) => botId !== command.bossBotId)),
       ];
+
       yield* Effect.forEach(memberBotIds, (botId) =>
         requireBotNotArchived({ readModel, command, botId }),
       );
+
       if (memberBotIds.length < 2) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -96,11 +99,14 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           updatedAt: command.createdAt,
         },
       };
+
       return groupCreatedEvent;
     }
+
     case "group.rename": {
       yield* requireGroup({ readModel, command, groupId: command.groupId });
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "group",
@@ -116,9 +122,11 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
         },
       };
     }
+
     case "group.delete": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
       const occurredAt = yield* nowIso;
+
       const deletedEvent: PlannedOrchestrationEvent = {
         ...(yield* withEventBase({
           aggregateKind: "group",
@@ -132,6 +140,7 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           deletedAt: occurredAt,
         },
       };
+
       const botUpdatedEvents = yield* Effect.forEach(
         group.members
           .filter(isGroupBotMember)
@@ -147,6 +156,7 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
             commandId: command.commandId,
           }),
       );
+
       const threadUpdatedEvents = yield* Effect.forEach(
         readModel.threads.filter((thread) => thread.groupId === command.groupId),
         Effect.fn(function* (thread) {
@@ -167,11 +177,14 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           };
         }),
       );
+
       return [...botUpdatedEvents, ...threadUpdatedEvents, deletedEvent];
     }
+
     case "group.member.assign": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
       const bot = yield* requireBotNotArchived({ readModel, command, botId: command.botId });
+
       if (command.role === "boss" && group.bossBotId !== null && group.bossBotId !== bot.id) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -180,6 +193,7 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           }),
         );
       }
+
       if (command.role === "specialist" && group.bossBotId === bot.id) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -188,7 +202,9 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           }),
         );
       }
+
       const occurredAt = yield* nowIso;
+
       const assignedEvent: PlannedOrchestrationEvent = {
         ...(yield* withEventBase({
           aggregateKind: "group",
@@ -203,13 +219,17 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           updatedAt: occurredAt,
         },
       };
+
       return assignedEvent;
     }
+
     case "group.member.unassign": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
+
       const member = group.members
         .filter(isGroupBotMember)
         .find((entry) => entry.botId === command.botId);
+
       if (!member) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -218,6 +238,7 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           }),
         );
       }
+
       if (member.role === "boss" || group.bossBotId === command.botId) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -226,8 +247,10 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           }),
         );
       }
+
       const remainingBotIds = activeGroupBotIds(readModel, group);
       remainingBotIds.delete(command.botId);
+
       if (remainingBotIds.size < 2) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -236,7 +259,9 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           }),
         );
       }
+
       const occurredAt = yield* nowIso;
+
       const unassignedEvent: PlannedOrchestrationEvent = {
         ...(yield* withEventBase({
           aggregateKind: "group",
@@ -251,11 +276,14 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           updatedAt: occurredAt,
         },
       };
+
       return unassignedEvent;
     }
+
     case "group.person.assign": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "group",
@@ -271,12 +299,15 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
         },
       };
     }
+
     case "group.person.unassign":
     case "group.leave": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
+
       const person = group.members.find(
         (member) => member.kind === "person" && member.personId === command.personId,
       );
+
       if (!person) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -285,7 +316,9 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           }),
         );
       }
+
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "group",
@@ -301,13 +334,16 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
         },
       };
     }
+
     case "group.boss.set": {
       const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
+
       const nextBoss = yield* requireBotNotArchived({
         readModel,
         command,
         botId: command.bossBotId,
       });
+
       if (group.bossBotId === nextBoss.id && command.unassignPreviousBoss === true) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -316,10 +352,13 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           }),
         );
       }
+
       if (command.unassignPreviousBoss === true) {
         const remainingBotIds = activeGroupBotIds(readModel, group);
+
         if (group.bossBotId !== null) remainingBotIds.delete(group.bossBotId);
         remainingBotIds.add(nextBoss.id);
+
         if (remainingBotIds.size < 2) {
           return yield* Effect.fail(
             new OrchestrationCommandInvariantError({
@@ -332,12 +371,14 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
 
       const occurredAt = yield* nowIso;
       const previousBossBotId = group.bossBotId;
+
       const previousBossRole =
         previousBossBotId === null || previousBossBotId === nextBoss.id
           ? null
           : command.unassignPreviousBoss === true
             ? ("unassigned" as const)
             : ("specialist" as const);
+
       const bossSetEvent: PlannedOrchestrationEvent = {
         ...(yield* withEventBase({
           aggregateKind: "group",
@@ -354,6 +395,7 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
           updatedAt: occurredAt,
         },
       };
+
       return bossSetEvent;
     }
   }

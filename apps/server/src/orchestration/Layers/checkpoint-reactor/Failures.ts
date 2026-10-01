@@ -1,6 +1,7 @@
 import { ThreadId, TurnId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import type { createDependencies } from "./Dependencies.ts";
+
 export function createFailures({
   serverCommandId,
   serverEventId,
@@ -71,5 +72,6 @@ export function createFailures({
         }),
       ),
     );
+
   return { appendRevertFailureActivity, appendCaptureFailureActivity };
 }

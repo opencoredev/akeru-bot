@@ -327,6 +327,7 @@ export function maxIso(left: string | null, right: string): string {
   if (left === null) {
     return right;
   }
+
   return left > right ? left : right;
 }
 
@@ -340,6 +341,7 @@ export function foldAsciiCase(value: string): string {
 
 export function buildSearchSnippet(text: string, query: string): string {
   const normalizedText = text.replace(/\s+/g, " ").trim();
+
   if (normalizedText.length <= 240) {
     return normalizedText;
   }
@@ -350,6 +352,7 @@ export function buildSearchSnippet(text: string, query: string): string {
   const idealStart = Math.max(0, matchIndex - 72);
   const start = Math.min(idealStart, normalizedText.length - bodyLength);
   const end = Math.min(normalizedText.length, start + bodyLength);
+
   return `${start > 0 ? "…" : ""}${normalizedText.slice(start, end)}${
     end < normalizedText.length ? "…" : ""
   }`;
@@ -361,16 +364,20 @@ export function computeSnapshotSequence(
   if (stateRows.length === 0) {
     return 0;
   }
+
   const sequenceByProjector = new Map(
     stateRows.map((row) => [row.projector, row.lastAppliedSequence] as const),
   );
 
   let minSequence = Number.POSITIVE_INFINITY;
+
   for (const projector of REQUIRED_SNAPSHOT_PROJECTORS) {
     const sequence = sequenceByProjector.get(projector);
+
     if (sequence === undefined) {
       return 0;
     }
+
     if (sequence < minSequence) {
       minSequence = sequence;
     }
@@ -538,9 +545,11 @@ export function mapThreadMessageRow(
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+
   if (row.attachments !== null) {
     return Object.assign(message, { attachments: row.attachments });
   }
+
   return message;
 }
 

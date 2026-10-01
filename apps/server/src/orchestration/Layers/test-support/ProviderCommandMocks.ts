@@ -68,12 +68,14 @@ export type ProviderCommandHarnessOptions = {
   readonly startReactor?: boolean;
   readonly dispatchDelegation?: AgentControllerShape["dispatchDelegation"];
 };
+
 export function createProviderCommandMocks(
   input: ProviderCommandHarnessOptions | undefined,
   now: string,
 ) {
   const observations = createObservationHistory<void>();
   const notify = () => Effect.runSync(observations.publish(undefined));
+
   function observeMock<Fn extends (...args: never[]) => unknown>(mock: Mock<Fn>) {
     return new Proxy(mock, {
       apply(target, receiver, args) {
@@ -85,6 +87,7 @@ export function createProviderCommandMocks(
       },
     });
   }
+
   const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
 
   let nextSessionIndex = 1;
@@ -102,10 +105,12 @@ export function createProviderCommandMocks(
     vi.fn((_: unknown, input: unknown) => {
       notify();
       const sessionIndex = nextSessionIndex++;
+
       const resumeCursor =
         typeof input === "object" && input !== null && "resumeCursor" in input
           ? input.resumeCursor
           : undefined;
+
       const threadId =
         typeof input === "object" &&
         input !== null &&
@@ -113,14 +118,17 @@ export function createProviderCommandMocks(
         typeof input.threadId === "string"
           ? ThreadId.make(input.threadId)
           : ThreadId.make(`thread-${sessionIndex}`);
+
       const inputModelSelection =
         typeof input === "object" && input !== null && "modelSelection" in input
           ? (input.modelSelection as ModelSelection | undefined)
           : undefined;
+
       const providerInstanceId =
         typeof input === "object" && input !== null && "providerInstanceId" in input
           ? (input.providerInstanceId as ProviderInstanceId | undefined)
           : inputModelSelection?.instanceId;
+
       const provider =
         typeof input === "object" &&
         input !== null &&
@@ -128,6 +136,7 @@ export function createProviderCommandMocks(
         typeof input.provider === "string"
           ? (input.provider as ProviderSession["provider"])
           : ProviderDriverKind.make(inputModelSelection?.instanceId ?? modelSelection.instanceId);
+
       const session: ProviderSession = {
         provider,
         ...(providerInstanceId ? { providerInstanceId } : {}),
@@ -153,6 +162,7 @@ export function createProviderCommandMocks(
         createdAt: now,
         updatedAt: now,
       };
+
       return (startSessionEffect?.(session) ?? Effect.succeed(session)).pipe(
         Effect.tap((startedSession) =>
           Effect.sync(() => {
@@ -166,6 +176,7 @@ export function createProviderCommandMocks(
   const sendTurn = observeMock(
     vi.fn((_: unknown) => {
       notify();
+
       return input?.sendTurnEffect
         ? input.sendTurnEffect()
         : Effect.succeed({
@@ -178,22 +189,27 @@ export function createProviderCommandMocks(
   const interruptTurn = observeMock(
     vi.fn((interruptInput: unknown) => {
       notify();
+
       return (input?.interruptTurnEffect?.(interruptInput) ?? Effect.void).pipe(
         Effect.tap(() =>
           Effect.sync(() => {
             if (input?.interruptTurnRemovesSession !== true) {
               return;
             }
+
             const threadId =
               typeof interruptInput === "object" &&
               interruptInput !== null &&
               "threadId" in interruptInput
                 ? (interruptInput as { threadId?: ThreadId }).threadId
                 : undefined;
+
             if (!threadId) {
               return;
             }
+
             const index = runtimeSessions.findIndex((session) => session.threadId === threadId);
+
             if (index >= 0) {
               runtimeSessions.splice(index, 1);
             }
@@ -206,6 +222,7 @@ export function createProviderCommandMocks(
   const respondToRequest = observeMock(
     vi.fn<AgentControllerShape["respondToRequest"]>((request) => {
       notify();
+
       return input?.respondToRequestEffect?.(request) ?? Effect.void;
     }),
   );
@@ -213,6 +230,7 @@ export function createProviderCommandMocks(
   const respondToUserInput = observeMock(
     vi.fn<AgentControllerShape["respondToUserInput"]>(() => {
       notify();
+
       return Effect.void;
     }),
   );
@@ -220,6 +238,7 @@ export function createProviderCommandMocks(
   const stopSession = observeMock(
     vi.fn((stopInput: unknown) => {
       notify();
+
       return (input?.stopSessionEffect?.() ?? Effect.void).pipe(
         Effect.tap(() =>
           Effect.sync(() => {
@@ -227,10 +246,13 @@ export function createProviderCommandMocks(
               typeof stopInput === "object" && stopInput !== null && "threadId" in stopInput
                 ? (stopInput as { threadId?: ThreadId }).threadId
                 : undefined;
+
             if (!threadId) {
               return;
             }
+
             const index = runtimeSessions.findIndex((session) => session.threadId === threadId);
+
             if (index >= 0) {
               runtimeSessions.splice(index, 1);
             }
@@ -243,6 +265,7 @@ export function createProviderCommandMocks(
   const renameBranch = observeMock(
     vi.fn((input: unknown) => {
       notify();
+
       return Effect.succeed({
         branch:
           typeof input === "object" &&
@@ -258,6 +281,7 @@ export function createProviderCommandMocks(
   const pruneWorktrees = observeMock(
     vi.fn((_: { readonly cwd: string }) => {
       notify();
+
       return Effect.void;
     }),
   );
@@ -265,6 +289,7 @@ export function createProviderCommandMocks(
   const createWorktree = observeMock(
     vi.fn((input: { readonly refName: string; readonly path: string | null }) => {
       notify();
+
       return Effect.succeed({ worktree: { path: input.path ?? "", refName: input.refName } });
     }),
   );
@@ -272,6 +297,7 @@ export function createProviderCommandMocks(
   const generateBranchName = observeMock(
     vi.fn<TextGenerationShape["generateBranchName"]>((_) => {
       notify();
+
       return Effect.fail(
         new TextGenerationError({
           operation: "generateBranchName",
@@ -284,6 +310,7 @@ export function createProviderCommandMocks(
   const generateThreadTitle = observeMock(
     vi.fn<TextGenerationShape["generateThreadTitle"]>((_) => {
       notify();
+
       return Effect.fail(
         new TextGenerationError({
           operation: "generateThreadTitle",
@@ -304,9 +331,11 @@ export function createProviderCommandMocks(
 
   const inspectEngine: AgentControllerShape["inspectEngine"] = (selected) => {
     const raw = String(selected.instanceId);
+
     const driverKind = ProviderDriverKind.make(
       raw.startsWith("claude") ? "claudeAgent" : raw.startsWith("codex") ? "codex" : raw,
     );
+
     return Effect.succeed({
       modelSelection: selected,
       routing: {
@@ -331,6 +360,7 @@ export function createProviderCommandMocks(
   const resolveEngine = observeMock(
     vi.fn<AgentControllerShape["resolveEngine"]>(({ engine, fallback, mode }) => {
       notify();
+
       if (input?.unavailableEngine === true && engine !== null) {
         return Effect.fail(
           new AgentControllerUnsupportedEngineError({
@@ -340,6 +370,7 @@ export function createProviderCommandMocks(
           }),
         );
       }
+
       if (input?.disabledEngine === true && engine !== null) {
         return Effect.fail(
           new ProviderValidationError({
@@ -348,6 +379,7 @@ export function createProviderCommandMocks(
           }),
         );
       }
+
       const selected =
         engine === null
           ? fallback
@@ -355,6 +387,7 @@ export function createProviderCommandMocks(
               instanceId: ProviderInstanceId.make(engine.provider),
               model: engine.model,
             };
+
       return inspectEngine(selected).pipe(Effect.map((result) => ({ ...result, mode })));
     }),
   );
@@ -362,6 +395,7 @@ export function createProviderCommandMocks(
   const failDelegation = observeMock(
     vi.fn<NonNullable<AgentControllerShape["failDelegation"]>>(() => {
       notify();
+
       return Effect.void;
     }),
   );
@@ -385,6 +419,7 @@ export function createProviderCommandMocks(
       return Stream.fromPubSub(runtimeEventPubSub);
     },
   };
+
   return {
     observations,
     runtimeSessions,

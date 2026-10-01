@@ -26,6 +26,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-pare
         const sql = yield* SqlClient.SqlClient;
         const now = "2026-01-01T00:00:00.000Z";
         const parentThreadId = ThreadId.make("thread-parent");
+
         const record = (delegationId: string, childThreadId: string) => ({
           delegationId: DelegationId.make(delegationId),
           parentDelegationId: null,
@@ -63,6 +64,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-pare
             progress: null,
           },
         });
+
         const appendDelegation = (delegationId: string, childThreadId: string) =>
           eventStore
             .append({
@@ -78,6 +80,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-pare
               payload: { delegation: record(delegationId, childThreadId) },
             })
             .pipe(Effect.flatMap(projectionPipeline.projectEvent));
+
         // A thread.created event from before parent fields existed.
         const appendLegacyThread = (threadId: string) =>
           eventStore
@@ -127,6 +130,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-pare
           FROM projection_threads
           ORDER BY thread_id
         `;
+
         assert.deepEqual(rows, [
           {
             threadId: "thread-child-early",

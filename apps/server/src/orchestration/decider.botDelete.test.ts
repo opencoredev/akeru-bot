@@ -32,6 +32,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         bots: [makeBot({ id: BOT_ID })],
         threads: [makeBotThread(BOT_ID)],
       });
+
       const result = yield* decideOrchestrationCommand({
         command: {
           type: "bot.delete",
@@ -40,6 +41,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         },
         readModel,
       });
+
       const events = Array.isArray(result) ? result : [result];
 
       expect(events.map((event) => event.type)).toEqual([
@@ -47,14 +49,17 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         "bot.deleted",
       ]);
       const ownership = events[0];
+
       if (ownership?.type !== "thread.ownership-updated") {
         throw new Error("Expected thread.ownership-updated");
       }
+
       expect(ownership.payload.botId).toBeNull();
       expect(ownership.payload.groupId).toBeNull();
 
       let next = readModel;
       let sequence = readModel.snapshotSequence;
+
       for (const event of events) {
         sequence += 1;
         next = yield* projectEvent(next, {
@@ -63,6 +68,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
           eventId: EventId.make(`evt-${sequence}`),
         });
       }
+
       expect(next.bots).toHaveLength(0);
       expect(next.threads[0]?.botId).toBeNull();
     }),
@@ -74,21 +80,25 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         ...makeBotThread(BOT_ID),
         session: createSession(ThreadId.make(`thread-${BOT_ID}`), "running"),
       };
+
       const idleThread = {
         ...makeBotThread(BOT_ID),
         id: ThreadId.make("thread-idle"),
         session: createSession(ThreadId.make("thread-idle"), "stopped"),
       };
+
       const childThread = {
         ...makeBotThread(OTHER_BOT_ID),
         id: ThreadId.make("thread-child"),
         parentThreadId: botThread.id,
         session: createSession(ThreadId.make("thread-child"), "running"),
       };
+
       const unrelatedThread = {
         ...makeBotThread(THIRD_BOT_ID),
         session: createSession(ThreadId.make(`thread-${THIRD_BOT_ID}`), "running"),
       };
+
       const sent = makeDelegation({
         delegationId: DelegationId.make("delegation-sent"),
         parentBotId: BOT_ID,
@@ -101,12 +111,14 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
           progress: null,
         },
       });
+
       const received = makeDelegation({
         delegationId: DelegationId.make("delegation-received"),
         parentBotId: OTHER_BOT_ID,
         childBotId: BOT_ID,
         phase: { _tag: "Queued" },
       });
+
       const finished = makeDelegation({
         delegationId: DelegationId.make("delegation-finished"),
         parentBotId: BOT_ID,
@@ -120,12 +132,14 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
           canceledBy: "user",
         },
       });
+
       const unrelated = makeDelegation({
         delegationId: DelegationId.make("delegation-unrelated"),
         parentBotId: OTHER_BOT_ID,
         childBotId: THIRD_BOT_ID,
         phase: { _tag: "Queued" },
       });
+
       const readModel = makeReadModel({
         bots: [
           makeBot({ id: BOT_ID }),
@@ -135,6 +149,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         threads: [botThread, idleThread, childThread, unrelatedThread],
         delegations: [sent, received, finished, unrelated],
       });
+
       const result = yield* decideOrchestrationCommand({
         command: {
           type: "bot.delete",
@@ -143,6 +158,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         },
         readModel,
       });
+
       const events = Array.isArray(result) ? result : [result];
 
       expect(events.map((event) => event.type)).toEqual([
@@ -162,6 +178,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
 
       let next = readModel;
       let sequence = readModel.snapshotSequence;
+
       for (const event of events) {
         sequence += 1;
         next = yield* projectEvent(next, {
@@ -170,9 +187,11 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
           eventId: EventId.make(`evt-${sequence}`),
         });
       }
+
       const phases = Object.fromEntries(
         next.delegations.map((delegation) => [delegation.delegationId, delegation.phase]),
       );
+
       expect(phases[sent.delegationId]).toMatchObject({
         _tag: "Canceled",
         childThreadId: childThread.id,
@@ -194,6 +213,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         respondingBotId: BOT_ID,
         session: createSession(ThreadId.make("thread-group"), "ready"),
       };
+
       const readModel = makeReadModel({
         bots: [
           makeBot({ id: BOT_ID }),
@@ -212,6 +232,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         ],
         threads: [groupThread],
       });
+
       const result = yield* decideOrchestrationCommand({
         command: {
           type: "bot.delete",
@@ -220,6 +241,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         },
         readModel,
       });
+
       const events = Array.isArray(result) ? result : [result];
 
       expect(events.map((event) => event.type)).toEqual([
@@ -231,6 +253,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
 
       let next = readModel;
       let sequence = readModel.snapshotSequence;
+
       for (const event of events) {
         sequence += 1;
         next = yield* projectEvent(next, {
@@ -239,6 +262,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
           eventId: EventId.make(`evt-${sequence}`),
         });
       }
+
       const thread = next.threads.find((entry) => entry.id === groupThread.id);
       expect(thread?.groupId).toBe(GROUP_ID);
       expect(thread?.botId).toBeNull();
@@ -263,6 +287,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected boss delete invariant error");
       }
+
       expect(error.detail).toContain("Set a new boss before deleting it");
     }),
   );
@@ -284,6 +309,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected minimum group size invariant error");
       }
+
       expect(error.detail).toContain("at least two active bots");
     }),
   );
@@ -306,6 +332,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
           }),
         ],
       });
+
       const result = yield* decideOrchestrationCommand({
         command: {
           type: "bot.delete",
@@ -314,12 +341,14 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         },
         readModel,
       });
+
       const events = Array.isArray(result) ? result : [result];
 
       expect(events.map((event) => event.type)).toEqual(["group.member-unassigned", "bot.deleted"]);
 
       let next = readModel;
       let sequence = readModel.snapshotSequence;
+
       for (const event of events) {
         sequence += 1;
         next = yield* projectEvent(next, {
@@ -328,10 +357,13 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
           eventId: EventId.make(`evt-${sequence}`),
         });
       }
+
       expect(next.bots).toHaveLength(2);
+
       const memberIds = next.groups[0]?.members
         .filter(isGroupBotMember)
         .map((member) => member.botId);
+
       expect(memberIds).toEqual([BOT_ID, OTHER_BOT_ID]);
     }),
   );

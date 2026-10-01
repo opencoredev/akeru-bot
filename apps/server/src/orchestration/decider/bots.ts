@@ -48,10 +48,12 @@ export const decideBots = Effect.fn("decideBots")(function* ({
   switch (command.type) {
     case "bot.create": {
       yield* requireBotAbsent({ readModel, command, botId: command.botId });
+
       const group =
         command.groupId === null
           ? null
           : yield* requireGroup({ readModel, command, groupId: command.groupId });
+
       const botCreatedEvent: PlannedOrchestrationEvent = {
         ...(yield* withEventBase({
           aggregateKind: "bot",
@@ -85,12 +87,14 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           updatedAt: command.createdAt,
         },
       };
+
       if (
         group === null ||
         group.members.some((member) => isGroupBotMember(member) && member.botId === command.botId)
       ) {
         return botCreatedEvent;
       }
+
       return [
         {
           ...(yield* withEventBase({
@@ -109,22 +113,28 @@ export const decideBots = Effect.fn("decideBots")(function* ({
         botCreatedEvent,
       ];
     }
+
     case "bot.update": {
       const bot = yield* requireBot({ readModel, command, botId: command.botId });
+
       const targetGroup =
         command.groupId == null
           ? null
           : yield* requireGroup({ readModel, command, groupId: command.groupId });
+
       if (command.groupId !== undefined && command.groupId !== null) {
         yield* requireBotNotArchived({ readModel, command, botId: command.botId });
       }
+
       const sourceGroup =
         command.groupId !== undefined && bot.groupId !== null && bot.groupId !== command.groupId
           ? readModel.groups.find((group) => group.id === bot.groupId)
           : undefined;
+
       const sourceMembership = sourceGroup?.members
         .filter(isGroupBotMember)
         .find((member) => member.botId === bot.id);
+
       if (sourceGroup && (sourceMembership?.role === "boss" || sourceGroup.bossBotId === bot.id)) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -133,9 +143,11 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           }),
         );
       }
+
       if (sourceGroup && sourceMembership) {
         const remainingBotIds = activeGroupBotIds(readModel, sourceGroup);
         remainingBotIds.delete(bot.id);
+
         if (remainingBotIds.size < 2) {
           return yield* Effect.fail(
             new OrchestrationCommandInvariantError({
@@ -148,6 +160,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
 
       const occurredAt = yield* nowIso;
       const events: PlannedOrchestrationEvent[] = [];
+
       if (sourceGroup && sourceMembership) {
         events.push({
           ...(yield* withEventBase({
@@ -160,6 +173,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           payload: { groupId: sourceGroup.id, botId: bot.id, updatedAt: occurredAt },
         });
       }
+
       if (
         command.groupId !== undefined &&
         targetGroup !== null &&
@@ -181,6 +195,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           },
         });
       }
+
       events.push({
         ...(yield* withEventBase({
           aggregateKind: "bot",
@@ -215,11 +230,14 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           updatedAt: occurredAt,
         },
       });
+
       return events;
     }
+
     case "bot.archive": {
       yield* requireBotNotArchived({ readModel, command, botId: command.botId });
       const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
+
       if (bossGroup) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -228,6 +246,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           }),
         );
       }
+
       const undersizedGroup = readModel.groups.find((group) => {
         if (
           !group.members.some(
@@ -236,10 +255,13 @@ export const decideBots = Effect.fn("decideBots")(function* ({
         ) {
           return false;
         }
+
         const remainingBotIds = activeGroupBotIds(readModel, group);
         remainingBotIds.delete(command.botId);
+
         return remainingBotIds.size < 2;
       });
+
       if (undersizedGroup) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -248,7 +270,9 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           }),
         );
       }
+
       const occurredAt = yield* nowIso;
+
       const archivedEvent = {
         ...(yield* withEventBase({
           aggregateKind: "bot",
@@ -263,7 +287,9 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           updatedAt: occurredAt,
         },
       };
+
       const pausedEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
+
       for (const routine of readModel.routines ?? []) {
         if (
           routine.botId !== command.botId ||
@@ -272,6 +298,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
         ) {
           continue;
         }
+
         pausedEvents.push({
           ...(yield* withEventBase({
             aggregateKind: "routine",
@@ -291,11 +318,14 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           },
         });
       }
+
       return [...pausedEvents, archivedEvent];
     }
+
     case "bot.restore": {
       yield* requireBotArchived({ readModel, command, botId: command.botId });
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "bot",
@@ -310,9 +340,11 @@ export const decideBots = Effect.fn("decideBots")(function* ({
         },
       };
     }
+
     case "bot.delete": {
       const bot = yield* requireBot({ readModel, command, botId: command.botId });
       const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
+
       if (bossGroup) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -321,6 +353,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           }),
         );
       }
+
       const undersizedGroup = readModel.groups.find((group) => {
         if (
           !group.members.some(
@@ -329,10 +362,13 @@ export const decideBots = Effect.fn("decideBots")(function* ({
         ) {
           return false;
         }
+
         const remainingBotIds = activeGroupBotIds(readModel, group);
         remainingBotIds.delete(command.botId);
+
         return remainingBotIds.size < 2;
       });
+
       if (undersizedGroup) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
@@ -341,8 +377,10 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           }),
         );
       }
+
       const occurredAt = yield* nowIso;
       const events: Array<Omit<OrchestrationEvent, "sequence">> = [];
+
       // Canceling interrupts each child turn, so work the bot sent or received stops with it.
       for (const delegation of readModel.delegations) {
         if (
@@ -353,10 +391,12 @@ export const decideBots = Effect.fn("decideBots")(function* ({
         ) {
           continue;
         }
+
         const canceledAt =
           Date.parse(occurredAt) >= Date.parse(delegation.updatedAt)
             ? occurredAt
             : delegation.updatedAt;
+
         events.push({
           ...(yield* withEventBase({
             aggregateKind: "delegation",
@@ -381,15 +421,19 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           },
         });
       }
+
       // Chats the bot owns or is answering in a group, plus their child chats, lose their agent.
       const liveThreads = readModel.threads.filter((thread) => thread.deletedAt === null);
+
       const stoppedThreadIds = new Set(
         liveThreads
           .filter((thread) => thread.botId === bot.id || thread.respondingBotId === bot.id)
           .map((thread) => thread.id),
       );
+
       for (let grew = true; grew; ) {
         grew = false;
+
         for (const thread of liveThreads) {
           if (
             !stoppedThreadIds.has(thread.id) &&
@@ -401,6 +445,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           }
         }
       }
+
       for (const thread of liveThreads) {
         if (
           !stoppedThreadIds.has(thread.id) ||
@@ -409,6 +454,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
         ) {
           continue;
         }
+
         events.push({
           ...(yield* withEventBase({
             aggregateKind: "thread",
@@ -423,10 +469,12 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           },
         });
       }
+
       for (const group of readModel.groups) {
         if (!group.members.some((member) => isGroupBotMember(member) && member.botId === bot.id)) {
           continue;
         }
+
         events.push({
           ...(yield* withEventBase({
             aggregateKind: "group",
@@ -442,11 +490,14 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           },
         });
       }
+
       for (const thread of liveThreads) {
         const owned = thread.botId === bot.id;
+
         if (!owned && thread.respondingBotId !== bot.id) {
           continue;
         }
+
         // An owned chat is detached. A group chat keeps its owners and only drops the responder.
         events.push({
           ...(yield* withEventBase({
@@ -464,10 +515,12 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           },
         });
       }
+
       for (const routine of readModel.routines ?? []) {
         if (routine.botId !== bot.id || routine.lifecycle === "deleted") {
           continue;
         }
+
         events.push({
           ...(yield* withEventBase({
             aggregateKind: "routine",
@@ -488,10 +541,12 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           },
         });
       }
+
       for (const assignment of readModel.skillAssignments ?? []) {
         if (assignment.botId !== bot.id) {
           continue;
         }
+
         events.push({
           ...(yield* withEventBase({
             aggregateKind: "skill-assignment",
@@ -507,6 +562,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           },
         });
       }
+
       events.push({
         ...(yield* withEventBase({
           aggregateKind: "bot",
@@ -520,6 +576,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           deletedAt: occurredAt,
         },
       });
+
       return events;
     }
   }

@@ -28,6 +28,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
           bots: [makeBot({ id: BOT_ID, archivedAt: NOW })],
         }),
       });
+
       const events = Array.isArray(result) ? result : [result];
 
       expect(events.map((event) => event.type)).toEqual(["bot.deleted"]);
@@ -76,6 +77,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
           },
         },
       });
+
       const readModel = {
         ...(yield* projectEvent(withRoutine, {
           sequence: 2,
@@ -111,6 +113,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         },
         readModel,
       });
+
       const events = Array.isArray(result) ? result : [result];
 
       expect(events.map((event) => event.type)).toEqual([

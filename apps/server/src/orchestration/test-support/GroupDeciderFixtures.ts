@@ -44,12 +44,14 @@ export const applyCommand = Effect.fn("applyCommand")(function* (
   const result = yield* decideOrchestrationCommand({ command, readModel });
   const events = Array.isArray(result) ? result : [result];
   let next = readModel;
+
   for (const event of events) {
     next = yield* projectEvent(next, {
       ...event,
       sequence: next.snapshotSequence + 1,
     } as OrchestrationEvent);
   }
+
   return { readModel: next, events };
 });
 

@@ -74,6 +74,7 @@ it.layer(makeProjectionPipelinePrefixedTestLayer("t3-pending-turn-terminal-test-
           WHERE turn_id IS NULL
             AND state = 'pending'
         `;
+
         assert.deepEqual(pendingRows, []);
       }),
     );
@@ -84,10 +85,12 @@ it.effect("restores pending turn-start metadata across projection pipeline resta
   Effect.gen(function* () {
     const { dbPath } = yield* ServerConfig;
     const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+
     const firstProjectionLayer = OrchestrationProjectionPipelineLive.pipe(
       Layer.provideMerge(OrchestrationEventStoreLive),
       Layer.provideMerge(persistenceLayer),
     );
+
     const secondProjectionLayer = OrchestrationProjectionPipelineLive.pipe(
       Layer.provideMerge(OrchestrationEventStoreLive),
       Layer.provideMerge(persistenceLayer),
@@ -168,6 +171,7 @@ it.effect("restores pending turn-start metadata across projection pipeline resta
           AND turn_id IS NULL
           AND state = 'pending'
       `;
+
       assert.deepEqual(pendingRows, []);
 
       return yield* sql<{

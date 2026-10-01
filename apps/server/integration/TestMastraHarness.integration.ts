@@ -88,9 +88,11 @@ function payloadString(
   key: "delta" | "detail" | "state" | "status" | "message" | "title",
 ): string | undefined {
   const direct = key in raw ? Reflect.get(raw, key) : undefined;
+
   if (typeof direct === "string") return direct;
   const payload = "payload" in raw ? raw.payload : undefined;
   const nested = payload && key in payload ? Reflect.get(payload, key) : undefined;
+
   return typeof nested === "string" ? nested : undefined;
 }
 
@@ -105,6 +107,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
 
   const nextToolCallId = () => {
     toolCallCount += 1;
+
     return `tool-call-${toolCallCount}`;
   };
 
@@ -119,6 +122,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
       case "message.delta":
       case "content.delta":
         state.assistantText += payloadString(raw, "delta") ?? "";
+
         return;
       case "tool.started":
       case "item.started": {
@@ -131,8 +135,10 @@ export function makeTestMastraHarness(): TestMastraHarness {
           args: detail ? { path: detail } : {},
         });
         publish(state, { type: "tool_end", toolCallId, result: {}, isError: false });
+
         return;
       }
+
       case "approval.requested":
       case "request.opened": {
         const toolCallId = typeof raw.requestId === "string" ? raw.requestId : nextToolCallId();
@@ -145,13 +151,16 @@ export function makeTestMastraHarness(): TestMastraHarness {
           toolName: "custom_test_command",
           args: {},
         });
+
         return;
       }
+
       case "runtime.error":
         publish(state, {
           type: "error",
           error: new Error(payloadString(raw, "message") ?? "runtime error"),
         });
+
         return;
       case "turn.completed": {
         const status = payloadString(raw, "status") ?? payloadString(raw, "state") ?? "completed";
@@ -164,8 +173,10 @@ export function makeTestMastraHarness(): TestMastraHarness {
                 ? "aborted"
                 : "complete",
         });
+
         return;
       }
+
       default:
         return;
     }
@@ -175,36 +186,45 @@ export function makeTestMastraHarness(): TestMastraHarness {
     const terminal = response.events.filter(
       (event) => event.type === "turn.completed" || event.type === "turn.aborted",
     );
+
     for (const raw of response.events) {
       if (raw.type === "turn.completed" || raw.type === "turn.aborted") continue;
       emitFixtureEvent(state, raw);
     }
+
     while (state.pendingApprovalToolCallIds.length > 0) {
       await new Promise<void>((resolve) => {
         state.resolvePendingApproval = resolve;
       });
     }
+
     if (response.mutateWorkspace && state.cwd) {
       await Effect.runPromise(
         response.mutateWorkspace({ cwd: state.cwd, turnCount: state.turnCount }),
       );
     }
+
     // Flush accumulated text as one completed message so the controller
     // publishes the assistant item before the terminal state.
     if (state.assistantText) {
       state.assistantMessageIndex += 1;
+
       const message = assistantMessage(
         state.threadId,
         state.assistantMessageIndex,
         state.assistantText,
       );
+
       state.assistantText = "";
       publish(state, { type: "message_end", message });
     }
+
     if (terminal.length === 0) {
       publish(state, { type: "agent_end", reason: "complete" });
+
       return;
     }
+
     for (const raw of terminal) emitFixtureEvent(state, raw);
   };
 
@@ -223,6 +243,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
         get: () => state.stateSnapshot,
         set: async (next: Record<string, unknown>) => {
           state.stateSnapshot = next;
+
           if (typeof next.projectPath === "string") state.cwd = next.projectPath;
         },
       },
@@ -240,12 +261,14 @@ export function makeTestMastraHarness(): TestMastraHarness {
       grantTool: () => undefined,
       subscribe: (listener: (event: AgentControllerEvent) => void) => {
         state.listeners.add(listener);
+
         return () => state.listeners.delete(listener);
       },
       sendMessage: () => {
         state.turnCount += 1;
         state.activeTurnId = TurnId.make(`turn-${state.turnCount}`);
         const response = state.queuedResponses.shift() ?? { events: [] };
+
         return new Promise<void>((resolve) => {
           state.finishActiveTurn = resolve;
           void runTurn(state, response).then(resolve);
@@ -273,6 +296,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
           decision: DECISION_BY_RESPONSE[decision] ?? "decline",
         });
         const index = state.pendingApprovalToolCallIds.indexOf(toolCallId);
+
         if (index >= 0) state.pendingApprovalToolCallIds.splice(index, 1);
         const resolve = state.resolvePendingApproval;
         state.resolvePendingApproval = undefined;
@@ -286,6 +310,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
       rebuildConversation: async (threadId: string, messages: ReadonlyArray<MastraDBMessage>) => {
         const previous = transcripts.get(threadId);
         transcripts.set(threadId, messages);
+
         return async () => {
           if (previous === undefined) transcripts.delete(threadId);
           else transcripts.set(threadId, previous);
@@ -299,6 +324,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
           readonly tags?: { readonly projectPath?: string };
         }) => {
           const threadId = ThreadId.make(String(input.resourceId ?? input.threadId));
+
           const state: SessionState = {
             threadId,
             cwd: input.tags?.projectPath,
@@ -316,9 +342,11 @@ export function makeTestMastraHarness(): TestMastraHarness {
             assistantText: "",
             resolvePendingApproval: undefined,
           };
+
           modelSwitchesByThread.set(String(threadId), state.modelSwitches);
           sessionStartCount += 1;
           sessions.set(String(threadId), state);
+
           return createSession(state);
         },
         deleteSession: async ({ resourceId }: { readonly resourceId?: string }) =>

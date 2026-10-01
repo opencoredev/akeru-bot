@@ -16,6 +16,7 @@ describe("ProviderRuntimeIngestion", () => {
   afterEach(testScope.dispose);
   it("opens and resolves bot inbox approval incidents from runtime requests", async () => {
     const harness = await createHarness({ botOwned: true, threadTitle: "Morning research" });
+
     const base = {
       provider: ProviderDriverKind.make("codex"),
       threadId: asThreadId("thread-1"),
@@ -106,26 +107,31 @@ describe("ProviderRuntimeIngestion", () => {
     const requested = thread?.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-request-opened",
     );
+
     const requestedPayload =
       requested?.payload && typeof requested.payload === "object"
         ? (requested.payload as Record<string, unknown>)
         : undefined;
+
     expect(requestedPayload?.requestKind).toBe("command");
     expect(requestedPayload?.requestType).toBe("command_execution_approval");
 
     const resolved = thread?.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-request-resolved",
     );
+
     const resolvedPayload =
       resolved?.payload && typeof resolved.payload === "object"
         ? (resolved.payload as Record<string, unknown>)
         : undefined;
+
     expect(resolvedPayload?.requestKind).toBe("command");
     expect(resolvedPayload?.requestType).toBe("command_execution_approval");
   });
 
   it("removes a pending approval after a lifecycle cancellation", async () => {
     const harness = await createHarness();
+
     const base = {
       provider: ProviderDriverKind.make("codex"),
       threadId: asThreadId("thread-1"),
@@ -155,12 +161,14 @@ describe("ProviderRuntimeIngestion", () => {
         action: "send",
       },
     });
+
     const openedThread = await waitForThread(harness, (thread) =>
       thread.activities.some(
         (activity: ProviderRuntimeTestActivity) =>
           activity.id === "evt-approval-cancel-opened" && activity.kind === "approval.requested",
       ),
     );
+
     expect(
       openedThread.activities.some(
         (activity: ProviderRuntimeTestActivity) => activity.id === "evt-approval-cancel-resolved",
@@ -188,9 +196,11 @@ describe("ProviderRuntimeIngestion", () => {
           activity.id === "evt-approval-cancel-resolved" && activity.kind === "approval.resolved",
       ),
     );
+
     const resolved = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-approval-cancel-resolved",
     );
+
     expect(resolved?.payload).toMatchObject({
       actor: "system",
       target: "gmail_send_message",
@@ -257,15 +267,18 @@ describe("ProviderRuntimeIngestion", () => {
     const requested = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-user-input-requested",
     );
+
     expect(requested?.kind).toBe("user-input.requested");
 
     const resolved = thread.activities.find(
       (activity: ProviderRuntimeTestActivity) => activity.id === "evt-user-input-resolved",
     );
+
     const resolvedPayload =
       resolved?.payload && typeof resolved.payload === "object"
         ? (resolved.payload as Record<string, unknown>)
         : undefined;
+
     expect(resolved?.kind).toBe("user-input.resolved");
     expect(resolvedPayload?.answers).toEqual({
       sandbox_mode: "workspace-write",

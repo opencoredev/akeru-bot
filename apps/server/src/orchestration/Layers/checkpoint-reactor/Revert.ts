@@ -6,6 +6,7 @@ import { checkpointRefForThreadTurn } from "../../../checkpointing/Utils.ts";
 import type { createContext } from "./Context.ts";
 import type { createFailures } from "./Failures.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
 export function createRevert({
   resolveThreadCheckpointState,
   appendRevertFailureActivity,
@@ -34,6 +35,7 @@ export function createRevert({
     const now = DateTime.formatIso(yield* DateTime.now);
 
     const thread = yield* resolveThreadCheckpointState(event.payload.threadId);
+
     if (!thread) {
       yield* appendRevertFailureActivity({
         threadId: event.payload.threadId,
@@ -41,10 +43,12 @@ export function createRevert({
         detail: "Chat was not found.",
         createdAt: now,
       }).pipe(Effect.catch(() => Effect.void));
+
       return;
     }
 
     const sessionRuntime = yield* resolveSessionRuntimeForThread(event.payload.threadId);
+
     if (Option.isNone(sessionRuntime)) {
       yield* appendRevertFailureActivity({
         threadId: event.payload.threadId,
@@ -52,8 +56,10 @@ export function createRevert({
         detail: "No active provider session with a workspace is bound to this chat.",
         createdAt: now,
       }).pipe(Effect.catch(() => Effect.void));
+
       return;
     }
+
     if (!(yield* checkpointStore.isGitRepository(sessionRuntime.value.cwd))) {
       yield* appendRevertFailureActivity({
         threadId: event.payload.threadId,
@@ -61,6 +67,7 @@ export function createRevert({
         detail: "Checkpoints are unavailable because this project is not a git repository.",
         createdAt: now,
       }).pipe(Effect.catch(() => Effect.void));
+
       return;
     }
 
@@ -76,6 +83,7 @@ export function createRevert({
         detail: `Checkpoint turn count ${event.payload.turnCount} exceeds current turn count ${currentTurnCount}.`,
         createdAt: now,
       }).pipe(Effect.catch(() => Effect.void));
+
       return;
     }
 
@@ -93,6 +101,7 @@ export function createRevert({
         detail: `Checkpoint ref for turn ${event.payload.turnCount} is unavailable in read model.`,
         createdAt: now,
       }).pipe(Effect.catch(() => Effect.void));
+
       return;
     }
 
@@ -101,6 +110,7 @@ export function createRevert({
       checkpointRef: targetCheckpointRef,
       fallbackToHead: event.payload.turnCount === 0,
     });
+
     if (!restored) {
       yield* appendRevertFailureActivity({
         threadId: event.payload.threadId,
@@ -108,6 +118,7 @@ export function createRevert({
         detail: `Filesystem checkpoint is unavailable for turn ${event.payload.turnCount}.`,
         createdAt: now,
       }).pipe(Effect.catch(() => Effect.void));
+
       return;
     }
 
@@ -116,6 +127,7 @@ export function createRevert({
     yield* workspaceEntries.refresh(sessionRuntime.value.cwd);
 
     const rolledBackTurns = Math.max(0, currentTurnCount - event.payload.turnCount);
+
     if (rolledBackTurns > 0) {
       yield* agentController.rollbackConversation({
         threadId: sessionRuntime.value.threadId,
@@ -124,6 +136,7 @@ export function createRevert({
     }
 
     const staleCheckpointRefs: Array<CheckpointRef> = [];
+
     for (const checkpoint of thread.checkpoints) {
       if (checkpoint.checkpointTurnCount > event.payload.turnCount) {
         staleCheckpointRefs.push(checkpoint.checkpointRef);
@@ -157,5 +170,6 @@ export function createRevert({
         Effect.asVoid,
       );
   });
+
   return { handleRevertRequested };
 }

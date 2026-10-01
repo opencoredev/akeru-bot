@@ -8,6 +8,7 @@ import {
 } from "./Definitions.ts";
 
 import { collectThreadAttachmentRelativePaths } from "./AttachmentCleanup.ts";
+
 export function createMessages({
   projectionThreadMessageRepository,
   projectionTurnRepository,
@@ -29,6 +30,7 @@ export function createMessages({
         yield* projectionThreadMessageRepository.deleteByThreadId({
           threadId: event.payload.threadId,
         });
+
         return;
 
       case "thread.message-sent": {
@@ -48,18 +50,22 @@ export function createMessages({
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
 
         const existingMessage = yield* projectionThreadMessageRepository.getByMessageId({
           messageId: event.payload.messageId,
         });
+
         const previousMessage = Option.getOrUndefined(existingMessage);
+
         const nextText = Option.match(existingMessage, {
           onNone: () => event.payload.text,
           onSome: (message) =>
             event.payload.text.length === 0 ? message.text : event.payload.text,
         });
+
         const nextAttachments = event.payload.attachments ?? previousMessage?.attachments;
         yield* projectionThreadMessageRepository.upsert({
           messageId: event.payload.messageId,
@@ -79,6 +85,7 @@ export function createMessages({
           createdAt: previousMessage?.createdAt ?? event.payload.createdAt,
           updatedAt: event.payload.updatedAt,
         });
+
         return;
       }
 
@@ -86,12 +93,14 @@ export function createMessages({
         const existingMessage = yield* projectionThreadMessageRepository.getByMessageId({
           messageId: event.payload.messageId,
         });
+
         if (Option.isNone(existingMessage)) return;
         yield* projectionThreadMessageRepository.upsert({
           ...existingMessage.value,
           channelDelivery: event.payload.delivery,
           updatedAt: event.payload.updatedAt,
         });
+
         return;
       }
 
@@ -99,13 +108,16 @@ export function createMessages({
         const existingMessage = yield* projectionThreadMessageRepository.getByMessageId({
           messageId: event.payload.messageId,
         });
+
         if (Option.isNone(existingMessage)) return;
+
         const withoutReaction = (existingMessage.value.reactions ?? []).filter(
           (reaction) =>
             reaction.botId !== event.payload.botId ||
             reaction.personId !== event.payload.personId ||
             reaction.emoji !== event.payload.emoji,
         );
+
         yield* projectionThreadMessageRepository.upsert({
           ...existingMessage.value,
           reactions: event.payload.present
@@ -121,6 +133,7 @@ export function createMessages({
             : withoutReaction,
           updatedAt: event.payload.updatedAt,
         });
+
         return;
       }
 
@@ -128,6 +141,7 @@ export function createMessages({
         const existingRows = yield* projectionThreadMessageRepository.listByThreadId({
           threadId: event.payload.threadId,
         });
+
         if (existingRows.length === 0) {
           return;
         }
@@ -135,11 +149,13 @@ export function createMessages({
         const existingTurns = yield* projectionTurnRepository.listByThreadId({
           threadId: event.payload.threadId,
         });
+
         const keptRows = retainProjectionMessagesAfterRevert(
           existingRows,
           existingTurns,
           event.payload.turnCount,
         );
+
         if (keptRows.length === existingRows.length) {
           return;
         }
@@ -154,6 +170,7 @@ export function createMessages({
           event.payload.threadId,
           collectThreadAttachmentRelativePaths(event.payload.threadId, keptRows),
         );
+
         return;
       }
 
@@ -170,6 +187,7 @@ export function createMessages({
         yield* projectionThreadProposedPlanRepository.deleteByThreadId({
           threadId: event.payload.threadId,
         });
+
         return;
 
       case "thread.proposed-plan-upserted":
@@ -183,12 +201,14 @@ export function createMessages({
           createdAt: event.payload.proposedPlan.createdAt,
           updatedAt: event.payload.proposedPlan.updatedAt,
         });
+
         return;
 
       case "thread.reverted": {
         const existingRows = yield* projectionThreadProposedPlanRepository.listByThreadId({
           threadId: event.payload.threadId,
         });
+
         if (existingRows.length === 0) {
           return;
         }
@@ -196,11 +216,13 @@ export function createMessages({
         const existingTurns = yield* projectionTurnRepository.listByThreadId({
           threadId: event.payload.threadId,
         });
+
         const keptRows = retainProjectionProposedPlansAfterRevert(
           existingRows,
           existingTurns,
           event.payload.turnCount,
         );
+
         if (keptRows.length === existingRows.length) {
           return;
         }
@@ -211,6 +233,7 @@ export function createMessages({
         yield* Effect.forEach(keptRows, projectionThreadProposedPlanRepository.upsert, {
           concurrency: 1,
         }).pipe(Effect.asVoid);
+
         return;
       }
 
@@ -218,5 +241,6 @@ export function createMessages({
         return;
     }
   });
+
   return { applyThreadMessagesProjection, applyThreadProposedPlansProjection };
 }

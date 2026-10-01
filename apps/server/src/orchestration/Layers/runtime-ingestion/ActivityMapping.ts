@@ -21,17 +21,21 @@ export function runtimeEventToActivities(
 ): ReadonlyArray<OrchestrationThreadActivity> {
   const maybeSequence = (() => {
     const eventWithSequence = event as ProviderRuntimeEvent & { sessionSequence?: number };
+
     return eventWithSequence.sessionSequence !== undefined
       ? { sequence: eventWithSequence.sessionSequence }
       : {};
   })();
+
   switch (event.type) {
     case "request.opened": {
       if (event.payload.requestType === "tool_user_input") {
         return [];
       }
+
       const requestKind = requestKindFromCanonicalRequestType(event.payload.requestType);
       const approvalArgs = boundedApprovalArgs(event.payload.toolName, event.payload.args);
+
       return [
         {
           id: event.eventId,
@@ -71,7 +75,9 @@ export function runtimeEventToActivities(
       if (event.payload.requestType === "tool_user_input") {
         return [];
       }
+
       const requestKind = requestKindFromCanonicalRequestType(event.payload.requestType);
+
       return [
         {
           id: event.eventId,
@@ -97,6 +103,7 @@ export function runtimeEventToActivities(
 
     case "model.rerouted": {
       const { fromModel, toModel, reason } = event.payload;
+
       return [
         {
           id: event.eventId,
@@ -271,16 +278,19 @@ export function runtimeEventToActivities(
       delete identityLinkage.typedUsage;
       delete identityLinkage.status;
       delete identityLinkage.error;
+
       const title =
         event.payload.description.trim().length > 0
           ? { title: truncateDetail(event.payload.description, 120) }
           : {};
+
       const hasProgressState =
         event.payload.typedUsage === undefined ||
         event.payload.summary !== undefined ||
         event.payload.lastToolName !== undefined ||
         event.payload.status !== undefined ||
         event.payload.error !== undefined;
+
       return [
         ...(hasProgressState
           ? [
@@ -376,6 +386,7 @@ export function runtimeEventToActivities(
       if (event.payload.taskId === undefined) {
         return [];
       }
+
       return [
         {
           // Same stable-id treatment as task.progress: a heartbeat is
@@ -405,6 +416,7 @@ export function runtimeEventToActivities(
 
     case "tool.receipt": {
       if (event.payload.phase !== "progress" || !event.payload.authorizationUrl) return [];
+
       return [
         {
           id: event.eventId,
@@ -481,6 +493,7 @@ export function runtimeEventToActivities(
 
     case "thread.token-usage.updated": {
       const payload = buildContextWindowActivityPayload(event);
+
       if (!payload) {
         return [];
       }
@@ -503,6 +516,7 @@ export function runtimeEventToActivities(
       if (!isToolLifecycleItemType(event.payload.itemType)) {
         return [];
       }
+
       // A streaming update's `data` carries the full tool output accumulated
       // so far (adapters merge state forward), and a new activity is emitted
       // per chunk, so persisting `data` verbatim writes O(N²) bytes per tool
@@ -538,6 +552,7 @@ export function runtimeEventToActivities(
       if (!isToolLifecycleItemType(event.payload.itemType)) {
         return [];
       }
+
       return [
         {
           id: event.eventId,
@@ -566,6 +581,7 @@ export function runtimeEventToActivities(
       if (!isToolLifecycleItemType(event.payload.itemType)) {
         return [];
       }
+
       return [
         {
           id: event.eventId,

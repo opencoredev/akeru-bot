@@ -122,6 +122,7 @@ describe("ProviderCommandReactor", () => {
       const approvalReachedAdapter = yield* Deferred.make<void>();
       const interruptReachedAdapter = yield* Deferred.make<void>();
       const threadB = ThreadId.make("thread-2");
+
       const harness = yield* Effect.promise(() =>
         createHarness({
           startSessionEffect: (session) =>
@@ -144,6 +145,7 @@ describe("ProviderCommandReactor", () => {
               : Effect.void,
         }),
       );
+
       const now = "2026-01-01T00:00:00.000Z";
 
       yield* harness.engine.dispatch({

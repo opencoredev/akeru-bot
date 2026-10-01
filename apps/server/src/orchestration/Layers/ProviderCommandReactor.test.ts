@@ -31,6 +31,7 @@ describe("ProviderCommandReactor", () => {
       respondingBotId: BotId.make("bot-specialist"),
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
     };
+
     expect(resolveControllerBotId(shell)).toBe("bot-specialist");
     expect("messages" in shell).toBe(false);
     expect("activities" in shell).toBe(false);

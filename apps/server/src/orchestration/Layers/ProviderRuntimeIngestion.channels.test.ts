@@ -30,6 +30,7 @@ describe("ProviderRuntimeIngestion", () => {
       const harness = await createHarness({ botOwned: true });
       const signals = new Set<string>();
       const adds: string[] = [];
+
       const channel = await harness.connectChannel(async () => {}, provider, {
         add: async (_thread, _message, emoji) => {
           signals.add(emoji);
@@ -39,24 +40,30 @@ describe("ProviderRuntimeIngestion", () => {
           signals.delete(emoji);
         },
       });
+
       const message = {
         externalThreadId: `${provider}:waiting`,
         externalMessageId: "request-waiting",
         text: "Deploy it",
       };
+
       await channel.inbound(message);
+
       const threadId = ChannelRuntime.channelThreadId(
         BotId.make("bot-akeru"),
         asProjectId("project-1"),
         provider,
         message.externalThreadId,
       );
+
       const turnId = asTurnId("waiting-turn");
+
       const base = {
         provider: ProviderDriverKind.make("codex"),
         threadId,
         createdAt: "2026-01-01T00:00:02.000Z",
       };
+
       harness.emit({
         ...base,
         turnId,
@@ -130,6 +137,7 @@ describe("ProviderRuntimeIngestion", () => {
     async (state) => {
       const harness = await createHarness({ botOwned: true });
       const signals = new Set<string>();
+
       const channel = await harness.connectChannel(async () => {}, "slack", {
         add: async (_thread, _message, emoji) => {
           signals.add(emoji);
@@ -138,25 +146,32 @@ describe("ProviderRuntimeIngestion", () => {
           signals.delete(emoji);
         },
       });
+
       const markWaiting = vi.spyOn(await harness.channels(), "markChannelTurnWaiting");
+
       const message = {
         externalThreadId: "slack:session-ended",
         externalMessageId: "request-ended",
         text: "Deploy it",
       };
+
       await channel.inbound(message);
+
       const threadId = ChannelRuntime.channelThreadId(
         BotId.make("bot-akeru"),
         asProjectId("project-1"),
         "slack",
         message.externalThreadId,
       );
+
       const turnId = asTurnId("ended-turn");
+
       const base = {
         provider: ProviderDriverKind.make("codex"),
         threadId,
         createdAt: "2026-01-01T00:00:02.000Z",
       };
+
       harness.emit({
         ...base,
         turnId,
@@ -282,6 +297,7 @@ describe("ProviderRuntimeIngestion", () => {
           updatedAt: createdAt,
         },
       });
+
       for (const [threadId, turnId, text] of [
         [ownerThreadId, ownerTurnId, "Owner answer"],
         [childThreadId, childTurnId, "Child answer"],
@@ -308,12 +324,14 @@ describe("ProviderRuntimeIngestion", () => {
           runtimeMode: "approval-required",
           createdAt,
         });
+
         const base = {
           provider: ProviderDriverKind.make("codex"),
           threadId,
           turnId,
           createdAt: "2026-01-01T00:00:02.000Z",
         };
+
         harness.emit({
           ...base,
           type: "turn.started",
@@ -336,6 +354,7 @@ describe("ProviderRuntimeIngestion", () => {
         });
         await harness.drain();
       }
+
       const complete = (
         threadId: ThreadId,
         turnId: TurnId,
@@ -352,12 +371,15 @@ describe("ProviderRuntimeIngestion", () => {
           payload: { state },
         });
       };
+
       complete(childThreadId, childTurnId, childState, "child");
       await harness.drain();
       expect(posts).toEqual([]);
+
       const child = (await harness.readModel()).threads.find(
         (thread) => thread.id === childThreadId,
       );
+
       expect(child?.latestTurn?.state).toBe(childState === "failed" ? "error" : "completed");
       complete(ownerThreadId, ownerTurnId, ownerState, "owner");
       await harness.drain();
@@ -370,8 +392,10 @@ describe("ProviderRuntimeIngestion", () => {
         requestMessageId: asMessageId("request-owner-turn"),
         assistantMessageId: asMessageId("assistant:item-owner-turn"),
       });
+
       const expectedPosts =
         ownerState === "completed" ? [{ target: "channel-owner", text: "Owner answer" }] : [];
+
       expect(posts).toEqual(expectedPosts);
       complete(childThreadId, childTurnId, childState, "child-replay");
       complete(ownerThreadId, ownerTurnId, ownerState, "owner-replay");

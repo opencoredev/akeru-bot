@@ -268,6 +268,7 @@ describe("CheckpointReactor", () => {
     const thread = await waitForThread(harness, (entry) =>
       entry.activities.some((activity) => activity.kind === "checkpoint.revert.failed"),
     );
+
     expect(thread.checkpoints).toHaveLength(2);
     expect(harness.provider.rollbackConversation).toHaveBeenCalledTimes(1);
   });
@@ -289,6 +290,7 @@ describe("CheckpointReactor", () => {
     const thread = await waitForThread(harness, (entry) =>
       entry.activities.some((activity) => activity.kind === "checkpoint.revert.failed"),
     );
+
     expect(thread.checkpoints).toHaveLength(2);
     expect(harness.provider.rollbackConversation).toHaveBeenCalledTimes(1);
   });

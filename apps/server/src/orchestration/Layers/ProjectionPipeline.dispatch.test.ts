@@ -47,6 +47,7 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
         FROM projection_projects
         WHERE project_id = 'project-live'
       `;
+
       assert.deepEqual(projectRows, [{ title: "Live Project", scriptsJson: "[]" }]);
 
       const projectorRows = yield* sql<{ readonly lastAppliedSequence: number }>`
@@ -55,6 +56,7 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
         FROM projection_state
         WHERE projector = 'projection.projects'
       `;
+
       assert.deepEqual(projectorRows, [{ lastAppliedSequence: 1 }]);
     }),
   );
@@ -110,6 +112,7 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
         FROM projection_projects
         WHERE project_id = 'project-scripts'
       `;
+
       assert.deepEqual(projectRows, [
         {
           scriptsJson:
@@ -202,6 +205,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-skip
             updatedAt: now,
           },
         });
+
         // Only the projects projector handles this event; every other projector
         // must skip it yet still record the sequence.
         const lastEvent = yield* appendAndProject({
@@ -233,11 +237,13 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-skip
           FROM projection_state
           ORDER BY projector ASC
         `;
+
         const stateRows = yield* readStateRows;
         assert.deepEqual(
           stateRows.map((row) => row.projector),
           Object.values(ORCHESTRATION_PROJECTOR_NAMES).toSorted(),
         );
+
         for (const row of stateRows) {
           assert.equal(row.lastAppliedSequence, lastEvent.sequence);
           assert.equal(row.updatedAt, later);
@@ -254,6 +260,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-skip
             SELECT title FROM projection_threads WHERE thread_id = 'thread-skip'
           `,
         });
+
         const rows = yield* readRows;
         assert.deepEqual(rows, {
           projects: [{ title: "Renamed Project" }],

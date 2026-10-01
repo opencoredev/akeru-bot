@@ -16,6 +16,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
       const initial = createEmptyReadModel(now);
+
       const withProject = yield* projectEvent(initial, {
         sequence: 1,
         eventId: asEventId("evt-project-create"),
@@ -37,6 +38,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
           updatedAt: now,
         },
       });
+
       const readModel = yield* projectEvent(withProject, {
         sequence: 2,
         eventId: asEventId("evt-thread-create"),
@@ -77,9 +79,11 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
       });
 
       const singleResult = Array.isArray(result) ? null : result;
+
       if (singleResult === null) {
         throw new Error("Expected a single runtime-mode-set event.");
       }
+
       expect(singleResult).toMatchObject({
         type: "thread.runtime-mode-set",
         payload: {
@@ -94,6 +98,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
       const initial = createEmptyReadModel(now);
+
       const withProject = yield* projectEvent(initial, {
         sequence: 1,
         eventId: asEventId("evt-project-create"),
@@ -115,6 +120,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
           updatedAt: now,
         },
       });
+
       const readModel = yield* projectEvent(withProject, {
         sequence: 2,
         eventId: asEventId("evt-thread-create"),
@@ -155,9 +161,11 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
       });
 
       const singleResult = Array.isArray(result) ? null : result;
+
       if (singleResult === null) {
         throw new Error("Expected a single interaction-mode-set event.");
       }
+
       expect(singleResult).toMatchObject({
         type: "thread.interaction-mode-set",
         payload: {

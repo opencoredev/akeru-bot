@@ -59,6 +59,7 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
       yield* requireBotNotArchived({ readModel, command, botId: delegation.childBotId });
       yield* requireThread({ readModel, command, threadId: delegation.parentThreadId });
       const createdChildThreadId = delegationChildThreadId(delegation.phase);
+
       if (createdChildThreadId !== null) {
         yield* requireThread({ readModel, command, threadId: createdChildThreadId });
       }
@@ -78,6 +79,7 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
               command,
               delegationId: delegation.parentDelegationId,
             });
+
       if (parentDelegation !== null && parentDelegation.childBotId !== delegation.parentBotId) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
@@ -86,10 +88,12 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
       }
 
       const expectedDepth = parentDelegation === null ? 1 : parentDelegation.depth + 1;
+
       const expectedAncestorBotIds =
         parentDelegation === null
           ? [delegation.parentBotId]
           : [...parentDelegation.ancestorBotIds, delegation.parentBotId];
+
       if (
         expectedDepth > AKERU_DELEGATION_MAX_DEPTH ||
         delegation.depth !== expectedDepth ||
@@ -100,6 +104,7 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
           detail: `Delegation '${delegation.delegationId}' has an invalid ancestor chain or depth.`,
         });
       }
+
       if (delegation.ancestorBotIds.includes(delegation.childBotId)) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
@@ -112,12 +117,14 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
           candidate.parentBotId === delegation.parentBotId &&
           !TERMINAL_DELEGATION_PHASES.has(candidate.phase._tag),
       ).length;
+
       if (activeDelegationCount >= AKERU_DELEGATION_MAX_CONCURRENCY) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Bot '${delegation.parentBotId}' already has ${activeDelegationCount} active delegations.`,
         });
       }
+
       if (delegation.phase._tag !== "Queued") {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
@@ -136,23 +143,28 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
         payload: { delegation },
       };
     }
+
     case "delegation.state.set": {
       const current = yield* requireDelegation({
         readModel,
         command,
         delegationId: command.delegation.delegationId,
       });
+
       const next = command.delegation;
+
       if (!hasSameDelegationOwnership(current, next)) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Delegation '${next.delegationId}' ownership and access fields are immutable.`,
         });
       }
+
       const currentChildThreadId = delegationChildThreadId(current.phase);
       const currentChildTurnId = delegationChildTurnId(current.phase);
       const nextChildThreadId = delegationChildThreadId(next.phase);
       const nextChildTurnId = delegationChildTurnId(next.phase);
+
       if (
         (currentChildThreadId !== null && nextChildThreadId !== currentChildThreadId) ||
         (currentChildTurnId !== null && nextChildTurnId !== currentChildTurnId)
@@ -162,6 +174,7 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
           detail: `Delegation '${next.delegationId}' child ownership is immutable once assigned.`,
         });
       }
+
       if (
         next.phase._tag === "Completed" &&
         (next.phase.result.childThreadId !== next.phase.childThreadId ||
@@ -172,19 +185,23 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
           detail: `Delegation '${next.delegationId}' result must come from its child thread and turn.`,
         });
       }
+
       if (nextChildThreadId !== null) {
         yield* requireThread({ readModel, command, threadId: nextChildThreadId });
       }
+
       if (!(Date.parse(next.updatedAt) >= Date.parse(current.updatedAt))) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Delegation '${next.delegationId}' cannot move updatedAt backward.`,
         });
       }
+
       if (current.phase._tag === next.phase._tag) {
         const assignsChildOwnership =
           (currentChildThreadId === null && nextChildThreadId !== null) ||
           (currentChildTurnId === null && nextChildTurnId !== null);
+
         const changesOnlyChildOwnership = NodeUtil.isDeepStrictEqual(current, {
           ...next,
           phase:
@@ -197,6 +214,7 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
                 },
           updatedAt: current.updatedAt,
         });
+
         // CheckAgent delivers a finished result by stamping acknowledgedAt.
         // That stamp is the only other same-phase change allowed.
         const acknowledgesOnly =
@@ -207,10 +225,12 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
             acknowledgeAkeruDelegation(current, next.phase.acknowledgedAt),
             next,
           );
+
         // A turn start that fails before its provider reads the results
         // hands them back, clearing only the stamp.
         const released = releaseAkeruDelegationAcknowledgement(current);
         const releasesOnly = released !== current && NodeUtil.isDeepStrictEqual(released, next);
+
         if (
           !NodeUtil.isDeepStrictEqual(current, next) &&
           !acknowledgesOnly &&
@@ -228,6 +248,7 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
           detail: `Delegation '${next.delegationId}' cannot transition from '${current.phase._tag}' to '${next.phase._tag}'.`,
         });
       }
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "delegation",
@@ -239,16 +260,19 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
         payload: { delegation: next },
       };
     }
+
     case "delegation.cancel": {
       const current = yield* requireDelegation({
         readModel,
         command,
         delegationId: command.delegationId,
       });
+
       const canceledAt =
         Date.parse(command.createdAt) >= Date.parse(current.updatedAt)
           ? command.createdAt
           : current.updatedAt;
+
       const delegation: AkeruDelegationRecord = command.keep
         ? { ...current, keep: true, updatedAt: canceledAt }
         : TERMINAL_DELEGATION_PHASES.has(current.phase._tag)
@@ -277,18 +301,21 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
         payload: { delegation },
       };
     }
+
     case "delegation.retry": {
       const original = yield* requireDelegation({
         readModel,
         command,
         delegationId: command.delegationId,
       });
+
       if (original.phase._tag !== "Failed" && original.phase._tag !== "Canceled") {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: "Only failed or canceled bot work can be retried.",
         });
       }
+
       if (
         readModel.delegations.some(
           (candidate) => candidate.retryOfDelegationId === original.delegationId,
@@ -299,14 +326,17 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
           detail: "This bot work was already retried. Use the newer card instead.",
         });
       }
+
       yield* requireThread({ readModel, command, threadId: original.parentThreadId });
       yield* requireBotNotArchived({ readModel, command, botId: original.parentBotId });
       yield* requireBotNotArchived({ readModel, command, botId: original.childBotId });
+
       const activeDelegationCount = readModel.delegations.filter(
         (candidate) =>
           candidate.parentBotId === original.parentBotId &&
           !TERMINAL_DELEGATION_PHASES.has(candidate.phase._tag),
       ).length;
+
       if (activeDelegationCount >= AKERU_DELEGATION_MAX_CONCURRENCY) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,

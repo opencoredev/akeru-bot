@@ -18,24 +18,30 @@ export function createGroups({
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         case "group.renamed": {
           const existing = yield* projectionGroupRepository.getById({
             groupId: event.payload.groupId,
           });
+
           if (Option.isNone(existing)) return;
           yield* projectionGroupRepository.upsert({
             ...existing.value,
             name: event.payload.name,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
+
         case "group.member-assigned": {
           const existing = yield* projectionGroupRepository.getById({
             groupId: event.payload.groupId,
           });
+
           if (Option.isNone(existing)) return;
+
           const members = existing.value.members.some(
             (member) => isGroupBotMember(member) && member.botId === event.payload.member.botId,
           )
@@ -45,6 +51,7 @@ export function createGroups({
                   : member,
               )
             : [...existing.value.members, event.payload.member];
+
           yield* projectionGroupRepository.upsert({
             ...existing.value,
             bossBotId:
@@ -54,12 +61,15 @@ export function createGroups({
             members,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
+
         case "group.member-unassigned": {
           const existing = yield* projectionGroupRepository.getById({
             groupId: event.payload.groupId,
           });
+
           if (Option.isNone(existing)) return;
           yield* projectionGroupRepository.upsert({
             ...existing.value,
@@ -68,13 +78,17 @@ export function createGroups({
             ),
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
+
         case "group.person-assigned": {
           const existing = yield* projectionGroupRepository.getById({
             groupId: event.payload.groupId,
           });
+
           if (Option.isNone(existing)) return;
+
           const members = existing.value.members.some(
             (member) =>
               member.kind === "person" && member.personId === event.payload.person.personId,
@@ -85,17 +99,21 @@ export function createGroups({
                   : member,
               )
             : [...existing.value.members, event.payload.person];
+
           yield* projectionGroupRepository.upsert({
             ...existing.value,
             members,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
+
         case "group.person-unassigned": {
           const existing = yield* projectionGroupRepository.getById({
             groupId: event.payload.groupId,
           });
+
           if (Option.isNone(existing)) return;
           yield* projectionGroupRepository.upsert({
             ...existing.value,
@@ -104,21 +122,27 @@ export function createGroups({
             ),
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
+
         case "group.boss-set": {
           const existing = yield* projectionGroupRepository.getById({
             groupId: event.payload.groupId,
           });
+
           if (Option.isNone(existing)) return;
+
           let members = existing.value.members.filter(
             (member) => !isGroupBotMember(member) || member.botId !== event.payload.bossBotId,
           );
+
           if (event.payload.previousBossBotId !== null) {
             members = members.filter(
               (member) =>
                 !isGroupBotMember(member) || member.botId !== event.payload.previousBossBotId,
             );
+
             if (event.payload.previousBossRole === "specialist") {
               members = [
                 ...members,
@@ -130,21 +154,26 @@ export function createGroups({
               ];
             }
           }
+
           yield* projectionGroupRepository.upsert({
             ...existing.value,
             bossBotId: event.payload.bossBotId,
             members: [...members, { kind: "bot", botId: event.payload.bossBotId, role: "boss" }],
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
+
         case "group.deleted":
           yield* projectionGroupRepository.deleteById({ groupId: event.payload.groupId });
+
           return;
         default:
           return;
       }
     },
   );
+
   return { applyGroupsProjection };
 }

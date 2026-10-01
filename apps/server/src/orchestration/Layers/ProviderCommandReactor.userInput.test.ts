@@ -98,6 +98,7 @@ describe("ProviderCommandReactor", () => {
     const failureActivity = thread?.activities.find(
       (activity) => activity.kind === "provider.user-input.respond.failed",
     );
+
     expect(failureActivity).toBeDefined();
     expect(failureActivity?.payload).toMatchObject({
       requestId: "user-input-request-1",
@@ -111,6 +112,7 @@ describe("ProviderCommandReactor", () => {
         activity.payload !== null &&
         (activity.payload as Record<string, unknown>).requestId === "user-input-request-1",
     );
+
     expect(resolvedActivity).toBeUndefined();
     expect(thread?.messages.some((message) => message.role === "assistant")).toBe(false);
     expect(thread?.session).toMatchObject({ status: "running", lastError: null });
@@ -203,6 +205,7 @@ describe("ProviderCommandReactor", () => {
     const failureActivity = thread?.activities.find(
       (activity) => activity.kind === "provider.user-input.respond.failed",
     );
+
     expect(failureActivity).toBeDefined();
     expect(failureActivity?.payload).toMatchObject({
       requestId: "user-input-request-1",
@@ -216,6 +219,7 @@ describe("ProviderCommandReactor", () => {
         activity.payload !== null &&
         (activity.payload as Record<string, unknown>).requestId === "user-input-request-1",
     );
+
     expect(resolvedActivity).toBeUndefined();
     expect(thread?.messages.some((message) => message.role === "assistant")).toBe(false);
     expect(thread?.session).toMatchObject({ status: "running", lastError: null });
@@ -307,6 +311,7 @@ describe("ProviderCommandReactor", () => {
     const failureActivity = thread?.activities.find(
       (activity) => activity.kind === "provider.user-input.respond.failed",
     );
+
     expect(failureActivity).toBeDefined();
     expect(failureActivity?.payload).toMatchObject({
       requestId: "user-input-request-1",
@@ -320,6 +325,7 @@ describe("ProviderCommandReactor", () => {
         activity.payload !== null &&
         (activity.payload as Record<string, unknown>).requestId === "user-input-request-1",
     );
+
     expect(resolvedActivity).toBeUndefined();
     expect(failureActivity?.payload).toMatchObject({
       detail: expect.stringContaining("Stale pending user-input request"),

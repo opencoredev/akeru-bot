@@ -145,10 +145,13 @@ export const decideOne = Effect.fn("decideDelegationTestCommand")(function* (
 ) {
   const decided = yield* decideOrchestrationCommand({ readModel, command });
   const event = Array.isArray(decided) ? decided[0] : decided;
+
   if (event === undefined) throw new Error("Expected one event");
+
   if (event.type !== "delegation.created" && event.type !== "delegation.updated") {
     throw new Error(`Expected a delegation event, received '${event.type}'`);
   }
+
   return event as PlannedDelegationEvent;
 });
 

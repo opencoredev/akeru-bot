@@ -40,6 +40,7 @@ describe("ProviderRuntimeIngestion", () => {
       harness,
       (entry) => entry.session?.status === "running" && entry.session?.activeTurnId === null,
     );
+
     expect(thread.session?.status).toBe("running");
     expect(thread.session?.lastError).toBeNull();
 
@@ -148,6 +149,7 @@ describe("ProviderRuntimeIngestion", () => {
         entry.session?.lastError === null,
       10_000,
     );
+
     expect(thread.session?.status).toBe("ready");
     expect(thread.session?.activeTurnId).toBeNull();
     expect(thread.session?.lastError).toBeNull();
@@ -206,6 +208,7 @@ describe("ProviderRuntimeIngestion", () => {
             (entry) => entry.session?.status === "starting" && entry.session.activeTurnId === null,
           ),
         );
+
         expect(thread.session?.status).toBe("starting");
         expect(thread.session?.activeTurnId).toBeNull();
 
@@ -324,9 +327,11 @@ describe("ProviderRuntimeIngestion", () => {
       });
 
       yield* Effect.promise(() => harness.drain());
+
       const thread = (yield* Effect.promise(() => harness.readModel())).threads.find(
         (entry) => entry.id === threadId,
       );
+
       expect(thread?.session?.status).toBe("stopped");
       expect(thread?.session?.activeTurnId).toBeNull();
     }),

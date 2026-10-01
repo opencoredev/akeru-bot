@@ -29,9 +29,11 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel(null),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events).toHaveLength(1);
       expect(events[0]?.type).toBe("thread.settled");
+
       if (events[0]?.type === "thread.settled") {
         expect(events[0].payload.settledAt).toBe(events[0].payload.updatedAt);
       }
@@ -46,9 +48,11 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel("settled"),
       });
+
       const reEmitEvents = Array.isArray(reEmit) ? reEmit : [reEmit];
       expect(reEmitEvents).toHaveLength(1);
       expect(reEmitEvents[0]?.type).toBe("thread.settled");
+
       if (reEmitEvents[0]?.type === "thread.settled") {
         expect(reEmitEvents[0].payload.settledAt).toBe(SETTLED_AT);
         // updatedAt must NOT rewind to the historical settledAt: sorting and
@@ -70,10 +74,12 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           snoozedUntil: "1970-01-02T09:00:00.000Z",
         }),
       });
+
       const events = Array.isArray(result) ? result : [result];
       expect(events.map((entry) => entry.type)).toEqual(["thread.settled", "thread.unsnoozed"]);
       const settled = events.find((entry) => entry.type === "thread.settled");
       const unsnoozed = events.find((entry) => entry.type === "thread.unsnoozed");
+
       if (settled?.type === "thread.settled" && unsnoozed?.type === "thread.unsnoozed") {
         expect(unsnoozed.payload.reason).toBe("user");
         expect(unsnoozed.payload.updatedAt).toBe(settled.payload.updatedAt);
@@ -93,10 +99,12 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           snoozedUntil: "1970-01-02T09:00:00.000Z",
         }),
       });
+
       const events = Array.isArray(result) ? result : [result];
       expect(events.map((entry) => entry.type)).toEqual(["thread.settled", "thread.unsnoozed"]);
       const settled = events.find((entry) => entry.type === "thread.settled");
       const unsnoozed = events.find((entry) => entry.type === "thread.unsnoozed");
+
       if (settled?.type === "thread.settled" && unsnoozed?.type === "thread.unsnoozed") {
         expect(settled.payload.settledAt).toBe(SETTLED_AT);
         expect(settled.payload.updatedAt).toBe(NOW);
@@ -118,6 +126,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           snoozedUntil: "1970-01-02T09:00:00.000Z",
         }),
       });
+
       const events = Array.isArray(result) ? result : [result];
       expect(events.map((entry) => entry.type)).toEqual([
         "thread.settled",
@@ -138,8 +147,10 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           },
           readModel: makeReadModel(null, null, createSession(status)),
         }).pipe(Effect.flip);
+
         expect(error._tag).toBe("OrchestrationCommandInvariantError");
       }
+
       // Stopped/error sessions are settleable — only live work is protected.
       const settled = yield* decideOrchestrationCommand({
         command: {
@@ -149,6 +160,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel(null, null, createSession("stopped")),
       });
+
       const settledEvents = Array.isArray(settled) ? settled : [settled];
       expect(settledEvents[0]?.type).toBe("thread.settled");
     }),
@@ -178,6 +190,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           requestActivity("approval.requested", "req-1", NOW),
         ]),
       }).pipe(Effect.flip);
+
       expect(openError._tag).toBe("OrchestrationCommandInvariantError");
 
       // Same request later resolved: settleable again.
@@ -192,6 +205,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           requestActivity("approval.resolved", "req-1", NOW),
         ]),
       });
+
       const settledEvents = Array.isArray(settled) ? settled : [settled];
       expect(settledEvents[0]?.type).toBe("thread.settled");
 
@@ -206,6 +220,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           requestActivity("user-input.requested", "req-2", NOW),
         ]),
       }).pipe(Effect.flip);
+
       expect(inputError._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
@@ -246,6 +261,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           }),
         ]),
       });
+
       const settledEvents = Array.isArray(settled) ? settled : [settled];
       expect(settledEvents[0]?.type).toBe("thread.settled");
 
@@ -264,6 +280,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
           }),
         ]),
       }).pipe(Effect.flip);
+
       expect(stillOpen._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
@@ -292,6 +309,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel(null, null, null, [], [userMessage("1969-12-31T23:59:30.000Z")]),
       }).pipe(Effect.flip);
+
       expect(queuedError._tag).toBe("OrchestrationCommandInvariantError");
 
       // Message timestamp far in the FUTURE (client clock ahead of server):
@@ -305,6 +323,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel(null, null, null, [], [userMessage("1970-01-01T01:00:00.000Z")]),
       });
+
       const skewedEvents = Array.isArray(skewed) ? skewed : [skewed];
       expect(skewedEvents[0]?.type).toBe("thread.settled");
     }),
@@ -320,6 +339,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel(null, NOW),
       }).pipe(Effect.flip);
+
       expect(settleError._tag).toBe("OrchestrationCommandInvariantError");
 
       const unsettleError = yield* decideOrchestrationCommand({
@@ -331,6 +351,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel("settled", NOW),
       }).pipe(Effect.flip);
+
       expect(unsettleError._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
@@ -346,9 +367,11 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel("settled"),
       });
+
       const userEvents = Array.isArray(userEvent) ? userEvent : [userEvent];
       expect(userEvents).toHaveLength(1);
       expect(userEvents[0]?.type).toBe("thread.unsettled");
+
       if (userEvents[0]?.type === "thread.unsettled") {
         expect(userEvents[0].payload.reason).toBe("user");
       }
@@ -364,6 +387,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel: makeReadModel("active"),
       });
+
       const userAgainEvents = Array.isArray(userAgain) ? userAgain : [userAgain];
       expect(userAgainEvents).toHaveLength(1);
       expect(userAgainEvents[0]?.type).toBe("thread.unsettled");
@@ -378,6 +402,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
   it.effect("an accepted un-settle re-anchors the thread for the active list", () =>
     Effect.gen(function* () {
       const readModel = makeReadModel("settled");
+
       const result = yield* decideOrchestrationCommand({
         command: {
           type: "thread.unsettle",
@@ -387,6 +412,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         },
         readModel,
       });
+
       const events = Array.isArray(result) ? result : [result];
       const unsettled = events[0]!;
       expect(unsettled.type).toBe("thread.unsettled");
@@ -395,11 +421,13 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
         ...unsettled,
         sequence: readModel.snapshotSequence + 1,
       } as OrchestrationEvent);
+
       const thread = projected.threads[0]!;
       expect(thread.settledOverride).toBe("active");
       // The stamp is the decider's accept time: every thread created before
       // the un-settle anchors below it.
       expect(thread.unsettledAt).toBe(unsettled.occurredAt);
+
       if (unsettled.type === "thread.unsettled") {
         expect(thread.unsettledAt).toBe(unsettled.payload.updatedAt);
       }

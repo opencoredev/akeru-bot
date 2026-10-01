@@ -55,6 +55,7 @@ type LegacyFixtureEvent = FixtureIds &
   );
 
 export type FixtureProviderRuntimeEvent = CanonicalFixtureEvent | LegacyFixtureEvent;
+
 export type LegacyProviderRuntimeEvent = FixtureProviderRuntimeEvent;
 
 const decodeRuntimeEvent = Schema.decodeUnknownSync(ProviderRuntimeEvent, {

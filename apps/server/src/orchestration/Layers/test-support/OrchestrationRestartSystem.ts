@@ -54,16 +54,21 @@ export async function createRestartSystem() {
       Layer.provideMerge(NodeServices.layer),
     ),
   );
+
   let scope = await Effect.runPromise(Scope.make());
+
   const start = async () =>
     Context.get(
       await runtime.runPromise(Layer.build(OrchestrationEngineLive).pipe(Scope.provide(scope))),
       OrchestrationEngineService,
     );
+
   let engine = await start();
   const createdAt = nowIso();
+
   const dispatch = (command: Parameters<typeof engine.dispatch>[0]) =>
     runtime.runPromise(engine.dispatch(command));
+
   await dispatch({
     type: "project.create",
     commandId: CommandId.make("restart-project-create"),
@@ -100,6 +105,7 @@ export async function createRestartSystem() {
     worktreePath: null,
     createdAt,
   });
+
   return {
     dispatch,
     async restart() {

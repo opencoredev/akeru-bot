@@ -1,5 +1,6 @@
 import { type OrchestrationReadModel, type OrchestrationEvent } from "@akeru/contracts";
 import { createObservationHistory } from "../../test-support/Observations.ts";
+
 interface CheckpointObservation {
   engine: OrchestrationEngineShape;
   readModel: () => Promise<OrchestrationReadModel>;
@@ -8,14 +9,17 @@ interface CheckpointObservation {
     predicate: (receipt: OrchestrationRuntimeReceipt) => boolean,
   ) => Promise<OrchestrationRuntimeReceipt>;
 }
+
 import {
   normalizeFixtureEvent,
   type LegacyProviderRuntimeEvent,
 } from "../../test-support/ProviderFixtureEvents.ts";
+
 export type {
   LegacyProviderRuntimeEvent,
   FixtureProviderRuntimeEvent,
 } from "../../test-support/ProviderFixtureEvents.ts";
+
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -92,6 +96,7 @@ export function createAgentControllerHarness(
 ) {
   const now = "2026-01-01T00:00:00.000Z";
   const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
+
   const rollbackConversation = vi.fn(
     (_input: {
       readonly threadId: ThreadId;
@@ -101,6 +106,7 @@ export function createAgentControllerHarness(
 
   const unsupported = <A>() =>
     Effect.die(new Error("Unsupported provider call in test")) as Effect.Effect<A, never>;
+
   const listSessions = () =>
     hasSession
       ? Effect.succeed([
@@ -115,6 +121,7 @@ export function createAgentControllerHarness(
           },
         ] satisfies ReadonlyArray<ProviderSession>)
       : Effect.succeed([] as ReadonlyArray<ProviderSession>);
+
   const service: AgentControllerShape = {
     authenticateMcpServer: () => unsupported(),
     resolveEngine: () => unsupported(),
@@ -141,6 +148,7 @@ export function createAgentControllerHarness(
     // SAFETY: This boundary deliberately publishes an obsolete event to test rejection.
     Effect.runSync(PubSub.publish(runtimeEventPubSub, event as ProviderRuntimeEvent));
   };
+
   return {
     service,
     rollbackConversation,
@@ -148,29 +156,37 @@ export function createAgentControllerHarness(
     emit,
   };
 }
+
 export async function waitForThread(
   harness: CheckpointObservation,
   predicate: (thread: OrchestrationReadModel["threads"][number]) => boolean,
 ) {
   await harness.drain();
+
   const thread = (await harness.readModel()).threads.find(
     (thread) => thread.id === ThreadId.make("thread-1"),
   );
+
   if (!thread || !predicate(thread))
     throw new Error("Expected checkpoint thread state after drain");
+
   return thread;
 }
+
 export async function waitForEvent(
   harness: CheckpointObservation,
   predicate: (event: OrchestrationEvent) => boolean,
 ) {
   await harness.drain();
+
   const events = await Effect.runPromise(
     Stream.runCollect(harness.engine.readEvents(0)).pipe(
       Effect.map((events) => Array.from(events)),
     ),
   );
+
   if (!events.some(predicate)) throw new Error("Expected checkpoint event after drain");
+
   return events;
 }
 
@@ -190,12 +206,14 @@ export function createGitRepository() {
   NodeFS.writeFileSync(NodePath.join(cwd, "README.md"), "v1\n", "utf8");
   runGit(cwd, ["add", "."]);
   runGit(cwd, ["commit", "-m", "Initial"]);
+
   return cwd;
 }
 
 export function gitRefExists(cwd: string, ref: string): boolean {
   try {
     runGit(cwd, ["show-ref", "--verify", "--quiet", ref]);
+
     return true;
   } catch {
     return false;
@@ -205,6 +223,7 @@ export function gitRefExists(cwd: string, ref: string): boolean {
 export function gitShowFileAtRef(cwd: string, ref: string, filePath: string): string {
   return runGit(cwd, ["show", `${ref}:${filePath}`]);
 }
+
 export async function waitForGitRefExists(
   harness: CheckpointObservation,
   cwd: string,
@@ -214,6 +233,7 @@ export async function waitForGitRefExists(
     await harness.waitForReceipt(
       (receipt) => receipt.type !== "turn.processing.quiesced" && receipt.checkpointRef === ref,
     );
+
   if (!gitRefExists(cwd, ref)) throw new Error("Checkpoint receipt did not create " + ref);
 }
 
@@ -246,16 +266,20 @@ export function createCheckpointHarness() {
     readonly gitStatusRefresh?: Effect.Effect<void>;
   }) {
     const cwd = createGitRepository();
+
     if (options?.initializeGit === false) {
       NodeFS.rmSync(NodePath.join(cwd, ".git"), { recursive: true });
     }
+
     tempDirs.push(cwd);
+
     const provider = createAgentControllerHarness(
       cwd,
       options?.hasSession ?? true,
       options?.providerSessionCwd ?? cwd,
       options?.providerName ?? ProviderDriverKind.make("codex"),
     );
+
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionSnapshotQueryLive),
       Layer.provide(ThreadBackgroundLiveness.layer),
@@ -266,6 +290,7 @@ export function createCheckpointHarness() {
       Layer.provide(RepositoryIdentityResolver.layer),
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const projectionSnapshotLayer = OrchestrationProjectionSnapshotQueryLive.pipe(
       Layer.provide(ThreadBackgroundLiveness.layer),
       Layer.provide(ThreadPlanProgress.layer),
@@ -276,6 +301,7 @@ export function createCheckpointHarness() {
     const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
       prefix: "t3-checkpoint-reactor-test-",
     });
+
     const gitVcsDriverLayer = Layer.mock(GitVcsDriver.GitVcsDriver)({
       statusDetailsLocal: (cwd: string) =>
         Effect.sync(() => {
@@ -321,26 +347,33 @@ export function createCheckpointHarness() {
     const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
     const snapshotQuery = await runtime.runPromise(Effect.service(ProjectionSnapshotQuery));
     const reactor = await runtime.runPromise(Effect.service(CheckpointReactor));
+
     const checkpointStore = await runtime.runPromise(
       Effect.service(CheckpointStore.CheckpointStore),
     );
+
     const receiptBus = await runtime.runPromise(Effect.service(RuntimeReceiptBus));
     const testScope = await Effect.runPromise(Scope.make("sequential"));
     scope = testScope;
     const receiptHistory = createObservationHistory<OrchestrationRuntimeReceipt>();
+
     const receipts = await Effect.runPromise(
       Effect.gen(function* () {
         const receipts = yield* Queue.unbounded<OrchestrationRuntimeReceipt>();
+
         const receiptStream = yield* receiptBus.subscribeEventsForTest!.pipe(
           Scope.provide(testScope),
         );
+
         yield* Stream.runForEach(receiptStream, (receipt) =>
           receiptHistory.publish(receipt).pipe(Effect.andThen(Queue.offer(receipts, receipt))),
         ).pipe(Effect.forkIn(testScope));
         yield* reactor.start().pipe(Scope.provide(testScope));
+
         return receipts;
       }),
     );
+
     const drain = () => Effect.runPromise(reactor.drain);
     const nextReceipt = Queue.take(receipts);
 
@@ -457,6 +490,7 @@ export function createCheckpointHarness() {
         createdAt,
       }),
     );
+
     for (const turnCount of [1, 2]) {
       await Effect.runPromise(
         harness.engine.dispatch({
@@ -473,6 +507,7 @@ export function createCheckpointHarness() {
         }),
       );
     }
+
     await runtime!.runPromise(
       harness.engine.dispatch({
         type: "thread.checkpoint.revert",
@@ -483,22 +518,29 @@ export function createCheckpointHarness() {
       }),
     );
   }
+
   const dispose = async () => {
     if (scope) {
       await Effect.runPromise(Scope.close(scope, Exit.void));
     }
+
     scope = null;
+
     if (runtime) {
       await runtime.dispose();
     }
+
     runtime = null;
+
     while (tempDirs.length > 0) {
       const dir = tempDirs.pop();
+
       if (dir) {
         NodeFS.rmSync(dir, { recursive: true, force: true });
       }
     }
   };
+
   return {
     createHarness,
     seedTwoTurnsAndRevertToFirst,

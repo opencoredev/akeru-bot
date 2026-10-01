@@ -142,6 +142,7 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
     const turnId = asTurnId("turn-duplicate-resolution");
     harness.emitTurnStarted(turnId);
     await harness.drain();
+
     const request = (type: "request.opened" | "request.resolved", id: string, n: number) =>
       harness.emit({
         type,
@@ -156,6 +157,7 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
             ? { requestType: "command_execution_approval", detail: "pwd" }
             : { requestType: "command_execution_approval", decision: "accept" },
       } as ProviderRuntimeEvent);
+
     request("request.opened", "req-a", 0);
     request("request.opened", "req-b", 0);
     request("request.resolved", "req-a", 0);

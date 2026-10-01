@@ -58,6 +58,7 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
         command,
         threadId: command.threadId,
       });
+
       // Channel replies are sent only from the parent thread's turn, so a delegated child
       // thread must never carry an inbound channel message. See resolveCompletedChannelReply.
       if (targetThread.parentThreadId && command.message.channelOrigin !== undefined) {
@@ -66,7 +67,9 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           detail: `Delegated thread '${command.threadId}' cannot receive channel messages.`,
         });
       }
+
       const sourceProposedPlan = command.sourceProposedPlan;
+
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({
             readModel,
@@ -74,16 +77,19 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
             threadId: sourceProposedPlan.threadId,
           })
         : null;
+
       const sourcePlan =
         sourceProposedPlan && sourceThread
           ? sourceThread.proposedPlans.find((entry) => entry.id === sourceProposedPlan.planId)
           : null;
+
       if (sourceProposedPlan && !sourcePlan) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Proposed plan '${sourceProposedPlan.planId}' does not exist on thread '${sourceProposedPlan.threadId}'.`,
         });
       }
+
       if (sourceThread && sourceThread.projectId !== targetThread.projectId) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
@@ -93,6 +99,7 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
 
       let respondingBotId = targetThread.botId ?? null;
       const isGroupThread = targetThread.groupId !== null && targetThread.groupId !== undefined;
+
       // Direct chats refuse archived bots here so a stale client or queued send cannot
       // wake one. Group chats check the responding member below instead.
       let respondingBot =
@@ -101,20 +108,25 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           : isGroupThread
             ? yield* requireBot({ readModel, command, botId: respondingBotId })
             : yield* requireBotNotArchived({ readModel, command, botId: respondingBotId });
+
       let personAssignedEvent: Omit<OrchestrationEvent, "sequence"> | null = null;
+
       if (targetThread.groupId !== null && targetThread.groupId !== undefined) {
         const group = yield* requireGroup({
           readModel,
           command,
           groupId: targetThread.groupId,
         });
+
         const activeMemberIds = activeGroupBotIds(readModel, group);
+
         const selectedBotId = yield* resolveGroupResponderBotId({
           group,
           respondingBotId: command.respondingBotId,
           text: command.message.text,
           isActive: (botId) => Effect.succeed(activeMemberIds.has(botId)),
         });
+
         if (selectedBotId === null) {
           return yield* Effect.fail(
             new OrchestrationCommandInvariantError({
@@ -123,6 +135,7 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
             }),
           );
         }
+
         respondingBot = yield* requireActiveGroupMember({
           readModel,
           command,
@@ -131,9 +144,11 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
         });
         respondingBotId = selectedBotId;
         const personMembers = group.members.filter((member) => member.kind === "person");
+
         const senderIsMember = personMembers.some(
           (member) => member.personId === command.senderPersonId,
         );
+
         if (command.senderPersonId === undefined) {
           return yield* Effect.fail(
             new OrchestrationCommandInvariantError({
@@ -142,6 +157,7 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
             }),
           );
         }
+
         if (!senderIsMember) {
           if (personMembers.length === 0 && command.senderCanManageGroups === true) {
             personAssignedEvent = {
@@ -191,7 +207,9 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
             isAkeruDelegationResultPending(delegation),
         )
         .map((delegation) => acknowledgeAkeruDelegation(delegation, command.createdAt));
+
       const acknowledgementEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
+
       for (const delegation of acknowledgedDelegations) {
         acknowledgementEvents.push({
           ...(yield* withEventBase({
@@ -230,6 +248,7 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           updatedAt: command.createdAt,
         },
       };
+
       const turnStartRequestedEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -270,11 +289,13 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           createdAt: command.createdAt,
         },
       };
+
       // Real activity resets any override. It wakes an explicitly settled
       // thread and clears an active override back to neutral.
       // A snooze clears the same way — sending a message to a snoozed
       // thread is the user re-engaging, so the return ticket is spent.
       const lifecycleResetEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
+
       if (targetThread.settledOverride !== null) {
         lifecycleResetEvents.push({
           ...(yield* withEventBase({
@@ -291,6 +312,7 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           },
         });
       }
+
       if (targetThread.snoozedUntil != null) {
         lifecycleResetEvents.push({
           ...(yield* withEventBase({
@@ -307,6 +329,7 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           },
         });
       }
+
       return [
         ...(personAssignedEvent === null ? [] : [personAssignedEvent]),
         ...lifecycleResetEvents,
@@ -315,14 +338,17 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
         turnStartRequestedEvent,
       ];
     }
+
     case "thread.turn.resume": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       const failedBeforeProviderAccepted =
         thread.latestTurn === null && thread.session?.status === "error";
+
       if (
         !failedBeforeProviderAccepted &&
         (thread.latestTurn === null ||
@@ -333,6 +359,7 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           detail: `Chat '${command.threadId}' does not have an interrupted request to resume.`,
         });
       }
+
       if (
         thread.session !== null &&
         thread.session.status !== "error" &&
@@ -344,10 +371,12 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           detail: `Chat '${command.threadId}' is already active.`,
         });
       }
+
       const group =
         thread.groupId === null || thread.groupId === undefined
           ? null
           : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+
       // Resume answers with the same bot the provider reactor picks.
       yield* requireActiveResponder({
         readModel,
@@ -355,6 +384,7 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
         groupId: thread.groupId,
         botId: thread.respondingBotId ?? thread.botId ?? group?.bossBotId,
       });
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -369,12 +399,14 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
         },
       };
     }
+
     case "thread.turn.interrupt": {
       yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -390,22 +422,26 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
         },
       };
     }
+
     case "thread.approval.respond": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       const group =
         thread.groupId === null || thread.groupId === undefined
           ? null
           : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+
       yield* requireActiveResponder({
         readModel,
         command,
         groupId: thread.groupId,
         botId: thread.respondingBotId ?? thread.botId ?? group?.bossBotId,
       });
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -425,22 +461,26 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
         },
       };
     }
+
     case "thread.user-input.respond": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       const group =
         thread.groupId === null || thread.groupId === undefined
           ? null
           : yield* requireGroup({ readModel, command, groupId: thread.groupId });
+
       yield* requireActiveResponder({
         readModel,
         command,
         groupId: thread.groupId,
         botId: thread.respondingBotId ?? thread.botId ?? group?.bossBotId,
       });
+
       const responseRequestedEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -459,7 +499,9 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           createdAt: command.createdAt,
         },
       };
+
       const answerText = userInputAnswerText(command.answers);
+
       if (answerText === null) return responseRequestedEvent;
 
       const userMessageEvent: Omit<OrchestrationEvent, "sequence"> = {
@@ -487,12 +529,14 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
         { ...responseRequestedEvent, causationEventId: userMessageEvent.eventId },
       ];
     }
+
     case "thread.turn.diff.complete": {
       yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",

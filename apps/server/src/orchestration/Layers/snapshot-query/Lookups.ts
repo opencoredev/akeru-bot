@@ -135,6 +135,7 @@ export function createLookups({
     "ProjectionSnapshotQuery.searchThreads",
   )(function* (input) {
     const escapedQuery = escapeLikePattern(input.query);
+
     const rows = yield* searchActiveThreadRows({
       pattern: `%${escapedQuery}%`,
       limit: input.limit ?? 50,
@@ -146,6 +147,7 @@ export function createLookups({
         ),
       ),
     );
+
     return {
       matches: rows.map((row) => ({
         threadId: row.threadId,
@@ -246,6 +248,7 @@ export function createLookups({
           ),
         ),
       );
+
       if (Option.isNone(threadRow)) {
         return Option.none<ProjectionThreadCheckpointContext>();
       }
@@ -293,6 +296,7 @@ export function createLookups({
           ),
         ),
       );
+
       if (Option.isNone(row)) {
         return Option.none<ProjectionFullThreadDiffContext>();
       }
@@ -391,6 +395,7 @@ export function createLookups({
           ),
         ),
       );
+
       return Option.map(context, (row) => ({
         id: row.id,
         title: row.title,
@@ -463,6 +468,7 @@ export function createLookups({
         ),
       ),
     );
+
     return Option.map(message, (row) => ({
       message: {
         id: row.messageId,
@@ -502,9 +508,11 @@ export function createLookups({
           ),
         ),
       );
+
       return Option.isSome(row);
     },
   );
+
   return {
     getSnapshotSequence,
     getCounts,

@@ -22,6 +22,7 @@ export function sameId(left: string | null | undefined, right: string | null | u
   if (left === null || left === undefined || right === null || right === undefined) {
     return false;
   }
+
   return left === right;
 }
 

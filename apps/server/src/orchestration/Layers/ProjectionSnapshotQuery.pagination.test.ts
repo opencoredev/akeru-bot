@@ -61,6 +61,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       { turn: "turn-4", pendingMessage: "user-msg-4", at: "2026-03-01T00:03:00.000Z" },
       { turn: "turn-5", pendingMessage: "user-msg-5", at: "2026-03-01T00:04:00.000Z" },
     ];
+
     for (const { turn, pendingMessage, at } of turns) {
       yield* sql`
         INSERT INTO projection_turns (
@@ -69,6 +70,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         )
         VALUES ('thread-w', ${turn}, ${pendingMessage}, 'completed', ${at}, ${at}, ${at}, '[]')
       `;
+
       if (pendingMessage !== null) {
         yield* sql`
           INSERT INTO projection_thread_messages (
@@ -77,6 +79,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
           VALUES (${pendingMessage}, 'thread-w', NULL, 'user', ${"prompt for " + turn}, 0, ${at}, ${at})
         `;
       }
+
       yield* sql`
         INSERT INTO projection_thread_messages (
           message_id, thread_id, turn_id, role, text, is_streaming, created_at, updated_at
@@ -119,8 +122,10 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
   });
 
   const threadW = ThreadId.make("thread-w");
+
   const messageIds = (snapshot: { thread: { messages: ReadonlyArray<{ id: string }> } }) =>
     snapshot.thread.messages.map((message) => message.id).toSorted();
+
   const activityIds = (snapshot: { thread: { activities: ReadonlyArray<{ id: string }> } }) =>
     snapshot.thread.activities.map((activity) => activity.id).toSorted();
 
@@ -131,6 +136,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       const snapshot = yield* snapshotQuery.getThreadDetailSnapshot(threadW);
       assert.equal(snapshot._tag, "Some");
+
       if (snapshot._tag === "Some") {
         assert.equal(snapshot.value.page, undefined);
         assert.equal(snapshot.value.thread.messages.length, 9);
@@ -151,6 +157,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       // after turn-4's anchor) ride along.
       const snapshot = yield* snapshotQuery.getThreadDetailSnapshot(threadW, { turnLimit: 2 });
       assert.equal(snapshot._tag, "Some");
+
       if (snapshot._tag === "Some") {
         assert.deepEqual(messageIds(snapshot.value), [
           "turn-4-reply",
@@ -180,6 +187,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       // the full thread, so no further pages.
       const snapshot = yield* snapshotQuery.getThreadDetailSnapshot(threadW, { turnLimit: 3 });
       assert.equal(snapshot._tag, "Some");
+
       if (snapshot._tag === "Some") {
         assert.equal(snapshot.value.thread.messages.length, 9);
         assert.equal(snapshot.value.thread.activities.length, 6);
@@ -201,9 +209,11 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       const firstPage = yield* snapshotQuery.getThreadDetailSnapshot(threadW, { turnLimit: 2 });
       assert.equal(firstPage._tag, "Some");
+
       if (firstPage._tag !== "Some") return;
       const cursor = firstPage.value.page?.beforeCursor;
       assert.notEqual(cursor, null);
+
       if (cursor === null || cursor === undefined) return;
 
       // Simulate the rewrite: delete and re-insert every turn row with the
@@ -213,7 +223,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
           completed_at, checkpoint_files_json
         FROM projection_turns WHERE thread_id = 'thread-w' ORDER BY row_id
       `;
+
       yield* sql`DELETE FROM projection_turns WHERE thread_id = 'thread-w'`;
+
       for (const row of turnRows) {
         yield* sql`
           INSERT INTO projection_turns (
@@ -231,7 +243,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         turnLimit: 1,
         beforeCursor: cursor,
       });
+
       assert.equal(olderPage._tag, "Some");
+
       if (olderPage._tag === "Some") {
         // Identical older slice to what the pre-rewrite cursor would return.
         assert.deepEqual(messageIds(olderPage.value), [
@@ -252,10 +266,12 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       const firstPage = yield* snapshotQuery.getThreadDetailSnapshot(threadW, { turnLimit: 2 });
       assert.equal(firstPage._tag, "Some");
+
       if (firstPage._tag !== "Some") return;
       const cursor = firstPage.value.page?.beforeCursor;
       assert.notEqual(cursor, null);
       assert.notEqual(cursor, undefined);
+
       if (cursor === null || cursor === undefined) return;
 
       // Older page: user turn-1 plus subagent turns 2-3 riding along. Disjoint
@@ -264,7 +280,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         turnLimit: 1,
         beforeCursor: cursor,
       });
+
       assert.equal(olderPage._tag, "Some");
+
       if (olderPage._tag === "Some") {
         assert.deepEqual(messageIds(olderPage.value), [
           "turn-1-reply",
@@ -290,6 +308,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       const firstPage = yield* snapshotQuery.getThreadDetailSnapshot(threadW, { turnLimit: 2 });
       assert.equal(firstPage._tag, "Some");
+
       if (firstPage._tag !== "Some") return;
 
       const foreign = encodeThreadDetailPageCursor({
@@ -297,11 +316,14 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         beforeAnchorAt: "2026-03-01T00:01:00.000Z",
         beforeTurnId: "turn-2",
       });
+
       const snapshot = yield* snapshotQuery.getThreadDetailSnapshot(threadW, {
         turnLimit: 2,
         beforeCursor: foreign,
       });
+
       assert.equal(snapshot._tag, "Some");
+
       if (snapshot._tag === "Some") {
         assert.deepEqual(messageIds(snapshot.value), messageIds(firstPage.value));
       }
@@ -317,7 +339,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         turnLimit: 2,
         beforeCursor: "not-a-cursor",
       });
+
       assert.equal(snapshot._tag, "Some");
+
       if (snapshot._tag === "Some") {
         assert.equal(snapshot.value.page?.hasMore, true);
         assert.equal(snapshot.value.thread.messages.length, 5);
@@ -335,19 +359,24 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const seenMessages: string[] = [];
       const seenActivities: string[] = [];
       let cursor: string | undefined;
+
       for (let page = 0; page < 10; page += 1) {
         const snapshot = yield* snapshotQuery.getThreadDetailSnapshot(threadW, {
           turnLimit: 1,
           ...(cursor !== undefined ? { beforeCursor: cursor } : {}),
         });
+
         assert.equal(snapshot._tag, "Some");
+
         if (snapshot._tag !== "Some") return;
         seenMessages.push(...snapshot.value.thread.messages.map((message) => message.id));
         seenActivities.push(...snapshot.value.thread.activities.map((activity) => activity.id));
         const next = snapshot.value.page?.beforeCursor;
+
         if (next === null || next === undefined) break;
         cursor = next;
       }
+
       assert.equal(new Set(seenMessages).size, seenMessages.length);
       assert.equal(new Set(seenActivities).size, seenActivities.length);
       assert.equal(seenMessages.length, 9);
@@ -386,6 +415,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       const fullDetail = yield* snapshotQuery.getThreadDetailById(threadW);
       assert.equal(fullDetail._tag, "Some");
+
       if (fullDetail._tag === "Some") {
         assert.equal(fullDetail.value.activities.length, 500);
         assert.equal(fullDetail.value.activities[0]?.id, asEventId("activity-0002"));
@@ -395,7 +425,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const windowedDetail = yield* snapshotQuery.getThreadDetailSnapshot(threadW, {
         turnLimit: 2,
       });
+
       assert.equal(windowedDetail._tag, "Some");
+
       if (windowedDetail._tag === "Some") {
         assert.equal(windowedDetail.value.thread.activities.length, 500);
         assert.equal(windowedDetail.value.thread.activities[0]?.id, asEventId("activity-0002"));
@@ -480,10 +512,12 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       const detailWithPinnedRequests = yield* snapshotQuery.getThreadDetailById(threadW);
       assert.equal(detailWithPinnedRequests._tag, "Some");
+
       if (detailWithPinnedRequests._tag === "Some") {
         const ids = new Set(
           detailWithPinnedRequests.value.activities.map((activity) => activity.id),
         );
+
         assert.equal(detailWithPinnedRequests.value.activities.length, 504);
         assert.equal(ids.has(asEventId("approval-old")), true);
         assert.equal(ids.has(asEventId("user-input-old")), true);
@@ -496,11 +530,14 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const windowWithPinnedRequests = yield* snapshotQuery.getThreadDetailSnapshot(threadW, {
         turnLimit: 2,
       });
+
       assert.equal(windowWithPinnedRequests._tag, "Some");
+
       if (windowWithPinnedRequests._tag === "Some") {
         const ids = new Set(
           windowWithPinnedRequests.value.thread.activities.map((activity) => activity.id),
         );
+
         assert.equal(windowWithPinnedRequests.value.thread.activities.length, 504);
         assert.equal(ids.has(asEventId("approval-old")), true);
         assert.equal(ids.has(asEventId("user-input-old")), true);
@@ -548,6 +585,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         VALUES ('pre-turn-msg', 'thread-e', NULL, 'user', 'first prompt', 0,
           '2026-03-02T00:00:01.000Z', '2026-03-02T00:00:01.000Z')
       `;
+
       for (const projector of Object.values(ORCHESTRATION_PROJECTOR_NAMES)) {
         yield* sql`
           INSERT INTO projection_state (projector, last_applied_sequence, updated_at)
@@ -558,7 +596,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const snapshot = yield* snapshotQuery.getThreadDetailSnapshot(ThreadId.make("thread-e"), {
         turnLimit: 5,
       });
+
       assert.equal(snapshot._tag, "Some");
+
       if (snapshot._tag === "Some") {
         assert.deepEqual(messageIds(snapshot.value), ["pre-turn-msg"]);
         assert.equal(snapshot.value.page?.hasMore, false);

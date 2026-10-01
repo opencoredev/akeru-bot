@@ -44,12 +44,14 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
       );
+
       if (existing !== undefined) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine '${command.routineId}' already exists.`,
         });
       }
+
       const routine = {
         id: command.routineId,
         botId: command.botId,
@@ -76,6 +78,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         updatedAt: command.createdAt,
         deletedAt: null,
       };
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "routine",
@@ -87,16 +90,19 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         payload: { routine },
       };
     }
+
     case "routine.draft": {
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
       );
+
       if (existing?.lifecycle === "deleted") {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine '${command.routineId}' is deleted.`,
         });
       }
+
       if (
         existing !== undefined &&
         command.expectedProcedureVersion !== undefined &&
@@ -107,7 +113,9 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
           detail: `Routine '${command.routineId}' procedure version changed.`,
         });
       }
+
       const procedureVersion = (existing?.procedureVersion ?? 0) + 1;
+
       const routine = {
         id: command.routineId,
         botId: command.botId,
@@ -134,6 +142,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         updatedAt: command.createdAt,
         deletedAt: null,
       };
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "routine",
@@ -145,10 +154,12 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         payload: { routine },
       };
     }
+
     case "routine.approve": {
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
       );
+
       if (
         existing === undefined ||
         existing.lifecycle === "deleted" ||
@@ -159,6 +170,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
           detail: `Routine '${command.routineId}' cannot approve procedure version ${command.procedureVersion}.`,
         });
       }
+
       const routine = {
         ...existing,
         approvalVersion: existing.procedureVersion,
@@ -166,6 +178,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         lifecycle: "approved" as const,
         updatedAt: command.createdAt,
       };
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "routine",
@@ -177,10 +190,12 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         payload: { routine },
       };
     }
+
     case "routine.enable": {
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
       );
+
       if (
         existing === undefined ||
         existing.lifecycle === "deleted" ||
@@ -191,6 +206,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
           detail: `Routine '${command.routineId}' requires approval before enable.`,
         });
       }
+
       const routine = {
         ...existing,
         enabled: true,
@@ -203,6 +219,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         latestFailure: null,
         updatedAt: command.createdAt,
       };
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "routine",
@@ -214,16 +231,19 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         payload: { routine },
       };
     }
+
     case "routine.pause": {
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
       );
+
       if (existing === undefined || existing.lifecycle === "deleted") {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine '${command.routineId}' does not exist.`,
         });
       }
+
       const routine = {
         ...existing,
         enabled: false,
@@ -231,6 +251,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         nextRunAt: null,
         updatedAt: command.createdAt,
       };
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "routine",
@@ -242,35 +263,41 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         payload: { routine },
       };
     }
+
     case "routine.run":
     case "routine.run.scheduled": {
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
       );
+
       if (existing === undefined || existing.lifecycle === "deleted") {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine '${command.routineId}' does not exist.`,
         });
       }
+
       if (command.type === "routine.run.scheduled" && !existing.enabled) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine '${command.routineId}' is not enabled.`,
         });
       }
+
       if (command.trigger !== "dry-run" && existing.approvalVersion !== existing.procedureVersion) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine '${command.routineId}' procedure approval is stale.`,
         });
       }
+
       if ((readModel.routineRuns ?? []).some((run) => run.id === command.runId)) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine run '${command.runId}' already exists.`,
         });
       }
+
       const runBase = {
         id: command.runId,
         routineId: command.routineId,
@@ -285,6 +312,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         createdAt: command.createdAt,
         updatedAt: command.createdAt,
       };
+
       const run =
         command.type === "routine.run.scheduled"
           ? {
@@ -293,12 +321,14 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
               scheduledFor: command.scheduledFor,
             }
           : { ...runBase, trigger: command.trigger, scheduledFor: null };
+
       const routine = {
         ...existing,
         lifecycle: "running" as const,
         lastRunAt: command.createdAt,
         updatedAt: command.createdAt,
       };
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "routine",
@@ -310,6 +340,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         payload: { routine, run },
       };
     }
+
     case "routine.run.start":
     case "routine.run.block":
     case "routine.run.fail":
@@ -318,13 +349,16 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
       );
+
       const existingRun = (readModel.routineRuns ?? []).find((run) => run.id === command.runId);
+
       if (existing === undefined || existing.lifecycle === "deleted" || existingRun === undefined) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine run '${command.runId}' does not exist.`,
         });
       }
+
       // A run canceled or settled before it started stays ended, and a
       // cancellation never overwrites a run that already ended.
       if (
@@ -338,8 +372,10 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
           detail: `Routine run '${command.runId}' already ended with status '${existingRun.status}'.`,
         });
       }
+
       const occurredAt =
         command.type === "routine.run.start" ? command.startedAt : command.createdAt;
+
       const run =
         command.type === "routine.run.start"
           ? {
@@ -381,9 +417,12 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
                     completedAt: command.createdAt,
                     updatedAt: command.createdAt,
                   };
+
       const terminal = command.type !== "routine.run.start";
+
       const blockedOrFailed =
         command.type === "routine.run.block" || command.type === "routine.run.fail";
+
       const routine = {
         ...existing,
         enabled: blockedOrFailed ? false : existing.enabled,
@@ -416,6 +455,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
             : existing.latestFailure,
         updatedAt: occurredAt,
       };
+
       const type =
         command.type === "routine.run.start"
           ? ("routine.running" as const)
@@ -426,6 +466,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
               : command.type === "routine.run.complete"
                 ? ("routine.completed" as const)
                 : ("routine.run-canceled" as const);
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "routine",
@@ -437,16 +478,19 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         payload: { routine, run },
       };
     }
+
     case "routine.delete": {
       const existing = (readModel.routines ?? []).find(
         (routine) => routine.id === command.routineId,
       );
+
       if (existing === undefined) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Routine '${command.routineId}' does not exist.`,
         });
       }
+
       const routine = {
         ...existing,
         enabled: false,
@@ -455,6 +499,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         updatedAt: command.createdAt,
         deletedAt: command.createdAt,
       };
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "routine",
@@ -466,6 +511,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         payload: { routine },
       };
     }
+
     case "routine.skill.assign": {
       if (
         (readModel.skillAssignments ?? []).some(
@@ -477,6 +523,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
           detail: `Skill assignment '${command.assignmentId}' already exists.`,
         });
       }
+
       const assignment = {
         id: command.assignmentId,
         botId: command.botId,
@@ -486,6 +533,7 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         createdAt: command.createdAt,
         updatedAt: command.createdAt,
       };
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "skill-assignment",
@@ -497,16 +545,19 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         payload: { assignment },
       };
     }
+
     case "routine.skill.unassign": {
       const assignment = (readModel.skillAssignments ?? []).find(
         (entry) => entry.id === command.assignmentId && entry.botId === command.botId,
       );
+
       if (assignment === undefined) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Skill assignment '${command.assignmentId}' does not exist.`,
         });
       }
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "skill-assignment",

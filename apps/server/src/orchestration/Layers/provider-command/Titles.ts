@@ -9,6 +9,7 @@ import { formatThreadTitleContext } from "./TitleContext.ts";
 import type { createContext } from "./Context.ts";
 import type { createWorkspace } from "./Workspace.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
 export const createTitles = Effect.fn("makeprovider-command-Titles")(function* ({
   resolveThreadDetail,
   resolveProject,
@@ -40,27 +41,34 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
     }
 
     const thread = yield* resolveThreadDetail(event.payload.threadId);
+
     if (!thread || thread.titleRegeneration?.requestId !== requestId) {
       return { _tag: "Superseded" } as const;
     }
 
     const { message, attachments } = formatThreadTitleContext(thread.messages);
+
     if (message.length === 0) {
       return { _tag: "Completed", title: undefined } as const;
     }
 
     const previousTitle = event.payload.previousTitle ?? thread.title;
+
     if (thread.title !== previousTitle) {
       return { _tag: "Superseded" } as const;
     }
+
     const project = yield* resolveProject(thread.projectId);
+
     const cwd =
       resolveThreadWorkspaceCwd({
         thread,
         projects: project ? [project] : [],
       }) ?? process.cwd();
+
     const { textGenerationModelSelection: modelSelection } =
       yield* serverSettingsService.getSettings;
+
     const generated = yield* textGeneration.generateThreadTitle({
       cwd,
       message,
@@ -68,6 +76,7 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
       ...(attachments.length > 0 ? { attachments } : {}),
       modelSelection,
     });
+
     if (
       generated.title === DEFAULT_THREAD_TITLE ||
       generated.title === PLACEHOLDER_THREAD_TITLE ||
@@ -77,6 +86,7 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
     }
 
     const latestThread = yield* resolveThreadShell(event.payload.threadId);
+
     if (
       !latestThread ||
       latestThread.titleRegeneration?.requestId !== requestId ||
@@ -108,8 +118,10 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
     "findInterruptedThreadTitleRegenerations",
   )(function* () {
     const readModel = yield* projectionSnapshotQuery.getCommandReadModel();
+
     return readModel.threads.flatMap((thread) => {
       const requestId = thread.titleRegeneration?.requestId;
+
       return requestId === undefined ? [] : [{ threadId: thread.id, requestId }];
     });
   });
@@ -130,6 +142,7 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
             if (Cause.hasInterruptsOnly(cause)) {
               return Effect.interrupt;
             }
+
             return Effect.logWarning(
               "provider command reactor failed to clear interrupted title regeneration",
               {
@@ -151,20 +164,24 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
       }
 
       const requestId = event.payload.titleRegeneration?.requestId ?? event.commandId;
+
       if (requestId === null) {
         return;
       }
+
       const result = yield* regenerateThreadTitle(event, requestId).pipe(
         Effect.catchCause((cause) => {
           if (Cause.hasInterruptsOnly(cause)) {
             return Effect.failCause(cause);
           }
+
           return Effect.logWarning("provider command reactor failed to regenerate thread title", {
             threadId: event.payload.threadId,
             cause: Cause.pretty(cause),
           }).pipe(Effect.as({ _tag: "Completed", title: undefined } as const));
         }),
       );
+
       if (result._tag === "Superseded") {
         return;
       }
@@ -174,11 +191,13 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
         requestId,
         ...(result.title !== undefined ? { title: result.title } : {}),
       };
+
       yield* dispatchThreadTitleRegenerationCompletion(completion).pipe(
         Effect.catchCause((cause) => {
           if (Cause.hasInterruptsOnly(cause)) {
             return Effect.failCause(cause);
           }
+
           return Effect.logWarning(
             "provider command reactor retrying title regeneration completion",
             {
@@ -195,6 +214,7 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
           if (Cause.hasInterruptsOnly(cause)) {
             return Effect.failCause(cause);
           }
+
           return Effect.logWarning(
             "provider command reactor failed to complete title regeneration",
             {
@@ -209,6 +229,7 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
   const threadTitleRegenerationWorker = yield* makeDrainableWorker(
     processThreadTitleRegenerationSafely,
   );
+
   return {
     regenerateThreadTitle,
     dispatchThreadTitleRegenerationCompletion,

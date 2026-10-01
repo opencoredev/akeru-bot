@@ -37,6 +37,7 @@ describe("ProviderRuntimeIngestion", () => {
         entry.session?.activeTurnId === "turn-3" &&
         entry.session?.lastError === "runtime exploded",
     );
+
     expect(thread.session?.status).toBe("error");
     expect(thread.session?.lastError).toBe("runtime exploded");
   });
@@ -60,9 +61,11 @@ describe("ProviderRuntimeIngestion", () => {
     const thread = await waitForThread(harness, (entry) =>
       entry.activities.some((activity) => activity.id === "evt-runtime-error-activity"),
     );
+
     const activity = thread.activities.find(
       (entry: ProviderRuntimeTestActivity) => entry.id === "evt-runtime-error-activity",
     );
+
     const activityPayload =
       activity?.payload && typeof activity.payload === "object"
         ? (activity.payload as Record<string, unknown>)
@@ -127,12 +130,15 @@ describe("ProviderRuntimeIngestion", () => {
         ) &&
         entry.activities.some((activity) => activity.id === "evt-warning-resolved"),
     );
+
     expect(thread.session?.status).toBe("running");
     expect(thread.session?.activeTurnId).toBe("turn-warning");
     expect(thread.session?.lastError).toBeNull();
+
     const resolvedActivity = thread.activities.find(
       (activity) => activity.id === "evt-warning-resolved",
     );
+
     expect(resolvedActivity?.payload).toMatchObject({
       key: "provider.retry",
       message: "Reconnected.",
@@ -190,9 +196,11 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     expect(thread.session?.status).toBe("ready");
+
     const activity = thread.activities.find(
       (entry: ProviderRuntimeTestActivity) => entry.kind === "tool.started",
     );
+
     const payload = activity?.payload as Record<string, unknown> | undefined;
     expect(payload).toMatchObject({
       itemType: "command_execution",
@@ -243,6 +251,7 @@ describe("ProviderRuntimeIngestion", () => {
         entry.session?.activeTurnId === "turn-after-failure" &&
         entry.session?.lastError === "runtime still processed",
     );
+
     expect(thread.session?.status).toBe("error");
     expect(thread.session?.lastError).toBe("runtime still processed");
   });

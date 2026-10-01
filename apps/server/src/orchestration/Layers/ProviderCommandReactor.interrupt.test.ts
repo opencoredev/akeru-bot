@@ -71,6 +71,7 @@ describe("ProviderCommandReactor", () => {
               ),
           }),
         );
+
         const now = "2026-01-01T00:00:00.000Z";
 
         yield* harness.engine.dispatch({
@@ -102,6 +103,7 @@ describe("ProviderCommandReactor", () => {
             const thread = (await harness.readModel()).threads.find(
               (entry) => entry.id === ThreadId.make("thread-1"),
             );
+
             return thread?.session?.status === "stopped";
           }),
         );
@@ -109,6 +111,7 @@ describe("ProviderCommandReactor", () => {
         const thread = (yield* Effect.promise(() => harness.readModel())).threads.find(
           (entry) => entry.id === ThreadId.make("thread-1"),
         );
+
         expect(thread?.session).toMatchObject({
           status: "stopped",
           activeTurnId: null,
@@ -138,6 +141,7 @@ describe("ProviderCommandReactor", () => {
             ),
         }),
       );
+
       const now = "2026-01-01T00:00:00.000Z";
 
       yield* harness.engine.dispatch({
@@ -168,6 +172,7 @@ describe("ProviderCommandReactor", () => {
       const thread = (yield* Effect.promise(() => harness.readModel())).threads.find(
         (entry) => entry.id === ThreadId.make("thread-1"),
       );
+
       expect(thread?.session).toMatchObject({
         status: "stopped",
         activeTurnId: null,
@@ -246,6 +251,7 @@ describe("ProviderCommandReactor", () => {
       const thread = (yield* Effect.promise(() => harness.readModel())).threads.find(
         (entry) => entry.id === ThreadId.make("thread-1"),
       );
+
       expect(thread?.session).toMatchObject({
         status: "ready",
         activeTurnId: null,

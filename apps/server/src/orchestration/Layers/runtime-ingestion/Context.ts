@@ -12,6 +12,7 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import { type ProjectionThreadRuntimeContext } from "../../Services/ProjectionSnapshotQuery.ts";
 import type { createDependencies } from "./Dependencies.ts";
+
 export function createContext({
   crypto,
   projectionThreadActivities,
@@ -44,9 +45,12 @@ export function createContext({
         threadId: input.threadId,
         turnId: input.turnId,
       });
+
       const pendingRequestIds = new Set<string>();
+
       for (const activity of activities) {
         const payload = Predicate.isObject(activity.payload) ? activity.payload : undefined;
+
         if (!payload || typeof payload.requestId !== "string") continue;
         const requestId = payload.requestId;
 
@@ -54,12 +58,15 @@ export function createContext({
           pendingRequestIds.add(requestId);
           continue;
         }
+
         if (activity.kind === "user-input.resolved") {
           pendingRequestIds.delete(requestId);
           continue;
         }
+
         if (activity.kind !== "provider.user-input.respond.failed") continue;
         const detail = typeof payload.detail === "string" ? payload.detail.toLowerCase() : "";
+
         if (
           detail.includes("stale pending user-input request") ||
           detail.includes("unknown pending user-input request") ||
@@ -114,16 +121,21 @@ export function createContext({
   const resolveThreadRuntimeContextForEvent = Effect.fn("resolveThreadRuntimeContextForEvent")(
     function* (event: ProviderRuntimeEvent) {
       const key = String(event.threadId);
+
       if (event.type === "content.delta") {
         const cached = deltaRuntimeContextByThread.get(key);
+
         if (cached) return cached;
       }
+
       const thread = yield* resolveThreadRuntimeContext(event.threadId);
+
       if (thread && event.type !== "session.exited") {
         deltaRuntimeContextByThread.set(key, thread);
       } else {
         deltaRuntimeContextByThread.delete(key);
       }
+
       return thread;
     },
   );
@@ -133,6 +145,7 @@ export function createContext({
     messageId: MessageId,
   ) {
     const message = yield* projectionThreadMessages.getByMessageId({ messageId });
+
     return Option.filter(message, (entry) => entry.threadId === threadId).pipe(
       Option.getOrUndefined,
     );
@@ -147,17 +160,22 @@ export function createContext({
     },
   ) {
     const botId = thread.respondingBotId ?? thread.botId;
+
     if (!botId) return;
     const snapshot = yield* projectionSnapshotQuery.getShellSnapshot();
     const bot = snapshot.bots.find((candidate) => candidate.id === botId);
+
     if (!bot) return;
     const incidentKey = `approval:${event.requestId}`;
     yield* Effect.sync(() => {
       botInbox.reload();
+
       if (event.type === "request.resolved") {
         botInbox.resolve(incidentKey);
+
         return;
       }
+
       botInbox.ensureOpen({
         incidentKey,
         kind: "approval-request",
@@ -169,6 +187,7 @@ export function createContext({
       });
     });
   });
+
   return {
     providerCommandId,
     resolveNativeUserInputForTerminalTurn,

@@ -22,7 +22,9 @@ export function createProjectIdentity({
       options?.includeDeleted === true
         ? projectRows
         : projectRows.filter((row) => row.deletedAt === null);
+
     const uniqueWorkspaceRoots = [...new Set(filteredProjectRows.map((row) => row.workspaceRoot))];
+
     const repositoryIdentityByWorkspaceRoot = new Map(
       yield* Effect.forEach(
         uniqueWorkspaceRoots,
@@ -41,5 +43,6 @@ export function createProjectIdentity({
       ]),
     );
   });
+
   return { repositoryIdentityResolutionConcurrency, resolveRepositoryIdentitiesForProjects };
 }

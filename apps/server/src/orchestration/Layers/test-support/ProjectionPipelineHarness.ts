@@ -26,6 +26,7 @@ export const exists = (filePath: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const fileInfo = yield* Effect.result(fileSystem.stat(filePath));
+
     return fileInfo._tag === "Success";
   });
 

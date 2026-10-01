@@ -60,6 +60,7 @@ describe("ProviderCommandReactor", () => {
         model: "claude-sonnet-4-6",
       },
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.run(
@@ -110,6 +111,7 @@ describe("ProviderCommandReactor", () => {
         model: "claude-opus-4-6",
       },
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.run(

@@ -36,6 +36,7 @@ it.layer(
       const threadId = ThreadId.make("Thread Revert.Files");
       const keepAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000001";
       const removeAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000002";
+
       const otherThreadAttachmentId =
         "thread-revert-files-extra-00000000-0000-4000-8000-000000000003";
 
@@ -244,6 +245,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-atta
         const now = "2026-01-01T00:00:00.000Z";
         const threadId = ThreadId.make("Thread Delete.Files");
         const attachmentId = "thread-delete-files-00000000-0000-4000-8000-000000000001";
+
         const otherThreadAttachmentId =
           "thread-delete-files-extra-00000000-0000-4000-8000-000000000002";
 
@@ -331,10 +333,12 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-atta
         });
 
         const threadAttachmentPath = path.join(attachmentsDir, `${attachmentId}.png`);
+
         const otherThreadAttachmentPath = path.join(
           attachmentsDir,
           `${otherThreadAttachmentId}.png`,
         );
+
         yield* fileSystem.makeDirectory(attachmentsDir, { recursive: true });
         yield* fileSystem.writeFileString(threadAttachmentPath, "delete");
         yield* fileSystem.writeFileString(otherThreadAttachmentPath, "other-thread");

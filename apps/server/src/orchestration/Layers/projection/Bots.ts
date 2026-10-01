@@ -30,9 +30,11 @@ export function createBots({
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         case "bot.updated": {
           const existing = yield* projectionBotRepository.getById({ botId: event.payload.botId });
+
           if (Option.isNone(existing)) return;
           yield* projectionBotRepository.upsert({
             ...existing.value,
@@ -67,35 +69,45 @@ export function createBots({
             ...(event.payload.groupId !== undefined ? { groupId: event.payload.groupId } : {}),
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
+
         case "bot.archived": {
           const existing = yield* projectionBotRepository.getById({ botId: event.payload.botId });
+
           if (Option.isNone(existing)) return;
           yield* projectionBotRepository.upsert({
             ...existing.value,
             archivedAt: event.payload.archivedAt,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
+
         case "bot.restored": {
           const existing = yield* projectionBotRepository.getById({ botId: event.payload.botId });
+
           if (Option.isNone(existing)) return;
           yield* projectionBotRepository.upsert({
             ...existing.value,
             archivedAt: null,
             updatedAt: event.payload.updatedAt,
           });
+
           return;
         }
+
         case "bot.deleted":
           yield* projectionBotRepository.deleteById({ botId: event.payload.botId });
+
           return;
         default:
           return;
       }
     },
   );
+
   return { applyBotsProjection };
 }

@@ -21,6 +21,7 @@ export const makeKeyedDrainableWorker = <K, A, E, R>(options: {
   Effect.gen(function* () {
     const concurrency = Math.max(1, Math.floor(options.concurrency));
     const readyKeys = yield* Effect.acquireRelease(TxQueue.unbounded<K>(), TxQueue.shutdown);
+
     const stateRef = yield* TxRef.make<KeyedDrainableWorkerState<K, A>>({
       lanes: new Map(),
       outstanding: 0,
@@ -30,12 +31,15 @@ export const makeKeyedDrainableWorker = <K, A, E, R>(options: {
       Effect.flatMap((key) =>
         TxRef.modify(stateRef, (state) => {
           const lane = state.lanes.get(key);
+
           if (lane === undefined || lane.length === 0) {
             return [undefined, state] as const;
           }
+
           const item = lane[0] as A;
           const lanes = new Map(state.lanes);
           lanes.set(key, lane.slice(1));
+
           return [
             { key, item },
             { ...state, lanes },
@@ -49,10 +53,13 @@ export const makeKeyedDrainableWorker = <K, A, E, R>(options: {
       TxRef.modify(stateRef, (state) => {
         const lane = state.lanes.get(key);
         const lanes = new Map(state.lanes);
+
         if (lane === undefined || lane.length === 0) {
           lanes.delete(key);
+
           return [false, { lanes, outstanding: state.outstanding - 1 }] as const;
         }
+
         return [true, { lanes, outstanding: state.outstanding - 1 }] as const;
       }).pipe(
         Effect.flatMap((requeue) => (requeue ? TxQueue.offer(readyKeys, key) : Effect.void)),
@@ -83,6 +90,7 @@ export const makeKeyedDrainableWorker = <K, A, E, R>(options: {
         const lane = state.lanes.get(key);
         const lanes = new Map(state.lanes);
         lanes.set(key, [...(lane ?? []), item]);
+
         return [lane === undefined, { lanes, outstanding: state.outstanding + 1 }] as const;
       }).pipe(
         Effect.flatMap((offer) => (offer ? TxQueue.offer(readyKeys, key) : Effect.void)),

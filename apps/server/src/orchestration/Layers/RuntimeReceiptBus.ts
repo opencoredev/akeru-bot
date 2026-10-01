@@ -37,4 +37,5 @@ const makeRuntimeReceiptBusTest = Effect.gen(function* () {
 });
 
 export const RuntimeReceiptBusLive = Layer.effect(RuntimeReceiptBus, makeRuntimeReceiptBus);
+
 export const RuntimeReceiptBusTest = Layer.effect(RuntimeReceiptBus, makeRuntimeReceiptBusTest);

@@ -11,6 +11,7 @@ it.each(["approval", "user-input"] as const)(
   "keeps unresolved %s requests authoritative after restart",
   async (kind) => {
     const system = await createRestartSystem();
+
     try {
       const createdAt = nowIso();
       await system.dispatch({
@@ -69,6 +70,7 @@ it.each(["approval", "user-input"] as const)(
 
 it("keeps an unadopted user start visible after restart", async () => {
   const system = await createRestartSystem();
+
   try {
     await system.dispatch({
       type: "thread.turn.start",
@@ -103,6 +105,7 @@ it("keeps an unadopted user start visible after restart", async () => {
 
 it("reacts to persisted messages outside the retained tail before and after restart", async () => {
   const system = await createRestartSystem();
+
   try {
     for (let index = 0; index < 2001; index += 1) {
       await system.dispatch({
@@ -114,6 +117,7 @@ it("reacts to persisted messages outside the retained tail before and after rest
         createdAt: nowIso(),
       });
     }
+
     const react = (suffix: string) =>
       system.dispatch({
         type: "thread.message.reaction.set",
@@ -125,6 +129,7 @@ it("reacts to persisted messages outside the retained tail before and after rest
         present: true,
         updatedAt: nowIso(),
       });
+
     await react("tail");
     await system.restart();
     await react("restart");

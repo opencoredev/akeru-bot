@@ -22,6 +22,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       const projectionPipeline = yield* OrchestrationProjectionPipeline;
       const eventStore = yield* OrchestrationEventStore;
       const sql = yield* SqlClient.SqlClient;
+
       const appendAndProject = (event: Parameters<typeof eventStore.append>[0]) =>
         eventStore
           .append(event)
@@ -213,6 +214,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         WHERE thread_id = 'thread-revert'
         ORDER BY created_at ASC, message_id ASC
       `;
+
       assert.deepEqual(messageRows, [
         {
           messageId: "assistant-keep",

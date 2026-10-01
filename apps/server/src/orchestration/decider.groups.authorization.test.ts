@@ -30,6 +30,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
     Effect.gen(function* () {
       const outsiderId = AuthSessionId.make("person-outsider");
       const actor = { personId: outsiderId, canManageGroups: false } as const;
+
       const readModel = {
         ...makeReadModel({
           bots: [
@@ -61,6 +62,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           },
         ],
       };
+
       const results = yield* Effect.all([
         Effect.result(
           decideOrchestrationCommand({
@@ -185,10 +187,12 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         personId: AuthSessionId.make("person-outsider"),
         canManageGroups: false,
       } as const;
+
       const readModel = makeReadModel({
         groups: [makeGroup()],
         threads: [makeGroupThread()],
       });
+
       const commands = [
         {
           type: "thread.delete",
@@ -233,6 +237,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           updatedAt: NOW,
         },
       ] satisfies ReadonlyArray<OrchestrationCommand>;
+
       const errors = yield* Effect.all(
         commands.map((command) =>
           decideOrchestrationCommand({ command, readModel, actor }).pipe(Effect.flip),
@@ -243,6 +248,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         if (error._tag !== "OrchestrationCommandInvariantError") {
           throw new Error("Expected group thread authorization error");
         }
+
         expect(error.detail).toContain(`Person '${actor.personId}' is not a member`);
       }
     }),
@@ -269,6 +275,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
   it.effect("binds client group reactions to the authenticated person", () =>
     Effect.gen(function* () {
       const messageId = MessageId.make("message-1");
+
       const readModel = makeReadModel({
         bots: [
           makeBot({ id: BOSS_ID, groupId: GROUP_ID }),
@@ -293,6 +300,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           },
         ],
       });
+
       const command = {
         type: "thread.message.reaction.set",
         commandId: CommandId.make("cmd-member-thread-reaction"),
@@ -313,9 +321,11 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       const event = (Array.isArray(result) ? result : [result]).find(
         (candidate) => candidate.type === "thread.message-reaction-set",
       );
+
       if (event?.type !== "thread.message-reaction-set") {
         throw new Error("Expected thread.message-reaction-set");
       }
+
       expect(event.payload).toMatchObject({ personId: PERSON_ID, emoji: "👍", present: true });
       expect(event.payload.botId).toBeUndefined();
     }),
@@ -324,6 +334,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
   it.effect("keeps trusted internal group reactions bot-authored", () =>
     Effect.gen(function* () {
       const messageId = MessageId.make("message-1");
+
       const readModel = makeReadModel({
         bots: [makeBot({ id: BOSS_ID, groupId: GROUP_ID })],
         groups: [makeGroup()],
@@ -363,9 +374,11 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       const event = (Array.isArray(result) ? result : [result]).find(
         (candidate) => candidate.type === "thread.message-reaction-set",
       );
+
       if (event?.type !== "thread.message-reaction-set") {
         throw new Error("Expected thread.message-reaction-set");
       }
+
       expect(event.payload).toMatchObject({ botId: BOSS_ID, emoji: "👍", present: true });
       expect(event.payload.personId).toBeUndefined();
     }),
@@ -411,6 +424,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
   it.effect("rejects a group turn from a person who is not a member", () =>
     Effect.gen(function* () {
       const outsiderId = AuthSessionId.make("person-outsider");
+
       const error = yield* decideOrchestrationCommand({
         command: {
           ...startTurnCommand(),
@@ -427,6 +441,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected sender membership invariant error");
       }
+
       expect(error.detail).toContain(`Person '${outsiderId}' is not a member`);
     }),
   );
@@ -451,6 +466,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
           threads: [makeGroupThread()],
         }),
       });
+
       const events = Array.isArray(result) ? result : [result];
 
       expect(events.map((event) => event.type)).toEqual([
@@ -459,9 +475,11 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         "thread.turn-start-requested",
       ]);
       const assigned = events[0];
+
       if (assigned?.type !== "group.person-assigned") {
         throw new Error("Expected group person assignment");
       }
+
       expect(assigned.payload.person.personId).toBe(PERSON_ID);
       expect(assigned.payload.person.displayName).toBe("Member");
     }),
@@ -491,6 +509,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected sender membership invariant error");
       }
+
       expect(error.detail).toContain(`Person '${PERSON_ID}' is not a member`);
     }),
   );
@@ -509,6 +528,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       if (error._tag !== "OrchestrationCommandInvariantError") {
         throw new Error("Expected missing sender invariant error");
       }
+
       expect(error.detail).toContain("A person member must send turns");
     }),
   );

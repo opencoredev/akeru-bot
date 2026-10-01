@@ -16,6 +16,7 @@ describe("ProviderCommandReactor", () => {
     const now = "2026-01-01T00:00:00.000Z";
     const firstUserContext = "USER:\nOld visual issue\n[Attachments: old-issue.png]";
     const truncationMarker = "[Earlier content truncated]\n\n";
+
     const retainedContext = "x".repeat(
       8_000 - firstUserContext.length - "\n\n".length - truncationMarker.length,
     );
@@ -96,9 +97,11 @@ describe("ProviderCommandReactor", () => {
   it("does not overwrite a manual rename while title regeneration is running", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
+
     const generatedTitle = await harness.runEffect(
       Deferred.make<{ readonly title: string }, never>(),
     );
+
     harness.generateThreadTitle.mockReturnValue(Deferred.await(generatedTitle));
 
     await harness.runEffect(
@@ -161,12 +164,15 @@ describe("ProviderCommandReactor", () => {
 
   it("does not overwrite a manual rename while title regeneration is queued", async () => {
     let releaseStart = () => {};
+
     const startGate = new Promise<void>((resolve) => {
       releaseStart = resolve;
     });
+
     const harness = await createHarness({
       startSessionEffect: (session) => Effect.promise(() => startGate).pipe(Effect.as(session)),
     });
+
     const now = "2026-01-01T00:00:00.000Z";
     harness.generateThreadTitle.mockReturnValue(
       Effect.succeed({ title: "Generated title should not win" }),
@@ -225,12 +231,15 @@ describe("ProviderCommandReactor", () => {
 
   it("skips superseded title regeneration before generation starts", async () => {
     let releaseStart = () => {};
+
     const startGate = new Promise<void>((resolve) => {
       releaseStart = resolve;
     });
+
     const harness = await createHarness({
       startSessionEffect: (session) => Effect.promise(() => startGate).pipe(Effect.as(session)),
     });
+
     const now = "2026-01-01T00:00:00.000Z";
     harness.generateThreadTitle.mockReturnValue(
       Effect.succeed({ title: "Latest regenerated title" }),

@@ -54,6 +54,7 @@ export function projectEnvironment(
       return decodeForEvent(ProjectCreatedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
           const existing = nextBase.projects.find((entry) => entry.id === payload.projectId);
+
           const nextProject = {
             id: payload.projectId,
             title: payload.title,
@@ -127,6 +128,7 @@ export function projectEnvironment(
       return decodeForEvent(McpServerCreatedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
           const mcpServers = nextBase.mcpServers ?? [];
+
           return {
             ...nextBase,
             mcpServers: mcpServers.some((entry) => entry.id === payload.mcpServer.id)
@@ -138,6 +140,7 @@ export function projectEnvironment(
         }),
       );
     }
+
     case "mcp-server.deleted":
       return decodeForEvent(McpServerDeletedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => ({
@@ -162,9 +165,11 @@ export function projectEnvironment(
               : event.type === "routine.paused"
                 ? RoutinePausedPayload
                 : RoutineDeletedPayload;
+
       return decodeForEvent(schema, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
           const routines = nextBase.routines ?? [];
+
           return {
             ...nextBase,
             routines: routines.some((routine) => routine.id === payload.routine.id)
@@ -176,6 +181,7 @@ export function projectEnvironment(
         }),
       );
     }
+
     case "routine.running":
     case "routine.blocked":
     case "routine.failed":
@@ -191,10 +197,12 @@ export function projectEnvironment(
               : event.type === "routine.completed"
                 ? RoutineCompletedPayload
                 : RoutineRunCanceledPayload;
+
       return decodeForEvent(schema, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
           const routines = nextBase.routines ?? [];
           const runs = nextBase.routineRuns ?? [];
+
           return {
             ...nextBase,
             routines: routines.some((routine) => routine.id === payload.routine.id)
@@ -209,10 +217,12 @@ export function projectEnvironment(
         }),
       );
     }
+
     case "skill-assignment.assigned":
       return decodeForEvent(RoutineSkillAssignedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => {
           const assignments = nextBase.skillAssignments ?? [];
+
           return {
             ...nextBase,
             skillAssignments: assignments.some((entry) => entry.id === payload.assignment.id)

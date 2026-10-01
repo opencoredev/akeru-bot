@@ -58,24 +58,29 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         command,
         projectId: command.projectId,
       });
+
       if (command.botId != null && command.groupId != null) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: "A thread cannot belong to both a bot and a group.",
         });
       }
+
       if (command.botId != null) {
         yield* requireBotNotArchived({ readModel, command, botId: command.botId });
       }
+
       if (command.groupId != null) {
         const group = yield* requireGroup({ readModel, command, groupId: command.groupId });
         yield* requireGroupThreadCreateAuthorized({ group, command, actor });
       }
+
       yield* requireThreadAbsent({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -102,6 +107,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.delete": {
       yield* requireThread({
         readModel,
@@ -109,6 +115,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         threadId: command.threadId,
       });
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -123,6 +130,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.archive": {
       yield* requireThreadNotArchived({
         readModel,
@@ -130,6 +138,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         threadId: command.threadId,
       });
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -145,6 +154,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.unarchive": {
       yield* requireThreadArchived({
         readModel,
@@ -152,6 +162,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         threadId: command.threadId,
       });
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -166,18 +177,21 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.pin": {
       const thread = yield* requireThreadNotArchived({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       const occurredAt = yield* nowIso;
       // Re-pinning an already-pinned thread is a duplicate (double-click,
       // raced clients): re-emit with the original timestamps so the
       // projection is a no-op. Pinning has no lifecycle invariants — a pin
       // only ever promotes visibility, so it can never hide pending work.
       const existingPinnedAt = thread.pinnedAt ?? null;
+
       const pinnedEvent = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -198,11 +212,13 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
           updatedAt: existingPinnedAt !== null ? thread.updatedAt : occurredAt,
         },
       };
+
       // Pinning is a promotion: it clears the parked states rather than
       // silently outranking them. An explicit settle un-settles (reason
       // "user", same override the un-settle button stamps), and a snooze's
       // return ticket is spent — the thread is on top NOW, not on Tuesday.
       const promotionEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
+
       if (thread.settledOverride === "settled") {
         promotionEvents.push({
           ...(yield* withEventBase({
@@ -219,6 +235,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
           },
         });
       }
+
       if (thread.snoozedUntil != null) {
         promotionEvents.push({
           ...(yield* withEventBase({
@@ -235,19 +252,23 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
           },
         });
       }
+
       return promotionEvents.length > 0 ? [pinnedEvent, ...promotionEvents] : pinnedEvent;
     }
+
     case "thread.unpin": {
       const thread = yield* requireThreadNotArchived({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       // Idempotent by re-emission (see thread.settle): unpinning a thread
       // that is not pinned lands on the same null state without churning
       // updatedAt.
       const alreadyUnpinned = thread.pinnedAt == null;
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -262,12 +283,14 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.pin.reorder": {
       const thread = yield* requireThreadNotArchived({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       // Only pinned threads have a slot in the arranged order. Rejecting
       // (rather than silently pinning) keeps a raced reorder-after-unpin
       // from resurrecting a pin the user just cleared.
@@ -279,10 +302,12 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
           }),
         );
       }
+
       // Idempotent by re-emission (see thread.settle): a duplicate drop on
       // the same slot keeps the existing updatedAt so it projects as a no-op.
       const keyUnchanged = thread.pinOrderKey === command.orderKey;
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -298,19 +323,23 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.meta.update": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       const branch =
         command.branch !== undefined &&
         command.expectedBranch !== undefined &&
         thread.branch !== command.expectedBranch
           ? thread.branch
           : command.branch;
+
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -347,14 +376,17 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.title.regeneration.complete": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       const requestIsCurrent = thread.titleRegeneration?.requestId === command.requestId;
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -371,6 +403,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.runtime-mode.set": {
       yield* requireThread({
         readModel,
@@ -378,6 +411,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         threadId: command.threadId,
       });
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -393,6 +427,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.interaction-mode.set": {
       yield* requireThread({
         readModel,
@@ -400,6 +435,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         threadId: command.threadId,
       });
       const occurredAt = yield* nowIso;
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -415,26 +451,31 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.channel-delivery.set": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       // Messages hydrate into the command model empty after a restart, so a
       // message missing here is not proof the id is wrong; the projector and
       // pipeline already no-op on unknown ids. Only reject a message the model
       // can actually see and that is not an assistant reply.
       const message = thread.messages.find((entry) => entry.id === command.messageId);
+
       if (message && message.role !== "assistant") {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Channel delivery can only mark an assistant message in thread '${command.threadId}'.`,
         });
       }
+
       if (message?.channelDelivery === command.delivery) {
         return [];
       }
+
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -451,13 +492,16 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
         },
       };
     }
+
     case "thread.history.restore": {
       const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+
       const events: Array<Omit<OrchestrationEvent, "sequence">> = [];
+
       const eventBase = (occurredAt: string) =>
         withEventBase({
           aggregateKind: "thread",
@@ -486,6 +530,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
           },
         });
       }
+
       for (const proposedPlan of command.proposedPlans) {
         events.push({
           ...(yield* eventBase(proposedPlan.updatedAt)),
@@ -493,6 +538,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
           payload: { threadId: command.threadId, proposedPlan },
         });
       }
+
       for (const activity of command.activities) {
         events.push({
           ...(yield* eventBase(activity.createdAt)),
@@ -524,6 +570,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
           });
         }
       }
+
       if (
         command.snoozedUntil !== (thread.snoozedUntil ?? null) ||
         command.snoozedAt !== (thread.snoozedAt ?? null)
@@ -547,6 +594,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
           });
         }
       }
+
       if (
         command.pinnedAt !== (thread.pinnedAt ?? null) ||
         command.pinOrderKey !== (thread.pinOrderKey ?? null)
@@ -570,6 +618,7 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
           });
         }
       }
+
       if (command.archivedAt !== thread.archivedAt) {
         if (command.archivedAt !== null) {
           events.push({
@@ -589,12 +638,14 @@ export const decideThreadLifecycle = Effect.fn("decideThreadLifecycle")(function
           });
         }
       }
+
       if (events.length === 0) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Thread '${command.threadId}' history already matches the restore command.`,
         });
       }
+
       return events;
     }
   }

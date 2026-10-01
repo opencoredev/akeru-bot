@@ -15,6 +15,7 @@ describe("makeKeyedDrainableWorker", () => {
           const releaseA1 = yield* Deferred.make<void>();
           const startedB1 = yield* Deferred.make<void>();
           const processed: string[] = [];
+
           const worker = yield* makeKeyedDrainableWorker<string, string, never, never>({
             concurrency: 2,
             process: (item) =>
@@ -23,11 +24,14 @@ describe("makeKeyedDrainableWorker", () => {
                   yield* Deferred.succeed(startedA1, undefined).pipe(Effect.orDie);
                   yield* Deferred.await(releaseA1);
                 }
+
                 if (item === "approval") {
                   processed.push(item);
                   yield* Deferred.succeed(startedB1, undefined).pipe(Effect.orDie);
+
                   return;
                 }
+
                 processed.push(item);
               }),
           });
@@ -55,6 +59,7 @@ describe("makeKeyedDrainableWorker", () => {
         const releaseA = yield* Deferred.make<void>();
         const releaseB = yield* Deferred.make<void>();
         const drained = yield* Deferred.make<void>();
+
         const worker = yield* makeKeyedDrainableWorker<string, string, never, never>({
           concurrency: 2,
           process: (item) =>
@@ -88,13 +93,16 @@ describe("makeKeyedDrainableWorker", () => {
       Effect.gen(function* () {
         const started = new Map<string, Deferred.Deferred<void>>();
         const releases = new Map<string, Deferred.Deferred<void>>();
+
         for (const item of ["a", "b", "c"]) {
           started.set(item, yield* Deferred.make<void>());
           releases.set(item, yield* Deferred.make<void>());
         }
+
         const recovered = yield* Deferred.make<void>();
         let active = 0;
         let maxActive = 0;
+
         const worker = yield* makeKeyedDrainableWorker<string, string, string, never>({
           concurrency: 2,
           process: (item) =>

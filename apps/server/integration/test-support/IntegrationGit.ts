@@ -26,6 +26,7 @@ export const initializeGitWorkspace = Effect.fn(function* (cwd: string) {
 export function gitRefExists(cwd: string, ref: string): boolean {
   try {
     runGit(cwd, ["show-ref", "--verify", "--quiet", ref]);
+
     return true;
   } catch {
     return false;

@@ -16,6 +16,7 @@ import {
 } from "./EventFields.ts";
 import type { createDependencies } from "./Dependencies.ts";
 import type { createContext } from "./Context.ts";
+
 export const createPlans = Effect.fn("makeRuntimePlans")(function* ({
   projectionThreadProposedPlans,
   orchestrationEngine,
@@ -44,6 +45,7 @@ export const createPlans = Effect.fn("makeRuntimePlans")(function* ({
     Cache.getOption(bufferedProposedPlanById, planId).pipe(
       Effect.flatMap((existingEntry) => {
         const existing = Option.getOrUndefined(existingEntry);
+
         return Cache.set(bufferedProposedPlanById, planId, {
           text: `${existing?.text ?? ""}${delta}`,
           createdAt:
@@ -75,6 +77,7 @@ export const createPlans = Effect.fn("makeRuntimePlans")(function* ({
   }) =>
     Effect.gen(function* () {
       const planMarkdown = normalizeProposedPlanMarkdown(input.planMarkdown);
+
       if (!planMarkdown) {
         return;
       }
@@ -83,6 +86,7 @@ export const createPlans = Effect.fn("makeRuntimePlans")(function* ({
         threadId: input.threadId,
         planId: OrchestrationProposedPlanId.make(input.planId),
       });
+
       yield* orchestrationEngine.dispatch({
         type: "thread.proposed-plan.upsert",
         commandId: yield* providerCommandId(input.event, "proposed-plan-upsert"),
@@ -114,6 +118,7 @@ export const createPlans = Effect.fn("makeRuntimePlans")(function* ({
       const bufferedMarkdown = normalizeProposedPlanMarkdown(bufferedPlan?.text);
       const fallbackMarkdown = normalizeProposedPlanMarkdown(input.fallbackMarkdown);
       const planMarkdown = bufferedMarkdown ?? fallbackMarkdown;
+
       if (!planMarkdown) {
         return;
       }
@@ -139,12 +144,14 @@ export const createPlans = Effect.fn("makeRuntimePlans")(function* ({
     const pendingTurnStart = yield* projectionTurnRepository.getPendingTurnStartByThreadId({
       threadId,
     });
+
     if (Option.isNone(pendingTurnStart)) {
       return null;
     }
 
     const sourceThreadId = pendingTurnStart.value.sourceProposedPlanThreadId;
     const sourcePlanId = pendingTurnStart.value.sourceProposedPlanId;
+
     if (sourceThreadId === null || sourcePlanId === null) {
       return null;
     }
@@ -159,6 +166,7 @@ export const createPlans = Effect.fn("makeRuntimePlans")(function* ({
     function* (threadId: ThreadId) {
       const sessions = yield* agentController.listSessions();
       const session = sessions.find((entry) => entry.threadId === threadId);
+
       return session?.activeTurnId;
     },
   );
@@ -171,6 +179,7 @@ export const createPlans = Effect.fn("makeRuntimePlans")(function* ({
     }
 
     const expectedTurnId = yield* getExpectedProviderTurnIdForThread(threadId);
+
     if (!sameId(expectedTurnId, eventTurnId)) {
       return null;
     }
@@ -187,6 +196,7 @@ export const createPlans = Effect.fn("makeRuntimePlans")(function* ({
     ) {
       const sourceThread = yield* resolveThreadDetail(sourceThreadId);
       const sourcePlan = sourceThread?.proposedPlans.find((entry) => entry.id === sourcePlanId);
+
       if (!sourceThread || !sourcePlan || sourcePlan.implementedAt !== null) {
         return;
       }
@@ -208,6 +218,7 @@ export const createPlans = Effect.fn("makeRuntimePlans")(function* ({
       });
     },
   );
+
   return {
     bufferedProposedPlanById,
     appendBufferedProposedPlan,

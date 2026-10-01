@@ -20,9 +20,13 @@ import { decideOrchestrationCommand } from "./decider.ts";
 import { createEmptyReadModel } from "./projector.ts";
 
 const NOW = "2026-09-01T03:40:00.000Z";
+
 const THREAD_ID = ThreadId.make("thread-user-input");
+
 const REQUEST_ID = ApprovalRequestId.make("request-color");
+
 const BOT_ID = BotId.make("bot-akeru");
+
 const GROUP_ID = GroupId.make("group-product");
 
 const archivedBot: OrchestrationBot = {
@@ -104,6 +108,7 @@ it.layer(NodeServices.layer)("user input response decider", (it) => {
         },
         readModel: makeReadModel(),
       });
+
       const events = Array.isArray(decided) ? decided : [decided];
 
       expect(events.map((event) => event.type)).toEqual([
@@ -132,6 +137,7 @@ it.layer(NodeServices.layer)("user input response decider", (it) => {
       it.effect(`rejects ${type} for an archived ${groupChat ? "group boss" : "bot"}`, () =>
         Effect.gen(function* () {
           const readModel = makeReadModel();
+
           const command =
             type === "thread.approval.respond"
               ? {
@@ -150,6 +156,7 @@ it.layer(NodeServices.layer)("user input response decider", (it) => {
                   answers: { color: "Red" },
                   createdAt: NOW,
                 };
+
           const error = yield* decideOrchestrationCommand({
             command,
             readModel: {
@@ -176,6 +183,7 @@ it.layer(NodeServices.layer)("user input response decider", (it) => {
               ],
             },
           }).pipe(Effect.flip);
+
           expect(String(error)).toContain("is archived");
         }),
       );

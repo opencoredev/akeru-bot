@@ -57,6 +57,7 @@ const removeClaimedAttachmentPaths = Effect.fn("Normalizer.removeClaimedAttachme
     if (attachmentPaths.length === 0) {
       return;
     }
+
     const fileSystem = yield* FileSystem.FileSystem;
     yield* Effect.forEach(
       attachmentPaths,
@@ -137,6 +138,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
     }
 
     const claimedAttachmentPaths: string[] = [];
+
     const normalizedAttachments = yield* Effect.forEach(
       canonicalCommand.message.attachments,
       (attachment) =>
@@ -147,6 +149,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
               threadId: canonicalCommand.threadId,
               attachmentId: attachment.id,
             });
+
             if (!claim.ok) {
               return yield* new OrchestrationDispatchCommandError({
                 message: `Attachment '${attachment.name}' cannot be sent: ${claim.reason}.`,
@@ -162,6 +165,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
                   }),
               ),
             );
+
             if (Number(info.size) !== attachment.sizeBytes) {
               return yield* new OrchestrationDispatchCommandError({
                 message: `Attachment '${attachment.name}' cannot be sent: stored size does not match.`,
@@ -176,10 +180,12 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
                     id: claim.finalId,
                     mimeType: attachment.mimeType.toLowerCase(),
                   };
+
             const expectedPath = resolveAttachmentPath({
               attachmentsDir: serverConfig.attachmentsDir,
               attachment: normalizedAttachment,
             });
+
             if (expectedPath !== claim.finalPath) {
               return yield* new OrchestrationDispatchCommandError({
                 message: `Attachment '${attachment.name}' cannot be sent: ${attachment.type} type does not match the upload.`,
@@ -203,6 +209,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
           }
 
           const parsed = parseBase64DataUrl(attachment.dataUrl);
+
           if (
             !parsed ||
             parsed.mimeType !== attachment.mimeType.toLowerCase() ||
@@ -214,10 +221,12 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
           }
 
           const bytes = Buffer.from(parsed.base64, "base64");
+
           const maxBytes =
             attachment.type === "image"
               ? PROVIDER_SEND_TURN_MAX_IMAGE_BYTES
               : PROVIDER_SEND_TURN_MAX_FILE_BYTES;
+
           if (bytes.byteLength === 0 || bytes.byteLength > maxBytes) {
             return yield* new OrchestrationDispatchCommandError({
               message: `Attachment '${attachment.name}' is empty or too large.`,
@@ -225,6 +234,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
           }
 
           const attachmentId = createAttachmentId(canonicalCommand.threadId);
+
           if (!attachmentId) {
             return yield* new OrchestrationDispatchCommandError({
               message: "Failed to create a safe attachment id.",
@@ -252,6 +262,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
             attachmentsDir: serverConfig.attachmentsDir,
             attachment: persistedAttachment,
           });
+
           if (!attachmentPath) {
             return yield* new OrchestrationDispatchCommandError({
               message: `Failed to resolve persisted path for '${attachment.name}'.`,
@@ -298,8 +309,10 @@ export const cleanupFailedUploadedAttachments = Effect.fn(
 
   const serverConfig = yield* ServerConfig;
   const claimedPaths: string[] = [];
+
   for (const [index, attachment] of normalizedCommand.message.attachments.entries()) {
     const original = command.message.attachments[index];
+
     if (
       !original ||
       "dataUrl" in original ||
@@ -312,9 +325,11 @@ export const cleanupFailedUploadedAttachments = Effect.fn(
       attachmentsDir: serverConfig.attachmentsDir,
       attachment,
     });
+
     if (claimedPath) {
       claimedPaths.push(claimedPath);
     }
   }
+
   yield* removeClaimedAttachmentPaths(claimedPaths);
 });

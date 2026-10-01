@@ -60,9 +60,11 @@ export const createDependencies = Effect.fn("makeprovider-command-Dependencies")
               readonly limit?: number;
             }) => {
               const status = await runPromise(composio.value.getStatus);
+
               if (!status.configured) {
                 return { status: "setup-required" as const, toolkits: [] };
               }
+
               return {
                 status: "available" as const,
                 toolkits: await runPromise(composio.value.searchToolkits(input)),
@@ -111,6 +113,7 @@ export const createDependencies = Effect.fn("makeprovider-command-Dependencies")
   const threadMcpServers = new Map<string, readonly McpServer[]>();
 
   const threadsAwaitingRestrictiveSessionCleanup = new Set<string>();
+
   return {
     crypto,
     orchestrationEngine,

@@ -27,6 +27,7 @@ import type { createPlans } from "./Plans.ts";
 import type { createCleanup } from "./Cleanup.ts";
 import type { createTasks } from "./Tasks.ts";
 import type { createChannels } from "./Channels.ts";
+
 export function createEvents({
   prepareRuntimeEvent,
   getOrCreateAssistantMessageId,
@@ -105,7 +106,9 @@ export function createEvents({
   const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
       const context = yield* prepareRuntimeEvent(event);
+
       if (!context) return;
+
       const {
         thread,
         eventTurnId,
@@ -115,19 +118,24 @@ export function createEvents({
         pendingTurnStart,
         shouldApplyThreadLifecycle,
       } = context;
+
       const assistantDelta =
         event.type === "content.delta" && event.payload.streamKind === "assistant_text"
           ? event.payload.delta
           : undefined;
+
       const proposedPlanDelta =
         event.type === "turn.proposed.delta" ? event.payload.delta : undefined;
+
       if (assistantDelta && assistantDelta.length > 0) {
         const turnId = toTurnId(event.turnId);
+
         const assistantMessageId = yield* getOrCreateAssistantMessageId({
           threadId: thread.id,
           event,
           ...(turnId ? { turnId } : {}),
         });
+
         if (turnId) {
           yield* rememberAssistantMessageId(thread.id, turnId, assistantMessageId);
         }
@@ -136,8 +144,10 @@ export function createEvents({
           serverSettingsService.getSettings,
           (settings) => (settings.enableLegacyTokenStreaming ? "streaming" : "buffered"),
         );
+
         if (assistantDeliveryMode === "buffered") {
           const spillChunk = yield* appendBufferedAssistantText(assistantMessageId, assistantDelta);
+
           if (spillChunk.length > 0) {
             yield* orchestrationEngine.dispatch({
               type: "thread.message.assistant.delta",
@@ -161,7 +171,9 @@ export function createEvents({
           });
         }
       }
+
       const chatAttachment = runtimeChatAttachment(event);
+
       if (chatAttachment) {
         const turnId = toTurnId(event.turnId);
         const messageId = MessageId.make(`provider-attachment-${event.eventId}`);
@@ -184,15 +196,18 @@ export function createEvents({
           createdAt: now,
         });
       }
+
       const pauseForUserTurnId =
         event.type === "request.opened" || event.type === "user-input.requested"
           ? toTurnId(event.turnId)
           : undefined;
+
       if (pauseForUserTurnId) {
         const assistantDeliveryMode: AssistantDeliveryMode = yield* Effect.map(
           serverSettingsService.getSettings,
           (settings) => (settings.enableLegacyTokenStreaming ? "streaming" : "buffered"),
         );
+
         const flushedMessageIds =
           assistantDeliveryMode === "buffered"
             ? yield* flushBufferedAssistantMessagesForTurn({
@@ -206,6 +221,7 @@ export function createEvents({
                     : "assistant-delta-flush-on-user-input-requested",
               })
             : new Set<MessageId>();
+
         yield* finalizeActiveAssistantSegmentForTurn({
           event,
           threadId: thread.id,
@@ -227,10 +243,12 @@ export function createEvents({
           flushedMessageIds,
         });
       }
+
       if (proposedPlanDelta && proposedPlanDelta.length > 0) {
         const planId = proposedPlanIdFromEvent(event, thread.id);
         yield* appendBufferedProposedPlan(planId, proposedPlanDelta, now);
       }
+
       const assistantCompletion =
         event.type === "item.completed" && event.payload.itemType === "assistant_message"
           ? {
@@ -240,6 +258,7 @@ export function createEvents({
               fallbackText: event.payload.detail,
             }
           : undefined;
+
       const proposedPlanCompletion =
         event.type === "turn.proposed.completed"
           ? {
@@ -248,11 +267,14 @@ export function createEvents({
               planMarkdown: event.payload.planMarkdown,
             }
           : undefined;
+
       if (assistantCompletion) {
         const turnId = toTurnId(event.turnId);
+
         const activeAssistantMessageId = turnId
           ? yield* getActiveAssistantMessageIdForTurn(thread.id, turnId)
           : Option.none<MessageId>();
+
         const hasAssistantMessagesForTurn =
           turnId !== undefined
             ? yield* projectionThreadMessages.hasAssistantMessageForTurn({
@@ -261,11 +283,14 @@ export function createEvents({
                 streamingOnly: false,
               })
             : false;
+
         const assistantMessageId = Option.getOrElse(
           activeAssistantMessageId,
           () => assistantCompletion.messageId,
         );
+
         const existingAssistantMessage = yield* getThreadMessageById(thread.id, assistantMessageId);
+
         const shouldApplyFallbackCompletionText =
           !existingAssistantMessage || existingAssistantMessage.text.length === 0;
 
@@ -303,6 +328,7 @@ export function createEvents({
           yield* clearAssistantSegmentStateForTurn(thread.id, turnId);
         }
       }
+
       if (proposedPlanCompletion) {
         yield* finalizeBufferedProposedPlan({
           event,
@@ -313,8 +339,10 @@ export function createEvents({
           updatedAt: now,
         });
       }
+
       if (event.type === "turn.completed" || event.type === "turn.aborted") {
         const turnId = toTurnId(event.turnId);
+
         if (turnId) {
           yield* resolveNativeUserInputForTerminalTurn({
             event,
@@ -324,15 +352,19 @@ export function createEvents({
           });
         }
       }
+
       if (event.type === "turn.completed") {
         const turnId = toTurnId(event.turnId);
+
         if (turnId) {
           const assistantMessageIds = yield* getAssistantMessageIdsForTurn(thread.id, turnId);
+
           const finalizedReplyVisibility = yield* Effect.forEach(
             assistantMessageIds,
             (assistantMessageId) =>
               Effect.gen(function* () {
                 const existing = yield* getThreadMessageById(thread.id, assistantMessageId);
+
                 return yield* finalizeAssistantMessage({
                   event,
                   threadId: thread.id,
@@ -346,6 +378,7 @@ export function createEvents({
               }),
             { concurrency: 1 },
           );
+
           yield* clearAssistantMessageIdsForTurn(thread.id, turnId);
           yield* clearAssistantSegmentStateForTurn(thread.id, turnId);
 
@@ -363,11 +396,13 @@ export function createEvents({
               turnId,
               streamingOnly: false,
             });
+
           if (!hasVisibleAssistantReply && !finalizedReplyVisibility.some(Boolean)) {
             const fallbackText =
               event.payload.state === "failed"
                 ? "I cannot complete the request. Check the error details."
                 : "I finished without a text response. Please try again.";
+
             yield* finalizeAssistantMessage({
               event,
               threadId: thread.id,
@@ -382,9 +417,11 @@ export function createEvents({
           }
         }
       }
+
       if (event.type === "session.exited") {
         yield* clearTurnStateForSession(thread.id);
       }
+
       if (event.type === "runtime.error") {
         const runtimeErrorMessage = event.payload.message;
 
@@ -414,15 +451,19 @@ export function createEvents({
           });
         }
       }
+
       if (event.type === "turn.diff.updated") {
         const turnId = toTurnId(event.turnId);
+
         const checkpointContext = turnId
           ? yield* projectionSnapshotQuery
               .getThreadCheckpointContext(thread.id)
               .pipe(Effect.map(Option.getOrUndefined))
           : undefined;
+
         const workspaceCwd =
           checkpointContext?.worktreePath ?? checkpointContext?.workspaceRoot ?? undefined;
+
         if (
           turnId &&
           checkpointContext &&
@@ -441,6 +482,7 @@ export function createEvents({
             const assistantMessageId = MessageId.make(
               `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
             );
+
             yield* orchestrationEngine.dispatch({
               type: "thread.turn.diff.complete",
               commandId: yield* providerCommandId(event, "thread-turn-diff-complete"),
@@ -457,12 +499,15 @@ export function createEvents({
           }
         }
       }
+
       if (event.type === "task.started" || event.type === "task.progress") {
         const description = event.payload.description?.trim();
+
         if (description) {
           yield* rememberTaskDescription(thread.id, event.payload.taskId, description);
         }
       }
+
       // Working-indicator plan progress: current step while the turn runs,
       // cleared on settle so a finished plan never lingers as stale UI.
       // Events carrying a turn id that conflicts with the active turn are
@@ -477,6 +522,7 @@ export function createEvents({
           threadPlanProgress.clearThreadPlanProgress(thread.id);
         }
       }
+
       // Sidebar background liveness: fed from the same lifecycle stream,
       // read by the shell query at mapping time (no persistence).
       switch (event.type) {
@@ -490,6 +536,7 @@ export function createEvents({
             status?: string;
             agentId?: string;
           };
+
           threadBackgroundLiveness.recordTaskLiveness({
             threadId: thread.id,
             taskId: payload.taskId,
@@ -507,26 +554,32 @@ export function createEvents({
           });
           break;
         }
+
         case "session.exited":
           threadBackgroundLiveness.clearThreadLiveness(thread.id);
           break;
         default:
           break;
       }
+
       let taskTitle: string | undefined;
+
       if (event.type === "task.completed") {
         taskTitle = yield* lookupTaskDescription(thread.id, event.payload.taskId);
+
         if (!taskTitle) {
           const latestTask = yield* projectionThreadActivities.getLatestTaskActivity({
             threadId: thread.id,
             taskId: event.payload.taskId,
           });
+
           taskTitle = findTaskTitleInActivities(
             Option.match(latestTask, { onNone: () => [], onSome: (activity) => [activity] }),
             event.payload.taskId,
           );
         }
       }
+
       const activities = runtimeEventToActivities(event, taskTitle);
       yield* Effect.forEach(activities, (activity) =>
         providerCommandId(event, "thread-activity-append").pipe(
@@ -541,6 +594,7 @@ export function createEvents({
           ),
         ),
       ).pipe(Effect.asVoid);
+
       if (
         shouldApplyThreadLifecycle &&
         !conflictsWithActiveTurn &&
@@ -551,9 +605,11 @@ export function createEvents({
             (event.payload.state === "error" || event.payload.state === "stopped")))
       ) {
         const terminalTurnId = eventTurnId ?? activeTurnId ?? undefined;
+
         if (terminalTurnId) {
           channelWaitingRequests.delete(providerTurnKey(thread.id, terminalTurnId));
         }
+
         yield* channelStatusWorker.enqueue({
           threadId: thread.id,
           turnId: terminalTurnId,
@@ -572,6 +628,7 @@ export function createEvents({
                 : "cancelled",
         });
       }
+
       if (
         event.type === "turn.completed" &&
         event.payload.state === "completed" &&
@@ -582,8 +639,10 @@ export function createEvents({
         const target = yield* channelRuntime
           .resolveCompletedChannelReply(thread.id, eventTurnId)
           .pipe(Effect.orDie);
+
         if (target) yield* automaticChannelReplyWorker.enqueue(target);
       }
     });
+
   return { processRuntimeEvent };
 }

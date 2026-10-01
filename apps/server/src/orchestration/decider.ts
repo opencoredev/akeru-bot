@@ -45,7 +45,9 @@ export const decideCommandSequence = Effect.fn("decideCommandSequence")(function
       readModel: nextReadModel,
       ...(actor !== undefined ? { actor } : {}),
     });
+
     const nextEvents = Array.isArray(decided) ? decided : [decided];
+
     for (const nextEvent of nextEvents) {
       plannedEvents.push(nextEvent);
       nextSequence += 1;
@@ -73,6 +75,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
   Crypto.Crypto
 > {
   const commandType = command.type;
+
   switch (command.type) {
     case "thread.delete":
     case "thread.archive":
@@ -226,6 +229,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       });
     default: {
       command satisfies never;
+
       return yield* new OrchestrationCommandInvariantError({
         commandType: commandType,
         detail: `Unknown command type: ${commandType}`,

@@ -58,7 +58,9 @@ export const MASTRA_PROVIDERS = [
 export function modelFor(provider: IntegrationProvider, variant: "a" | "b"): string {
   if (provider === CLAUDE_AGENT_PROVIDER)
     return variant === "a" ? "claude-sonnet-5" : "claude-opus-4-6";
+
   if (provider === GROK_PROVIDER) return "grok-build";
+
   return variant === "a" ? "gpt-5.6-luna" : "gpt-5.6-sol";
 }
 
@@ -68,6 +70,7 @@ export function mastraFixture(provider: IntegrationProvider, suffix: string): Te
     threadId: String(THREAD_ID),
     turnId: FIXTURE_TURN_ID,
   });
+
   return {
     events: [
       { type: "turn.started", ...base(`evt-${suffix}-start`, "2026-05-01T00:00:00.000Z") },

@@ -27,7 +27,9 @@ export function projectThreadMessages(
           event.type,
           "payload",
         );
+
         const thread = findProjectedThread(nextBase.threads, payload.threadId);
+
         if (!thread) {
           return nextBase;
         }
@@ -64,6 +66,7 @@ export function projectThreadMessages(
         // and replace the one entry instead of mapping the whole history.
         const existingIndex = thread.messages.findLastIndex((entry) => entry.id === message.id);
         const entry = existingIndex >= 0 ? thread.messages[existingIndex] : undefined;
+
         const messages = entry
           ? thread.messages.with(existingIndex, {
               ...entry,
@@ -81,6 +84,7 @@ export function projectThreadMessages(
               ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
             })
           : [...thread.messages, message];
+
         const cappedMessages =
           messages.length > MAX_THREAD_MESSAGES ? messages.slice(-MAX_THREAD_MESSAGES) : messages;
 
@@ -101,15 +105,19 @@ export function projectThreadMessages(
       ).pipe(
         Effect.map((payload) => {
           const thread = findProjectedThread(nextBase.threads, payload.threadId);
+
           if (!thread) return nextBase;
+
           const messages = thread.messages.map((message) => {
             if (message.id !== payload.messageId) return message;
+
             const withoutReaction = (message.reactions ?? []).filter(
               (reaction) =>
                 reaction.botId !== payload.botId ||
                 reaction.personId !== payload.personId ||
                 reaction.emoji !== payload.emoji,
             );
+
             return {
               ...message,
               reactions: payload.present
@@ -126,6 +134,7 @@ export function projectThreadMessages(
               updatedAt: payload.updatedAt,
             };
           });
+
           return {
             ...nextBase,
             threads: updateThread(nextBase.threads, payload.threadId, {
@@ -143,7 +152,9 @@ export function projectThreadMessages(
           event.type,
           "payload",
         );
+
         const thread = findProjectedThread(nextBase.threads, payload.threadId);
+
         if (!thread) {
           return nextBase;
         }

@@ -26,17 +26,21 @@ const isPluginSearchResult = Schema.is(AkeruPluginSearchResult);
  */
 function projectMemoryOperationCount(data: Record<string, unknown>): number | undefined {
   const operations = asRecord(data.args)?.operations;
+
   return Array.isArray(operations) ? operations.length : undefined;
 }
 
 function projectRawOutput(value: unknown): Record<string, unknown> | undefined {
   const direct = asTrimmedString(value);
+
   if (direct) {
     const summary = summarizeToolTextOutput(direct);
+
     return summary ? { content: summary } : undefined;
   }
 
   const rawOutput = asRecord(value);
+
   if (!rawOutput) {
     return undefined;
   }
@@ -49,20 +53,26 @@ function projectRawOutput(value: unknown): Record<string, unknown> | undefined {
   }
 
   const content = asTrimmedString(rawOutput.content);
+
   if (content) {
     const summary = summarizeToolTextOutput(content);
+
     return summary ? { content: summary } : undefined;
   }
 
   const stdout = asTrimmedString(rawOutput.stdout);
+
   if (stdout) {
     const summary = summarizeToolTextOutput(stdout);
+
     return summary ? { content: summary } : undefined;
   }
 
   const stderr = asTrimmedString(rawOutput.stderr);
+
   if (stderr) {
     const summary = summarizeToolTextOutput(stderr);
+
     return summary ? { content: summary } : undefined;
   }
 
@@ -78,18 +88,22 @@ function projectAcpContent(value: unknown): Record<string, unknown> | undefined 
     .map((entryValue) => {
       const entry = asRecord(entryValue);
       const content = asRecord(entry?.content);
+
       return entry?.type === "content" && content?.type === "text"
         ? asTrimmedString(content.text)
         : null;
     })
     .filter((entry): entry is string => entry !== null)
     .join("\n");
+
   const summary = summarizeToolTextOutput(text);
+
   return summary ? { content: summary } : undefined;
 }
 
 function projectPluginSearchResult(value: unknown): AkeruPluginSearchResult | undefined {
   if (!isPluginSearchResult(value)) return undefined;
+
   return {
     ...value,
     recommendations: value.recommendations.slice(0, 6),
@@ -105,11 +119,13 @@ export function projectActivityPayload(
 ): OrchestrationThreadActivity {
   const payload = asRecord(activity.payload);
   const data = asRecord(payload?.data);
+
   if (!payload || !data) {
     return activity;
   }
 
   const itemStatus = asRecord(data.item)?.status;
+
   const projectedPayload =
     payload.status === "completed" && (itemStatus === "failed" || itemStatus === "declined")
       ? { ...payload, status: itemStatus }
@@ -127,6 +143,7 @@ export function projectActivityPayload(
 
   if (payload.itemType === "dynamic_tool_call" && activity.summary === "SearchPlugins") {
     const result = projectPluginSearchResult(data.result);
+
     if (result) {
       return {
         ...activity,
@@ -143,16 +160,20 @@ export function projectActivityPayload(
 
   const projectedData: Record<string, unknown> = {};
   const item = projectCommandData(data);
+
   if (item) {
     projectedData.item = item;
   }
+
   const command = projectCommandValue(data);
+
   if (command !== undefined) {
     projectedData.command = projectBoundedValue(command);
   }
 
   const changedFiles: string[] = [];
   collectChangedFiles(data, changedFiles, new Set<string>(), 0);
+
   if (changedFiles.length > 0) {
     // Both clients discover file names by walking objects with path-like keys.
     projectedData.files = changedFiles.map((path) => ({ path }));
@@ -161,16 +182,19 @@ export function projectActivityPayload(
   if ("toolCallId" in data) {
     projectedData.toolCallId = data.toolCallId;
   }
+
   if ("kind" in data) {
     projectedData.kind = data.kind;
   }
 
   const memoryOperationCount = projectMemoryOperationCount(data);
+
   if (memoryOperationCount !== undefined) {
     projectedData.memoryOperationCount = memoryOperationCount;
   }
 
   const rawOutput = projectRawOutput(data.rawOutput) ?? projectAcpContent(data.content);
+
   if (rawOutput) {
     projectedData.rawOutput = rawOutput;
   }
@@ -207,10 +231,13 @@ export function projectActivityEvent(event: OrchestrationEvent): OrchestrationEv
   if (event.type !== "thread.activity-appended") {
     return event;
   }
+
   const cached = projectedActivityEvents.get(event);
+
   if (cached !== undefined) {
     return cached;
   }
+
   const projected: OrchestrationEvent = {
     ...event,
     payload: {
@@ -218,8 +245,10 @@ export function projectActivityEvent(event: OrchestrationEvent): OrchestrationEv
       activity: projectActivityPayload(event.payload.activity),
     },
   };
+
   projectedActivityEvents.set(event, projected);
   // Mark the result as already projected so a repeat call returns it unchanged.
   projectedActivityEvents.set(projected, projected);
+
   return projected;
 }

@@ -59,6 +59,7 @@ describe("ProviderCommandReactor", () => {
     await harness.waitFor(async () => {
       const readModel = await harness.readModel();
       const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+
       return thread?.runtimeMode === "approval-required";
     });
     await harness.waitFor(() => harness.startSession.mock.calls.length === 2);
@@ -99,6 +100,7 @@ describe("ProviderCommandReactor", () => {
 
   it("stops a full-access session when a restrictive runtime mode update fails", async () => {
     let failComposioPreparation = false;
+
     const harness = await createHarness({
       composioResolveRuntimeMcpServer: () =>
         failComposioPreparation
@@ -110,6 +112,7 @@ describe("ProviderCommandReactor", () => {
             )
           : Effect.succeed<McpServer | undefined>(undefined),
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.runEffect(
@@ -154,9 +157,11 @@ describe("ProviderCommandReactor", () => {
     expect(harness.interruptTurn).toHaveBeenCalledWith({ threadId: ThreadId.make("thread-1") });
     expect(harness.stopSession).toHaveBeenCalledWith({ threadId: ThreadId.make("thread-1") });
     expect(harness.runtimeSessions).toHaveLength(0);
+
     const thread = (await harness.readModel()).threads.find(
       (entry) => entry.id === ThreadId.make("thread-1"),
     );
+
     expect(thread?.runtimeMode).toBe("approval-required");
     expect(thread?.session).toMatchObject({
       status: "error",
@@ -176,12 +181,14 @@ describe("ProviderCommandReactor", () => {
   it("quarantines a full-access session until restrictive cleanup is confirmed", async () => {
     let failComposioPreparation = false;
     let failSessionStop = true;
+
     const providerFailure = (method: string, detail: string) =>
       new ProviderAdapterRequestError({
         provider: "codex",
         method,
         detail,
       });
+
     const harness = await createHarness({
       composioResolveRuntimeMcpServer: () =>
         failComposioPreparation
@@ -199,6 +206,7 @@ describe("ProviderCommandReactor", () => {
           ? Effect.fail(providerFailure("thread.session.stop", "Stop failed."))
           : Effect.void,
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.runEffect(
@@ -311,6 +319,7 @@ describe("ProviderCommandReactor", () => {
 
   it("accepts an interrupt that already removed the unrestricted session", async () => {
     let failComposioPreparation = false;
+
     const harness = await createHarness({
       composioResolveRuntimeMcpServer: () =>
         failComposioPreparation
@@ -323,6 +332,7 @@ describe("ProviderCommandReactor", () => {
           : Effect.succeed<McpServer | undefined>(undefined),
       interruptTurnRemovesSession: true,
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.runEffect(
@@ -399,6 +409,7 @@ describe("ProviderCommandReactor", () => {
         model: "claude-opus-4-6",
       },
     });
+
     const now = "2026-01-01T00:00:00.000Z";
 
     await harness.run(
@@ -491,6 +502,7 @@ describe("ProviderCommandReactor", () => {
     await harness.waitFor(async () => {
       const readModel = await harness.readModel();
       const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+
       return thread?.runtimeMode === "approval-required";
     });
     await harness.waitFor(() => harness.startSession.mock.calls.length === 2);
