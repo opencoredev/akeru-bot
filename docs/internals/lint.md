@@ -123,12 +123,15 @@ Test files (`*.test.*`, `test/`, `testUtils/`, `test-support/`) turn off
 `require-safety-comment-for-type-assertion` and `no-manual-tagged-construction`. Tests build
 partial fixtures and tagged values by hand on purpose, and annotating each one adds noise.
 
-A deliberate exception gets a disable comment with its reason after `--`:
+There are no inline exceptions. `akeru/no-lint-suppressions` reports every `oxlint-disable`,
+`eslint-disable`, `@ts-ignore`, `@ts-expect-error`, and `@ts-nocheck` comment, and
+`typescript/no-explicit-any` reports `any`. A file-wide `oxlint-disable` would also silence that
+rule, so `vp run lint` finishes with `scripts/check-lint-suppressions.ts`, which scans tracked
+sources directly. Vendored and generated code is excluded and fixed at its source.
 
-```tsx
-// oxlint-disable-next-line shadcn/no-raw-colors -- Partner brand color, approved by design.
-<span className="bg-amber-400">Sponsor</span>
-```
+When a rule is wrong for a whole category of code, change its configuration in `vite.config.ts`
+with the reason beside it, as the test-file override above does. To assert that a value fails to
+type-check, use `expectTypeOf` from Vitest rather than `@ts-expect-error`.
 
 ## Updating the vendored anti-slop copy
 

@@ -125,6 +125,7 @@ Choose meaningful test data. Use deterministic visual fixtures for repeatable UI
 ## Lint
 
 - Oxlint runs anti-slop, Effect, and shadcn design-system rules on top of the built-ins. Run `vp lint <paths>` on the files you touched and fix what it reports there. Do not lower a rule from `error` to `warn` to get a change through.
+- No suppressions. Never write `oxlint-disable`, `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, or `@ts-nocheck`, and never reach for `any` or `as unknown as`. Fix the code: parse untrusted input with a schema, narrow with `Predicate`, fix the type at its source. If a rule is wrong for a whole category of code, change its configuration in `vite.config.ts` and write down why. `akeru/no-lint-suppressions` and `scripts/check-lint-suppressions.ts` enforce this in CI.
 - Keep files under 800 lines. Split along real seams such as a component, a service, or a test fixture group, not at an arbitrary line.
 - New web UI uses the primitives in `apps/web/src/components/ui` and the theme tokens in `apps/web/src/index.css`. No raw palette colors, no arbitrary values such as `w-[13px]`, and no restyling a primitive through `className`. Pick a variant or size, or add one to the primitive.
 - Rule groups, the warn-to-error ratchet, and the shadcn contracts are in [docs/internals/lint.md](docs/internals/lint.md).
