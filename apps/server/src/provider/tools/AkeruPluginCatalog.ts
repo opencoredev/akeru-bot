@@ -35,7 +35,7 @@ declare global {
   }
 }
 
-export function loadNodeCatalogModules(): CatalogManifestModules {
+export function loadNodeCatalogModules(): CatalogManifestModules<unknown> {
   // The server bundle lives at `apps/server/dist`, while source files live
   // one directory deeper under `apps/server/src/provider`. Resolve the
   // repository catalog from the bundled location, with the packaged desktop
