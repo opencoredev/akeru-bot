@@ -18,8 +18,9 @@ orchestration layer does not know which one is behind a thread.
 | `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode]      |
 | `opencodeGo`  | [`Drivers/OpenCodeGoDriver.ts`][opencode-go] |
 
-Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds an
-adapter in a child scope. Adapter implementations live beside them in
+Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds a
+provider instance in a child scope. The five subscription drivers supply a Mastra connection;
+standard OpenCode supplies a legacy adapter. Adapter implementations live beside them in
 `apps/server/src/provider/Layers/` (`CodexAdapter.ts`, `ClaudeAdapter.ts`, and so on) and conform to
 [`ProviderAdapter.ts`][adapter]. Read the driver plus its adapter to see how a specific agent's
 transport, config, and event shapes are mapped.
@@ -152,9 +153,59 @@ revert boundary. OpenCode keeps reverted messages in the transcript until the ne
 `readThread` stops at `session.revert.messageID` rather than slicing the local copy. OpenCode Go
 stays on Mastra and does not use this adapter path.
 
-### Grok health check
+### Harness-native readiness
 
-`checkGrokProviderStatus` never opens an ACP session. It runs `grok --version`, then `grok models`
+Codex, Claude, and Grok use `HarnessProviderStatus.ts`, not their CLI health checks, to publish
+readiness. Like Kimi and OpenCode Go, they report the bundled runtime as installed even when no
+provider binary exists. The initial snapshot and each refresh reload `SubscriptionAuthService`
+from the environment's `subscription-auth.json`. A connected saved credential makes the instance
+ready; a missing credential reports unauthenticated and asks the user to connect in Settings.
+
+The model list comes from built-in metadata and `ModelManifest.applyModelManifest`. Codex combines
+current manifest IDs with bundled and historical compatibility models. The manifest classifies
+models as current or legacy; it is not an exhaustive allowlist. The OAuth transport forwards the
+selected ID to the Codex API without a local catalog restriction. Account access is still checked
+by the provider when a request runs. Thinking levels come from the harness SDK, without a CLI
+`model/list` request.
+Standard and Fast service tiers remain selectable. Claude merges manifest additions into its
+built-in capability catalog without dropping historical models. Grok includes its API model IDs
+alongside manifest additions. It labels the compatibility `grok-build` selection as Grok 4.6 and maps it to `grok-4.6` in
+`mastraModelId`, because the product slug is not an API model ID. Keeping the selection slug lets
+existing bots and the default model pass catalog validation. Custom models are retained.
+
+Successful credential mutations through poll, completion, and logout RPCs reconcile default
+provider settings and refresh each affected saved-credential instance before returning. The
+registry publishes the updated snapshot immediately, including for named instances and when
+periodic health refresh is disabled.
+
+Explicit connection variables or a custom home disable saved-credential fallback. Codex then
+requires `OPENAI_API_KEY`, Claude requires `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or
+`CLAUDE_CODE_OAUTH_TOKEN`, and Grok requires `XAI_API_KEY` in the instance's explicit environment.
+A CLI login or custom CLI home alone cannot make that instance ready. Ambient credentials remain
+available to saved-credential instances, matching the harness's transport precedence.
+
+`HarnessTextGeneration.ts` generates chat titles and branch names through
+`resolveAkeruMastraModel`, the same transport resolver as turns. It reloads saved credentials for
+each operation and preserves instance scoping, Codex reasoning effort and service tier, and Claude
+effort and context-window selections. Claude's 1M context selection uses the same `[1m]` model
+suffix in turns and writing requests. The transport strips this CLI-style suffix from the API
+model ID and sets the extended-context beta header for API keys and OAuth alike.
+Each writing operation has a 180-second deadline and aborts
+the generation request when it expires. Stored
+image attachments are resolved through the attachment store and sent as multimodal image parts,
+not just filenames. Invalid or unreadable image attachments are skipped; available images and
+text still reach generation.
+It does not spawn a provider CLI. These drivers no
+longer construct legacy adapters. CLI skill catalogs and maintenance remain optional extras;
+catalog failures do not fail a workspace snapshot or change readiness. A missing Grok CLI stays
+silent; other skill discovery failures are logged as warnings. Claude still reads skill
+files directly, without a CLI. Codex's CLI-only skills and Claude's CLI slash-command discovery are
+not part of readiness snapshots. Version checks are skipped when there is no CLI version.
+
+### Legacy Grok CLI probe
+
+`checkGrokProviderStatus` is retained for legacy probe tests and is not used by `GrokDriver`.
+It never opens an ACP session. It runs `grok --version`, then `grok models`
 for login state and model slugs, then a single ACP `initialize` and reads models from
 `_meta.modelState`. `authenticate` and `session/new` are skipped on purpose: `authenticate` can open
 a browser login and `session/new` boots every configured MCP server, both of which made background
@@ -174,10 +225,9 @@ request and drops, so Stop did not stop. `AcpSessionRuntime.cancel` now waits fo
 write before returning so a replacement prompt cannot race ahead of it. Grok mid-turn sends cancel
 the in-flight prompt and continue the same turn instead of queueing.
 
-Grok skill discovery uses `grok inspect --json`. Machine-level health checks recover probe
-failures to an empty skill list. `ProviderInstance.snapshotForCwd` re-runs inspect in the
-thread workspace so a failed probe is not cached as empty. Composer cwd refresh still uses the
-machine snapshot until a client calls `snapshotForCwd`.
+Grok skill discovery uses `grok inspect --json` only for optional workspace catalogs.
+`ProviderInstance.snapshotForCwd` recovers missing binaries and failed inspect requests to an empty
+skill list. Machine snapshots do not probe the CLI.
 
 `ServerProviderSkill` carries an optional `icon` (an emoji or a short glyph name from skill
 frontmatter or provider metadata, e.g. the Codex app-server's interface icon paths). Clients

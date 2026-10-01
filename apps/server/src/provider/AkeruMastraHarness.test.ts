@@ -6,6 +6,7 @@ import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
+import type { createAnthropic } from "@ai-sdk/anthropic";
 import { MessageList, type Agent } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
 import { Memory } from "@mastra/memory";
@@ -1866,6 +1867,85 @@ describe("AkeruMastraHarness", () => {
     expect(getCredential).not.toHaveBeenCalled();
   });
 
+  it("uses the first nonempty trimmed Claude auth token", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-empty-token-auth.json");
+    for (const token of ["", "   "]) {
+      expect(
+        resolveAkeruMastraModel(
+          "anthropic/claude-opus-4-6",
+          authStorage,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          {
+            environment: {},
+            instanceEnvironment: {
+              ANTHROPIC_AUTH_TOKEN: token,
+              CLAUDE_CODE_OAUTH_TOKEN: "  valid-token  ",
+            },
+            useSavedCredential: false,
+          },
+        ),
+      ).toMatchObject({ modelId: "claude-opus-4-6", provider: "anthropic.messages" });
+    }
+  });
+
+  it("translates Claude 1M model selections into API headers for every credential transport", async () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-context-auth.json");
+    const requests: Array<{ body: unknown; beta: string | null }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>(
+        async (_input, init) => {
+          requests.push({
+            body: init?.body,
+            beta: new Headers(init?.headers).get("anthropic-beta"),
+          });
+          return Response.json({
+            id: "msg-context",
+            type: "message",
+            role: "assistant",
+            model: "claude-opus-4-6",
+            content: [{ type: "text", text: "Done" }],
+            stop_reason: "end_turn",
+            stop_sequence: null,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          });
+        },
+      ),
+    );
+    try {
+      for (const transport of ["environment", "saved-key", "oauth"] as const) {
+        const model = resolveAkeruMastraModel(
+          "anthropic/claude-opus-4-6[1m]",
+          authStorage,
+          undefined,
+          undefined,
+          undefined,
+          transport === "saved-key" ? () => ({ type: "api-key", access: "saved-key" }) : undefined,
+          {
+            environment: transport === "environment" ? { ANTHROPIC_API_KEY: "env-key" } : {},
+            instanceEnvironment: {},
+            useSavedCredential: true,
+          },
+        ) as ReturnType<ReturnType<typeof createAnthropic>>;
+        await model.doGenerate({
+          prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
+          maxOutputTokens: 32,
+        });
+      }
+      expect(requests).toHaveLength(3);
+      for (const request of requests) {
+        expect(request.body).toContain('"model":"claude-opus-4-6"');
+        expect(request.body).not.toContain("[1m]");
+        expect(request.beta).toContain("context-1m-2025-08-07");
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("keeps Kimi model names on the Kimi subscription transport", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-auth.json");
     assert.equal(
@@ -1960,6 +2040,7 @@ describe("AkeruMastraHarness", () => {
       { provider: "anthropic.messages", modelId: "claude-sonnet-4-5" },
     );
     assert.equal(mastraModelId(ProviderDriverKind.make("grok"), "grok-4"), "xai/grok-4");
+    assert.equal(mastraModelId(ProviderDriverKind.make("grok"), "grok-build"), "xai/grok-4.6");
     assert.deepInclude(
       resolveAkeruMastraModel(
         "xai/grok-4",

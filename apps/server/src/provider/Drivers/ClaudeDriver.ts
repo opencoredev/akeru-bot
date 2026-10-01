@@ -1,20 +1,4 @@
-/**
- * ClaudeDriver — `ProviderDriver` for the Claude Agent SDK runtime.
- *
- * Mirrors `CodexDriver`: a plain value whose `create()` returns one
- * `ProviderInstance` bundling `snapshot` / `adapter` / `textGeneration`
- * closures captured over the per-instance `ClaudeSettings`.
- *
- * Unlike Codex, the Claude snapshot probe may invoke a secondary probe
- * (`probeClaudeCapabilities`) to read Anthropic account + slash-command
- * metadata. That probe is per-instance and keyed by binary + resolved HOME so
- * two concurrent Claude instances don't cross-contaminate account metadata.
- *
- * @module provider/Drivers/ClaudeDriver
- */
 import { ClaudeSettings, ProviderDriverKind, type ServerProvider } from "@akeru/contracts";
-import * as Cache from "effect/Cache";
-import * as Duration from "effect/Duration";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -23,18 +7,14 @@ import * as Schema from "effect/Schema";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
-import { makeClaudeTextGeneration } from "../../textGeneration/ClaudeTextGeneration.ts";
+import { makeHarnessTextGeneration } from "../../textGeneration/HarnessTextGeneration.ts";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { instanceUsesSavedCredential } from "../../subscription-auth/runtime.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderDriverError } from "../Errors.ts";
-import { makeClaudeAdapter } from "../Layers/ClaudeAdapter.ts";
-import {
-  checkClaudeProviderStatus,
-  makePendingClaudeProvider,
-  probeClaudeCapabilities,
-} from "../Layers/ClaudeProvider.ts";
+import { makeHarnessProviderStatus } from "../HarnessProviderStatus.ts";
+import { makePendingClaudeProvider } from "../Layers/ClaudeProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import * as ModelManifest from "../ModelManifest.ts";
@@ -57,11 +37,11 @@ import {
   makeProviderSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
-import { makeClaudeCapabilitiesCacheKey, makeClaudeContinuationGroupKey } from "./ClaudeHome.ts";
+import { makeClaudeContinuationGroupKey } from "./ClaudeHome.ts";
+import { discoverClaudeSkills } from "./ClaudeSkills.ts";
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
-const CAPABILITIES_PROBE_TTL = Duration.minutes(5);
 
 function isClaudeNativeCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
@@ -122,20 +102,26 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
   defaultConfig: (): ClaudeSettings => decodeClaudeSettings({}),
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
-      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const { cwd, secretsDir } = yield* ServerConfig;
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const { cwd, secretsDir } = yield* ServerConfig;
       const httpClient = yield* HttpClient.HttpClient;
       const serverSettings = yield* ServerSettingsService;
-      const eventLoggers = yield* ProviderEventLoggers;
-      const modelManifest = yield* ModelManifest.ModelManifest;
       const processEnv = mergeSubscriptionInstanceEnvironment(environment);
       const fallbackContinuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
       });
       const effectiveConfig = { ...config, enabled } satisfies ClaudeSettings;
+      const connection = {
+        environment: processEnv,
+        instanceEnvironment: explicitProviderInstanceEnvironment(environment),
+        useSavedCredential: instanceUsesSavedCredential("anthropic", {
+          driver: DRIVER_KIND,
+          environment,
+          config,
+        }),
+      };
       const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
@@ -148,50 +134,27 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         continuationGroupKey,
       });
 
-      const adapterOptions = {
-        instanceId,
-        environment: processEnv,
-        ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
-      };
-      const adapter = yield* makeClaudeAdapter(effectiveConfig, adapterOptions);
-      const textGeneration = yield* makeClaudeTextGeneration(
-        effectiveConfig,
-        processEnv,
+      const adapter = undefined;
+      const textGeneration = yield* makeHarnessTextGeneration({
         secretsDir,
+        driver: DRIVER_KIND,
         instanceId,
-      );
-
-      // Per-instance capabilities cache: keyed on binary + resolved HOME so
-      // account-specific probes never share auth metadata across instances.
-      const capabilitiesProbeCache = yield* Cache.make({
-        capacity: 1,
-        timeToLive: CAPABILITIES_PROBE_TTL,
-        lookup: () =>
-          probeClaudeCapabilities(effectiveConfig, processEnv, cwd).pipe(
-            Effect.provideService(Path.Path, path),
-          ),
+        connection,
       });
-      const capabilitiesCacheKey = yield* makeClaudeCapabilitiesCacheKey(effectiveConfig, cwd);
 
-      // Kick the TTL-gated manifest refresh in the background and classify
-      // with the in-memory manifest, so a slow or hung fetch never delays the
-      // provider check. A refresh that lands mid-probe applies on the next one.
-      const checkProvider = modelManifest.refreshInBackground.pipe(
-        Effect.andThen(
-          Effect.zipWith(
-            checkClaudeProviderStatus(
-              effectiveConfig,
-              () => Cache.get(capabilitiesProbeCache, capabilitiesCacheKey),
-              processEnv,
-              cwd,
-            ),
-            modelManifest.current,
-            (draft, manifest) =>
-              stampIdentity(ModelManifest.applyModelManifest(draft, manifest, DRIVER_KIND)),
-            { concurrent: true },
+      const checkProvider = (yield* makeHarnessProviderStatus({
+        secretsDir,
+        provider: "anthropic",
+        driver: DRIVER_KIND,
+        instanceId,
+        connection,
+        draft: makePendingClaudeProvider(effectiveConfig),
+      })).pipe(
+        Effect.flatMap((draft) =>
+          discoverClaudeSkills(effectiveConfig, cwd, processEnv).pipe(
+            Effect.map((skills) => stampIdentity({ ...draft, skills })),
           ),
         ),
-        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provideService(Path.Path, path),
       );
@@ -202,13 +165,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         getSettings: snapshotSettings.getSettings,
         streamSettings: snapshotSettings.streamSettings,
         haveSettingsChanged: haveProviderSnapshotSettingsChanged,
-        initialSnapshot: (settings) =>
-          Effect.zipWith(
-            makePendingClaudeProvider(settings.provider),
-            modelManifest.current,
-            (draft, manifest) =>
-              stampIdentity(ModelManifest.applyModelManifest(draft, manifest, DRIVER_KIND)),
-          ),
+        initialSnapshot: () => checkProvider,
         checkProvider,
         enrichSnapshot: ({ settings, snapshot, publishSnapshot }) =>
           enrichProviderSnapshotWithVersionAdvisory(snapshot, maintenanceCapabilities, {
@@ -239,15 +196,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         displayName,
         accentColor,
         enabled,
-        mastraConnection: {
-          environment: processEnv,
-          instanceEnvironment: explicitProviderInstanceEnvironment(environment),
-          useSavedCredential: instanceUsesSavedCredential("anthropic", {
-            driver: DRIVER_KIND,
-            environment,
-            config,
-          }),
-        },
+        mastraConnection: connection,
         snapshot,
         adapter,
         textGeneration,

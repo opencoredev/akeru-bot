@@ -151,6 +151,7 @@ import { encodeMemoryArchiveJson } from "./memory/MemoryArchiveJson.ts";
 import { memoryRevisionArchivePath, renderMemoryRevision } from "./memory/MemoryExport.ts";
 import * as AgentController from "./provider/Services/AgentController.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
+import { ProviderInstanceRegistryMutator } from "./provider/Services/ProviderInstanceRegistryMutator.ts";
 import { ProviderAdapterRequestError } from "./provider/Errors.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
@@ -741,6 +742,7 @@ const buildAppUnderTest = (options?: {
             streamChanges: Stream.empty,
             ...options?.layers?.providerRegistry,
           }),
+          Layer.succeed(ProviderInstanceRegistryMutator, { reconcile: () => Effect.void }),
           Layer.mock(AgentController.AgentController)({
             uploadFeedback: () => Effect.die("Provider feedback is not stubbed in this test"),
             ...options?.layers?.agentController,

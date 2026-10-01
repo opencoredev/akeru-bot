@@ -2,6 +2,15 @@
 
 Akeru Bot connects to provider subscriptions and API keys from **Settings → Providers**. Credentials stay in the environment that owns the connection.
 
+ChatGPT, Claude, Grok, Kimi For Coding, and OpenCode Go run through Akeru's built-in runtime.
+You do not need their command-line tools installed or signed in to create a bot, chat, or generate
+chat titles and branch names with ChatGPT, Claude, or Grok. After connecting an account in Akeru,
+choose its models in onboarding or the bot's settings. If the account is disconnected, reconnect
+it in **Settings → Providers**.
+
+An instance configured with its own credentials uses those credentials rather than the shared
+connection. A custom configuration directory alone does not connect an account to Akeru's runtime.
+
 ## Subscription login health
 
 After a login or API key save completes, the environment server sends one request that costs nothing, to confirm the account can reach its models or usage endpoint. The check runs on the server, so closing the app or losing the connection right after login does not stop it. While it runs, the provider row shows **Checking health…**. It then changes to **Connected** when the request succeeds or **Failed** when it does not. A failed check does not undo a successful login. Repair the provider account, then use **Reconnect** or **Check OAuth**.

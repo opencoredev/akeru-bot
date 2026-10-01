@@ -1,8 +1,7 @@
 # Claude
 
-Connect a Claude Pro or Max subscription from Akeru. Claude chats run through Akeru's Claude
-adapter, which keeps Claude-specific session behavior behind the same chat controls as other
-providers.
+Connect a Claude Pro or Max subscription from Akeru. Claude chats run through Akeru's built-in
+runtime, with the same chat controls as other providers. The Claude CLI is not required.
 
 ## Connect Claude
 
@@ -24,14 +23,14 @@ real provider request succeeds.
 - Select **Reconnect** after an expired or revoked login.
 - Disconnect the account to remove its stored credential from this environment.
 
-If a Claude chat fails because the login expired, Akeru names that cause instead of a generic API error and tells you to run `claude auth login` on the environment machine. A usage-limit failure says the limit was reached and to send the message again after it resets.
+If the login expires or is revoked, reconnect Claude in **Settings > Providers**. A usage-limit
+failure means you should send the message again after the limit resets.
 
 Sign-in state belongs to one environment. Connect Claude again on each separate Akeru server that
 should use the account.
 
-Claude Code's verbose mode can stay enabled when you use Claude for text generation, including
-chat titles and worktree branch names. On a remote connection,
-Akeru uses the Claude configuration on the connected server.
+Chat titles and worktree branch names use the same Akeru connection as Claude chats, not a separate
+Claude Code login. On a remote connection, credentials stay on the connected environment server.
 
 ## Continue a Claude chat
 
