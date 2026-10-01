@@ -84,7 +84,7 @@ async function loadPersistedComposerDrafts(): Promise<Record<string, ComposerDra
     const raw = await file.text();
     operation = "decode";
 
-    return decodePersistedComposerDrafts(JSON.parse(raw) as unknown);
+    return decodePersistedComposerDrafts(JSON.parse(raw));
   } catch (cause) {
     throw new ComposerDraftPersistenceError({
       operation,

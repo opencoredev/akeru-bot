@@ -166,9 +166,7 @@ function withoutCardedDelegationActivities(
     if (!activity.kind.startsWith("delegation.")) return true;
 
     const payload =
-      activity.payload && Predicate.isObjectOrArray(activity.payload)
-        ? (activity.payload as Record<string, unknown>)
-        : null;
+      activity.payload && Predicate.isObject(activity.payload) ? activity.payload : null;
 
     const delegationId = payload?.delegationId;
 

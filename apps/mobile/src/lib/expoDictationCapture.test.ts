@@ -2,12 +2,17 @@ import { DEFAULT_DICTATION_LIMITS } from "@akeru/client-runtime/dictation";
 import type { RecordingStatus } from "expo-audio";
 import type { AppStateStatus } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { DICTATION_RECORDING, startExpoDictationCapture } from "./expoDictationCapture";
 
 const native = vi.hoisted(() => ({
   granted: true,
   listenerFails: false,
-  mode: vi.fn(async (_mode: unknown) => {}),
-  prepare: vi.fn(async (_options: unknown) => {}),
+  mode: vi.fn(async (_mode: Parameters<typeof import("expo-audio").setAudioModeAsync>[0]) => {}),
+  prepare: vi.fn(
+    async (
+      _options: Parameters<import("expo-audio").AudioRecorder["prepareToRecordAsync"]>[0],
+    ) => {},
+  ),
   record: vi.fn(),
   stop: vi.fn(async () => {}),
   release: vi.fn(),
@@ -37,7 +42,9 @@ vi.mock("expo-audio", () => ({
 
         return { remove: native.statusRemove };
       }
-      prepareToRecordAsync(options: unknown) {
+      prepareToRecordAsync(
+        options: Parameters<import("expo-audio").AudioRecorder["prepareToRecordAsync"]>[0],
+      ) {
         this.uri = "file:///cache/recording.m4a";
 
         return native.prepare(options);
@@ -84,8 +91,6 @@ vi.mock("react-native", () => ({
     },
   },
 }));
-
-import { DICTATION_RECORDING, startExpoDictationCapture } from "./expoDictationCapture";
 
 function start(signal = new AbortController().signal) {
   const onError = vi.fn();

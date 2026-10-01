@@ -70,15 +70,16 @@ function toSavedConnection(
 const savedConnectionsByIdAtom = Atom.make((get) => {
   const presentationById = get(environmentPresentations.presentationsAtom);
 
-  return Object.fromEntries(
-    [...presentationById.entries()].map(([environmentId, presentation]) => [
-      environmentId,
-      toSavedConnection(
-        projectEnvironmentPresentation(environmentId, presentation),
-        get(environmentSession.preparedConnectionValueAtom(environmentId)),
-      ),
-    ]),
-  ) as Record<EnvironmentId, SavedRemoteConnection>;
+  const connections: Record<EnvironmentId, SavedRemoteConnection> = {};
+
+  for (const [environmentId, presentation] of presentationById) {
+    connections[environmentId] = toSavedConnection(
+      projectEnvironmentPresentation(environmentId, presentation),
+      get(environmentSession.preparedConnectionValueAtom(environmentId)),
+    );
+  }
+
+  return connections;
 }).pipe(Atom.withLabel("mobile:saved-connections-by-id"));
 
 function toRuntimeState(

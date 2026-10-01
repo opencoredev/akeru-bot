@@ -1,13 +1,20 @@
-import { Predicate } from "effect";
+import { flow, Option, Predicate, Schema } from "effect";
 import { availableLanguages, resolveLocale } from "@akeru/client-runtime/i18n";
 
-export function normalizeLanguagePreference(value: unknown): string {
-  return Predicate.isString(value) && availableLanguages.some((language) => language.id === value)
-    ? value
-    : "system";
-}
+export const normalizeLanguagePreference = flow(
+  Schema.decodeUnknownOption(Schema.String),
+  Option.getOrNull,
+  (value) =>
+    value !== null && availableLanguages.some((language) => language.id === value)
+      ? value
+      : "system",
+);
 
-export function resolveMobileLanguage(value: unknown, deviceLocales: readonly string[]) {
+// Normalization is the preference I/O boundary; locale selection consumes its typed output.
+export function resolveMobileLanguage(
+  value: Parameters<typeof normalizeLanguagePreference>[0],
+  deviceLocales: readonly string[],
+) {
   const preference = normalizeLanguagePreference(value);
 
   return { preference, locale: resolveLocale(preference, deviceLocales) };
@@ -18,7 +25,9 @@ export function resolveMobileLanguage(value: unknown, deviceLocales: readonly st
  * read one, so a supported second language wins over an unsupported first one; otherwise
  * falls back to the single resolved Intl locale.
  */
-export function readDeviceLocales(readPreferredLocales?: () => unknown): readonly string[] {
+export function readDeviceLocales(
+  readPreferredLocales?: () => readonly string[] | undefined,
+): readonly string[] {
   try {
     const preferred = readPreferredLocales?.();
 

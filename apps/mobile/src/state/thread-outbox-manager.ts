@@ -34,7 +34,10 @@ export class ThreadOutboxManagerError extends Schema.TaggedErrorClass<ThreadOutb
 export interface ThreadOutboxManagerOptions {
   readonly registry: AtomRegistry.AtomRegistry;
   readonly storage: ThreadOutboxStorage;
-  readonly warn?: (message: string, error: unknown) => void;
+  readonly warn?: (
+    message: string,
+    error: ThreadOutboxManagerError | ThreadOutboxLoadResult["unreadRecords"][number],
+  ) => void;
 }
 
 export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
@@ -44,7 +47,10 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
 
   const warn =
     options.warn ??
-    ((message: string, error: unknown) => {
+    ((
+      message: string,
+      error: ThreadOutboxManagerError | ThreadOutboxLoadResult["unreadRecords"][number],
+    ) => {
       console.warn(message, error);
     });
 

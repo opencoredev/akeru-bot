@@ -1,5 +1,11 @@
 import { Predicate } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import {
+  clearAgentAwarenessRegistrationRecord,
+  loadPreferences,
+  loadSavedConnections,
+  savePreferencesPatch,
+} from "../persistence/imperative";
 
 const mocks = vi.hoisted(() => {
   const values = new Map<string, string>();
@@ -59,7 +65,7 @@ const mocks = vi.hoisted(() => {
             : { payload: preferencesJson, updatedAt: preferencesUpdatedAt },
         );
       }),
-      runAsync: vi.fn((_sql: string, payload?: unknown, updatedAt?: unknown) => {
+      runAsync: vi.fn((_sql: string, payload?: string | number, updatedAt?: string | number) => {
         if (savePreferencesFails) {
           return Promise.reject(new Error("database unavailable"));
         }
@@ -101,13 +107,6 @@ vi.mock("react-native", () => ({
     OS: "ios",
   },
 }));
-
-import {
-  clearAgentAwarenessRegistrationRecord,
-  loadPreferences,
-  loadSavedConnections,
-  savePreferencesPatch,
-} from "../persistence/imperative";
 
 describe("mobile connection storage", () => {
   beforeEach(() => {

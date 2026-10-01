@@ -68,13 +68,18 @@ export function applyProviderOptionSelection(
   }
 
   const nextDescriptors = descriptors.map((candidate) =>
-    candidate.id === descriptor.id
-      ? {
-          ...candidate,
-          currentValue: change.value,
-        }
-      : candidate,
-  ) as ReadonlyArray<ProviderOptionDescriptor>;
+    candidate.id !== descriptor.id
+      ? candidate
+      : candidate.type === "boolean"
+        ? {
+            ...candidate,
+            currentValue: Predicate.isBoolean(change.value) ? change.value : candidate.currentValue,
+          }
+        : {
+            ...candidate,
+            currentValue: Predicate.isString(change.value) ? change.value : candidate.currentValue,
+          },
+  );
 
   return buildProviderOptionSelectionsFromDescriptors(nextDescriptors) ?? [];
 }

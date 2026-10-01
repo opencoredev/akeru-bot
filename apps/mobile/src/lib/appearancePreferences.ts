@@ -106,7 +106,7 @@ const TEXT_SCALE_VARIABLE_ROLES = {
  * pass to `Uniwind.updateCSSVariables`. All className-based text (`text-sm`,
  * `text-base`, ...) re-resolves live when these are injected.
  */
-export function resolveTextScaleVariables(baseFontSize: number): Record<string, number> {
+export function resolveTextScaleVariables(baseFontSize: number) {
   const scale = normalizeBaseFontSize(baseFontSize) / DEFAULT_BASE_FONT_SIZE;
   const variables: Record<string, number> = {};
 

@@ -39,9 +39,7 @@ function isTerminalBypassUpdate(activity: OrchestrationThreadActivity): boolean 
   }
 
   const payload =
-    activity.payload && Predicate.isObjectOrArray(activity.payload)
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+    activity.payload && Predicate.isObject(activity.payload) ? activity.payload : null;
 
   return (
     payload?.timelineBypass === true &&
@@ -60,9 +58,7 @@ function isTerminalBypassUpdate(activity: OrchestrationThreadActivity): boolean 
  */
 function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean {
   const payload =
-    activity.payload && Predicate.isObjectOrArray(activity.payload)
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+    activity.payload && Predicate.isObject(activity.payload) ? activity.payload : null;
 
   if (!payload) {
     return false;
@@ -145,18 +141,14 @@ function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): bool
   }
 
   const payload =
-    activity.payload && Predicate.isObjectOrArray(activity.payload)
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+    activity.payload && Predicate.isObject(activity.payload) ? activity.payload : null;
 
   return Predicate.isString(payload?.detail) && payload.detail.startsWith("ExitPlanMode:");
 }
 
 function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWorkLogEntry {
   const payload =
-    activity.payload && Predicate.isObjectOrArray(activity.payload)
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+    activity.payload && Predicate.isObject(activity.payload) ? activity.payload : null;
 
   const commandPreview = extractToolCommand(payload);
   const changedFiles = extractChangedFiles(payload);
@@ -609,12 +601,14 @@ export function workEntryHeading(workEntry: WorkLogEntry): string {
   return capitalizePhrase(normalizeCompactToolLabel(workEntry.toolTitle));
 }
 
-function extractToolTitle(payload: Record<string, unknown> | null): string | null {
+function extractToolTitle(
+  payload: { readonly title?: unknown; readonly status?: unknown } | null,
+): string | null {
   return asTrimmedString(payload?.title);
 }
 
 function extractWorkLogToolLifecycleStatus(
-  payload: Record<string, unknown> | null,
+  payload: { readonly title?: unknown; readonly status?: unknown } | null,
 ): WorkLogToolLifecycleStatus | undefined {
   const status = payload?.status;
 

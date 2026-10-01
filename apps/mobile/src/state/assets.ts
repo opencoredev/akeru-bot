@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Data, Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { createAssetEnvironmentAtoms, resolveAssetUrl } from "@akeru/client-runtime/state/assets";
 import type { AssetResource, EnvironmentId } from "@akeru/contracts";
@@ -18,6 +18,8 @@ export type AssetUrlState =
   | { readonly _tag: "Failure" }
   | { readonly _tag: "Success"; readonly url: string };
 
+const assetUrlState = Data.taggedEnum<AssetUrlState>();
+
 export function useAssetUrlState(
   environmentId: EnvironmentId | null,
   resource: AssetResource | null,
@@ -31,16 +33,16 @@ export function useAssetUrlState(
   );
 
   if (Predicate.isTagged(result, "Failure")) {
-    return { _tag: "Failure" };
+    return assetUrlState["Failure"]();
   }
 
   if (Predicate.isTagged(preparedConnection, "None") || !Predicate.isTagged(result, "Success")) {
-    return { _tag: "Loading" };
+    return assetUrlState["Loading"]();
   }
 
   const url = resolveAssetUrl(preparedConnection.value.httpBaseUrl, result.value.relativeUrl);
 
-  return url === null ? { _tag: "Failure" } : { _tag: "Success", url };
+  return url === null ? assetUrlState["Failure"]() : assetUrlState["Success"]({ url });
 }
 
 export function useAssetUrl(

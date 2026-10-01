@@ -12,10 +12,11 @@ import {
   type MobileThemeId,
   type MobileThemeMode,
 } from "../lib/mobileTheme";
-
 import * as MobileDatabase from "./mobile-database";
 import * as MobileSecureStorage from "./mobile-secure-storage";
 import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-storage";
+
+type MutablePreferences = { -readonly [Key in keyof Preferences]: Preferences[Key] };
 
 const PREFERENCES_KEY = "akeru.preferences";
 
@@ -71,7 +72,7 @@ export class MobilePreferencesSaveError extends Schema.TaggedErrorClass<MobilePr
 interface PreferencesFallback {
   readonly payload: string;
   readonly updatedAt: number;
-  readonly preferences: Preferences;
+  readonly preferences: typeof StoredPreferences.Type;
 }
 
 export class MobilePreferencesStore extends Context.Service<
@@ -87,23 +88,27 @@ export class MobilePreferencesStore extends Context.Service<
   }
 >()("@akeru/mobile/persistence/MobilePreferencesStore") {}
 
-function sanitizePreferences(parsed: Preferences): Preferences {
-  const preferences: {
-    language?: string;
-    reviewedPrivacyPolicyVersion?: string;
-    reviewedTermsVersion?: string;
-    liveActivitiesEnabled?: boolean;
-    themeId?: MobileThemeId;
-    lightThemeId?: MobileThemeId;
-    darkThemeId?: MobileThemeId;
-    themeMode?: MobileThemeMode;
-    baseFontSize?: number;
-    markdownFontSize?: number;
-    projectGroupingEnabled?: boolean;
-    projectGroupingMode?: SidebarProjectGroupingMode;
-    threadListV2SettledShelfExpanded?: boolean;
-    threadListV2SnoozedShelfExpanded?: boolean;
-  } = {};
+const StoredPreferences = Schema.Struct({
+  language: Schema.optional(Schema.Unknown),
+  reviewedPrivacyPolicyVersion: Schema.optional(Schema.Unknown),
+  reviewedTermsVersion: Schema.optional(Schema.Unknown),
+  liveActivitiesEnabled: Schema.optional(Schema.Unknown),
+  themeId: Schema.optional(Schema.Unknown),
+  lightThemeId: Schema.optional(Schema.Unknown),
+  darkThemeId: Schema.optional(Schema.Unknown),
+  themeMode: Schema.optional(Schema.Unknown),
+  baseFontSize: Schema.optional(Schema.Unknown),
+  markdownFontSize: Schema.optional(Schema.Unknown),
+  projectGroupingEnabled: Schema.optional(Schema.Unknown),
+  projectGroupingMode: Schema.optional(Schema.Unknown),
+  threadListV2SettledShelfExpanded: Schema.optional(Schema.Unknown),
+  threadListV2SnoozedShelfExpanded: Schema.optional(Schema.Unknown),
+});
+
+const decodeStoredPreferences = Schema.decodeUnknownSync(StoredPreferences);
+
+function sanitizePreferences(parsed: typeof StoredPreferences.Type): Preferences {
+  const preferences: MutablePreferences = {};
 
   if (Predicate.isString(parsed.language)) preferences.language = parsed.language;
 
@@ -176,12 +181,12 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
   const lock = yield* Semaphore.make(1);
   const lastUpdatedAt = yield* Ref.make(0);
 
-  const parsePayload = (raw: string | null): Preferences | null => {
+  const parsePayload = (raw: string | null) => {
     if (raw === null || !raw.trim()) return null;
-    let parsed: unknown;
+    let parsed: typeof StoredPreferences.Type;
 
     try {
-      parsed = JSON.parse(raw);
+      parsed = decodeStoredPreferences(JSON.parse(raw));
     } catch (cause) {
       console.warn(
         "[mobile-storage] ignored invalid JSON",
@@ -191,9 +196,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       return null;
     }
 
-    return Predicate.isObjectOrArray(parsed) && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Preferences)
-      : null;
+    return parsed;
   };
 
   const parseFallback = (raw: string | null): PreferencesFallback | null => {
@@ -231,7 +234,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
 
   const encode = Effect.fn("MobilePreferencesStore.encode")(function* (
     key: string,
-    value: unknown,
+    value: Preferences | { readonly payload: string; readonly updatedAt: number },
   ) {
     return yield* Effect.try({
       try: () => JSON.stringify(value),
@@ -329,7 +332,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       (storedPreferences === null ||
         (Option.isSome(storedJson) && fallback.updatedAt > storedJson.value.updatedAt));
 
-    let parsed: Preferences | null = null;
+    let parsed: typeof StoredPreferences.Type | null = null;
 
     if (fallbackIsNewer) {
       parsed = fallback.preferences;

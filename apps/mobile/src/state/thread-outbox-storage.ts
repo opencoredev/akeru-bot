@@ -93,7 +93,7 @@ export const expoThreadOutboxStorage: ThreadOutboxStorage = {
         }
 
         try {
-          messages.push(decodeQueuedThreadMessage(JSON.parse(await entry.text()) as unknown));
+          messages.push(decodeQueuedThreadMessage(JSON.parse(await entry.text())));
         } catch (cause) {
           // Leave the file on disk. Cleanup must see that ownership is
           // incomplete, while delivery can still hydrate readable messages.

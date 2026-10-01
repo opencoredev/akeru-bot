@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Schema, Predicate } from "effect";
 import {
   aggregateUsage,
   usageWindowKey,
@@ -16,7 +16,7 @@ import {
  * @module state/usage
  */
 import { useAtomValue } from "@effect/atom-react";
-import { type UsageSummaryInput } from "@akeru/contracts";
+import { UsageSummaryInput } from "@akeru/contracts";
 import type { MergedUsage } from "@akeru/shared/usageMerge";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
@@ -35,7 +35,7 @@ import { serverEnvironment } from "./server";
  */
 const usageByWindowAtom = Atom.family((windowKey: string) =>
   Atom.make((get): readonly EnvironmentUsageStatus[] => {
-    const input = JSON.parse(windowKey) as UsageSummaryInput;
+    const input = decodeUsageSummaryInput(JSON.parse(windowKey));
     const presentations = get(environmentPresentations.presentationsAtom);
 
     const statuses: EnvironmentUsageStatus[] = [];
@@ -91,7 +91,7 @@ export function useUsage(input: UsageSummaryInput): UsageView {
   // queries within their stale window and change nothing. Refresh each
   // environment's query so pull-to-refresh always rescans.
   const refresh = useCallback(() => {
-    const input = JSON.parse(windowKey) as UsageSummaryInput;
+    const input = decodeUsageSummaryInput(JSON.parse(windowKey));
 
     for (const environment of environments) {
       appAtomRegistry.refresh(
@@ -108,3 +108,5 @@ export function useUsage(input: UsageSummaryInput): UsageView {
     refresh,
   };
 }
+
+const decodeUsageSummaryInput = Schema.decodeUnknownSync(UsageSummaryInput);

@@ -1,5 +1,5 @@
 import { Predicate } from "effect";
-import type { EnvironmentId } from "@akeru/contracts";
+import { EnvironmentId } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -37,7 +37,7 @@ export interface StoredPreferencesJson {
 
 const ClientCacheSummaryRows = Schema.Array(
   Schema.Struct({
-    environmentId: Schema.String,
+    environmentId: EnvironmentId,
     kind: ClientCacheKind,
     recordCount: Schema.Number,
     payloadBytes: Schema.Number,
@@ -82,29 +82,24 @@ interface LegacyCacheRecord {
   readonly payload: string;
 }
 
-function objectRecord(value: unknown): Record<string, unknown> | null {
-  return Predicate.isObjectOrArray(value) && value !== null
-    ? (value as Record<string, unknown>)
-    : null;
-}
+const decodeLegacyCacheMetadata = Schema.decodeUnknownSync(
+  Schema.Struct({
+    environmentId: Schema.String,
+    schemaVersion: Schema.Number,
+    threadId: Schema.optional(Schema.Unknown),
+    cwd: Schema.optional(Schema.Unknown),
+  }),
+);
 
 export function decodeLegacyCacheRecord(
   directoryName: (typeof LEGACY_CACHE_DIRECTORIES)[number],
   payload: string,
 ): LegacyCacheRecord | null {
-  let parsed: Record<string, unknown> | null;
+  let parsed: ReturnType<typeof decodeLegacyCacheMetadata>;
 
   try {
-    parsed = objectRecord(JSON.parse(payload));
+    parsed = decodeLegacyCacheMetadata(JSON.parse(payload));
   } catch {
-    return null;
-  }
-
-  if (
-    parsed === null ||
-    !Predicate.isString(parsed.environmentId) ||
-    !Predicate.isNumber(parsed.schemaVersion)
-  ) {
     return null;
   }
 
@@ -388,7 +383,7 @@ const makeAvailable = Effect.gen(function* () {
       Effect.map(
         (rows): ReadonlyArray<ClientCacheSummaryRow> =>
           rows.map((row) => ({
-            environmentId: row.environmentId as EnvironmentId,
+            environmentId: row.environmentId,
             kind: row.kind,
             recordCount: row.recordCount,
             payloadBytes: row.payloadBytes,

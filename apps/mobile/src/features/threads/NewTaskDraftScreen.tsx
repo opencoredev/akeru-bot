@@ -33,7 +33,7 @@ import { ProviderIcon } from "../../components/ProviderIcon";
 import { AppText as Text } from "../../components/AppText";
 import { ComposerSurface } from "./composer-surface";
 import { useThreadSettingsSheetRoute } from "./use-thread-settings-sheet-presentation";
-import { makeTurnCommandMetadata } from "../../lib/commandMetadata";
+import { createTurnCommandMetadata } from "../../lib/commandMetadata";
 import { convertPastedImagesToAttachments, pickComposerImages } from "../../lib/composerImages";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
@@ -407,7 +407,7 @@ export function NewTaskDraftScreen(props: {
             messageId: editingPendingTask.messageId,
             createdAt: editingPendingTask.createdAt,
           }
-        : makeTurnCommandMetadata();
+        : createTurnCommandMetadata();
 
       const message = flow.buildPendingTaskMessage(metadata);
 

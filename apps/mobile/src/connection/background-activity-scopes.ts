@@ -1,5 +1,5 @@
 import type { EnvironmentRpcSubscriptionObservation } from "@akeru/client-runtime/rpc";
-import { type BackgroundScope, type EnvironmentId, WS_METHODS } from "@akeru/contracts";
+import { type BackgroundScope, EnvironmentId, WS_METHODS } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 
 interface RetainedScope {
@@ -61,7 +61,7 @@ export function observeMobileBackgroundActivitySubscription(
   if (scope === null) return Effect.succeed(Effect.void);
 
   return Effect.sync(() => {
-    const environmentId = observation.environmentId as EnvironmentId;
+    const environmentId = EnvironmentId.make(observation.environmentId);
     const key = stableScopeKey(environmentId, scope);
     const current = retainedScopes.get(key);
 

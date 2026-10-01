@@ -2,7 +2,7 @@ import { type StyleProp, StyleSheet, type TextStyle } from "react-native";
 import type { NativeFontWeight } from "./T3MarkdownTextRunNativeComponent";
 
 export function flattenStyles(rootStyle: TextStyle, style: StyleProp<TextStyle>) {
-  const flattenedStyle = StyleSheet.flatten([rootStyle, style]) as TextStyle;
+  const flattenedStyle = StyleSheet.flatten([rootStyle, style]);
 
   return {
     ...flattenedStyle,

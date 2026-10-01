@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Option, Predicate } from "effect";
 import { EnvironmentId } from "@akeru/contracts";
 import * as Arr from "effect/Array";
 import * as Context from "effect/Context";
@@ -129,21 +129,6 @@ export class MobileStorage extends Context.Service<
 export const make = Effect.fn("MobileStorage.make")(function* () {
   const secureStorage = yield* MobileSecureStorage.MobileSecureStorage;
 
-  const parseJson = <A>(key: string, raw: string): A | null => {
-    if (!raw.trim()) return null;
-
-    try {
-      return JSON.parse(raw) as A;
-    } catch (cause) {
-      console.warn(
-        "[mobile-storage] ignored invalid JSON",
-        new MobileStorageDecodeError({ key, cause }),
-      );
-
-      return null;
-    }
-  };
-
   const getItem = Effect.fn("MobileStorage.getItem")(function* (key: string) {
     const value = yield* secureStorage.getItem(key);
 
@@ -163,10 +148,24 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
     return legacy;
   });
 
-  const readJson = Effect.fn("MobileStorage.readJson")(function* <A>(key: string) {
+  const readJson = Effect.fn("MobileStorage.readJson")(function* <A>(
+    key: string,
+    decode: (value: Parameters<typeof decodeSavedConnectionDocument>[0]) => A,
+  ) {
     const raw = (yield* getItem(key)) ?? "";
 
-    return parseJson<A>(key, raw);
+    if (!raw.trim()) return null;
+
+    try {
+      return decode(JSON.parse(raw));
+    } catch (cause) {
+      console.warn(
+        "[mobile-storage] ignored invalid JSON",
+        new MobileStorageDecodeError({ key, cause }),
+      );
+
+      return null;
+    }
   });
 
   const setItem = Effect.fn("MobileStorage.setItem")(function* (key: string, value: string) {
@@ -178,7 +177,13 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
     }
   });
 
-  const writeJson = Effect.fn("MobileStorage.writeJson")(function* (key: string, value: unknown) {
+  const writeJson = Effect.fn("MobileStorage.writeJson")(function* (
+    key: string,
+    value:
+      | AgentAwarenessRegistrationRecord
+      | { readonly connections: ReadonlyArray<SavedRemoteConnection> }
+      | { readonly threads: ReadonlyArray<RecentThreadShortcut> },
+  ) {
     const encoded = yield* Effect.try({
       try: () => JSON.stringify(value),
       catch: (cause) => new MobileStorageEncodeError({ key, cause }),
@@ -187,9 +192,7 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
     yield* setItem(key, encoded);
   });
 
-  const loadSavedConnections = readJson<{
-    readonly connections?: ReadonlyArray<SavedRemoteConnection>;
-  }>(CONNECTIONS_KEY).pipe(
+  const loadSavedConnections = readJson(CONNECTIONS_KEY, decodeSavedConnectionDocument).pipe(
     Effect.map((parsed) =>
       pipe(
         parsed?.connections ?? [],
@@ -247,8 +250,9 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
     Effect.map((existing) => (existing?.trim() ? existing : null)),
   );
 
-  const loadAgentAwarenessRegistrationRecord = readJson<AgentAwarenessRegistrationRecord>(
+  const loadAgentAwarenessRegistrationRecord = readJson(
     AGENT_AWARENESS_REGISTRATION_KEY,
+    decodeRegistrationRecord,
   ).pipe(
     Effect.map((parsed) => {
       if (
@@ -272,20 +276,15 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
 
   // Threads most recently opened on this device, newest first — the source
   // for the launcher's dynamic "recent thread" app shortcuts.
-  const loadRecentThreadShortcuts = readJson<{
-    readonly threads?: ReadonlyArray<RecentThreadShortcut>;
-  }>(RECENT_THREAD_SHORTCUTS_KEY).pipe(
+  const loadRecentThreadShortcuts = readJson(RECENT_THREAD_SHORTCUTS_KEY, decodeRecentThreads).pipe(
     Effect.map((parsed) =>
       pipe(
         parsed?.threads ?? [],
-        Arr.filter(
-          (thread) =>
-            Predicate.isString(thread?.environmentId) &&
-            thread.environmentId.length > 0 &&
-            Predicate.isString(thread.threadId) &&
-            thread.threadId.length > 0 &&
-            Predicate.isString(thread.title),
-        ),
+        Arr.flatMap((thread) => {
+          const parsedThread = decodeRecentThread(thread);
+
+          return Option.isSome(parsedThread) ? [parsedThread.value] : [];
+        }),
       ),
     ),
   );
@@ -306,3 +305,43 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
 });
 
 export const layer = Layer.effect(MobileStorage, make());
+
+const decodeSavedConnectionDocument = Schema.decodeUnknownSync(
+  Schema.Struct({
+    connections: Schema.optional(
+      Schema.Array(
+        Schema.Struct({
+          environmentId: EnvironmentId,
+          environmentLabel: Schema.String,
+          pairingUrl: Schema.String,
+          displayUrl: Schema.String,
+          httpBaseUrl: Schema.String,
+          wsBaseUrl: Schema.String,
+          bearerToken: Schema.NullOr(Schema.String),
+        }),
+      ),
+    ),
+  }),
+);
+
+const decodeRegistrationRecord = Schema.decodeUnknownSync(
+  Schema.Struct({
+    identity: Schema.String,
+    signature: Schema.String,
+    pushToStartToken: Schema.optional(Schema.Unknown),
+  }),
+);
+
+const decodeRecentThreads = Schema.decodeUnknownSync(
+  Schema.Struct({
+    threads: Schema.optional(Schema.Array(Schema.Unknown)),
+  }),
+);
+
+const decodeRecentThread = Schema.decodeUnknownOption(
+  Schema.Struct({
+    environmentId: Schema.String.check(Schema.isMinLength(1)),
+    threadId: Schema.String.check(Schema.isMinLength(1)),
+    title: Schema.String,
+  }),
+);

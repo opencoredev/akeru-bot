@@ -1,12 +1,16 @@
+import { Schema } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { createBotEnvironmentAtoms } from "@akeru/client-runtime/state/bots";
 import type { EnvironmentId, OrchestrationBot, OrchestrationGroup } from "@akeru/contracts";
 import { Atom } from "effect/unstable/reactivity";
 import { useMemo } from "react";
-
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { environmentSnapshotAtom } from "./shell";
+
+const decodeTitlePairs = Schema.decodeUnknownSync(
+  Schema.Array(Schema.Tuple([Schema.String, Schema.NullOr(Schema.String)])),
+);
 
 const EMPTY_BOTS: ReadonlyArray<OrchestrationBot> = Object.freeze([]);
 
@@ -52,7 +56,7 @@ export function useBotNames(botIds: ReadonlyArray<string>): ReadonlyMap<string, 
   return useMemo(() => {
     const names = new Map<string, string>();
 
-    for (const [botId, name] of JSON.parse(json) as Array<[string, string | null]>) {
+    for (const [botId, name] of decodeTitlePairs(JSON.parse(json))) {
       if (name !== null) names.set(botId, name);
     }
 

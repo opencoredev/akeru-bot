@@ -3,7 +3,7 @@ import { EnvironmentRpcSubscriptionObserver, request } from "@akeru/client-runti
 import {
   type BackgroundScope,
   type ClientActivityReportInput,
-  type EnvironmentId,
+  EnvironmentId,
   WS_METHODS,
 } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
@@ -69,7 +69,7 @@ export const mobileBackgroundActivityReporterLayer = Layer.effectDiscard(
             .run(
               environmentId,
               request(WS_METHODS.serverReportClientActivity, {
-                environmentId: environmentId as EnvironmentId,
+                environmentId: EnvironmentId.make(environmentId),
                 clientId,
                 clientKind: "mobile",
                 visible: active,
@@ -78,7 +78,7 @@ export const mobileBackgroundActivityReporterLayer = Layer.effectDiscard(
                 appState: normalizeAppState(appState),
                 scopes: [
                   ...BASELINE_SCOPES,
-                  ...retainedMobileBackgroundScopes(environmentId as EnvironmentId),
+                  ...retainedMobileBackgroundScopes(EnvironmentId.make(environmentId)),
                 ],
                 ttlMs: LEASE_TTL_MS,
                 observedAt: DateTime.makeUnsafe(observedAtMs),

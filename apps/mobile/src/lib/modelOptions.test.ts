@@ -14,7 +14,7 @@ import {
 // Fixtures list only the provider fields these rules read; the rest of the
 // server config is irrelevant here, so the partial provider rows are cast once.
 function serverConfig(providers: ReadonlyArray<object>): ServerConfig {
-  return { providers, settings: DEFAULT_SERVER_SETTINGS } as unknown as ServerConfig;
+  return { providers, settings: DEFAULT_SERVER_SETTINGS } as ServerConfig;
 }
 
 describe("mobile model options", () => {
@@ -289,7 +289,12 @@ describe("mobile model options", () => {
 });
 
 describe("resolveModelSendBlock", () => {
-  const claude = (patch: Record<string, unknown>) =>
+  const claude = (patch: {
+    readonly instanceId?: string;
+    readonly auth?: { readonly status: string };
+    readonly unavailability?: string;
+    readonly models?: ReadonlyArray<{ readonly slug: string; readonly name: string }>;
+  }) =>
     serverConfig([
       {
         instanceId: "claudeAgent",
