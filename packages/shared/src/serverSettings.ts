@@ -25,11 +25,19 @@ const decodeServerSettingsJson = Schema.decodeUnknownOption(ServerSettingsJson);
 
 type LegacyProviderSettings = ServerSettings["providers"][keyof ServerSettings["providers"]];
 
+const hasLegacyProviderSettings = (
+  settings: ServerSettings,
+  provider: string,
+): provider is keyof ServerSettings["providers"] => provider in settings.providers;
+
 const getLegacyProviderSettings = (
   settings: ServerSettings,
   provider: ProviderDriverKind,
-): LegacyProviderSettings | undefined =>
-  (settings.providers as Record<string, LegacyProviderSettings | undefined>)[provider];
+): LegacyProviderSettings | undefined => {
+  const key = String(provider);
+
+  return hasLegacyProviderSettings(settings, key) ? settings.providers[key] : undefined;
+};
 
 export function isModelSelectionProviderEnabled(
   settings: ServerSettings,

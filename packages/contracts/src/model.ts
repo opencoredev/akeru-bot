@@ -103,7 +103,7 @@ export const ProviderOptionSelections = Schema.Union([
 export type ProviderOptionSelections = typeof ProviderOptionSelections.Type;
 
 function coerceLegacyOptionsObjectToArray(
-  record: Record<string, unknown>,
+  record: typeof LegacyProviderOptionSelectionsObject.Type,
 ): ReadonlyArray<ProviderOptionSelection> {
   const entries: Array<ProviderOptionSelection> = [];
 
@@ -126,9 +126,7 @@ function coerceLegacyOptionsObjectToArray(
   return entries;
 }
 
-function canonicalSelectionsToLegacyObject(
-  selections: ReadonlyArray<ProviderOptionSelection>,
-): Record<string, string | boolean> {
+function canonicalSelectionsToLegacyObject(selections: ReadonlyArray<ProviderOptionSelection>) {
   const out: Record<string, string | boolean> = {};
 
   for (const { id, value } of selections) {

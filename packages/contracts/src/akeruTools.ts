@@ -1,3 +1,4 @@
+import type { decodeAkeruToolInput } from "./akeruTools/inputs.ts";
 import * as Predicate from "effect/Predicate";
 import { AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH } from "./akeruDelegation.ts";
 import { AKERU_WORKER_MAX_DEPTH } from "./akeruWorkers.ts";
@@ -86,10 +87,10 @@ export function classifyAkeruExternalCommand(
 
 export function akeruToolApprovalForInput(
   tool: AkeruToolDefinition,
-  input: unknown,
+  input: Parameters<typeof decodeAkeruToolInput>[1],
   context?: { readonly workspaceType?: AkeruToolWorkspaceType },
 ): AkeruToolApprovalClass {
-  if (typeof input !== "object" || input === null) return tool.approval;
+  if (!Predicate.isObjectOrArray(input)) return tool.approval;
 
   if (
     (tool.id === "Shell" || tool.id === "ExternalShell") &&
@@ -123,13 +124,18 @@ export function akeruToolRequiresApproval(
   context: Pick<AkeruToolAvailabilityContext, "localFullAccess"> & {
     readonly workspaceType?: AkeruToolWorkspaceType;
   },
-  input?: unknown,
+  input?: Parameters<typeof decodeAkeruToolInput>[1],
 ): boolean {
   const approval = akeruToolApprovalForInput(tool, input, context);
 
   if (tool.id === "Shell" && context.workspaceType === "local") return true;
 
-  if (AKERU_PROTECTED_APPROVAL_CLASSES.has(approval as AkeruProtectedApprovalClass)) return true;
+  if (
+    Array.from(AKERU_PROTECTED_APPROVAL_CLASSES).some(
+      (protectedClass) => protectedClass === approval,
+    )
+  )
+    return true;
 
   return approval === "user-computer" && !(context.localFullAccess && input !== undefined);
 }

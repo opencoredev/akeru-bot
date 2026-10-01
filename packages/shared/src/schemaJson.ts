@@ -1,3 +1,5 @@
+import { flow } from "effect/Function";
+import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -58,25 +60,43 @@ function formatDiagnosticIssue(issue: SchemaDiagnosticIssue): string {
 }
 
 function schemaDiagnosticMessage(issue: SchemaIssue.Issue): string {
-  switch (issue._tag) {
-    case "InvalidType":
-      return "Invalid type";
-    case "InvalidValue":
-    case "Filter":
-    case "AnyOf":
-    case "Encoding":
-    case "Pointer":
-    case "Composite":
-      return "Invalid value";
-    case "MissingKey":
-      return "Missing key";
-    case "UnexpectedKey":
-      return "Unexpected key";
-    case "Forbidden":
-      return "Forbidden operation";
-    case "OneOf":
-      return "Expected exactly one schema member to match";
-  }
+  return Match.value(issue).pipe(
+    Match.tagsExhaustive({
+      InvalidType: () => {
+        return "Invalid type";
+      },
+      InvalidValue: () => {
+        return "Invalid value";
+      },
+      Filter: () => {
+        return "Invalid value";
+      },
+      AnyOf: () => {
+        return "Invalid value";
+      },
+      Encoding: () => {
+        return "Invalid value";
+      },
+      Pointer: () => {
+        return "Invalid value";
+      },
+      Composite: () => {
+        return "Invalid value";
+      },
+      MissingKey: () => {
+        return "Missing key";
+      },
+      UnexpectedKey: () => {
+        return "Unexpected key";
+      },
+      Forbidden: () => {
+        return "Forbidden operation";
+      },
+      OneOf: () => {
+        return "Expected exactly one schema member to match";
+      },
+    }),
+  );
 }
 
 function collectSchemaDiagnosticIssues(
@@ -84,31 +104,26 @@ function collectSchemaDiagnosticIssues(
   path: ReadonlyArray<PropertyKey>,
   diagnostics: Array<SchemaDiagnosticIssue>,
 ): number {
-  switch (issue._tag) {
-    case "Encoding":
+  if (Predicate.isTagged(issue, "Encoding")) {
+    return collectSchemaDiagnosticIssues(issue.issue, path, diagnostics);
+  } else if (Predicate.isTagged(issue, "Filter")) {
+    if (!Predicate.isTagged(issue.issue, "InvalidValue")) {
       return collectSchemaDiagnosticIssues(issue.issue, path, diagnostics);
-    case "Filter":
-      if (!Predicate.isTagged(issue.issue, "InvalidValue")) {
-        return collectSchemaDiagnosticIssues(issue.issue, path, diagnostics);
-      }
-
-      break;
-    case "Pointer":
-      return collectSchemaDiagnosticIssues(issue.issue, [...path, ...issue.path], diagnostics);
-    case "Composite":
+    }
+  } else if (Predicate.isTagged(issue, "Pointer")) {
+    return collectSchemaDiagnosticIssues(issue.issue, [...path, ...issue.path], diagnostics);
+  } else if (Predicate.isTagged(issue, "Composite")) {
+    return issue.issues.reduce(
+      (count, issue) => count + collectSchemaDiagnosticIssues(issue, path, diagnostics),
+      0,
+    );
+  } else if (Predicate.isTagged(issue, "AnyOf")) {
+    if (issue.issues.length > 0) {
       return issue.issues.reduce(
         (count, issue) => count + collectSchemaDiagnosticIssues(issue, path, diagnostics),
         0,
       );
-    case "AnyOf":
-      if (issue.issues.length > 0) {
-        return issue.issues.reduce(
-          (count, issue) => count + collectSchemaDiagnosticIssues(issue, path, diagnostics),
-          0,
-        );
-      }
-
-      break;
+    }
   }
 
   if (diagnostics.length < MAX_SCHEMA_DIAGNOSTIC_ISSUES) {
@@ -139,15 +154,13 @@ export const decodeUnknownJsonResult = <S extends Schema.Codec<unknown, unknown,
 ) => {
   const decode = Schema.decodeUnknownExit(Schema.fromJsonString(schema));
 
-  return (input: unknown) => {
-    const result = decode(input);
-
+  return flow(decode, (result) => {
     if (Exit.isFailure(result)) {
       return Result.fail(result.cause);
     }
 
     return Result.succeed(result.value);
-  };
+  });
 };
 
 export const formatSchemaError = (cause: Cause.Cause<Schema.SchemaError>) => {
@@ -158,22 +171,24 @@ export const formatSchemaError = (cause: Cause.Cause<Schema.SchemaError>) => {
   let interruptionCount = 0;
 
   for (const reason of cause.reasons) {
-    switch (reason._tag) {
-      case "Fail":
-        failureCount += 1;
+    Match.value(reason).pipe(
+      Match.tags({
+        Fail: (reason) => {
+          failureCount += 1;
 
-        if (Schema.isSchemaError(reason.error)) {
-          issueCount += collectSchemaDiagnosticIssues(reason.error.issue, [], issues);
-        }
-
-        break;
-      case "Die":
-        defectCount += 1;
-        break;
-      case "Interrupt":
-        interruptionCount += 1;
-        break;
-    }
+          if (Schema.isSchemaError(reason.error)) {
+            issueCount += collectSchemaDiagnosticIssues(reason.error.issue, [], issues);
+          }
+        },
+        Die: () => {
+          defectCount += 1;
+        },
+        Interrupt: () => {
+          interruptionCount += 1;
+        },
+      }),
+      Match.orElse(() => {}),
+    );
   }
 
   if (issues.length === 0) {

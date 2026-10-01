@@ -240,20 +240,23 @@ export const AkeruMessageReactionResult = Schema.Union([
 
 export type AkeruMessageReactionResult = typeof AkeruMessageReactionResult.Type;
 
+// SAFETY: Each decoder is compiled from the schema paired with that exact tool id; fromEntries loses the key/value correlation.
 const AkeruToolInputDecoders = Object.fromEntries(
   Object.entries(AkeruToolInputSchemas).map(([toolId, schema]) => [
     toolId,
     Schema.decodeUnknownSync(schema),
   ]),
-) as Record<
-  AkeruToolId,
-  (input: unknown, options: { readonly onExcessProperty: "error" }) => unknown
->;
+) as {
+  [Name in AkeruToolId]: ReturnType<
+    typeof Schema.decodeUnknownSync<(typeof AkeruToolInputSchemas)[Name]>
+  >;
+};
 
 export function decodeAkeruToolInput<Name extends AkeruToolId>(
   toolId: Name,
-  input: unknown,
+  input: Parameters<(typeof AkeruToolInputDecoders)[Name]>[0],
 ): (typeof AkeruToolInputSchemas)[Name]["Type"] {
+  // SAFETY: The cache indexes the decoder and return type by the same tool id, and the decoder validates the input.
   return AkeruToolInputDecoders[toolId](input, {
     onExcessProperty: "error",
   }) as (typeof AkeruToolInputSchemas)[Name]["Type"];

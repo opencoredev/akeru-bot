@@ -62,9 +62,7 @@ export type RoutineSchedule = typeof RoutineSchedule.Type;
 export const RoutineTimeZone = TrimmedNonEmptyString.check(
   Schema.makeFilter((value) => {
     try {
-      new Intl.DateTimeFormat("en", { timeZone: value });
-
-      return true;
+      return Boolean(new Intl.DateTimeFormat("en", { timeZone: value }));
     } catch {
       return "timezone must be a valid IANA time zone";
     }

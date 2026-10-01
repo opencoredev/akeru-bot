@@ -17,22 +17,12 @@ export function projectScriptCwd(input: {
   return input.worktreePath ?? input.project.cwd;
 }
 
-export function projectScriptRuntimeEnv(
-  input: ProjectScriptRuntimeEnvInput,
-): Record<string, string> {
-  const env: Record<string, string> = {
+export function projectScriptRuntimeEnv(input: ProjectScriptRuntimeEnvInput) {
+  return {
     T3CODE_PROJECT_ROOT: input.project.cwd,
+    ...(input.worktreePath ? { T3CODE_WORKTREE_PATH: input.worktreePath } : {}),
+    ...input.extraEnv,
   };
-
-  if (input.worktreePath) {
-    env.T3CODE_WORKTREE_PATH = input.worktreePath;
-  }
-
-  if (input.extraEnv) {
-    return { ...env, ...input.extraEnv };
-  }
-
-  return env;
 }
 
 export function setupProjectScript(scripts: readonly ProjectScript[]): ProjectScript | null {

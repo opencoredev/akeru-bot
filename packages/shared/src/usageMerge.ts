@@ -112,10 +112,12 @@ function fingerprintKey(fingerprint: UsageSourceFingerprint): string {
  * provider's buckets dropped. Environments are sorted by id so the winner does
  * not change between renders.
  */
-function claimSources(environments: readonly EnvironmentUsage[]): {
+type ClaimSourcesResult = {
   readonly ownerByFingerprint: ReadonlyMap<string, EnvironmentId>;
   readonly duplicates: readonly string[];
-} {
+};
+
+function claimSources(environments: readonly EnvironmentUsage[]): ClaimSourcesResult {
   const ownerByFingerprint = new Map<string, EnvironmentId>();
   const duplicates: string[] = [];
 
@@ -139,13 +141,15 @@ function claimSources(environments: readonly EnvironmentUsage[]): {
 }
 
 /** Sources this environment owns after fingerprint claims, plus their buckets. */
+type OwnedContributionResult = {
+  readonly buckets: readonly UsageBucket[];
+  readonly sessionsByProvider: ReadonlyMap<UsageProviderKind, number>;
+};
+
 function ownedContribution(
   environment: EnvironmentUsage,
   ownerByFingerprint: ReadonlyMap<string, EnvironmentId>,
-): {
-  readonly buckets: readonly UsageBucket[];
-  readonly sessionsByProvider: ReadonlyMap<UsageProviderKind, number>;
-} {
+): OwnedContributionResult {
   const ownedProviders = new Set<UsageProviderKind>();
   const connectedUsageProviders = new Set<UsageProviderKind>();
 

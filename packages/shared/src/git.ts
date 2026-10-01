@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import type {
   VcsRef,
   SourceControlProviderInfo,
@@ -326,26 +327,31 @@ export function applyGitStatusStreamEvent(
   current: VcsStatusResult | null,
   event: VcsStatusStreamEvent,
 ): VcsStatusResult {
-  switch (event._tag) {
-    case "snapshot":
-      return mergeGitStatusParts(event.local, event.remote);
-    case "localUpdated":
-      return mergeGitStatusParts(event.local, current ? toRemoteStatusPart(current) : null);
-    case "remoteUpdated":
-      if (current === null) {
-        return mergeGitStatusParts(
-          {
-            isRepo: true,
-            hasPrimaryRemote: false,
-            isDefaultRef: false,
-            refName: null,
-            hasWorkingTreeChanges: false,
-            workingTree: { files: [], insertions: 0, deletions: 0 },
-          },
-          event.remote,
-        );
-      }
+  return Match.value(event).pipe(
+    Match.tagsExhaustive({
+      snapshot: (event) => {
+        return mergeGitStatusParts(event.local, event.remote);
+      },
+      localUpdated: (event) => {
+        return mergeGitStatusParts(event.local, current ? toRemoteStatusPart(current) : null);
+      },
+      remoteUpdated: (event) => {
+        if (current === null) {
+          return mergeGitStatusParts(
+            {
+              isRepo: true,
+              hasPrimaryRemote: false,
+              isDefaultRef: false,
+              refName: null,
+              hasWorkingTreeChanges: false,
+              workingTree: { files: [], insertions: 0, deletions: 0 },
+            },
+            event.remote,
+          );
+        }
 
-      return mergeGitStatusParts(toLocalStatusPart(current), event.remote);
-  }
+        return mergeGitStatusParts(toLocalStatusPart(current), event.remote);
+      },
+    }),
+  );
 }

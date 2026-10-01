@@ -77,10 +77,10 @@ export const decodeOrchestrationThreadShell = Schema.decodeUnknownEffect(Orchest
 
 export const encodeThreadCreatedPayload = Schema.encodeEffect(ThreadCreatedPayload);
 
-export function getOptionValue(
-  options: ReadonlyArray<{ id: string; value: unknown }> | undefined,
+export function getOptionValue<Value>(
+  options: ReadonlyArray<{ id: string; value: Value }> | undefined,
   id: string,
-): unknown {
+): Value | undefined {
   return options?.find((option) => option.id === id)?.value;
 }
 

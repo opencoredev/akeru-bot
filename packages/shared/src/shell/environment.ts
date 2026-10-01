@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeOS from "node:os";
@@ -44,8 +45,11 @@ export function listLoginShellCandidates(
   shell: string | undefined,
   userShell = readUserLoginShell(),
 ): ReadonlyArray<string> {
-  const fallbackShell =
-    platform === "darwin" ? "/bin/zsh" : platform === "linux" ? "/bin/bash" : undefined;
+  const fallbackShell = Match.value(platform).pipe(
+    Match.when("darwin", () => "/bin/zsh"),
+    Match.when("linux", () => "/bin/bash"),
+    Match.orElse(() => undefined),
+  );
 
   const seen = new Set<string>();
   const candidates: string[] = [];
@@ -241,7 +245,7 @@ export function readEnvironmentFromWindowsShell(
   names: ReadonlyArray<string>,
   optionsOrExecFile?: WindowsEnvironmentProbeOptions | ExecFileSyncLike,
   maybeExecFile?: ExecFileSyncLike,
-): Partial<Record<string, string>> {
+) {
   if (names.length === 0) {
     return {};
   }
@@ -252,7 +256,7 @@ export function readEnvironmentFromWindowsShell(
 
   const execFile: ExecFileSyncLike = Predicate.isFunction(optionsOrExecFile)
     ? optionsOrExecFile
-    : (maybeExecFile ?? (NodeChildProcess.execFileSync as ExecFileSyncLike));
+    : (maybeExecFile ?? NodeChildProcess.execFileSync);
 
   const command = buildWindowsEnvironmentCaptureCommand(names);
 

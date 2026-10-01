@@ -339,9 +339,9 @@ export function resolveModelSlugForProvider(
 }
 
 /** Trim a string, returning null for empty/missing values. */
-export function trimOrNull<T extends string>(value: T | null | undefined): T | null {
+export function trimOrNull(value: string | null | undefined) {
   if (!Predicate.isString(value)) return null;
-  const trimmed = value.trim() as T;
+  const trimmed = value.trim();
 
   return trimmed || null;
 }

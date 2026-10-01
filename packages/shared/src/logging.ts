@@ -85,10 +85,17 @@ export class RotatingFileSink {
       maxBufferedChunks: options.maxBufferedChunks ?? 512,
     };
 
-    for (const [option, received] of Object.entries(limits)) {
+    for (const option of [
+      "maxBytes",
+      "maxFiles",
+      "maxBufferedBytes",
+      "maxBufferedChunks",
+    ] as const) {
+      const received = limits[option];
+
       if (!Number.isSafeInteger(received) || received < 1) {
         throw new RotatingFileSinkConfigurationError({
-          option: option as keyof typeof limits,
+          option,
           received,
           minimum: 1,
         });

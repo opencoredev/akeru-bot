@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeNet from "node:net";
 
 import { assert, describe, it } from "@effect/vitest";
@@ -17,7 +18,7 @@ const closeServer = (server: NodeNet.Server) =>
 const getPort = (server: NodeNet.Server): number => {
   const address = server.address();
 
-  return typeof address === "object" && address !== null ? address.port : 0;
+  return address !== null && !Predicate.isString(address) ? address.port : 0;
 };
 
 const openServer = (host?: string): Effect.Effect<NodeNet.Server, NetService.NetError> =>

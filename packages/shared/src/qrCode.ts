@@ -667,7 +667,8 @@ export class QrCode {
 
     for (const b of data) {
       // Polynomial division
-      const factor: byte = b ^ (result.shift() as byte);
+      // SAFETY: A Reed-Solomon divisor has positive degree; the remainder is refilled after every shift.
+      const factor: byte = b ^ result.shift()!;
       result.push(0);
       divisor.forEach((coef, i) => (result[i]! ^= QrCode.reedSolomonMultiply(coef, factor)));
     }
@@ -689,7 +690,7 @@ export class QrCode {
 
     assert(z >>> 8 == 0);
 
-    return z as byte;
+    return z;
   }
 
   // Can only be called immediately after a light run is added, and

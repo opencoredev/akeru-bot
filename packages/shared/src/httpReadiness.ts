@@ -40,11 +40,13 @@ export type HttpReadinessFailure = HttpReadinessFailureCause & {
  * message/cause) shape for Effect tagged errors while recursing through nested
  * `cause`/`reason` chains.
  */
+// oxlint-disable-next-line anti-slop/no-unknown-returns -- Diagnostic normalization preserves arbitrary primitive causes, including functions and symbols.
 export function describeReadinessCause(cause: unknown): unknown {
   if (cause instanceof Error) {
     const tag = "_tag" in cause ? cause._tag : undefined;
     const nested = cause.cause;
 
+    // oxlint-disable-next-line anti-slop/no-known-value-widening -- Structured error details share the return contract with unchanged arbitrary primitive causes.
     return {
       ...(Predicate.isString(tag) ? { _tag: tag } : { name: cause.name }),
       message: cause.message,
@@ -52,17 +54,26 @@ export function describeReadinessCause(cause: unknown): unknown {
     };
   }
 
-  if (typeof cause !== "object" || cause === null) {
+  if (!Predicate.isObjectOrArray(cause)) {
     return cause;
   }
 
-  const record = cause as Readonly<Record<string, unknown>>;
+  const record = cause;
 
+  // oxlint-disable-next-line anti-slop/no-known-value-widening -- Recursive diagnostic records may contain unchanged arbitrary primitive causes.
   return {
-    ...(Predicate.isString(record._tag) ? { _tag: record._tag } : {}),
-    ...(Predicate.isString(record.message) ? { message: record.message } : {}),
-    ...(record.reason === undefined ? {} : { reason: describeReadinessCause(record.reason) }),
-    ...(record.cause === undefined ? {} : { cause: describeReadinessCause(record.cause) }),
+    ...(Predicate.hasProperty(record, "_tag") && Predicate.isString(record._tag)
+      ? { _tag: record._tag }
+      : {}),
+    ...(Predicate.hasProperty(record, "message") && Predicate.isString(record.message)
+      ? { message: record.message }
+      : {}),
+    ...(!Predicate.hasProperty(record, "reason") || record.reason === undefined
+      ? {}
+      : { reason: describeReadinessCause(record.reason) }),
+    ...(!Predicate.hasProperty(record, "cause") || record.cause === undefined
+      ? {}
+      : { cause: describeReadinessCause(record.cause) }),
   };
 }
 
@@ -110,7 +121,7 @@ export const waitForHttpReady = Effect.fn("shared.httpReadiness.waitForHttpReady
   const fail = (failure: HttpReadinessFailureCause): E => {
     const error = makeError({ requestUrl, probeTimeoutMs, attempt, ...failure });
 
-    if (typeof error === "object" && error !== null) {
+    if (Predicate.isObjectOrArray(error)) {
       madeErrors.add(error);
     }
 
@@ -118,7 +129,7 @@ export const waitForHttpReady = Effect.fn("shared.httpReadiness.waitForHttpReady
   };
 
   const isMadeError = (value: unknown): value is E =>
-    typeof value === "object" && value !== null && madeErrors.has(value);
+    Predicate.isObjectOrArray(value) && madeErrors.has(value);
 
   yield* Effect.logDebug("httpReadiness.start", {
     baseUrl: input.baseUrl,

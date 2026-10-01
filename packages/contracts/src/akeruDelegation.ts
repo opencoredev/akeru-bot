@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Data from "effect/Data";
 import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -17,6 +19,8 @@ import {
 import { McpServerId } from "./mcpServer.ts";
 import { BotSandbox } from "./orchestration/roster.ts";
 import { RuntimeMode } from "./orchestration/modelSelection.ts";
+
+const DelegationPhase = Data.taggedEnum<AkeruDelegationPhase>();
 
 export const AKERU_DELEGATION_MAX_DEPTH = 2;
 
@@ -194,51 +198,46 @@ const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
 
   switch (legacy.state) {
     case "queued":
-      return { _tag: "Queued" };
+      return DelegationPhase.Queued();
     case "running":
     case "blocked":
-      if (childThreadId === null) return { _tag: "Queued" };
+      if (childThreadId === null) return DelegationPhase.Queued();
 
       return legacy.state === "running"
-        ? {
-            _tag: "Running",
+        ? DelegationPhase.Running({
             childThreadId,
             childTurnId: legacy.childTurnId,
             startedAt,
             progress: legacy.progress ?? null,
-          }
-        : {
-            _tag: "Blocked",
+          })
+        : DelegationPhase.Blocked({
             childThreadId,
             childTurnId: legacy.childTurnId,
             startedAt,
             reason: legacy.blockedReason ?? legacy.failure?.message ?? "The bot is blocked.",
-          };
+          });
     case "completed":
       if (childThreadId !== null && legacy.result !== null) {
-        return {
-          _tag: "Completed",
+        return DelegationPhase.Completed({
           childThreadId,
           childTurnId: legacy.childTurnId,
           startedAt,
           completedAt,
           result: legacy.result,
           acknowledgedAt: legacy.acknowledgedAt ?? null,
-        };
+        });
       }
 
-      return {
-        _tag: "Failed",
+      return DelegationPhase.Failed({
         childThreadId,
         childTurnId: legacy.childTurnId,
         startedAt: legacy.startedAt,
         completedAt,
         failure: { failureCode: "child_failed", message: "The bot did not return a result." },
         acknowledgedAt: null,
-      };
+      });
     case "failed":
-      return {
-        _tag: "Failed",
+      return DelegationPhase.Failed({
         childThreadId,
         childTurnId: legacy.childTurnId,
         startedAt: legacy.startedAt,
@@ -248,16 +247,15 @@ const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
           message: "The bot did not return a result.",
         },
         acknowledgedAt: null,
-      };
+      });
     case "canceled":
-      return {
-        _tag: "Canceled",
+      return DelegationPhase.Canceled({
         childThreadId,
         childTurnId: legacy.childTurnId,
         startedAt: legacy.startedAt,
         completedAt,
         canceledBy: legacy.canceledBy ?? "user",
-      };
+      });
   }
 };
 
@@ -303,20 +301,28 @@ const LegacyToTagged = LegacyDelegationRecord.pipe(
 
 /** Lowercase state name for a phase, as used by activity kinds and tool payloads. */
 export const akeruDelegationStateOf = (phase: AkeruDelegationPhase): AkeruDelegationState => {
-  switch (phase._tag) {
-    case "Queued":
-      return "queued";
-    case "Running":
-      return "running";
-    case "Blocked":
-      return "blocked";
-    case "Completed":
-      return "completed";
-    case "Failed":
-      return "failed";
-    case "Canceled":
-      return "canceled";
-  }
+  return Match.value(phase).pipe(
+    Match.tagsExhaustive({
+      Queued: () => {
+        return "queued" as const;
+      },
+      Running: () => {
+        return "running" as const;
+      },
+      Blocked: () => {
+        return "blocked" as const;
+      },
+      Completed: () => {
+        return "completed" as const;
+      },
+      Failed: () => {
+        return "failed" as const;
+      },
+      Canceled: () => {
+        return "canceled" as const;
+      },
+    }),
+  );
 };
 
 export const AkeruDelegationRecord = Schema.Union([LegacyToTagged, TaggedDelegationRecord]);

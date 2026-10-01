@@ -34,6 +34,7 @@ export type IsoDateTime = typeof IsoDateTime.Type;
  * couldn't act on anyway. Encoding is the plain array encoding.
  */
 export const ForwardCompatibleArray = <Element extends Schema.Top>(element: Element) => {
+  // SAFETY: Wire element schemas are context-free codecs; Schema.Top erases their decoding service requirement.
   const decodeElement = Schema.decodeUnknownOption(element as never);
 
   return Schema.Array(Schema.Unknown).pipe(
@@ -41,6 +42,7 @@ export const ForwardCompatibleArray = <Element extends Schema.Top>(element: Elem
       Schema.Array(element),
       SchemaTransformation.transform<ReadonlyArray<Element["Encoded"]>, ReadonlyArray<unknown>>({
         decode: (values) =>
+          // SAFETY: Retained values decoded successfully as this element; keep their encoded form for decodeTo to apply the element codec once.
           values.filter((value) => Option.isSome(decodeElement(value))) as ReadonlyArray<
             Element["Encoded"]
           >,

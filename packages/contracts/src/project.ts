@@ -115,7 +115,7 @@ type ProjectEntriesFailureContext = {
   readonly cause?: unknown;
 };
 
-function decodedProjectErrorMessage(props: object): string | undefined {
+function decodedProjectErrorMessage<Props extends object>(props: Props): string | undefined {
   if (!("message" in props)) return undefined;
 
   return Predicate.isString(props.message) ? props.message : undefined;

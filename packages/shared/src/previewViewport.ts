@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import * as Predicate from "effect/Predicate";
 import type {
   PreviewAutomationResizeInput,
@@ -5,6 +6,8 @@ import type {
   PreviewViewportSetting,
 } from "@akeru/contracts";
 import { PREVIEW_VIEWPORT_PRESET_IDS } from "@akeru/contracts";
+
+const Viewport = Data.taggedEnum<PreviewViewportSetting>();
 
 export interface PreviewViewportPreset {
   readonly id: PreviewViewportPresetId;
@@ -150,7 +153,7 @@ export const PREVIEW_VIEWPORT_PRESETS: ReadonlyArray<PreviewViewportPreset> =
 export function resolvePreviewViewport(
   input: PreviewAutomationResizeInput,
 ): PreviewViewportSetting {
-  if (input.mode === "fill") return { _tag: "fill" };
+  if (input.mode === "fill") return Viewport.fill();
 
   if (input.mode === "preset" && input.preset !== undefined) {
     const preset = PREVIEW_VIEWPORT_PRESETS.find((candidate) => candidate.id === input.preset);
@@ -161,23 +164,18 @@ export function resolvePreviewViewport(
     const nativePortrait = preset.height >= preset.width;
     const shouldSwap = (landscape && nativePortrait) || (portrait && !nativePortrait);
 
-    return {
-      _tag: "preset",
+    return Viewport.preset({
       width: shouldSwap ? preset.height : preset.width,
       height: shouldSwap ? preset.width : preset.height,
       presetId: preset.id,
-    };
+    });
   }
 
   if (input.width === undefined || input.height === undefined) {
     throw new Error("Custom preview viewport requires width and height");
   }
 
-  return {
-    _tag: "freeform",
-    width: input.width,
-    height: input.height,
-  };
+  return Viewport.freeform({ width: input.width, height: input.height });
 }
 
 export function previewViewportLabel(viewport: PreviewViewportSetting): string {

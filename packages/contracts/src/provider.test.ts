@@ -24,10 +24,10 @@ const decodeProviderUploadFeedbackInput = Schema.decodeUnknownSync(ProviderUploa
 
 const decodeProviderUploadFeedbackResult = Schema.decodeUnknownSync(ProviderUploadFeedbackResult);
 
-function getOptionValue(
-  options: ReadonlyArray<{ id: string; value: unknown }> | undefined,
+function getOptionValue<Value>(
+  options: ReadonlyArray<{ id: string; value: Value }> | undefined,
   id: string,
-): unknown {
+): Value | undefined {
   return options?.find((option) => option.id === id)?.value;
 }
 

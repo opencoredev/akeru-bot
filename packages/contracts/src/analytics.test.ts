@@ -47,7 +47,8 @@ const event = {
   timestamp: "2026-08-31T21:00:00.000Z",
 } as const;
 
-const rejects = (input: unknown) => expect(() => decodeUsage3hEvent(input)).toThrow();
+const rejects = (input: Parameters<typeof decodeUsage3hEvent>[0]) =>
+  expect(() => decodeUsage3hEvent(input)).toThrow();
 
 describe("Usage3hEvent", () => {
   it("accepts the fixed anonymous aggregate payload", () => {

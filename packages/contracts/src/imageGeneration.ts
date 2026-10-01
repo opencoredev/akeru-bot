@@ -21,7 +21,7 @@ export type ImageProviderId = typeof ImageProviderId.Type;
 export const IMAGE_PROVIDER_IDS = ["chatgpt", "grok"] as const;
 
 export function isImageProviderId(value: string): value is ImageProviderId {
-  return (IMAGE_PROVIDER_IDS as readonly string[]).includes(value);
+  return IMAGE_PROVIDER_IDS.some((provider) => provider === value);
 }
 
 export const ImageProviderOperation = Schema.Literals(["generate", "edit"]);
@@ -182,7 +182,7 @@ const decodeImageGenerationRequestSync = Schema.decodeUnknownSync(ImageGeneratio
 
 /** Strict decode: unknown option keys are rejected rather than ignored. */
 export function decodeImageGenerationRequest(
-  input: unknown,
+  input: Parameters<typeof decodeImageGenerationRequestSync>[0],
 ):
   | { readonly ok: true; readonly request: ImageGenerationRequest }
   | { readonly ok: false; readonly message: string } {

@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 /**
  * Preview - Schemas for the in-app browser preview surface.
  *
@@ -9,6 +10,8 @@
  */
 import { Schema } from "effect";
 import { NonNegativeInt, PositiveInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+
+const Viewport = Data.taggedEnum<PreviewViewportSetting>();
 
 export const PREVIEW_URL_MAX_LENGTH = 2_048;
 
@@ -122,9 +125,7 @@ export const PreviewViewportSetting = Schema.Union([
 
 export type PreviewViewportSetting = typeof PreviewViewportSetting.Type;
 
-export const FILL_PREVIEW_VIEWPORT = {
-  _tag: "fill",
-} as const satisfies PreviewViewportSetting;
+export const FILL_PREVIEW_VIEWPORT = Viewport.fill();
 
 /**
  * Discrete zoom levels mirroring Chrome's preset ladder. Zoom is applied by the

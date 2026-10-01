@@ -1,9 +1,14 @@
+import type * as Schema from "effect/Schema";
+import type * as Tracer from "effect/Tracer";
+import * as Data from "effect/Data";
 import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import type * as Exit from "effect/Exit";
 import * as ExitRuntime from "effect/Exit";
 import * as Option from "effect/Option";
 import { type TraceAttributes, type EffectTraceRecord } from "./types.ts";
+
+const TraceExit = Data.taggedEnum<EffectTraceRecord["exit"]>();
 
 function isStructuralTag(value: unknown): value is string {
   return (
@@ -14,20 +19,21 @@ function isStructuralTag(value: unknown): value is string {
   );
 }
 
-export function errorTag(error: unknown): string {
+export function errorTag(cause: unknown): string {
   try {
-    if (typeof error === "object" && error !== null && "_tag" in error) {
-      return isStructuralTag(error._tag) ? error._tag : "TaggedError";
+    if (Predicate.isObjectOrArray(cause) && "_tag" in cause) {
+      return isStructuralTag(cause._tag) ? cause._tag : "TaggedError";
     }
 
-    if (error instanceof Error) {
-      return isStructuralTag(error.name) ? error.name : "Error";
+    if (cause instanceof Error) {
+      return isStructuralTag(cause.name) ? cause.name : "Error";
     }
   } catch {
     return "UnknownError";
   }
 
-  return typeof error;
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Diagnostic labels preserve JavaScript primitive categories, including symbol and function.
+  return typeof cause;
 }
 
 export function causeErrorTag(cause: Cause.Cause<unknown>): string {
@@ -40,11 +46,9 @@ export function causeErrorTag(cause: Cause.Cause<unknown>): string {
   return cause.reasons[0]?._tag ?? "Empty";
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const isPlainObject = Predicate.isObject;
 
-function markSeen(value: object, seen: WeakSet<object>): boolean {
+function markSeen<T extends object>(value: T, seen: WeakSet<object>): boolean {
   if (seen.has(value)) {
     return true;
   }
@@ -54,7 +58,8 @@ function markSeen(value: object, seen: WeakSet<object>): boolean {
   return false;
 }
 
-function normalizeJsonValue(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Trace serialization accepts arbitrary runtime values and normalizes them to JSON.
+function normalizeJsonValue(value: unknown, seen: WeakSet<object> = new WeakSet()): Schema.Json {
   if (
     value === null ||
     value === undefined ||
@@ -124,9 +129,9 @@ function normalizeJsonValue(value: unknown, seen: WeakSet<object> = new WeakSet(
 }
 
 export function compactTraceAttributes(
-  attributes: Readonly<Record<string, unknown>>,
+  attributes: NonNullable<Parameters<Tracer.Span["event"]>[2]>,
 ): TraceAttributes {
-  const entries: Array<[string, unknown]> = [];
+  const entries: Array<[string, Schema.Json]> = [];
 
   for (const [key, value] of Object.entries(attributes)) {
     if (value !== undefined) {
@@ -139,20 +144,14 @@ export function compactTraceAttributes(
 
 export function formatTraceExit(exit: Exit.Exit<unknown, unknown>): EffectTraceRecord["exit"] {
   if (ExitRuntime.isSuccess(exit)) {
-    return { _tag: "Success" };
+    return TraceExit.Success();
   }
 
   if (Cause.hasInterruptsOnly(exit.cause)) {
-    return {
-      _tag: "Interrupted",
-      cause: Cause.pretty(exit.cause),
-    };
+    return TraceExit.Interrupted({ cause: Cause.pretty(exit.cause) });
   }
 
-  return {
-    _tag: "Failure",
-    cause: Cause.pretty(exit.cause),
-  };
+  return TraceExit.Failure({ cause: Cause.pretty(exit.cause) });
 }
 
 const TRACE_ATTRIBUTE_MAX_LENGTH = 500;
@@ -166,7 +165,7 @@ const ALWAYS_TRUNCATED_TRACE_ATTRIBUTES: ReadonlySet<string> = new Set(["db.quer
 // Clamps strings nested inside already-normalized attribute values (arrays and
 // plain objects from normalizeJsonValue, e.g. an Error's `stack`). Returns the
 // input reference when nothing was clamped.
-function truncateNestedValue(value: unknown): unknown {
+function truncateNestedValue(value: Schema.Json): Schema.Json {
   if (Predicate.isString(value)) {
     return value.length <= TRACE_ATTRIBUTE_MAX_LENGTH
       ? value
@@ -179,8 +178,8 @@ function truncateNestedValue(value: unknown): unknown {
     return truncated.some((entry, index) => entry !== value[index]) ? truncated : value;
   }
 
-  if (isPlainObject(value)) {
-    let truncated: Record<string, unknown> | undefined;
+  if (isJsonObject(value)) {
+    let truncated: Record<string, Schema.Json> | undefined;
 
     for (const [key, entry] of Object.entries(value)) {
       const next = truncateNestedValue(entry);
@@ -203,7 +202,7 @@ function truncateNestedValue(value: unknown): unknown {
  * mutates the input (the live span's attributes are shared with other tracers).
  */
 export function truncateTraceAttributes(attributes: TraceAttributes): TraceAttributes {
-  let truncated: Record<string, unknown> | undefined;
+  let truncated: Record<string, Schema.Json> | undefined;
 
   for (const [key, value] of Object.entries(attributes)) {
     if (Predicate.isString(value) && ALWAYS_TRUNCATED_TRACE_ATTRIBUTES.has(key)) {
@@ -222,4 +221,8 @@ export function truncateTraceAttributes(attributes: TraceAttributes): TraceAttri
   }
 
   return truncated ?? attributes;
+}
+
+function isJsonObject(value: Schema.Json): value is Schema.JsonObject {
+  return Predicate.isObject(value);
 }
