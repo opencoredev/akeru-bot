@@ -210,7 +210,7 @@ export function ChannelSendApproval({
           deliveryLabel?.tone === "error"
             ? "text-destructive"
             : deliveryLabel?.tone === "warning"
-              ? "text-amber-700 dark:text-amber-400"
+              ? "text-warning-foreground"
               : "text-muted-foreground",
         )}
       >

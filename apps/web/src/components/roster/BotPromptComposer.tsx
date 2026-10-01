@@ -21,7 +21,11 @@ import { ExpandedImageDialog } from "../chat/ExpandedImageDialog";
 import { ComposerStashBadge } from "../chat/ComposerStashBadge";
 import { ComposerStashMenu } from "../chat/ComposerStashMenu";
 import { LoaderMeter } from "../chat/ResponseLoadingState";
-import { CONVERSATION_MEASURE_CLASS_NAME } from "./botConversationPresentation";
+import {
+  BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME,
+  BOT_COMPOSER_SURFACE_CLASS_NAME,
+  CONVERSATION_MEASURE_CLASS_NAME,
+} from "./botConversationPresentation";
 import type { MessageReplyTarget } from "../chat/MessageControls";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
@@ -392,8 +396,8 @@ export function BotPromptComposer({
             className={cn(
               "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out",
               quietSurface
-                ? "border-border/70 bg-card"
-                : "border-white/10 bg-foreground/[0.12] dark:bg-white/[0.16]",
+                ? BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME
+                : BOT_COMPOSER_SURFACE_CLASS_NAME,
               expanded && "min-h-28",
               pendingActionSlot ? "rounded-t-md border-t-transparent" : undefined,
             )}

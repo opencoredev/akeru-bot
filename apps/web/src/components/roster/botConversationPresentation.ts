@@ -12,6 +12,20 @@ export const channelProviderLabel = sharedChannelProviderLabel;
  */
 export const CONVERSATION_MEASURE_CLASS_NAME = "mx-auto w-full max-w-[46rem]";
 
+/** The prompt box fill. Panels docked onto the composer reuse it so the joint reads as one surface. */
+export const BOT_COMPOSER_SURFACE_CLASS_NAME =
+  "border-white/10 bg-foreground/[0.12] dark:bg-white/[0.16]";
+
+/** The quieter card fill for the prompt box and the decision panels docked onto it. */
+export const BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME = "border-border/70 bg-card";
+
+/**
+ * Shape of a panel docked on top of the composer: its rounded top continues the prompt box
+ * and its open bottom edge meets the box's squared top. Put it after a surface class.
+ */
+export const BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME =
+  "mb-1 w-full rounded-t-[1.65rem] rounded-b-md border border-b-transparent px-3.5 pt-3 pb-2.5";
+
 export function isBotConversationWorking(input: {
   sending: boolean;
   respondingToUserInput: boolean;

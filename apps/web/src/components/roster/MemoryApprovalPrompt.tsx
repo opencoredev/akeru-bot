@@ -17,6 +17,11 @@ import { memoryEnvironment } from "../../state/memory";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import { cn } from "../../lib/utils";
+import {
+  BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME,
+  BOT_COMPOSER_SURFACE_CLASS_NAME,
+} from "./botConversationPresentation";
 
 // Asks the user to approve a shared fact a bot wants to save. Shown above the
 // composer while the chat has undecided requests; the inbox resolves the same ones.
@@ -75,11 +80,11 @@ export function MemoryApprovalPrompt({
   return (
     <section
       aria-label={t("Memory approval")}
-      className="mb-1 w-full rounded-t-[1.65rem] rounded-b-md border border-white/10 border-b-transparent bg-foreground/[0.12] px-3.5 pt-3 pb-2.5 dark:bg-white/[0.16]"
+      className={cn(BOT_COMPOSER_SURFACE_CLASS_NAME, BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME)}
       data-testid="memory-approval-prompt"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-amber-400" />
+        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-warning" />
         <p className="text-sm font-semibold text-foreground">
           {memoryApprovalHeading(approval.scope, i18n)}
         </p>
