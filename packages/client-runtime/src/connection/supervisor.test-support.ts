@@ -6,7 +6,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
+import { testRpcClient } from "../test-support/services.ts";
 import type { ConnectionCatalogEntry } from "./catalog.ts";
 import * as Connectivity from "./connectivity.ts";
 import * as ConnectionDriver from "./driver.ts";
@@ -44,7 +44,7 @@ export const PREPARED_CONNECTION: PreparedConnection = {
   target: TARGET,
 };
 
-const TEST_RPC_CLIENT = {} as WsRpcProtocolClient;
+const TEST_RPC_CLIENT = testRpcClient({});
 
 export function transient(message = "Connection failed.") {
   return new ConnectionTransientError({

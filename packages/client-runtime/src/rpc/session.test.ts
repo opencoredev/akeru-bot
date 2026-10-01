@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
@@ -29,34 +30,35 @@ type SocketEvent = {
   readonly type: SocketEventType;
 };
 
-type SocketListener = (event: SocketEvent) => void;
-
-class TestWebSocket {
+class TestWebSocket extends EventTarget implements WebSocket {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
   static readonly CLOSING = 2;
   static readonly CLOSED = 3;
 
-  readyState = TestWebSocket.CONNECTING;
+  readyState: WebSocket["readyState"] = TestWebSocket.CONNECTING;
   readonly sent: string[] = [];
   readonly url: string;
-  private readonly listeners = new Map<SocketEventType, Set<SocketListener>>();
+  readonly CONNECTING = 0;
+  readonly OPEN = 1;
+  readonly CLOSING = 2;
+  readonly CLOSED = 3;
+  readonly bufferedAmount = 0;
+  readonly extensions = "";
+  readonly protocol = "";
+  binaryType: BinaryType = "arraybuffer";
+  onopen: WebSocket["onopen"] = null;
+  onclose: WebSocket["onclose"] = null;
+  onerror: WebSocket["onerror"] = null;
+  onmessage: WebSocket["onmessage"] = null;
 
   constructor(url: string) {
+    super();
     this.url = url;
   }
 
-  addEventListener(type: SocketEventType, listener: SocketListener) {
-    const listeners = this.listeners.get(type) ?? new Set<SocketListener>();
-    listeners.add(listener);
-    this.listeners.set(type, listeners);
-  }
-
-  removeEventListener(type: SocketEventType, listener: SocketListener) {
-    this.listeners.get(type)?.delete(listener);
-  }
-
-  send(data: string) {
+  send(data: Parameters<WebSocket["send"]>[0]) {
+    if (!Predicate.isString(data)) throw new Error("The RPC fixture expects text frames.");
     this.sent.push(data);
   }
 
@@ -79,9 +81,8 @@ class TestWebSocket {
   }
 
   private emit(type: SocketEventType, event: SocketEvent) {
-    for (const listener of this.listeners.get(type) ?? []) {
-      listener(event);
-    }
+    const { type: _type, ...fields } = event;
+    this.dispatchEvent(Object.assign(new Event(type), fields));
   }
 }
 
@@ -169,7 +170,7 @@ const makeFactory = Effect.fn("TestRpcSessionFactory.make")(function* () {
     const socket = new TestWebSocket(url);
     sockets.push(socket);
 
-    return socket as unknown as globalThis.WebSocket;
+    return socket;
   });
 
   const layer = RpcSession.layer.pipe(Layer.provide(constructorLayer));
@@ -213,7 +214,7 @@ const awaitRequest = Effect.fn("TestRpcSessionFactory.awaitRequest")(function* (
 
 const completeInitialConfig = Effect.fn("TestRpcSessionFactory.completeInitialConfig")(function* (
   socket: TestWebSocket,
-  config: unknown = ENCODED_SERVER_CONFIG,
+  config: Parameters<typeof encodeJson>[0] = ENCODED_SERVER_CONFIG,
 ) {
   const request = yield* awaitRequest(socket);
   expect(request).toMatchObject({

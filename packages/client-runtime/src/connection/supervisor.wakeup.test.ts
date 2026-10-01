@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { describe, expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -80,11 +81,11 @@ describe("EnvironmentSupervisor", () => {
     Effect.gen(function* () {
       const harness = yield* makeHarness({
         prepare: (attempt) =>
-          attempt === 1
-            ? Effect.fail(transient())
-            : attempt === 2
-              ? Effect.fail(blocked())
-              : Effect.succeed(PREPARED_CONNECTION),
+          Match.value(attempt).pipe(
+            Match.when(1, () => Effect.fail(transient())),
+            Match.when(2, () => Effect.fail(blocked())),
+            Match.orElse(() => Effect.succeed(PREPARED_CONNECTION)),
+          ),
       });
 
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {

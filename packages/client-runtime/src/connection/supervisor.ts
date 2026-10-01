@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Data from "effect/Data";
 import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -27,6 +29,12 @@ import {
 import * as RpcSession from "../rpc/session.ts";
 import { safeErrorLogAttributes } from "../errors/safeLog.ts";
 import * as ConnectionWakeups from "./wakeups.ts";
+
+const Outcome = Data.taggedEnum<AttemptOutcome>();
+
+const Establishment = Data.taggedEnum<EstablishmentEvent>();
+
+const Signal = Data.taggedEnum<SupervisorSignal>();
 
 const RETRY_DELAYS_MS = [3_000, 4_000, 8_000, 16_000] as const;
 
@@ -155,29 +163,23 @@ function failureFromExit<A>(
   stable: boolean,
 ): AttemptOutcome {
   if (Exit.isSuccess(exit) || Cause.hasInterruptsOnly(exit.cause)) {
-    return { _tag: "Interrupted", established, stable, resetRetry: false };
+    return Outcome.Interrupted({ established, stable, resetRetry: false });
   }
 
   const typedFailure = exit.cause.reasons.find(Cause.isFailReason);
 
   if (typedFailure) {
-    return {
-      _tag: "Failure",
-      established,
-      stable,
-      failure: typedFailure.error,
-    };
+    return Outcome.Failure({ established, stable, failure: typedFailure.error });
   }
 
-  return {
-    _tag: "Failure",
+  return Outcome.Failure({
     established,
     stable,
     failure: new ConnectionTransientError({
       reason: "transport",
       detail: `${target.label} connection failed unexpectedly.`,
     }),
-  };
+  });
 }
 
 export class EnvironmentSupervisor extends Context.Service<
@@ -281,24 +283,19 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     for (;;) {
       const next = yield* Queue.take(signals);
 
-      switch (next._tag) {
-        case "DisconnectRequested":
-        case "RetryRequested":
+      if (
+        Predicate.isTagged(next, "DisconnectRequested") ||
+        Predicate.isTagged(next, "RetryRequested")
+      ) {
+        return false;
+      } else if (Predicate.isTagged(next, "NetworkChanged")) {
+        if (next.network === "offline") {
           return false;
-        case "NetworkChanged":
-          if (next.network === "offline") {
-            return false;
-          }
-
-          break;
-        case "ConnectRequested":
-          break;
-        case "Wakeup":
-          if (next.reason === "application-active-reconnect") {
-            return true;
-          }
-
-          break;
+        }
+      } else if (Predicate.isTagged(next, "Wakeup")) {
+        if (next.reason === "application-active-reconnect") {
+          return true;
+        }
       }
     }
   });
@@ -309,92 +306,82 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     for (;;) {
       const next = yield* Queue.take(signals);
 
-      switch (next._tag) {
-        case "DisconnectRequested":
-        case "RetryRequested":
+      if (
+        Predicate.isTagged(next, "DisconnectRequested") ||
+        Predicate.isTagged(next, "RetryRequested")
+      ) {
+        return false;
+      } else if (Predicate.isTagged(next, "NetworkChanged")) {
+        if (next.network === "offline") {
           return false;
-        case "NetworkChanged":
-          if (next.network === "offline") {
-            return false;
-          }
+        }
+      } else if (Predicate.isTagged(next, "Wakeup")) {
+        if (next.reason === "application-active-reconnect") {
+          // Mobile operating systems commonly suspend sockets without
+          // delivering a close event. A long background resume deliberately
+          // replaces that lease and starts a fresh attempt without backoff.
+          return true;
+        }
 
-          break;
-        case "Wakeup":
-          if (next.reason === "application-active-reconnect") {
-            // Mobile operating systems commonly suspend sockets without
-            // delivering a close event. A long background resume deliberately
-            // replaces that lease and starts a fresh attempt without backoff.
-            return true;
-          }
+        if (next.reason === "application-active" || next.reason === "application-active-probe") {
+          const probe = yield* lease.session.probe.pipe(
+            Effect.timeoutOrElse({
+              duration:
+                next.reason === "application-active-probe"
+                  ? MOBILE_CONNECTION_PROBE_TIMEOUT
+                  : CONNECTION_PROBE_TIMEOUT,
+              orElse: () =>
+                Effect.fail(
+                  new ConnectionTransientError({
+                    reason: "timeout",
+                    detail: `${target.label} did not respond to a connection health check.`,
+                  }),
+                ),
+            }),
+            Effect.forkChild,
+          );
 
-          if (next.reason === "application-active" || next.reason === "application-active-probe") {
-            const probe = yield* lease.session.probe.pipe(
-              Effect.timeoutOrElse({
-                duration:
-                  next.reason === "application-active-probe"
-                    ? MOBILE_CONNECTION_PROBE_TIMEOUT
-                    : CONNECTION_PROBE_TIMEOUT,
-                orElse: () =>
-                  Effect.fail(
-                    new ConnectionTransientError({
-                      reason: "timeout",
-                      detail: `${target.label} did not respond to a connection health check.`,
-                    }),
-                  ),
-              }),
-              Effect.forkChild,
+          for (;;) {
+            const probeEvent = yield* Effect.raceFirst(
+              Fiber.await(probe).pipe(
+                Effect.map((exit) => ({ _tag: "ProbeCompleted" as const, exit })),
+              ),
+              Queue.take(signals).pipe(
+                Effect.map((signal) => ({ _tag: "Signal" as const, signal })),
+              ),
             );
 
-            for (;;) {
-              const probeEvent = yield* Effect.raceFirst(
-                Fiber.await(probe).pipe(
-                  Effect.map((exit) => ({ _tag: "ProbeCompleted" as const, exit })),
-                ),
-                Queue.take(signals).pipe(
-                  Effect.map((signal) => ({ _tag: "Signal" as const, signal })),
-                ),
-              );
-
-              if (Predicate.isTagged(probeEvent, "ProbeCompleted")) {
-                if (Exit.isFailure(probeEvent.exit)) {
-                  yield* Ref.set(wakeProbeFailed, true);
-                }
-
-                yield* probeEvent.exit;
-                break;
+            if (Predicate.isTagged(probeEvent, "ProbeCompleted")) {
+              if (Exit.isFailure(probeEvent.exit)) {
+                yield* Ref.set(wakeProbeFailed, true);
               }
 
-              switch (probeEvent.signal._tag) {
-                case "DisconnectRequested":
-                case "RetryRequested":
-                  yield* Fiber.interrupt(probe);
+              yield* probeEvent.exit;
+              break;
+            }
 
-                  return false;
-                case "NetworkChanged":
-                  if (probeEvent.signal.network === "offline") {
-                    yield* Fiber.interrupt(probe);
+            if (
+              Predicate.isTagged(probeEvent.signal, "DisconnectRequested") ||
+              Predicate.isTagged(probeEvent.signal, "RetryRequested")
+            ) {
+              yield* Fiber.interrupt(probe);
 
-                    return false;
-                  }
+              return false;
+            } else if (Predicate.isTagged(probeEvent.signal, "NetworkChanged")) {
+              if (probeEvent.signal.network === "offline") {
+                yield* Fiber.interrupt(probe);
 
-                  break;
-                case "Wakeup":
-                  if (probeEvent.signal.reason === "application-active-reconnect") {
-                    yield* Fiber.interrupt(probe);
+                return false;
+              }
+            } else if (Predicate.isTagged(probeEvent.signal, "Wakeup")) {
+              if (probeEvent.signal.reason === "application-active-reconnect") {
+                yield* Fiber.interrupt(probe);
 
-                    return true;
-                  }
-
-                  break;
-                case "ConnectRequested":
-                  break;
+                return true;
               }
             }
           }
-
-          break;
-        case "ConnectRequested":
-          break;
+        }
       }
     }
   });
@@ -408,45 +395,33 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
 
     const establishment = yield* Effect.raceAllFirst([
       exitUnlessInterrupted(establishConnection(attempt, generation, lastFailure)).pipe(
-        Effect.map(
-          (exit): EstablishmentEvent => ({
-            _tag: "Completed",
-            exit,
-          }),
-        ),
+        Effect.map((exit): EstablishmentEvent => Establishment.Completed({ exit })),
       ),
       waitForEstablishmentInterrupt().pipe(
-        Effect.map(
-          (resetRetry): EstablishmentEvent => ({
-            _tag: "Interrupted",
-            resetRetry,
-          }),
-        ),
+        Effect.map((resetRetry): EstablishmentEvent => Establishment.Interrupted({ resetRetry })),
       ),
       Effect.sleep(CONNECTION_ESTABLISHMENT_TIMEOUT).pipe(
-        Effect.as<EstablishmentEvent>({ _tag: "TimedOut" }),
+        Effect.as<EstablishmentEvent>(Establishment.TimedOut()),
       ),
     ]);
 
     if (isEstablishmentInterrupted(establishment)) {
-      return {
-        _tag: "Interrupted",
+      return Outcome.Interrupted({
         established: false,
         stable: false,
         resetRetry: establishment.resetRetry,
-      } satisfies AttemptOutcome;
+      }) satisfies AttemptOutcome;
     }
 
     if (isEstablishmentTimedOut(establishment)) {
-      return {
-        _tag: "Failure",
+      return Outcome.Failure({
         established: false,
         stable: false,
         failure: new ConnectionTransientError({
           reason: "timeout",
           detail: `${target.label} did not respond during connection setup.`,
         }),
-      } satisfies AttemptOutcome;
+      }) satisfies AttemptOutcome;
     }
 
     if (Exit.isFailure(establishment.exit)) {
@@ -475,12 +450,11 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     const currentIntent = yield* Ref.get(intent);
 
     if (!currentIntent.desired || currentIntent.network === "offline") {
-      return {
-        _tag: "Interrupted",
+      return Outcome.Interrupted({
         established: false,
         stable: false,
         resetRetry: false,
-      } satisfies AttemptOutcome;
+      }) satisfies AttemptOutcome;
     }
 
     const connectedAt = yield* Clock.currentTimeMillis;
@@ -505,12 +479,11 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     const connectedForMs = (yield* Clock.currentTimeMillis) - connectedAt;
 
     if (Exit.isSuccess(connectedExit)) {
-      return {
-        _tag: "Interrupted",
+      return Outcome.Interrupted({
         established: true,
         stable: connectedForMs >= BACKOFF_RESET_AFTER_MS,
         resetRetry: connectedExit.value,
-      } satisfies AttemptOutcome;
+      }) satisfies AttemptOutcome;
     }
 
     return failureFromExit(target, connectedExit, true, connectedForMs >= BACKOFF_RESET_AFTER_MS);
@@ -523,15 +496,25 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
         for (;;) {
           const next = yield* Queue.take(signals);
 
-          switch (next._tag) {
-            case "Wakeup":
-              return ConnectionWakeups.isApplicationActiveWakeup(next.reason);
-            case "ConnectRequested":
-            case "DisconnectRequested":
-            case "RetryRequested":
-            case "NetworkChanged":
-              return false;
-          }
+          return Match.value(next).pipe(
+            Match.tagsExhaustive({
+              Wakeup: (next) => {
+                return ConnectionWakeups.isApplicationActiveWakeup(next.reason);
+              },
+              ConnectRequested: () => {
+                return false;
+              },
+              DisconnectRequested: () => {
+                return false;
+              },
+              RetryRequested: () => {
+                return false;
+              },
+              NetworkChanged: () => {
+                return false;
+              },
+            }),
+          );
         }
       }),
     );
@@ -672,14 +655,14 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
         current.network === network ? [false, current] : ([true, { ...current, network }] as const),
       ).pipe(
         Effect.flatMap((changed) =>
-          changed ? signal({ _tag: "NetworkChanged", network }) : Effect.void,
+          changed ? signal(Signal.NetworkChanged({ network })) : Effect.void,
         ),
       ),
     ),
     Effect.forkScoped,
   );
   yield* wakeups.changes.pipe(
-    Stream.runForEach((reason) => signal({ _tag: "Wakeup", reason })),
+    Stream.runForEach((reason) => signal(Signal.Wakeup({ reason }))),
     Effect.forkScoped,
   );
   yield* run().pipe(Effect.forkScoped);
@@ -688,7 +671,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     ...current,
     desired: true,
   })).pipe(
-    Effect.andThen(signal({ _tag: "ConnectRequested" })),
+    Effect.andThen(signal(Signal.ConnectRequested())),
     Effect.withSpan("EnvironmentSupervisor.connect"),
   );
 
@@ -696,7 +679,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
     ...current,
     desired: false,
   })).pipe(
-    Effect.andThen(signal({ _tag: "DisconnectRequested" })),
+    Effect.andThen(signal(Signal.DisconnectRequested())),
     Effect.withSpan("EnvironmentSupervisor.disconnect"),
   );
 
@@ -704,7 +687,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
   // intent: an available environment that is not connecting starts connecting.
   const retryNow = Ref.set(resetRetryState, true).pipe(
     Effect.andThen(Ref.update(intent, (current) => ({ ...current, desired: true }))),
-    Effect.andThen(signal({ _tag: "RetryRequested" })),
+    Effect.andThen(signal(Signal.RetryRequested())),
     Effect.withSpan("EnvironmentSupervisor.retryNow"),
   );
 
@@ -713,7 +696,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
   const retryIfDesired = Ref.get(intent).pipe(
     Effect.flatMap((current) =>
       current.desired
-        ? Ref.set(resetRetryState, true).pipe(Effect.andThen(signal({ _tag: "RetryRequested" })))
+        ? Ref.set(resetRetryState, true).pipe(Effect.andThen(signal(Signal.RetryRequested())))
         : Effect.void,
     ),
     Effect.withSpan("EnvironmentSupervisor.retryIfDesired"),
