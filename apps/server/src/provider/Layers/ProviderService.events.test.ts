@@ -36,19 +36,24 @@ it.effect("ProviderServiceLive writes canonical events to the emitting thread se
     const codex = makeFakeCodexAdapter();
     const canonicalEvents: ProviderRuntimeEvent[] = [];
     const canonicalThreadIds: Array<string | null> = [];
+
     const registry = makeAdapterRegistryMock({
       [ProviderDriverKind.make("codex")]: codex.adapter,
     });
+
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+
     const providerLayer = makeProviderServiceLive({
       canonicalEventLogger: {
         filePath: "memory://provider-canonical-events",
         write: (event, threadId) => {
           canonicalEvents.push(event as ProviderRuntimeEvent);
           canonicalThreadIds.push(threadId ?? null);
+
           return Effect.void;
         },
         close: () => Effect.void,
@@ -92,6 +97,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
   it.effect("fans out adapter turn completion events", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+
       const session = yield* provider.startSession(asThreadId("thread-1"), {
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
@@ -100,9 +106,11 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       });
 
       const eventsRef = yield* Ref.make<Array<ProviderRuntimeEvent>>([]);
+
       const consumer = yield* Stream.runForEach(provider.streamEvents, (event) =>
         Ref.update(eventsRef, (current) => [...current, event]),
       ).pipe(Effect.forkChild);
+
       yield* advanceTestClock(50);
 
       const completedEvent: LegacyProviderRuntimeEvent = {
@@ -140,6 +148,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
   it.effect("fans out canonical runtime events in emission order", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+
       const session = yield* provider.startSession(asThreadId("thread-seq"), {
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
@@ -148,10 +157,12 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       });
 
       const receivedRef = yield* Ref.make<Array<ProviderRuntimeEvent>>([]);
+
       const consumer = yield* Stream.take(provider.streamEvents, 3).pipe(
         Stream.runForEach((event) => Ref.update(receivedRef, (current) => [...current, event])),
         Effect.forkChild,
       );
+
       yield* advanceTestClock(50);
 
       fanout.codex.emit({
@@ -198,6 +209,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
   it.effect("keeps subscriber delivery ordered and isolates failing subscribers", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+
       const session = yield* provider.startSession(asThreadId("thread-1"), {
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
@@ -207,6 +219,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
 
       const receivedByHealthy: string[] = [];
       const expectedEventIds = new Set<string>(["evt-ordered-1", "evt-ordered-2", "evt-ordered-3"]);
+
       const healthyFiber = yield* Stream.take(provider.streamEvents, 3).pipe(
         Stream.runForEach((event) =>
           Effect.sync(() => {
@@ -215,10 +228,12 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         ),
         Effect.forkChild,
       );
+
       const failingFiber = yield* Stream.take(provider.streamEvents, 1).pipe(
         Stream.runForEach(() => Effect.fail("listener crash")),
         Effect.forkChild,
       );
+
       yield* advanceTestClock(50);
 
       const events: ReadonlyArray<LegacyProviderRuntimeEvent> = [
@@ -256,6 +271,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       for (const event of events) {
         fanout.codex.emit(event);
       }
+
       const failingResult = yield* Effect.result(Fiber.join(failingFiber));
       assert.equal(failingResult._tag, "Failure");
       yield* Fiber.join(healthyFiber);

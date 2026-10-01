@@ -12,6 +12,7 @@ import { encodeUnknownJson, ownedLogPath, parseLogLine } from "./test-support/ev
 describe("EventNdjsonLogger", () => {
   it.effect("logs bounded diagnostics when an event cannot be serialized", () => {
     const messages: Array<unknown> = [];
+
     const logCapture = Logger.make<unknown, void>(({ message }) => {
       if (Array.isArray(message)) {
         messages.push(...message);
@@ -19,6 +20,7 @@ describe("EventNdjsonLogger", () => {
         messages.push(message);
       }
     });
+
     const secret = "secret-circular-event-value";
 
     return Effect.gen(function* () {
@@ -30,6 +32,7 @@ describe("EventNdjsonLogger", () => {
       try {
         const logger = yield* makeEventNdjsonLogger(basePath, { stream: "native" });
         assert.exists(logger);
+
         if (!logger) return;
         yield* logger.write(circular, ThreadId.make("thread-1"));
 
@@ -52,6 +55,7 @@ describe("EventNdjsonLogger", () => {
       try {
         const logger = yield* makeEventNdjsonLogger(basePath, { stream: "native" });
         assert.notEqual(logger, undefined);
+
         if (!logger) {
           return;
         }
@@ -102,6 +106,7 @@ describe("EventNdjsonLogger", () => {
         try {
           const logger = yield* makeEventNdjsonLogger(basePath, { stream: "orchestration" });
           assert.notEqual(logger, undefined);
+
           if (!logger) {
             return;
           }
@@ -112,10 +117,12 @@ describe("EventNdjsonLogger", () => {
 
           const globalPath = ownedLogPath(basePath, "_global");
           assert.equal(NodeFS.existsSync(globalPath), true);
+
           const lines = NodeFS.readFileSync(globalPath, "utf8")
             .trim()
             .split("\n")
             .map((line) => parseLogLine(line));
+
           assert.equal(lines.length, 2);
           assert.equal(Number.isNaN(Date.parse(lines[0]?.observedAt ?? "")), false);
           assert.equal(Number.isNaN(Date.parse(lines[1]?.observedAt ?? "")), false);
@@ -257,13 +264,17 @@ describe("EventNdjsonLogger", () => {
           stream: "canonical",
           batchWindowMs: 0,
         });
+
         assert.exists(logger);
+
         if (!logger) return;
+
         const hostile = new Proxy(
           { id: "hostile" },
           {
             get(_target, property) {
               if (property === "type") throw new Error("blocked");
+
               return undefined;
             },
           },
@@ -289,15 +300,18 @@ describe("EventNdjsonLogger", () => {
         const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-error-"));
         const basePath = NodePath.join(tempDir, "events.log");
         const messages: unknown[] = [];
+
         const capture = Logger.make<unknown, void>(({ message }) => {
           messages.push(message);
         });
+
         try {
           yield* Effect.gen(function* () {
             const store = yield* makeEventNdjsonLogStore(basePath, {
               maxBufferedBytes: 256,
               batchWindowMs: 0,
             });
+
             NodeFS.mkdirSync(ownedLogPath(basePath, "broken"));
             const logger = store.logger("native");
             yield* logger.write({ payload: "x".repeat(1024) }, ThreadId.make("oversized"));

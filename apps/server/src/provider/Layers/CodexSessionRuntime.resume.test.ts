@@ -50,12 +50,14 @@ describe("openCodexThread", () => {
     Effect.gen(function* () {
       const calls: Array<{ method: "thread/start" | "thread/resume"; payload: unknown }> = [];
       const started = makeThreadOpenResponse("fresh-thread");
+
       const client = {
         request: <M extends "thread/start" | "thread/resume">(
           method: M,
           payload: CodexRpc.ClientRequestParamsByMethod[M],
         ) => {
           calls.push({ method, payload });
+
           if (method === "thread/resume") {
             return Effect.fail(
               new CodexErrors.CodexAppServerRequestError({
@@ -64,6 +66,7 @@ describe("openCodexThread", () => {
               }),
             );
           }
+
           return Effect.succeed(started as CodexRpc.ClientRequestResponsesByMethod[M]);
         },
       };
@@ -103,6 +106,7 @@ describe("openCodexThread", () => {
               }),
             );
           }
+
           return Effect.succeed(
             makeThreadOpenResponse("fresh-thread") as CodexRpc.ClientRequestResponsesByMethod[M],
           );

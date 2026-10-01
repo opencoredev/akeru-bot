@@ -118,6 +118,7 @@ describe("mastraConnectionIssue", () => {
         },
       }),
     };
+
     assert.isUndefined(
       mastraConnectionIssue(
         ProviderDriverKind.make("opencodeGo"),
@@ -165,6 +166,7 @@ describe("provider access health", () => {
     async (state) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-stop-"));
       const authPath = NodePath.join(directory, "subscription-auth.json");
+
       try {
         const service = await makeTestSubscriptionAuthService(authPath);
         recordProviderAccessHealth(service, {
@@ -199,12 +201,14 @@ describe("AgentControllerLive", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
       const attachment = vi.fn(async () => undefined);
+
       const manager = {
         init: vi.fn(async () => undefined),
         disconnect: vi.fn(async () => undefined),
         getTools: () => ({}),
         getServerStatuses: () => [],
       };
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
@@ -265,6 +269,7 @@ describe("AgentControllerLive", () => {
     const mastra = makeMastraHarness();
     const usage = makeUsageLedger();
     const botId = BotId.make("bot-tool-usage");
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -332,6 +337,7 @@ describe("AgentControllerLive", () => {
     const usage = makeUsageLedger();
     usage.recordStart.mockImplementation(() => Effect.die(new Error("ledger unavailable")));
     const botId = BotId.make("bot-tool-usage");
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -391,6 +397,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("boots a real Mastra Code controller and creates a Codex session", () => {
     const bridge = makeBridge();
+
     const layer = makeAgentControllerLive().pipe(
       Layer.provide(
         Layer.mergeAll(
@@ -406,6 +413,7 @@ describe("AgentControllerLive", () => {
     return Effect.gen(function* () {
       const controller = yield* AgentController;
       yield* resolveCodex(controller);
+
       const session = yield* controller.startSession(codexThreadId, {
         threadId: codexThreadId,
         provider: ProviderDriverKind.make("codex"),
@@ -427,10 +435,12 @@ describe("AgentControllerLive", () => {
   it.effect("keeps the current bot name in reused Mastra session state", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
+
         const input = {
           threadId: codexThreadId,
           provider: ProviderDriverKind.make("codex"),
@@ -477,10 +487,12 @@ describe("AgentControllerLive", () => {
   it.effect("clears a stale bot name in reused Mastra session state", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
+
         const input = {
           threadId: codexThreadId,
           provider: ProviderDriverKind.make("codex"),
@@ -513,6 +525,7 @@ describe("AgentControllerLive", () => {
   it.effect("queues Mastra follow-ups while the current turn is active", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -525,16 +538,19 @@ describe("AgentControllerLive", () => {
           runtimeMode: "full-access",
         });
         const events: ProviderRuntimeEvent[] = [];
+
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
 
         const first = yield* controller.sendTurn({
           threadId: codexThreadId,
           input: "First message",
         });
+
         const second = yield* controller.sendTurn({
           threadId: codexThreadId,
           input: "Queued follow-up",
@@ -566,6 +582,7 @@ describe("AgentControllerLive", () => {
   it.effect("rejects a queued Mastra turn when its provider is disabled", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -584,10 +601,12 @@ describe("AgentControllerLive", () => {
           runtimeMode: "approval-required",
         });
         yield* controller.sendTurn({ threadId: openCodeGoThreadId, input: "First message" });
+
         const queued = yield* controller.sendTurn({
           threadId: openCodeGoThreadId,
           input: "Queued follow-up",
         });
+
         const failedTurn = yield* controller.streamEvents.pipe(
           Stream.filter(
             (event) =>
@@ -598,6 +617,7 @@ describe("AgentControllerLive", () => {
           Stream.runHead,
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
 
         bridge.setInstanceEnabled(false);
@@ -617,6 +637,7 @@ describe("AgentControllerLive", () => {
   it.effect("releases turn preparation when provider routing rejects a turn", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -636,9 +657,11 @@ describe("AgentControllerLive", () => {
         });
 
         bridge.setInstanceEnabled(false);
+
         const rejected = yield* Effect.exit(
           controller.sendTurn({ threadId: openCodeGoThreadId, input: "Disabled" }),
         );
+
         assert.isTrue(Exit.isFailure(rejected));
 
         bridge.setInstanceEnabled(true);

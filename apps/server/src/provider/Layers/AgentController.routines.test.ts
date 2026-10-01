@@ -34,16 +34,20 @@ describe("AgentControllerLive", () => {
     it.effect("creates the routine when the answer lands before the limit", () => {
       const mastra = makeMastraHarness();
       const events: Array<ProviderRuntimeEvent> = [];
+
       const created = {
         routineId: RoutineId.make("routine-created"),
         sequence: 1,
         status: "approved" as const,
       };
+
       let dispatched = 0;
+
       return provideRoutineController(
         Effect.gen(function* () {
           const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
           yield* TestClock.adjust(60 * 60_000 - 1_000);
+
           // Creation is slow enough to cross the one-hour review limit.
           const answer = yield* controller
             .respondToRequest({
@@ -52,6 +56,7 @@ describe("AgentControllerLive", () => {
               decision: "accept",
             })
             .pipe(Effect.forkChild({ startImmediately: true }));
+
           yield* TestClock.adjust(5 * 60_000);
           yield* Fiber.join(answer);
           const result = yield* Fiber.join(toolCall);
@@ -82,11 +87,14 @@ describe("AgentControllerLive", () => {
     it.effect("keeps an accepted review waiting until its routine is created", () => {
       const mastra = makeMastraHarness();
       const events: Array<ProviderRuntimeEvent> = [];
+
       const lastState = () =>
         events.findLast((event) => event.type === "session.state.changed")?.payload.state;
+
       return provideRoutineController(
         Effect.gen(function* () {
           const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
+
           const answer = yield* controller
             .respondToRequest({
               threadId: codexThreadId,
@@ -94,6 +102,7 @@ describe("AgentControllerLive", () => {
               decision: "accept",
             })
             .pipe(Effect.flip, Effect.forkChild({ startImmediately: true }));
+
           yield* Effect.yieldNow;
           assert.isFalse(events.some((event) => event.type === "request.resolved"));
           assert.strictEqual(lastState(), "waiting");
@@ -127,6 +136,7 @@ describe("AgentControllerLive", () => {
     it.effect("keeps the turn waiting on a routine review after a tool approval answer", () => {
       const mastra = makeMastraHarness();
       const events: Array<ProviderRuntimeEvent> = [];
+
       return provideRoutineController(
         Effect.gen(function* () {
           const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
@@ -177,6 +187,7 @@ describe("AgentControllerLive", () => {
       const mastra = makeMastraHarness();
       const events: Array<ProviderRuntimeEvent> = [];
       let dispatched = 0;
+
       return provideRoutineController(
         Effect.gen(function* () {
           const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
@@ -196,6 +207,7 @@ describe("AgentControllerLive", () => {
               },
             ],
           );
+
           const late = yield* controller
             .respondToRequest({
               threadId: codexThreadId,
@@ -203,6 +215,7 @@ describe("AgentControllerLive", () => {
               decision: "accept",
             })
             .pipe(Effect.flip);
+
           assert.instanceOf(late, AgentControllerRuntimeError);
           assert.strictEqual(dispatched, 0);
           mastra.finishSend();
@@ -228,6 +241,7 @@ describe("AgentControllerLive", () => {
     it.effect("keeps the turn waiting when another routine review remains open", () => {
       const mastra = makeMastraHarness();
       const events: Array<ProviderRuntimeEvent> = [];
+
       return provideRoutineController(
         Effect.gen(function* () {
           const {
@@ -235,15 +249,18 @@ describe("AgentControllerLive", () => {
             toolCall: firstCall,
             nextOpened,
           } = yield* openRoutineReview(mastra, events);
+
           yield* TestClock.adjust(30 * 60_000);
           const createRoutine = mastra.harnessOptions[0]?.createRoutine;
           assert.isDefined(createRoutine);
+
           const secondCall = yield* Effect.promise(() =>
             createRoutine(String(codexThreadId), routineInput).then(
               (value) => Exit.succeed(value),
               (cause: unknown) => Exit.fail(cause),
             ),
           ).pipe(Effect.forkChild({ startImmediately: true }));
+
           const secondRequestId = yield* Deferred.await(nextOpened);
 
           yield* TestClock.adjust(30 * 60_000);
@@ -271,6 +288,7 @@ describe("AgentControllerLive", () => {
     it.effect("rejects a routine answer from another active chat without claiming it", () => {
       const mastra = makeMastraHarness();
       const events: Array<ProviderRuntimeEvent> = [];
+
       return provideRoutineController(
         Effect.gen(function* () {
           const { controller, toolCall, requestId } = yield* openRoutineReview(mastra, events);
@@ -297,6 +315,7 @@ describe("AgentControllerLive", () => {
               decision: "accept",
             })
             .pipe(Effect.flip);
+
           assert.instanceOf(wrongChat, AgentControllerRuntimeError);
           assert.strictEqual(events.filter((event) => event.type === "request.resolved").length, 0);
 

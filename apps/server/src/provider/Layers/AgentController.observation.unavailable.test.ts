@@ -44,12 +44,15 @@ describe("AgentControllerLive", () => {
   it.effect("rejects conversation memory calls when the harness has no memory", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
+
         const readError = yield* controller.readConversationMemory!(codexThreadId).pipe(
           Effect.flip,
         );
+
         const clearError = yield* controller.clearConversationMemory!(codexThreadId).pipe(
           Effect.flip,
         );
@@ -73,6 +76,7 @@ describe("AgentControllerLive", () => {
   it.effect("registers the file-backed memory tool for Mastra sessions", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const access = {
       tenantId: AkeruMemoryTenantId.make("local"),
       userId: AkeruMemoryUserId.make("owner"),
@@ -84,6 +88,7 @@ describe("AgentControllerLive", () => {
       respondingBotId: BotId.make("bot-memory-tools"),
       groupMemberBotIds: [],
     } as const;
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -102,6 +107,7 @@ describe("AgentControllerLive", () => {
         expect(runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id)).toEqual(
           expect.arrayContaining(["memory"]),
         );
+
         const result = yield* Effect.promise(() =>
           runtime.execute({
             threadId: String(codexThreadId),
@@ -114,7 +120,9 @@ describe("AgentControllerLive", () => {
             approvalMode: "require-grant",
           }),
         );
+
         expect(result).toMatchObject({ success: true, message: "Memory updated.", target: "user" });
+
         const recalled = yield* Effect.promise(() =>
           runtime.execute({
             threadId: String(codexThreadId),
@@ -124,6 +132,7 @@ describe("AgentControllerLive", () => {
             approvalMode: "require-grant",
           }),
         );
+
         expect(recalled).toMatchObject({
           success: true,
           changed: false,
@@ -145,6 +154,7 @@ describe("AgentControllerLive", () => {
     const botA = BotId.make("bot-group-active-a");
     const botB = BotId.make("bot-group-queued-b");
     const groupId = GroupId.make("group-tool-scope");
+
     const accessFor = (botId: BotId) =>
       ({
         tenantId: AkeruMemoryTenantId.make("local"),
@@ -208,9 +218,11 @@ describe("AgentControllerLive", () => {
         const activeDocument = yield* Effect.promise(() =>
           botMemoryStore.readDocument(accessFor(botA), "group"),
         );
+
         const queuedDocument = yield* Effect.promise(() =>
           botMemoryStore.readDocument(accessFor(botB), "group"),
         );
+
         expect(activeDocument.content).toContain("The group chose option A.");
         expect(queuedDocument.content).not.toContain("The group chose option A.");
 
@@ -254,11 +266,14 @@ describe("AgentControllerLive", () => {
   it.effect("honors the Memory setting per turn on the Mastra path", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const memoryDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "akeru-memory-toggle-mastra-"),
     );
+
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const botId = BotId.make("bot-memory-toggle-mastra");
+
     const access = {
       tenantId: AkeruMemoryTenantId.make("local"),
       userId: AkeruMemoryUserId.make("owner"),
@@ -355,6 +370,7 @@ describe("AgentControllerLive", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const botId = BotId.make("bot-entity-memory-stale-group");
+
     const access = {
       tenantId: AkeruMemoryTenantId.make("local"),
       userId: AkeruMemoryUserId.make("owner"),
@@ -366,10 +382,12 @@ describe("AgentControllerLive", () => {
       respondingBotId: botId,
       groupMemberBotIds: [botId],
     } as const;
+
     const listCurrent = vi.fn(
       (_input: { access: { groupId: GroupId | null; groupMemberBotIds: ReadonlyArray<BotId> } }) =>
         Effect.succeed([]),
     );
+
     const recordDerivedCopies = vi.fn(() => Effect.void);
 
     return provideController(
@@ -410,11 +428,14 @@ describe("AgentControllerLive", () => {
   it.effect("drops a Mastra admission interrupted while the memory settings read is held", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const memoryDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "akeru-mastra-admit-gate-"),
     );
+
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const botId = BotId.make("bot-mastra-admit-gate");
+
     const access = {
       tenantId: AkeruMemoryTenantId.make("local"),
       userId: AkeruMemoryUserId.make("owner"),
@@ -426,10 +447,12 @@ describe("AgentControllerLive", () => {
       respondingBotId: botId,
       groupMemberBotIds: [],
     } as const;
+
     const disabledMemorySettings: ServerSettings = {
       ...DEFAULT_SERVER_SETTINGS,
       memory: { ...DEFAULT_SERVER_SETTINGS.memory, enabled: false },
     };
+
     const sessionInput = {
       threadId: codexThreadId,
       provider: ProviderDriverKind.make("codex"),
@@ -442,6 +465,7 @@ describe("AgentControllerLive", () => {
     const gate = Deferred.makeUnsafe<void>();
     const reached = Deferred.makeUnsafe<void>();
     let holdNextGetSettings = false;
+
     const gatedSettingsLayer = Layer.succeed(ServerSettingsService, {
       start: Effect.void,
       ready: Effect.void,
@@ -468,6 +492,7 @@ describe("AgentControllerLive", () => {
       // Collect turn.started events for the rest of the test so we can prove
       // the cancelled admission never begins a turn.
       const startedEvents: TurnId[] = [];
+
       const startedFiber = yield* controller.streamEvents.pipe(
         Stream.filter((event) => event.type === "turn.started"),
         Stream.runForEach((event) =>
@@ -477,12 +502,15 @@ describe("AgentControllerLive", () => {
         ),
         Effect.forkChild({ startImmediately: true }),
       );
+
       yield* Effect.yieldNow;
       yield* controller.interruptTurn({ threadId: codexThreadId });
+
       const next = yield* controller.sendTurn({
         threadId: codexThreadId,
         input: "Replacement turn.",
       });
+
       // Admission of the replacement is queued behind the held settings read.
       assert.equal(mastra.sendMessage.mock.calls.length, 0);
 
@@ -530,11 +558,13 @@ describe("AgentControllerLive", () => {
   it.effect("dispatches a thread activity when an observation is dropped", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const dispatched: Array<{
       readonly type: string;
       readonly commandId?: string;
       readonly activity?: unknown;
     }> = [];
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -563,12 +593,14 @@ describe("AgentControllerLive", () => {
         assert.equal(dispatched.length, 1);
         const command = dispatched[0]!;
         assert.equal(command.type, "thread.activity.append");
+
         const activity = command.activity as {
           readonly kind: string;
           readonly tone: string;
           readonly turnId: string;
           readonly payload: { readonly attempts: number };
         };
+
         assert.equal(activity.kind, "memory.observation.dropped");
         assert.equal(activity.tone, "error");
         assert.equal(activity.turnId, "turn-dropped");
@@ -587,6 +619,7 @@ describe("AgentControllerLive", () => {
           dispatch: (command) =>
             Effect.sync(() => {
               dispatched.push(command);
+
               return { sequence: 1 };
             }),
           streamDomainEvents: Stream.empty,

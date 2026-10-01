@@ -74,6 +74,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
 it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
   it.effect("keeps private memory context out of user-authored prompt parts", () => {
     const instanceId = ProviderInstanceId.make("opencode_zen");
+
     const adapterLayer = Layer.effect(
       OpenCodeAdapter,
       makeOpenCodeAdapter(openCodeAdapterTestSettings, { instanceId }),
@@ -161,12 +162,15 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           ["assistant-1", "assistant-2"].slice(0, Math.max(0, 2 - numTurns)),
         );
       }
+
       runtimeMock.state.revertMessageID = undefined;
+
       for (const remaining of [1, 0]) {
         const snapshot = yield* adapter.rollbackThread(threadId, 1);
         NodeAssert.equal(snapshot.turns.length, remaining);
         NodeAssert.deepEqual((yield* adapter.readThread(threadId)).turns, snapshot.turns);
       }
+
       NodeAssert.deepEqual(
         runtimeMock.state.revertCalls.slice(-2).map((call) => call.messageID),
         ["assistant-2", "assistant-1"],
@@ -210,6 +214,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
       const threadId = asThreadId("thread-opencode-raw-delta");
+
       const part = {
         id: "part-raw-delta",
         sessionID: "http://127.0.0.1:9999/session",
@@ -218,6 +223,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         text: "A B",
         time: { start: 1 },
       };
+
       runtimeMock.state.subscribedEvents = [
         {
           type: "message.updated",
@@ -260,6 +266,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const eventsFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.threadId === threadId),
         Stream.take(5),
@@ -281,6 +288,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       );
       NodeAssert.equal(events.at(-1)?.type, "item.completed");
       const completed = events.at(-1);
+
       if (completed?.type === "item.completed") {
         NodeAssert.equal(completed.payload.detail, "A BBonus");
       }
@@ -294,6 +302,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const adapter = yield* OpenCodeAdapter;
       const threadId = asThreadId("thread-opencode-text-index");
       const sessionID = "http://127.0.0.1:9999/session";
+
       const toolEvents = Array.from({ length: 24 }, (_, index) => ({
         type: "message.part.updated",
         properties: {
@@ -312,6 +321,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       }));
+
       runtimeMock.state.subscribedEvents = [
         ...toolEvents,
         {
@@ -335,6 +345,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const eventsFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.threadId === threadId && event.type === "content.delta"),
         Stream.runHead,
@@ -350,10 +361,13 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const delta = Option.getOrThrow(
         yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")),
       );
+
       NodeAssert.equal(delta.type, "content.delta");
+
       if (delta.type === "content.delta") {
         NodeAssert.equal(delta.payload.delta, "Hello");
       }
+
       yield* adapter.stopSession(threadId);
     }),
   );
@@ -415,6 +429,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const eventsFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.threadId === threadId && event.type === "content.delta"),
         Stream.take(2),
@@ -431,6 +446,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const deltas = Array.from(
         yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")),
       ).map((event) => (event.type === "content.delta" ? event.payload.delta : undefined));
+
       NodeAssert.deepEqual(deltas, ["stale text that was removed", "replacement text"]);
       yield* adapter.stopSession(threadId);
     }),

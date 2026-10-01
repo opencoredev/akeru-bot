@@ -12,6 +12,7 @@ export const shouldRetainMissingProviderModels = (provider: ServerProvider): boo
     // and keeps the last good list.
     return provider.enabled && provider.status !== "ready";
   }
+
   if (provider.driver !== ProviderDriverKind.make("opencode")) {
     return true;
   }
@@ -24,7 +25,9 @@ export const shouldRetainMissingProviderModels = (provider: ServerProvider): boo
   // logout or plugin removal).
   const isPendingInitialProbe =
     provider.enabled && !provider.installed && provider.status === "warning";
+
   const didInstalledProviderProbeFail = provider.installed && provider.status === "error";
+
   return isPendingInitialProbe || didInstalledProviderProbeFail;
 };
 
@@ -40,17 +43,22 @@ export const mergeProviderModels = (
   }
 
   const previousBySlug = new Map(previousModels.map((model) => [model.slug, model] as const));
+
   const mergedModels = nextModels.map((model) => {
     const previousModel = previousBySlug.get(model.slug);
+
     if (!previousModel || hasModelCapabilities(model) || !hasModelCapabilities(previousModel)) {
       return model;
     }
+
     return {
       ...model,
       capabilities: previousModel.capabilities,
     };
   });
+
   const nextSlugs = new Set(nextModels.map((model) => model.slug));
+
   return shouldRetainMissingModels
     ? [...mergedModels, ...previousModels.filter((model) => !nextSlugs.has(model.slug))]
     : mergedModels;

@@ -17,6 +17,7 @@ import {
 describe("ClaudeAdapterLive", () => {
   it.effect("classifies Claude Task tool invocations as collaboration agent work", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -81,6 +82,7 @@ describe("ClaudeAdapterLive", () => {
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const toolStarted = runtimeEvents.find((event) => event.type === "item.started");
       assert.equal(toolStarted?.type, "item.started");
+
       if (toolStarted?.type === "item.started") {
         assert.equal(toolStarted.payload.itemType, "collab_agent_tool_call");
         assert.equal(toolStarted.payload.title, "Subagent task");
@@ -95,6 +97,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("interruptTurn settles live tasks and closes the provider session", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -113,6 +116,7 @@ describe("ClaudeAdapterLive", () => {
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       yield* adapter.sendTurn({
         threadId: session.threadId,
         input: "spawn agents",
@@ -156,6 +160,7 @@ describe("ClaudeAdapterLive", () => {
         Stream.runCollect,
         Effect.forkChild,
       );
+
       yield* adapter.interruptTurn(session.threadId);
 
       // Closing the session is the hard stop because SDK interrupt can leave
@@ -169,6 +174,7 @@ describe("ClaudeAdapterLive", () => {
       assert.equal(stoppedTaskEvents.length, 1);
       const stoppedTaskEvent = stoppedTaskEvents[0];
       assert.equal(stoppedTaskEvent?.type, "task.completed");
+
       if (stoppedTaskEvent?.type === "task.completed") {
         assert.equal(String(stoppedTaskEvent.payload.taskId), "task-live");
         assert.equal(stoppedTaskEvent.payload.status, "stopped");
@@ -185,6 +191,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("workflow member coalescing: identical snapshots suppress, changes emit", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -209,6 +216,7 @@ describe("ClaudeAdapterLive", () => {
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       yield* adapter.sendTurn({
         threadId: session.threadId,
         input: "run workflow",
@@ -234,6 +242,7 @@ describe("ClaudeAdapterLive", () => {
           tokens: 50,
         },
       ];
+
       const tick = (usageTotal: number, snapshot: ReturnType<typeof memberSnapshot>) =>
         harness.query.emit({
           type: "system",
@@ -256,11 +265,14 @@ describe("ClaudeAdapterLive", () => {
 
       const progressEvents = Array.from(yield* Fiber.join(progressFiber));
       const byMember = new Map<string, number>();
+
       for (const event of progressEvents) {
         const taskId = (event.payload as { taskId: string }).taskId;
+
         if (!taskId.includes(":wf:")) continue;
         byMember.set(taskId, (byMember.get(taskId) ?? 0) + 1);
       }
+
       // member-0: tick 1 + tick 3. member-1: tick 1 only (tick 2 identical,
       // tick 3 unchanged).
       assert.equal(byMember.get("wf-coalesce:wf:0"), 2);
@@ -275,6 +287,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("task.started carries model/effort; subagent snapshots refine the model", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -295,6 +308,7 @@ describe("ClaudeAdapterLive", () => {
         ),
         runtimeMode: "full-access",
       });
+
       yield* adapter.sendTurn({
         threadId: session.threadId,
         input: "spawn an agent",
@@ -338,12 +352,15 @@ describe("ClaudeAdapterLive", () => {
       const taskEvents = Array.from(yield* Fiber.join(taskEventsFiber));
       const started = taskEvents[0];
       assert.equal(started?.type, "task.started");
+
       if (started?.type === "task.started") {
         assert.equal(started.payload.model, "claude-opus-4-6");
         assert.equal(started.payload.effort, "max");
       }
+
       const progress = taskEvents[1];
       assert.equal(progress?.type, "task.progress");
+
       if (progress?.type === "task.progress") {
         assert.equal(progress.payload.model, "claude-sonnet-5[1m]");
         assert.equal(progress.payload.effort, "max");
@@ -358,6 +375,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("a subagent snapshot that beats task_started still wins over the seed", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -378,6 +396,7 @@ describe("ClaudeAdapterLive", () => {
         ),
         runtimeMode: "full-access",
       });
+
       yield* adapter.sendTurn({
         threadId: session.threadId,
         input: "spawn an agent",
@@ -419,12 +438,15 @@ describe("ClaudeAdapterLive", () => {
       const taskEvents = Array.from(yield* Fiber.join(taskEventsFiber));
       const started = taskEvents[0];
       assert.equal(started?.type, "task.started");
+
       if (started?.type === "task.started") {
         assert.equal(started.payload.model, "claude-sonnet-5[1m]");
         assert.equal(started.payload.effort, "max");
       }
+
       const progress = taskEvents[1];
       assert.equal(progress?.type, "task.progress");
+
       if (progress?.type === "task.progress") {
         assert.equal(progress.payload.model, "claude-sonnet-5[1m]");
       }
@@ -438,6 +460,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("forwards Claude task progress summaries for subagent updates", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -470,6 +493,7 @@ describe("ClaudeAdapterLive", () => {
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const progressEvent = runtimeEvents.find((event) => event.type === "task.progress");
       assert.equal(progressEvent?.type, "task.progress");
+
       if (progressEvent?.type === "task.progress") {
         assert.equal(
           progressEvent.payload.summary,
@@ -489,6 +513,7 @@ describe("ClaudeAdapterLive", () => {
     "preserves oversized Claude result totals after task progress snapshots are recorded",
     () => {
       const harness = makeHarness();
+
       return Effect.gen(function* () {
         const adapter = yield* ClaudeAdapter;
 
@@ -544,11 +569,14 @@ describe("ClaudeAdapterLive", () => {
         harness.query.finish();
 
         const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
+
         const usageEvents = runtimeEvents.filter(
           (event) => event.type === "thread.token-usage.updated",
         );
+
         const finalUsageEvent = usageEvents.at(-1);
         assert.equal(finalUsageEvent?.type, "thread.token-usage.updated");
+
         if (finalUsageEvent?.type === "thread.token-usage.updated") {
           assert.deepEqual(finalUsageEvent.payload, {
             usage: {

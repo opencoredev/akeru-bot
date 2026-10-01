@@ -22,9 +22,13 @@ import {
   approvalDecision,
   toProviderSession,
 } from "./agentController/Policy.ts";
+
 export { usesMastraCode } from "./agentController/Policy.ts";
+
 import type { AgentControllerLiveOptions } from "./agentController/Options.ts";
+
 export type { AgentControllerLiveOptions } from "./agentController/Options.ts";
+
 import { createMemoryAccess } from "./agentController/MemoryAccess.ts";
 import { createMemoryCadence } from "./agentController/MemoryCadence.ts";
 import { createDelegation } from "./agentController/Delegation.ts";
@@ -162,11 +166,14 @@ const make = (options?: AgentControllerLiveOptions) =>
     const projectionTurns = yield* Effect.serviceOption(ProjectionTurnRepository);
     const resolvedByThread = new Map<string, ResolvedEngine>();
     const webFetch = createAkeruWebFetch(options?.webFetch);
+
     const modelConnections = new Map<
       string,
       NonNullable<ProviderInstanceRoutingInfo["mastraConnection"]>
     >();
+
     const sessions = new Map<string, ActiveSession>();
+
     // Tool calls consume no model tokens, so their entries hold no cap while they run.
     // `persisted` is false when the start write failed; finish then writes the whole entry.
     const toolUsageStarts = new Map<
@@ -178,10 +185,13 @@ const make = (options?: AgentControllerLiveOptions) =>
         readonly model: string | null;
       }
     >();
+
     // Providers only promise tool-call ids unique within a chat.
     const toolUsageKey = (input: { readonly threadId: string; readonly toolCallId: string }) =>
       `tool:${input.threadId}:${input.toolCallId}`;
+
     const legacyHiddenWakeByTurn = new Map<string, boolean>();
+
     // Memory calls with no live turn reservation, recorded when they finish.
     const unreservedMemoryCalls = new Map<
       string,
@@ -193,10 +203,12 @@ const make = (options?: AgentControllerLiveOptions) =>
         readonly model: string | null;
       }
     >();
+
     const memoryUsageByThread = new Map<
       string,
       { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
     >();
+
     const { clearPreviewMcpSession, preparePreviewMcpSession } = createPreviewMcpSessions({
       options,
       mcpSessionRegistry,
@@ -216,13 +228,17 @@ const make = (options?: AgentControllerLiveOptions) =>
       readonly delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"];
       readonly workerOrchestration?: WorkerOrchestration;
     }>({ delegationRuntime: options?.delegationRuntime });
+
     const wired = () => Ref.getUnsafe(lateWiring);
+
     const childWaiters = yield* makePendingWaiters<null, AkeruDelegationChildOutcome>(
       "The agent controller stopped.",
     );
+
     const resolveChildWaiter = (threadId: ThreadId, outcome: AkeruDelegationChildOutcome) => {
       childWaiters.resolve(String(threadId), outcome);
     };
+
     const pendingRoutineRequests = yield* makePendingWaiters<
       {
         readonly threadId: string;
@@ -232,8 +248,10 @@ const make = (options?: AgentControllerLiveOptions) =>
       unknown,
       Error
     >("The agent controller stopped before the routine review finished.");
+
     // Accepted routine reviews whose routine is still being created, by tool call.
     const creatingRoutineReviews = new Map<string, string>();
+
     // A turn waits on the user while any tool approval, question, or routine review
     // it opened is unanswered, or an accepted routine is still being created.
     const {
@@ -323,6 +341,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     const authStorage = createAkeruMastraAuthStorage(config.secretsDir);
     const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
     const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
+
     const { sessionResources } = createSessionResources({
       get config() {
         return config;
@@ -340,8 +359,10 @@ const make = (options?: AgentControllerLiveOptions) =>
         return options;
       },
     });
+
     const botMemoryStore = options?.botMemoryStore ?? new BotMemoryStore(config.stateDir);
     const memoryTurnHarness = new AkeruMemoryTurnHarness(botMemoryStore);
+
     const { toolRuntime } = createToolRuntime({
       botInbox,
       sessions,
@@ -354,6 +375,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         return baseEvent;
       },
     });
+
     const { memoryAccessFor, refreshEntityMemoryAccess, entityMemoryContext, memoryHandlers } =
       createMemoryAccess({
         runPromise,
@@ -377,6 +399,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           Effect.map(({ chatgptEnabled, grokEnabled }) => ({ chatgptEnabled, grokEnabled })),
         )
       : Effect.succeed({ chatgptEnabled: true, grokEnabled: true });
+
     const memorySettings = () =>
       Option.isSome(serverSettings)
         ? serverSettings.value.getSettings.pipe(
@@ -393,20 +416,27 @@ const make = (options?: AgentControllerLiveOptions) =>
             })),
           )
         : Effect.succeed(DEFAULT_MEMORY_TOOL_SETTINGS);
+
     const memoryAccessKey = (access: BotMemoryAccess | undefined): string | undefined =>
       access ? `${access.botId}:${access.groupId ?? "private"}` : undefined;
+
     const legacyResourceIdentity = new Map<string, LegacyResourceIdentity>();
     const legacyTurnMemory = new Map<string, Array<LegacyTurnMemoryState>>();
     const legacyPending = (key: string) => legacyTurnMemory.get(key) ?? [];
+
     const addLegacyPending = (key: string, pending: LegacyTurnMemoryState) =>
       legacyTurnMemory.set(key, [...legacyPending(key), pending]);
+
     const removeLegacyPending = (key: string, pending: LegacyTurnMemoryState) => {
       const remaining = legacyPending(key).filter((entry) => entry !== pending);
+
       if (remaining.length > 0) legacyTurnMemory.set(key, remaining);
       else legacyTurnMemory.delete(key);
     };
+
     const hasLegacyPending = (key: string, pending: LegacyTurnMemoryState) =>
       legacyPending(key).includes(pending);
+
     const restoreLegacyMemoryHandler = (key: string, pending: LegacyTurnMemoryState) => {
       if (
         !pending.reviewMemoryHandler ||
@@ -415,6 +445,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       ) {
         return;
       }
+
       if (pending.priorMemoryHandler) {
         McpMemoryToolSession.setMcpMemoryToolSession(
           ThreadId.make(key),
@@ -424,10 +455,13 @@ const make = (options?: AgentControllerLiveOptions) =>
         McpMemoryToolSession.clearMcpMemoryToolSession(ThreadId.make(key));
       }
     };
+
     const legacyBufferedTerminals = new Map<string, Map<string, ProviderRuntimeEvent>>();
     const mastraMemoryTurns = new Map<string, AkeruMemoryTurn>();
+
     const mastraReservationKey = (threadId: ThreadId, turnId: TurnId) =>
       `${String(threadId)}:${String(turnId)}`;
+
     const { releaseMastraReservations, drainLegacyTerminals, queueTurnMemory } =
       createMemoryCadence({
         forkPromise,
@@ -457,6 +491,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       },
       failureDetail,
     });
+
     const { bundle } = yield* createHarness({
       options,
       authStorage,
@@ -500,6 +535,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         readSnapshot: () => runPromise(projectionSnapshotQuery.value.getCommandReadModel()),
         dispatch: (command) => runPromise(orchestrationEngine.value.dispatch(command)),
       };
+
       yield* Ref.update(lateWiring, (current) => ({
         ...current,
         delegationRuntime: current.delegationRuntime ?? makeDelegationRuntime(orchestration),
@@ -509,6 +545,7 @@ const make = (options?: AgentControllerLiveOptions) =>
 
     /** Runtime mode for each hidden worker thread's turns, keyed by child thread id. */
     const workerTurnDefaults = new Map<string, RuntimeMode>();
+
     const { workerRuntime, workersFor } = yield* createWorkers({
       runMastra,
       wired,
@@ -707,9 +744,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           active.pendingTurns.length = 0;
           active.admittingTurn = null;
           active.session.abort();
+
           if (active.activeTurn) {
             finishTurn(ThreadId.make(threadId), active, "interrupted");
           }
+
           active.unsubscribe();
           yield* releaseMastraReservations(ThreadId.make(threadId));
           yield* runMastra("deleteSession", () =>
@@ -718,9 +757,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           yield* clearPreviewMcpSession(ThreadId.make(threadId));
           toolRuntime.unregisterSession(threadId);
         }
+
         for (const threadId of legacyResourceIdentity.keys()) {
           yield* clearPreviewMcpSession(ThreadId.make(threadId));
         }
+
         for (const pendingTurns of legacyTurnMemory.values()) {
           for (const pending of pendingTurns) {
             if (pending.memoryTurn) {
@@ -730,6 +771,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             }
           }
         }
+
         legacyTurnMemory.clear();
         legacyBufferedTerminals.clear();
         legacyResourceIdentity.clear();
@@ -761,6 +803,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       legacyBufferedTerminals,
       drainLegacyTerminals,
     });
+
     return AgentController.of({
       readConversationMemory: auxiliary.readConversationMemory,
       clearConversationMemory: auxiliary.clearConversationMemory,
@@ -793,7 +836,9 @@ const make = (options?: AgentControllerLiveOptions) =>
         Effect.tryPromise({
           try: async () => {
             const dispatchDelegation = wired().delegationRuntime?.dispatchDelegation;
+
             if (!dispatchDelegation) throw new Error("Bot work is not available yet.");
+
             return dispatchDelegation(input);
           },
           catch: (cause) =>
@@ -806,9 +851,11 @@ const make = (options?: AgentControllerLiveOptions) =>
       authenticateMcpServer: ({ server, onAuthorizationUrl }) =>
         runMastra("mcp.authenticate", async (signal) => {
           const recoveryFailures: string[] = [];
+
           const managerSessions = sessionResources.getMcpManagerSessionsForServer(
             String(server.id),
           );
+
           const status = await authenticateMcpServer({
             server,
             managers: managerSessions.map(({ manager }) => manager),
@@ -831,6 +878,7 @@ const make = (options?: AgentControllerLiveOptions) =>
               });
             },
           });
+
           return { toolCount: status.toolCount, recoveryFailures };
         }),
 
@@ -855,6 +903,7 @@ export const AgentControllerLive = Layer.effect(
   AgentController,
   Effect.gen(function* () {
     const entityMemoryRepository = yield* EntityMemoryRepository;
+
     return yield* make({ entityMemoryRepository });
   }),
 ).pipe(
@@ -868,6 +917,7 @@ export {
   mastraConnectionIssue,
   recordProviderAccessHealth,
 } from "./agentController/ProviderAccess.ts";
+
 export {
   toMcpServerConfigs,
   toMcpServerConfig,

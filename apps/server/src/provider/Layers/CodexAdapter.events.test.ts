@@ -49,13 +49,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "item.completed");
+
       if (firstEvent.value.type !== "item.completed") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.itemId, "msg_1");
       NodeAssert.equal(firstEvent.value.turnId, "turn-1");
       NodeAssert.equal(firstEvent.value.payload.itemType, "assistant_message");
@@ -98,9 +102,11 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some" || firstEvent.value.type !== "item.completed") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.payload.itemType, "mcp_tool_call");
       NodeAssert.equal(firstEvent.value.payload.title, "akeru · preview_status");
       NodeAssert.deepStrictEqual(firstEvent.value.payload.data, {
@@ -127,6 +133,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
   it.effect("preserves failed and declined outcomes on completed tool items", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
+
       const items = [
         {
           type: "commandExecution",
@@ -176,9 +183,11 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
         const firstEvent = yield* Fiber.join(firstEventFiber);
         NodeAssert.equal(firstEvent._tag, "Some");
+
         if (firstEvent._tag !== "Some" || firstEvent.value.type !== "item.completed") {
           return;
         }
+
         NodeAssert.equal(firstEvent.value.payload.status, item.status);
       }
     }),
@@ -216,13 +225,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "turn.proposed.completed");
+
       if (firstEvent.value.type !== "turn.proposed.completed") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.turnId, "turn-1");
       NodeAssert.equal(firstEvent.value.payload.planMarkdown, "## Final plan\n\n- one\n- two");
     }),
@@ -255,13 +268,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "turn.proposed.delta");
+
       if (firstEvent.value.type !== "turn.proposed.delta") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.turnId, "turn-1");
       NodeAssert.equal(firstEvent.value.payload.delta, "## Final plan");
     }),
@@ -288,13 +305,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "session.exited");
+
       if (firstEvent.value.type !== "session.exited") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.threadId, "thread-1");
       NodeAssert.equal(firstEvent.value.payload.reason, "Session stopped");
     }),
@@ -328,13 +349,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "runtime.warning");
+
       if (firstEvent.value.type !== "runtime.warning") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.turnId, "turn-1");
       NodeAssert.equal(firstEvent.value.payload.message, "Reconnecting... 2/5");
     }),
@@ -361,13 +386,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "runtime.warning");
+
       if (firstEvent.value.type !== "runtime.warning") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.turnId, "turn-1");
       NodeAssert.equal(
         firstEvent.value.payload.message,
@@ -400,13 +429,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "thread.realtime.started");
+
       if (firstEvent.value.type !== "thread.realtime.started") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.threadId, "thread-1");
       NodeAssert.equal(firstEvent.value.payload.realtimeSessionId, "realtime-session-1");
     }),
@@ -434,13 +467,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "runtime.error");
+
       if (firstEvent.value.type !== "runtime.error") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.turnId, "turn-1");
       NodeAssert.equal(firstEvent.value.payload.class, "provider_error");
       NodeAssert.equal(
@@ -490,10 +527,13 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       const firstEvent = yield* Fiber.join(firstEventFiber);
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "thread.token-usage.updated");
+
       if (firstEvent.value.type !== "thread.token-usage.updated") {
         return;
       }
@@ -521,6 +561,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
   it.effect("accumulates independent model-call usage within a turn", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
+
       const eventsFiber = yield* Stream.runCollect(Stream.take(adapter.streamEvents, 3)).pipe(
         Effect.forkChild,
       );
@@ -579,6 +620,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
   it.effect("keeps consuming runtime events after the startSession fiber completes", () =>
     Effect.gen(function* () {
       const adapter = yield* CodexAdapter;
+
       const startSessionFiber = yield* adapter
         .startSession({
           provider: ProviderDriverKind.make("codex"),
@@ -586,6 +628,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
           runtimeMode: "full-access",
         })
         .pipe(Effect.forkChild);
+
       yield* Fiber.join(startSessionFiber);
 
       const runtime = lifecycleRuntimeFactory.lastRuntime;
@@ -615,9 +658,11 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       const firstEvent = yield* Fiber.join(firstEventFiber).pipe(Effect.timeout("10 seconds"));
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "item.completed");
       // Live clock so the timeout above is real: under the default test clock it
       // waits on virtual time that never advances, and a regression would hang

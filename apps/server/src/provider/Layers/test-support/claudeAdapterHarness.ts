@@ -47,11 +47,15 @@ export class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
     if (this.done) {
       return;
     }
+
     const waiter = this.waiters.shift();
+
     if (waiter) {
       waiter.resolve({ done: false, value: message });
+
       return;
     }
+
     this.queue.push(message);
   }
 
@@ -59,8 +63,10 @@ export class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
     if (this.done) {
       return;
     }
+
     this.done = true;
     this.failure = cause;
+
     for (const waiter of this.waiters.splice(0)) {
       waiter.reject(cause);
     }
@@ -70,8 +76,10 @@ export class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
     if (this.done) {
       return;
     }
+
     this.done = true;
     this.failure = undefined;
+
     for (const waiter of this.waiters.splice(0)) {
       waiter.resolve({ done: true, value: undefined });
     }
@@ -91,9 +99,11 @@ export class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
 
   readonly close = (): void => {
     this.closeCalls += 1;
+
     if (this.closeError !== undefined) {
       throw this.closeError;
     }
+
     this.finish();
   };
 
@@ -102,6 +112,7 @@ export class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
       next: () => {
         if (this.queue.length > 0) {
           const value = this.queue.shift();
+
           if (value) {
             return Promise.resolve({
               done: false,
@@ -109,17 +120,21 @@ export class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
             });
           }
         }
+
         if (this.failure !== undefined) {
           const failure = this.failure;
           this.failure = undefined;
+
           return Promise.reject(failure);
         }
+
         if (this.done) {
           return Promise.resolve({
             done: true,
             value: undefined,
           });
         }
+
         return new Promise((resolve, reject) => {
           this.waiters.push({
             resolve,
@@ -141,6 +156,7 @@ export function makeHarness(config?: {
   readonly environment?: ClaudeAdapterLiveOptions["environment"];
 }) {
   const query = new FakeClaudeQuery();
+
   let createInput:
     | {
         readonly prompt: AsyncIterable<SDKUserMessage>;
@@ -153,6 +169,7 @@ export function makeHarness(config?: {
     ...(config?.instanceId ? { instanceId: config.instanceId } : {}),
     createQuery: (input) => {
       createInput = input;
+
       return query;
     },
     ...(config?.nativeEventLogger
@@ -172,6 +189,7 @@ export function makeHarness(config?: {
       ClaudeAdapter,
       Effect.gen(function* () {
         const claudeConfig = decodeClaudeSettings(config?.claudeConfig ?? {});
+
         return yield* makeClaudeAdapter(claudeConfig, adapterOptions);
       }),
     ).pipe(
@@ -194,8 +212,10 @@ export function makeDeterministicRandomService(seed = 0x1234_5678): {
   nextDoubleUnsafe: () => number;
 } {
   let state = seed >>> 0;
+
   const nextIntUnsafe = (): number => {
     state = (Math.imul(1_664_525, state) + 1_013_904_223) >>> 0;
+
     return state;
   };
 
@@ -213,20 +233,27 @@ export async function readFirstPromptText(
     | undefined,
 ): Promise<string | undefined> {
   const iterator = input?.prompt[Symbol.asyncIterator]();
+
   if (!iterator) {
     return undefined;
   }
+
   const next = await iterator.next();
+
   if (next.done) {
     return undefined;
   }
+
   if (typeof next.value.message.content === "string") {
     return next.value.message.content;
   }
+
   const content = next.value.message.content[0];
+
   if (!content || content.type !== "text") {
     return undefined;
   }
+
   return content.text;
 }
 
@@ -238,13 +265,17 @@ export async function readFirstPromptMessage(
     | undefined,
 ): Promise<SDKUserMessage | undefined> {
   const iterator = input?.prompt[Symbol.asyncIterator]();
+
   if (!iterator) {
     return undefined;
   }
+
   const next = await iterator.next();
+
   if (next.done) {
     return undefined;
   }
+
   return next.value;
 }
 
@@ -258,6 +289,7 @@ export const completedTurn = (runtimeEvents: ReadonlyArray<ProviderRuntimeEvent>
   const event = runtimeEvents[runtimeEvents.length - 1];
   assert.equal(event?.type, "turn.completed");
   assert(event?.type === "turn.completed");
+
   return event.payload;
 };
 

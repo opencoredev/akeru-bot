@@ -85,18 +85,22 @@ export function createClaudeTextStreams(deps: {
     },
   ) {
     const turnState = context.turnState;
+
     if (!turnState) {
       return undefined;
     }
 
     const existing = turnState.assistantTextBlocks.get(blockIndex);
+
     if (existing && !existing.completionEmitted) {
       if (existing.fallbackText.length === 0 && options?.fallbackText) {
         existing.fallbackText = options.fallbackText;
       }
+
       if (options?.streamClosed) {
         existing.streamClosed = true;
       }
+
       return { blockIndex, block: existing };
     }
 
@@ -108,25 +112,31 @@ export function createClaudeTextStreams(deps: {
       streamClosed: options?.streamClosed ?? false,
       completionEmitted: false,
     };
+
     turnState.assistantTextBlocks.set(blockIndex, block);
     turnState.assistantTextBlockOrder.push(block);
+
     return { blockIndex, block };
   });
+
   const createSyntheticAssistantTextBlock = Effect.fn("createSyntheticAssistantTextBlock")(
     function* (context: ClaudeSessionContext, fallbackText: string) {
       const turnState = context.turnState;
+
       if (!turnState) {
         return undefined;
       }
 
       const blockIndex = turnState.nextSyntheticAssistantBlockIndex;
       turnState.nextSyntheticAssistantBlockIndex -= 1;
+
       return yield* ensureAssistantTextBlock(context, blockIndex, {
         fallbackText,
         streamClosed: true,
       });
     },
   );
+
   const completeAssistantTextBlock = Effect.fn("completeAssistantTextBlock")(function* (
     context: ClaudeSessionContext,
     block: AssistantTextBlockState,
@@ -137,6 +147,7 @@ export function createClaudeTextStreams(deps: {
     },
   ) {
     const turnState = context.turnState;
+
     if (!turnState || block.completionEmitted) {
       return;
     }
@@ -173,6 +184,7 @@ export function createClaudeTextStreams(deps: {
     }
 
     block.completionEmitted = true;
+
     if (turnState.assistantTextBlocks.get(block.blockIndex) === block) {
       turnState.assistantTextBlocks.delete(block.blockIndex);
     }
@@ -204,15 +216,18 @@ export function createClaudeTextStreams(deps: {
         : {}),
     });
   });
+
   const backfillAssistantTextBlocksFromSnapshot = Effect.fn(
     "backfillAssistantTextBlocksFromSnapshot",
   )(function* (context: ClaudeSessionContext, message: SDKMessage) {
     const turnState = context.turnState;
+
     if (!turnState) {
       return;
     }
 
     const snapshotTextBlocks = extractAssistantTextBlocks(message);
+
     if (snapshotTextBlocks.length === 0) {
       return;
     }
@@ -224,6 +239,7 @@ export function createClaudeTextStreams(deps: {
 
     for (const [position, text] of snapshotTextBlocks.entries()) {
       const existingEntry = orderedBlocks[position];
+
       const entry =
         existingEntry ??
         (yield* createSyntheticAssistantTextBlock(context, text).pipe(
@@ -231,10 +247,13 @@ export function createClaudeTextStreams(deps: {
             if (!created) {
               return undefined;
             }
+
             orderedBlocks.push(created);
+
             return created;
           }),
         ));
+
       if (!entry) {
         continue;
       }
@@ -251,6 +270,7 @@ export function createClaudeTextStreams(deps: {
       }
     }
   });
+
   const handleStreamEvent = Effect.fn("handleStreamEvent")(function* (
     context: ClaudeSessionContext,
     message: SDKMessage,
@@ -270,6 +290,7 @@ export function createClaudeTextStreams(deps: {
     // re-homed by the quiet-timeline filter.
     const streamParentToolUseId = (message as { parent_tool_use_id?: string | null })
       .parent_tool_use_id;
+
     if (streamParentToolUseId !== null && streamParentToolUseId !== undefined) {
       // Drop only the subagent's narration (text/thinking); tool_use blocks
       // and their input_json_delta frames must flow so attributed tool items
@@ -279,9 +300,11 @@ export function createClaudeTextStreams(deps: {
         event.content_block.type !== "tool_use" &&
         event.content_block.type !== "server_tool_use" &&
         event.content_block.type !== "mcp_tool_use";
+
       const dropDelta =
         event.type === "content_block_delta" &&
         (event.delta.type === "text_delta" || event.delta.type === "thinking_delta");
+
       if (dropStart || dropDelta) {
         return;
       }
@@ -297,10 +320,12 @@ export function createClaudeTextStreams(deps: {
         context.lastKnownContextWindow,
         context.lastKnownTotalProcessedTokens,
       );
+
       yield* deps.emitThreadTokenUsage(context, snapshot, {
         rawMethod: "claude/stream_event/message_delta",
         rawPayload: message,
       });
+
       return;
     }
 
@@ -315,10 +340,13 @@ export function createClaudeTextStreams(deps: {
             : typeof event.delta.thinking === "string"
               ? event.delta.thinking
               : "";
+
         if (deltaText.length === 0) {
           return;
         }
+
         const streamKind = streamKindFromDeltaType(event.delta.type);
+
         const assistantBlockEntry =
           event.delta.type === "text_delta"
             ? yield* ensureAssistantTextBlock(context, event.index)
@@ -330,9 +358,11 @@ export function createClaudeTextStreams(deps: {
                   ) as AssistantTextBlockState,
                 }
               : undefined;
+
         if (assistantBlockEntry?.block && event.delta.type === "text_delta") {
           assistantBlockEntry.block.emittedTextDelta = true;
         }
+
         const stamp = yield* deps.makeEventStamp();
         yield* deps.offerRuntimeEvent({
           type: "content.delta",
@@ -357,11 +387,13 @@ export function createClaudeTextStreams(deps: {
             payload: message,
           },
         });
+
         return;
       }
 
       if (event.delta.type === "input_json_delta") {
         const tool = context.inFlightTools.get(event.index);
+
         if (!tool || typeof event.delta.partial_json !== "string") {
           return;
         }
@@ -369,6 +401,7 @@ export function createClaudeTextStreams(deps: {
         const partialInputJson = tool.partialInputJson + event.delta.partial_json;
         const parsedInput = tryParseJsonRecord(partialInputJson);
         const detail = parsedInput ? summarizeToolRequest(tool.toolName, parsedInput) : tool.detail;
+
         let nextTool: ToolInFlight = {
           ...tool,
           partialInputJson,
@@ -380,6 +413,7 @@ export function createClaudeTextStreams(deps: {
           parsedInput && Object.keys(parsedInput).length > 0
             ? toolInputFingerprint(parsedInput)
             : undefined;
+
         context.inFlightTools.set(event.index, nextTool);
 
         if (
@@ -434,6 +468,7 @@ export function createClaudeTextStreams(deps: {
         // Emit plan update when TodoWrite input is parsed
         if (parsedInput && isTodoTool(nextTool.toolName)) {
           const planSteps = extractPlanStepsFromTodoInput(parsedInput);
+
           if (planSteps && planSteps.length > 0) {
             const planStamp = yield* deps.makeEventStamp();
             yield* deps.offerRuntimeEvent({
@@ -455,17 +490,21 @@ export function createClaudeTextStreams(deps: {
           }
         }
       }
+
       return;
     }
 
     if (event.type === "content_block_start") {
       const { index, content_block: block } = event;
+
       if (block.type === "text") {
         yield* ensureAssistantTextBlock(context, index, {
           fallbackText: extractContentBlockText(block),
         });
+
         return;
       }
+
       if (
         block.type !== "tool_use" &&
         block.type !== "server_tool_use" &&
@@ -476,12 +515,15 @@ export function createClaudeTextStreams(deps: {
 
       const toolName = block.name;
       const itemType = classifyToolItemType(toolName);
+
       const toolInput =
         typeof block.input === "object" && block.input !== null
           ? (block.input as Record<string, unknown>)
           : {};
+
       const itemId = block.id;
       const detail = summarizeToolRequest(toolName, toolInput);
+
       const inputFingerprint =
         Object.keys(toolInput).length > 0 ? toolInputFingerprint(toolInput) : undefined;
 
@@ -491,6 +533,7 @@ export function createClaudeTextStreams(deps: {
       // spawning Task tool's id as parent_tool_use_id.
       const parentToolUseId =
         (message as { parent_tool_use_id?: string | null }).parent_tool_use_id ?? undefined;
+
       const owningAgentId = agentIdForParentToolUse(context.taskAgents, parentToolUseId);
 
       const tool: ToolInFlight = {
@@ -505,6 +548,7 @@ export function createClaudeTextStreams(deps: {
         ...(owningAgentId ? { agentId: owningAgentId } : {}),
         ...(parentToolUseId ? { parentToolUseId } : {}),
       };
+
       context.inFlightTools.set(index, tool);
 
       const stamp = yield* deps.makeEventStamp();
@@ -537,26 +581,32 @@ export function createClaudeTextStreams(deps: {
           payload: message,
         },
       });
+
       return;
     }
 
     if (event.type === "content_block_stop") {
       const { index } = event;
       const assistantBlock = context.turnState?.assistantTextBlocks.get(index);
+
       if (assistantBlock) {
         assistantBlock.streamClosed = true;
         yield* completeAssistantTextBlock(context, assistantBlock, {
           rawMethod: "claude/stream_event/content_block_stop",
           rawPayload: message,
         });
+
         return;
       }
+
       const tool = context.inFlightTools.get(index);
+
       if (!tool) {
         return;
       }
     }
   });
+
   return {
     ensureAssistantTextBlock,
     createSyntheticAssistantTextBlock,

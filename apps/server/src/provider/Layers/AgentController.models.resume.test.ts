@@ -59,6 +59,7 @@ describe("AgentControllerLive", () => {
       const mastraBefore = makeMastraHarness();
       const mastraAfter = makeMastraHarness();
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-kimi-restart-"));
+
       const layer = (factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>) =>
         makeLayer(bridge.service, factory, undefined, baseDir);
 
@@ -96,11 +97,13 @@ describe("AgentControllerLive", () => {
           botConversation: true,
         });
         yield* second.startSession(kimiThreadId, kimiStartInput("k3-256k"));
+
         const completed = yield* second.streamEvents.pipe(
           Stream.filter((event) => event.type === "turn.completed"),
           Stream.runHead,
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* second.sendTurn({ threadId: kimiThreadId, input: "After restart." });
         yield* Effect.yieldNow;
@@ -132,6 +135,7 @@ describe("AgentControllerLive", () => {
     it.effect("normalizes a Kimi model switch in-session between turns", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
@@ -159,6 +163,7 @@ describe("AgentControllerLive", () => {
             Stream.runHead,
             Effect.forkChild({ startImmediately: true }),
           );
+
           yield* controller.sendTurn({
             threadId: kimiThreadId,
             input: "Second turn.",
@@ -191,11 +196,13 @@ describe("AgentControllerLive", () => {
       // produces a `tool_approval_required`, the controller response resumes
       // the run, and `turn.completed` lands through the real event pipeline.
       const bridge = makeBridge();
+
       const kimiRequests: Array<{
         readonly url: string;
         readonly body: string;
         readonly headers: Record<string, string>;
       }> = [];
+
       // Scripted Kimi replies: the first request emits a Shell tool_use, and
       // the post-approval resume ends the turn with a text reply. The SSE
       // parser only emits a tool_call when the `content_block_start` carries
@@ -214,6 +221,7 @@ describe("AgentControllerLive", () => {
           "event: message_stop",
           'data: {"type":"message_stop"}',
         ].join("\n\n") + "\n\n";
+
       const endTurnSse =
         [
           "event: message_start",
@@ -227,19 +235,25 @@ describe("AgentControllerLive", () => {
           "event: message_stop",
           'data: {"type":"message_stop"}',
         ].join("\n\n") + "\n\n";
+
       const fakeKimi = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url =
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+
         const body = typeof init?.body === "string" ? init.body : "";
+
         const headers = Object.fromEntries(
           new Headers(input instanceof Request ? input.headers : (init?.headers ?? {})),
         );
+
         kimiRequests.push({ url, body, headers });
+
         return new Response(kimiRequests.length === 1 ? toolCallSse : endTurnSse, {
           status: 200,
           headers: { "content-type": "text/event-stream" },
         });
       });
+
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-kimi-e2e-"));
       NodeFS.mkdirSync(NodePath.join(baseDir, "userdata", "secrets"), { recursive: true });
       NodeFS.writeFileSync(
@@ -256,9 +270,11 @@ describe("AgentControllerLive", () => {
       );
 
       const originalFetch = globalThis.fetch;
+
       const fetchPatched = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
         const url =
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+
         return url.startsWith("https://api.kimi.com/coding/v1/messages")
           ? fakeKimi(input as string | URL | Request, init as RequestInit | undefined)
           : originalFetch(input, init);
@@ -289,6 +305,7 @@ describe("AgentControllerLive", () => {
         const unrelated = yield* Effect.promise(() =>
           fetch("data:text/plain,unrelated").then((response) => response.text()),
         );
+
         assert.equal(unrelated, "unrelated");
         assert.equal(kimiRequests.length, 0);
         const scope = yield* Scope.make("sequential");
@@ -316,10 +333,12 @@ describe("AgentControllerLive", () => {
         });
 
         const events: ProviderRuntimeEvent[] = [];
+
         const collector = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         const opened = yield* controller.streamEvents.pipe(
           Stream.filter(
             (event) => event.type === "request.opened" && event.threadId === kimiThreadId,
@@ -327,6 +346,7 @@ describe("AgentControllerLive", () => {
           Stream.runHead,
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
 
         yield* controller.sendTurn({ threadId: kimiThreadId, input: "Run pwd." });
@@ -343,6 +363,7 @@ describe("AgentControllerLive", () => {
           Stream.runHead,
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* controller.respondToRequest({
           threadId: kimiThreadId,
@@ -357,6 +378,7 @@ describe("AgentControllerLive", () => {
         // The controller emitted the approval request, the resolved approval,
         // the tool item, and the completed turn — in that causal order.
         const types = events.map((event) => event.type);
+
         const causalOrder = [
           types.indexOf("turn.started"),
           types.indexOf("request.opened"),
@@ -364,6 +386,7 @@ describe("AgentControllerLive", () => {
           types.indexOf("item.completed"),
           types.indexOf("turn.completed"),
         ];
+
         assert.notInclude(causalOrder, -1);
         assert.deepEqual(
           [...causalOrder].sort((a, b) => a - b),
@@ -402,6 +425,7 @@ describe("AgentControllerLive", () => {
   it.effect("does not fall back to the legacy Kimi loop when its Mastra session is absent", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -412,6 +436,7 @@ describe("AgentControllerLive", () => {
           mode: "default",
           botConversation: true,
         });
+
         const error = yield* controller
           .sendTurn({ threadId: kimiThreadId, input: "No legacy fallback." })
           .pipe(Effect.flip);
@@ -431,11 +456,13 @@ describe("AgentControllerLive", () => {
       it.effect(`sends the saved ${testCase.provider} model to the Mastra wire`, () => {
         const bridge = makeBridge();
         const mastra = makeMastraHarness();
+
         const modelSelection = {
           instanceId: testCase.instanceId,
           model: testCase.model,
           ...(testCase.options ? { options: [...testCase.options] } : {}),
         };
+
         return provideController(
           Effect.gen(function* () {
             const controller = yield* AgentController;
@@ -450,6 +477,7 @@ describe("AgentControllerLive", () => {
               mode: "default",
               botConversation: true,
             });
+
             const session = yield* controller.startSession(testCase.threadId, {
               threadId: testCase.threadId,
               provider: testCase.provider,
@@ -458,6 +486,7 @@ describe("AgentControllerLive", () => {
               modelSelection,
               runtimeMode: "approval-required",
             });
+
             assert.equal(session.provider, testCase.provider);
             assert.equal(session.model, testCase.model);
 
@@ -469,11 +498,13 @@ describe("AgentControllerLive", () => {
             expect(mastra.session.model.switch).toHaveBeenCalledWith({
               modelId: testCase.wireModelId,
             });
+
             if (testCase.modelOptions !== undefined) {
               expect(mastra.session.state.set).toHaveBeenLastCalledWith(
                 expect.objectContaining({ modelOptions: testCase.modelOptions }),
               );
             }
+
             expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "Route me." });
             expect(bridge.startSession).not.toHaveBeenCalled();
             expect(bridge.sendTurn).not.toHaveBeenCalled();
@@ -491,6 +522,7 @@ describe("AgentControllerLive", () => {
     it.effect("sends the saved OpenCode model to the legacy bridge", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       const modelSelection = {
         instanceId: openCodeInstanceId,
         model: "anthropic/claude-sonnet-4-5",
@@ -499,6 +531,7 @@ describe("AgentControllerLive", () => {
           { id: "variant", value: "high" },
         ],
       };
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
@@ -516,6 +549,7 @@ describe("AgentControllerLive", () => {
             mode: "default",
             botConversation: true,
           });
+
           const session = yield* controller.startSession(claudeThreadId, {
             threadId: claudeThreadId,
             provider: ProviderDriverKind.make("opencode"),
@@ -524,6 +558,7 @@ describe("AgentControllerLive", () => {
             modelSelection,
             runtimeMode: "approval-required",
           });
+
           assert.equal(session.provider, "opencode");
 
           yield* controller.sendTurn({
@@ -580,6 +615,7 @@ describe("AgentControllerLive", () => {
         const bridge = makeBridge();
         const mastra = makeMastraHarness();
         const threadId = ThreadId.make(`thread-${provider.toLowerCase()}-isolated`);
+
         const service: ProviderServiceShape = {
           ...bridge.service,
           getInstanceInfo: (candidate) =>
@@ -599,9 +635,11 @@ describe("AgentControllerLive", () => {
               },
             }),
         };
+
         return provideController(
           Effect.gen(function* () {
             const controller = yield* AgentController;
+
             const error = yield* controller
               .resolveEngine({
                 threadId,
@@ -613,12 +651,16 @@ describe("AgentControllerLive", () => {
               .pipe(Effect.flip);
 
             assert.equal(error._tag, "AgentControllerUnsupportedEngineError");
+
             if (error._tag === "AgentControllerUnsupportedEngineError") {
               assert.include(error.detail, `Provider instance '${provider}' is not available.`);
+
               const causeMessage =
                 error.cause instanceof Error ? error.cause.message : String(error.cause ?? "");
+
               assert.include(causeMessage, expectedIssue);
             }
+
             expect(bridge.startSession).not.toHaveBeenCalled();
             expect(bridge.sendTurn).not.toHaveBeenCalled();
             expect(mastra.session.model.switch).not.toHaveBeenCalled();
@@ -636,10 +678,12 @@ describe("AgentControllerLive", () => {
     it.effect("fails closed for a disabled saved provider instead of rerouting", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
           bridge.setInstanceEnabled(false);
+
           const error = yield* controller
             .resolveEngine({
               threadId: claudeThreadId,
@@ -651,9 +695,11 @@ describe("AgentControllerLive", () => {
             .pipe(Effect.flip);
 
           assert.equal(error._tag, "ProviderValidationError");
+
           if (error._tag === "ProviderValidationError") {
             assert.include(error.issue, "disabled in Akeru Bot settings");
           }
+
           expect(bridge.startSession).not.toHaveBeenCalled();
           expect(bridge.sendTurn).not.toHaveBeenCalled();
           expect(mastra.session.model.switch).not.toHaveBeenCalled();

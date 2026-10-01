@@ -35,11 +35,14 @@ export function buildPromptText(
     input.modelSelection?.instanceId === boundInstanceId
       ? getModelSelectionStringOptionValue(input.modelSelection, "effort")
       : null;
+
   const claudeModel =
     input.modelSelection?.instanceId === boundInstanceId ? input.modelSelection.model : undefined;
+
   const caps = getClaudeModelCapabilities(claudeModel);
 
   const promptEffort = resolvePromptInjectedEffort(caps, rawEffort);
+
   return applyClaudePromptEffortPrefix(input.input?.trim() ?? "", promptEffort);
 }
 
@@ -105,6 +108,7 @@ export const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(functi
       attachmentsDir: dependencies.attachmentsDir,
       attachment,
     });
+
     if (!attachmentPath) {
       return yield* new ProviderAdapterRequestError({
         provider: PROVIDER,
@@ -138,6 +142,7 @@ export const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(functi
     if (dispatch.leadingText !== undefined) {
       sdkContent.push({ type: "text", text: dispatch.leadingText });
     }
+
     sdkContent.push({ type: "text", text: dispatch.commandText });
   } else if (text.length > 0) {
     sdkContent.push({ type: "text", text });

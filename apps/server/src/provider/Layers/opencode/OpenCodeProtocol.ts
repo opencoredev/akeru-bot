@@ -39,13 +39,17 @@ export function parseOpenCodeResume(raw: unknown): { readonly sessionId: string 
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return undefined;
   }
+
   const record = raw as Record<string, unknown>;
+
   if (record.schemaVersion !== OPENCODE_RESUME_VERSION) {
     return undefined;
   }
+
   if (typeof record.sessionId !== "string" || record.sessionId.trim().length === 0) {
     return undefined;
   }
+
   return { sessionId: record.sessionId.trim() };
 }
 
@@ -64,15 +68,19 @@ export function parseOpenCodeResume(raw: unknown): { readonly sessionId: string 
 export function isOpenCodeNotFound(cause: unknown): boolean {
   const seen = new Set<unknown>();
   const queue: Array<unknown> = [cause];
+
   for (let steps = 0; queue.length > 0 && steps < 32; steps += 1) {
     const node = queue.shift();
+
     if (node === null || typeof node !== "object" || seen.has(node)) {
       continue;
     }
+
     seen.add(node);
     const record = node as Record<string, unknown>;
 
     const response = record.response;
+
     const statuses = [
       record.status,
       record.statusCode,
@@ -80,17 +88,21 @@ export function isOpenCodeNotFound(cause: unknown): boolean {
         ? (response as { readonly status?: unknown }).status
         : undefined,
     ].filter((status): status is number => typeof status === "number");
+
     if (statuses.includes(404)) {
       return true;
     }
+
     if (statuses.length > 0) {
       continue;
     }
 
     const name = record.name;
+
     if (typeof name === "string" && name.toLowerCase() === "notfounderror") {
       return true;
     }
+
     if (record._tag === "QuestionNotFoundError" || record._tag === "PermissionNotFoundError") {
       return true;
     }
@@ -101,6 +113,7 @@ export function isOpenCodeNotFound(cause: unknown): boolean {
       }
     }
   }
+
   return false;
 }
 
@@ -122,11 +135,14 @@ export function isSameOpenCodeDirectory(
 ): Effect.Effect<boolean> {
   const lexicalLeft = path.resolve(left);
   const lexicalRight = path.resolve(right);
+
   if (lexicalLeft === lexicalRight) {
     return Effect.succeed(true);
   }
+
   const canonicalize = (lexical: string) =>
     fileSystem.realPath(lexical).pipe(Effect.orElseSucceed(() => lexical));
+
   return Effect.zipWith(
     canonicalize(lexicalLeft),
     canonicalize(lexicalRight),
@@ -136,22 +152,26 @@ export function isSameOpenCodeDirectory(
 
 export function trimText(value: string | undefined | null): string | undefined {
   const trimmed = value?.trim();
+
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
 export function openCodeEventSessionId(event: OpenCodeSubscribedEvent): string | undefined {
   const properties = "properties" in event ? event.properties : undefined;
+
   if (!properties || typeof properties !== "object") {
     return undefined;
   }
 
   const sessionID = (properties as { readonly sessionID?: unknown }).sessionID;
   const sessionIDFromProperties = typeof sessionID === "string" ? sessionID : undefined;
+
   if (sessionIDFromProperties) {
     return sessionIDFromProperties;
   }
 
   const info = (properties as { readonly info?: { readonly id?: unknown } }).info;
+
   return info && typeof info.id === "string" ? info.id : undefined;
 }
 
@@ -161,6 +181,7 @@ export function openCodeEventSessionTitle(event: OpenCodeSubscribedEvent): strin
   }
 
   const title = trimText(event.properties.info.title);
+
   // OpenCode mints a placeholder title at session.create when no title was
   // provided, and re-emits it on every `session.updated`. Mirroring it would
   // overwrite the thread's real title (openCodeEventSessionTitle feeds the
@@ -225,9 +246,11 @@ export const toProcessError = (threadId: ThreadId, cause: unknown): ProviderAdap
 
 export function toToolLifecycleItemType(toolName: string): ToolLifecycleItemType {
   const normalized = toolName.toLowerCase();
+
   if (normalized.includes("bash") || normalized.includes("command")) {
     return "command_execution";
   }
+
   if (
     normalized.includes("edit") ||
     normalized.includes("write") ||
@@ -236,15 +259,19 @@ export function toToolLifecycleItemType(toolName: string): ToolLifecycleItemType
   ) {
     return "file_change";
   }
+
   if (normalized.includes("web")) {
     return "web_search";
   }
+
   if (normalized.includes("mcp")) {
     return "mcp_tool_call";
   }
+
   if (normalized.includes("image")) {
     return "image_view";
   }
+
   if (
     normalized.includes("task") ||
     normalized.includes("agent") ||
@@ -252,6 +279,7 @@ export function toToolLifecycleItemType(toolName: string): ToolLifecycleItemType
   ) {
     return "collab_agent_tool_call";
   }
+
   return "dynamic_tool_call";
 }
 
@@ -287,18 +315,21 @@ export const ensureSessionContext = Effect.fn("ensureSessionContext")(function* 
   threadId: ThreadId,
 ) {
   const session = sessions.get(threadId);
+
   if (!session) {
     return yield* new ProviderAdapterSessionNotFoundError({
       provider: PROVIDER,
       threadId,
     });
   }
+
   if (yield* Ref.get(session.stopped)) {
     return yield* new ProviderAdapterSessionClosedError({
       provider: PROVIDER,
       threadId,
     });
   }
+
   return session;
 });
 
@@ -321,8 +352,10 @@ export function sessionErrorMessage(error: unknown): string {
   if (!error || typeof error !== "object") {
     return "OpenCode session failed.";
   }
+
   const data = "data" in error && error.data && typeof error.data === "object" ? error.data : null;
   const message = data && "message" in data ? data.message : null;
+
   return typeof message === "string" && message.trim().length > 0
     ? message
     : "OpenCode session failed.";
@@ -338,19 +371,25 @@ export function updateProviderSession(
 ): Effect.Effect<ProviderSession> {
   return Effect.gen(function* () {
     const updatedAt = yield* nowIso;
+
     const nextSession = {
       ...context.session,
       ...patch,
       updatedAt,
     } as ProviderSession & Record<string, unknown>;
+
     const mutableSession = nextSession as Record<string, unknown>;
+
     if (options?.clearActiveTurnId) {
       delete mutableSession.activeTurnId;
     }
+
     if (options?.clearLastError) {
       delete mutableSession.lastError;
     }
+
     context.session = nextSession;
+
     return nextSession;
   });
 }

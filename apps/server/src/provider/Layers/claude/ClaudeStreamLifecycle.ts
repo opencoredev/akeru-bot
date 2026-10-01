@@ -87,6 +87,7 @@ export function createClaudeStreamLifecycle(deps: {
         ),
       ),
     );
+
   const handleStreamExit = Effect.fn("handleStreamExit")(function* (
     context: ClaudeSessionContext,
     exit: Exit.Exit<void, ProviderAdapterProcessError>,
@@ -104,6 +105,7 @@ export function createClaudeStreamLifecycle(deps: {
         const failures = exit.cause.reasons.flatMap((reason) =>
           Cause.isFailReason(reason) ? [reason.error] : [],
         );
+
         const message = failures[0]?.detail ?? "Claude runtime stream failed.";
         yield* deps.emitRuntimeError(context, message, {
           failureCount: failures.length,
@@ -119,6 +121,7 @@ export function createClaudeStreamLifecycle(deps: {
       emitExitEvent: true,
     });
   });
+
   const stopSessionInternal = Effect.fn("stopSessionInternal")(function* (
     context: ClaudeSessionContext,
     options?: { readonly emitExitEvent?: boolean },
@@ -144,6 +147,7 @@ export function createClaudeStreamLifecycle(deps: {
       if (!context.liveTaskIds.delete(taskId)) {
         continue;
       }
+
       const stamp = yield* deps.makeEventStamp();
       yield* deps.offerRuntimeEvent({
         type: "task.completed",
@@ -179,6 +183,7 @@ export function createClaudeStreamLifecycle(deps: {
         providerRefs: nativeProviderRefs(context),
       });
     }
+
     context.pendingApprovals.clear();
 
     // Same reason as the approvals above: a request nobody can answer any more
@@ -195,6 +200,7 @@ export function createClaudeStreamLifecycle(deps: {
 
     const streamFiber = context.streamFiber;
     context.streamFiber = undefined;
+
     if (streamFiber && streamFiber.pollUnsafe() === undefined) {
       yield* Fiber.interrupt(streamFiber);
     }
@@ -230,5 +236,6 @@ export function createClaudeStreamLifecycle(deps: {
       deps.sessions.delete(context.session.threadId);
     }
   });
+
   return { runSdkStream, handleStreamExit, stopSessionInternal };
 }

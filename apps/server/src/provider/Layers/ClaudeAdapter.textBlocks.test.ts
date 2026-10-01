@@ -16,6 +16,7 @@ import {
 describe("ClaudeAdapterLive", () => {
   it.effect("creates a fresh assistant message when Claude reuses a text block index", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -146,19 +147,24 @@ describe("ClaudeAdapterLive", () => {
       const assistantDeltas = runtimeEvents.filter(
         (event) => event.type === "content.delta" && event.payload.streamKind === "assistant_text",
       );
+
       assert.equal(assistantDeltas.length, 2);
+
       if (assistantDeltas.length !== 2) {
         return;
       }
+
       const [firstAssistantDelta, secondAssistantDelta] = assistantDeltas;
       assert.equal(firstAssistantDelta?.type, "content.delta");
       assert.equal(secondAssistantDelta?.type, "content.delta");
+
       if (
         firstAssistantDelta?.type !== "content.delta" ||
         secondAssistantDelta?.type !== "content.delta"
       ) {
         return;
       }
+
       assert.equal(firstAssistantDelta.payload.delta, "First");
       assert.equal(secondAssistantDelta.payload.delta, "Second");
       assert.notEqual(firstAssistantDelta.itemId, secondAssistantDelta.itemId);
@@ -167,6 +173,7 @@ describe("ClaudeAdapterLive", () => {
         (event) =>
           event.type === "item.completed" && event.payload.itemType === "assistant_message",
       );
+
       assert.equal(assistantCompletions.length, 2);
       assert.equal(String(assistantCompletions[0]?.itemId), String(firstAssistantDelta.itemId));
       assert.equal(String(assistantCompletions[1]?.itemId), String(secondAssistantDelta.itemId));
@@ -184,6 +191,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("segments Claude assistant text blocks around tool calls", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -366,14 +374,19 @@ describe("ClaudeAdapterLive", () => {
       const assistantTextDeltas = runtimeEvents.filter(
         (event) => event.type === "content.delta" && event.payload.streamKind === "assistant_text",
       );
+
       assert.equal(assistantTextDeltas.length, 2);
+
       if (assistantTextDeltas.length !== 2) {
         return;
       }
+
       const [firstAssistantDelta, secondAssistantDelta] = assistantTextDeltas;
+
       if (!firstAssistantDelta || !secondAssistantDelta) {
         return;
       }
+
       assert.notEqual(String(firstAssistantDelta.itemId), String(secondAssistantDelta.itemId));
 
       const firstAssistantCompletedIndex = runtimeEvents.findIndex(
@@ -382,7 +395,9 @@ describe("ClaudeAdapterLive", () => {
           event.payload.itemType === "assistant_message" &&
           String(event.itemId) === String(firstAssistantDelta.itemId),
       );
+
       const toolStartedIndex = runtimeEvents.findIndex((event) => event.type === "item.started");
+
       const secondAssistantDeltaIndex = runtimeEvents.findIndex(
         (event) =>
           event.type === "content.delta" &&

@@ -75,18 +75,22 @@ describe("ClaudeAdapterLive", () => {
     "reports the real cause when an expired login is followed by $name",
     ({ result, state, errorMessage }) => {
       const harness = makeHarness();
+
       return Effect.gen(function* () {
         const adapter = yield* ClaudeAdapter;
+
         const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
           Stream.takeUntil((event) => event.type === "turn.completed"),
           Stream.runCollect,
           Effect.forkChild,
         );
+
         const session = yield* adapter.startSession({
           threadId: THREAD_ID,
           provider: ProviderDriverKind.make("claudeAgent"),
           runtimeMode: "full-access",
         });
+
         yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
         harness.query.emit(AUTH_FAILURE_ASSISTANT);
         harness.query.emit({
@@ -97,6 +101,7 @@ describe("ClaudeAdapterLive", () => {
         } as unknown as SDKMessage);
         const payload = completedTurn(Array.from(yield* Fiber.join(runtimeEventsFiber)));
         assert.equal(payload.state, state);
+
         if (errorMessage === undefined) {
           assert.equal(payload.errorMessage, undefined);
         } else {
@@ -122,20 +127,25 @@ describe("ClaudeAdapterLive", () => {
         claudeConfig: { homePath },
         environment: { ...process.env, CLAUDE_CONFIG_DIR: inherited },
       });
+
       return Effect.gen(function* () {
         const adapter = yield* ClaudeAdapter;
+
         const eventsFiber = yield* adapter.streamEvents.pipe(
           Stream.takeUntil((event) => event.type === "turn.completed"),
           Stream.runCollect,
           Effect.forkChild,
         );
+
         const cwd = NodePath.resolve("/tmp/synthetic-audit-project");
+
         const session = yield* adapter.startSession({
           threadId: THREAD_ID,
           provider: ProviderDriverKind.make("claudeAgent"),
           runtimeMode: "full-access",
           cwd,
         });
+
         yield* adapter.sendTurn({
           threadId: session.threadId,
           input: "synthetic",
@@ -178,6 +188,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("does not fabricate provider thread ids before first SDK session_id", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -191,6 +202,7 @@ describe("ClaudeAdapterLive", () => {
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       assert.equal(session.threadId, THREAD_ID);
 
       const turn = yield* adapter.sendTurn({
@@ -198,6 +210,7 @@ describe("ClaudeAdapterLive", () => {
         input: "hello",
         attachments: [],
       });
+
       assert.equal(turn.threadId, THREAD_ID);
 
       harness.query.emit({
@@ -236,12 +249,14 @@ describe("ClaudeAdapterLive", () => {
 
       const sessionStarted = runtimeEvents[0];
       assert.equal(sessionStarted?.type, "session.started");
+
       if (sessionStarted?.type === "session.started") {
         assert.equal(sessionStarted.threadId, THREAD_ID);
       }
 
       const threadStarted = runtimeEvents[4];
       assert.equal(threadStarted?.type, "thread.started");
+
       if (threadStarted?.type === "thread.started") {
         assert.equal(threadStarted.threadId, THREAD_ID);
         assert.deepEqual(threadStarted.payload, {
@@ -258,6 +273,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("passes Claude resume ids without pinning a stale assistant checkpoint", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -295,6 +311,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("preserves durable resume ids across Claude resume hooks", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       const durableSessionId = "550e8400-e29b-41d4-a716-446655440000";
@@ -364,6 +381,7 @@ describe("ClaudeAdapterLive", () => {
       assert.equal(threadStartedEvents.length, 1);
       const threadStarted = threadStartedEvents[0];
       assert.equal(threadStarted?.type, "thread.started");
+
       if (threadStarted?.type === "thread.started") {
         assert.deepEqual(threadStarted.payload, {
           providerThreadId: durableSessionId,
@@ -371,11 +389,13 @@ describe("ClaudeAdapterLive", () => {
       }
 
       const activeSessions = yield* adapter.listSessions();
+
       const resumeCursor = activeSessions[0]?.resumeCursor as
         | {
             readonly resume?: string;
           }
         | undefined;
+
       assert.equal(resumeCursor?.resume, durableSessionId);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
@@ -387,6 +407,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("uses an app-generated Claude session id for fresh sessions", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -397,11 +418,13 @@ describe("ClaudeAdapterLive", () => {
       });
 
       const createInput = harness.getLastCreateQueryInput();
+
       const sessionResumeCursor = session.resumeCursor as {
         threadId?: string;
         resume?: string;
         turnCount?: number;
       };
+
       assert.equal(sessionResumeCursor.threadId, THREAD_ID);
       assert.equal(typeof sessionResumeCursor.resume, "string");
       assert.equal(sessionResumeCursor.turnCount, 0);
@@ -423,6 +446,7 @@ describe("ClaudeAdapterLive", () => {
     "supports rollbackThread by trimming in-memory turns and preserving earlier turns",
     () => {
       const harness = makeHarness();
+
       return Effect.gen(function* () {
         const adapter = yield* ClaudeAdapter;
 
@@ -454,6 +478,7 @@ describe("ClaudeAdapterLive", () => {
 
         const firstCompleted = yield* Fiber.join(firstCompletedFiber);
         assert.equal(firstCompleted._tag, "Some");
+
         if (firstCompleted._tag === "Some" && firstCompleted.value.type === "turn.completed") {
           assert.equal(String(firstCompleted.value.turnId), String(firstTurn.turnId));
         }
@@ -480,6 +505,7 @@ describe("ClaudeAdapterLive", () => {
 
         const secondCompleted = yield* Fiber.join(secondCompletedFiber);
         assert.equal(secondCompleted._tag, "Some");
+
         if (secondCompleted._tag === "Some" && secondCompleted.value.type === "turn.completed") {
           assert.equal(String(secondCompleted.value.turnId), String(secondTurn.turnId));
         }
@@ -505,6 +531,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("updates model on sendTurn when model override is provided", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -513,6 +540,7 @@ describe("ClaudeAdapterLive", () => {
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       yield* adapter.sendTurn({
         threadId: session.threadId,
         input: "hello",
@@ -535,6 +563,7 @@ describe("ClaudeAdapterLive", () => {
   it.effect("updates model on sendTurn for the adapter's bound custom instance id", () => {
     const customInstanceId = ProviderInstanceId.make("claude_openrouter");
     const harness = makeHarness({ instanceId: customInstanceId });
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -543,6 +572,7 @@ describe("ClaudeAdapterLive", () => {
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       yield* adapter.sendTurn({
         threadId: session.threadId,
         input: "hello",
@@ -566,8 +596,10 @@ describe("ClaudeAdapterLive", () => {
     "does not re-set the Claude model when the session already uses the same effective API model",
     () => {
       const harness = makeHarness();
+
       return Effect.gen(function* () {
         const adapter = yield* ClaudeAdapter;
+
         const modelSelection = {
           instanceId: ProviderInstanceId.make("claudeAgent"),
           model: "claude-opus-4-6",
@@ -605,6 +637,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("re-sets the Claude model when the effective API model changes", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 

@@ -85,6 +85,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
   it.effect("forwards transient headers to remote MCP servers", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
+
       const mcpServer = withMcpRuntimeHeaders(
         {
           id: McpServerId.make("composio-session"),
@@ -286,6 +287,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       });
 
       runtimeMock.state.promptAsyncError = new Error("prompt failed");
+
       const error = yield* adapter
         .sendTurn({
           threadId: asThreadId("thread-send-turn-failure"),
@@ -296,12 +298,15 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         })
         .pipe(Effect.flip);
+
       const sessions = yield* adapter.listSessions();
 
       NodeAssert.equal(error._tag, "ProviderAdapterRequestError");
+
       if (error._tag !== "ProviderAdapterRequestError") {
         throw new Error("Unexpected error type");
       }
+
       NodeAssert.equal(error.detail, "prompt failed");
       NodeAssert.equal(
         error.message,
@@ -345,6 +350,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           model: "openai/gpt-5",
         },
       });
+
       NodeAssert.equal(String(steeredTurn.turnId), String(turn.turnId));
 
       const sessions = yield* adapter.listSessions();
@@ -377,6 +383,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       });
 
       runtimeMock.state.promptAsyncError = new Error("steer failed");
+
       const error = yield* adapter
         .sendTurn({
           threadId,
@@ -401,6 +408,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
 it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
   it.effect("passes agent and variant options for the adapter's bound custom instance id", () => {
     const instanceId = ProviderInstanceId.make("opencode_zen");
+
     const adapterLayer = Layer.effect(
       OpenCodeAdapter,
       makeOpenCodeAdapter(openCodeAdapterTestSettings, { instanceId }),
@@ -450,6 +458,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
 it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
   it.effect("uses the bound custom instance id for fallback sendTurn model selection", () => {
     const instanceId = ProviderInstanceId.make("opencode_zen");
+
     const adapterLayer = Layer.effect(
       OpenCodeAdapter,
       makeOpenCodeAdapter(openCodeAdapterTestSettings, { instanceId }),
@@ -494,6 +503,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
 it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
   it.effect("rejects sendTurn model selections for another instance id", () => {
     const instanceId = ProviderInstanceId.make("opencode_zen");
+
     const adapterLayer = Layer.effect(
       OpenCodeAdapter,
       makeOpenCodeAdapter(openCodeAdapterTestSettings, { instanceId }),
@@ -526,9 +536,11 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         .pipe(Effect.flip);
 
       NodeAssert.equal(error._tag, "ProviderAdapterValidationError");
+
       if (error._tag !== "ProviderAdapterValidationError") {
         throw new Error("Unexpected error type");
       }
+
       NodeAssert.equal(
         error.issue,
         "OpenCode model selection is bound to instance 'opencode', expected 'opencode_zen'.",
@@ -546,6 +558,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const wrappedError = new Error("Session not found: ses_x", {
         cause: { body: { name: "NotFoundError" }, status: 404 },
       });
+
       NodeAssert.equal(
         isOpenCodeNotFound({
           _tag: "OpenCodeRuntimeError",
@@ -563,6 +576,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       NodeAssert.equal(isOpenCodeNotFound({ statusCode: 404 }), true);
       // OpenCode NotFoundError body name with no status.
       NodeAssert.equal(isOpenCodeNotFound({ body: { name: "NotFoundError" } }), true);
+
       for (const tag of ["QuestionNotFoundError", "PermissionNotFoundError"]) {
         const body = { _tag: tag, requestID: "req_missing", message: "Request not found" };
         NodeAssert.equal(isOpenCodeNotFound(body), true);
@@ -572,6 +586,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         NodeAssert.equal(isOpenCodeNotFound({ ...body, statusCode: 500 }), false);
         NodeAssert.equal(isOpenCodeNotFound({ response: { status: 401 }, cause: body }), false);
       }
+
       NodeAssert.equal(isOpenCodeNotFound({ _tag: "ProviderNotFoundError" }), false);
       NodeAssert.equal(isOpenCodeNotFound({ _tag: "questionnotfounderror" }), false);
 
@@ -612,6 +627,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const sameDirectory = (left: string, right: string) =>
         isSameOpenCodeDirectory(fileSystem, path, left, right);
 
@@ -671,6 +687,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
 
       const metadataUpdated = events.find((event) => event.type === "thread.metadata.updated");
       NodeAssert.ok(metadataUpdated);
+
       if (metadataUpdated.type === "thread.metadata.updated") {
         NodeAssert.equal(metadataUpdated.payload.name, "Investigate OpenCode title sync");
       }

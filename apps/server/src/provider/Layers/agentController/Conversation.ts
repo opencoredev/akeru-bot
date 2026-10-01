@@ -103,10 +103,13 @@ export function createConversation(deps: {
     yield* cancelActiveImageGenerations(input.threadId);
     const key = String(input.threadId);
     const active = deps.sessions.get(key);
+
     if (!active) {
       const legacySessions = yield* deps.legacyProviderBridge.listSessions();
+
       if (legacySessions.some((session) => session.threadId === input.threadId)) {
         const pendingTurns = deps.legacyPending(key);
+
         for (const pending of pendingTurns) deps.restoreLegacyMemoryHandler(key, pending);
         deps.legacyTurnMemory.delete(key);
         deps.legacyBufferedTerminals.delete(key);
@@ -133,8 +136,10 @@ export function createConversation(deps: {
             }),
           ),
         );
+
         return;
       }
+
       if (
         deps.usesMastraCode(
           deps.resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"),
@@ -147,20 +152,25 @@ export function createConversation(deps: {
           .pipe(Effect.ignoreCause({ log: true }));
         yield* deps.clearPreviewMcpSession(input.threadId);
         deps.toolRuntime.unregisterSession(key);
+
         return;
       }
+
       return yield* deps.legacyProviderBridge.stopSession(input);
     }
+
     deps.endTurnAdmissionGeneration(active);
     active.pendingTurns.length = 0;
     active.admittingTurn = null;
     active.session.abort();
     yield* deps.releaseMastraReservations(input.threadId);
+
     if (active.activeTurn) {
       deps.finishTurn(input.threadId, active, "interrupted");
     } else {
       deps.cancelAllPendingApprovals(input.threadId, active);
     }
+
     active.unsubscribe();
     deps.publishSessionState(input.threadId, active, "stopped");
     yield* deps
@@ -183,20 +193,26 @@ export function createConversation(deps: {
         ),
       );
   });
+
   const stopSession: AgentControllerShape["stopSession"] = (input) =>
     stopSessionWithResources(input, false);
+
   const rollbackConversation: AgentControllerShape["rollbackConversation"] = Effect.fn(
     "AgentController.rollbackConversation",
   )(function* (input) {
     if (input.numTurns === 0) return;
     const resolved = deps.resolvedByThread.get(String(input.threadId));
+
     if (!deps.sessions.has(String(input.threadId)) && !resolved) {
       return yield* deps.legacyProviderBridge.rollbackConversation(input);
     }
+
     if (resolved && !deps.usesMastraCode(resolved.provider)) {
       return yield* deps.legacyProviderBridge.rollbackConversation(input);
     }
+
     const active = deps.sessions.get(String(input.threadId));
+
     if (
       !active ||
       !deps.bundle.rebuildConversation ||
@@ -208,20 +224,26 @@ export function createConversation(deps: {
         detail: "Conversation history is unavailable for rebuilding the provider session.",
       });
     }
+
     const turns = yield* deps.projectionTurns.value.listByThreadId({ threadId: input.threadId });
+
     const messages = yield* deps.projectionMessages.value.listByThreadId({
       threadId: input.threadId,
     });
+
     const currentTurnCount = turns.reduce(
       (count, turn) => Math.max(count, turn.checkpointTurnCount ?? 0),
       0,
     );
+
     const retained = retainProjectionMessagesAfterRevert(
       messages,
       turns,
       Math.max(0, currentTurnCount - input.numTurns),
     );
+
     const key = String(input.threadId);
+
     const transcript: MastraDBMessage[] = yield* Effect.forEach(retained, (message) =>
       Effect.try({
         try: () => ({
@@ -239,6 +261,7 @@ export function createConversation(deps: {
                       attachmentsDir: deps.config.attachmentsDir,
                       attachment,
                     });
+
                     return `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`;
                   }),
                 ]
@@ -253,7 +276,9 @@ export function createConversation(deps: {
                       attachmentsDir: deps.config.attachmentsDir,
                       attachment,
                     });
+
                     if (path === null) throw new Error(`Invalid attachment '${attachment.id}'.`);
+
                     return {
                       name: attachment.name,
                       contentType: attachment.mimeType,
@@ -275,12 +300,15 @@ export function createConversation(deps: {
           }),
       }),
     );
+
     const startInput = {
       ...active.startInput,
       runtimeMode: active.runtimeMode,
       ...(resolved ? { modelSelection: resolved.modelSelection } : {}),
     };
+
     const drainLifetime = new AbortController();
+
     const drained = (async () => {
       while (
         !drainLifetime.signal.aborted &&
@@ -289,6 +317,7 @@ export function createConversation(deps: {
         const wake = new AbortController();
         const cancel = () => wake.abort();
         drainLifetime.signal.addEventListener("abort", cancel, { once: true });
+
         try {
           await Promise.race([
             active.session.stream.waitForTeardown(wake.signal),
@@ -300,6 +329,7 @@ export function createConversation(deps: {
         }
       }
     })();
+
     yield* deps.interruptTurn({ threadId: input.threadId });
     yield* deps
       .runMastra("drainConversation", async () => {
@@ -308,9 +338,11 @@ export function createConversation(deps: {
       })
       .pipe(Effect.ensuring(Effect.sync(() => drainLifetime.abort())));
     yield* stopSession({ threadId: input.threadId });
+
     const restore = yield* deps.runMastra("rebuildConversation", () =>
       deps.bundle.rebuildConversation!(key, transcript),
     );
+
     // A failed restart restores the original transcript and reopens its session, so the chat
     // keeps a live provider session even though the revert fails.
     yield* deps
@@ -330,5 +362,6 @@ export function createConversation(deps: {
         ),
       );
   });
+
   return { stopSessionWithResources, stopSession, rollbackConversation };
 }

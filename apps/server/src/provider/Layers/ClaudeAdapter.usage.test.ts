@@ -26,6 +26,7 @@ describe("ClaudeAdapterLive", () => {
     Object.assign(harness.query, {
       getContextUsage: async () => {
         getContextUsageCalls += 1;
+
         return {
           totalTokens: 999,
           maxTokens: 200000,
@@ -33,13 +34,16 @@ describe("ClaudeAdapterLive", () => {
         };
       },
     });
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
         Stream.takeUntil((event) => event.type === "turn.completed"),
         Stream.runCollect,
         Effect.forkChild,
       );
+
       yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
@@ -94,6 +98,7 @@ describe("ClaudeAdapterLive", () => {
       assert.equal(getContextUsageCalls, 0);
       const usageEvent = runtimeEvents.find((event) => event.type === "thread.token-usage.updated");
       assert.equal(usageEvent?.type, "thread.token-usage.updated");
+
       if (usageEvent?.type === "thread.token-usage.updated") {
         assert.deepEqual(usageEvent.payload.usage, {
           usedTokens: 200,
@@ -116,13 +121,16 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("preserves compacted usage when completion follows an older assistant frame", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
         Stream.takeUntil((event) => event.type === "turn.completed"),
         Stream.runCollect,
         Effect.forkChild,
       );
+
       yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
@@ -169,10 +177,13 @@ describe("ClaudeAdapterLive", () => {
       } as unknown as SDKMessage);
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
+
       const finalUsageEvent = runtimeEvents.findLast(
         (event) => event.type === "thread.token-usage.updated",
       );
+
       assert.equal(finalUsageEvent?.type, "thread.token-usage.updated");
+
       if (finalUsageEvent?.type === "thread.token-usage.updated") {
         assert.deepEqual(finalUsageEvent.payload.usage, {
           usedTokens: 40,
@@ -191,18 +202,22 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("fails a usage-limited turn with the limit it parked on", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
         Stream.takeUntil((event) => event.type === "turn.completed"),
         Stream.runCollect,
         Effect.forkChild,
       );
+
       const session = yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
       const nowMs = yield* Clock.currentTimeMillis;
       harness.query.emit({
@@ -240,8 +255,10 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("resolves a usage-limit warning when Claude reports recovery", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
         Stream.takeUntil(
           (event) => event.type === "runtime.warning" && event.payload.resolved === true,
@@ -249,11 +266,13 @@ describe("ClaudeAdapterLive", () => {
         Stream.runCollect,
         Effect.forkChild,
       );
+
       const session = yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
       harness.query.emit({
         type: "rate_limit_event",
@@ -279,6 +298,7 @@ describe("ClaudeAdapterLive", () => {
       const warnings = Array.from(yield* Fiber.join(runtimeEventsFiber)).filter(
         (event) => event.type === "runtime.warning",
       );
+
       assert.equal(warnings.length, 2);
       assert.equal(warnings[0]?.payload.key, "claude.rate-limit:five_hour");
       assert.equal(warnings[0]?.payload.resolved, undefined);
@@ -298,13 +318,16 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("names repeated usage limits without carrying them into a later turn", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const session = yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       for (const [index, expected] of [
         usageLimitMessage,
         usageLimitMessage,
@@ -315,7 +338,9 @@ describe("ClaudeAdapterLive", () => {
           Stream.runCollect,
           Effect.forkChild,
         );
+
         yield* adapter.sendTurn({ threadId: session.threadId, input: "again", attachments: [] });
+
         if (index === 0) {
           harness.query.emit({
             type: "rate_limit_event",
@@ -324,12 +349,14 @@ describe("ClaudeAdapterLive", () => {
             uuid: "limit-rejected",
           } as unknown as SDKMessage);
         }
+
         if (index < 2) {
           harness.query.emit({
             ...rateLimitAssistant,
             uuid: `assistant-limit-${index}`,
           } as unknown as SDKMessage);
         }
+
         harness.query.emit({
           ...rateLimitResult,
           uuid: `result-limit-${index}`,
@@ -348,6 +375,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("emits thread token usage updates from Claude task progress", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -380,6 +408,7 @@ describe("ClaudeAdapterLive", () => {
       const usageEvent = runtimeEvents.find((event) => event.type === "thread.token-usage.updated");
       const progressEvent = runtimeEvents.find((event) => event.type === "task.progress");
       assert.equal(usageEvent?.type, "thread.token-usage.updated");
+
       if (usageEvent?.type === "thread.token-usage.updated") {
         assert.deepEqual(usageEvent.payload, {
           usage: {
@@ -390,7 +419,9 @@ describe("ClaudeAdapterLive", () => {
           },
         });
       }
+
       assert.equal(progressEvent?.type, "task.progress");
+
       if (usageEvent && progressEvent) {
         assert.notStrictEqual(usageEvent.eventId, progressEvent.eventId);
       }
@@ -404,6 +435,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("emits Claude context window on result completion usage snapshots", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -452,6 +484,7 @@ describe("ClaudeAdapterLive", () => {
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const usageEvent = runtimeEvents.find((event) => event.type === "thread.token-usage.updated");
       assert.equal(usageEvent?.type, "thread.token-usage.updated");
+
       if (usageEvent?.type === "thread.token-usage.updated") {
         assert.deepEqual(usageEvent.payload, {
           usage: {
@@ -475,6 +508,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("clamps oversized Claude usage to the reported context window", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -520,6 +554,7 @@ describe("ClaudeAdapterLive", () => {
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const usageEvent = runtimeEvents.find((event) => event.type === "thread.token-usage.updated");
       assert.equal(usageEvent?.type, "thread.token-usage.updated");
+
       if (usageEvent?.type === "thread.token-usage.updated") {
         assert.deepEqual(usageEvent.payload, {
           usage: {

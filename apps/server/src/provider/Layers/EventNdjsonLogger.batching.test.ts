@@ -21,21 +21,28 @@ describe("EventNdjsonLogger", () => {
   it.effect("closes empty and buffered stores when the owning fiber is interrupted", () =>
     Effect.gen(function* () {
       const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-interrupt-"));
+
       try {
         for (const count of [0, 1]) {
           const basePath = NodePath.join(tempDir, `provider-${count}.ndjson`);
           const ready = yield* Deferred.make<void>();
+
           const owner = yield* Effect.gen(function* () {
             const store = yield* makeEventNdjsonLogStore(basePath, { batchWindowMs: 10_000 });
             yield* Effect.addFinalizer(() => store.close());
+
             if (count > 0) {
               yield* store.logger("native").write({ id: "accepted" }, ThreadId.make("thread-1"));
             }
+
             yield* Deferred.succeed(ready, undefined);
+
             return yield* Effect.never;
           }).pipe(Effect.scoped, Effect.forkChild);
+
           yield* Deferred.await(ready);
           yield* Fiber.interrupt(owner);
+
           if (count > 0) {
             const line = NodeFS.readFileSync(ownedLogPath(basePath, "thread-1"), "utf8").trim();
             assert.equal(parseLogLine(line).payload, '{"id":"accepted"}');
@@ -122,9 +129,11 @@ describe("EventNdjsonLogger", () => {
       try {
         const store = yield* makeEventNdjsonLogStore(basePath, { batchWindowMs: 1_000 });
         const logger = store.logger("native");
+
         const interruptedWrite = yield* logger
           .write({ id: "possibly-interrupted" }, ThreadId.make("thread-interrupted"))
           .pipe(Effect.forkChild);
+
         yield* Effect.yieldNow;
         yield* Fiber.interrupt(interruptedWrite);
         yield* logger.write({ id: "accepted" }, ThreadId.make("thread-interrupted"));
@@ -153,7 +162,9 @@ describe("EventNdjsonLogger", () => {
           stream: "canonical",
           batchWindowMs: 0,
         });
+
         assert.notEqual(logger, undefined);
+
         if (!logger) {
           return;
         }
@@ -169,6 +180,7 @@ describe("EventNdjsonLogger", () => {
 
         const globalPath = ownedLogPath(basePath, "_global");
         assert.equal(NodeFS.existsSync(globalPath), true);
+
         const lines = NodeFS.readFileSync(globalPath, "utf8")
           .trim()
           .split("\n")
@@ -202,6 +214,7 @@ describe("EventNdjsonLogger", () => {
         bytes: 6,
       },
     ];
+
     const attributed: Array<PendingRecord> = [];
     let writes = 0;
 
@@ -210,6 +223,7 @@ describe("EventNdjsonLogger", () => {
         {
           write: async () => {
             writes += 1;
+
             if (writes === 2) throw new Error("simulated disk exhaustion");
           },
         },
@@ -229,12 +243,14 @@ describe("EventNdjsonLogger", () => {
       Effect.gen(function* () {
         const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-bound-"));
         const basePath = NodePath.join(tempDir, "events.log");
+
         try {
           const store = yield* makeEventNdjsonLogStore(basePath, {
             maxBufferedBytes: 160,
             maxBufferedRecords: 2,
             batchWindowMs: 1_000,
           });
+
           const native = store.logger("native");
           const canonical = store.logger("canonical");
           yield* Effect.all(
@@ -246,10 +262,12 @@ describe("EventNdjsonLogger", () => {
           yield* native.close();
           yield* store.flush;
           yield* store.close();
+
           const lines = NodeFS.readFileSync(ownedLogPath(basePath, "ordered"), "utf8")
             .trim()
             .split("\n")
             .map(parseLogLine);
+
           assert.deepEqual(
             lines.map((line) => line.payload),
             Array.from({ length: 20 }, (_, id) => encodeUnknownJson({ id })),
@@ -259,6 +277,7 @@ describe("EventNdjsonLogger", () => {
             {
               toJSON: () => {
                 serializedAfterClose = true;
+
                 return {};
               },
             },
@@ -280,12 +299,15 @@ describe("EventNdjsonLogger", () => {
 
       try {
         const attribution = yield* ResourceAttribution.make();
+
         const logger = yield* makeEventNdjsonLogger(basePath, {
           stream: "native",
           batchWindowMs: 0,
           attribution,
         });
+
         assert.notEqual(logger, undefined);
+
         if (!logger) {
           return;
         }

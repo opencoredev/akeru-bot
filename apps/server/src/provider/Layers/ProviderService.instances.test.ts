@@ -35,10 +35,12 @@ it.effect("ProviderServiceLive rejects new sessions for disabled providers", () 
   Effect.gen(function* () {
     const codex = makeFakeCodexAdapter();
     const claude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
+
     const registryBase = makeAdapterRegistryMock({
       [CODEX_DRIVER]: codex.adapter,
       [CLAUDE_AGENT_DRIVER]: claude.adapter,
     });
+
     const registry: ProviderAdapterRegistry.ProviderAdapterRegistry["Service"] = {
       ...registryBase,
       getInstanceInfo: (instanceId) =>
@@ -55,14 +57,18 @@ it.effect("ProviderServiceLive rejects new sessions for disabled providers", () 
             })
           : registryBase.getInstanceInfo(instanceId),
     };
+
     const providerAdapterLayer = Layer.succeed(
       ProviderAdapterRegistry.ProviderAdapterRegistry,
       registry,
     );
+
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+
     const providerLayer = makeProviderServiceLive().pipe(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
@@ -79,6 +85,7 @@ it.effect("ProviderServiceLive rejects new sessions for disabled providers", () 
     const failure = yield* Effect.flip(
       Effect.gen(function* () {
         const provider = yield* ProviderService.ProviderService;
+
         return yield* provider.startSession(asThreadId("thread-disabled"), {
           provider: ProviderDriverKind.make("claudeAgent"),
           providerInstanceId: claudeAgentInstanceId,
@@ -101,10 +108,12 @@ it.effect(
       const instanceId = ProviderInstanceId.make("codex_personal");
       const driverKind = CODEX_DRIVER;
       const codex = makeFakeCodexAdapter();
+
       const unsupported = () =>
         new ProviderUnsupportedError({
           provider: driverKind,
         });
+
       const instanceInfo = {
         instanceId,
         driverKind,
@@ -115,6 +124,7 @@ it.effect(
           continuationKey: "codex:/Users/example/.codex",
         },
       } as const;
+
       const registry: ProviderAdapterRegistry.ProviderAdapterRegistry["Service"] = {
         getByInstance: (requestedInstanceId) =>
           requestedInstanceId === instanceId
@@ -137,10 +147,12 @@ it.effect(
           PubSub.subscribe(pubsub),
         ),
       };
+
       const providerAdapterLayer = Layer.succeed(
         ProviderAdapterRegistry.ProviderAdapterRegistry,
         registry,
       );
+
       const serverSettingsLayer = ServerSettings.ServerSettingsService.layerTest({
         providers: {
           codex: {
@@ -148,12 +160,15 @@ it.effect(
           },
         },
       });
+
       const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
         Layer.provide(SqlitePersistenceMemory),
       );
+
       const directoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
       );
+
       const providerLayer = makeProviderServiceLive().pipe(
         Layer.provide(providerAdapterLayer),
         Layer.provide(directoryLayer),
@@ -169,6 +184,7 @@ it.effect(
 
       const session = yield* Effect.gen(function* () {
         const provider = yield* ProviderService.ProviderService;
+
         return yield* provider.startSession(asThreadId("thread-enabled-custom"), {
           provider: driverKind,
           providerInstanceId: instanceId,
@@ -187,10 +203,12 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
     const instanceId = ProviderInstanceId.make("codex_personal");
     const driverKind = ProviderDriverKind.make("codex");
     const codex = makeFakeCodexAdapter();
+
     const unsupported = () =>
       new ProviderUnsupportedError({
         provider: ProviderDriverKind.make("codex"),
       });
+
     const instanceInfo = {
       instanceId,
       driverKind,
@@ -201,6 +219,7 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
         continuationKey: "codex:/Users/example/.codex",
       },
     } as const;
+
     const registry: ProviderAdapterRegistry.ProviderAdapterRegistry["Service"] = {
       getByInstance: (requestedInstanceId) =>
         requestedInstanceId === instanceId
@@ -223,14 +242,18 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
         PubSub.subscribe(pubsub),
       ),
     };
+
     const providerAdapterLayer = Layer.succeed(
       ProviderAdapterRegistry.ProviderAdapterRegistry,
       registry,
     );
+
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+
     const providerLayer = makeProviderServiceLive().pipe(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
@@ -247,6 +270,7 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
     const failure = yield* Effect.flip(
       Effect.gen(function* () {
         const provider = yield* ProviderService.ProviderService;
+
         return yield* provider.startSession(asThreadId("thread-disabled-instance"), {
           provider: ProviderDriverKind.make("codex"),
           providerInstanceId: instanceId,
@@ -276,6 +300,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
 
       routing.codex.sendTurn.mockClear();
+
       const failure = yield* Effect.flip(
         provider.sendTurn({
           threadId: session.threadId,
@@ -342,6 +367,7 @@ validation.layer("ProviderServiceLive validation", (it) => {
       const provider = yield* ProviderService.ProviderService;
 
       validation.codex.startSession.mockClear();
+
       const failure = yield* Effect.flip(
         provider.startSession(asThreadId("thread-missing-instance-id"), {
           provider: ProviderDriverKind.make("codex"),
@@ -364,6 +390,7 @@ validation.layer("ProviderServiceLive validation", (it) => {
 
       validation.codex.startSession.mockClear();
       validation.claude.startSession.mockClear();
+
       const failure = yield* Effect.flip(
         provider.startSession(asThreadId("thread-instance-mismatch"), {
           provider: ProviderDriverKind.make("codex"),

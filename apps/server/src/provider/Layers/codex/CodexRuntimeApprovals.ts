@@ -28,6 +28,7 @@ export function createCodexRuntimeApprovals(deps: {
         ),
       ),
     );
+
   const settlePendingUserInputs = (answers: ProviderUserInputAnswers) =>
     Ref.get(deps.pendingUserInputsRef).pipe(
       Effect.flatMap((pendingUserInputs) =>
@@ -39,5 +40,6 @@ export function createCodexRuntimeApprovals(deps: {
         ),
       ),
     );
+
   return { settlePendingApprovals, settlePendingUserInputs };
 }

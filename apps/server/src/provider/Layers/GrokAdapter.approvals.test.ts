@@ -24,10 +24,13 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
   it.effect("responds to ACP approvals using provider-supplied option ids", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("grok-custom-approval-option-id");
+
       const tempDir = yield* Effect.promise(() =>
         NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "grok-acp-")),
       );
+
       const requestLogPath = NodePath.join(tempDir, "requests.ndjson");
+
       const wrapperPath = yield* Effect.promise(() =>
         makeMockGrokWrapper({
           T3_ACP_REQUEST_LOG_PATH: requestLogPath,
@@ -35,7 +38,9 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
           T3_ACP_ALLOW_ONCE_OPTION_ID: "agent-defined-approval-id",
         }),
       );
+
       const adapter = yield* makeTestAdapter(wrapperPath);
+
       const eventsFiber = yield* Stream.runForEach(adapter.streamEvents, (event) =>
         event.type === "request.opened"
           ? adapter.respondToRequest(
@@ -79,12 +84,16 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
   it.effect("handles xAI ask_user_question extension requests", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("grok-xai-ask-user-question");
+
       const wrapperPath = yield* Effect.promise(() =>
         makeMockGrokWrapper({ T3_ACP_EMIT_XAI_ASK_USER_QUESTION: "1" }),
       );
+
       const adapter = yield* makeTestAdapter(wrapperPath);
+
       const requested =
         yield* Deferred.make<Extract<ProviderRuntimeEvent, { type: "user-input.requested" }>>();
+
       const resolved =
         yield* Deferred.make<Extract<ProviderRuntimeEvent, { type: "user-input.resolved" }>>();
 
@@ -92,12 +101,15 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
         if (String(event.threadId) !== String(threadId)) {
           return Effect.void;
         }
+
         if (event.type === "user-input.requested") {
           return Deferred.succeed(requested, event).pipe(Effect.ignore);
         }
+
         if (event.type === "user-input.resolved") {
           return Deferred.succeed(resolved, event).pipe(Effect.ignore);
         }
+
         return Effect.void;
       }).pipe(Effect.forkChild);
 

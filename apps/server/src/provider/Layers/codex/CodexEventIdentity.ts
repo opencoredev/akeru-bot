@@ -12,8 +12,11 @@ export function providerRefsFromEvent(
   event: ProviderEvent,
 ): ProviderRuntimeEvent["providerRefs"] | undefined {
   const refs: Record<string, string> = {};
+
   if (event.turnId) refs.providerTurnId = event.turnId;
+
   if (event.itemId) refs.providerItemId = event.itemId;
+
   if (event.requestId) refs.providerRequestId = event.requestId;
 
   return Object.keys(refs).length > 0 ? (refs as ProviderRuntimeEvent["providerRefs"]) : undefined;
@@ -24,6 +27,7 @@ export function runtimeEventBase(
   canonicalThreadId: ThreadId,
 ): Omit<ProviderRuntimeEvent, "type" | "payload"> {
   const refs = providerRefsFromEvent(event);
+
   return {
     eventId: event.id,
     provider: event.provider,

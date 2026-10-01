@@ -45,28 +45,34 @@ export const handleSessionUpdate = ({
 }): Effect.Effect<void> =>
   Effect.gen(function* () {
     const parsed = parseSessionUpdateEvent(params);
+
     if (parsed.modeId) {
       yield* Ref.update(modeStateRef, (current) =>
         current === undefined ? current : updateModeState(current, parsed.modeId!),
       );
     }
+
     for (const event of parsed.events) {
       if (event._tag === "ToolCallUpdated") {
         yield* closeActiveAssistantSegment({
           queue,
           assistantSegmentRef,
         });
+
         const { merged, decision } = yield* Ref.modify(toolCallsRef, (current) => {
           const tracked = current.get(event.toolCall.toolCallId);
           const previous = tracked?.state;
           const nextToolCall = mergeToolCallState(previous, event.toolCall);
+
           const decision = decideToolCallUpdateEmission({
             previous,
             next: nextToolCall,
             lastEmittedDetailLength: tracked?.lastEmittedDetailLength,
             skippedSinceEmit: tracked?.skippedSinceEmit ?? 0,
           });
+
           const next = new Map(current);
+
           if (nextToolCall.status === "completed" || nextToolCall.status === "failed") {
             next.delete(nextToolCall.toolCallId);
           } else {
@@ -78,11 +84,14 @@ export const handleSessionUpdate = ({
               skippedSinceEmit: decision.skippedSinceEmit,
             });
           }
+
           return [{ merged: nextToolCall, decision }, next] as const;
         });
+
         if (!decision.emit) {
           continue;
         }
+
         yield* Queue.offer(queue, {
           _tag: "ToolCallUpdated",
           toolCall: merged,
@@ -90,25 +99,30 @@ export const handleSessionUpdate = ({
         });
         continue;
       }
+
       if (event._tag === "ContentDelta") {
         if (event.text.trim().length === 0) {
           const assistantSegmentState = yield* Ref.get(assistantSegmentRef);
+
           if (!assistantSegmentState.activeItemId) {
             continue;
           }
         }
+
         const itemId = yield* ensureActiveAssistantSegment({
           queue,
           assistantSegmentRef,
           sessionId: params.sessionId,
           assistantItemRuntimeId,
         });
+
         yield* Queue.offer(queue, {
           ...event,
           itemId,
         });
         continue;
       }
+
       yield* Queue.offer(queue, event);
     }
   });
@@ -118,9 +132,11 @@ export function updateModeState(
   nextModeId: string,
 ): AcpSessionModeState {
   const normalized = nextModeId.trim();
+
   if (!normalized) {
     return modeState;
   }
+
   return modeState.availableModes.some((mode) => mode.id === normalized)
     ? {
         ...modeState,
@@ -149,7 +165,9 @@ export const ensureActiveAssistantSegment = ({
       if (current.activeItemId) {
         return [{ itemId: current.activeItemId }, current] as const;
       }
+
       const itemId = assistantItemId(sessionId, assistantItemRuntimeId, current.nextSegmentIndex);
+
       return [
         {
           itemId,
@@ -183,6 +201,7 @@ export const closeActiveAssistantSegment = ({
     if (!current.activeItemId) {
       return [undefined, current] as const;
     }
+
     return [
       {
         _tag: "AssistantItemCompleted",

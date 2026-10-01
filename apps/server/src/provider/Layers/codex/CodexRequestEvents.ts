@@ -18,6 +18,7 @@ export function mapCodexRequestEvents(
     if (!event.message) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -36,10 +37,13 @@ export function mapCodexRequestEvents(
       const payload =
         readPayload(EffectCodexSchema.ServerRequest__ToolRequestUserInputParams, event.payload) ??
         readPayload(EffectCodexSchema.ToolRequestUserInputParams, event.payload);
+
       const questions = payload ? toUserInputQuestions(payload.questions) : undefined;
+
       if (!questions) {
         return [];
       }
+
       return [
         {
           ...runtimeEventBase(event, canonicalThreadId),
@@ -55,7 +59,9 @@ export function mapCodexRequestEvents(
       event.method === "mcpServer/elicitation/request"
         ? readPayload(EffectCodexSchema.McpServerElicitationRequestParams, event.payload)
         : undefined;
+
     const elicitationApproval = elicitation ? describeMcpElicitation(elicitation) : undefined;
+
     const detail = (() => {
       switch (event.method) {
         case "item/commandExecution/requestApproval": {
@@ -63,15 +69,19 @@ export function mapCodexRequestEvents(
             EffectCodexSchema.ServerRequest__CommandExecutionRequestApprovalParams,
             event.payload,
           );
+
           return payload?.command ?? payload?.reason ?? undefined;
         }
+
         case "item/fileChange/requestApproval": {
           const payload = readPayload(
             EffectCodexSchema.ServerRequest__FileChangeRequestApprovalParams,
             event.payload,
           );
+
           return payload?.reason ?? undefined;
         }
+
         case "mcpServer/elicitation/request":
           return elicitation?.message;
         case "applyPatchApproval": {
@@ -79,22 +89,28 @@ export function mapCodexRequestEvents(
             EffectCodexSchema.ServerRequest__ApplyPatchApprovalParams,
             event.payload,
           );
+
           return payload?.reason ?? undefined;
         }
+
         case "execCommandApproval": {
           const payload = readPayload(
             EffectCodexSchema.ServerRequest__ExecCommandApprovalParams,
             event.payload,
           );
+
           return payload?.reason ?? payload?.command.join(" ");
         }
+
         case "item/tool/call": {
           const payload = readPayload(
             EffectCodexSchema.ServerRequest__DynamicToolCallParams,
             event.payload,
           );
+
           return payload?.tool ?? undefined;
         }
+
         default:
           return undefined;
       }
@@ -120,10 +136,12 @@ export function mapCodexRequestEvents(
 
   if (event.method === "item/requestApproval/decision" && event.requestId) {
     const payload = readPayload(ApprovalDecisionPayload, event.payload);
+
     const requestType =
       event.requestKind !== undefined
         ? toRequestTypeFromKind(event.requestKind)
         : toRequestTypeFromMethod(event.method);
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -136,5 +154,6 @@ export function mapCodexRequestEvents(
       },
     ];
   }
+
   return undefined;
 }

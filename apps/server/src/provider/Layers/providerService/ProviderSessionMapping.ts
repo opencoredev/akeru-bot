@@ -42,6 +42,7 @@ export const decodeInputOrValidationError = <S extends Schema.Top>(input: {
   readonly payload: unknown;
 }) => {
   const decodeProviderRequestInput = Schema.decodeUnknownEffect(input.schema);
+
   return decodeProviderRequestInput(input.payload).pipe(
     Effect.mapError(
       (schemaError) =>
@@ -98,7 +99,9 @@ export function readPersistedModelSelection(
   if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
     return undefined;
   }
+
   const raw = "modelSelection" in runtimePayload ? runtimePayload.modelSelection : undefined;
+
   return isModelSelection(raw) ? raw : undefined;
 }
 
@@ -108,9 +111,12 @@ export function readPersistedCwd(
   if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
     return undefined;
   }
+
   const rawCwd = "cwd" in runtimePayload ? runtimePayload.cwd : undefined;
+
   if (typeof rawCwd !== "string") return undefined;
   const trimmed = rawCwd.trim();
+
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
@@ -124,6 +130,7 @@ export const dieOnMissingBindingInstanceId = (
   if (payload.providerInstanceId !== undefined) {
     return payload.providerInstanceId;
   }
+
   throw new Error(
     payload.provider
       ? `${operation}: provider instance id is required for provider '${payload.provider}'.`
@@ -143,10 +150,12 @@ export const correlateRuntimeEventWithInstance = (
       `ProviderService.streamEvents: provider instance '${source.instanceId}' is backed by driver '${source.provider}' but emitted driver '${event.provider}'.`,
     );
   }
+
   if (event.providerInstanceId !== undefined && event.providerInstanceId !== source.instanceId) {
     throw new Error(
       `ProviderService.streamEvents: provider instance '${source.instanceId}' emitted event for instance '${event.providerInstanceId}'.`,
     );
   }
+
   return { ...event, providerInstanceId: source.instanceId };
 };

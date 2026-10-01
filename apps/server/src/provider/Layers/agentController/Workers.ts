@@ -53,7 +53,9 @@ export function createWorkers(deps: {
       deps
         .runMastra("worker.orchestration", () => {
           const orchestration = deps.wired().workerOrchestration;
+
           if (!orchestration) throw new Error("Workers need the orchestration engine.");
+
           return run(orchestration);
         })
         .pipe(
@@ -61,22 +63,28 @@ export function createWorkers(deps: {
             (error) => new AkeruWorkerError({ reason: "start_failed", detail: error.detail }),
           ),
         );
+
     const workerRuntime = yield* makeAkeruWorkerRuntime({
       createChild: (spec) =>
         workerCall(async (orchestration) => {
           const snapshot = await orchestration.readSnapshot();
+
           const parentThread = snapshot.threads.find(
             (candidate) => candidate.id === spec.parentThreadId,
           );
+
           if (!parentThread) throw new Error(`Chat '${spec.parentThreadId}' was not found.`);
+
           const botId =
             deps.sessions.get(String(spec.parentThreadId))?.toolSession.botId ??
             parentThread.respondingBotId ??
             parentThread.botId ??
             null;
+
           const childThreadId = ThreadId.make(
             `${WORKER_THREAD_ID_PREFIX}${NodeCrypto.randomUUID()}`,
           );
+
           deps.workerTurnDefaults.set(String(childThreadId), parentThread.runtimeMode);
           // A worker is a direct copy of the responding bot, never a group chat,
           // even when the parent is one.
@@ -97,11 +105,13 @@ export function createWorkers(deps: {
             worktreePath: parentThread.worktreePath,
             createdAt: nowIso(),
           });
+
           return childThreadId;
         }),
       messageChild: (childThreadId, text) =>
         workerCall(async (orchestration) => {
           const runtimeMode = deps.workerTurnDefaults.get(String(childThreadId));
+
           if (!runtimeMode) throw new Error(`Worker chat '${childThreadId}' is not known.`);
           await orchestration.dispatch({
             type: "thread.turn.start",
@@ -141,15 +151,19 @@ export function createWorkers(deps: {
           Effect.ignoreCause({ log: true }),
         ),
     });
+
     const workersFor = (
       threadId: ThreadId,
       access: AkeruDelegationAccessGrant,
     ): NonNullable<AkeruToolSession["workers"]> => {
       const parent = () => {
         const turnId = deps.sessions.get(String(threadId))?.activeTurn?.turnId;
+
         if (!turnId) throw new Error("Workers require an active turn.");
+
         return { threadId, turnId, depth: workerRuntime.depthForThread(threadId), access };
       };
+
       return {
         depth: workerRuntime.depthForThread(threadId),
         spawn: (request) => deps.runPromise(workerRuntime.spawn(parent(), request)),
@@ -158,6 +172,7 @@ export function createWorkers(deps: {
         stop: (request) => deps.runPromise(workerRuntime.stop({ threadId }, request)),
       };
     };
+
     return { workerCall, workerRuntime, workersFor };
   });
 }

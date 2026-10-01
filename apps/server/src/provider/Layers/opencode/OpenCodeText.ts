@@ -10,12 +10,15 @@ import {
 
 export function forgetOpenCodeTextPart(context: OpenCodeSessionContext, partID: string): void {
   const part = context.textPartById.get(partID);
+
   if (!part) {
     return;
   }
+
   context.textPartById.delete(partID);
   const parts = context.textPartsByMessageId.get(part.messageID);
   parts?.delete(partID);
+
   if (parts?.size === 0) {
     context.textPartsByMessageId.delete(part.messageID);
   }
@@ -27,11 +30,14 @@ export function retainOpenCodeTextPart(
 ): OpenCodeTextPartState {
   const previous = context.textPartById.get(part.id);
   const previousInMessage = previous?.messageID === part.messageID ? previous : undefined;
+
   if (previous && !previousInMessage) {
     forgetOpenCodeTextPart(context, part.id);
   }
+
   const parts =
     context.textPartsByMessageId.get(part.messageID) ?? new Map<string, OpenCodeTextPartState>();
+
   const state: OpenCodeTextPartState = {
     id: part.id,
     messageID: part.messageID,
@@ -41,9 +47,11 @@ export function retainOpenCodeTextPart(
     emittedText: previousInMessage?.emittedText,
     completed: previousInMessage?.completed ?? false,
   };
+
   parts.set(part.id, state);
   context.textPartsByMessageId.set(part.messageID, parts);
   context.textPartById.set(part.id, state);
+
   return state;
 }
 
@@ -52,12 +60,15 @@ export function forgetOpenCodeTextMessage(
   messageID: string,
 ): void {
   const parts = context.textPartsByMessageId.get(messageID);
+
   if (!parts) {
     return;
   }
+
   for (const partId of parts.keys()) {
     context.textPartById.delete(partId);
   }
+
   context.textPartsByMessageId.delete(messageID);
 }
 
@@ -69,9 +80,11 @@ export function resolveTextStreamKind(
 
 export function commonPrefixLength(left: string, right: string): number {
   let index = 0;
+
   while (index < left.length && index < right.length && left[index] === right[index]) {
     index += 1;
   }
+
   return index;
 }
 
@@ -82,6 +95,7 @@ export function resolveLatestAssistantText(
   if (previousText && previousText.length > nextText.length && previousText.startsWith(nextText)) {
     return previousText;
   }
+
   return nextText;
 }
 
@@ -93,6 +107,7 @@ export function mergeOpenCodeAssistantText(
   readonly deltaToEmit: string;
 } {
   const latestText = resolveLatestAssistantText(previousText, nextText);
+
   return {
     latestText,
     deltaToEmit: latestText.slice(commonPrefixLength(previousText ?? "", latestText)),
@@ -125,9 +140,11 @@ export function messageRoleForPart(
   part: Pick<Part, "messageID" | "type">,
 ): "assistant" | "user" | undefined {
   const known = context.messageRoleById.get(part.messageID);
+
   if (known) {
     return known;
   }
+
   return part.type === "tool" ? "assistant" : undefined;
 }
 

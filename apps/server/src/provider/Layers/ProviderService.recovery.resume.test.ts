@@ -33,19 +33,24 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const tempDir = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "t3-provider-service-start-"),
       );
+
       const dbPath = NodePath.join(tempDir, "orchestration.sqlite");
       const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+
       const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
         Layer.provide(persistenceLayer),
       );
 
       const firstClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
+
       const firstRegistry = makeAdapterRegistryMock({
         [ProviderDriverKind.make("claudeAgent")]: firstClaude.adapter,
       });
+
       const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
       );
+
       const firstProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
           Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, firstRegistry),
@@ -63,6 +68,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       const initial = yield* Effect.gen(function* () {
         const provider = yield* ProviderService.ProviderService;
+
         return yield* provider.startSession(asThreadId("thread-claude-start"), {
           provider: ProviderDriverKind.make("claudeAgent"),
           providerInstanceId: claudeAgentInstanceId,
@@ -78,12 +84,15 @@ routing.layer("ProviderServiceLive routing", (it) => {
       }).pipe(Effect.provide(firstProviderLayer));
 
       const secondClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
+
       const secondRegistry = makeAdapterRegistryMock({
         [ProviderDriverKind.make("claudeAgent")]: secondClaude.adapter,
       });
+
       const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
       );
+
       const secondProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
           Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, secondRegistry),
@@ -115,6 +124,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(secondClaude.startSession.mock.calls.length, 1);
       const resumedStartInput = secondClaude.startSession.mock.calls[0]?.[0];
       assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+
       if (resumedStartInput && typeof resumedStartInput === "object") {
         const startPayload = resumedStartInput as {
           provider?: string;
@@ -122,6 +132,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
           resumeCursor?: unknown;
           threadId?: string;
         };
+
         assert.equal(startPayload.provider, "claudeAgent");
         assert.equal(startPayload.cwd, "/tmp/project-claude-start");
         assert.deepEqual(startPayload.resumeCursor, initial.resumeCursor);
@@ -141,19 +152,24 @@ routing.layer("ProviderServiceLive routing", (it) => {
         const tempDir = NodeFS.mkdtempSync(
           NodePath.join(NodeOS.tmpdir(), "t3-provider-service-cwd-"),
         );
+
         const dbPath = NodePath.join(tempDir, "orchestration.sqlite");
         const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+
         const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
           Layer.provide(persistenceLayer),
         );
 
         const firstClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
+
         const firstRegistry = makeAdapterRegistryMock({
           [ProviderDriverKind.make("claudeAgent")]: firstClaude.adapter,
         });
+
         const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
           Layer.provide(runtimeRepositoryLayer),
         );
+
         const firstProviderLayer = makeProviderServiceLive().pipe(
           Layer.provide(
             Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, firstRegistry),
@@ -171,6 +187,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
         const initial = yield* Effect.gen(function* () {
           const provider = yield* ProviderService.ProviderService;
+
           return yield* provider.startSession(asThreadId("thread-claude-cwd"), {
             provider: ProviderDriverKind.make("claudeAgent"),
             providerInstanceId: claudeAgentInstanceId,
@@ -181,12 +198,15 @@ routing.layer("ProviderServiceLive routing", (it) => {
         }).pipe(Effect.provide(firstProviderLayer));
 
         const secondClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
+
         const secondRegistry = makeAdapterRegistryMock({
           [ProviderDriverKind.make("claudeAgent")]: secondClaude.adapter,
         });
+
         const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
           Layer.provide(runtimeRepositoryLayer),
         );
+
         const secondProviderLayer = makeProviderServiceLive().pipe(
           Layer.provide(
             Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, secondRegistry),
@@ -217,6 +237,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         assert.equal(secondClaude.startSession.mock.calls.length, 1);
         const resumedStartInput = secondClaude.startSession.mock.calls[0]?.[0];
         assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+
         if (resumedStartInput && typeof resumedStartInput === "object") {
           const startPayload = resumedStartInput as {
             provider?: string;
@@ -224,6 +245,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
             resumeCursor?: unknown;
             threadId?: string;
           };
+
           assert.equal(startPayload.provider, "claudeAgent");
           assert.equal(startPayload.cwd, "/tmp/project-claude-cwd");
           assert.deepEqual(startPayload.resumeCursor, initial.resumeCursor);

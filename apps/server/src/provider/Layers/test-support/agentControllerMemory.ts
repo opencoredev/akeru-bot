@@ -34,7 +34,9 @@ export function completeLegacyTurnWithMemoryReview(
   return Effect.promise(async () => {
     if (input.persistentMemoryContext?.includes("<automatic-memory-review>")) {
       const handler = McpMemoryToolSession.readMcpMemoryToolSession(input.threadId);
+
       if (!handler) throw new Error("Foreground memory review handler was not registered.");
+
       for (let call = 0; call < successfulMemoryCalls; call += 1) {
         await handler({
           threadId: String(input.threadId),
@@ -45,6 +47,7 @@ export function completeLegacyTurnWithMemoryReview(
         });
       }
     }
+
     return { threadId: input.threadId, turnId };
   });
 }
@@ -85,6 +88,7 @@ export function privatePolicyRevisions(
       sensitive: false,
       affectedBotIds: [botId],
     }) as AkeruMemoryRevision;
+
   return [
     revision("bot", "Bot-private entity fact."),
     revision("bot-user", "Bot-about-you entity fact."),
@@ -94,6 +98,7 @@ export function privatePolicyRevisions(
 
 export function entityMemorySection(context: unknown): string {
   const match = /<entity-memory>[\s\S]*?<\/entity-memory>/u.exec(String(context ?? ""));
+
   return match?.[0] ?? "";
 }
 
@@ -103,13 +108,17 @@ export function makeMemoryOnlyCredentialOptions() {
     readonly providerInstanceId: ProviderInstanceId;
     readonly capabilities?: ReadonlySet<McpCapability>;
   }> = [];
+
   const revoked: Array<ThreadId> = [];
+
   return {
     requests,
     revoked,
     issueMcpCredential: (request: (typeof requests)[number]) => {
       requests.push(request);
+
       if (!request.capabilities?.has("memory")) return Effect.succeed(undefined);
+
       return Effect.succeed({
         config: {
           environmentId: EnvironmentId.make("environment-test"),
@@ -131,11 +140,14 @@ export function makeMemoryOnlyCredentialOptions() {
 export function makeUsageLedger() {
   const reserve = vi.fn<BotUsageLedgerShape["reserve"]>(() => Effect.succeed({} as never));
   const settle = vi.fn<BotUsageLedgerShape["settle"]>(() => Effect.succeed({} as never));
+
   const recordMeasurement = vi.fn<BotUsageLedgerShape["recordMeasurement"]>(() =>
     Effect.succeed({} as never),
   );
+
   const recordStart = vi.fn<BotUsageLedgerShape["recordStart"]>(() => Effect.succeed({} as never));
   const unused = () => Effect.die("unused");
+
   return {
     reserve,
     settle,

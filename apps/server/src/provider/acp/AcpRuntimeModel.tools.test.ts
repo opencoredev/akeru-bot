@@ -20,6 +20,7 @@ import { toolCall } from "./test-support/acpModel.ts";
 effectIt.effect("finishes session replay at the configured idle deadline", () =>
   Effect.gen(function* () {
     yield* TestClock.setTime(0);
+
     const gateRef = yield* Ref.make<Option.Option<SessionLoadGate>>(
       Option.some({
         active: true,
@@ -28,6 +29,7 @@ effectIt.effect("finishes session replay at the configured idle deadline", () =>
         initializeResult: { protocolVersion: 1 },
       }),
     );
+
     const result = yield* waitForSessionLoadReplayIdle({ gateRef }).pipe(Effect.forkChild);
 
     yield* TestClock.adjust(Duration.millis(101));
@@ -133,6 +135,7 @@ describe("AcpRuntimeModel", () => {
     expect(updated.events[0]?._tag).toBe("ToolCallUpdated");
     const createdEvent = created.events[0];
     const updatedEvent = updated.events[0];
+
     if (createdEvent?._tag === "ToolCallUpdated" && updatedEvent?._tag === "ToolCallUpdated") {
       expect(mergeToolCallState(createdEvent.toolCall, updatedEvent.toolCall)).toMatchObject({
         toolCallId: "tool-1",
@@ -217,6 +220,7 @@ describe("AcpRuntimeModel", () => {
     const hugeText = Array.from({ length: 2_000 }, (_, i) => `line ${i}: ${"x".repeat(50)}`).join(
       "\n",
     );
+
     expect(hugeText.length).toBeGreaterThan(60_000);
 
     const result = parseSessionUpdateEvent({
@@ -234,6 +238,7 @@ describe("AcpRuntimeModel", () => {
 
     expect(result.events).toHaveLength(1);
     const event = result.events[0];
+
     if (event?._tag !== "ToolCallUpdated") {
       throw new Error("expected a ToolCallUpdated event");
     }
@@ -254,6 +259,7 @@ describe("AcpRuntimeModel", () => {
         };
       }
     ).update;
+
     expect(rawUpdate.content[0]?.content.text.length).toBeLessThan(8_100);
     expect(JSON.stringify(event).length).toBeLessThan(hugeText.length);
   });
@@ -286,30 +292,37 @@ describe("AcpRuntimeModel", () => {
           content: [{ type: "content", content: { type: "text", text: cumulativeBuffer } }],
         },
       } satisfies EffectAcpSchema.SessionNotification;
+
       notificationBytes += JSON.stringify(notification).length;
 
       const { events } = parseSessionUpdateEvent(notification);
 
       const event = events[0];
+
       if (event?._tag !== "ToolCallUpdated") {
         continue;
       }
 
       const merged = mergeToolCallState(previous, event.toolCall);
+
       const decision = decideToolCallUpdateEmission({
         previous,
         next: merged,
         lastEmittedDetailLength,
         skippedSinceEmit,
       });
+
       previous = merged;
       skippedSinceEmit = decision.skippedSinceEmit;
+
       if (decision.emit) {
         emittedCount += 1;
+
         const eventBytes = JSON.stringify({
           toolCall: merged,
           rawPayload: event.rawPayload,
         }).length;
+
         emittedBytes += eventBytes;
         largestEmittedEventBytes = Math.max(largestEmittedEventBytes, eventBytes);
         lastEmittedDetailLength = merged.detail?.length;
@@ -337,6 +350,7 @@ describe("AcpRuntimeModel", () => {
   it("keeps non-text tool call content entries in order when bounding oversized text", () => {
     const hugePrefix = "x".repeat(25_000);
     const hugeTail = "y".repeat(25_000);
+
     const { events } = parseSessionUpdateEvent({
       sessionId: "session-1",
       update: {
@@ -355,9 +369,11 @@ describe("AcpRuntimeModel", () => {
     } satisfies EffectAcpSchema.SessionNotification);
 
     const event = events[0];
+
     if (event?._tag !== "ToolCallUpdated") {
       throw new Error("expected a ToolCallUpdated event");
     }
+
     const content = event.toolCall.data.content as ReadonlyArray<EffectAcpSchema.ToolCallContent>;
     expect(content).toHaveLength(3);
     expect(content[0]).toEqual({
@@ -367,9 +383,11 @@ describe("AcpRuntimeModel", () => {
       newText: "after",
     });
     const lastEntry = content[1];
+
     if (lastEntry?.type !== "content" || lastEntry.content.type !== "text") {
       throw new Error("expected a bounded text entry");
     }
+
     expect(lastEntry.content.text.length).toBeLessThan(8_100);
     expect(lastEntry.content.text.endsWith(hugeTail.slice(-100))).toBe(true);
     expect(content[2]).toEqual({
@@ -429,6 +447,7 @@ describe("AcpRuntimeModel", () => {
         lastEmittedDetailLength: 1,
         skippedSinceEmit: 0,
       });
+
       expect(decision).toEqual({ emit: true, skippedSinceEmit: 0 });
     });
   });
@@ -446,17 +465,21 @@ describe("AcpRuntimeModel", () => {
         // Grows by 1 char per update — well under the 256-char growth threshold, so this
         // exercises the coalesce-count fallback rather than the growth-based trigger.
         const next = toolCall("x".repeat(i), "inProgress");
+
         const decision = decideToolCallUpdateEmission({
           previous,
           next,
           lastEmittedDetailLength,
           skippedSinceEmit,
         });
+
         emissions.push(decision.emit);
         skippedSinceEmit = decision.skippedSinceEmit;
+
         if (decision.emit) {
           lastEmittedDetailLength = next.detail?.length;
         }
+
         previous = next;
       }
 
@@ -477,12 +500,14 @@ describe("AcpRuntimeModel", () => {
 
       for (const detail of ["frame-b", "frame-c"]) {
         const next = mergeToolCallState(previous, toolCall(detail, "inProgress"));
+
         const decision = decideToolCallUpdateEmission({
           previous,
           next,
           lastEmittedDetailLength,
           skippedSinceEmit,
         });
+
         expect(decision.emit).toBe(false);
         skippedSinceEmit = decision.skippedSinceEmit;
         previous = next;

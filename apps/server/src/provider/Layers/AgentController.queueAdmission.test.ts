@@ -36,6 +36,7 @@ describe("AgentControllerLive", () => {
   it.effect("serializes queued turns while dispatch admission is pending", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -49,15 +50,18 @@ describe("AgentControllerLive", () => {
         });
 
         bridge.blockNextDispatchAdmission();
+
         const firstFiber = yield* controller
           .sendTurn({ threadId: codexThreadId, input: "First message" })
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Effect.promise(bridge.waitForNextDispatchAdmission);
 
         const second = yield* controller.sendTurn({
           threadId: codexThreadId,
           input: "Queued while admission is pending",
         });
+
         expect(mastra.sendMessage).not.toHaveBeenCalled();
 
         const secondStarted = yield* controller.streamEvents.pipe(
@@ -65,6 +69,7 @@ describe("AgentControllerLive", () => {
           Stream.runHead,
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         bridge.releaseNextDispatchAdmission();
         yield* Fiber.join(firstFiber);
@@ -86,6 +91,7 @@ describe("AgentControllerLive", () => {
   it.effect("ignores a stale Mastra send failure after the next turn starts", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -98,17 +104,21 @@ describe("AgentControllerLive", () => {
           runtimeMode: "full-access",
         });
         const events: ProviderRuntimeEvent[] = [];
+
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
 
         yield* controller.sendTurn({ threadId: codexThreadId, input: "First message" });
+
         const second = yield* controller.sendTurn({
           threadId: codexThreadId,
           input: "Queued follow-up",
         });
+
         mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
         yield* Effect.yieldNow;
         expect(mastra.sendMessage).toHaveBeenCalledTimes(2);
@@ -133,6 +143,7 @@ describe("AgentControllerLive", () => {
   it.effect("publishes the final text when Mastra rewrites a message snapshot", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -151,6 +162,7 @@ describe("AgentControllerLive", () => {
           Stream.runCollect,
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Say hello." });
         mastra.emit({
@@ -182,6 +194,7 @@ describe("AgentControllerLive", () => {
   it.effect("publishes a same-id rewrite after a tool boundary", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -200,6 +213,7 @@ describe("AgentControllerLive", () => {
           Stream.runCollect,
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Check the project." });
         mastra.emit({
@@ -245,19 +259,25 @@ describe("AgentControllerLive", () => {
 
       return Effect.gen(function* () {
         let markReadStarted!: () => void;
+
         const readStarted = new Promise<void>((resolve) => {
           markReadStarted = resolve;
         });
+
         let releaseRead!: (bytes: Uint8Array) => void;
+
         const blockedRead = new Promise<Uint8Array>((resolve) => {
           releaseRead = resolve;
         });
+
         const layer = makeLayer(bridge.service, mastra.factory, undefined, undefined, undefined, {
           readAttachment: () => {
             markReadStarted();
+
             return blockedRead;
           },
         });
+
         const program = Effect.gen(function* () {
           const controller = yield* AgentController;
           yield* resolveCodex(controller);
@@ -269,6 +289,7 @@ describe("AgentControllerLive", () => {
             modelSelection: codexSelection,
             runtimeMode: "full-access",
           });
+
           const sending = yield* controller
             .sendTurn({
               threadId: codexThreadId,
@@ -284,6 +305,7 @@ describe("AgentControllerLive", () => {
               ],
             })
             .pipe(Effect.forkChild({ startImmediately: true }));
+
           yield* Effect.promise(() => readStarted);
           expect(yield* controller.listSessions()).toHaveLength(1);
 
@@ -301,12 +323,14 @@ describe("AgentControllerLive", () => {
           } else {
             yield* controller.stopSession({ threadId: codexThreadId });
           }
+
           releaseRead(new Uint8Array([0, 1, 2, 3]));
 
           const exit = yield* Fiber.await(sending);
           assert.isTrue(Exit.isFailure(exit));
           expect(mastra.sendMessage).not.toHaveBeenCalled();
         });
+
         yield* program.pipe(Effect.provide(layer));
       }).pipe(Effect.orDie);
     });
@@ -318,6 +342,7 @@ describe("AgentControllerLive", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const dispatched: Array<{ readonly type: string; readonly activity?: unknown }> = [];
+
     return provideController(
       Effect.gen(function* () {
         // No startSession: the durable queue can drain after a restart before
@@ -339,10 +364,12 @@ describe("AgentControllerLive", () => {
         assert.equal(dispatched.length, 1);
         const command = dispatched[0]!;
         assert.equal(command.type, "thread.activity.append");
+
         const activity = command.activity as {
           readonly kind: string;
           readonly turnId: string;
         };
+
         assert.equal(activity.kind, "memory.observation.dropped");
         assert.equal(activity.turnId, "turn-durable");
       }),
@@ -358,6 +385,7 @@ describe("AgentControllerLive", () => {
           dispatch: (command) =>
             Effect.sync(() => {
               dispatched.push(command);
+
               return { sequence: 1 };
             }),
           streamDomainEvents: Stream.empty,
@@ -373,6 +401,7 @@ describe("AgentControllerLive", () => {
   it.effect("keeps replies and status beats as separate completed messages", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -387,10 +416,12 @@ describe("AgentControllerLive", () => {
         });
 
         const events: ProviderRuntimeEvent[] = [];
+
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* controller.sendTurn({
           threadId: codexThreadId,
@@ -444,10 +475,12 @@ describe("AgentControllerLive", () => {
   it.effect("recreates a Mastra session after sendMessage fails", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
+
         const startInput = {
           threadId: codexThreadId,
           provider: ProviderDriverKind.make("codex"),
@@ -456,6 +489,7 @@ describe("AgentControllerLive", () => {
           modelSelection: codexSelection,
           runtimeMode: "full-access" as const,
         };
+
         yield* controller.startSession(codexThreadId, startInput);
 
         const failedTurn = yield* controller.streamEvents.pipe(
@@ -465,6 +499,7 @@ describe("AgentControllerLive", () => {
           Stream.runHead,
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* controller.sendTurn({ threadId: codexThreadId, input: "First turn." });
         yield* Effect.yieldNow;
         mastra.failSend(new Error("Mastra session is poisoned"));
@@ -500,10 +535,12 @@ describe("AgentControllerLive", () => {
     const usageLedger = makeUsageLedger();
     usageLedger.reserve.mockImplementation(() => Effect.die("usage reserve failed"));
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-handoff-inbox-"));
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
+
         const sessionInput = {
           threadId: codexThreadId,
           provider: ProviderDriverKind.make("codex"),
@@ -512,6 +549,7 @@ describe("AgentControllerLive", () => {
           botSandboxBrowserSharing: "shared" as const,
           runtimeMode: "full-access" as const,
         };
+
         yield* controller.startSession(codexThreadId, {
           ...sessionInput,
           botId: BotId.make("bot-one"),

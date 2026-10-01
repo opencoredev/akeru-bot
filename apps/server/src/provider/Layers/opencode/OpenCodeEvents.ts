@@ -95,12 +95,15 @@ export function createOpenCodeEvents(deps: {
     raw: unknown,
   ) {
     const text = part.text;
+
     if (text === undefined) {
       return;
     }
+
     const { latestText, deltaToEmit } = mergeOpenCodeAssistantText(part.emittedText, text);
     part.emittedText = latestText;
     part.text = latestText;
+
     if (deltaToEmit.length > 0) {
       yield* deps.emit({
         ...(yield* deps.buildEventBase({
@@ -141,12 +144,14 @@ export function createOpenCodeEvents(deps: {
       });
     }
   });
+
   const handleSubscribedEvent = Effect.fn("handleSubscribedEvent")(function* (
     context: OpenCodeSessionContext,
     event: OpenCodeSubscribedEvent,
   ) {
     if (event.type === "session.created" || event.type === "session.updated") {
       const session = event.properties.info;
+
       if (session.parentID && context.relatedSessionIds.has(session.parentID)) {
         deps.addRelatedOpenCodeSession(context, session.id);
       }
@@ -157,6 +162,7 @@ export function createOpenCodeEvents(deps: {
     const payloadSessionId = openCodeEventSessionId(event);
     const isParentEvent = payloadSessionId === context.openCodeSessionId;
     let isKnownPendingTerminalEvent = false;
+
     if (
       payloadSessionId !== undefined &&
       !context.relatedSessionIds.has(payloadSessionId) &&
@@ -173,20 +179,25 @@ export function createOpenCodeEvents(deps: {
           event.type === "permission.asked" || event.type === "question.asked"
             ? event.properties.id
             : event.properties.requestID;
+
         isKnownPendingTerminalEvent =
           event.type !== "permission.asked" &&
           event.type !== "question.asked" &&
           (context.pendingPermissions.has(requestId) || context.pendingQuestions.has(requestId));
+
         if (!isKnownPendingTerminalEvent) {
           yield* deps.scheduleRequestRelationRetry(context, event);
+
           return;
         }
       }
     }
+
     const isChildRequestEvent =
       payloadSessionId !== undefined &&
       isOpenCodeChildRequestEvent(event) &&
       (context.relatedSessionIds.has(payloadSessionId) || isKnownPendingTerminalEvent);
+
     if (!isParentEvent && !isChildRequestEvent) {
       return;
     }
@@ -207,6 +218,7 @@ export function createOpenCodeEvents(deps: {
     switch (event.type) {
       case "session.updated": {
         const title = openCodeEventSessionTitle(event);
+
         if (title) {
           yield* deps.emit({
             ...(yield* deps.buildEventBase({
@@ -222,19 +234,23 @@ export function createOpenCodeEvents(deps: {
             },
           });
         }
+
         break;
       }
 
       case "message.updated": {
         context.messageRoleById.set(event.properties.info.id, event.properties.info.role);
+
         if (event.properties.info.role === "assistant") {
           const parts = context.textPartsByMessageId.get(event.properties.info.id);
+
           if (parts) {
             for (const part of parts.values()) {
               yield* emitAssistantTextDelta(context, part, turnId, event);
             }
           }
         }
+
         break;
       }
 
@@ -251,23 +267,31 @@ export function createOpenCodeEvents(deps: {
 
       case "message.part.delta": {
         const existingPart = context.textPartById.get(event.properties.partID);
+
         if (!existingPart) {
           break;
         }
+
         const role = messageRoleForPart(context, existingPart);
+
         if (role !== "assistant") {
           break;
         }
+
         const streamKind = resolveTextStreamKind(existingPart);
         const delta = event.properties.delta;
+
         if (delta.length === 0) {
           break;
         }
+
         const previousText = existingPart.emittedText ?? existingPart.text ?? "";
         const { nextText, deltaToEmit } = appendOpenCodeAssistantTextDelta(previousText, delta);
+
         if (deltaToEmit.length === 0) {
           break;
         }
+
         existingPart.emittedText = nextText;
         existingPart.text = nextText;
         yield* deps.emit({
@@ -292,6 +316,7 @@ export function createOpenCodeEvents(deps: {
 
         if (part.type === "text" || part.type === "reasoning") {
           const state = retainOpenCodeTextPart(context, part);
+
           if (messageRole === "assistant") {
             yield* emitAssistantTextDelta(context, state, turnId, event);
           }
@@ -299,9 +324,12 @@ export function createOpenCodeEvents(deps: {
 
         if (part.type === "tool") {
           const itemType = toToolLifecycleItemType(part.tool);
+
           const title =
             part.state.status === "running" ? (part.state.title ?? part.tool) : part.tool;
+
           const detail = detailFromToolPart(part);
+
           const payload = {
             itemType,
             ...(part.state.status === "error"
@@ -316,6 +344,7 @@ export function createOpenCodeEvents(deps: {
               state: part.state,
             },
           };
+
           const runtimeEvent: ProviderRuntimeEvent = {
             ...(yield* deps.buildEventBase({
               threadId: context.session.threadId,
@@ -332,8 +361,10 @@ export function createOpenCodeEvents(deps: {
                   : "item.updated",
             payload,
           };
+
           yield* deps.emit(runtimeEvent);
         }
+
         break;
       }
 
@@ -385,6 +416,7 @@ export function createOpenCodeEvents(deps: {
             },
           });
         }
+
         break;
       }
 
@@ -400,6 +432,7 @@ export function createOpenCodeEvents(deps: {
           },
           { clearActiveTurnId: true },
         );
+
         if (activeTurnId) {
           yield* deps.emit({
             ...(yield* deps.buildEventBase({
@@ -414,6 +447,7 @@ export function createOpenCodeEvents(deps: {
             },
           });
         }
+
         yield* deps.emit({
           ...(yield* deps.buildEventBase({
             threadId: context.session.threadId,
@@ -433,6 +467,7 @@ export function createOpenCodeEvents(deps: {
         break;
     }
   });
+
   const startEventPump = Effect.fn("startEventPump")(function* (context: OpenCodeSessionContext) {
     // One AbortController per session scope. The finalizer fires when
     // the scope closes (explicit stop, unexpected exit, or layer
@@ -471,6 +506,7 @@ export function createOpenCodeEvents(deps: {
           if (eventsAbortController.signal.aborted || (yield* Ref.get(context.stopped))) {
             return;
           }
+
           if (Exit.isFailure(exit)) {
             yield* deps.emitUnexpectedExit(
               context,
@@ -489,6 +525,7 @@ export function createOpenCodeEvents(deps: {
             if (yield* Ref.get(context.stopped)) {
               return;
             }
+
             yield* deps.emitUnexpectedExit(
               context,
               `OpenCode server exited unexpectedly (${code}).`,
@@ -499,5 +536,6 @@ export function createOpenCodeEvents(deps: {
       );
     }
   });
+
   return { emitAssistantTextDelta, handleSubscribedEvent, startEventPump };
 }

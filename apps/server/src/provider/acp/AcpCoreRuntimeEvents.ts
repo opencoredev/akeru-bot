@@ -164,6 +164,7 @@ export function makeAcpToolCallEvent(input: {
   readonly rawPayload: unknown;
 }): ProviderRuntimeEvent {
   const runtimeStatus = runtimeItemStatusFromAcpToolStatus(input.toolCall.status);
+
   return {
     type:
       input.toolCall.status === "completed" || input.toolCall.status === "failed"

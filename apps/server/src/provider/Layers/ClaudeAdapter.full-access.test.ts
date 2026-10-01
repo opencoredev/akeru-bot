@@ -22,6 +22,7 @@ describe("ClaudeAdapterLive", () => {
     "applies the $expectedBase base permission mode on default turns ($runtimeMode)",
     ({ runtimeMode, expectedBase }) => {
       const harness = makeHarness();
+
       return Effect.gen(function* () {
         const adapter = yield* ClaudeAdapter;
 
@@ -57,18 +58,22 @@ describe("ClaudeAdapterLive", () => {
         turnId?: string;
       };
     }> = [];
+
     const nativeThreadIds: Array<string | null> = [];
+
     const harness = makeHarness({
       nativeEventLogger: {
         filePath: "memory://claude-native-events",
         write: (event, threadId) => {
           nativeEvents.push(event as (typeof nativeEvents)[number]);
           nativeThreadIds.push(threadId ?? null);
+
           return Effect.void;
         },
         close: () => Effect.void,
       },
     });
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -77,6 +82,7 @@ describe("ClaudeAdapterLive", () => {
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       const turn = yield* adapter.sendTurn({
         threadId: session.threadId,
         input: "hello",

@@ -81,21 +81,28 @@ export function createProviderSessionRecovery(deps: {
       "provider.instance_id": bindingInstanceId,
       "provider.thread_id": input.binding.threadId,
     });
+
     return yield* Effect.gen(function* () {
       const adapter = yield* deps.registry.getByInstance(bindingInstanceId);
+
       const hasResumeCursor =
         input.binding.resumeCursor !== null && input.binding.resumeCursor !== undefined;
+
       const hasActiveSession = yield* adapter.hasSession(input.binding.threadId);
+
       if (hasActiveSession) {
         const activeSessions = yield* adapter.listSessions();
+
         const existing = activeSessions.find(
           (session) => session.threadId === input.binding.threadId,
         );
+
         if (existing) {
           yield* deps.upsertSessionBinding(
             { ...existing, providerInstanceId: bindingInstanceId },
             input.binding.threadId,
           );
+
           return { adapter, session: existing } as const;
         }
       }
@@ -111,6 +118,7 @@ export function createProviderSessionRecovery(deps: {
       const persistedModelSelection = readPersistedModelSelection(input.binding.runtimePayload);
 
       yield* deps.prepareMcpSession(input.binding.threadId, bindingInstanceId);
+
       const resumed = yield* adapter
         .startSession({
           threadId: input.binding.threadId,
@@ -122,8 +130,10 @@ export function createProviderSessionRecovery(deps: {
           runtimeMode: input.binding.runtimeMode ?? "full-access",
         })
         .pipe(Effect.onError(() => deps.clearMcpSession(input.binding.threadId)));
+
       if (resumed.provider !== adapter.provider) {
         yield* deps.clearMcpSession(input.binding.threadId);
+
         return yield* toValidationError(
           input.operation,
           `Adapter/provider mismatch while recovering thread '${input.binding.threadId}'. Expected '${adapter.provider}', received '${resumed.provider}'.`,
@@ -134,6 +144,7 @@ export function createProviderSessionRecovery(deps: {
         { ...resumed, providerInstanceId: bindingInstanceId },
         input.binding.threadId,
       );
+
       return { adapter, session: resumed } as const;
     }).pipe(
       withMetrics({
@@ -144,6 +155,7 @@ export function createProviderSessionRecovery(deps: {
       }),
     );
   });
+
   const resolveRoutableSession = Effect.fn("resolveRoutableSession")(function* (input: {
     readonly threadId: ThreadId;
     readonly operation: string;
@@ -151,16 +163,19 @@ export function createProviderSessionRecovery(deps: {
   }) {
     const bindingOption = yield* deps.directory.getBinding(input.threadId);
     const binding = Option.getOrUndefined(bindingOption);
+
     if (!binding) {
       return yield* toValidationError(
         input.operation,
         `Cannot route thread '${input.threadId}' because no persisted provider binding exists.`,
       );
     }
+
     const instanceId = yield* deps.requireBindingInstanceId(input.operation, binding);
     const adapter = yield* deps.registry.getByInstance(instanceId);
 
     const hasRequestedSession = yield* adapter.hasSession(input.threadId);
+
     if (hasRequestedSession) {
       return {
         adapter,
@@ -183,6 +198,7 @@ export function createProviderSessionRecovery(deps: {
       binding,
       operation: input.operation,
     });
+
     return {
       adapter: recovered.adapter,
       instanceId,
@@ -190,6 +206,7 @@ export function createProviderSessionRecovery(deps: {
       isActive: true,
     } as const;
   });
+
   const stopStaleSessionsForThread = Effect.fn("stopStaleSessionsForThread")(function* (input: {
     readonly threadId: ThreadId;
     readonly currentInstanceId: ProviderInstanceId;
@@ -202,6 +219,7 @@ export function createProviderSessionRecovery(deps: {
           ? Effect.void
           : Effect.gen(function* () {
               const hasSession = yield* adapter.hasSession(input.threadId);
+
               if (!hasSession) {
                 return;
               }
@@ -219,5 +237,6 @@ export function createProviderSessionRecovery(deps: {
       { discard: true },
     );
   });
+
   return { recoverSessionForThread, resolveRoutableSession, stopStaleSessionsForThread };
 }

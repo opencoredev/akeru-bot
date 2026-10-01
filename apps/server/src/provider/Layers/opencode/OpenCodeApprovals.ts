@@ -57,11 +57,13 @@ export function createOpenCodeApprovals(deps: {
     event: OpenCodeRoutedRequestEvent,
   ) {
     const turnId = context.activeTurnId;
+
     switch (event.type) {
       case "permission.asked": {
         if (context.pendingPermissions.has(event.properties.id)) {
           return;
         }
+
         if (context.session.runtimeMode === "full-access") {
           // Reply "once", not "always": OpenCode stores "always" grants per
           // directory, so an always from a full-access thread would widen a
@@ -104,8 +106,10 @@ export function createOpenCodeApprovals(deps: {
             }),
             Effect.forkIn(context.sessionScope),
           );
+
           return;
         }
+
         context.pendingPermissions.set(event.properties.id, event.properties);
         yield* deps.emit({
           ...(yield* deps.buildEventBase({
@@ -123,14 +127,18 @@ export function createOpenCodeApprovals(deps: {
                 : event.properties.permission,
           },
         });
+
         return;
       }
+
       case "permission.replied": {
         context.pendingPermissions.delete(event.properties.requestID);
         context.resolvedRequestIds.add(event.properties.requestID);
+
         if (context.autoRepliedRequestIds.delete(event.properties.requestID)) {
           return;
         }
+
         yield* deps.emit({
           ...(yield* deps.buildEventBase({
             threadId: context.session.threadId,
@@ -144,12 +152,15 @@ export function createOpenCodeApprovals(deps: {
             decision: mapPermissionDecision(event.properties.reply),
           },
         });
+
         return;
       }
+
       case "question.asked": {
         if (context.pendingQuestions.has(event.properties.id)) {
           return;
         }
+
         context.pendingQuestions.set(event.properties.id, event.properties);
         yield* deps.emit({
           ...(yield* deps.buildEventBase({
@@ -163,18 +174,22 @@ export function createOpenCodeApprovals(deps: {
             questions: normalizeQuestionRequest(event.properties),
           },
         });
+
         return;
       }
+
       case "question.replied": {
         const request = context.pendingQuestions.get(event.properties.requestID);
         context.pendingQuestions.delete(event.properties.requestID);
         context.resolvedRequestIds.add(event.properties.requestID);
+
         const answers = Object.fromEntries(
           (request?.questions ?? []).map((question, index) => [
             openCodeQuestionId(index, question),
             event.properties.answers[index]?.join(", ") ?? "",
           ]),
         );
+
         yield* deps.emit({
           ...(yield* deps.buildEventBase({
             threadId: context.session.threadId,
@@ -185,8 +200,10 @@ export function createOpenCodeApprovals(deps: {
           type: "user-input.resolved",
           payload: { answers },
         });
+
         return;
       }
+
       case "question.rejected": {
         context.pendingQuestions.delete(event.properties.requestID);
         context.resolvedRequestIds.add(event.properties.requestID);
@@ -203,6 +220,7 @@ export function createOpenCodeApprovals(deps: {
       }
     }
   });
+
   const scheduleRequestRelationRetry = Effect.fn("scheduleRequestRelationRetry")(function* (
     context: OpenCodeSessionContext,
     event: OpenCodeRoutedRequestEvent,
@@ -210,23 +228,30 @@ export function createOpenCodeApprovals(deps: {
     const isAskedEvent = event.type === "permission.asked" || event.type === "question.asked";
     const requestId = isAskedEvent ? event.properties.id : event.properties.requestID;
     const existing = context.requestRelationRetries.get(requestId);
+
     if (existing) {
       if (!isAskedEvent) {
         existing.terminalEvent = event;
       }
+
       return;
     }
+
     if (isAskedEvent && context.resolvedRequestIds.has(requestId)) {
       return;
     }
+
     const retry: OpenCodeRequestRelationRetry = {
       warned: false,
       event,
       ...(!isAskedEvent ? { terminalEvent: event } : {}),
     };
+
     context.requestRelationRetries.set(requestId, retry);
+
     const run = Effect.gen(function* () {
       let retryCount = 0;
+
       while (context.requestRelationRetries.get(requestId) === retry) {
         const relation = yield* deps
           .isRelatedOpenCodeSession(context, event.properties.sessionID)
@@ -236,19 +261,25 @@ export function createOpenCodeApprovals(deps: {
               onSuccess: (related) => ({ type: "known" as const, related }),
             }),
           );
+
         if (context.requestRelationRetries.get(requestId) !== retry) {
           return;
         }
+
         if (relation.type === "known") {
           context.requestRelationRetries.delete(requestId);
+
           if (relation.related) {
             yield* emitOpenCodeRequestEvent(context, retry.event);
+
             if (retry.terminalEvent && retry.terminalEvent !== retry.event) {
               yield* emitOpenCodeRequestEvent(context, retry.terminalEvent);
             }
           }
+
           return;
         }
+
         if (!retry.warned) {
           retry.warned = true;
           yield* deps.emit({
@@ -263,11 +294,14 @@ export function createOpenCodeApprovals(deps: {
             },
           });
         }
+
         const delayMs = Math.min(250 * 2 ** retryCount, 5_000);
         retryCount += 1;
+
         if (!isAskedEvent && retryCount >= 5) {
           return;
         }
+
         yield* Effect.sleep(`${delayMs} millis`);
       }
     }).pipe(
@@ -280,7 +314,9 @@ export function createOpenCodeApprovals(deps: {
         }),
       ),
     );
+
     retry.fiber = yield* run.pipe(Effect.forkIn(context.sessionScope));
   });
+
   return { emitOpenCodeRequestEvent, scheduleRequestRelationRetry };
 }

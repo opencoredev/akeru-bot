@@ -23,6 +23,7 @@ interface PendingXAiPromptCompletion {
 }
 
 const completedXAiPromptIdLimit = 128;
+
 const xAiStopReasonMissingMetaKey = "xAiStopReasonMissing";
 
 const XAiAskUserQuestionOption = Schema.Struct({
@@ -57,10 +58,12 @@ export const XAiAskUserQuestionRequest = Schema.Union([
 ]);
 
 type XAiAskUserQuestionRequestParams = typeof XAiAskUserQuestionParams.Type;
+
 type XAiAskUserQuestionRequest = typeof XAiAskUserQuestionRequest.Type;
 
 function trimmed(value: string | undefined): string | undefined {
   const text = value?.trim();
+
   return text && text.length > 0 ? text : undefined;
 }
 
@@ -117,10 +120,13 @@ function answerValues(answer: unknown): ReadonlyArray<string> {
   if (Array.isArray(answer)) {
     return answer.flatMap((entry) => {
       const text = typeof entry === "string" ? trimmed(entry) : undefined;
+
       return text ? [text] : [];
     });
   }
+
   const text = typeof answer === "string" ? trimmed(answer) : undefined;
+
   return text ? [text] : [];
 }
 
@@ -129,17 +135,21 @@ function normalizeAnswerForXAi(
   answer: unknown,
 ): NormalizedXAiAnswer | undefined {
   const values = answerValues(answer);
+
   if (values.length === 0) {
     return undefined;
   }
 
   const optionByLabel = new Map(question.options.map((option) => [option.label, option]));
+
   const resolvedValues = values.map((value) => ({
     value,
     option: optionByLabel.get(value),
   }));
+
   const selectedLabels = resolvedValues.flatMap(({ option }) => (option ? [option.label] : []));
   const notes = resolvedValues.flatMap(({ option, value }) => (option ? [] : [value]));
+
   const preview =
     question.multiSelect === true
       ? undefined
@@ -165,6 +175,7 @@ function findQuestionAnswer(
   question: XAiAskUserQuestionRequestParams["questions"][number],
 ): unknown {
   const key = question.id ?? question.question;
+
   return answers[key] ?? answers[question.question];
 }
 
@@ -173,10 +184,13 @@ export function makeXAiAskUserQuestionResponse(
   answers: ProviderUserInputAnswers,
 ): XAiAskUserQuestionAcceptedResponse {
   const questions = unwrapAskUserQuestionParams(params).questions;
+
   const normalized = questions.flatMap((question) => {
     const entry = normalizeAnswerForXAi(question, findQuestionAnswer(answers, question));
+
     return entry ? [entry] : [];
   });
+
   const annotations = Object.fromEntries(
     normalized.flatMap((entry) =>
       entry.annotation ? [[entry.questionText, entry.annotation] as const] : [],
@@ -206,8 +220,10 @@ export const makeXAiPromptCompletionRuntime = Effect.fn("makeXAiPromptCompletion
     const pendingRef = yield* Ref.make<ReadonlyArray<PendingXAiPromptCompletion>>([]);
     const completedPromptIdsRef = yield* Ref.make<ReadonlyArray<string>>([]);
     let nextPromptFallbackId = 0;
+
     const allocatePromptFallbackId = Effect.sync(() => {
       nextPromptFallbackId += 1;
+
       return `t3-xai-prompt-${nextPromptFallbackId}`;
     });
 
@@ -231,16 +247,19 @@ export const makeXAiPromptCompletionRuntime = Effect.fn("makeXAiPromptCompletion
       prompt: (payload, promptOptions?) =>
         Effect.gen(function* () {
           const sessionId = yield* Ref.get(activeSessionIdRef);
+
           if (sessionId === undefined) {
             return yield* runtime.prompt(payload, promptOptions);
           }
 
           const promptId = yield* allocatePromptFallbackId;
+
           const fallback = yield* registerXAiPromptCompletionFallback(
             pendingRef,
             sessionId,
             promptId,
           );
+
           const requestPayload = {
             ...payload,
             _meta: {
@@ -302,9 +321,11 @@ const abortPendingPromptCompletions = (
         entry.sessionId === sessionId ? [[...aborting, entry], kept] : [aborting, [...kept, entry]],
       [[], []],
     );
+
     if (toAbort.length === 0) {
       return [Effect.void, pending] as const;
     }
+
     return [
       Effect.forEach(
         toAbort,
@@ -341,6 +362,7 @@ const resolveXAiPromptCompletionFallback = ({
       ) {
         return Effect.void;
       }
+
       return Ref.modify(pendingRef, (pending) => {
         const index =
           notification.promptId !== undefined
@@ -350,13 +372,17 @@ const resolveXAiPromptCompletionFallback = ({
                   entry.promptId === notification.promptId,
               )
             : pending.findIndex((entry) => entry.sessionId === notification.sessionId);
+
         if (index < 0) {
           return [Effect.void, pending] as const;
         }
+
         const entry = pending[index];
+
         if (!entry) {
           return [Effect.void, pending] as const;
         }
+
         return [
           Deferred.succeed(entry.deferred, promptResponseFromXAi(notification)).pipe(Effect.asVoid),
           [...pending.slice(0, index), ...pending.slice(index + 1)],
@@ -371,20 +397,25 @@ const rememberCompletedXAiPromptId = (
   fallbackPromptId: string,
 ) => {
   const promptId = promptIdFromResponse(response) ?? fallbackPromptId;
+
   return Ref.update(completedPromptIdsRef, (completedPromptIds) => {
     if (completedPromptIds.includes(promptId)) {
       return completedPromptIds;
     }
+
     return [...completedPromptIds, promptId].slice(-completedXAiPromptIdLimit);
   });
 };
 
 function promptIdFromResponse(response: EffectAcpSchema.PromptResponse): string | undefined {
   const meta = response._meta;
+
   if (meta === null || typeof meta !== "object") {
     return undefined;
   }
+
   const promptId = meta.promptId ?? meta.requestId;
+
   return typeof promptId === "string" && promptId.length > 0 ? promptId : undefined;
 }
 
@@ -392,6 +423,7 @@ export function promptResponseHasMissingXAiStopReason(
   response: EffectAcpSchema.PromptResponse,
 ): boolean {
   const meta = response._meta;
+
   return meta !== null && typeof meta === "object" && meta[xAiStopReasonMissingMetaKey] === true;
 }
 
@@ -399,19 +431,24 @@ function promptResponseFromXAi(
   notification: XAiPromptCompleteNotification,
 ): EffectAcpSchema.PromptResponse {
   const stopReason = normalizeXAiStopReason(notification.stopReason);
+
   const meta: Record<string, unknown> = {
     sessionId: notification.sessionId,
   };
+
   if (notification.stopReason === undefined) {
     meta[xAiStopReasonMissingMetaKey] = true;
   }
+
   if (notification.promptId !== undefined) {
     meta.promptId = notification.promptId;
     meta.requestId = notification.promptId;
   }
+
   if (notification.agentResult !== undefined) {
     meta.agentResult = notification.agentResult;
   }
+
   return {
     stopReason,
     _meta: meta,

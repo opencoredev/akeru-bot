@@ -34,14 +34,17 @@ describe("AgentControllerLive", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
       const worker = makeWorkerSession(mastra.session);
+
       const mcpManager = {
         init: vi.fn(async () => undefined),
         disconnect: vi.fn(async () => undefined),
         getTools: vi.fn(() => ({ linear_update: { mcp: { annotations: {} } } })),
         getServerStatuses: vi.fn(() => []),
       };
+
       const dispatched: OrchestrationCommand[] = [];
       const turnStarted = Promise.withResolvers<void>();
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
@@ -49,11 +52,14 @@ describe("AgentControllerLive", () => {
             readSnapshot: async () => groupParentSnapshot,
             dispatch: async (command) => {
               dispatched.push(command);
+
               if (command.type === "thread.turn.start") turnStarted.resolve();
+
               return { sequence: dispatched.length };
             },
           });
           yield* resolveCodex(controller);
+
           const sessionInput = {
             provider: ProviderDriverKind.make("codex"),
             providerInstanceId: codexInstanceId,
@@ -64,6 +70,7 @@ describe("AgentControllerLive", () => {
             botName: "Boss",
             mcpServers: [linearServer],
           };
+
           yield* controller.startSession(codexThreadId, {
             ...sessionInput,
             threadId: codexThreadId,
@@ -84,6 +91,7 @@ describe("AgentControllerLive", () => {
               approvalMode: "require-grant",
             }),
           )) as { readonly phase: { readonly _tag: string } };
+
           expect(spawned.phase._tag).toBe("Running");
           yield* Effect.promise(() => turnStarted.promise);
           const [create, start] = dispatched;
@@ -111,6 +119,7 @@ describe("AgentControllerLive", () => {
             threadId: childThreadId,
           });
           const workerTools = runtime.toolsForThread(String(childThreadId)).map((tool) => tool.id);
+
           for (const toolId of [
             "Task",
             "request_box_help",
@@ -122,10 +131,12 @@ describe("AgentControllerLive", () => {
           }
 
           const events: ProviderRuntimeEvent[] = [];
+
           const eventsFiber = yield* controller.streamEvents.pipe(
             Stream.runForEach((event) => Effect.sync(() => events.push(event))),
             Effect.forkChild({ startImmediately: true }),
           );
+
           yield* Effect.yieldNow;
           yield* controller.sendTurn({ threadId: childThreadId, input: "Update the issue." });
           worker.emit({
@@ -160,14 +171,17 @@ describe("AgentControllerLive", () => {
     it.effect("keeps worker limits and declines approvals in a worker chat after a restart", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       const mcpManager = {
         init: vi.fn(async () => undefined),
         disconnect: vi.fn(async () => undefined),
         getTools: vi.fn(() => ({ linear_update: { mcp: { annotations: {} } } })),
         getServerStatuses: vi.fn(() => []),
       };
+
       // The worker runtime has no record of this chat, as after a server restart.
       const orphanThreadId = ThreadId.make("worker-thread-orphaned");
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
@@ -196,6 +210,7 @@ describe("AgentControllerLive", () => {
           const runtime = mastra.harnessOptions[0]?.toolRuntime;
           assert.isDefined(runtime);
           const tools = runtime.toolsForThread(String(orphanThreadId)).map((tool) => tool.id);
+
           // Without a parent link to rebuild the grant from, the chat keeps no tools.
           for (const toolId of [
             "Read",
@@ -238,6 +253,7 @@ describe("AgentControllerLive", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
       const dispatched: OrchestrationCommand[] = [];
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
@@ -245,9 +261,11 @@ describe("AgentControllerLive", () => {
             readSnapshot: async () => groupParentSnapshot,
             dispatch: async (command) => {
               dispatched.push(command);
+
               if (command.type === "thread.turn.start") {
                 throw new Error("A person member must send turns to this group.");
               }
+
               return { sequence: dispatched.length };
             },
           });
@@ -266,6 +284,7 @@ describe("AgentControllerLive", () => {
 
           const runtime = mastra.harnessOptions[0]?.toolRuntime;
           assert.isDefined(runtime);
+
           const status = (yield* Effect.promise(() =>
             runtime.execute({
               threadId: String(codexThreadId),
@@ -275,6 +294,7 @@ describe("AgentControllerLive", () => {
               approvalMode: "require-grant",
             }),
           )) as { readonly phase: { readonly _tag: string; readonly failureCode?: string } };
+
           expect(status.phase).toMatchObject({ _tag: "Failed", failureCode: "internal" });
           // Foreground Task settles only after the discard ran.
           const [create, start, discard] = dispatched;

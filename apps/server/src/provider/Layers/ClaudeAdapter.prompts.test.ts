@@ -33,6 +33,7 @@ describe("ClaudeAdapterLive", () => {
     "uses bypass permissions and general Akeru instructions for full-access claude sessions",
     () => {
       const harness = makeHarness();
+
       return Effect.gen(function* () {
         const adapter = yield* ClaudeAdapter;
         yield* adapter.startSession({
@@ -48,11 +49,13 @@ describe("ClaudeAdapterLive", () => {
           type: "preset",
           preset: "claude_code",
         });
+
         const appendedInstructions =
           typeof createInput?.options.systemPrompt === "object" &&
           "append" in createInput.options.systemPrompt
             ? (createInput.options.systemPrompt.append ?? "")
             : "";
+
         assert.include(appendedInstructions, "general assistant");
         assert.notInclude(appendedInstructions, "Before you use a tool");
       }).pipe(
@@ -66,6 +69,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("adds reply-first instructions to bot Claude sessions", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       yield* adapter.startSession({
@@ -78,10 +82,12 @@ describe("ClaudeAdapterLive", () => {
       });
 
       const systemPrompt = harness.getLastCreateQueryInput()?.options.systemPrompt;
+
       const appendedInstructions =
         typeof systemPrompt === "object" && "append" in systemPrompt
           ? (systemPrompt.append ?? "")
           : "";
+
       assert.include(appendedInstructions, "Before you use a tool");
       assert.include(appendedInstructions, "automatic continuation");
       assert.include(appendedInstructions, "You are Mina");
@@ -97,8 +103,10 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("treats ultrathink as a prompt keyword instead of a session effort", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const session = yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
@@ -135,13 +143,16 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("keeps compact commands intact when ultrathink is selected", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const modelSelection = createModelSelection(
         ProviderInstanceId.make("claudeAgent"),
         "claude-sonnet-4-6",
         [{ id: "effort", value: "ultrathink" }],
       );
+
       const session = yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
@@ -159,6 +170,7 @@ describe("ClaudeAdapterLive", () => {
       const promptText = yield* Effect.promise(() =>
         readFirstPromptText(harness.getLastCreateQueryInput()),
       );
+
       assert.equal(promptText, "/compact");
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
@@ -170,10 +182,12 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("embeds image attachments in Claude user messages", () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "claude-attachments-"));
+
     const harness = makeHarness({
       cwd: "/tmp/project-claude-attachments",
       baseDir,
     });
+
     return Effect.gen(function* () {
       yield* Effect.addFinalizer(() =>
         Effect.sync(() =>
@@ -194,6 +208,7 @@ describe("ClaudeAdapterLive", () => {
         mimeType: "image/png",
         sizeBytes: 4,
       };
+
       const attachmentPath = NodePath.join(attachmentsDir, attachmentRelativePath(attachment));
       NodeFS.mkdirSync(NodePath.dirname(attachmentPath), { recursive: true });
       NodeFS.writeFileSync(attachmentPath, Uint8Array.from([1, 2, 3, 4]));
@@ -253,6 +268,7 @@ describe("ClaudeAdapterLive", () => {
       ClaudeAdapter,
       Effect.gen(function* () {
         const claudeConfig = decodeClaudeSettings({});
+
         return yield* makeClaudeAdapter(claudeConfig, {
           createQuery: (input) => {
             // Simulate the SDK consuming the prompt iterable
@@ -265,6 +281,7 @@ describe("ClaudeAdapterLive", () => {
                 promptConsumerError = error;
               }
             })();
+
             return query;
           },
         });
@@ -315,6 +332,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("consumes Claude command lifecycle notifications silently", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       const sessionId = "6e81554e-5cff-4b37-8a39-f3a9051ac234";
@@ -326,10 +344,12 @@ describe("ClaudeAdapterLive", () => {
       });
 
       const readyMessage = "command lifecycle test ready";
+
       const readyFiber = yield* Stream.takeUntil(
         adapter.streamEvents,
         (event) => event.type === "runtime.warning" && event.payload.message === readyMessage,
       ).pipe(Stream.runDrain, Effect.forkChild);
+
       harness.query.emit({
         type: "system",
         subtype: "notification",
@@ -342,10 +362,12 @@ describe("ClaudeAdapterLive", () => {
       yield* Fiber.join(readyFiber);
 
       const processedMessage = "command lifecycle messages processed";
+
       const runtimeEventsFiber = yield* Stream.takeUntil(
         adapter.streamEvents,
         (event) => event.type === "runtime.warning" && event.payload.message === processedMessage,
       ).pipe(Stream.runCollect, Effect.forkChild);
+
       for (const [state, uuid] of [
         ["started", "command-started"],
         ["completed", "command-completed"],
@@ -358,6 +380,7 @@ describe("ClaudeAdapterLive", () => {
           uuid,
         } as unknown as SDKMessage);
       }
+
       harness.query.emit({
         type: "system",
         subtype: "notification",
@@ -375,6 +398,7 @@ describe("ClaudeAdapterLive", () => {
       );
       const warning = runtimeEvents[0];
       assert.equal(warning?.type, "runtime.warning");
+
       if (warning?.type === "runtime.warning") {
         assert.equal(warning.payload.message, processedMessage);
       }

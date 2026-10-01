@@ -33,11 +33,14 @@ describe("AgentControllerLive", () => {
   it.effect("honors the Memory setting per turn on the legacy provider path", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const memoryDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "akeru-memory-toggle-legacy-"),
     );
+
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const botId = BotId.make("bot-memory-toggle-legacy");
+
     const access = {
       tenantId: AkeruMemoryTenantId.make("local"),
       userId: AkeruMemoryUserId.make("owner"),
@@ -49,6 +52,7 @@ describe("AgentControllerLive", () => {
       respondingBotId: botId,
       groupMemberBotIds: [],
     } as const;
+
     const credentials = makeMemoryOnlyCredentialOptions();
 
     return provideController(
@@ -125,6 +129,7 @@ describe("AgentControllerLive", () => {
   it.effect("feeds completed legacy-provider turns into observational memory", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const events: ProviderRuntimeEvent[] = [
       {
         provider: ProviderDriverKind.make("opencode"),
@@ -150,6 +155,7 @@ describe("AgentControllerLive", () => {
         payload: { state: "completed", stopReason: null },
       },
     ];
+
     const service = { ...bridge.service, streamEvents: Stream.fromIterable(events) };
 
     return provideController(

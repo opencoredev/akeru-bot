@@ -23,10 +23,12 @@ import {
 describe("ClaudeAdapterLive", () => {
   it.effect("retains Claude session startup causes without exposing their messages", () => {
     const cause = new Error("credential material that must remain in the cause chain");
+
     const layer = Layer.effect(
       ClaudeAdapter,
       Effect.gen(function* () {
         const claudeConfig = decodeClaudeSettings({});
+
         return yield* makeClaudeAdapter(claudeConfig, {
           createQuery: () => {
             throw cause;
@@ -41,6 +43,7 @@ describe("ClaudeAdapterLive", () => {
 
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const error = yield* adapter
         .startSession({
           threadId: THREAD_ID,
@@ -63,6 +66,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("maps Claude stream/runtime messages to canonical provider runtime events", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -197,12 +201,14 @@ describe("ClaudeAdapterLive", () => {
 
       const turnStarted = runtimeEvents[3];
       assert.equal(turnStarted?.type, "turn.started");
+
       if (turnStarted?.type === "turn.started") {
         assert.equal(String(turnStarted.turnId), String(turn.turnId));
       }
 
       const deltaEvent = runtimeEvents.find((event) => event.type === "content.delta");
       assert.equal(deltaEvent?.type, "content.delta");
+
       if (deltaEvent?.type === "content.delta") {
         assert.equal(deltaEvent.payload.delta, "Hi");
         assert.equal(String(deltaEvent.turnId), String(turn.turnId));
@@ -210,6 +216,7 @@ describe("ClaudeAdapterLive", () => {
 
       const toolStarted = runtimeEvents.find((event) => event.type === "item.started");
       assert.equal(toolStarted?.type, "item.started");
+
       if (toolStarted?.type === "item.started") {
         assert.equal(toolStarted.payload.itemType, "command_execution");
       }
@@ -218,6 +225,7 @@ describe("ClaudeAdapterLive", () => {
         (event) =>
           event.type === "item.completed" && event.payload.itemType === "assistant_message",
       );
+
       const toolStartedIndex = runtimeEvents.findIndex((event) => event.type === "item.started");
       assert.equal(
         assistantCompletedIndex >= 0 &&
@@ -228,6 +236,7 @@ describe("ClaudeAdapterLive", () => {
 
       const turnCompleted = runtimeEvents[runtimeEvents.length - 1];
       assert.equal(turnCompleted?.type, "turn.completed");
+
       if (turnCompleted?.type === "turn.completed") {
         assert.equal(String(turnCompleted.turnId), String(turn.turnId));
         assert.equal(turnCompleted.payload.state, "completed");
@@ -242,6 +251,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("maps Claude reasoning deltas, streamed tool inputs, and tool results", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -367,7 +377,9 @@ describe("ClaudeAdapterLive", () => {
       const reasoningDelta = runtimeEvents.find(
         (event) => event.type === "content.delta" && event.payload.streamKind === "reasoning_text",
       );
+
       assert.equal(reasoningDelta?.type, "content.delta");
+
       if (reasoningDelta?.type === "content.delta") {
         assert.equal(reasoningDelta.payload.delta, "Let");
         assert.equal(String(reasoningDelta.turnId), String(turn.turnId));
@@ -375,6 +387,7 @@ describe("ClaudeAdapterLive", () => {
 
       const toolStarted = runtimeEvents.find((event) => event.type === "item.started");
       assert.equal(toolStarted?.type, "item.started");
+
       if (toolStarted?.type === "item.started") {
         assert.equal(toolStarted.payload.itemType, "dynamic_tool_call");
       }
@@ -385,7 +398,9 @@ describe("ClaudeAdapterLive", () => {
           (event.payload.data as { input?: { pattern?: string; path?: string } } | undefined)?.input
             ?.pattern === "foo",
       );
+
       assert.equal(toolInputUpdated?.type, "item.updated");
+
       if (toolInputUpdated?.type === "item.updated") {
         assert.deepEqual(toolInputUpdated.payload.data, {
           toolName: "Grep",
@@ -402,7 +417,9 @@ describe("ClaudeAdapterLive", () => {
           (event.payload.data as { result?: { tool_use_id?: string } } | undefined)?.result
             ?.tool_use_id === "tool-grep-1",
       );
+
       assert.equal(toolResultUpdated?.type, "item.updated");
+
       if (toolResultUpdated?.type === "item.updated") {
         assert.equal(
           (
@@ -425,6 +442,7 @@ describe("ClaudeAdapterLive", () => {
     "emits completion only after turn result when assistant frames arrive before deltas",
     () => {
       const harness = makeHarness();
+
       return Effect.gen(function* () {
         const adapter = yield* ClaudeAdapter;
 
@@ -503,6 +521,7 @@ describe("ClaudeAdapterLive", () => {
 
         const deltaEvent = runtimeEvents[deltaIndex];
         assert.equal(deltaEvent?.type, "content.delta");
+
         if (deltaEvent?.type === "content.delta") {
           assert.equal(deltaEvent.payload.delta, "Late text");
           assert.equal(String(deltaEvent.turnId), String(turn.turnId));
@@ -518,6 +537,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("falls back to assistant payload text when stream deltas are absent", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -575,6 +595,7 @@ describe("ClaudeAdapterLive", () => {
 
       const deltaEvent = runtimeEvents.find((event) => event.type === "content.delta");
       assert.equal(deltaEvent?.type, "content.delta");
+
       if (deltaEvent?.type === "content.delta") {
         assert.equal(deltaEvent.payload.delta, "Fallback hello");
         assert.equal(String(deltaEvent.turnId), String(turn.turnId));

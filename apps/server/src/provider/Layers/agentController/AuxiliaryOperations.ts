@@ -98,6 +98,7 @@ export function createAuxiliaryOperations({
         Stream.map((event) => {
           if (event.type !== "turn.started") return event;
           const key = String(event.threadId);
+
           const hiddenWake =
             event.turnId === undefined
               ? false
@@ -105,6 +106,7 @@ export function createAuxiliaryOperations({
                 legacyPending(key).some(
                   (pending) => !pending.dispatchReturned && pending.hiddenWake,
                 );
+
           return hiddenWake ? { ...event, payload: { ...event.payload, hiddenWake: true } } : event;
         }),
         Stream.tap((event) =>
@@ -115,38 +117,52 @@ export function createAuxiliaryOperations({
               event,
               resolvedByThread.get(key)?.modelSelection.model,
             );
+
             if (sessions.has(key)) return;
             const pendingTurns = legacyPending(key);
+
             if (pendingTurns.length === 0) return;
+
             const unseenPending = pendingTurns.filter(
               (pending) => !pending.seenEventIds.has(String(event.eventId)),
             );
+
             if (unseenPending.length === 0) return;
+
             for (const pending of unseenPending) {
               pending.seenEventIds.add(String(event.eventId));
             }
+
             if (event.type === "turn.completed" || event.type === "turn.aborted") {
               if (event.turnId) legacyHiddenWakeByTurn.delete(`${key}:${String(event.turnId)}`);
+
               if (!event.turnId) return;
               const terminals = legacyBufferedTerminals.get(key) ?? new Map();
               terminals.set(String(event.turnId), event);
               legacyBufferedTerminals.set(key, terminals);
+
               for (const pending of unseenPending) {
                 if (!pending.dispatchReturned) {
                   pending.earlyEvents.push(event);
                 }
               }
+
               yield* drainLegacyTerminals(key);
+
               return;
             }
+
             for (const pending of unseenPending) {
               if (!pending.dispatchReturned) {
                 if (event.type === "content.delta") {
                   pending.earlyEvents.push(event);
                 }
+
                 continue;
               }
+
               if (!event.turnId || String(event.turnId) !== pending.turnId) continue;
+
               if (event.type === "content.delta" && event.payload.streamKind === "assistant_text") {
                 pending.assistant += event.payload.delta;
                 continue;

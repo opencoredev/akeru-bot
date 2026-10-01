@@ -30,8 +30,10 @@ import {
 describe("ClaudeAdapterLive", () => {
   it.effect("returns validation error for non-claude provider on startSession", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const result = yield* adapter
         .startSession({
           threadId: THREAD_ID,
@@ -41,9 +43,11 @@ describe("ClaudeAdapterLive", () => {
         .pipe(Effect.result);
 
       assert.equal(result._tag, "Failure");
+
       if (result._tag !== "Failure") {
         return;
       }
+
       assert.deepEqual(
         result.failure,
         new ProviderAdapterValidationError({
@@ -62,6 +66,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("treats user-aborted Claude results as interrupted without a runtime error", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -107,6 +112,7 @@ describe("ClaudeAdapterLive", () => {
 
       const turnCompleted = runtimeEvents[runtimeEvents.length - 1];
       assert.equal(turnCompleted?.type, "turn.completed");
+
       if (turnCompleted?.type === "turn.completed") {
         assert.equal(String(turnCompleted.turnId), String(turn.turnId));
         assert.equal(turnCompleted.payload.state, "interrupted");
@@ -123,6 +129,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("treats aborted_tools results as interrupted and hides ede_diagnostic errors", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -171,6 +178,7 @@ describe("ClaudeAdapterLive", () => {
 
       const turnCompleted = runtimeEvents[runtimeEvents.length - 1];
       assert.equal(turnCompleted?.type, "turn.completed");
+
       if (turnCompleted?.type === "turn.completed") {
         assert.equal(String(turnCompleted.turnId), String(turn.turnId));
         assert.equal(turnCompleted.payload.state, "interrupted");
@@ -215,22 +223,28 @@ describe("ClaudeAdapterLive", () => {
     },
   ])("classifies the terminal API failure after $name", ({ messages, expected }) => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const eventsFiber = yield* adapter.streamEvents.pipe(
         Stream.takeUntil((event) => event.type === "turn.completed"),
         Stream.runCollect,
         Effect.forkChild,
       );
+
       const session = yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
+
       for (const [index, message] of messages.entries()) {
         harness.query.emit({ ...message, uuid: `assistant-${index}` } as unknown as SDKMessage);
       }
+
       harness.query.emit(rateLimitResult as unknown as SDKMessage);
       const events = Array.from(yield* Fiber.join(eventsFiber));
       const errors = events.filter((event) => event.type === "runtime.error");
@@ -248,21 +262,26 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("keeps the session available when process close fails", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const session = yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       harness.query.closeError = new Error("close failed");
 
       const result = yield* adapter.interruptTurn(session.threadId).pipe(Effect.result);
 
       assert.equal(result._tag, "Failure");
+
       if (result._tag === "Failure") {
         assert.equal(result.failure._tag, "ProviderAdapterProcessError");
       }
+
       assert.equal(harness.query.closeCalls, 1);
       assert.equal(yield* adapter.hasSession(session.threadId), true);
       assert.equal((yield* adapter.listSessions())[0]?.status, "ready");
@@ -276,14 +295,17 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("stopAll attempts every session when one process close fails", () => {
     const queries: FakeClaudeQuery[] = [];
+
     const layer = Layer.effect(
       ClaudeAdapter,
       Effect.gen(function* () {
         const claudeConfig = decodeClaudeSettings({});
+
         return yield* makeClaudeAdapter(claudeConfig, {
           createQuery: () => {
             const query = new FakeClaudeQuery();
             queries.push(query);
+
             return query;
           },
         });
@@ -307,9 +329,11 @@ describe("ClaudeAdapterLive", () => {
         runtimeMode: "full-access",
       });
       const firstQuery = queries[0];
+
       if (!firstQuery) {
         return;
       }
+
       firstQuery.closeError = new Error("close failed");
 
       const result = yield* adapter.stopAll().pipe(Effect.result);
@@ -329,14 +353,17 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("keeps a resumed replacement session after interrupt cleanup", () => {
     const queries: FakeClaudeQuery[] = [];
+
     const layer = Layer.effect(
       ClaudeAdapter,
       Effect.gen(function* () {
         const claudeConfig = decodeClaudeSettings({});
+
         return yield* makeClaudeAdapter(claudeConfig, {
           createQuery: () => {
             const query = new FakeClaudeQuery();
             queries.push(query);
+
             return query;
           },
         });
@@ -349,17 +376,20 @@ describe("ClaudeAdapterLive", () => {
 
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
+
       const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.type.startsWith("session.")),
         Stream.take(7),
         Stream.runCollect,
         Effect.forkChild,
       );
+
       const firstSession = yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "full-access",
       });
+
       yield* adapter.sendTurn({
         threadId: firstSession.threadId,
         input: "hello",
@@ -406,6 +436,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("closes the session when the Claude stream aborts after a turn starts", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       const runtimeEvents: Array<ProviderRuntimeEvent> = [];
@@ -448,6 +479,7 @@ describe("ClaudeAdapterLive", () => {
 
       const turnCompleted = runtimeEvents[4];
       assert.equal(turnCompleted?.type, "turn.completed");
+
       if (turnCompleted?.type === "turn.completed") {
         assert.equal(String(turnCompleted.turnId), String(turn.turnId));
         assert.equal(turnCompleted.payload.state, "interrupted");
@@ -471,9 +503,11 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("keeps Claude stream failure events structural", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       const runtimeEvents: Array<ProviderRuntimeEvent> = [];
+
       const runtimeEventsFiber = yield* Stream.runForEach(adapter.streamEvents, (event) =>
         Effect.sync(() => {
           runtimeEvents.push(event);
@@ -500,6 +534,7 @@ describe("ClaudeAdapterLive", () => {
 
       const runtimeError = runtimeEvents.find((event) => event.type === "runtime.error");
       assert.equal(runtimeError?.type, "runtime.error");
+
       if (runtimeError?.type === "runtime.error") {
         assert.equal(runtimeError.payload.message, "Claude runtime stream failed.");
         assert.deepEqual(runtimeError.payload.detail, {
@@ -510,6 +545,7 @@ describe("ClaudeAdapterLive", () => {
 
       const completed = runtimeEvents.find((event) => event.type === "turn.completed");
       assert.equal(completed?.type, "turn.completed");
+
       if (completed?.type === "turn.completed") {
         assert.equal(completed.payload.state, "failed");
         assert.equal(completed.payload.errorMessage, "Claude runtime stream failed.");
@@ -524,14 +560,17 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("closes the previous session before replacing an existing thread session", () => {
     const queries: FakeClaudeQuery[] = [];
+
     const layer = Layer.effect(
       ClaudeAdapter,
       Effect.gen(function* () {
         const claudeConfig = decodeClaudeSettings({});
+
         return yield* makeClaudeAdapter(claudeConfig, {
           createQuery: () => {
             const query = new FakeClaudeQuery();
             queries.push(query);
+
             return query;
           },
         });

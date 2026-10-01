@@ -22,6 +22,7 @@ describe("AcpSessionRuntime", () => {
       const promptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "hi" }],
       });
+
       expect(promptResult).toMatchObject({ stopReason: "end_turn" });
 
       const notes = Array.from(yield* Stream.runCollect(Stream.take(runtime.getEvents(), 4)));
@@ -34,11 +35,14 @@ describe("AcpSessionRuntime", () => {
       ]);
       const planUpdate = notes.find((note) => note._tag === "PlanUpdated");
       expect(planUpdate?._tag).toBe("PlanUpdated");
+
       if (planUpdate?._tag === "PlanUpdated") {
         expect(planUpdate.payload.plan).toHaveLength(2);
       }
+
       const assistantStart = notes[1];
       const assistantDelta = notes[2];
+
       if (
         assistantStart?._tag === "AssistantItemStarted" &&
         assistantDelta?._tag === "ContentDelta"
@@ -77,6 +81,7 @@ describe("AcpSessionRuntime", () => {
       const events = Array.from(yield* Stream.runCollect(Stream.take(runtime.getEvents(), 4)));
       const assistantStart = events.find((event) => event._tag === "AssistantItemStarted");
       expect(assistantStart?._tag).toBe("AssistantItemStarted");
+
       return assistantStart?._tag === "AssistantItemStarted" ? assistantStart.itemId : "";
     }).pipe(
       Effect.provide(
@@ -111,6 +116,7 @@ describe("AcpSessionRuntime", () => {
       const promptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "hi" }],
       });
+
       expect(promptResult).toMatchObject({ stopReason: "end_turn" });
 
       const notes = Array.from(yield* Stream.runCollect(Stream.take(runtime.getEvents(), 4)));
@@ -157,6 +163,7 @@ describe("AcpSessionRuntime", () => {
       const firstPromptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "first" }],
       });
+
       const secondPromptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "second" }],
       });
@@ -202,6 +209,7 @@ describe("AcpSessionRuntime", () => {
       const secondPromptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "second" }],
       });
+
       expect(secondPromptResult).toMatchObject({ stopReason: "end_turn" });
     }).pipe(
       Effect.provide(
@@ -233,6 +241,7 @@ describe("AcpSessionRuntime", () => {
       const promptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "hi" }],
       });
+
       expect(promptResult).toMatchObject({ stopReason: "end_turn" });
 
       const notes = Array.from(yield* Stream.runCollect(Stream.take(runtime.getEvents(), 7)));
@@ -254,6 +263,7 @@ describe("AcpSessionRuntime", () => {
       expect(firstStarted?._tag).toBe("AssistantItemStarted");
       expect(firstCompleted?._tag).toBe("AssistantItemCompleted");
       expect(secondStarted?._tag).toBe("AssistantItemStarted");
+
       if (
         firstStarted?._tag === "AssistantItemStarted" &&
         firstDelta?._tag === "ContentDelta" &&
@@ -296,12 +306,14 @@ describe("AcpSessionRuntime", () => {
       const promptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "hi" }],
       });
+
       expect(promptResult).toMatchObject({ stopReason: "end_turn" });
 
       const notes = Array.from(yield* Stream.runCollect(Stream.take(runtime.getEvents(), 1)));
       expect(notes.map((note) => note._tag)).toEqual(["ToolCallUpdated"]);
       const toolCall = notes[0];
       expect(toolCall?._tag).toBe("ToolCallUpdated");
+
       if (toolCall?._tag === "ToolCallUpdated") {
         expect(toolCall.toolCall.status).toBe("completed");
         expect(toolCall.toolCall.title).toBe("Read file");
@@ -330,6 +342,7 @@ describe("AcpSessionRuntime", () => {
 describe("AcpSessionRuntime", () => {
   it.effect("logs ACP requests from the shared runtime", () => {
     const requestEvents: Array<AcpSessionRuntime.AcpSessionRequestLogEvent> = [];
+
     return Effect.gen(function* () {
       const runtime = yield* AcpSessionRuntime.AcpSessionRuntime;
       yield* runtime.start();
@@ -384,6 +397,7 @@ describe("AcpSessionRuntime", () => {
 describe("AcpSessionRuntime", () => {
   it.effect("emits low-level ACP protocol logs for raw and decoded messages", () => {
     const protocolEvents: Array<EffectAcpProtocol.AcpProtocolLogEvent> = [];
+
     return Effect.gen(function* () {
       const runtime = yield* AcpSessionRuntime.AcpSessionRuntime;
       yield* runtime.start();

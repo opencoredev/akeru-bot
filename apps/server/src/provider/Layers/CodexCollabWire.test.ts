@@ -23,13 +23,16 @@ interface WireNotification {
 }
 
 const notifications = fixture.notifications as ReadonlyArray<WireNotification>;
+
 const rootThreadId = fixture.rootThreadId;
+
 const childThreadIds = new Set(fixture.childThreadIds);
 
 /** Mirrors readNotificationThreadId's addressing for the captured methods. */
 function notificationThreadId(entry: WireNotification): string | undefined {
   const params = entry.params;
   const thread = params.thread;
+
   if (
     typeof thread === "object" &&
     thread !== null &&
@@ -37,14 +40,17 @@ function notificationThreadId(entry: WireNotification): string | undefined {
   ) {
     return (thread as { id: string }).id;
   }
+
   return typeof params.threadId === "string" ? params.threadId : undefined;
 }
 
 function subAgentActivityItems(): ReadonlyArray<Record<string, unknown>> {
   return notifications.flatMap((entry) => {
     const item = entry.params.item;
+
     if (typeof item !== "object" || item === null) return [];
     const record = item as Record<string, unknown>;
+
     return record.type === "subAgentActivity" ? [record] : [];
   });
 }
@@ -65,14 +71,19 @@ describe("codex multi-agent wire capture", () => {
     // rather than being eaten (no regression vs. pre-feature behavior).
     const firstChildTraffic = notifications.findIndex((entry) => {
       const threadId = notificationThreadId(entry);
+
       return threadId !== undefined && childThreadIds.has(threadId);
     });
+
     const firstRegistration = notifications.findIndex((entry) => {
       const item = entry.params.item;
+
       if (typeof item !== "object" || item === null) return false;
       const record = item as Record<string, unknown>;
+
       return record.type === "subAgentActivity" && record.kind === "started";
     });
+
     assert.isAtLeast(firstChildTraffic, 0);
     assert.isAtLeast(firstRegistration, 0);
     assert.isBelow(
@@ -98,11 +109,14 @@ describe("codex multi-agent wire capture", () => {
       notifications
         .filter((entry) => {
           const threadId = notificationThreadId(entry);
+
           return threadId !== undefined && childThreadIds.has(threadId);
         })
         .map((entry) => entry.method),
     );
+
     assert.isAbove(childMethods.size, 0);
+
     for (const method of childMethods) {
       const route = routeCodexChildNotification(method);
       // Child lifecycle traffic must become agent events — never silently

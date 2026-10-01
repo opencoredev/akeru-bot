@@ -16,6 +16,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
     Effect.gen(function* () {
       const threadId = ThreadId.make("grok-native-log-failure");
       const wrapperPath = yield* Effect.promise(() => makeMockGrokWrapper());
+
       const adapter = yield* makeTestAdapter(wrapperPath, {
         nativeEventLogger: {
           filePath: "memory://grok-native-events",
@@ -32,7 +33,9 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
           close: () => Effect.void,
         },
       });
+
       const contentDelta = yield* Deferred.make<void>();
+
       const eventsFiber = yield* Stream.runForEach(adapter.streamEvents, (event) =>
         event.type === "content.delta" ? Deferred.succeed(contentDelta, undefined) : Effect.void,
       ).pipe(Effect.forkChild);

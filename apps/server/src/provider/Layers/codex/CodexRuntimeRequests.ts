@@ -56,12 +56,15 @@ export function normalizeCodexModelSlug(
   preferredId?: string,
 ): string | undefined {
   const normalized = normalizeModelSlug(model);
+
   if (!normalized) {
     return undefined;
   }
+
   if (preferredId?.endsWith("-codex") && preferredId !== normalized) {
     return preferredId;
   }
+
   return normalized;
 }
 
@@ -108,6 +111,7 @@ export function buildThreadStartParams(input: {
   readonly serviceTier: CodexServiceTier | undefined;
 }): EffectCodexSchema.V2ThreadStartParams {
   const config = runtimeModeToThreadConfig(input.runtimeMode);
+
   return {
     cwd: input.cwd,
     approvalPolicy: config.approvalPolicy,
@@ -148,8 +152,10 @@ export function buildCodexCollaborationMode(input: {
   if (input.interactionMode === undefined) {
     return undefined;
   }
+
   const model = normalizeCodexModelSlug(input.model) ?? DEFAULT_MODEL;
   const reasoningEffort = input.effort ?? "medium";
+
   // Plan mode is retired; every turn runs in Codex's default collaboration mode.
   return {
     mode: "default",
@@ -183,17 +189,20 @@ export function buildTurnStartParams(input: {
   CodexErrors.CodexAppServerProtocolParseError
 > {
   const turnInput: Array<EffectCodexSchema.V2TurnStartParams__UserInput> = [];
+
   if (input.prompt) {
     turnInput.push({
       type: "text",
       text: input.prompt,
     });
   }
+
   for (const attachment of input.attachments ?? []) {
     turnInput.push(attachment);
   }
 
   const config = runtimeModeToThreadConfig(input.runtimeMode);
+
   const collaborationMode = buildCodexCollaborationMode({
     ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
     ...(input.model ? { model: input.model } : {}),
@@ -232,13 +241,17 @@ export function toCodexUserInputAnswer(
   if (typeof value === "string") {
     return Effect.succeed({ answers: [value] });
   }
+
   if (Array.isArray(value)) {
     const answers = value.filter((entry): entry is string => typeof entry === "string");
+
     return Effect.succeed({ answers });
   }
+
   if (isCodexUserInputAnswerObject(value)) {
     return Effect.succeed({ answers: value.answers });
   }
+
   return Effect.fail(new CodexSessionRuntimeInvalidUserInputAnswersError({ questionId }));
 }
 

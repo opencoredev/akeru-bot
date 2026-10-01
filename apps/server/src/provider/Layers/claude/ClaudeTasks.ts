@@ -30,8 +30,10 @@ export function rememberPendingTaskModel(
   model: string,
 ): void {
   pending.set(parentToolUseId, model);
+
   if (pending.size > PENDING_TASK_MODEL_CAP) {
     const oldest = pending.keys().next();
+
     if (!oldest.done) {
       pending.delete(oldest.value);
     }
@@ -45,9 +47,11 @@ export function isTodoTool(toolName: string): boolean {
 export function extractPlanStepsFromTodoInput(input: Record<string, unknown>): PlanStep[] | null {
   // TodoWrite format: { todos: [{ content, status, activeForm? }] }
   const todos = input.todos;
+
   if (!Array.isArray(todos) || todos.length === 0) {
     return null;
   }
+
   return todos
     .filter((t): t is Record<string, unknown> => t !== null && typeof t === "object")
     .map((todo) => ({
@@ -86,7 +90,9 @@ export function readClaudeToolUseResult(message: SDKMessage): Record<string, unk
   if (message.type !== "user") {
     return undefined;
   }
+
   const result = (message as { readonly tool_use_result?: unknown }).tool_use_result;
+
   return result !== null && typeof result === "object" && !Array.isArray(result)
     ? (result as Record<string, unknown>)
     : undefined;
@@ -96,6 +102,7 @@ export function readClaudeTaskFromResult(
   result: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
   const task = result?.task;
+
   return task !== null && typeof task === "object" && !Array.isArray(task)
     ? (task as Record<string, unknown>)
     : undefined;
@@ -111,22 +118,29 @@ export function applyClaudeTaskToolResult(
   }
 
   let changed = false;
+
   if (tool.toolName === "TaskList") {
     const resultTasks = result?.tasks;
+
     if (!Array.isArray(resultTasks)) {
       return false;
     }
+
     tasks.clear();
+
     for (const entry of resultTasks) {
       if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
         continue;
       }
+
       const task = entry as Record<string, unknown>;
       const id = readString(task.id);
       const subject = readString(task.subject);
+
       if (!id || !subject) {
         continue;
       }
+
       tasks.set(id, {
         id,
         subject,
@@ -134,6 +148,7 @@ export function applyClaudeTaskToolResult(
         blockedBy: new Set(readStringArray(task.blockedBy)),
       });
     }
+
     return tasks.size > 0;
   }
 
@@ -141,49 +156,62 @@ export function applyClaudeTaskToolResult(
     const resultTask = readClaudeTaskFromResult(result);
     const id = readString(resultTask?.id);
     const subject = readString(resultTask?.subject) ?? readString(tool.input.subject);
+
     if (!id || !subject) {
       return false;
     }
+
     tasks.set(id, {
       id,
       subject,
       status: normalizeClaudeTaskStatus(tool.input.status),
       blockedBy: new Set(readStringArray(tool.input.blockedBy)),
     });
+
     return true;
   }
 
   const taskId = readString(tool.input.taskId) ?? readString(result?.taskId);
+
   if (!taskId) {
     return false;
   }
+
   const task = tasks.get(taskId);
+
   if (!task) {
     return false;
   }
+
   const subject = readString(tool.input.subject);
+
   if (subject && task.subject !== subject) {
     task.subject = subject;
     changed = true;
   }
+
   if (typeof tool.input.status === "string") {
     const status = normalizeClaudeTaskStatus(tool.input.status);
+
     if (task.status !== status) {
       task.status = status;
       changed = true;
     }
   }
+
   for (const dependency of readStringArray(tool.input.addBlockedBy)) {
     if (!task.blockedBy.has(dependency)) {
       task.blockedBy.add(dependency);
       changed = true;
     }
   }
+
   for (const dependency of readStringArray(tool.input.removeBlockedBy)) {
     if (task.blockedBy.delete(dependency)) {
       changed = true;
     }
   }
+
   return changed;
 }
 
@@ -191,6 +219,7 @@ export function planStepsFromClaudeTasks(tasks: Map<string, ClaudeTaskState>): P
   return Array.from(tasks.values()).map((task) => {
     const blockedBy = Array.from(task.blockedBy);
     const blockedSuffix = blockedBy.length > 0 ? ` (blocked by #${blockedBy.join(", #")})` : "";
+
     return {
       step: `${task.subject}${blockedSuffix}`,
       status: task.status,
@@ -203,10 +232,13 @@ export function sanitizeSessionUrl(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
+
   const trimmed = value.trim();
+
   if (!/^https?:\/\//i.test(trimmed)) {
     return undefined;
   }
+
   return trimmed;
 }
 
@@ -220,7 +252,9 @@ export function trimmedString(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
+
   const trimmed = value.trim();
+
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
@@ -233,16 +267,20 @@ export function normalizeTaskUsage(usage: unknown): RuntimeTaskUsage | undefined
   if (typeof usage !== "object" || usage === null) {
     return undefined;
   }
+
   const record = usage as Record<string, unknown>;
   const totalTokens = nonNegativeInt(record.total_tokens);
+
   if (totalTokens === undefined) {
     return undefined;
   }
+
   const inputTokens = nonNegativeInt(record.input_tokens);
   const cachedInputTokens = nonNegativeInt(record.cache_read_input_tokens);
   const outputTokens = nonNegativeInt(record.output_tokens);
   const toolUses = nonNegativeInt(record.tool_uses);
   const durationMs = nonNegativeInt(record.duration_ms);
+
   return {
     totalTokens,
     ...(inputTokens !== undefined ? { inputTokens } : {}),
@@ -276,11 +314,13 @@ export function agentIdForParentToolUse(
   if (parentToolUseId === null || parentToolUseId === undefined) {
     return undefined;
   }
+
   for (const agent of agents.values()) {
     if (agent.toolUseId === parentToolUseId) {
       return agent.taskId;
     }
   }
+
   return undefined;
 }
 
@@ -294,9 +334,11 @@ export function taskLinkageFor(
   taskId: string,
 ): TaskAgentLinkage {
   const agent = agents.get(taskId);
+
   if (!agent) {
     return {};
   }
+
   return {
     ...(agent.taskType ? { taskType: agent.taskType } : {}),
     ...(agent.owningAgentId ? { agentId: agent.owningAgentId } : {}),
@@ -345,30 +387,40 @@ export function parseWorkflowProgress(value: unknown): ClaudeWorkflowProgress | 
   if (!Array.isArray(value) || value.length === 0) {
     return undefined;
   }
+
   const phasesByIndex = new Map<number, string>();
   const agentsByIndex = new Map<number, ClaudeWorkflowAgentEntry>();
+
   for (const entry of value) {
     if (typeof entry !== "object" || entry === null) {
       continue;
     }
+
     const record = entry as Record<string, unknown>;
     const entryType = trimmedString(record.type);
+
     if (entryType === "workflow_phase") {
       const index = nonNegativeInt(record.index);
       const title = trimmedString(record.title);
+
       if (index !== undefined && title && !phasesByIndex.has(index)) {
         phasesByIndex.set(index, title);
       }
+
       continue;
     }
+
     if (entryType !== "workflow_agent") {
       continue;
     }
+
     const index = nonNegativeInt(record.index);
     const state = trimmedString(record.state);
+
     if (index === undefined || !state || agentsByIndex.has(index)) {
       continue;
     }
+
     agentsByIndex.set(index, {
       index,
       state,
@@ -384,16 +436,20 @@ export function parseWorkflowProgress(value: unknown): ClaudeWorkflowProgress | 
       toolCalls: nonNegativeInt(record.toolCalls),
     });
   }
+
   if (phasesByIndex.size === 0 && agentsByIndex.size === 0) {
     return undefined;
   }
+
   const phases = Array.from(phasesByIndex.entries())
     .map(([index, title]) => ({ index, title }))
     .toSorted((a, b) => a.index - b.index)
     .slice(0, WORKFLOW_PHASE_CAP);
+
   const agents = Array.from(agentsByIndex.values())
     .toSorted((a, b) => a.index - b.index)
     .slice(0, WORKFLOW_AGENT_CAP);
+
   return { phases, agents };
 }
 

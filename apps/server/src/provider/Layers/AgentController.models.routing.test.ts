@@ -13,6 +13,7 @@ describe("AgentControllerLive", () => {
   describe("per-driver wire-format model routing", () => {
     it.effect("routes two bots on the same Codex instance to different models", () => {
       const bridge = makeBridge();
+
       const sessionsByThread = new Map<
         string,
         {
@@ -20,6 +21,7 @@ describe("AgentControllerLive", () => {
           sendMessage: ReturnType<typeof vi.fn>;
         }
       >();
+
       const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = () =>
         Effect.succeed({
           controller: {
@@ -31,6 +33,7 @@ describe("AgentControllerLive", () => {
                 model: { switch: switchSpy },
                 sendMessage,
               });
+
               return {
                 state: {
                   get: () => ({}),
@@ -57,12 +60,14 @@ describe("AgentControllerLive", () => {
           },
           observeExternalTurn: vi.fn(async () => undefined),
         });
+
       const codexWorkThread = ThreadId.make("thread-codex-work");
       const codexReviewThread = ThreadId.make("thread-codex-review");
 
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
+
           for (const [threadId, model] of [
             [codexWorkThread, "gpt-5.6-sol"],
             [codexReviewThread, "gpt-5.6-codex-mini"],

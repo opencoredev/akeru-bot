@@ -132,11 +132,13 @@ export function makeOpenCodeAdapterHarness() {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {
             runtimeMock.state.closeCalls.push(url);
+
             if (runtimeMock.state.closeError) {
               throw runtimeMock.state.closeError;
             }
           }),
         );
+
         return {
           url,
           exitCode: Effect.never,
@@ -150,11 +152,13 @@ export function makeOpenCodeAdapterHarness() {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {
             runtimeMock.state.closeCalls.push(url);
+
             if (runtimeMock.state.closeError) {
               throw runtimeMock.state.closeError;
             }
           }),
         );
+
         return {
           url,
           exitCode: null,
@@ -171,23 +175,28 @@ export function makeOpenCodeAdapterHarness() {
             runtimeMock.state.authHeaders.push(
               serverPassword ? `Basic ${btoa(`opencode:${serverPassword}`)}` : null,
             );
+
             return { data: { id: `${baseUrl}/session` } };
           },
           get: async ({ sessionID }: { sessionID: string }) => {
             runtimeMock.state.sessionGetIds.push(sessionID);
             await runtimeMock.state.sessionGetHold?.(sessionID);
+
             // The real client is `throwOnError: true`: non-2xx rejects rather
             // than resolving, so missing → 404 throw, transient → 500 throw.
             if (runtimeMock.state.transientErrorSessionIds.has(sessionID)) {
               throw new Error("opencode server error", { cause: { status: 500 } });
             }
+
             if (runtimeMock.state.missingSessionIds.has(sessionID)) {
               throw new Error(`Session not found: ${sessionID}`, {
                 cause: { status: 404, body: { name: "NotFoundError" } },
               });
             }
+
             const directory = runtimeMock.state.sessionDirectoryById.get(sessionID);
             const parentID = runtimeMock.state.sessionParentById.get(sessionID);
+
             return {
               data: {
                 id: sessionID,
@@ -201,15 +210,18 @@ export function makeOpenCodeAdapterHarness() {
           },
           update: async ({ sessionID, permission }: { sessionID: string; permission: unknown }) => {
             runtimeMock.state.sessionUpdateCalls.push({ sessionID, permission });
+
             return { data: { id: sessionID } };
           },
           fork: async ({ sessionID, directory }: { sessionID: string; directory?: string }) => {
             // Fork clones history into a new session bound to the directory.
             const forkedId = `${sessionID}_fork`;
             runtimeMock.state.forkCalls.push({ sessionID, ...(directory ? { directory } : {}) });
+
             if (directory) {
               runtimeMock.state.sessionDirectoryById.set(forkedId, directory);
             }
+
             return { data: { id: forkedId, ...(directory ? { directory } : {}) } };
           },
           abort: async ({ sessionID }: { sessionID: string }) => {
@@ -218,10 +230,12 @@ export function makeOpenCodeAdapterHarness() {
           },
           children: async ({ sessionID }: { sessionID: string }) => {
             runtimeMock.state.sessionChildrenCalls.push(sessionID);
+
             return { data: runtimeMock.state.sessionChildrenById.get(sessionID) ?? [] };
           },
           promptAsync: async (input: unknown) => {
             runtimeMock.state.promptCalls.push(input);
+
             if (runtimeMock.state.promptAsyncError) {
               throw runtimeMock.state.promptAsyncError;
             }
@@ -232,12 +246,16 @@ export function makeOpenCodeAdapterHarness() {
               sessionID,
               ...(messageID ? { messageID } : {}),
             });
+
             if (!messageID) {
               throw new Error("Expected messageID");
             }
+
             let lastUserID: string | undefined;
+
             for (const entry of runtimeMock.state.messages) {
               if (entry.info.role === "user") lastUserID = entry.info.id;
+
               if (entry.info.id === messageID && entry.parts.length > 0) {
                 runtimeMock.state.revertMessageID = lastUserID ?? messageID;
                 break;
@@ -260,9 +278,11 @@ export function makeOpenCodeAdapterHarness() {
             options?: { signal?: AbortSignal },
           ) => {
             runtimeMock.state.permissionReplyCalls.push({ requestID, reply });
+
             if (runtimeMock.state.permissionReplyError) {
               throw runtimeMock.state.permissionReplyError;
             }
+
             await runtimeMock.state.permissionReplyImplementation?.(
               requestID,
               reply,
@@ -273,6 +293,7 @@ export function makeOpenCodeAdapterHarness() {
         question: {
           reply: async ({ requestID }: { requestID: string }) => {
             runtimeMock.state.questionReplyCalls.push(requestID);
+
             if (runtimeMock.state.questionReplyError) {
               throw runtimeMock.state.questionReplyError;
             }
@@ -281,6 +302,7 @@ export function makeOpenCodeAdapterHarness() {
         mcp: {
           add: async (input: { name: string; config: unknown }) => {
             runtimeMock.state.mcpAddCalls.push(input);
+
             return { data: true };
           },
         },
@@ -323,5 +345,6 @@ export function makeOpenCodeAdapterHarness() {
     Layer.provideMerge(providerSessionDirectoryTestLayer),
     Layer.provideMerge(NodeServices.layer),
   );
+
   return { runtimeMock, OpenCodeRuntimeTestDouble, OpenCodeAdapterTestLayer };
 }

@@ -37,16 +37,20 @@ export function readResumeCursorThreadId(
 
 export function classifyCodexStderrLine(rawLine: string): { readonly message: string } | null {
   const line = rawLine.replaceAll(ANSI_ESCAPE_REGEX, "").trim();
+
   if (!line) {
     return null;
   }
 
   const match = line.match(CODEX_STDERR_LOG_REGEX);
+
   if (match) {
     const level = match[1];
+
     if (level && level !== "ERROR") {
       return null;
     }
+
     if (BENIGN_ERROR_LOG_SNIPPETS.some((snippet) => line.includes(snippet))) {
       return null;
     }
@@ -57,9 +61,11 @@ export function classifyCodexStderrLine(rawLine: string): { readonly message: st
 
 export function isRecoverableThreadResumeError(error: unknown): boolean {
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+
   if (!message.includes("thread")) {
     return false;
   }
+
   return RECOVERABLE_THREAD_RESUME_ERROR_SNIPPETS.some((snippet) => message.includes(snippet));
 }
 
@@ -86,6 +92,7 @@ export const openCodexThread = (input: {
   readonly resumeThreadId: string | undefined;
 }): Effect.Effect<CodexThreadOpenResponse, CodexErrors.CodexAppServerError> => {
   const resumeThreadId = input.resumeThreadId;
+
   const startParams = buildThreadStartParams({
     cwd: input.cwd,
     runtimeMode: input.runtimeMode,

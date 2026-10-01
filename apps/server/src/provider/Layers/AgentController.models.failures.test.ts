@@ -45,10 +45,12 @@ import { makeMastraHarness, assistantMessage } from "./test-support/agentControl
 describe("provider access health", () => {
   it("records the model a failed turn ran on with the instance failure", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-model-"));
+
     try {
       const service = await makeTestSubscriptionAuthService(
         NodePath.join(directory, "subscription-auth.json"),
       );
+
       recordProviderAccessHealth(
         service,
         {
@@ -79,10 +81,12 @@ describe("AgentControllerLive", () => {
   it.effect("runs Codex turns through Mastra Session.sendMessage and normalizes events", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
+
         const session = yield* controller.startSession(codexThreadId, {
           threadId: codexThreadId,
           provider: ProviderDriverKind.make("codex"),
@@ -91,9 +95,11 @@ describe("AgentControllerLive", () => {
           modelSelection: codexSelection,
           runtimeMode: "full-access",
         });
+
         assert.equal(session.provider, "codex");
 
         const events: ProviderRuntimeEvent[] = [];
+
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) =>
             Effect.sync(() => {
@@ -102,6 +108,7 @@ describe("AgentControllerLive", () => {
           ),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Reply once." });
         mastra.emit({
@@ -149,9 +156,11 @@ describe("AgentControllerLive", () => {
   it.effect("normalizes legacy plan input when running Claude through Mastra", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
+
         const resolved = yield* controller.resolveEngine({
           threadId: claudeThreadId,
           engine: { provider: "claudeAgent", model: "claude-fable-5" },
@@ -159,6 +168,7 @@ describe("AgentControllerLive", () => {
           mode: "plan",
           botConversation: true,
         });
+
         assert.equal(resolved.mode, "default");
         yield* controller.startSession(claudeThreadId, {
           threadId: claudeThreadId,
@@ -167,6 +177,7 @@ describe("AgentControllerLive", () => {
           cwd: process.cwd(),
           runtimeMode: "approval-required",
         });
+
         const result = yield* controller.sendTurn({
           threadId: claudeThreadId,
           input: "Use Claude.",
@@ -192,6 +203,7 @@ describe("AgentControllerLive", () => {
   it.effect("runs Grok through the Akeru Mastra harness", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -209,6 +221,7 @@ describe("AgentControllerLive", () => {
           cwd: process.cwd(),
           runtimeMode: "approval-required",
         });
+
         const result = yield* controller.sendTurn({
           threadId: grokThreadId,
           input: "Use Grok.",
@@ -233,6 +246,7 @@ describe("AgentControllerLive", () => {
   it.effect("runs the saved Kimi model through Mastra without provider fallback", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -243,6 +257,7 @@ describe("AgentControllerLive", () => {
           mode: "default",
           botConversation: true,
         });
+
         const session = yield* controller.startSession(kimiThreadId, {
           threadId: kimiThreadId,
           provider: ProviderDriverKind.make("kimi"),
@@ -274,13 +289,16 @@ describe("AgentControllerLive", () => {
         () => {
           const bridge = makeBridge();
           const mastra = makeMastraHarness();
+
           const model = (model: string) => ({
             instanceId: testCase.instanceId,
             model,
           });
+
           return provideController(
             Effect.gen(function* () {
               const controller = yield* AgentController;
+
               const resolve = (model: string) =>
                 controller.resolveEngine({
                   threadId: testCase.threadId,
@@ -289,6 +307,7 @@ describe("AgentControllerLive", () => {
                   mode: "default",
                   botConversation: true,
                 });
+
               yield* resolve(testCase.from);
               yield* controller.startSession(testCase.threadId, {
                 threadId: testCase.threadId,
@@ -321,6 +340,7 @@ describe("AgentControllerLive", () => {
                 Stream.runHead,
                 Effect.forkChild({ startImmediately: true }),
               );
+
               yield* controller.sendTurn({
                 threadId: testCase.threadId,
                 input: "Second turn.",
@@ -353,9 +373,11 @@ describe("AgentControllerLive", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
       instanceModelCatalog.set(String(codexInstanceId), { models: ["gpt-5.6-sol"] });
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
+
           const failure = yield* Effect.flip(
             controller.resolveEngine({
               threadId: codexThreadId,
@@ -365,10 +387,13 @@ describe("AgentControllerLive", () => {
               botConversation: true,
             }),
           );
+
           assert.equal(failure._tag, "AgentControllerUnsupportedEngineError");
+
           if (failure._tag === "AgentControllerUnsupportedEngineError") {
             assert.include(failure.detail, "Model 'not-a-model' is not available for codex.");
           }
+
           expect(mastra.createSession).not.toHaveBeenCalled();
         }),
         bridge.service,
@@ -386,9 +411,11 @@ describe("AgentControllerLive", () => {
       instanceModelCatalog.set(String(codexInstanceId), {
         models: ["gpt-5.6-sol", "custom-codex"],
       });
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
+
           const resolved = yield* controller.resolveEngine({
             threadId: codexThreadId,
             engine: { provider: "codex", model: "custom-codex" },
@@ -396,6 +423,7 @@ describe("AgentControllerLive", () => {
             mode: "default",
             botConversation: true,
           });
+
           assert.equal(resolved.modelSelection.model, "custom-codex");
         }),
         bridge.service,
@@ -417,9 +445,11 @@ describe("AgentControllerLive", () => {
         models: ["gpt-5.6-sol"],
         status: "warning",
       });
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
+
           const resolved = yield* controller.resolveEngine({
             threadId: codexThreadId,
             engine: { provider: "codex", model: "cli-only-model" },
@@ -427,6 +457,7 @@ describe("AgentControllerLive", () => {
             mode: "default",
             botConversation: true,
           });
+
           assert.equal(resolved.modelSelection.model, "cli-only-model");
         }),
         bridge.service,
@@ -441,6 +472,7 @@ describe("AgentControllerLive", () => {
     it.effect("normalizes a full Kimi turn with a tool call over the Mastra session", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
@@ -448,10 +480,12 @@ describe("AgentControllerLive", () => {
           yield* controller.startSession(kimiThreadId, kimiStartInput("k3-256k"));
 
           const events: ProviderRuntimeEvent[] = [];
+
           const eventsFiber = yield* controller.streamEvents.pipe(
             Stream.runForEach((event) => Effect.sync(() => events.push(event))),
             Effect.forkChild({ startImmediately: true }),
           );
+
           const completed = yield* controller.streamEvents.pipe(
             Stream.filter(
               (event) => event.type === "turn.completed" && event.payload.state === "completed",
@@ -459,6 +493,7 @@ describe("AgentControllerLive", () => {
             Stream.runHead,
             Effect.forkChild({ startImmediately: true }),
           );
+
           yield* Effect.yieldNow;
 
           yield* controller.sendTurn({ threadId: kimiThreadId, input: "Read this file." });
@@ -490,6 +525,7 @@ describe("AgentControllerLive", () => {
           yield* Fiber.interrupt(eventsFiber);
 
           const types = events.map((event) => event.type);
+
           for (const expected of [
             "turn.started",
             "session.state.changed",
@@ -500,13 +536,16 @@ describe("AgentControllerLive", () => {
           ]) {
             assert.include(types, expected);
           }
+
           const itemStarted = events.find((event) => event.type === "item.started");
           expect(itemStarted).toMatchObject({
             payload: { itemType: "file_change", title: "read_file" },
           });
+
           const toolItem = events.find(
             (event) => event.type === "item.completed" && String(event.itemId ?? "") === "read-1",
           );
+
           expect(toolItem).toMatchObject({ payload: { status: "completed" } });
           expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "Read this file." });
           expect(mastra.session.model.switch).toHaveBeenCalledWith({
@@ -527,6 +566,7 @@ describe("AgentControllerLive", () => {
     it.effect("normalizes a Kimi approval denial to the Mastra session", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
@@ -540,6 +580,7 @@ describe("AgentControllerLive", () => {
             Stream.runHead,
             Effect.forkChild({ startImmediately: true }),
           );
+
           const turnEvents = yield* controller.streamEvents.pipe(
             Stream.filter(
               (event) =>
@@ -550,6 +591,7 @@ describe("AgentControllerLive", () => {
             Stream.runCollect,
             Effect.forkChild({ startImmediately: true }),
           );
+
           yield* Effect.yieldNow;
           yield* controller.sendTurn({ threadId: kimiThreadId, input: "Run a shell command." });
           yield* Effect.yieldNow;
@@ -588,9 +630,11 @@ describe("AgentControllerLive", () => {
           const completed = [...events].find((event) => event.type === "turn.completed");
           const itemCompleted = [...events].find((event) => event.type === "item.completed");
           assert.equal(completed?.type, "turn.completed");
+
           if (completed?.type === "turn.completed") {
             assert.equal(completed.payload.state, "completed");
           }
+
           expect(itemCompleted).toMatchObject({ payload: { status: "declined" } });
           const [session] = yield* controller.listSessions();
           assert.isUndefined(session?.activeTurnId);
@@ -607,6 +651,7 @@ describe("AgentControllerLive", () => {
     it.effect("normalizes interrupting a Kimi turn mid-flight through Mastra abort", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
@@ -620,18 +665,22 @@ describe("AgentControllerLive", () => {
             Stream.runHead,
             Effect.forkChild({ startImmediately: true }),
           );
+
           const turn = yield* controller.sendTurn({
             threadId: kimiThreadId,
             input: "Work on this forever.",
           });
+
           yield* Effect.yieldNow;
 
           yield* controller.interruptTurn({ threadId: kimiThreadId });
           const event = yield* Fiber.join(interrupted);
           assert.equal(event._tag, "Some");
+
           if (event._tag === "Some") {
             assert.equal(event.value.turnId, turn.turnId);
           }
+
           expect(mastra.session.abort).toHaveBeenCalledOnce();
           expect(bridge.interruptTurn).not.toHaveBeenCalled();
 

@@ -19,11 +19,14 @@ export function configOptionCurrentValueMatches(
   value: string | boolean,
 ): boolean {
   const currentValue = configOption.currentValue;
+
   if (configOption.type === "boolean") {
     return currentValue === value;
   }
+
   if (typeof currentValue !== "string") {
     return false;
   }
+
   return currentValue.trim() === String(value).trim();
 }

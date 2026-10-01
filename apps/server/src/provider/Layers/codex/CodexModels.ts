@@ -39,7 +39,9 @@ export function mapCodexModelCapabilities(
           label: reasoningEffortLabel(reasoningEffort),
         },
   );
+
   const defaultReasoning = reasoningOptions.find((option) => option.isDefault)?.id;
+
   const serviceTiers =
     model.serviceTiers && model.serviceTiers.length > 0
       ? model.serviceTiers
@@ -48,11 +50,13 @@ export function mapCodexModelCapabilities(
           name: id === "fast" ? "Fast" : id,
           description: "",
         }));
+
   const catalogDefaultServiceTier = serviceTiers.some(
     (tier) => tier.id === model.defaultServiceTier,
   )
     ? model.defaultServiceTier
     : null;
+
   const defaultServiceTier = catalogDefaultServiceTier ?? DEFAULT_SERVICE_TIER_ID;
   const optionDescriptors: ProviderOptionDescriptor[] = [];
 
@@ -65,6 +69,7 @@ export function mapCodexModelCapabilities(
       ...(defaultReasoning ? { currentValue: defaultReasoning } : {}),
     });
   }
+
   if (serviceTiers.length > 0) {
     optionDescriptors.push({
       id: "serviceTier",
@@ -121,17 +126,22 @@ export function applyPreferredCodexDefaultModel(
   const preferredSlug = PREFERRED_DEFAULT_CODEX_MODELS.find((slug) =>
     models.some((model) => model.slug === slug && !model.isCustom),
   );
+
   if (!preferredSlug) {
     return models;
   }
+
   return models.map((model) => {
     if (model.slug === preferredSlug) {
       return model.isDefault ? model : { ...model, isDefault: true };
     }
+
     if (!model.isDefault) {
       return model;
     }
+
     const { isDefault: _isDefault, ...rest } = model;
+
     return rest;
   });
 }
@@ -147,11 +157,14 @@ export function appendCustomCodexModels(
   const seen = new Set(models.map((model) => model.slug));
   const fallbackCapabilities = models.find((model) => model.capabilities)?.capabilities ?? null;
   const customEntries: ServerProviderModel[] = [];
+
   for (const rawModel of customModels) {
     const slug = rawModel.trim();
+
     if (!slug || seen.has(slug)) {
       continue;
     }
+
     seen.add(slug);
     customEntries.push({
       slug,
@@ -160,5 +173,6 @@ export function appendCustomCodexModels(
       capabilities: fallbackCapabilities,
     });
   }
+
   return customEntries.length === 0 ? models : [...models, ...customEntries];
 }

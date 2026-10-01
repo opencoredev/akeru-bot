@@ -21,6 +21,7 @@ import {
 effectIt.effect("finishes session replay at the configured idle deadline", () =>
   Effect.gen(function* () {
     yield* TestClock.setTime(0);
+
     const gateRef = yield* Ref.make<Option.Option<SessionLoadGate>>(
       Option.some({
         active: true,
@@ -29,6 +30,7 @@ effectIt.effect("finishes session replay at the configured idle deadline", () =>
         initializeResult: { protocolVersion: 1 },
       }),
     );
+
     const result = yield* waitForSessionLoadReplayIdle({ gateRef }).pipe(Effect.forkChild);
 
     yield* TestClock.adjust(Duration.millis(101));

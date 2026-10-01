@@ -10,9 +10,11 @@ export function mapCodexTelemetryEvents(
 ): ReadonlyArray<ProviderRuntimeEvent> | undefined {
   if (event.method === "model/rerouted") {
     const payload = readPayload(EffectCodexSchema.V2ModelReroutedNotification, event.payload);
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         type: "model.rerouted",
@@ -28,9 +30,11 @@ export function mapCodexTelemetryEvents(
 
   if (event.method === "deprecationNotice") {
     const payload = readPayload(EffectCodexSchema.V2DeprecationNoticeNotification, event.payload);
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         type: "deprecation.notice",
@@ -45,9 +49,11 @@ export function mapCodexTelemetryEvents(
 
   if (event.method === "configWarning") {
     const payload = readPayload(EffectCodexSchema.V2ConfigWarningNotification, event.payload);
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         type: "config.warning",
@@ -68,6 +74,7 @@ export function mapCodexTelemetryEvents(
     if (!readPayload(EffectCodexSchema.V2AccountUpdatedNotification, event.payload)) {
       return [];
     }
+
     return [
       {
         type: "account.updated",
@@ -83,6 +90,7 @@ export function mapCodexTelemetryEvents(
     if (!readPayload(EffectCodexSchema.V2AccountRateLimitsUpdatedNotification, event.payload)) {
       return [];
     }
+
     return [
       {
         type: "account.rate-limits.updated",
@@ -99,9 +107,11 @@ export function mapCodexTelemetryEvents(
       EffectCodexSchema.V2McpServerOauthLoginCompletedNotification,
       event.payload,
     );
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         type: "mcp.oauth.completed",
@@ -120,9 +130,11 @@ export function mapCodexTelemetryEvents(
       EffectCodexSchema.V2ThreadRealtimeStartedNotification,
       event.payload,
     );
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         type: "thread.realtime.started",
@@ -139,9 +151,11 @@ export function mapCodexTelemetryEvents(
       EffectCodexSchema.V2ThreadRealtimeItemAddedNotification,
       event.payload,
     );
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         type: "thread.realtime.item-added",
@@ -158,9 +172,11 @@ export function mapCodexTelemetryEvents(
       EffectCodexSchema.V2ThreadRealtimeOutputAudioDeltaNotification,
       event.payload,
     );
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         type: "thread.realtime.audio.delta",
@@ -175,6 +191,7 @@ export function mapCodexTelemetryEvents(
   if (event.method === "thread/realtime/error") {
     const payload = readPayload(EffectCodexSchema.V2ThreadRealtimeErrorNotification, event.payload);
     const message = payload?.message ?? event.message ?? "Realtime error";
+
     return [
       {
         type: "thread.realtime.error",
@@ -191,6 +208,7 @@ export function mapCodexTelemetryEvents(
       EffectCodexSchema.V2ThreadRealtimeClosedNotification,
       event.payload,
     );
+
     return [
       {
         type: "thread.realtime.closed",
@@ -206,6 +224,7 @@ export function mapCodexTelemetryEvents(
     const payload = readPayload(EffectCodexSchema.V2ErrorNotification, event.payload);
     const message = payload?.error.message ?? event.message ?? "Provider runtime error";
     const willRetry = payload?.willRetry === true;
+
     return [
       {
         type: willRetry ? "runtime.warning" : "runtime.error",
@@ -222,6 +241,7 @@ export function mapCodexTelemetryEvents(
   if (event.method === "process/stderr") {
     const message = event.message ?? "Codex process stderr";
     const isFatal = isFatalCodexProcessStderrMessage(message);
+
     return [
       isFatal
         ? {
@@ -248,6 +268,7 @@ export function mapCodexTelemetryEvents(
     if (!readPayload(EffectCodexSchema.V2WindowsWorldWritableWarningNotification, event.payload)) {
       return [];
     }
+
     return [
       {
         type: "runtime.warning",
@@ -265,9 +286,11 @@ export function mapCodexTelemetryEvents(
       EffectCodexSchema.V2WindowsSandboxSetupCompletedNotification,
       event.payload,
     );
+
     if (!payload) {
       return [];
     }
+
     const successMessage = event.message ?? "Windows sandbox setup completed";
     const failureMessage = event.message ?? "Windows sandbox setup failed";
 
@@ -295,5 +318,6 @@ export function mapCodexTelemetryEvents(
         : []),
     ];
   }
+
   return undefined;
 }

@@ -52,6 +52,7 @@ describe("AgentControllerLive", () => {
             Effect.as({ threadId: input.threadId, turnId: turnA }),
           ),
         );
+
       const terminal = (turnId: TurnId, eventId: string): ProviderRuntimeEvent => ({
         provider: ProviderDriverKind.make("opencode"),
         providerInstanceId: openCodeInstanceId,
@@ -69,8 +70,10 @@ describe("AgentControllerLive", () => {
             const reservation = yield* Effect.promise(() =>
               botMemoryStore.reserveReviewCadence(botId),
             );
+
             yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
           }
+
           const controller = yield* AgentController;
           yield* controller.resolveEngine({
             threadId: claudeThreadId,
@@ -98,28 +101,35 @@ describe("AgentControllerLive", () => {
           });
           const terminalObserved = yield* Deferred.make<void>();
           let observedCount = 0;
+
           const streamFiber = yield* Stream.runForEach(controller.streamEvents, () => {
             observedCount += 1;
+
             return Effect.all([
               observedCount === 2
                 ? Deferred.succeed(terminalObserved, undefined).pipe(Effect.ignore)
                 : Effect.void,
             ]).pipe(Effect.asVoid);
           }).pipe(Effect.forkChild({ startImmediately: true }));
+
           yield* Effect.yieldNow;
 
           yield* controller.sendTurn({ threadId: claudeThreadId, input: "Turn A" });
+
           const secondSend = yield* controller
             .sendTurn({ threadId: claudeThreadId, input: "Turn B" })
             .pipe(Effect.forkChild({ startImmediately: true }));
+
           yield* Deferred.await(secondDispatchEntered);
           const lateObserved = yield* Deferred.make<void>();
+
           const lateFiber = yield* controller.streamEvents.pipe(
             Stream.take(1),
             Stream.runDrain,
             Effect.andThen(Deferred.succeed(lateObserved, undefined)),
             Effect.forkChild({ startImmediately: true }),
           );
+
           yield* Effect.yieldNow;
           yield* PubSub.publish(nativeEvents, {
             provider: ProviderDriverKind.make("opencode"),
@@ -152,11 +162,13 @@ describe("AgentControllerLive", () => {
               assistant: "One shared answer.",
             }),
           );
+
           const observedUsers = (
             mastra.observeExternalTurn.mock.calls as unknown as ReadonlyArray<
               readonly [{ readonly userMessages: ReadonlyArray<{ readonly id: string }> }]
             >
           )[0]?.[0].userMessages;
+
           expect(new Set(observedUsers?.map((entry) => entry.id)).size).toBe(2);
           yield* Fiber.interrupt(lateFiber);
           yield* Fiber.interrupt(streamFiber);
@@ -191,9 +203,11 @@ describe("AgentControllerLive", () => {
           Effect.as({ threadId: input.threadId, turnId }),
         ),
       );
+
       const memoryDir = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "akeru-racing-terminal-"),
       );
+
       const botMemoryStore = new BotMemoryStore(memoryDir);
       const botId = BotId.make("bot-racing-terminal");
 
@@ -225,13 +239,16 @@ describe("AgentControllerLive", () => {
             },
           });
           const processed = yield* Deferred.make<void>();
+
           const streamFiber = yield* controller.streamEvents.pipe(
             Stream.runForEach(() => Deferred.succeed(processed, undefined).pipe(Effect.ignore)),
             Effect.forkChild({ startImmediately: true }),
           );
+
           const sendFiber = yield* controller
             .sendTurn({ threadId: claudeThreadId, input: "Racing terminal." })
             .pipe(Effect.forkChild({ startImmediately: true }));
+
           yield* Deferred.await(dispatchEntered);
           yield* PubSub.publish(nativeEvents, {
             provider: ProviderDriverKind.make("opencode"),

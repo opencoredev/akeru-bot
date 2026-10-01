@@ -54,6 +54,7 @@ export function createProviderSessionBindings(deps: {
               : "Provider instance id is required.",
           ),
         );
+
   const upsertSessionBinding = (
     session: ProviderSession,
     threadId: ThreadId,
@@ -68,6 +69,7 @@ export function createProviderSessionBindings(deps: {
         "ProviderService.upsertSessionBinding",
         session,
       );
+
       yield* deps.directory.upsert({
         threadId,
         provider: session.provider,
@@ -78,6 +80,7 @@ export function createProviderSessionBindings(deps: {
         runtimePayload: toRuntimePayloadFromSession(session, extra),
       });
     });
+
   const processRuntimeEvent = (
     source: {
       readonly instanceId: ProviderInstanceId;
@@ -93,5 +96,6 @@ export function createProviderSessionBindings(deps: {
         }).pipe(Effect.andThen(deps.publishRuntimeEvent(canonicalEvent))),
       ),
     );
+
   return { requireBindingInstanceId, upsertSessionBinding, processRuntimeEvent };
 }

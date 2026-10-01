@@ -102,6 +102,7 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
   it.effect("rejects feedback for an unknown Codex thread", () =>
     Effect.gen(function* () {
       const adapter = yield* CodexAdapter;
+
       const result = yield* adapter
         .uploadFeedback({ threadId: asThreadId("thread-feedback-missing") })
         .pipe(Effect.result);
@@ -150,10 +151,12 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
 sessionErrorLayer("CodexAdapterLive session errors", (it) => {
   it.effect("passes configured launch args into the session runtime", () => {
     const runtimeFactory = makeRuntimeFactory();
+
     const layer = Layer.effect(
       CodexAdapter,
       Effect.gen(function* () {
         const codexConfig = decodeCodexSettings({ launchArgs: "--strict-config --enable foo" });
+
         return yield* makeCodexAdapter(codexConfig, {
           makeRuntime: runtimeFactory.factory,
         });
@@ -183,10 +186,12 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
 sessionErrorLayer("CodexAdapterLive session errors", (it) => {
   it.effect("uses T3CODE_CODEX_LAUNCH_ARGS for the session runtime", () => {
     const runtimeFactory = makeRuntimeFactory();
+
     const layer = Layer.effect(
       CodexAdapter,
       Effect.gen(function* () {
         const codexConfig = decodeCodexSettings({ launchArgs: "--enable settings-feature" });
+
         return yield* makeCodexAdapter(codexConfig, {
           environment: { T3CODE_CODEX_LAUNCH_ARGS: " --strict-config --enable env-feature " },
           makeRuntime: runtimeFactory.factory,
@@ -218,10 +223,12 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
   it.effect("maps codex model options for the adapter's bound custom instance id", () => {
     const customInstanceId = ProviderInstanceId.make("codex_personal");
     const customRuntimeFactory = makeRuntimeFactory();
+
     const customLayer = Layer.effect(
       CodexAdapter,
       Effect.gen(function* () {
         const codexConfig = decodeCodexSettings({});
+
         return yield* makeCodexAdapter(codexConfig, {
           instanceId: customInstanceId,
           makeRuntime: customRuntimeFactory.factory,
@@ -275,6 +282,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
   it.effect("does not reactivate an idle child after a parent interaction", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
+
       const eventsFiber = yield* Stream.runCollect(Stream.take(adapter.streamEvents, 3)).pipe(
         Effect.forkChild,
       );
@@ -359,13 +367,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "request.resolved");
+
       if (firstEvent.value.type !== "request.resolved") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.payload.requestType, "command_execution_approval");
     }),
   );
@@ -396,13 +408,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "request.resolved");
+
       if (firstEvent.value.type !== "request.resolved") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.payload.requestType, "file_read_approval");
     }),
   );
@@ -437,6 +453,7 @@ it.effect("flushes managed native logs when the adapter layer shuts down", () =>
     const tempDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "t3-codex-adapter-native-log-"),
     );
+
     const basePath = NodePath.join(tempDir, "provider-native.ndjson");
     const runtimeFactory = makeRuntimeFactory();
     const scope = yield* Scope.make("sequential");
@@ -447,6 +464,7 @@ it.effect("flushes managed native logs when the adapter layer shuts down", () =>
         CodexAdapter,
         Effect.gen(function* () {
           const codexConfig = decodeCodexSettings({});
+
           return yield* makeCodexAdapter(codexConfig, {
             makeRuntime: runtimeFactory.factory,
             nativeEventLogPath: basePath,
@@ -458,6 +476,7 @@ it.effect("flushes managed native logs when the adapter layer shuts down", () =>
         Layer.provideMerge(providerSessionDirectoryTestLayer),
         Layer.provideMerge(NodeServices.layer),
       );
+
       const context = yield* Layer.buildWithScope(layer, scope);
       const adapter = yield* Effect.service(CodexAdapter).pipe(Effect.provide(context));
 
@@ -493,6 +512,7 @@ it.effect("flushes managed native logs when the adapter layer shuts down", () =>
       if (!scopeClosed) {
         yield* Scope.close(scope, Exit.void);
       }
+
       NodeFS.rmSync(tempDir, { recursive: true, force: true });
     }
   }),

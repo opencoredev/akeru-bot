@@ -46,9 +46,12 @@ describe("AgentControllerLive", () => {
     (provider) => {
       const bridge = makeBridge();
       const threadId = provider === "codex" ? codexThreadId : kimiThreadId;
+
       const selection =
         provider === "codex" ? codexSelection : { instanceId: kimiInstanceId, model: "k3-256k" };
+
       const createdAt = "2026-01-01T00:00:00.000Z";
+
       const attachment = {
         type: "image" as const,
         id: `${threadId}-12345678-1234-1234-1234-123456789abc`,
@@ -56,6 +59,7 @@ describe("AgentControllerLive", () => {
         mimeType: "image/png",
         sizeBytes: 1,
       };
+
       const messages: ProjectionThreadMessage[] = [1, 2].flatMap((count) =>
         (["user", "assistant"] as const).map((role) => ({
           messageId: MessageId.make(`${role}-${count}`),
@@ -69,6 +73,7 @@ describe("AgentControllerLive", () => {
           attachments: count === 1 && role === "user" ? [attachment] : [],
         })),
       );
+
       const turns: ProjectionTurn[] = [1, 2].map((count) => ({
         threadId,
         turnId: TurnId.make(`turn-${count}`),
@@ -86,6 +91,7 @@ describe("AgentControllerLive", () => {
         checkpointStatus: null,
         checkpointFiles: [],
       }));
+
       const nextContext = Promise.withResolvers<MastraDBMessage[]>();
       const dispatchStarted = Promise.withResolvers<void>();
       const finishDispatch = Promise.withResolvers<void>();
@@ -93,6 +99,7 @@ describe("AgentControllerLive", () => {
       const sessions: Session<Record<string, unknown>>[] = [];
       let harness: AkeruMastraHarness | undefined;
       let failRestart = false;
+
       const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = (options) =>
         Effect.gen(function* () {
           const real = yield* makeAkeruMastraHarness(options);
@@ -110,6 +117,7 @@ describe("AgentControllerLive", () => {
               })),
             ),
           );
+
           return {
             ...real,
             observeAfterTurn: async () => undefined,
@@ -122,8 +130,10 @@ describe("AgentControllerLive", () => {
                   failRestart = false;
                   throw new Error("Restart failed");
                 }
+
                 const session = await real.controller.createSession(input);
                 sessions.push(session);
+
                 if (sessions.length === 1) {
                   const abort = session.abort.bind(session);
                   vi.spyOn(session, "abort").mockImplementation(() => {
@@ -131,19 +141,24 @@ describe("AgentControllerLive", () => {
                     dispatchAborted.resolve();
                   });
                 }
+
                 vi.spyOn(session, "sendMessage").mockImplementation(async () => {
                   if (sessions.length === 1) {
                     dispatchStarted.resolve();
                     await finishDispatch.promise;
+
                     return;
                   }
+
                   nextContext.resolve(await session.thread.listActiveMessages());
                 });
+
                 return session;
               },
             },
           };
         });
+
       return Effect.gen(function* () {
         const controller = yield* AgentController;
         const config = yield* ServerConfig;
@@ -190,9 +205,11 @@ describe("AgentControllerLive", () => {
         );
         yield* controller.sendTurn({ threadId, input: "Discarded in-flight turn" });
         yield* Effect.promise(() => dispatchStarted.promise);
+
         const rollback = yield* controller
           .rollbackConversation({ threadId, numTurns: 1 })
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Effect.promise(() => dispatchAborted.promise);
         expect(sessions).toHaveLength(1);
         finishDispatch.resolve();
@@ -223,9 +240,11 @@ describe("AgentControllerLive", () => {
         turns.splice(1);
         messages.splice(2);
         failRestart = true;
+
         const failedRestart = yield* controller
           .rollbackConversation({ threadId, numTurns: 1 })
           .pipe(Effect.exit);
+
         expect(Exit.isFailure(failedRestart)).toBe(true);
         // The original session reopens without another start request.
         expect(sessions).toHaveLength(3);
@@ -270,15 +289,18 @@ describe("AgentControllerLive", () => {
     it.effect("rebuilds an orphaned worker grant from its delegated parent after a restart", () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       const mcpManager = {
         init: vi.fn(async () => undefined),
         disconnect: vi.fn(async () => undefined),
         getTools: vi.fn(() => ({ linear_update: { mcp: { annotations: {} } } })),
         getServerStatuses: vi.fn(() => []),
       };
+
       // The worker's parent is a delegated chat limited to Task and WebSearch.
       const delegatedParentThreadId = ThreadId.make("thread-delegated-parent");
       const orphanThreadId = ThreadId.make("worker-thread-restricted");
+
       const parentDelegation = {
         delegationId: "delegation-restricted",
         parentThreadId: codexThreadId,
@@ -302,6 +324,7 @@ describe("AgentControllerLive", () => {
           approvalCeiling: "none",
         },
       };
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
@@ -331,6 +354,7 @@ describe("AgentControllerLive", () => {
           assert.isDefined(runtime);
           const tools = runtime.toolsForThread(String(orphanThreadId)).map((tool) => tool.id);
           expect(tools).toContain("WebSearch");
+
           for (const toolId of ["Read", "Task", "linear_update"]) {
             expect(tools).not.toContain(toolId);
           }

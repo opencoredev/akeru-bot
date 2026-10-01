@@ -47,6 +47,7 @@ export const parseCodexSkillsListResponse = Effect.fn("parseCodexSkillsListRespo
   // Resolve each distinct reported root once; a workspace appearing in
   // multiple entries only pays for a single realpath.
   const distinctRoots = [...new Set(response.data.map((entry) => entry.cwd))];
+
   const canonicalRoots = new Map(
     yield* Effect.forEach(
       distinctRoots,
@@ -54,9 +55,11 @@ export const parseCodexSkillsListResponse = Effect.fn("parseCodexSkillsListRespo
       { concurrency: "unbounded" },
     ),
   );
+
   const matchingEntry = response.data.find(
     (entry) => canonicalRoots.get(entry.cwd) === canonicalCwd,
   );
+
   // No matching entry means the provider reported nothing for this
   // workspace. Never union the other workspaces' catalogs: skills from
   // unrelated directories are not skills this provider would load here.
@@ -75,18 +78,23 @@ export const parseCodexSkillsListResponse = Effect.fn("parseCodexSkillsListRespo
     if (skill.description) {
       parsedSkill.description = skill.description;
     }
+
     if (skill.scope) {
       parsedSkill.scope = skill.scope;
     }
+
     if (skill.interface?.displayName) {
       parsedSkill.displayName = skill.interface.displayName;
     }
+
     if (shortDescription) {
       parsedSkill.shortDescription = shortDescription;
     }
+
     // Prefer the small icon asset path; fall back to the large one when the
     // provider only ships a single size.
     const icon = skill.interface?.iconSmall ?? skill.interface?.iconLarge ?? undefined;
+
     if (icon) {
       parsedSkill.icon = icon;
     }
@@ -106,6 +114,7 @@ export const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function
       "model/list",
       cursor ? { cursor } : {},
     );
+
     models.push(...parseCodexModelListResponse(response));
     cursor = response.nextCursor;
   } while (cursor);
@@ -141,10 +150,12 @@ export const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvide
     // Expand here for parity with `CodexTextGeneration`/`CodexSessionRuntime`.
     const resolvedHomePath = input.homePath ? expandHomePath(input.homePath) : undefined;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
     const environment = {
       ...input.environment,
       ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
     };
+
     const spawnCommand = yield* resolveSpawnCommand(
       input.binaryPath,
       codexAppServerArgs(input.launchArgs),
@@ -153,6 +164,7 @@ export const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvide
         extendEnv: true,
       },
     );
+
     const child = yield* spawner
       .spawn(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
@@ -172,7 +184,9 @@ export const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvide
             }),
         ),
       );
+
     const clientContext = yield* Layer.build(CodexClient.layerChildProcess(child));
+
     const client = yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
       Effect.provide(clientContext),
     );
@@ -187,6 +201,7 @@ export const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvide
         experimentalApi: true,
       },
     });
+
     yield* client.notify("initialized", undefined);
 
     // Extract the version string after the first '/' in userAgent, up to the next space or the end
@@ -194,6 +209,7 @@ export const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvide
     const version = versionMatch ? versionMatch[1] : undefined;
 
     const accountResponse = yield* client.request("account/read", {});
+
     if (!accountResponse.account && accountResponse.requiresOpenaiAuth) {
       return {
         account: accountResponse,

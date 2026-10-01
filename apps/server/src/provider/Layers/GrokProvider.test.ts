@@ -18,6 +18,7 @@ import {
 } from "./GrokProvider.ts";
 
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
+
 const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
 
 const LOGGED_IN_MODELS_OUTPUT = [
@@ -70,6 +71,7 @@ describe("buildGrokModelsFromSessionModelState", () => {
         { modelId: "grok-4.5", name: "Grok 4.5" },
       ],
     });
+
     expect(models.map((model) => [model.slug, model.isDefault ?? false])).toEqual([
       ["grok-4.6", true],
       ["grok-4.5", false],
@@ -83,6 +85,7 @@ describe("buildInitialGrokProviderSnapshot", () => {
       const snapshot = yield* buildInitialGrokProviderSnapshot(
         decodeGrokSettings({ enabled: false }),
       );
+
       expect(snapshot.enabled).toBe(false);
       expect(snapshot.status).toBe("disabled");
       expect(snapshot.installed).toBe(false);
@@ -103,6 +106,7 @@ describe("buildInitialGrokProviderSnapshot", () => {
       const snapshot = yield* buildInitialGrokProviderSnapshot(
         decodeGrokSettings({ enabled: true }),
       );
+
       expect(snapshot.enabled).toBe(true);
       expect(snapshot.installed).toBe(true);
       expect(snapshot.status).toBe("warning");
@@ -122,6 +126,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
           binaryPath: "/definitely/not/installed/grok-binary",
         }),
       );
+
       expect(snapshot.enabled).toBe(true);
       expect(snapshot.installed).toBe(false);
       expect(snapshot.status).toBe("error");
@@ -132,6 +137,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
   it.effect("reports an installed CLI as unhealthy when --version exits non-zero", () =>
     Effect.gen(function* () {
       const secretStderr = "broken grok install: secret-token-value";
+
       const snapshot = yield* Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
@@ -188,6 +194,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
         ].join("\n"),
       );
       yield* fs.chmod(grokPath, 0o755);
+
       return grokPath;
     });
 
@@ -199,6 +206,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
             modelsOutput: LOGGED_IN_MODELS_OUTPUT,
             acp: true,
           });
+
           return yield* checkGrokProviderStatus(
             decodeGrokSettings({ enabled: true, binaryPath: grokPath }),
             { ...process.env, XAI_API_KEY: "" },
@@ -226,6 +234,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
             modelsOutput: LOGGED_OUT_MODELS_OUTPUT,
             acp: true,
           });
+
           return yield* checkGrokProviderStatus(
             decodeGrokSettings({ enabled: true, binaryPath: grokPath }),
             { ...process.env, XAI_API_KEY: "" },
@@ -248,6 +257,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
             modelsOutput: LOGGED_IN_MODELS_OUTPUT,
             acp: false,
           });
+
           return yield* checkGrokProviderStatus(
             decodeGrokSettings({ enabled: true, binaryPath: grokPath }),
             { ...process.env, XAI_API_KEY: "" },
@@ -274,6 +284,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
             modelsOutput: LOGGED_OUT_MODELS_OUTPUT,
             acp: false,
           });
+
           return yield* checkGrokProviderStatus(
             decodeGrokSettings({ enabled: true, binaryPath: grokPath }),
             { ...process.env, XAI_API_KEY: "xai-test-key" },
@@ -300,6 +311,7 @@ describe.runIf(process.env.T3_GROK_ACP_PROBE === "1")("checkGrokProviderStatus l
           binaryPath: process.env.T3_GROK_BINARY || "grok",
         }),
       );
+
       expect(snapshot.status).toBe("ready");
       expect(["authenticated", "unknown"]).toContain(snapshot.auth.status);
       expect(snapshot.requiresNewThreadForModelChange).toBeUndefined();

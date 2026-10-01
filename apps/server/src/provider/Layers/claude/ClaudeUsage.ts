@@ -17,6 +17,7 @@ import { toMessage, normalizeClaudeStreamMessages } from "./ClaudeProtocolValues
 
 export function isClaudeInterruptedMessage(message: string): boolean {
   const normalized = message.toLowerCase();
+
   return (
     normalized.includes("all fibers interrupted without error") ||
     normalized.includes("request was aborted") ||
@@ -86,6 +87,7 @@ export function isInterruptedResult(result: SDKResultMessage): boolean {
   }
 
   const errors = resultErrorsText(result);
+
   if (errors.includes("interrupt")) {
     return true;
   }
@@ -119,12 +121,15 @@ export const CLAUDE_USAGE_LIMIT_MAX_WAIT_MS = 30 * 24 * 60 * 60 * 1000;
 export function describeClaudeUsageLimit(info: SDKRateLimitInfo, nowMs: number): string {
   const label = info.rateLimitType ? CLAUDE_USAGE_LIMIT_WINDOWS[info.rateLimitType] : undefined;
   const resetsAtMs = info.resetsAt === undefined ? undefined : info.resetsAt * 1000;
+
   const waitMs =
     resetsAtMs === undefined || !Number.isFinite(nowMs) ? undefined : resetsAtMs - nowMs;
+
   const wait =
     waitMs !== undefined && waitMs > 0 && waitMs <= CLAUDE_USAGE_LIMIT_MAX_WAIT_MS
       ? formatClaudeUsageLimitWait(waitMs)
       : undefined;
+
   return `Claude usage limit reached. This turn is paused until the ${
     label ? `${label} ` : ""
   }limit resets${wait ? ` in ${wait}` : ""}.`;
@@ -134,7 +139,9 @@ export function formatClaudeUsageLimitWait(waitMs: number): string {
   const totalMinutes = Math.ceil(waitMs / 60_000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
+
   if (hours === 0) return `${totalMinutes}m`;
+
   return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
@@ -144,6 +151,7 @@ export function maxClaudeContextWindowFromModelUsage(
   if (!modelUsage) return undefined;
 
   let maxContextWindow: number | undefined;
+
   for (const value of Object.values(modelUsage)) {
     const contextWindow = value.contextWindow;
     maxContextWindow = Math.max(maxContextWindow ?? 0, contextWindow);
@@ -200,6 +208,7 @@ export function lastClaudeUsageIteration(
   value: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
   const iterations = Array.isArray(value.iterations) ? value.iterations : [];
+
   return iterations.findLast(
     (iteration): iteration is Record<string, unknown> =>
       iteration !== null && typeof iteration === "object" && !Array.isArray(iteration),
@@ -213,11 +222,13 @@ export function claudeTotalProcessedTokens(value: unknown): number | undefined {
 
   const usage = value as Record<string, unknown>;
   const explicitTotal = finiteNonNegativeInteger(usage.total_tokens);
+
   if (explicitTotal !== undefined && explicitTotal > 0) {
     return explicitTotal;
   }
 
   const total = claudeUsageInputTokens(usage) + claudeUsageOutputTokens(usage);
+
   return total > 0 ? total : undefined;
 }
 
@@ -234,15 +245,18 @@ export function makeClaudeTokenUsageSnapshot(input: {
   readonly autoCompactThreshold?: number;
 }): ThreadTokenUsageSnapshot | undefined {
   const activeTokens = finiteNonNegativeInteger(input.activeTokens);
+
   if (activeTokens === undefined || activeTokens <= 0) {
     return undefined;
   }
 
   const maxTokens = finitePositiveInteger(input.contextWindow);
   const usedTokens = maxTokens !== undefined ? Math.min(activeTokens, maxTokens) : activeTokens;
+
   const lastUsedTokens =
     finiteNonNegativeInteger(input.lastUsedTokens) ??
     (maxTokens !== undefined ? Math.min(activeTokens, maxTokens) : activeTokens);
+
   const totalProcessedTokens = finiteNonNegativeInteger(input.totalProcessedTokens);
   const inputTokens = finiteNonNegativeInteger(input.inputTokens);
   const cachedInputTokens = finiteNonNegativeInteger(input.cachedInputTokens);
@@ -283,6 +297,7 @@ export function normalizeClaudeActiveTokenUsage(
   const inputTokens = claudeUsageInputTokens(activeUsage);
   const outputTokens = claudeUsageOutputTokens(activeUsage);
   const activeTokens = claudeTotalProcessedTokens(activeUsage) ?? inputTokens + outputTokens;
+
   if (activeTokens <= 0) {
     return undefined;
   }
@@ -304,17 +319,20 @@ export function compactBoundaryTokenUsageSnapshot(
   totalProcessedTokens?: number,
 ): ThreadTokenUsageSnapshot | undefined {
   const metadata = message.compact_metadata;
+
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return undefined;
   }
 
   const compactMetadata = metadata as Record<string, unknown>;
   const postTokens = finiteNonNegativeInteger(compactMetadata.post_tokens);
+
   if (postTokens === undefined || postTokens <= 0) {
     return undefined;
   }
 
   const preTokens = finiteNonNegativeInteger(compactMetadata.pre_tokens);
+
   return makeClaudeTokenUsageSnapshot({
     activeTokens: postTokens,
     ...(preTokens !== undefined ? { lastUsedTokens: preTokens } : {}),
@@ -328,18 +346,22 @@ export function normalizeClaudeTaskProgressTokenUsage(
   context: ClaudeSessionContext,
 ): ThreadTokenUsageSnapshot | undefined {
   const totalTokens = claudeTotalProcessedTokens(value);
+
   if (totalTokens === undefined || totalTokens <= 0) {
     return undefined;
   }
 
   const lastUsedTokens = context.lastKnownTokenUsage?.usedTokens;
+
   const activeTokens =
     lastUsedTokens !== undefined ? Math.max(totalTokens, lastUsedTokens) : totalTokens;
+
   if (lastUsedTokens !== undefined && activeTokens === lastUsedTokens) {
     return undefined;
   }
 
   const usage = value as Record<string, unknown>;
+
   const snapshot = makeClaudeTokenUsageSnapshot({
     activeTokens,
     ...(context.lastKnownContextWindow !== undefined
@@ -350,12 +372,14 @@ export function normalizeClaudeTaskProgressTokenUsage(
       context.lastKnownTotalProcessedTokens ?? totalTokens,
     ),
   });
+
   if (!snapshot) {
     return undefined;
   }
 
   const toolUses = finiteNonNegativeInteger(usage.tool_uses);
   const durationMs = finiteNonNegativeInteger(usage.duration_ms);
+
   return {
     ...snapshot,
     ...(toolUses !== undefined ? { toolUses } : {}),
@@ -383,14 +407,17 @@ export function resultOutcome(
   // A success result flagged is_error only fails when the turn already
   // reported its cause (expired login, rejected usage window).
   const successTaggedFailure = result.subtype === "success" && result.is_error === true;
+
   const structuredError = isOverloadedResult(result)
     ? "Claude API is overloaded (529). Try again shortly."
     : (terminalResultError(result.terminal_reason, failureHint) ??
       (successTaggedFailure ? failureHint : undefined));
+
   // CLI diagnostic entries must not become the error banner. Success results
   // carry no typed error list, but a success-tagged failure may still list one.
   const listedErrors: ReadonlyArray<unknown> =
     "errors" in result && Array.isArray(result.errors) ? result.errors : [];
+
   const listedError =
     result.subtype === "success" && !successTaggedFailure
       ? undefined
@@ -398,10 +425,15 @@ export function resultOutcome(
           (error): error is string =>
             typeof error === "string" && !error.startsWith("[ede_diagnostic]"),
         );
+
   const errorMessage = listedError || structuredError;
+
   if (structuredError !== undefined) return { status: "failed", errorMessage };
+
   if (result.subtype === "success") return { status: "completed", errorMessage };
+
   if (isInterruptedResult(result)) return { status: "interrupted", errorMessage };
+
   return {
     status: resultErrorsText(result).includes("cancel") ? "cancelled" : "failed",
     errorMessage,

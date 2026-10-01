@@ -16,6 +16,7 @@ import {
 describe("ClaudeAdapterLive", () => {
   it.effect("loads Claude filesystem settings sources for SDK sessions", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       yield* adapter.startSession({
@@ -40,18 +41,22 @@ describe("ClaudeAdapterLive", () => {
     "preserves %s behavior for an unknown runtime terminal reason",
     (subtype) => {
       const harness = makeHarness();
+
       return Effect.gen(function* () {
         const adapter = yield* ClaudeAdapter;
+
         const completionFiber = yield* adapter.streamEvents.pipe(
           Stream.filter((event) => event.type === "turn.completed"),
           Stream.runHead,
           Effect.forkChild,
         );
+
         const session = yield* adapter.startSession({
           threadId: THREAD_ID,
           provider: ProviderDriverKind.make("claudeAgent"),
           runtimeMode: "full-access",
         });
+
         yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
         harness.query.emit({
           type: "result",
@@ -66,6 +71,7 @@ describe("ClaudeAdapterLive", () => {
         } as unknown as SDKMessage);
         const completed = yield* Fiber.join(completionFiber);
         assert.equal(completed._tag, "Some");
+
         if (completed._tag === "Some" && completed.value.type === "turn.completed") {
           assert.equal(
             completed.value.payload.state,
@@ -87,9 +93,11 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("consumes undeclared and UX-internal system subtypes without warning rows", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       const runtimeEvents: Array<ProviderRuntimeEvent> = [];
+
       const runtimeEventsFiber = yield* Stream.runForEach(adapter.streamEvents, (event) =>
         Effect.sync(() => runtimeEvents.push(event)),
       ).pipe(Effect.forkChild);
@@ -156,6 +164,7 @@ describe("ClaudeAdapterLive", () => {
       ]) {
         harness.query.emit(message as unknown as SDKMessage);
       }
+
       // High-priority notifications DO surface as a warning row.
       harness.query.emit({
         type: "system",
@@ -166,6 +175,7 @@ describe("ClaudeAdapterLive", () => {
         session_id: "session",
         uuid: "notif-high",
       } as unknown as SDKMessage);
+
       // session_state_changed maps to the matching session states.
       for (const [state, uuid] of [
         ["running", "ssc-run"],
@@ -180,6 +190,7 @@ describe("ClaudeAdapterLive", () => {
           uuid,
         } as unknown as SDKMessage);
       }
+
       // api_retry maps to a session heartbeat, not a warning row.
       harness.query.emit({
         type: "system",
@@ -201,22 +212,27 @@ describe("ClaudeAdapterLive", () => {
         warnings.map((event) => event.payload.message),
         ["context window nearly full"],
       );
+
       const sessionStates = runtimeEvents.flatMap((event) => {
         if (event.type !== "session.state.changed") return [];
         const entry = `${event.payload.state}:${event.payload.reason ?? ""}`;
+
         return entry.includes("session_state") ? [entry] : [];
       });
+
       assert.deepEqual(sessionStates, [
         "running:session_state:running",
         "waiting:session_state:requires_action",
         "ready:session_state:idle",
       ]);
+
       const heartbeat = runtimeEvents.find(
         (event) =>
           event.type === "session.state.changed" &&
           typeof event.payload.reason === "string" &&
           event.payload.reason.startsWith("api_retry:"),
       );
+
       assert.equal(heartbeat?.type, "session.state.changed");
       runtimeEventsFiber.interruptUnsafe();
     }).pipe(

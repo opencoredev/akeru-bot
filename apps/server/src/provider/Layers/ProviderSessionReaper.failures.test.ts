@@ -9,12 +9,14 @@ import { ProviderValidationError } from "../Errors.ts";
 import { drainFibers, makeReadModel, createReaperSupport } from "./test-support/sessionReaper.ts";
 
 const support = createReaperSupport();
+
 afterEach(() => support.close());
 
 describe("ProviderSessionReaper", () => {
   it("skips persisted sessions that are already marked stopped", async () => {
     const threadId = ThreadId.make("thread-reaper-stopped");
     const now = "2026-01-01T00:00:00.000Z";
+
     const harness = await support.createHarness({
       readModel: makeReadModel([
         {
@@ -31,6 +33,7 @@ describe("ProviderSessionReaper", () => {
         },
       ]),
     });
+
     const repository = await support.runtime!.runPromise(
       Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
     );
@@ -65,6 +68,7 @@ describe("ProviderSessionReaper", () => {
     const failedThreadId = ThreadId.make("thread-reaper-stop-failure");
     const reapedThreadId = ThreadId.make("thread-reaper-stop-success");
     const now = "2026-01-01T00:00:00.000Z";
+
     const harness = await support.createHarness({
       readModel: makeReadModel([
         {
@@ -102,6 +106,7 @@ describe("ProviderSessionReaper", () => {
             )
           : Effect.void,
     });
+
     const repository = await support.runtime!.runPromise(
       Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
     );
@@ -153,6 +158,7 @@ describe("ProviderSessionReaper", () => {
     const defectThreadId = ThreadId.make("thread-reaper-stop-defect");
     const reapedThreadId = ThreadId.make("thread-reaper-stop-after-defect");
     const now = "2026-01-01T00:00:00.000Z";
+
     const harness = await support.createHarness({
       readModel: makeReadModel([
         {
@@ -185,6 +191,7 @@ describe("ProviderSessionReaper", () => {
           ? Effect.die(new Error("simulated stop defect"))
           : Effect.void,
     });
+
     const repository = await support.runtime!.runPromise(
       Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
     );

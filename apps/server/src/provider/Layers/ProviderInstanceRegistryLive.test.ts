@@ -141,6 +141,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
       // Old settings files can carry both flags with conflicting values.
       // The explicit false must win so a user's disable is never undone.
       const staleId = ProviderInstanceId.make("codex_stale");
+
       const configMap: ProviderInstanceConfigMap = {
         [staleId]: {
           driver: ProviderDriverKind.make("codex"),
@@ -167,6 +168,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
   it.live("blocks dispatch after disable without awaiting the provider promise", () =>
     Effect.gen(function* () {
       const instanceId = ProviderInstanceId.make("codex_atomic");
+
       const enabledConfig: ProviderInstanceConfigMap = {
         [instanceId]: {
           driver: ProviderDriverKind.make("codex"),
@@ -174,6 +176,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
           config: makeCodexConfig({ enabled: true }),
         },
       };
+
       const disabledConfig: ProviderInstanceConfigMap = {
         [instanceId]: {
           driver: ProviderDriverKind.make("codex"),
@@ -181,33 +184,41 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
           config: makeCodexConfig({ enabled: false }),
         },
       };
+
       const { registry, mutator } = yield* makeProviderInstanceRegistry({
         drivers: [CodexDriver],
         configMap: enabledConfig,
       });
+
       let dispatchCalls = 0;
       let resolveDispatch!: () => void;
+
       const pendingDispatch = new Promise<void>((resolve) => {
         resolveDispatch = resolve;
       });
 
       const admitted = yield* registry.dispatchIfEnabled(instanceId, () => {
         dispatchCalls += 1;
+
         return pendingDispatch;
       });
+
       expect(admitted._tag).toBe("Dispatched");
       expect(dispatchCalls).toBe(1);
 
       yield* mutator.reconcile(disabledConfig);
+
       const disabled = yield* registry.dispatchIfEnabled(instanceId, () => {
         dispatchCalls += 1;
       });
+
       expect(disabled._tag).toBe("Disabled");
       expect(dispatchCalls).toBe(1);
 
       const missing = yield* registry.dispatchIfEnabled(ProviderInstanceId.make("missing"), () => {
         dispatchCalls += 1;
       });
+
       expect(missing._tag).toBe("Missing");
       expect(dispatchCalls).toBe(1);
       resolveDispatch();
@@ -349,15 +360,18 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       // no legacy adapter or text-generation closure.
       const adapters = [codex!.adapter, claude!.adapter, grok!.adapter, openCode!.adapter];
       expect(new Set(adapters).size).toBe(adapters.length);
+
       const textGenerations = [
         codex!.textGeneration,
         claude!.textGeneration,
         grok!.textGeneration,
         openCode!.textGeneration,
       ];
+
       expect(new Set(textGenerations).size).toBe(textGenerations.length);
       expect(kimi!.adapter).toBeUndefined();
       expect(kimi!.textGeneration).toBeUndefined();
+
       const snapshots = [
         codex!.snapshot,
         claude!.snapshot,
@@ -365,6 +379,7 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
         kimi!.snapshot,
         openCode!.snapshot,
       ];
+
       expect(new Set(snapshots).size).toBe(snapshots.length);
 
       // Snapshots identify themselves by `instanceId` + `driver` so
@@ -440,6 +455,7 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
         ProviderInstanceRegistry,
         registry,
       );
+
       const lookup = yield* adapterRegistry.getByInstance(kimiId).pipe(Effect.flip);
       expect(lookup._tag).toBe("ProviderUnsupportedError");
       const info = yield* adapterRegistry.getInstanceInfo(kimiId);
@@ -467,6 +483,7 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
           ),
         ),
       );
+
       const bridge = Context.get(bridgeContext, LegacyProviderBridge);
 
       const startError = yield* bridge
@@ -477,6 +494,7 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
           runtimeMode: "full-access",
         })
         .pipe(Effect.flip);
+
       expect(startError._tag).toBe("ProviderUnsupportedError");
 
       // The directory never saw a binding, so sendTurn fails closed at
@@ -484,11 +502,13 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
       const sendError = yield* bridge
         .sendTurn({ threadId: kimiThread, input: "This must never reach a provider." })
         .pipe(Effect.flip);
+
       expect(sendError._tag).toBe("ProviderValidationError");
 
       const interruptError = yield* bridge
         .interruptTurn({ threadId: kimiThread })
         .pipe(Effect.flip);
+
       expect(interruptError._tag).toBe("ProviderValidationError");
 
       const sessions = yield* bridge.listSessions();

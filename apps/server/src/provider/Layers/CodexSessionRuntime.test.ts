@@ -24,6 +24,7 @@ import { request, makeThreadStartedNotification } from "./test-support/codexProt
 describe("buildTurnStartParams", () => {
   it("keeps invalid turn values only in the schema cause", () => {
     const secret = "codex-turn-input-secret-sentinel";
+
     const error = Effect.runSync(
       buildTurnStartParams({
         threadId: "provider-thread-1",
@@ -36,6 +37,7 @@ describe("buildTurnStartParams", () => {
         ],
       }).pipe(Effect.flip),
     );
+
     const { cause, ...directDiagnostics } = error;
 
     NodeAssert.equal(error.operation, "decode-request-payload");
@@ -415,6 +417,7 @@ describe("buildCodexDeveloperInstructions", () => {
       model: "gpt-5.3-codex",
       reasoningEffort: "medium",
     });
+
     const second = buildCodexDeveloperInstructions({
       model: "gpt-5.4",
       reasoningEffort: "high",

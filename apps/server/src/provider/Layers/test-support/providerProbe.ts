@@ -154,6 +154,7 @@ export function mockSpawnerLayer(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) => {
       const cmd = command as unknown as { args: ReadonlyArray<string> };
+
       return Effect.succeed(mockHandle(handler(cmd.args)));
     }),
   );
@@ -170,6 +171,7 @@ export function recordingMockSpawnerLayer(
     readonly args: ReadonlyArray<string>;
     readonly env: NodeJS.ProcessEnv | undefined;
   }> = [];
+
   const layer = Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) => {
@@ -179,10 +181,13 @@ export function recordingMockSpawnerLayer(
           readonly env?: NodeJS.ProcessEnv;
         };
       };
+
       commands.push({ args: cmd.args, env: cmd.options?.env });
+
       return Effect.succeed(mockHandle(handler(cmd.args)));
     }),
   );
+
   return { layer, commands };
 }
 
@@ -199,6 +204,7 @@ export function mockCommandSpawnerLayer(
         command: string;
         args: ReadonlyArray<string>;
       };
+
       return Effect.succeed(mockHandle(handler(cmd.command, cmd.args)));
     }),
   );
@@ -238,7 +244,9 @@ export function hangingScopedSpawnerLayer(killCalls: Ref.Ref<number>) {
           getInputFd: () => Sink.drain,
           getOutputFd: () => Stream.empty,
         });
+
         yield* Effect.addFinalizer(() => handle.kill().pipe(Effect.ignore));
+
         return handle;
       }),
     ),
@@ -299,6 +307,7 @@ export function makeMutableServerSettingsService(
           encodeServerSettings(next);
           yield* Ref.set(settingsRef, next);
           yield* PubSub.publish(changes, next);
+
           return next;
         }),
       get streamChanges() {

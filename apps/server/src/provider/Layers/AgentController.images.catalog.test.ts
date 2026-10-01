@@ -55,16 +55,20 @@ describe("AgentControllerLive", () => {
     const mastra = makeMastraHarness();
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-catalog-tools-"));
     const page = NodeHttp.createServer((_request, response) => response.end("catalog page"));
+
     const imageResult = {
       status: "needs-consent",
       provider: "grok",
       message: "ask first",
       attempts: [],
     };
+
     const generateImage = vi.fn((_threadId: ThreadId, _input: unknown) =>
       Effect.succeed(imageResult),
     );
+
     const dispatched: OrchestrationCommand[] = [];
+
     const docsServer: McpServer = {
       id: McpServerId.make("docs"),
       name: "Docs",
@@ -75,6 +79,7 @@ describe("AgentControllerLive", () => {
       updatedAt: "2026-09-01T00:00:00.000Z",
       instructions: "Search the docs first.",
     };
+
     const localServer: McpServer = {
       id: McpServerId.make("local"),
       name: "Local",
@@ -85,6 +90,7 @@ describe("AgentControllerLive", () => {
       createdAt: "2026-09-01T00:00:00.000Z",
       updatedAt: "2026-09-01T00:00:00.000Z",
     };
+
     // Ada uses both servers, Grace turned docs off, and archived Linus turned local off.
     const snapshotBots = [
       { id: BotId.make("ada"), name: "Ada", archivedAt: null, disabledMcpServerIds: [] },
@@ -117,6 +123,7 @@ describe("AgentControllerLive", () => {
             }) as unknown as OrchestrationReadModel,
           dispatch: async (command) => {
             dispatched.push(command);
+
             // Grace saves another disabled server while docs is being removed;
             // the sweep must keep that newer choice.
             if (command.type === "mcp-server.delete" && command.mcpServerId === "docs") {
@@ -125,6 +132,7 @@ describe("AgentControllerLive", () => {
                 McpServerId.make("newer"),
               ];
             }
+
             return { sequence: dispatched.length };
           },
         });
@@ -151,10 +159,12 @@ describe("AgentControllerLive", () => {
             "SetMcpInstructions",
           ]),
         );
+
         const run = (toolId: AkeruRuntimeToolId, toolCallId: string, input: unknown) =>
           Effect.promise(() => {
             const execution = { threadId: String(codexThreadId), toolId, toolCallId, input };
             runtime.grantApproval(execution);
+
             return runtime.execute({ ...execution, approvalMode: "require-grant" });
           });
 
@@ -248,6 +258,7 @@ describe("AgentControllerLive", () => {
               (error: unknown) => error,
             ),
         );
+
         expect(Schema.isSchemaError(invalidAdd)).toBe(true);
         expect(takeDispatched()).toEqual([]);
 
@@ -335,17 +346,20 @@ describe("AgentControllerLive", () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-catalog-image-"));
     const grokCalls: Array<unknown> = [];
     let grokGate: (() => void) | undefined;
+
     const grokAdapter: ImageProviderAdapter = {
       provider: "grok",
       capabilities: GROK_IMAGE_CAPABILITIES,
       run: (request, signal) => {
         grokCalls.push(request);
+
         if (!grokGate) {
           return Promise.resolve({
             images: [pngBytes(32, 32)],
             model: "grok-image-model",
           });
         }
+
         return new Promise((resolve, reject) => {
           grokGate!();
           signal.addEventListener("abort", () => {
@@ -354,6 +368,7 @@ describe("AgentControllerLive", () => {
         });
       },
     };
+
     const {
       layer: runtimeLayer,
       dispatched,
@@ -387,21 +402,27 @@ describe("AgentControllerLive", () => {
           "generate_image",
         );
         const input = { operation: "generate", prompt: "a fox" } as const;
+
         const execution = {
           threadId: String(codexThreadId),
           toolId: "GenerateImage" as const,
           toolCallId: "image-catalog",
           input,
         };
+
         runtime.grantApproval(execution);
+
         const result = yield* Effect.promise(() =>
           Promise.resolve(runtime.execute({ ...execution, approvalMode: "require-grant" })),
         );
+
         expect(result).toMatchObject({ status: "completed", provider: "grok" });
         expect(grokCalls).toHaveLength(1);
+
         const delta = dispatched.find(
           (command) => command.type === "thread.message.assistant.delta",
         ) as { attachments?: unknown[] } | undefined;
+
         expect(delta?.attachments).toHaveLength(1);
         expect(
           dispatched.filter((command) => command.type === "thread.message.assistant.complete"),
@@ -435,13 +456,16 @@ describe("AgentControllerLive", () => {
   it.effect("falls back to the next image provider when a Mastra image attempt times out", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const baseDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "akeru-catalog-image-timeout-"),
     );
+
     const requestTimeout = Duration.millis(50);
     const chatgptStarted = Deferred.makeUnsafe<void>();
     let chatgptAborted = false;
     const grokCalls: Array<unknown> = [];
+
     const chatgptAdapter: ImageProviderAdapter = {
       provider: "chatgpt",
       capabilities: GROK_IMAGE_CAPABILITIES,
@@ -454,15 +478,19 @@ describe("AgentControllerLive", () => {
           });
         }),
     };
+
     const grokAdapter: ImageProviderAdapter = {
       provider: "grok",
       capabilities: GROK_IMAGE_CAPABILITIES,
       run: (request) => {
         grokCalls.push(request);
+
         return Promise.resolve({ images: [pngBytes(32, 32)], model: "grok-image-model" });
       },
     };
+
     const settings = { chatgptEnabled: true, grokEnabled: true };
+
     const { layer: runtimeLayer, dispatched } = makeImageRuntimeTestLayer({
       baseDir,
       adapters: { chatgpt: chatgptAdapter, grok: grokAdapter },
@@ -485,18 +513,22 @@ describe("AgentControllerLive", () => {
         });
         const runtime = mastra.harnessOptions[0]?.toolRuntime;
         assert.isDefined(runtime);
+
         const execution = {
           threadId: String(codexThreadId),
           toolId: "GenerateImage" as const,
           toolCallId: "image-catalog-timeout",
           input: { operation: "generate", prompt: "a fox" },
         };
+
         runtime.grantApproval(execution);
+
         const pending = yield* Effect.forkChild(
           Effect.promise(() =>
             Promise.resolve(runtime.execute({ ...execution, approvalMode: "require-grant" })),
           ),
         );
+
         yield* Deferred.await(chatgptStarted);
         yield* TestClock.adjust(requestTimeout);
         const result = yield* Fiber.join(pending);
@@ -535,11 +567,14 @@ describe("AgentControllerLive", () => {
       NodePath.join(secretsDir, "subscription-auth.json"),
       JSON.stringify({ "openai-codex": { type: "api-key", access: "openai-key" } }),
     );
+
     return Effect.gen(function* () {
       const subscriptionAuth = yield* Effect.promise(() =>
         makeTestSubscriptionAuthService(NodePath.join(secretsDir, "subscription-auth.json")),
       );
+
       const adapter = makeChatGptImageAdapter({ subscriptionAuth });
+
       const run = adapter.run(
         {
           operation: "generate",
@@ -551,6 +586,7 @@ describe("AgentControllerLive", () => {
         },
         AbortSignal.timeout(5_000),
       );
+
       const failure = yield* Effect.promise(() =>
         run.then(
           () => {
@@ -559,6 +595,7 @@ describe("AgentControllerLive", () => {
           (cause: unknown) => cause,
         ),
       );
+
       expect(String((failure as Error).message)).toContain("ChatGPT account sign-in");
     }).pipe(Effect.provide(NodeServices.layer));
   });
@@ -607,11 +644,13 @@ describe("AgentControllerLive", () => {
     () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       return provideController(
         Effect.gen(function* () {
           const controller = yield* AgentController;
           const settings = yield* ServerSettingsService;
           yield* resolveCodex(controller);
+
           const input = {
             threadId: codexThreadId,
             provider: ProviderDriverKind.make("codex"),
@@ -619,11 +658,14 @@ describe("AgentControllerLive", () => {
             modelSelection: codexSelection,
             runtimeMode: "full-access" as const,
           };
+
           yield* controller.startSession(codexThreadId, input);
           const runtime = mastra.harnessOptions[0]?.toolRuntime;
           assert.isDefined(runtime);
+
           const toolIds = () =>
             runtime.toolsForThread(String(codexThreadId)).map((tool) => tool.id);
+
           expect(toolIds()).toContain("GenerateImage");
 
           yield* settings.updateSettings({ imageGeneration: { grokEnabled: false } });

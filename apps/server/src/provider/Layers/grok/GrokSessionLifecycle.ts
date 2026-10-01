@@ -146,6 +146,7 @@ export function createGrokSessionLifecycle(deps: {
             issue: `Expected provider '${PROVIDER}' but received '${input.provider}'.`,
           });
         }
+
         if (!input.cwd?.trim()) {
           return yield* new ProviderAdapterValidationError({
             provider: PROVIDER,
@@ -155,11 +156,14 @@ export function createGrokSessionLifecycle(deps: {
         }
 
         const cwd = deps.path.resolve(input.cwd.trim());
+
         const grokModelSelection =
           input.modelSelection?.instanceId === deps.boundInstanceId
             ? input.modelSelection
             : undefined;
+
         const existing = deps.sessions.get(input.threadId);
+
         if (existing && !existing.stopped) {
           yield* deps.stopSessionInternal(existing);
         }
@@ -173,6 +177,7 @@ export function createGrokSessionLifecycle(deps: {
         );
 
         const resumeSessionId = parseGrokResume(input.resumeCursor)?.sessionId;
+
         const acpNativeLoggers = deps.makeAcpNativeLoggers({
           nativeEventLogger: deps.nativeEventLogger,
           provider: PROVIDER,
@@ -181,6 +186,7 @@ export function createGrokSessionLifecycle(deps: {
         });
 
         const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
+
         const mcpServers = [
           ...toAcpMcpServers(input.mcpServers ?? []),
           ...(mcpSession
@@ -199,6 +205,7 @@ export function createGrokSessionLifecycle(deps: {
               ]
             : []),
         ];
+
         const acp = yield* makeGrokAcpRuntime({
           grokSettings: deps.grokSettings,
           environment: yield* subscriptionRuntimeEnvironment(
@@ -229,6 +236,7 @@ export function createGrokSessionLifecycle(deps: {
               }),
           ),
         );
+
         const started = yield* Effect.gen(function* () {
           yield* Effect.forEach(
             ["x.ai/ask_user_question", "_x.ai/ask_user_question"] as const,
@@ -273,6 +281,7 @@ export function createGrokSessionLifecycle(deps: {
                         payload: params,
                       },
                     });
+
                     switch (resolved._tag) {
                       case "answered":
                         return makeXAiAskUserQuestionResponse(params, resolved.answers);
@@ -288,8 +297,10 @@ export function createGrokSessionLifecycle(deps: {
             deps.mapAcpCallbackFailure(
               Effect.gen(function* () {
                 yield* deps.logNative(input.threadId, "session/request_permission", params);
+
                 if (input.runtimeMode === "full-access") {
                   const autoApprovedOptionId = selectAutoApprovedPermissionOption(params);
+
                   if (autoApprovedOptionId !== undefined) {
                     return {
                       outcome: {
@@ -299,6 +310,7 @@ export function createGrokSessionLifecycle(deps: {
                     };
                   }
                 }
+
                 const permissionRequest = parsePermissionRequest(params);
                 const requestId = ApprovalRequestId.make(yield* deps.randomUUIDv4);
                 const runtimeRequestId = RuntimeRequestId.make(requestId);
@@ -335,10 +347,12 @@ export function createGrokSessionLifecycle(deps: {
                     decision: resolved,
                   }),
                 );
+
                 const selectedOptionId =
                   resolved === "cancel"
                     ? undefined
                     : selectGrokPermissionOptionId(params, resolved);
+
                 return {
                   outcome: selectedOptionId
                     ? {
@@ -350,6 +364,7 @@ export function createGrokSessionLifecycle(deps: {
               }),
             ),
           );
+
           return yield* acp.start();
         }).pipe(
           Effect.mapError((error) =>
@@ -360,6 +375,7 @@ export function createGrokSessionLifecycle(deps: {
         const requestedStartModelId = grokModelSelection?.model
           ? resolveGrokAcpBaseModelId(grokModelSelection.model)
           : undefined;
+
         const boundModelId = yield* applyGrokAcpModelSelection({
           runtime: acp,
           currentModelId: currentGrokModelIdFromSessionSetup(started.sessionSetupResult),
@@ -369,6 +385,7 @@ export function createGrokSessionLifecycle(deps: {
         });
 
         const now = yield* deps.nowIso;
+
         const session: ProviderSession = {
           provider: PROVIDER,
           providerInstanceId: deps.boundInstanceId,
@@ -412,8 +429,10 @@ export function createGrokSessionLifecycle(deps: {
             Effect.gen(function* () {
               if (event._tag === "EventStreamBarrier") {
                 yield* Deferred.succeed(event.acknowledge, undefined);
+
                 return;
               }
+
               if (
                 event._tag === "PlanUpdated" ||
                 event._tag === "ToolCallUpdated" ||
@@ -427,12 +446,14 @@ export function createGrokSessionLifecycle(deps: {
               }
 
               const notificationTurnId = resolveNotificationTurnId(ctx);
+
               if (
                 notificationTurnId === undefined ||
                 ctx.interruptedTurnIds.has(notificationTurnId)
               ) {
                 return;
               }
+
               const stamp = yield* deps.makeEventStamp();
 
               switch (event._tag) {
@@ -447,6 +468,7 @@ export function createGrokSessionLifecycle(deps: {
                       lifecycle: "item.started",
                     }),
                   );
+
                   return;
                 case "AssistantItemCompleted":
                   yield* deps.offerRuntimeEvent(
@@ -459,6 +481,7 @@ export function createGrokSessionLifecycle(deps: {
                       lifecycle: "item.completed",
                     }),
                   );
+
                   return;
                 case "PlanUpdated":
                   yield* deps.emitPlanUpdate(
@@ -469,6 +492,7 @@ export function createGrokSessionLifecycle(deps: {
                     event.rawPayload,
                     "session/update",
                   );
+
                   return;
                 case "ToolCallUpdated":
                   yield* deps.offerRuntimeEvent(
@@ -481,6 +505,7 @@ export function createGrokSessionLifecycle(deps: {
                       rawPayload: event.rawPayload,
                     }),
                   );
+
                   return;
                 case "ContentDelta":
                   yield* deps.offerRuntimeEvent(
@@ -494,6 +519,7 @@ export function createGrokSessionLifecycle(deps: {
                       rawPayload: event.rawPayload,
                     }),
                   );
+
                   return;
               }
             }),
@@ -540,5 +566,6 @@ export function createGrokSessionLifecycle(deps: {
         return session;
       }).pipe(Effect.scoped),
     );
+
   return { startSession };
 }

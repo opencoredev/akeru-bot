@@ -48,6 +48,7 @@ describe("AgentControllerLive", () => {
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-entity-reuse-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const botId = BotId.make("bot-entity-reuse");
+
     const accessFor = (project: string) =>
       ({
         tenantId: AkeruMemoryTenantId.make("local"),
@@ -60,17 +61,22 @@ describe("AgentControllerLive", () => {
         respondingBotId: botId,
         groupMemberBotIds: [],
       }) as const;
+
     const listedProjects: Array<string | null> = [];
+
     const listCurrent = vi.fn((input: { readonly access: { readonly projectId: unknown } }) => {
       listedProjects.push(String(input.access.projectId));
+
       return Effect.succeed([]);
     });
+
     const recordDerivedCopies = vi.fn(() => Effect.void);
 
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
+
         const start = (project: string) =>
           controller.startSession(codexThreadId, {
             threadId: codexThreadId,
@@ -80,6 +86,7 @@ describe("AgentControllerLive", () => {
             runtimeMode: "full-access",
             memoryAccess: accessFor(project),
           });
+
         yield* start("project-before");
         yield* start("project-after");
         listedProjects.length = 0;
@@ -109,6 +116,7 @@ describe("AgentControllerLive", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const botId = BotId.make("bot-entity-memory-off");
+
     const access = {
       tenantId: AkeruMemoryTenantId.make("local"),
       userId: AkeruMemoryUserId.make("owner"),
@@ -120,6 +128,7 @@ describe("AgentControllerLive", () => {
       respondingBotId: botId,
       groupMemberBotIds: [],
     } as const;
+
     const listCurrent = vi.fn(() => Effect.succeed([]));
     // Only the entity packet records derived copies; the legacy migration read also lists facts.
     const recordDerivedCopies = vi.fn(() => Effect.void);
@@ -165,6 +174,7 @@ describe("AgentControllerLive", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const botId = BotId.make("bot-entity-memory-moved");
+
     const accessFor = (project: string) =>
       ({
         tenantId: AkeruMemoryTenantId.make("local"),
@@ -177,10 +187,13 @@ describe("AgentControllerLive", () => {
         respondingBotId: botId,
         groupMemberBotIds: [],
       }) as const;
+
     const listCurrent = vi.fn((_input: { access: { projectId: ProjectId } }) => Effect.succeed([]));
+
     const startSession = (project: string) =>
       Effect.gen(function* () {
         const controller = yield* AgentController;
+
         return yield* controller.startSession(claudeThreadId, {
           threadId: claudeThreadId,
           provider: ProviderDriverKind.make("opencode"),
@@ -235,6 +248,7 @@ describe("AgentControllerLive", () => {
       const mastra = makeMastraHarness();
       const botId = BotId.make("bot-entity-private-legacy");
       const projectId = ProjectId.make("project-entity-private-legacy");
+
       const access = {
         tenantId: AkeruMemoryTenantId.make("local"),
         userId: AkeruMemoryUserId.make("owner"),
@@ -246,8 +260,10 @@ describe("AgentControllerLive", () => {
         respondingBotId: botId,
         groupMemberBotIds: [],
       } as const;
+
       const revisions = privatePolicyRevisions(botId, projectId);
       const listCurrent = vi.fn(() => Effect.succeed(revisions));
+
       const recordDerivedCopies = vi.fn(
         (_input: { readonly revisions: ReadonlyArray<AkeruMemoryRevision> }) => Effect.void,
       );
@@ -272,20 +288,25 @@ describe("AgentControllerLive", () => {
             runtimeMode: "approval-required",
             memoryAccess: access,
           });
+
           const startPacket = entityMemorySection(
             bridge.startSession.mock.calls[0]?.[1].persistentMemoryContext,
           );
+
           expect(startPacket).toContain("Shared project entity fact.");
           expect(startPacket).not.toContain("Bot-private entity fact.");
           expect(startPacket).not.toContain("Bot-about-you entity fact.");
 
           yield* controller.sendTurn({ threadId: claudeThreadId, input: "Private off." });
+
           const offPacket = entityMemorySection(
             bridge.sendTurn.mock.calls[0]?.[0].persistentMemoryContext,
           );
+
           expect(offPacket).toContain("Shared project entity fact.");
           expect(offPacket).not.toContain("Bot-private entity fact.");
           expect(offPacket).not.toContain("Bot-about-you entity fact.");
+
           // Derived copies track only what reached the provider.
           for (const [input] of recordDerivedCopies.mock.calls) {
             expect(input.revisions.map((revision) => revision.partition.scope)).toEqual([
@@ -295,9 +316,11 @@ describe("AgentControllerLive", () => {
 
           yield* settings.updateSettings({ memory: { privateBotMemory: true } });
           yield* controller.sendTurn({ threadId: claudeThreadId, input: "Private on." });
+
           const onPacket = entityMemorySection(
             bridge.sendTurn.mock.calls[1]?.[0].persistentMemoryContext,
           );
+
           expect(onPacket).toContain("Bot-private entity fact.");
           expect(onPacket).toContain("Bot-about-you entity fact.");
         }),
@@ -328,6 +351,7 @@ describe("AgentControllerLive", () => {
       const botMemoryStore = new BotMemoryStore(memoryDir);
       const botId = BotId.make("bot-entity-private-mastra");
       const projectId = ProjectId.make("project-entity-private-mastra");
+
       const access = {
         tenantId: AkeruMemoryTenantId.make("local"),
         userId: AkeruMemoryUserId.make("owner"),
@@ -339,6 +363,7 @@ describe("AgentControllerLive", () => {
         respondingBotId: botId,
         groupMemberBotIds: [],
       } as const;
+
       const revisions = privatePolicyRevisions(botId, projectId);
       const listCurrent = vi.fn(() => Effect.succeed(revisions));
       const recordDerivedCopies = vi.fn(() => Effect.void);
@@ -356,6 +381,7 @@ describe("AgentControllerLive", () => {
             runtimeMode: "full-access",
             memoryAccess: access,
           });
+
           const awaitNextCompletedTurn = () =>
             controller.streamEvents.pipe(
               Stream.filter((event) => event.type === "turn.completed"),
@@ -405,6 +431,7 @@ describe("AgentControllerLive", () => {
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-private-toggle-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const botId = BotId.make("bot-private-toggle-legacy");
+
     const access = {
       tenantId: AkeruMemoryTenantId.make("local"),
       userId: AkeruMemoryUserId.make("owner"),
@@ -416,7 +443,9 @@ describe("AgentControllerLive", () => {
       respondingBotId: botId,
       groupMemberBotIds: [],
     } as const;
+
     const credentials = makeMemoryOnlyCredentialOptions();
+
     const callMemoryTool = (input: {
       target: string;
       operations: Array<unknown>;
@@ -426,6 +455,7 @@ describe("AgentControllerLive", () => {
         try: () => {
           const handler = McpMemoryToolSession.readMcpMemoryToolSession(claudeThreadId);
           assert.isDefined(handler);
+
           return handler({
             threadId: String(claudeThreadId),
             toolId: "memory",
@@ -478,13 +508,16 @@ describe("AgentControllerLive", () => {
         const context = bridge.sendTurn.mock.calls[0]?.[0].persistentMemoryContext ?? "";
         expect(context).not.toContain("<bot-memory>");
         expect(context).not.toContain("Bot-private note.");
+
         const denied = yield* callMemoryTool({ target: "memory", operations: [] }).pipe(
           Effect.result,
         );
+
         assert.equal(denied._tag, "Failure");
         expect(denied._tag === "Failure" ? denied.failure.cause.message : "").toContain(
           "Private bot memory is disabled.",
         );
+
         // A share-only call names the memory target but never touches MEMORY.md,
         // so it passes the Private bot memory gate and reaches the share path
         // (this fixture has no approvals service).
@@ -493,6 +526,7 @@ describe("AgentControllerLive", () => {
           operations: [],
           share: { fact: "The project uses pnpm.", scope: "project" },
         }).pipe(Effect.result);
+
         expect(shareOnly._tag === "Failure" ? shareOnly.failure.cause.message : "").toBe(
           "Shared memory is not available in this chat.",
         );

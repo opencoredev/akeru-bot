@@ -96,16 +96,20 @@ export const makeCodexSessionRuntime = (
     // `child_process.spawn`; `expandHomePath` lets a configured
     // `CODEX_HOME=~/.codex_work` reach codex as an absolute path.
     const resolvedHomePath = options.homePath ? expandHomePath(options.homePath) : undefined;
+
     const env = {
       ...options.environment,
       ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
     };
+
     const extendEnv = options.environment === undefined;
     const appServerArgs = codexSessionAppServerArgs(options.appServerArgs, options.launchArgs);
+
     const spawnCommand = yield* resolveSpawnCommand(options.binaryPath, appServerArgs, {
       env,
       extendEnv,
     });
+
     const child = yield* spawner
       .spawn(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
@@ -131,11 +135,14 @@ export const makeCodexSessionRuntime = (
       Layer.build,
       Effect.provideService(Scope.Scope, runtimeScope),
     );
+
     const client = yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
       Effect.provide(clientContext),
     );
+
     const serverNotifications = yield* Queue.unbounded<CodexServerNotification>();
     const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
+
     const randomUUIDv4 = (purpose: CodexErrors.CodexAppServerIdentifierPurpose) =>
       crypto.randomUUIDv4.pipe(
         Effect.mapError(
@@ -148,6 +155,7 @@ export const makeCodexSessionRuntime = (
       );
 
     const sessionCreatedAt = yield* nowIso;
+
     const initialSession = {
       provider: PROVIDER,
       ...(options.providerInstanceId ? { providerInstanceId: options.providerInstanceId } : {}),
@@ -160,12 +168,14 @@ export const makeCodexSessionRuntime = (
       createdAt: sessionCreatedAt,
       updatedAt: sessionCreatedAt,
     } satisfies ProviderSession;
+
     const sessionRef = yield* Ref.make<ProviderSession>(initialSession);
     const offerEvent = (event: ProviderEvent) => Queue.offer(events, event).pipe(Effect.asVoid);
 
     const emitEvent = (event: Omit<ProviderEvent, "id" | "provider" | "createdAt">) =>
       Effect.gen(function* () {
         const id = yield* randomUUIDv4("provider-event");
+
         return yield* offerEvent({
           id: EventId.make(id),
           provider: PROVIDER,
@@ -174,6 +184,7 @@ export const makeCodexSessionRuntime = (
           ...event,
         });
       });
+
     const emitSessionEvent = (method: string, message: string) =>
       emitEvent({
         kind: "session",
@@ -212,6 +223,7 @@ export const makeCodexSessionRuntime = (
           if (providerThreadId && payload.thread.id !== providerThreadId) {
             return Effect.void;
           }
+
           return updateSession(sessionRef, {
             resumeCursor: { threadId: payload.thread.id },
           });
@@ -225,6 +237,7 @@ export const makeCodexSessionRuntime = (
           if (providerThreadId && payload.threadId !== providerThreadId) {
             return Effect.void;
           }
+
           return updateSession(sessionRef, {
             status: "running",
             activeTurnId: TurnId.make(payload.turn.id),
@@ -239,10 +252,12 @@ export const makeCodexSessionRuntime = (
           if (providerThreadId && payload.threadId !== providerThreadId) {
             return Effect.void;
           }
+
           const lastError =
             payload.turn.status === "failed" && "error" in payload.turn && payload.turn.error
               ? payload.turn.error.message
               : undefined;
+
           return updateSession(sessionRef, {
             status: payload.turn.status === "failed" ? "error" : "ready",
             activeTurnId: undefined,
@@ -256,11 +271,14 @@ export const makeCodexSessionRuntime = (
       currentSessionProviderThreadId.pipe(
         Effect.flatMap((providerThreadId) => {
           const payloadThreadId = payload.threadId;
+
           if (providerThreadId && payloadThreadId && payloadThreadId !== providerThreadId) {
             return Effect.void;
           }
+
           const errorMessage = payload.error.message;
           const willRetry = payload.willRetry;
+
           return updateSession(sessionRef, {
             status: willRetry ? "running" : "error",
             ...(errorMessage ? { lastError: errorMessage } : {}),
@@ -286,6 +304,7 @@ export const makeCodexSessionRuntime = (
             itemId,
             decision,
           });
+
           return next;
         });
         yield* Ref.update(approvalCorrelationsRef, (current) => {
@@ -296,6 +315,7 @@ export const makeCodexSessionRuntime = (
             turnId,
             itemId,
           });
+
           return next;
         });
 
@@ -315,10 +335,12 @@ export const makeCodexSessionRuntime = (
             Ref.update(pendingApprovalsRef, (current) => {
               const next = new Map(current);
               next.delete(requestId);
+
               return next;
             }),
           ),
         );
+
         return {
           decision: resolved === "acceptAlways" ? "acceptForSession" : resolved,
         } satisfies EffectCodexSchema.CommandExecutionRequestApprovalResponse;
@@ -330,6 +352,7 @@ export const makeCodexSessionRuntime = (
         const requestId = ApprovalRequestId.make(
           yield* randomUUIDv4("file-change-approval-request"),
         );
+
         const turnId = TurnId.make(payload.turnId);
         const itemId = ProviderItemId.make(payload.itemId);
         const decision = yield* Deferred.make<ProviderApprovalDecision>();
@@ -344,6 +367,7 @@ export const makeCodexSessionRuntime = (
             itemId,
             decision,
           });
+
           return next;
         });
         yield* Ref.update(approvalCorrelationsRef, (current) => {
@@ -354,6 +378,7 @@ export const makeCodexSessionRuntime = (
             turnId,
             itemId,
           });
+
           return next;
         });
 
@@ -373,10 +398,12 @@ export const makeCodexSessionRuntime = (
             Ref.update(pendingApprovalsRef, (current) => {
               const next = new Map(current);
               next.delete(requestId);
+
               return next;
             }),
           ),
         );
+
         return {
           decision: resolved === "acceptAlways" ? "acceptForSession" : resolved,
         } satisfies EffectCodexSchema.FileChangeRequestApprovalResponse;
@@ -390,15 +417,18 @@ export const makeCodexSessionRuntime = (
             serverName: payload.serverName,
             mode: payload.mode,
           });
+
           return {
             action: "decline",
           } satisfies EffectCodexSchema.McpServerElicitationRequestResponse;
         }
 
         const requestId = ApprovalRequestId.make(yield* randomUUIDv4("mcp-elicitation-request"));
+
         const turnId = payload.turnId
           ? TurnId.make(payload.turnId)
           : (yield* Ref.get(sessionRef)).activeTurnId;
+
         const jsonRpcId = payload.mode === "url" ? payload.elicitationId : requestId;
         const decision = yield* Deferred.make<ProviderApprovalDecision>();
 
@@ -412,6 +442,7 @@ export const makeCodexSessionRuntime = (
             itemId: undefined,
             decision,
           });
+
           return next;
         });
         yield* Ref.update(approvalCorrelationsRef, (current) => {
@@ -422,6 +453,7 @@ export const makeCodexSessionRuntime = (
             turnId,
             itemId: undefined,
           });
+
           return next;
         });
 
@@ -440,10 +472,12 @@ export const makeCodexSessionRuntime = (
             Ref.update(pendingApprovalsRef, (current) => {
               const next = new Map(current);
               next.delete(requestId);
+
               return next;
             }),
           ),
         );
+
         return toMcpElicitationResponse(payload, resolved);
       }),
     );
@@ -463,6 +497,7 @@ export const makeCodexSessionRuntime = (
             itemId,
             answers,
           });
+
           return next;
         });
 
@@ -481,6 +516,7 @@ export const makeCodexSessionRuntime = (
             Ref.update(pendingUserInputsRef, (current) => {
               const next = new Map(current);
               next.delete(requestId);
+
               return next;
             }),
           ),
@@ -530,6 +566,7 @@ export const makeCodexSessionRuntime = (
           const combined = current + chunk;
           const lines = combined.split("\n");
           const remainder = lines.pop() ?? "";
+
           return [lines.map((line) => line.replace(/\r$/, "")), remainder] as const;
         }).pipe(
           Effect.flatMap((lines) =>
@@ -537,9 +574,11 @@ export const makeCodexSessionRuntime = (
               lines,
               (line) => {
                 const classified = classifyCodexStderrLine(line);
+
                 if (!classified) {
                   return Effect.void;
                 }
+
                 return emitEvent({
                   kind: "notification",
                   threadId: options.threadId,
@@ -562,7 +601,9 @@ export const makeCodexSessionRuntime = (
             if (closed) {
               return Effect.void;
             }
+
             const nextStatus = exitCode === 0 ? "closed" : "error";
+
             return updateSession(sessionRef, {
               status: nextStatus,
               activeTurnId: undefined,
@@ -600,6 +641,7 @@ export const makeCodexSessionRuntime = (
       });
 
       const providerThreadId = opened.thread.id;
+
       const session = {
         ...(yield* Ref.get(sessionRef)),
         status: "ready",
@@ -608,26 +650,32 @@ export const makeCodexSessionRuntime = (
         resumeCursor: { threadId: providerThreadId },
         updatedAt: yield* nowIso,
       } satisfies ProviderSession;
+
       yield* Ref.set(sessionRef, session);
       yield* emitSessionEvent("session/ready", "Codex App Server session ready.");
+
       return session;
     });
 
     const readProviderThreadId = Effect.gen(function* () {
       const providerThreadId = currentProviderThreadId(yield* Ref.get(sessionRef));
+
       if (!providerThreadId) {
         return yield* new CodexSessionRuntimeThreadIdMissingError({
           threadId: options.threadId,
         });
       }
+
       return providerThreadId;
     });
 
     const close = Effect.gen(function* () {
       const alreadyClosed = yield* Ref.getAndSet(closedRef, true);
+
       if (alreadyClosed) {
         return;
       }
+
       yield* settlePendingApprovals("cancel");
       yield* settlePendingUserInputs({});
       yield* updateSession(sessionRef, {
@@ -650,6 +698,7 @@ export const makeCodexSessionRuntime = (
       sendTurn: (input) =>
         Effect.gen(function* () {
           const providerThreadId = yield* readProviderThreadId;
+
           if (hasConfiguredMcpServer(options.appServerArgs)) {
             yield* client.request("config/mcpServer/reload", undefined).pipe(
               Effect.catch((cause) =>
@@ -659,9 +708,11 @@ export const makeCodexSessionRuntime = (
               ),
             );
           }
+
           const normalizedModel = normalizeCodexModelSlug(
             input.model ?? (yield* Ref.get(sessionRef)).model,
           );
+
           const params = yield* buildTurnStartParams({
             threadId: providerThreadId,
             runtimeMode: options.runtimeMode,
@@ -676,7 +727,9 @@ export const makeCodexSessionRuntime = (
             // has even if the setting changed after the session started.
             browserToolsAvailable: hasConfiguredMcpServer(options.appServerArgs),
           });
+
           const rawResponse = yield* client.raw.request("turn/start", params);
+
           const response = yield* decodeV2TurnStartResponse(rawResponse).pipe(
             Effect.mapError((error) =>
               CodexErrors.CodexAppServerProtocolParseError.fromSchemaError(
@@ -686,6 +739,7 @@ export const makeCodexSessionRuntime = (
               ),
             ),
           );
+
           const turnId = TurnId.make(response.turn.id);
           yield* updateSession(sessionRef, (session) => ({
             status: "running",
@@ -696,6 +750,7 @@ export const makeCodexSessionRuntime = (
             ...(normalizedModel ? { model: normalizedModel } : {}),
           }));
           const resumedProviderThreadId = currentProviderThreadId(yield* Ref.get(sessionRef));
+
           return {
             threadId: options.threadId,
             turnId,
@@ -729,9 +784,11 @@ export const makeCodexSessionRuntime = (
             { concurrency: 8, discard: true },
           ).pipe(Effect.timeoutOption("10 seconds"), Effect.ignore);
           const effectiveTurnId = turnId ?? session.activeTurnId;
+
           if (!effectiveTurnId) {
             return;
           }
+
           yield* client.request("turn/interrupt", {
             threadId: providerThreadId,
             turnId: effectiveTurnId,
@@ -739,28 +796,34 @@ export const makeCodexSessionRuntime = (
         }),
       readThread: Effect.gen(function* () {
         const providerThreadId = yield* readProviderThreadId;
+
         const response = yield* client.request("thread/read", {
           threadId: providerThreadId,
           includeTurns: true,
         });
+
         return parseThreadSnapshot(response);
       }),
       rollbackThread: (numTurns) =>
         Effect.gen(function* () {
           const providerThreadId = yield* readProviderThreadId;
+
           const response = yield* client.request("thread/rollback", {
             threadId: providerThreadId,
             numTurns,
           });
+
           yield* updateSession(sessionRef, {
             status: "ready",
             activeTurnId: undefined,
           });
+
           return parseThreadSnapshot(response);
         }),
       uploadFeedback: (reason) =>
         Effect.gen(function* () {
           const providerThreadId = yield* readProviderThreadId;
+
           return yield* client.request("feedback/upload", {
             classification: "bug",
             includeLogs: true,
@@ -771,14 +834,17 @@ export const makeCodexSessionRuntime = (
       respondToRequest: (requestId, decision) =>
         Effect.gen(function* () {
           const pending = (yield* Ref.get(pendingApprovalsRef)).get(requestId);
+
           if (!pending) {
             return yield* new CodexSessionRuntimePendingApprovalNotFoundError({
               requestId,
             });
           }
+
           yield* Ref.update(pendingApprovalsRef, (current) => {
             const next = new Map(current);
             next.delete(requestId);
+
             return next;
           });
           yield* Deferred.succeed(pending.decision, decision);
@@ -800,15 +866,18 @@ export const makeCodexSessionRuntime = (
       respondToUserInput: (requestId, answers) =>
         Effect.gen(function* () {
           const pending = (yield* Ref.get(pendingUserInputsRef)).get(requestId);
+
           if (!pending) {
             return yield* new CodexSessionRuntimePendingUserInputNotFoundError({
               requestId,
             });
           }
+
           const codexAnswers = yield* toCodexUserInputAnswers(answers);
           yield* Ref.update(pendingUserInputsRef, (current) => {
             const next = new Map(current);
             next.delete(requestId);
+
             return next;
           });
           yield* Deferred.succeed(pending.answers, answers);
@@ -836,6 +905,7 @@ export {
   type CodexResumeCursor,
   buildTurnStartParams,
 } from "./codex/CodexRuntimeRequests.ts";
+
 export {
   type CodexSessionRuntimeOptions,
   type CodexSessionRuntimeSendTurnInput,
@@ -843,6 +913,7 @@ export {
   type CodexThreadSnapshot,
   type CodexSessionRuntimeShape,
 } from "./codex/CodexRuntimeState.ts";
+
 export {
   type CodexSessionRuntimeError,
   CodexSessionRuntimePendingApprovalNotFoundError,
@@ -850,8 +921,11 @@ export {
   CodexSessionRuntimeInvalidUserInputAnswersError,
   CodexSessionRuntimeThreadIdMissingError,
 } from "./codex/CodexRuntimeErrors.ts";
+
 export { describeMcpElicitation, toMcpElicitationResponse } from "./codex/CodexMcpElicitation.ts";
+
 export { isRecoverableThreadResumeError, openCodexThread } from "./codex/CodexRuntimeOpening.ts";
+
 export {
   makeMemoryConsolidationNotificationFilter,
   type CodexChildNotificationRoute,

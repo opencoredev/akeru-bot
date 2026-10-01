@@ -91,13 +91,17 @@ export function createClaudeSystemMessages(deps: {
     const progress = parseWorkflowProgress(
       (message as unknown as Record<string, unknown>).workflow_progress,
     );
+
     if (!progress) {
       return;
     }
+
     const coordinatorId = message.task_id;
+
     for (const entry of progress.agents) {
       const memberTaskId = `${coordinatorId}:wf:${entry.index}`;
       const status = workflowAgentStatus(entry);
+
       // Material-transition filter: the wire repeats every member each tick.
       // Emit only when something the client renders actually changed, so a
       // 100-agent fleet costs ~1 event per changed member instead of 100
@@ -114,9 +118,11 @@ export function createClaudeSystemMessages(deps: {
         entry.phaseTitle ?? "",
         entry.attempt ?? "",
       ].join("\u001f");
+
       if (context.workflowMemberFingerprints.get(memberTaskId) === fingerprint) {
         continue;
       }
+
       context.workflowMemberFingerprints.set(memberTaskId, fingerprint);
       const stamp = yield* deps.makeEventStamp();
       yield* deps.offerRuntimeEvent({
@@ -150,6 +156,7 @@ export function createClaudeSystemMessages(deps: {
       });
     }
   });
+
   const handleSystemMessage = Effect.fn("handleSystemMessage")(function* (
     context: ClaudeSessionContext,
     message: SDKMessage,
@@ -159,6 +166,7 @@ export function createClaudeSystemMessages(deps: {
     }
 
     const stamp = yield* deps.makeEventStamp();
+
     const base = {
       eventId: stamp.eventId,
       provider: PROVIDER,
@@ -200,6 +208,7 @@ export function createClaudeSystemMessages(deps: {
             config: message as Record<string, unknown>,
           },
         });
+
         return;
       case "status":
         yield* deps.offerRuntimeEvent({
@@ -211,12 +220,14 @@ export function createClaudeSystemMessages(deps: {
             detail: message,
           },
         });
+
         return;
       case "compact_boundary":
         if (context.turnState) {
           context.turnState.latestAssistantUsage = undefined;
           context.turnState.compactedSinceLatestAssistantUsage = true;
         }
+
         yield* deps.emitThreadTokenUsage(
           context,
           compactBoundaryTokenUsageSnapshot(
@@ -237,6 +248,7 @@ export function createClaudeSystemMessages(deps: {
             detail: message,
           },
         });
+
         return;
       case "hook_started":
         yield* deps.offerRuntimeEvent({
@@ -248,6 +260,7 @@ export function createClaudeSystemMessages(deps: {
             hookEvent: message.hook_event,
           },
         });
+
         return;
       case "hook_progress":
         yield* deps.offerRuntimeEvent({
@@ -260,6 +273,7 @@ export function createClaudeSystemMessages(deps: {
             stderr: message.stderr,
           },
         });
+
         return;
       case "hook_response":
         yield* deps.offerRuntimeEvent({
@@ -274,6 +288,7 @@ export function createClaudeSystemMessages(deps: {
             ...(typeof message.exit_code === "number" ? { exitCode: message.exit_code } : {}),
           },
         });
+
         return;
       case "task_started": {
         // A task launched by a tool that itself ran inside a subagent (the
@@ -284,6 +299,7 @@ export function createClaudeSystemMessages(deps: {
               (tool) => tool.itemId === message.tool_use_id,
             )
           : undefined;
+
         const owningAgentId = launchingTool?.agentId;
         // Model/effort: the Agent tool's input carries explicit overrides;
         // absent ones inherit the session's selection (SDK behavior).
@@ -294,19 +310,24 @@ export function createClaudeSystemMessages(deps: {
         const launchInput = launchingTool?.input;
         const toolUseId = message.tool_use_id;
         const bufferedModel = toolUseId ? context.pendingTaskModels.get(toolUseId) : undefined;
+
         if (toolUseId) {
           context.pendingTaskModels.delete(toolUseId);
         }
+
         const model =
           bufferedModel ??
           trimmedString(launchInput?.model) ??
           trimmedString(context.session.model ?? undefined);
+
         const rawLaunchEffort = launchInput?.effort;
+
         const effort =
           trimmedString(rawLaunchEffort) ??
           (typeof rawLaunchEffort === "number" && Number.isFinite(rawLaunchEffort)
             ? String(rawLaunchEffort)
             : context.currentEffort);
+
         // Remember the agent identity so every later task.* payload for this
         // taskId is self-describing (identity must survive activity retention).
         context.taskAgents.set(message.task_id, {
@@ -339,8 +360,10 @@ export function createClaudeSystemMessages(deps: {
             ...(message.workflow_name ? { workflowName: message.workflow_name } : {}),
           },
         });
+
         return;
       }
+
       case "task_progress": {
         yield* deps.emitThreadTokenUsage(
           context,
@@ -352,6 +375,7 @@ export function createClaudeSystemMessages(deps: {
         );
         const linkage = taskLinkageFor(context.taskAgents, message.task_id);
         const typedUsage = normalizeTaskUsage(message.usage);
+
         // Phases ride on the coordinator's ONE progress row per tick. A
         // separate phases-only row shared the stable ingestion activity id
         // with this full row, and the thinner upsert overwrote usage and
@@ -359,6 +383,7 @@ export function createClaudeSystemMessages(deps: {
         const workflowPhases = parseWorkflowProgress(
           (message as unknown as Record<string, unknown>).workflow_progress,
         )?.phases;
+
         yield* deps.offerRuntimeEvent({
           ...base,
           type: "task.progress",
@@ -375,21 +400,27 @@ export function createClaudeSystemMessages(deps: {
           },
         });
         yield* emitWorkflowMemberProgress(context, base, message);
+
         return;
       }
+
       case "task_updated": {
         // Status patch (killed/paused/backgrounded/end_time/error) — main
         // previously dropped this on the floor, losing all transitions.
         const patch = message.patch;
+
         const status =
           patch.status !== undefined ? CLAUDE_TASK_PATCH_STATUS[patch.status] : undefined;
+
         if (status === "completed" || status === "failed" || status === "cancelled") {
           context.liveTaskIds.delete(message.task_id);
         }
+
         const endedAt =
           typeof patch.end_time === "number" && Number.isFinite(patch.end_time)
             ? DateTime.formatIso(DateTime.makeUnsafe(patch.end_time))
             : undefined;
+
         yield* deps.offerRuntimeEvent({
           ...base,
           type: "task.updated",
@@ -405,8 +436,10 @@ export function createClaudeSystemMessages(deps: {
             ...taskLinkageFor(context.taskAgents, message.task_id),
           },
         });
+
         return;
       }
+
       case "task_notification": {
         context.liveTaskIds.delete(message.task_id);
         yield* deps.emitThreadTokenUsage(
@@ -431,8 +464,10 @@ export function createClaudeSystemMessages(deps: {
             ...taskLinkageFor(context.taskAgents, message.task_id),
           },
         });
+
         return;
       }
+
       case "files_persisted":
         yield* deps.offerRuntimeEvent({
           ...base,
@@ -454,6 +489,7 @@ export function createClaudeSystemMessages(deps: {
               : {}),
           },
         });
+
         return;
       case "thinking_tokens":
         return;
@@ -470,6 +506,7 @@ export function createClaudeSystemMessages(deps: {
             reason: `api_retry:${message.attempt}/${message.max_retries}`,
           },
         });
+
         return;
       case "session_state_changed":
         // Authoritative turn-over signal from the CLI.
@@ -486,6 +523,7 @@ export function createClaudeSystemMessages(deps: {
             reason: `session_state:${message.state}`,
           },
         });
+
         return;
       case "notification":
         // User-facing CLI notification (e.g. context-limit warnings). Only
@@ -493,6 +531,7 @@ export function createClaudeSystemMessages(deps: {
         if (message.priority === "high" || message.priority === "immediate") {
           yield* deps.emitRuntimeWarning(context, message.text, message);
         }
+
         return;
       // Inner protocol/UX details with no T3 surface today — consumed
       // deliberately so they don't masquerade as unknown-subtype warnings.
@@ -514,6 +553,7 @@ export function createClaudeSystemMessages(deps: {
             ...(message.agent_id ? { agentId: message.agent_id } : {}),
           },
         });
+
         return;
       case "mirror_error":
         yield* deps.emitRuntimeError(
@@ -521,6 +561,7 @@ export function createClaudeSystemMessages(deps: {
           `Claude workspace mirror error: ${message.error}`,
           message,
         );
+
         return;
       default: {
         // Exhaustiveness guard: every subtype in the SDK's typed union is
@@ -535,15 +576,18 @@ export function createClaudeSystemMessages(deps: {
           describeUnknownSdkMessage(`Claude system message '${unknownMessage.subtype}'`, message),
           message,
         );
+
         return;
       }
     }
   });
+
   const handleSdkTelemetryMessage = Effect.fn("handleSdkTelemetryMessage")(function* (
     context: ClaudeSessionContext,
     message: SDKMessage,
   ) {
     const stamp = yield* deps.makeEventStamp();
+
     const base = {
       eventId: stamp.eventId,
       provider: PROVIDER,
@@ -573,6 +617,7 @@ export function createClaudeSystemMessages(deps: {
             : {}),
         },
       });
+
       return;
     }
 
@@ -589,6 +634,7 @@ export function createClaudeSystemMessages(deps: {
             : {}),
         },
       });
+
       return;
     }
 
@@ -602,6 +648,7 @@ export function createClaudeSystemMessages(deps: {
           ...(message.error ? { error: message.error } : {}),
         },
       });
+
       return;
     }
 
@@ -614,7 +661,9 @@ export function createClaudeSystemMessages(deps: {
         },
       });
       const rateLimitInfo = message.rate_limit_info;
+
       if (!rateLimitInfo) return;
+
       // A rejected window parks the turn inside the SDK: no further messages
       // arrive and no result lands, so without a row the thread just spins.
       // Warnings (allowed_warning) still have headroom and stay quiet, an
@@ -625,12 +674,15 @@ export function createClaudeSystemMessages(deps: {
         rateLimitInfo.overageStatus === "allowed_warning" ||
         rateLimitInfo.isUsingOverage === true ||
         rateLimitInfo.overageInUse === true;
+
       const blocked = rateLimitInfo.status === "rejected" && !overageAllowed;
       const limitType = rateLimitInfo.rateLimitType ?? "unknown";
       const limitKey = `${limitType}:${rateLimitInfo.resetsAt ?? "unknown"}`;
       const warningKey = `claude.rate-limit:${limitType}`;
+
       const recovered =
         context.turnState?.rejectedRateLimitTypes.has(limitType) === true && !blocked;
+
       if (context.turnState) {
         // Current blocking evidence is independent of whether its warning has
         // already been shown. A recovery can omit or advance the reset time;
@@ -644,11 +696,14 @@ export function createClaudeSystemMessages(deps: {
           context.turnState.rejectedRateLimitTypes.delete(limitType);
         }
       }
+
       if (blocked && context.turnState !== undefined) {
         const turnId = context.turnState.turnId;
+
         if (context.announcedUsageLimits?.turnId !== turnId) {
           context.announcedUsageLimits = { turnId, keys: new Set() };
         }
+
         if (!context.announcedUsageLimits.keys.has(limitKey)) {
           context.announcedUsageLimits.keys.add(limitKey);
           const notice = describeClaudeUsageLimit(rateLimitInfo, Date.parse(stamp.createdAt));
@@ -662,8 +717,10 @@ export function createClaudeSystemMessages(deps: {
           { key: warningKey, resolved: true },
         );
       }
+
       return;
     }
   });
+
   return { emitWorkflowMemberProgress, handleSystemMessage, handleSdkTelemetryMessage };
 }

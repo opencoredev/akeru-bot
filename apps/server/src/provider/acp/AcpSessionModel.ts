@@ -11,9 +11,11 @@ export function isSessionModelState(value: unknown): value is EffectAcpSchema.Se
   if (!isRecord(value) || typeof value.currentModelId !== "string") {
     return false;
   }
+
   if (!Array.isArray(value.availableModels)) {
     return false;
   }
+
   return value.availableModels.every(
     (model) =>
       isRecord(model) &&
@@ -29,9 +31,11 @@ export function isSessionModeState(value: unknown): value is EffectAcpSchema.Ses
   if (!isRecord(value) || typeof value.currentModeId !== "string") {
     return false;
   }
+
   if (!Array.isArray(value.availableModes)) {
     return false;
   }
+
   return value.availableModes.every(
     (mode) =>
       isRecord(mode) &&
@@ -43,12 +47,15 @@ export function isSessionModeState(value: unknown): value is EffectAcpSchema.Ses
 
 export function extractModelConfigId(sessionResponse: AcpSessionSetupResponse): string | undefined {
   const configOptions = sessionResponse.configOptions;
+
   if (!configOptions) return undefined;
+
   for (const opt of configOptions) {
     if (opt.category === "model" && opt.id.trim().length > 0) {
       return opt.id.trim();
     }
   }
+
   return undefined;
 }
 
@@ -59,10 +66,13 @@ export function findSessionConfigOption(
   if (!configOptions) {
     return undefined;
   }
+
   const normalizedConfigId = configId.trim();
+
   if (!normalizedConfigId) {
     return undefined;
   }
+
   return configOptions.find((option) => option.id.trim() === normalizedConfigId);
 }
 
@@ -72,6 +82,7 @@ export function collectSessionConfigOptionValues(
   if (configOption.type !== "select") {
     return [];
   }
+
   return configOption.options.flatMap((entry) =>
     "value" in entry ? [entry.value] : entry.options.map((option) => option.value),
   );
@@ -81,18 +92,24 @@ export function parseSessionModeState(
   sessionResponse: AcpSessionSetupResponse,
 ): AcpSessionModeState | undefined {
   const modes = sessionResponse.modes;
+
   if (!modes) return undefined;
   const currentModeId = modes.currentModeId.trim();
+
   if (!currentModeId) {
     return undefined;
   }
+
   const availableModes: Array<AcpSessionMode> = [];
+
   for (const mode of modes.availableModes) {
     const id = mode.id.trim();
     const name = mode.name.trim();
+
     if (!id || !name) {
       continue;
     }
+
     const description = mode.description?.trim() || undefined;
     availableModes.push(
       description !== undefined
@@ -100,9 +117,11 @@ export function parseSessionModeState(
         : ({ id, name } satisfies AcpSessionMode),
     );
   }
+
   if (availableModes.length === 0) {
     return undefined;
   }
+
   return {
     currentModeId,
     availableModes,
@@ -118,6 +137,7 @@ export function sessionModelStateFromInitialize(
 ): EffectAcpSchema.SessionModelState | undefined {
   const meta = initializeResult._meta;
   const modelState = isRecord(meta) ? meta.modelState : undefined;
+
   return isSessionModelState(modelState) ? modelState : undefined;
 }
 

@@ -117,11 +117,13 @@ export function createTurnRequests(deps: {
       const key = String(input.threadId);
       const resolved = deps.resolvedByThread.get(key);
       const active = deps.sessions.get(key);
+
       if (!active) {
         if (resolved && deps.usesMastraCode(resolved.provider)) {
           const routing = yield* deps.legacyProviderBridge.getInstanceInfo(
             resolved.providerInstanceId,
           );
+
           if (!routing.enabled) {
             return yield* deps.disabledProviderError(
               "AgentController.sendTurn",
@@ -129,6 +131,7 @@ export function createTurnRequests(deps: {
             );
           }
         }
+
         if (
           deps.usesMastraCode(
             deps.resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"),
@@ -139,14 +142,17 @@ export function createTurnRequests(deps: {
             detail: `Mastra session for thread '${input.threadId}' is not running.`,
           });
         }
+
         const { botUsage: _, delegationResults, ...providerInput } = input;
         // memory.enabled is authoritative per turn: while it is off the turn
         // must not read the durable snapshot or reserve review cadence. The
         // identity keeps its stored access so re-enabling restores memory.
         const settings = yield* deps.memorySettings();
+
         const memoryAccess = settings.enabled
           ? deps.legacyResourceIdentity.get(key)?.memoryAccess
           : undefined;
+
         const entityMemoryAccess = settings.enabled
           ? yield* deps.runMastra("memory.access", () =>
               deps.refreshEntityMemoryAccess(
@@ -154,6 +160,7 @@ export function createTurnRequests(deps: {
               ),
             )
           : undefined;
+
         if (
           settings.enabled &&
           deps.legacyResourceIdentity.get(key)?.entityMemoryAccess &&
@@ -164,16 +171,19 @@ export function createTurnRequests(deps: {
             detail: "The bot is no longer a member of this group.",
           });
         }
+
         const entityPacket = entityMemoryAccess
           ? yield* deps.runMastra("memory.packet", () =>
               deps.entityMemoryContext(entityMemoryAccess),
             )
           : "";
+
         const conversation = deps.bundle.readObservationalMemory
           ? yield* deps.runMastra("memory.read", () =>
               deps.bundle.readObservationalMemory!(key, key),
             )
           : undefined;
+
         const observationContext = conversation?.current?.activeObservations
           ? [
               "<thread-observations>",
@@ -181,6 +191,7 @@ export function createTurnRequests(deps: {
               "</thread-observations>",
             ].join("\n")
           : "";
+
         const memoryTurn = memoryAccess
           ? yield* Effect.promise(() =>
               deps.memoryTurnHarness.admit({
@@ -194,6 +205,7 @@ export function createTurnRequests(deps: {
               }),
             )
           : undefined;
+
         const pendingMemory: LegacyTurnMemoryState = {
           observationPromptId: NodeCrypto.randomUUID(),
           observationRecorded: false,
@@ -207,8 +219,10 @@ export function createTurnRequests(deps: {
           memoryTurn,
           hiddenWake: input.hiddenWake === true,
         };
+
         if (memoryTurn?.reviewIncluded) {
           const priorMemoryHandler = McpMemoryToolSession.readMcpMemoryToolSession(input.threadId);
+
           if (priorMemoryHandler) {
             const reviewMemoryHandler = memoryTurn.wrapMemoryHandler(priorMemoryHandler);
             pendingMemory.priorMemoryHandler = priorMemoryHandler;
@@ -216,7 +230,9 @@ export function createTurnRequests(deps: {
             McpMemoryToolSession.setMcpMemoryToolSession(input.threadId, reviewMemoryHandler);
           }
         }
+
         deps.addLegacyPending(key, pendingMemory);
+
         const turnInstructions = resolved?.botConversation
           ? createAkeruBotTurnInstructions({
               ...(resolved.botName ? { name: resolved.botName } : {}),
@@ -225,9 +241,11 @@ export function createTurnRequests(deps: {
                 : {}),
             })
           : "";
+
         // OpenCode reads per-turn context as its system prompt. Claude and Grok
         // only read context at session start, so this turn's text carries it.
         const contextInSystem = resolved?.provider === "opencode";
+
         const providerContext = [
           contextInSystem ? turnInstructions : "",
           memoryTurn?.context,
@@ -237,7 +255,9 @@ export function createTurnRequests(deps: {
         ]
           .filter(Boolean)
           .join("\n\n");
+
         const inputPrefix = contextInSystem ? [] : [turnInstructions, delegationResults];
+
         return yield* deps.legacyProviderBridge
           .sendTurn({
             ...providerInput,
@@ -251,11 +271,14 @@ export function createTurnRequests(deps: {
               Effect.gen(function* () {
                 if (!deps.hasLegacyPending(key, pendingMemory)) return;
                 pendingMemory.turnId = String(result.turnId);
+
                 if (input.hiddenWake === true)
                   deps.legacyHiddenWakeByTurn.set(`${key}:${pendingMemory.turnId}`, true);
                 pendingMemory.dispatchReturned = true;
+
                 for (const event of pendingMemory.earlyEvents) {
                   if (String(event.turnId) !== pendingMemory.turnId) continue;
+
                   if (
                     event.type === "content.delta" &&
                     event.payload.streamKind === "assistant_text"
@@ -263,6 +286,7 @@ export function createTurnRequests(deps: {
                     pendingMemory.assistant += event.payload.delta;
                   }
                 }
+
                 pendingMemory.earlyEvents.length = 0;
                 yield* deps.drainLegacyTerminals(key);
               }),
@@ -273,22 +297,27 @@ export function createTurnRequests(deps: {
                   deps.restoreLegacyMemoryHandler(key, pendingMemory);
                   deps.removeLegacyPending(key, pendingMemory);
                 }
+
                 if (memoryTurn) {
                   yield* Effect.promise(() => memoryTurn.abandon());
                 }
+
                 yield* deps.drainLegacyTerminals(key);
               }),
             ),
           );
       }
+
       const turnAdmissionGeneration = active.turnAdmissionGeneration;
       const turnPreparationCancelled = active.turnPreparationCancelled;
+
       const prepareTurn = active.turnPreparation.withPermit(
         Effect.gen(function* () {
           if (resolved && deps.usesMastraCode(resolved.provider)) {
             const routing = yield* deps.legacyProviderBridge.getInstanceInfo(
               resolved.providerInstanceId,
             );
+
             if (!routing.enabled) {
               return yield* deps.disabledProviderError(
                 "AgentController.sendTurn",
@@ -296,16 +325,19 @@ export function createTurnRequests(deps: {
               );
             }
           }
+
           if (input.timezone !== undefined) {
             active.configuredToolSession = {
               ...active.configuredToolSession,
               timezone: input.timezone,
             };
+
             if (!active.activeTurn && !active.admittingTurn && active.pendingTurns.length === 0) {
               active.toolSession = active.configuredToolSession;
               deps.toolRuntime.registerSession(key, active.toolSession);
             }
           }
+
           const attachmentFiles = yield* Effect.forEach(
             input.attachments ?? [],
             (attachment) => {
@@ -313,6 +345,7 @@ export function createTurnRequests(deps: {
                 attachmentsDir: deps.config.attachmentsDir,
                 attachment,
               });
+
               if (path === null) {
                 return Effect.fail(
                   new AgentControllerRuntimeError({
@@ -321,11 +354,13 @@ export function createTurnRequests(deps: {
                   }),
                 );
               }
+
               return Effect.tryPromise({
                 try: async () => {
                   const bytes = await (deps.options?.readAttachment ?? NodeFS.promises.readFile)(
                     path,
                   );
+
                   return {
                     file: {
                       data: Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString(
@@ -347,6 +382,7 @@ export function createTurnRequests(deps: {
             },
             { concurrency: 1 },
           );
+
           if (
             deps.sessions.get(key) !== active ||
             active.status === "closed" ||
@@ -357,9 +393,11 @@ export function createTurnRequests(deps: {
               detail: `Mastra session for thread '${input.threadId}' is not running.`,
             });
           }
+
           const content = [input.input, ...attachmentFiles.map(({ pathLine }) => pathLine)]
             .filter((part): part is string => typeof part === "string" && part.length > 0)
             .join("\n\n");
+
           const files = attachmentFiles.map(({ file }) => file);
           const turnId = TurnId.make(`mastra-turn-${NodeCrypto.randomUUID()}`);
           active.pendingTurns.push({
@@ -374,9 +412,11 @@ export function createTurnRequests(deps: {
             hiddenWake: input.hiddenWake === true,
             delegationResults: input.delegationResults,
           });
+
           return turnId;
         }),
       );
+
       // An interrupt must not wait for a stalled attachment read: abandon the
       // preparation, release its permit, and fail turns still queued behind it.
       const turnId = yield* Effect.raceFirst(
@@ -392,8 +432,10 @@ export function createTurnRequests(deps: {
           ),
         ),
       );
+
       if (!active.activeTurn && !active.admittingTurn) {
         const nextTurn = active.pendingTurns.shift();
+
         if (nextTurn) {
           yield* deps
             .admitPendingTurn(active, nextTurn)
@@ -404,14 +446,17 @@ export function createTurnRequests(deps: {
             );
         }
       }
+
       return { threadId: input.threadId, turnId };
     },
   );
+
   const interruptTurn: AgentControllerShape["interruptTurn"] = Effect.fn(
     "AgentController.interruptTurn",
   )(function* (input) {
     const key = String(input.threadId);
     const active = deps.sessions.get(key);
+
     if (!active) {
       if (
         deps.usesMastraCode(
@@ -420,10 +465,12 @@ export function createTurnRequests(deps: {
       ) {
         return;
       }
+
       return yield* deps.legacyProviderBridge.interruptTurn(input).pipe(
         Effect.ensuring(
           Effect.gen(function* () {
             const pendingTurns = deps.legacyPending(key);
+
             for (const pending of pendingTurns) deps.restoreLegacyMemoryHandler(key, pending);
             deps.legacyTurnMemory.delete(key);
             deps.legacyBufferedTerminals.delete(key);
@@ -441,6 +488,7 @@ export function createTurnRequests(deps: {
         ),
       );
     }
+
     deps.endTurnAdmissionGeneration(active);
     active.pendingTurns.length = 0;
     active.admittingTurn = null;
@@ -449,5 +497,6 @@ export function createTurnRequests(deps: {
     yield* deps.releaseMastraReservations(input.threadId);
     deps.finishTurn(input.threadId, active, "interrupted");
   });
+
   return { sendTurn, interruptTurn };
 }

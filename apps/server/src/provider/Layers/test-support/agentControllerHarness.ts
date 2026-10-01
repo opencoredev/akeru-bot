@@ -43,6 +43,7 @@ export function makeMastraHarness() {
   const harnessOptions: Array<
     Parameters<NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>>[0]
   > = [];
+
   const listeners = new Set<(event: AgentControllerEvent) => void>();
   let modeId = "build";
   let modelId = "openai/gpt-5.6-sol";
@@ -51,17 +52,21 @@ export function makeMastraHarness() {
   const rejectSends: Array<(cause: unknown) => void> = [];
   let sendMessageCount = 0;
   const sendMessageWaiters: Array<{ readonly count: number; readonly resolve: () => void }> = [];
+
   const sendMessage = vi.fn(() => {
     sendMessageCount += 1;
+
     for (const waiter of sendMessageWaiters.splice(0)) {
       if (sendMessageCount >= waiter.count) waiter.resolve();
       else sendMessageWaiters.push(waiter);
     }
+
     return new Promise<void>((resolve, reject) => {
       resolveSend = resolve;
       rejectSends.push(reject);
     });
   });
+
   const session = {
     state: {
       get: () => state,
@@ -88,6 +93,7 @@ export function makeMastraHarness() {
     grantTool: vi.fn(),
     subscribe: vi.fn((listener: (event: AgentControllerEvent) => void) => {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     }),
     sendMessage,
@@ -95,12 +101,15 @@ export function makeMastraHarness() {
     respondToToolApproval: vi.fn(),
     respondToToolSuspension: vi.fn(async () => undefined),
   } as unknown as Session<Record<string, unknown>>;
+
   const createSession = vi.fn(async (_input: unknown) => session as never);
   const deleteSession = vi.fn(async () => true);
   const observeExternalTurn = vi.fn(async () => undefined);
+
   const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = (options) =>
     Effect.sync(() => {
       harnessOptions.push(options);
+
       return {
         controller: {
           init: vi.fn(async () => undefined),
@@ -110,9 +119,11 @@ export function makeMastraHarness() {
         observeExternalTurn,
       };
     });
+
   const emit = (event: AgentControllerEvent) => {
     for (const listener of listeners) listener(event);
   };
+
   return {
     factory,
     harnessOptions,

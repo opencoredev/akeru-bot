@@ -55,6 +55,7 @@ describe("toMcpServerConfigs", () => {
       },
       { Authorization: "Bearer fixture" },
     );
+
     const browser = {
       browserUrl: "https://sandbox.example/browser",
       mcpSessionId: "session",
@@ -62,6 +63,7 @@ describe("toMcpServerConfigs", () => {
       localRequestHeaders: { "sandbox-key": "local" },
       availableToHostedPlugins: true,
     };
+
     const local = { ...server, transport: "stdio" as const, command: "executor" };
     expect(toMcpServerConfigs([server], browser)[server.id]).toEqual({
       url: server.url,
@@ -98,6 +100,7 @@ describe("provider access health", () => {
   ] as const)("maps %s runtime requests to %s access health", async (driver, provider) => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-map-"));
     const authPath = NodePath.join(directory, "subscription-auth.json");
+
     try {
       NodeFS.writeFileSync(
         authPath,
@@ -108,11 +111,13 @@ describe("provider access health", () => {
       const service = await makeTestSubscriptionAuthService(authPath);
       // The default instance reports as the provider-level account.
       const providerInstanceId = ProviderInstanceId.make(driver);
+
       const base = {
         provider: ProviderDriverKind.make(driver),
         providerInstanceId,
         threadId: ThreadId.make(`thread-${driver}`),
       };
+
       recordProviderAccessHealth(service, {
         ...base,
         type: "runtime.error",
@@ -186,6 +191,7 @@ describe("AgentControllerLive", () => {
   it.effect("passes Akeru subscription auth and memory storage to the custom harness", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         yield* AgentController;
@@ -205,6 +211,7 @@ describe("AgentControllerLive", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const destroy = vi.fn(async () => undefined);
+
     const makeRemoteWorkspace = vi.fn(
       async (_input: import("../botWorkspace.ts").CreateRemoteBotWorkspaceInput) => ({
         id: "railway-vm",
@@ -219,6 +226,7 @@ describe("AgentControllerLive", () => {
         destroy,
       }),
     );
+
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
@@ -234,9 +242,11 @@ describe("AgentControllerLive", () => {
         ),
       ),
     );
+
     return Effect.gen(function* () {
       const controller = yield* AgentController;
       yield* resolveCodex(controller);
+
       const input = {
         threadId: codexThreadId,
         provider: ProviderDriverKind.make("codex"),
@@ -245,12 +255,14 @@ describe("AgentControllerLive", () => {
         runtimeMode: "full-access" as const,
         botSandbox: "railway" as const,
       };
+
       for (const token of ["old", "new"]) {
         yield* controller.startSession(codexThreadId, {
           ...input,
           botSandboxEnvironment: { RAILWAY_API_TOKEN: token, RAILWAY_ENVIRONMENT_ID: "env" },
         });
       }
+
       expect(makeRemoteWorkspace).toHaveBeenCalledTimes(2);
       expect(makeRemoteWorkspace.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({

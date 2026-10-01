@@ -64,6 +64,7 @@ export function createToolRuntime(deps: {
     },
     onReceipt: (receipt) => {
       const active = deps.sessions.get(String(receipt.threadId));
+
       if (!active) return;
       PubSub.publishUnsafe(deps.runtimeEvents, {
         eventId: eventId(),
@@ -80,12 +81,14 @@ export function createToolRuntime(deps: {
       if (!session.botId) return;
       const key = deps.toolUsageKey(input);
       const active = deps.sessions.get(input.threadId);
+
       const started = {
         persisted: false,
         turnId: active?.activeTurn?.turnId ?? null,
         provider: active?.provider ?? null,
         model: active?.model ?? null,
       };
+
       deps.toolUsageStarts.set(key, started);
       await deps.runPromise(
         deps.botUsageLedger
@@ -119,6 +122,7 @@ export function createToolRuntime(deps: {
       const key = deps.toolUsageKey(input);
       const started = deps.toolUsageStarts.get(key);
       deps.toolUsageStarts.delete(key);
+
       if (!session.botId || !started) return;
       await deps.runPromise(
         (started.persisted
@@ -156,6 +160,7 @@ export function createToolRuntime(deps: {
     },
     onProgress: ({ threadId, toolId, toolCallId, summary, authorizationUrl }) => {
       const active = deps.sessions.get(threadId);
+
       if (!active) return;
       PubSub.publishUnsafe(deps.runtimeEvents, {
         ...deps.baseEvent(ThreadId.make(threadId), active, active.activeTurn?.turnId),
@@ -174,5 +179,6 @@ export function createToolRuntime(deps: {
       });
     },
   });
+
   return { toolRuntime };
 }

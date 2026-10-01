@@ -9,12 +9,14 @@ import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntim
 import { drainFibers, makeReadModel, createReaperSupport } from "./test-support/sessionReaper.ts";
 
 const support = createReaperSupport();
+
 afterEach(() => support.close());
 
 describe("ProviderSessionReaper", () => {
   it("reaps an idle session through AgentController stop", async () => {
     const threadId = ThreadId.make("thread-reaper-stale");
     const now = "2026-01-01T00:00:00.000Z";
+
     const harness = await support.createHarness({
       readModel: makeReadModel([
         {
@@ -31,6 +33,7 @@ describe("ProviderSessionReaper", () => {
         },
       ]),
     });
+
     const repository = await support.runtime!.runPromise(
       Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
     );
@@ -65,6 +68,7 @@ describe("ProviderSessionReaper", () => {
     const threadId = ThreadId.make("thread-reaper-active-turn");
     const turnId = TurnId.make("turn-reaper-active");
     const now = "2026-01-01T00:00:00.000Z";
+
     const harness = await support.createHarness({
       readModel: makeReadModel([
         {
@@ -81,6 +85,7 @@ describe("ProviderSessionReaper", () => {
         },
       ]),
     });
+
     const repository = await support.runtime!.runPromise(
       Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
     );
@@ -114,6 +119,7 @@ describe("ProviderSessionReaper", () => {
   it("skips stale sessions while background work is still live", async () => {
     const threadId = ThreadId.make("thread-reaper-background-work");
     const now = "2026-01-01T00:00:00.000Z";
+
     const harness = await support.createHarness({
       readModel: makeReadModel([
         {
@@ -131,6 +137,7 @@ describe("ProviderSessionReaper", () => {
         },
       ]),
     });
+
     const repository = await support.runtime!.runPromise(
       Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
     );
@@ -164,6 +171,7 @@ describe("ProviderSessionReaper", () => {
   it("does not reap sessions that are still within the inactivity threshold", async () => {
     const threadId = ThreadId.make("thread-reaper-fresh");
     const now = DateTime.formatIso(await Effect.runPromise(DateTime.now));
+
     const harness = await support.createHarness({
       readModel: makeReadModel([
         {
@@ -180,6 +188,7 @@ describe("ProviderSessionReaper", () => {
         },
       ]),
     });
+
     const repository = await support.runtime!.runPromise(
       Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
     );
@@ -217,6 +226,7 @@ describe("ProviderSessionReaper", () => {
       const startedAt = "2026-04-14T00:00:00.000Z";
       const completedAt = "2026-04-14T01:00:00.000Z";
       const completedAtMs = Date.parse(completedAt);
+
       const harness = await support.createHarness({
         readModel: makeReadModel([
           {
@@ -233,9 +243,11 @@ describe("ProviderSessionReaper", () => {
           },
         ]),
       });
+
       const repository = await support.runtime!.runPromise(
         Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
       );
+
       await support.runtime!.runPromise(
         repository.upsert({
           threadId,
@@ -268,6 +280,7 @@ describe("ProviderSessionReaper", () => {
       const threadId = ThreadId.make("thread-reaper-fresh");
       const now = "2026-04-14T01:00:00.000Z";
       const nowMs = Date.parse(now);
+
       const harness = await support.createHarness({
         readModel: makeReadModel([
           {
@@ -286,9 +299,11 @@ describe("ProviderSessionReaper", () => {
           },
         ]),
       });
+
       const repository = await support.runtime!.runPromise(
         Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
       );
+
       await support.runtime!.runPromise(
         repository.upsert({
           threadId,

@@ -33,18 +33,23 @@ export function normalizeCommandValue(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim().length > 0) {
     return value.trim();
   }
+
   if (!Array.isArray(value)) {
     return undefined;
   }
+
   const parts: Array<string> = [];
+
   for (const entry of value) {
     if (typeof entry === "string") {
       const part = entry.trim();
+
       if (part.length > 0) {
         parts.push(part);
       }
     }
   }
+
   return parts.length > 0 ? parts.join(" ") : undefined;
 }
 
@@ -52,7 +57,9 @@ export function extractCommandFromTitle(title: string | undefined): string | und
   if (!title) {
     return undefined;
   }
+
   const match = /`([^`]+)`/.exec(title);
+
   return match?.[1]?.trim() || undefined;
 }
 
@@ -62,18 +69,23 @@ export function extractToolCallCommand(
 ): string | undefined {
   if (isRecord(rawInput)) {
     const directCommand = normalizeCommandValue(rawInput.command);
+
     if (directCommand) {
       return directCommand;
     }
+
     const executable = typeof rawInput.executable === "string" ? rawInput.executable.trim() : "";
     const args = normalizeCommandValue(rawInput.args);
+
     if (executable && args) {
       return `${executable} ${args}`;
     }
+
     if (executable) {
       return executable;
     }
   }
+
   return extractCommandFromTitle(title);
 }
 
@@ -92,7 +104,9 @@ export function boundToolCallOutputText(text: string): string {
   if (text.length <= TOOL_CALL_CONTENT_MAX_CHARS) {
     return text;
   }
+
   const tail = text.slice(text.length - TOOL_CALL_CONTENT_MAX_CHARS);
+
   return `${TOOL_CALL_CONTENT_TRUNCATION_MARKER}${tail}`;
 }
 
@@ -106,15 +120,19 @@ export function boundToolCallRawOutput(rawOutput: unknown): unknown {
   if (!isRecord(rawOutput)) {
     return rawOutput;
   }
+
   let changed = false;
   const bounded: Record<string, unknown> = { ...rawOutput };
+
   for (const field of RAW_OUTPUT_TEXT_FIELDS) {
     const value = rawOutput[field];
+
     if (typeof value === "string" && value.length > TOOL_CALL_CONTENT_MAX_CHARS) {
       bounded[field] = boundToolCallOutputText(value);
       changed = true;
     }
   }
+
   return changed ? bounded : rawOutput;
 }
 
@@ -127,6 +145,7 @@ export function toolCallContentText(entry: EffectAcpSchema.ToolCallContent): str
   if (entry.type !== "content" || entry.content.type !== "text") {
     return undefined;
   }
+
   return entry.content.text;
 }
 
@@ -136,21 +155,29 @@ export function extractTextContentFromToolCallContent(
   if (!content) {
     return { text: undefined, content: undefined };
   }
+
   const chunks: Array<string> = [];
+
   for (const entry of content) {
     const text = toolCallContentText(entry)?.trim();
+
     if (text) {
       chunks.push(text);
     }
   }
+
   if (chunks.length === 0) {
     return { text: undefined, content };
   }
+
   const joined = chunks.join("\n");
+
   if (joined.length <= TOOL_CALL_CONTENT_MAX_CHARS) {
     return { text: joined, content };
   }
+
   const bounded = boundToolCallOutputText(joined);
+
   // Collapse the text entries into a single bounded one at the final contributing text entry,
   // and leave every other entry kind (diffs, images, resource links) in its original relative
   // order. The retained tail came from that text entry, so placing it there also preserves its
@@ -159,15 +186,19 @@ export function extractTextContentFromToolCallContent(
     (lastIndex, entry, index) => (toolCallContentText(entry)?.trim() ? index : lastIndex),
     -1,
   );
+
   const boundedContent = content.flatMap((entry, index) => {
     if (toolCallContentText(entry) === undefined) {
       return [entry];
     }
+
     if (index !== lastContributingTextIndex) {
       return [];
     }
+
     return [{ type: "content", content: { type: "text", text: bounded } } as const];
   });
+
   return { text: bounded, content: boundedContent };
 }
 
@@ -207,44 +238,57 @@ export function makeToolCallState(
   },
 ): AcpToolCallState | undefined {
   const toolCallId = input.toolCallId.trim();
+
   if (!toolCallId) {
     return undefined;
   }
+
   const title = input.title?.trim() || undefined;
   const command = extractToolCallCommand(input.rawInput, title);
   const extractedContent = extractTextContentFromToolCallContent(input.content);
   const textContent = extractedContent.text;
+
   const normalizedTitle =
     title && title.toLowerCase() !== "terminal" && title.toLowerCase() !== "tool call"
       ? title
       : undefined;
+
   const data: Record<string, unknown> = { toolCallId };
   const kind = normalizeToolKind(input.kind);
+
   if (kind) {
     data.kind = kind;
   }
+
   if (command) {
     data.command = command;
   }
+
   if (input.rawInput !== undefined) {
     data.rawInput = input.rawInput;
   }
+
   if (input.rawOutput !== undefined) {
     data.rawOutput = boundToolCallRawOutput(input.rawOutput);
   }
+
   if (input.content !== undefined) {
     data.content = extractedContent.content ?? input.content;
   }
+
   if (input.locations !== undefined) {
     data.locations = input.locations;
   }
+
   const fallbackDetail = command ?? normalizedTitle ?? textContent;
+
   const hasPresentationSeed =
     title !== undefined ||
     kind !== undefined ||
     command !== undefined ||
     normalizedTitle !== undefined ||
     textContent !== undefined;
+
   const presentation = hasPresentationSeed
     ? deriveToolActivityPresentation({
         itemType: canonicalItemTypeFromAcpToolKind(kind),
@@ -254,7 +298,9 @@ export function makeToolCallState(
         fallbackSummary: title ?? "Tool",
       })
     : undefined;
+
   const status = normalizeToolCallStatus(input.status, options?.fallbackStatus);
+
   return {
     toolCallId,
     ...(kind ? { kind } : {}),
@@ -297,6 +343,7 @@ export function mergeToolCallState(
   const status = next.status ?? previous?.status;
   const command = next.command ?? previous?.command;
   const detail = next.detail ?? previous?.detail;
+
   return {
     toolCallId: next.toolCallId,
     ...(kind ? { kind } : {}),
@@ -325,25 +372,32 @@ export function decideToolCallUpdateEmission(
   input: AcpToolCallEmitDecisionInput,
 ): AcpToolCallEmitDecision {
   const { previous, next, lastEmittedDetailLength, skippedSinceEmit } = input;
+
   if (next.status === "completed" || next.status === "failed") {
     return { emit: true, skippedSinceEmit: 0 };
   }
+
   if (!next.detail) {
     return { emit: false, skippedSinceEmit };
   }
+
   if (previous === undefined || previous.title !== next.title) {
     return { emit: true, skippedSinceEmit: 0 };
   }
+
   if (previous.detail === next.detail) {
     return { emit: false, skippedSinceEmit };
   }
+
   const grewMeaningfully =
     lastEmittedDetailLength === undefined ||
     Math.abs(next.detail.length - lastEmittedDetailLength) >=
       TOOL_CALL_UPDATE_MIN_DETAIL_GROWTH_CHARS;
+
   if (grewMeaningfully || skippedSinceEmit + 1 >= TOOL_CALL_UPDATE_COALESCE_LIMIT) {
     return { emit: true, skippedSinceEmit: 0 };
   }
+
   return { emit: false, skippedSinceEmit: skippedSinceEmit + 1 };
 }
 
@@ -361,9 +415,11 @@ export function boundToolCallRawPayload(
   const boundedRawOutput = toolCall.data.rawOutput;
   const contentBounded = update.content !== undefined && boundedContent !== update.content;
   const rawOutputBounded = update.rawOutput !== undefined && boundedRawOutput !== update.rawOutput;
+
   if (!contentBounded && !rawOutputBounded) {
     return params;
   }
+
   return {
     ...params,
     update: {

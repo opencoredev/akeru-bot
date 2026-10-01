@@ -33,6 +33,7 @@ export function createSessionResources(deps: {
     hostPlatform: deps.hostPlatform,
     getPreviewMcpServerConfig: (threadId) => {
       const session = McpProviderSession.readMcpProviderSession(ThreadId.make(threadId));
+
       return session
         ? {
             url: session.endpoint,
@@ -55,5 +56,6 @@ export function createSessionResources(deps: {
       ? { resolveComputerUseServer: deps.options.resolveComputerUseServer }
       : {}),
   });
+
   return { sessionResources };
 }

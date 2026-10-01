@@ -55,6 +55,7 @@ export function createMemoryCadence(deps: {
           ),
       { discard: true },
     );
+
   const settleLegacyTurnMemory = (
     key: string,
     pending: LegacyTurnMemoryState,
@@ -62,8 +63,10 @@ export function createMemoryCadence(deps: {
   ) =>
     Effect.gen(function* () {
       if (!deps.hasLegacyPending(key, pending)) return;
+
       const foregroundSucceeded =
         event.type === "turn.completed" && event.payload.state === "completed";
+
       // Delegated children on legacy providers report back through the same waiter as Mastra.
       const assistantText = pending.assistant.trim();
       deps.resolveChildWaiter(ThreadId.make(key), {
@@ -77,9 +80,11 @@ export function createMemoryCadence(deps: {
                 "The delegated turn did not finish.",
             }),
       });
+
       if (!foregroundSucceeded) {
         deps.restoreLegacyMemoryHandler(key, pending);
         deps.removeLegacyPending(key, pending);
+
         if (pending.memoryTurn) {
           yield* deps
             .runMastra("memory.finishForeground", () =>
@@ -87,8 +92,10 @@ export function createMemoryCadence(deps: {
             )
             .pipe(Effect.ignoreCause({ log: true }));
         }
+
         return;
       }
+
       if (pending.memoryTurn) {
         yield* deps
           .runMastra("memory.finishForeground", () =>
@@ -96,9 +103,11 @@ export function createMemoryCadence(deps: {
           )
           .pipe(Effect.ignoreCause({ log: true }));
       }
+
       const mergedPrompts = deps
         .legacyPending(key)
         .filter((entry) => entry.turnId !== undefined && entry.turnId === pending.turnId);
+
       if (
         mergedPrompts[0] === pending &&
         !pending.observationRecorded &&
@@ -106,9 +115,11 @@ export function createMemoryCadence(deps: {
         deps.bundle.observeExternalTurn
       ) {
         for (const entry of mergedPrompts) entry.observationRecorded = true;
+
         const assistant = mergedPrompts
           .map((entry) => entry.assistant)
           .toSorted((left, right) => right.length - left.length)[0]!;
+
         const observeExternalTurn = deps.bundle.observeExternalTurn;
         const turnId = pending.turnId ?? `legacy-${event.eventId}`;
         deps.forkPromise(
@@ -128,28 +139,39 @@ export function createMemoryCadence(deps: {
           { annotations: { threadId: key, turnId } },
         );
       }
+
       deps.removeLegacyPending(key, pending);
+
       if (pending.memoryTurn?.reviewIncluded) {
         deps.restoreLegacyMemoryHandler(key, pending);
       }
     });
+
   const drainLegacyTerminals = (key: string) =>
     Effect.gen(function* () {
       const pendingTurns = deps.legacyPending(key);
+
       if (pendingTurns.some((pending) => !pending.dispatchReturned)) return;
       const terminals = deps.legacyBufferedTerminals.get(key);
+
       if (!terminals) return;
+
       for (const [turnId, terminal] of terminals) {
         const matching = deps.legacyPending(key).filter((pending) => pending.turnId === turnId);
+
         for (const pending of matching) {
           yield* settleLegacyTurnMemory(key, pending, terminal);
         }
+
         terminals.delete(turnId);
       }
+
       if (terminals.size === 0) deps.legacyBufferedTerminals.delete(key);
     });
+
   const queueTurnMemory = (threadId: ThreadId, active: ActiveSession, turn: ActiveTurn) => {
     const resolved = deps.resolvedByThread.get(String(threadId));
+
     if (turn.memoryQueued || !deps.bundle.observeAfterTurn || !resolved) return;
     turn.memoryQueued = true;
     const observeAfterTurn = deps.bundle.observeAfterTurn;
@@ -171,6 +193,7 @@ export function createMemoryCadence(deps: {
       },
     );
   };
+
   return {
     releaseMastraReservations,
     settleLegacyTurnMemory,

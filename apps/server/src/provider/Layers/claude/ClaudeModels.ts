@@ -319,41 +319,50 @@ export function getBuiltInClaudeModelsForVersion(
     if (model.slug === "claude-opus-5") {
       return supportsClaudeOpus5(version);
     }
+
     if (model.slug === "claude-fable-5") {
       return supportsClaudeFable5(version);
     }
+
     if (model.slug === "claude-opus-4-8") {
       return supportsClaudeOpus48(version);
     }
+
     if (model.slug === "claude-opus-4-7") {
       return supportsClaudeOpus47(version);
     }
+
     return true;
   });
 }
 
 export function formatClaudeOpus5UpgradeMessage(version: string | null): string {
   const versionLabel = version ? `v${version}` : "the installed version";
+
   return `Claude Code ${versionLabel} is too old for Claude Opus 5. Upgrade to v${MINIMUM_CLAUDE_OPUS_5_VERSION} or newer to access it.`;
 }
 
 export function formatClaudeFable5UpgradeMessage(version: string | null): string {
   const versionLabel = version ? `v${version}` : "the installed version";
+
   return `Claude Code ${versionLabel} is too old for Claude Fable 5. Upgrade to v${MINIMUM_CLAUDE_FABLE_5_VERSION} or newer to access it.`;
 }
 
 export function formatClaudeOpus48UpgradeMessage(version: string | null): string {
   const versionLabel = version ? `v${version}` : "the installed version";
+
   return `Claude Code ${versionLabel} is too old for Claude Opus 4.8. Upgrade to v${MINIMUM_CLAUDE_OPUS_4_8_VERSION} or newer to access it.`;
 }
 
 export function formatClaudeOpus47UpgradeMessage(version: string | null): string {
   const versionLabel = version ? `v${version}` : "the installed version";
+
   return `Claude Code ${versionLabel} is too old for Claude Opus 4.7. Upgrade to v${MINIMUM_CLAUDE_OPUS_4_7_VERSION} or newer to access it.`;
 }
 
 export function getClaudeModelCapabilities(model: string | null | undefined): ModelCapabilities {
   const slug = model?.trim();
+
   return (
     BUILT_IN_MODELS.find((candidate) => candidate.slug === slug)?.capabilities ??
     DEFAULT_CLAUDE_MODEL_CAPABILITIES
@@ -368,8 +377,10 @@ export function resolveClaudeEffort(
     caps,
     ...(raw ? { selections: [{ id: "effort", value: raw }] } : {}),
   });
+
   const effortDescriptor = descriptors.find((descriptor) => descriptor.id === "effort");
   const value = getProviderOptionCurrentValue(effortDescriptor);
+
   return typeof value === "string" ? value : undefined;
 }
 
@@ -390,9 +401,11 @@ export function normalizeClaudeCliEffort(
   if (!effort || effort === "ultrathink") {
     return undefined;
   }
+
   if (effort === "ultracode") {
     return "xhigh";
   }
+
   if (
     effort === "xhigh" &&
     model !== "claude-fable-5" &&
@@ -402,9 +415,11 @@ export function normalizeClaudeCliEffort(
   ) {
     return "max";
   }
+
   if (effort === "max" && model === "claude-sonnet-4-6") {
     return "high";
   }
+
   return effort;
 }
 
@@ -417,12 +432,15 @@ export function resolveClaudeContextWindow(
 ): string | undefined {
   const caps = getClaudeModelCapabilities(modelSelection?.model);
   const raw = getModelSelectionStringOptionValue(modelSelection, "contextWindow");
+
   const descriptors = getProviderOptionDescriptors({
     caps,
     ...(raw ? { selections: [{ id: "contextWindow", value: raw }] } : {}),
   });
+
   const descriptor = descriptors.find((candidate) => candidate.id === "contextWindow");
   const value = getProviderOptionCurrentValue(descriptor);
+
   return typeof value === "string" ? value : undefined;
 }
 

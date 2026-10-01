@@ -22,6 +22,7 @@ describe("EventNdjsonLogger", () => {
           maxFiles: 2,
           batchWindowMs: 0,
         });
+
         const native = store.logger("native");
         const canonical = store.logger("canonical");
 
@@ -37,9 +38,11 @@ describe("EventNdjsonLogger", () => {
             ThreadId.make("thread-rotate"),
           );
         }
+
         yield* store.close();
 
         const fileStem = NodePath.basename(ownedLogPath(basePath, "thread-rotate"));
+
         const matchingFiles = NodeFS.readdirSync(tempDir)
           .filter((entry) => entry === fileStem || entry.startsWith(`${fileStem}.`))
           .toSorted();
@@ -78,9 +81,11 @@ describe("EventNdjsonLogger", () => {
       try {
         yield* TestClock.setTime(1_800_000_000_000);
         const now = yield* Clock.currentTimeMillis;
+
         for (const filePath of [expiredPath, oldPath, newPath, unrelatedLogPath, ignoredPath]) {
           NodeFS.writeFileSync(filePath, "x".repeat(40));
         }
+
         NodeFS.writeFileSync(
           legacyLogPath,
           "[2026-01-01T00:00:00.000Z] CANON: legacy provider event\n",
@@ -94,6 +99,7 @@ describe("EventNdjsonLogger", () => {
           maxAgeMs: 10_000,
           maxTotalBytes: 60,
         });
+
         yield* store.close();
 
         assert.equal(NodeFS.existsSync(expiredPath), false);
@@ -118,11 +124,13 @@ describe("EventNdjsonLogger", () => {
 
       try {
         yield* TestClock.setTime(1_800_000_000_000);
+
         const store = yield* makeEventNdjsonLogStore(basePath, {
           batchWindowMs: 0,
           maxAgeMs: 1,
           retentionCheckIntervalMs: 1,
         });
+
         const logger = store.logger("native");
 
         yield* logger.write({ id: "active-before-retention" }, ThreadId.make("active"));

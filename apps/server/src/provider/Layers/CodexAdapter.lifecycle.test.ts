@@ -27,6 +27,7 @@ validationLayer("CodexAdapterLive validation", (it) => {
   it.effect("returns validation error for non-codex provider on startSession", () =>
     Effect.gen(function* () {
       const adapter = yield* CodexAdapter;
+
       const result = yield* adapter
         .startSession({
           provider: ProviderDriverKind.make("claudeAgent"),
@@ -53,6 +54,7 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
   it.effect("maps missing adapter sessions to ProviderAdapterSessionNotFoundError", () =>
     Effect.gen(function* () {
       const adapter = yield* CodexAdapter;
+
       const result = yield* adapter
         .sendTurn({
           threadId: asThreadId("sess-missing"),
@@ -73,6 +75,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
   it.effect("maps windowsSandbox/setupCompleted to session state and warning on failure", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
+
       const eventsFiber = yield* Stream.runCollect(Stream.take(adapter.streamEvents, 2)).pipe(
         Effect.forkChild,
       );
@@ -101,12 +104,14 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const secondEvent = events[1];
 
       NodeAssert.equal(firstEvent?.type, "session.state.changed");
+
       if (firstEvent?.type === "session.state.changed") {
         NodeAssert.equal(firstEvent.payload.state, "error");
         NodeAssert.equal(firstEvent.payload.reason, "Sandbox setup failed");
       }
 
       NodeAssert.equal(secondEvent?.type, "runtime.warning");
+
       if (secondEvent?.type === "runtime.warning") {
         NodeAssert.equal(secondEvent.payload.message, "Sandbox setup failed");
       }

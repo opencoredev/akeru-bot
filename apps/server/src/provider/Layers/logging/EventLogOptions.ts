@@ -23,6 +23,7 @@ export function validateOption(input: {
   readonly minimum: number;
 }): EventNdjsonLogConfigurationError | undefined {
   if (Number.isInteger(input.value) && input.value >= input.minimum) return undefined;
+
   return new EventNdjsonLogConfigurationError(input);
 }
 
@@ -56,7 +57,9 @@ export function resolveOptions(
 
   for (const [option, value, minimum] of validations) {
     const error = validateOption({ filePath, option, value, minimum });
+
     if (error) return Effect.fail(error);
   }
+
   return Effect.succeed(resolved);
 }

@@ -98,6 +98,7 @@ export function createClaudeTurnCompletion(deps: {
         : {}),
     });
   });
+
   const emitProposedPlanCompleted = Effect.fn("emitProposedPlanCompleted")(function* (
     context: ClaudeSessionContext,
     input: {
@@ -110,6 +111,7 @@ export function createClaudeTurnCompletion(deps: {
   ) {
     const turnState = context.turnState;
     const planMarkdown = input.planMarkdown.trim();
+
     if (!turnState || planMarkdown.length === 0) {
       return;
     }
@@ -118,9 +120,11 @@ export function createClaudeTurnCompletion(deps: {
       toolUseId: input.toolUseId,
       planMarkdown,
     });
+
     if (turnState.capturedProposedPlanKeys.has(captureKey)) {
       return;
     }
+
     turnState.capturedProposedPlanKeys.add(captureKey);
 
     const stamp = yield* deps.makeEventStamp();
@@ -144,6 +148,7 @@ export function createClaudeTurnCompletion(deps: {
       },
     });
   });
+
   const emitClaudeTaskPlanUpdated = Effect.fn("emitClaudeTaskPlanUpdated")(function* (
     context: ClaudeSessionContext,
     input: {
@@ -153,6 +158,7 @@ export function createClaudeTurnCompletion(deps: {
     },
   ) {
     const plan = planStepsFromClaudeTasks(context.claudeTasks);
+
     if (plan.length === 0) {
       return;
     }
@@ -179,6 +185,7 @@ export function createClaudeTurnCompletion(deps: {
       },
     });
   });
+
   const completeTurn = Effect.fn("completeTurn")(function* (
     context: ClaudeSessionContext,
     status: ProviderRuntimeTurnStatus,
@@ -186,12 +193,14 @@ export function createClaudeTurnCompletion(deps: {
     result?: SDKResultMessage,
   ) {
     const resultContextWindow = maxClaudeContextWindowFromModelUsage(result?.modelUsage);
+
     if (resultContextWindow !== undefined) {
       context.lastKnownContextWindow = resultContextWindow;
     }
 
     const maxTokens = resultContextWindow ?? context.lastKnownContextWindow;
     const accumulatedTotalProcessedTokens = claudeTotalProcessedTokens(result?.usage);
+
     if (accumulatedTotalProcessedTokens !== undefined) {
       context.lastKnownTotalProcessedTokens = accumulatedTotalProcessedTokens;
     }
@@ -201,16 +210,20 @@ export function createClaudeTurnCompletion(deps: {
       result?.usage && typeof result.usage === "object" && !Array.isArray(result.usage)
         ? (result.usage as Record<string, unknown>)
         : undefined;
+
     const hasResultUsageIteration =
       resultUsageRecord !== undefined && lastClaudeUsageIteration(resultUsageRecord) !== undefined;
+
     const resultHasActiveUsage =
       resultUsageRecord !== undefined &&
       (hasResultUsageIteration ||
         claudeUsageInputTokens(resultUsageRecord) + claudeUsageOutputTokens(resultUsageRecord) > 0);
+
     const resultTotalOnly =
       resultUsageRecord !== undefined &&
       !resultHasActiveUsage &&
       claudeTotalProcessedTokens(resultUsageRecord) !== undefined;
+
     const resultIterationSnapshot = resultUsageRecord
       ? normalizeClaudeActiveTokenUsage(
           resultUsageRecord,
@@ -218,12 +231,15 @@ export function createClaudeTurnCompletion(deps: {
           accumulatedTotalProcessedTokens ?? context.lastKnownTotalProcessedTokens,
         )
       : undefined;
+
     const latestAssistantSnapshot = normalizeClaudeActiveTokenUsage(
       context.turnState?.latestAssistantUsage,
       maxTokens,
       accumulatedTotalProcessedTokens ?? context.lastKnownTotalProcessedTokens,
     );
+
     const lastGoodUsage = context.lastKnownTokenUsage;
+
     const usageSnapshot: ThreadTokenUsageSnapshot | undefined =
       latestAssistantSnapshot ??
       (context.turnState?.compactedSinceLatestAssistantUsage
@@ -260,6 +276,7 @@ export function createClaudeTurnCompletion(deps: {
         : undefined);
 
     const turnState = context.turnState;
+
     if (!turnState) {
       yield* emitThreadTokenUsage(context, usageSnapshot, {
         rawMethod: "claude/result",
@@ -285,6 +302,7 @@ export function createClaudeTurnCompletion(deps: {
         hasUsage: result?.usage !== undefined,
         ...(errorMessage ? { errorMessage } : {}),
       });
+
       return;
     }
 
@@ -319,6 +337,7 @@ export function createClaudeTurnCompletion(deps: {
       });
       context.inFlightTools.delete(index);
     }
+
     // Clear any remaining stale entries (e.g. from interrupted content blocks)
     context.inFlightTools.clear();
 
@@ -372,6 +391,7 @@ export function createClaudeTurnCompletion(deps: {
     };
     yield* deps.updateResumeCursor(context);
   });
+
   return {
     emitThreadTokenUsage,
     emitProposedPlanCompleted,

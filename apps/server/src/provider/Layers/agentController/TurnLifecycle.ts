@@ -151,6 +151,7 @@ export function createTurnLifecycle(deps: {
     (active.activeTurn?.suspendedToolCalls.size ?? 0) > 0 ||
     deps.pendingRoutineRequests.entries().some(([, request]) => request.threadId === threadId) ||
     [...deps.creatingRoutineReviews.values()].includes(threadId);
+
   const cancelPendingApproval = (
     threadId: ThreadId,
     active: ActiveSession,
@@ -171,24 +172,29 @@ export function createTurnLifecycle(deps: {
       },
     });
   };
+
   const cancelAllPendingApprovals = (threadId: ThreadId, active: ActiveSession) => {
     for (const [requestId, pending] of active.pendingApprovals) {
       cancelPendingApproval(threadId, active, requestId, pending);
     }
+
     active.pendingApprovals.clear();
     active.approvalRequests.clear();
     deps.toolRuntime.clearApprovals(String(threadId));
   };
+
   const beginPendingTurn = (
     active: ActiveSession,
     { threadId, turnId, botUsage, hiddenWake }: PendingTurn,
   ) => {
     const key = String(threadId);
+
     if (botUsage) {
       deps.memoryUsageByThread.set(key, { ...botUsage, turnId });
     } else {
       deps.memoryUsageByThread.delete(key);
     }
+
     active.activeTurn = {
       turnId,
       assistantMessages: new Map(),
@@ -209,6 +215,7 @@ export function createTurnLifecycle(deps: {
     });
     deps.publishSessionState(threadId, active, "running");
   };
+
   const failActiveTurn = async (
     active: ActiveSession,
     threadId: ThreadId,
@@ -234,6 +241,7 @@ export function createTurnLifecycle(deps: {
       ),
     );
   };
+
   const handlePendingTurnFailure = (
     active: ActiveSession,
     pending: PendingTurn,
@@ -241,32 +249,43 @@ export function createTurnLifecycle(deps: {
   ) => {
     const ownsAdmission = active.admittingTurn?.turnId === pending.turnId;
     const ownsActiveTurn = active.activeTurn?.turnId === pending.turnId;
+
     if (!ownsAdmission && !ownsActiveTurn) return Promise.resolve();
+
     if (ownsAdmission) {
       active.admittingTurn = null;
     }
+
     if (!active.activeTurn) beginPendingTurn(active, pending);
+
     return failActiveTurn(active, pending.threadId, pending.turnId, cause);
   };
+
   const startAdmittedPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
     const { threadId, turnId, message } = pending;
+
     if (active.admittingTurn?.turnId !== turnId) return;
+
     const dispatch: Promise<void> = (async () => {
       const settings = pending.memoryAccess
         ? await deps.runPromise(deps.memorySettings())
         : undefined;
+
       // The settings read is asynchronous; the turn may have been interrupted
       // while it was pending. Only mutate session state if this admission
       // still owns the turn.
       if (active.admittingTurn?.turnId !== turnId) return;
+
       const memoryAccess =
         pending.memoryAccess && settings?.enabled ? pending.memoryAccess : undefined;
+
       // Entity memory rides on durable memory access. With Memory off (or a
       // delegated turn without memory) the turn runs without memory, so group
       // membership is only checked when memory is actually in play.
       const entityMemoryAccess = memoryAccess
         ? await deps.refreshEntityMemoryAccess(pending.entityMemoryAccess)
         : undefined;
+
       if (memoryAccess && pending.entityMemoryAccess && !entityMemoryAccess) {
         active.admittingTurn = null;
         beginPendingTurn(active, pending);
@@ -276,20 +295,25 @@ export function createTurnLifecycle(deps: {
           pending.turnId,
           new Error("The bot is no longer a member of this group."),
         );
+
         return;
       }
+
       if (settings) active.privateBotMemory = settings.privateBotMemory;
       active.memoryAccess = memoryAccess;
+
       if (!memoryAccess) {
         // Memory was turned off after the turn was queued: drop the memory
         // tool handler so the bot cannot read or change facts. A delegated
         // turn never has durable access, so it keeps the handler its grant
         // built; that handler checks the Memory setting on every call.
         const toolSession = { ...pending.toolSession };
+
         if (pending.memoryAccess) delete toolSession.memoryHandlers;
         active.toolSession = toolSession;
         deps.toolRuntime.registerSession(String(threadId), active.toolSession);
         const { persistentMemoryContext, ...stateWithoutMemory } = active.session.state.get();
+
         if (pending.delegationResults) {
           await active.session.state.set({
             ...stateWithoutMemory,
@@ -298,14 +322,18 @@ export function createTurnLifecycle(deps: {
         } else if (persistentMemoryContext) {
           await active.session.state.set(stateWithoutMemory);
         }
+
         if (active.admittingTurn?.turnId !== turnId) return;
         active.admittingTurn = null;
         beginPendingTurn(active, pending);
         await active.session.sendMessage(message);
+
         return;
       }
+
       {
         active.toolSession = pending.toolSession;
+
         const memoryTurn = await deps.memoryTurnHarness.admit({
           access: memoryAccess,
           input: {
@@ -315,12 +343,15 @@ export function createTurnLifecycle(deps: {
           },
           privateBotMemory: active.privateBotMemory,
         });
+
         const reservationKey = deps.mastraReservationKey(threadId, turnId);
         deps.mastraMemoryTurns.set(reservationKey, memoryTurn);
         let accepted = false;
         let reviewToolSession: AkeruToolSession | undefined;
+
         try {
           const memoryHandler = pending.toolSession.memoryHandlers?.memory;
+
           if (memoryTurn.reviewIncluded && memoryHandler) {
             reviewToolSession = {
               ...pending.toolSession,
@@ -330,11 +361,15 @@ export function createTurnLifecycle(deps: {
             };
             active.toolSession = reviewToolSession;
           }
+
           deps.toolRuntime.registerSession(String(threadId), active.toolSession);
           const currentState = active.session.state.get();
+
           const { persistentMemoryContext: _priorMemoryContext, ...stateWithoutMemory } =
             currentState;
+
           const entityPacket = await deps.entityMemoryContext(entityMemoryAccess);
+
           const persistentMemoryContext = [
             memoryTurn.context,
             entityPacket,
@@ -342,10 +377,12 @@ export function createTurnLifecycle(deps: {
           ]
             .filter(Boolean)
             .join("\n\n");
+
           await active.session.state.set({
             ...stateWithoutMemory,
             ...(persistentMemoryContext ? { persistentMemoryContext } : {}),
           });
+
           if (active.admittingTurn?.turnId !== turnId) return;
           active.admittingTurn = null;
           beginPendingTurn(active, pending);
@@ -353,16 +390,19 @@ export function createTurnLifecycle(deps: {
           accepted = true;
         } finally {
           await memoryTurn.finishForeground(accepted, "foreground");
+
           if (reviewToolSession && active.toolSession === reviewToolSession) {
             active.toolSession = active.configuredToolSession;
             deps.toolRuntime.registerSession(String(threadId), active.toolSession);
           }
+
           if (deps.mastraMemoryTurns.get(reservationKey) === memoryTurn) {
             deps.mastraMemoryTurns.delete(reservationKey);
           }
         }
       }
     })();
+
     active.pendingDispatches.add(dispatch);
     void dispatch.then(
       () => active.pendingDispatches.delete(dispatch),
@@ -373,6 +413,7 @@ export function createTurnLifecycle(deps: {
       () =>
         dispatch.then(() => {
           const turn = active.activeTurn;
+
           if (turn?.turnId === turnId && !turn.waiting) {
             finishTurn(threadId, active, "completed");
           }
@@ -383,8 +424,10 @@ export function createTurnLifecycle(deps: {
       },
     );
   };
+
   const admitPendingTurn = (active: ActiveSession, pending: PendingTurn) => {
     active.admittingTurn = pending;
+
     return deps.legacyProviderBridge
       .dispatchIfEnabled(active.providerInstanceId, "AgentController.startPendingTurn", () =>
         startAdmittedPendingTurn(active, pending),
@@ -395,16 +438,19 @@ export function createTurnLifecycle(deps: {
             if (active.admittingTurn?.turnId !== pending.turnId) return;
             active.admittingTurn = null;
             const nextTurn = active.pendingTurns.shift();
+
             if (nextTurn) deps.startPendingTurn(active, nextTurn);
           }),
         ),
       );
   };
+
   const endTurnAdmissionGeneration = (active: ActiveSession) => {
     active.turnAdmissionGeneration += 1;
     Deferred.doneUnsafe(active.turnPreparationCancelled, Effect.void);
     active.turnPreparationCancelled = Deferred.makeUnsafe<void>();
   };
+
   const finishTurn = (
     threadId: ThreadId,
     active: ActiveSession,
@@ -412,6 +458,7 @@ export function createTurnLifecycle(deps: {
     errorMessage?: string,
   ) => {
     const turn = active.activeTurn;
+
     if (!turn || turn.finished) return;
     deps.queueTurnMemory(threadId, active, turn);
     turn.finished = true;
@@ -452,6 +499,7 @@ export function createTurnLifecycle(deps: {
       },
     );
     const delegationRuntime = deps.wired().delegationRuntime;
+
     if (state !== "completed" && delegationRuntime) {
       deps.forkPromise(
         "Akeru delegated work could not settle after the parent turn.",
@@ -473,6 +521,7 @@ export function createTurnLifecycle(deps: {
         },
       );
     }
+
     for (const [requestId, request] of deps.pendingRoutineRequests.entries()) {
       if (request.threadId !== String(threadId)) continue;
       deps.pendingRoutineRequests.reject(
@@ -480,8 +529,10 @@ export function createTurnLifecycle(deps: {
         new Error("The routine review ended before it received a response."),
       );
     }
+
     active.activeTurn = null;
     const nextTurn = active.pendingTurns.shift();
+
     if (nextTurn) {
       deps.startPendingTurn(active, nextTurn);
     } else if (state === "failed") {
@@ -492,6 +543,7 @@ export function createTurnLifecycle(deps: {
       deps.publishSessionState(threadId, active, "ready");
     }
   };
+
   return {
     turnStillWaiting,
     cancelPendingApproval,

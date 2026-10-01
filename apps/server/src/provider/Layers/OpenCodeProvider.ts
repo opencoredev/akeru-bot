@@ -29,7 +29,9 @@ const OPENCODE_PRESENTATION = {
   displayName: "OpenCode",
   showInteractionModeToggle: false,
 } as const;
+
 const MINIMUM_OPENCODE_VERSION = "1.14.19";
+
 const OPENCODE_VERSION_PROBE_TIMEOUT = "4 seconds";
 
 class OpenCodeProbeError extends Data.TaggedError("OpenCodeProbeError")<{
@@ -39,15 +41,18 @@ class OpenCodeProbeError extends Data.TaggedError("OpenCodeProbeError")<{
 
 function normalizeProbeMessage(message: string): string | undefined {
   const trimmed = message.trim();
+
   if (trimmed.length === 0) {
     return undefined;
   }
+
   if (
     trimmed === "An error occurred in Effect.tryPromise" ||
     trimmed === "An error occurred in Effect.try"
   ) {
     return undefined;
   }
+
   return trimmed;
 }
 
@@ -138,11 +143,13 @@ function formatOpenCodeProbeError(input: {
 
 function titleCaseSlug(value: string): string {
   const segments: Array<string> = [];
+
   for (const segment of value.split(/[-_/]+/)) {
     if (segment.length > 0) {
       segments.push(segment.charAt(0).toUpperCase() + segment.slice(1));
     }
   }
+
   return segments.join(" ");
 }
 
@@ -153,12 +160,15 @@ function inferDefaultVariant(
   if (variants.length === 1) {
     return variants[0];
   }
+
   if (providerID === "anthropic" || providerID.startsWith("google")) {
     return variants.includes("high") ? "high" : undefined;
   }
+
   if (providerID === "openai" || providerID === "opencode") {
     return variants.includes("medium") ? "medium" : variants.includes("high") ? "high" : undefined;
   }
+
   return undefined;
 }
 
@@ -177,20 +187,25 @@ function openCodeCapabilitiesForModel(input: {
 }): ModelCapabilities {
   const variantValues = Object.keys(input.model.variants ?? {});
   const defaultVariant = inferDefaultVariant(input.providerID, variantValues);
+
   const variantOptions = variantValues.map((value) =>
     defaultVariant === value
       ? { id: value, label: titleCaseSlug(value), isDefault: true as const }
       : { id: value, label: titleCaseSlug(value) },
   );
+
   const primaryAgents = input.agents.filter(
     (agent) => !agent.hidden && (agent.mode === "primary" || agent.mode === "all"),
   );
+
   const defaultAgent = inferDefaultAgent(primaryAgents);
+
   const agentOptions = primaryAgents.map((agent) =>
     defaultAgent === agent.name
       ? { id: agent.name, label: titleCaseSlug(agent.name), isDefault: true as const }
       : { id: agent.name, label: titleCaseSlug(agent.name) },
   );
+
   return createModelCapabilities({
     optionDescriptors: [
       ...(variantOptions.length > 0
@@ -230,6 +245,7 @@ function flattenOpenCodeModels(input: OpenCodeInventory): ReadonlyArray<ServerPr
 
     for (const model of Object.values(provider.models)) {
       const name = nonEmptyTrimmed(model.name);
+
       if (!name) {
         continue;
       }
@@ -254,6 +270,7 @@ function flattenOpenCodeModels(input: OpenCodeInventory): ReadonlyArray<ServerPr
 
 function trimOptional(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim();
+
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
@@ -261,9 +278,11 @@ function flattenOpenCodeSkills(input: OpenCodeInventory): ReadonlyArray<ServerPr
   // The OpenCode SDK's `/skill` endpoint and `debug skill` CLI only return
   // name, description, and location — there is no icon field to map.
   const skills: ServerProviderSkill[] = [];
+
   for (const skill of input.skills ?? []) {
     const name = trimOptional(skill.name);
     const path = trimOptional(skill.location);
+
     if (!name || !path) {
       continue;
     }
@@ -285,6 +304,7 @@ export const makePendingOpenCodeProvider = (
 ): Effect.Effect<ServerProviderDraft> =>
   Effect.gen(function* () {
     const checkedAt = yield* Effect.map(DateTime.now, DateTime.formatIso);
+
     const models = providerModelsFromSettings(
       [],
       openCodeSettings.customModels,
@@ -342,6 +362,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
       isExternalServer,
       serverUrl: openCodeSettings.serverUrl,
     });
+
     return buildServerProvider({
       presentation: OPENCODE_PRESENTATION,
       enabled: openCodeSettings.enabled,
@@ -376,6 +397,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
   }
 
   let version: string | null = null;
+
   if (!isExternalServer) {
     const versionExit = yield* Effect.exit(
       openCodeRuntime
@@ -399,9 +421,11 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
           }),
         ),
     );
+
     if (versionExit._tag === "Failure") {
       return fallback(Cause.squash(versionExit.cause));
     }
+
     version = parseGenericCliVersion(versionExit.value.stdout) ?? null;
 
     if (!version) {
@@ -412,6 +436,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
         null,
       );
     }
+
     if (compareSemverVersions(version, MINIMUM_OPENCODE_VERSION) < 0) {
       return buildServerProvider({
         presentation: OPENCODE_PRESENTATION,
@@ -438,6 +463,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
               serverUrl: openCodeSettings.serverUrl,
               environment: resolvedEnvironment,
             });
+
             return yield* openCodeRuntime.loadOpenCodeInventory(
               openCodeRuntime.createOpenCodeSdkClient({
                 baseUrl: server.url,
@@ -460,6 +486,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
       ),
     ),
   );
+
   if (inventoryExit._tag === "Failure") {
     return fallback(Cause.squash(inventoryExit.cause), version);
   }
@@ -469,8 +496,10 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
     customModels,
     DEFAULT_OPENCODE_MODEL_CAPABILITIES,
   );
+
   const skills = flattenOpenCodeSkills(inventoryExit.value);
   const connectedCount = inventoryExit.value.providerList.connected.length;
+
   return buildServerProvider({
     presentation: OPENCODE_PRESENTATION,
     enabled: true,

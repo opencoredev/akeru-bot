@@ -51,12 +51,15 @@ async function isProviderLogFile(
   filePrefix: string,
 ): Promise<boolean> {
   if (!/\.log(?:\.\d+)?$/u.test(fileName)) return false;
+
   if (fileName.startsWith(filePrefix)) return true;
 
   const descriptor = await NodeFSP.open(filePath, "r");
+
   try {
     const header = Buffer.alloc(256);
     const { bytesRead } = await descriptor.read(header, 0, header.byteLength, 0);
+
     return /^\[[^\]\r\n]+\] (?:NTIVE|CANON|ORCH): /u.test(header.toString("utf8", 0, bytesRead));
   } finally {
     await descriptor.close();
@@ -75,6 +78,7 @@ async function enforceRetention(input: {
   const files: Array<{ filePath: string; mtimeMs: number; size: number }> = [];
 
   let entries: ReadonlyArray<NodeFS.Dirent>;
+
   try {
     entries = await NodeFSP.readdir(input.directory, { withFileTypes: true });
   } catch (cause) {
@@ -84,6 +88,7 @@ async function enforceRetention(input: {
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const filePath = NodePath.join(input.directory, entry.name);
+
     try {
       if (!(await isProviderLogFile(filePath, entry.name, input.filePrefix))) continue;
       const stat = await NodeFSP.stat(filePath);
@@ -94,19 +99,24 @@ async function enforceRetention(input: {
   }
 
   let totalBytes = files.reduce((total, file) => total + file.size, 0);
+
   const remove = async (file: (typeof files)[number]) => {
     if (input.activeFilePaths.has(file.filePath)) return false;
+
     try {
       await NodeFSP.rm(file.filePath, { force: true });
       totalBytes -= file.size;
+
       return true;
     } catch (cause) {
       failures.push({ filePath: file.filePath, cause });
+
       return false;
     }
   };
 
   const retained: typeof files = [];
+
   for (const file of files) {
     if (input.now - file.mtimeMs <= input.maxAgeMs || !(await remove(file))) retained.push(file);
   }
@@ -136,10 +146,12 @@ async function drainPending(input: {
 
   const sinks = new Map(input.state.sinks);
   const failures: Array<FileOperationFailure> = [];
+
   const attributionByStream = new Map<
     EventNdjsonStream,
     { count: number; logicalWriteBytes: number }
   >();
+
   const recordsBySegment = new Map<string, Array<PendingRecord>>();
 
   for (const record of input.state.pending) {
@@ -151,6 +163,7 @@ async function drainPending(input: {
   for (const [threadSegment, records] of recordsBySegment) {
     const filePath = providerLogPath(input.directory, input.filePrefix, threadSegment);
     let sink = sinks.get(threadSegment);
+
     if (!sink) {
       try {
         sink = new RotatingFileSink({
@@ -173,6 +186,7 @@ async function drainPending(input: {
             count: 0,
             logicalWriteBytes: 0,
           };
+
           attributionByStream.set(record.stream, {
             count: current.count + 1,
             logicalWriteBytes: current.logicalWriteBytes + record.bytes,
@@ -188,6 +202,7 @@ async function drainPending(input: {
 
   const retentionDue =
     input.now - input.state.lastRetentionAt >= input.options.retentionCheckIntervalMs;
+
   const retention = retentionDue
     ? await enforceRetention({
         directory: input.directory,
@@ -214,6 +229,7 @@ async function drainPending(input: {
         });
       }
     }
+
     sinks.clear();
   }
 
@@ -250,6 +266,7 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
   });
 
   const initializedAt = yield* Clock.currentTimeMillis;
+
   const initialRetention = yield* Effect.promise(() =>
     enforceRetention({
       directory,
@@ -260,6 +277,7 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
       now: initializedAt,
     }),
   );
+
   for (const failure of initialRetention.failures) {
     yield* logWarning("provider event log retention failed", {
       filePath: failure.filePath,
@@ -275,6 +293,7 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
     closed: false,
     lastRetentionAt: initializedAt,
   });
+
   const timerScope = yield* Scope.make();
 
   const drain = (state: StoreState, now: number, timerFired = false, close = false) =>
@@ -293,10 +312,12 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
     if (resolved.attribution && result.attributions.length > 0) {
       const completedAt = yield* Clock.currentTimeMillis;
       const durationMs = Math.max(0, completedAt - startedAt);
+
       const totalBytes = result.attributions.reduce(
         (total, entry) => total + entry.logicalWriteBytes,
         0,
       );
+
       yield* Effect.forEach(
         result.attributions,
         (entry) =>
@@ -317,9 +338,11 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
 
   const flush = Effect.fnUntraced(function* (timerFired: boolean, close: boolean) {
     const startedAt = yield* Clock.currentTimeMillis;
+
     const result = yield* SynchronizedRef.modifyEffect(stateRef, (state) =>
       drain(state, startedAt, timerFired, close),
     );
+
     yield* reportDrain(result, startedAt);
   }, Effect.uninterruptible);
 
@@ -337,43 +360,56 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
   }, Effect.uninterruptible);
 
   const loggerViews = new Map<EventNdjsonStream, EventNdjsonLogger>();
+
   const logger = (stream: EventNdjsonStream): EventNdjsonLogger => {
     const existing = loggerViews.get(stream);
+
     if (existing) return existing;
 
     const write = Effect.fnUntraced(function* (event: unknown, threadId: ThreadId | null) {
       if (!shouldPersist(stream, event)) return;
       const startedAt = yield* Clock.currentTimeMillis;
+
       const results = yield* SynchronizedRef.modifyEffect(stateRef, (state) =>
         Effect.gen(function* () {
           const results: DrainResult[] = [];
+
           if (state.closed) return [results, state] as const;
           const payload = yield* serializeEvent(event);
+
           if (payload === undefined) return [results, state] as const;
           const observedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
           const line = `[${observedAt}] ${resolveStreamLabel(stream)}: ${payload}\n`;
           const bytes = Buffer.byteLength(line);
+
           if (bytes > resolved.maxBufferedBytes) {
             yield* logWarning("provider event log record exceeds buffer capacity", {
               filePath,
               bytes,
             });
+
             return [results, state] as const;
           }
+
           let current = state;
+
           if (current.pendingBytes + bytes > resolved.maxBufferedBytes) {
             const [result, drained] = yield* drain(current, startedAt);
             results.push(result);
             current = drained;
           }
+
           const pending = current.pending;
           pending.push({ stream, threadSegment: resolveThreadSegment(threadId), line, bytes });
           const pendingBytes = current.pendingBytes + bytes;
+
           const flushNow =
             resolved.batchWindowMs === 0 ||
             pending.length >= resolved.maxBufferedRecords ||
             pendingBytes >= resolved.maxBufferedBytes;
+
           current = { ...current, pending, pendingBytes };
+
           if (flushNow) {
             const [result, drained] = yield* drain(current, startedAt);
             results.push(result);
@@ -382,14 +418,17 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
             yield* scheduleFlush();
             current = { ...current, flushScheduled: true };
           }
+
           return [results, current] as const;
         }),
       ).pipe(Effect.uninterruptible);
+
       for (const result of results) yield* reportDrain(result, startedAt);
     });
 
     const view = { filePath, write, close: () => Effect.void } satisfies EventNdjsonLogger;
     loggerViews.set(stream, view);
+
     return view;
   };
 
@@ -407,7 +446,9 @@ export const makeEventNdjsonLogger = Effect.fnUntraced(function* (
       ),
     ),
   );
+
   if (!store) return undefined;
+
   return { ...store.logger(options.stream), close: store.close };
 });
 
@@ -422,4 +463,5 @@ export {
   type EventNdjsonLogStoreError,
   type PendingRecord,
 } from "./logging/EventLogTypes.ts";
+
 export { writeBatchedMessages } from "./logging/EventLogFiles.ts";

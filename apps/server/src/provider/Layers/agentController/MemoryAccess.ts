@@ -49,10 +49,12 @@ export function createMemoryAccess(deps: {
   readonly botMemoryStore: BotMemoryStore;
 }) {
   const memoryApprovals = deps.memoryApprovals;
+
   const memoryAccessFor = (
     access: AkeruMemoryThreadAccess | undefined,
   ): BotMemoryAccess | undefined => {
     const botId = access?.respondingBotId ?? access?.botId;
+
     return access && botId
       ? {
           botId,
@@ -61,43 +63,58 @@ export function createMemoryAccess(deps: {
         }
       : undefined;
   };
+
   const refreshEntityMemoryAccess = async (
     access: AkeruMemoryThreadAccess | undefined,
   ): Promise<AkeruMemoryThreadAccess | undefined> => {
     if (!access || access.groupId === null) return access;
+
     // Without a projection the membership cannot be rechecked. The access stays a group
     // access with no members, so it reads neither group facts nor the bot's private ones.
     if (Option.isNone(deps.projectionSnapshotQuery)) {
       return { ...access, groupMemberBotIds: [] };
     }
+
     const snapshot = await deps.runPromise(deps.projectionSnapshotQuery.value.getSnapshot());
     const group = snapshot.groups.find((candidate) => candidate.id === access.groupId);
+
     if (!group) return undefined;
+
     const groupMemberBotIds = group.members
       .filter((member) => member.kind === "bot")
       .map((member) => member.botId);
+
     const respondingBotId = access.respondingBotId ?? access.botId;
+
     if (respondingBotId === null || !groupMemberBotIds.includes(respondingBotId)) return undefined;
+
     return { ...access, groupMemberBotIds };
   };
+
   const entityMemoryContext = async (
     access: AkeruMemoryThreadAccess | undefined,
   ): Promise<string> => {
     const current = await refreshEntityMemoryAccess(access);
+
     if (!current || !deps.options?.entityMemoryRepository) return "";
+
     if (current.groupId !== null && current.groupMemberBotIds.length === 0) return "";
+
     const currentRevisions = await deps.runPromise(
       deps.options.entityMemoryRepository.listCurrent({ access: current }),
     );
+
     // Memory inspection and export still list bot-private facts; only the
     // provider packet honours the Private bot memory switch.
     const { privateBotMemory } = await deps.runPromise(deps.memorySettings());
+
     const revisions = privateBotMemory
       ? currentRevisions
       : currentRevisions.filter(
           (revision) =>
             revision.partition.scope !== "bot" && revision.partition.scope !== "bot-user",
         );
+
     await deps.runPromise(
       deps.options.entityMemoryRepository.recordDerivedCopies?.({
         tenantId: current.tenantId,
@@ -106,24 +123,33 @@ export function createMemoryAccess(deps: {
       }) ?? Effect.void,
     );
     const packet = buildProviderMemoryPacket(current.threadId, revisions);
+
     return packet.rendered ? `<entity-memory>\n${packet.rendered}\n</entity-memory>` : "";
   };
+
   const memoryHandlers = (
     access: AkeruMemoryThreadAccess | undefined,
     allowedScopes: AkeruDelegationAccessGrant["memoryScopes"],
   ) => {
     const resolved = memoryAccessFor(access);
+
     if (!resolved) return undefined;
     const scopes = new Set(allowedScopes);
     const targets = new Set<AkeruMemoryDocumentTarget>();
+
     if (scopes.has("private")) targets.add("user");
+
     if (scopes.has("bot")) targets.add("memory");
+
     if (resolved.groupId !== null && scopes.has("group")) targets.add("group");
+
     const canShare =
       scopes.has("project") ||
       scopes.has("workspace") ||
       (resolved.groupId !== null && scopes.has("group"));
+
     if (targets.size === 0 && !(canShare && Option.isSome(memoryApprovals))) return undefined;
+
     // Shared facts go through MemoryApprovals, which saves them directly in
     // auto mode or opens an approval card and inbox item in ask mode.
     const shareFact: AkeruMemoryShareFact | undefined =
@@ -134,10 +160,13 @@ export function createMemoryAccess(deps: {
                 `The ${request.scope} memory scope is outside this bot's access grant.`,
               );
             }
+
             if (request.scope === "group" && access.groupId === null) {
               throw new Error("Group memory is available only in a group chat.");
             }
+
             const settings = await deps.runPromise(deps.memorySettings());
+
             const result = await deps.runPromise(
               memoryApprovals.value.propose({
                 access,
@@ -147,38 +176,48 @@ export function createMemoryAccess(deps: {
                 mode: settings.sharedProjectMemory,
               }),
             );
+
             return { status: result.status };
           }
         : undefined;
+
     const handler = createBotMemoryToolHandler(
       deps.botMemoryStore,
       resolved,
       targets,
       shareFact,
     ).memory;
+
     // The memory settings gate is enforced at call time: a handler captured
     // while Memory was on must deny calls after it is turned off, and a
     // "Private bot memory" toggle applies without rebuilding the session.
     const guarded: AkeruMemoryToolHandler = async (input) => {
       const settings = await deps.runPromise(deps.memorySettings());
+
       if (!settings.enabled) {
         throw new Error("Bot memory is disabled.");
       }
+
       if (!settings.privateBotMemory) {
         const { target, operations, share } = input.input as {
           readonly target?: AkeruMemoryDocumentTarget;
           readonly operations?: ReadonlyArray<unknown>;
           readonly share?: unknown;
         };
+
         // A share-only call never reads or changes the target document.
         const shareOnly = share !== undefined && operations?.length === 0;
+
         if (target === "memory" && !shareOnly) {
           throw new Error("Private bot memory is disabled.");
         }
       }
+
       return handler(input);
     };
+
     return { memory: guarded };
   };
+
   return { memoryAccessFor, refreshEntityMemoryAccess, entityMemoryContext, memoryHandlers };
 }

@@ -31,10 +31,13 @@ export function createProviderMcpSessions(deps: {
   const mcpCapabilities = deps.serverSettings.getSettings.pipe(
     Effect.map((settings) => {
       const capabilities = new Set<McpCapability>();
+
       if (settings.enableAgentBrowserAccess) capabilities.add("preview");
+
       if (settings.imageGeneration.chatgptEnabled || settings.imageGeneration.grokEnabled) {
         capabilities.add("image");
       }
+
       return capabilities;
     }),
     Effect.catch((cause) =>
@@ -44,9 +47,11 @@ export function createProviderMcpSessions(deps: {
       ).pipe(Effect.as(new Set<McpCapability>())),
     ),
   );
+
   const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
     Effect.gen(function* () {
       const capabilities = yield* mcpCapabilities;
+
       if (capabilities.size === 0) {
         // Revoke as well as clear. Every other prepare path reaches
         // `issueActiveMcpCredential`, which revokes the thread first, so
@@ -56,21 +61,27 @@ export function createProviderMcpSessions(deps: {
         // model) re-prepares without stopping, so it relies on this.
         yield* deps.revokeMcpCredential(threadId);
         yield* Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId));
+
         return undefined;
       }
+
       const credential = yield* deps.issueMcpCredential({
         threadId,
         providerInstanceId,
         capabilities,
       });
+
       if (credential) {
         yield* Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config));
       }
+
       return credential;
     });
+
   const clearMcpSession = (threadId: ThreadId) =>
     McpSessionRegistry.revokeActiveMcpThread(threadId).pipe(
       Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
     );
+
   return { mcpCapabilities, prepareMcpSession, clearMcpSession };
 }

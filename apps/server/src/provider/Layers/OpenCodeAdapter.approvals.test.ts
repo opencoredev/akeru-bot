@@ -72,6 +72,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const eventsFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.threadId === threadId && event.type === "request.opened"),
         Stream.runHead,
@@ -87,7 +88,9 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const opened = Option.getOrThrow(
         yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")),
       );
+
       NodeAssert.equal(opened.type, "request.opened");
+
       if (opened.type === "request.opened") {
         NodeAssert.equal(opened.requestId, "per_child");
         NodeAssert.equal(opened.payload.requestType, "command_execution_approval");
@@ -117,6 +120,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const openedFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.threadId === threadId && event.type === "request.opened"),
         Stream.runHead,
@@ -158,6 +162,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const openedFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.threadId === threadId && event.type === "request.opened"),
         Stream.runHead,
@@ -170,9 +175,11 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         runtimeMode: "approval-required",
       });
       yield* TestClock.adjust("250 millis");
+
       const opened = Option.getOrThrow(
         yield* Fiber.join(openedFiber).pipe(Effect.timeout("1 second")),
       );
+
       NodeAssert.equal(opened.requestId, "per_nested");
 
       yield* adapter.stopSession(threadId);
@@ -187,15 +194,18 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const threadId = asThreadId("thread-opencode-child-reply-during-retry");
       const rootSessionId = "http://127.0.0.1:9999/session";
       let releaseChildGet: (() => void) | undefined;
+
       const childGetGate = new Promise<void>((resolve) => {
         releaseChildGet = resolve;
       });
+
       runtimeMock.state.sessionParentById.set("ses_child", rootSessionId);
       runtimeMock.state.sessionGetHold = async (sessionID) => {
         if (sessionID === "ses_child") {
           await childGetGate;
         }
       };
+
       runtimeMock.state.subscribedEvents = [
         {
           type: "permission.asked",
@@ -217,6 +227,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const eventsFiber = yield* adapter.streamEvents.pipe(
         Stream.filter(
           (event) =>
@@ -253,12 +264,15 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const adapter = yield* OpenCodeAdapter;
       const threadId = asThreadId("thread-opencode-full-access-auto-reply");
       let markReplyCompleted!: () => void;
+
       const replyCompleted = new Promise<void>((resolve) => {
         markReplyCompleted = resolve;
       });
+
       runtimeMock.state.permissionReplyImplementation = async () => {
         markReplyCompleted();
       };
+
       runtimeMock.state.subscribedEvents = [
         {
           type: "permission.asked",
@@ -272,6 +286,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const eventsFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.threadId === threadId),
         Stream.take(3),
@@ -329,6 +344,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const openedFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.threadId === threadId && event.type === "request.opened"),
         Stream.runHead,
@@ -340,9 +356,11 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         threadId,
         runtimeMode: "full-access",
       });
+
       const opened = Option.getOrThrow(
         yield* Fiber.join(openedFiber).pipe(Effect.timeout("1 second")),
       );
+
       NodeAssert.equal(opened.requestId, "per_fail");
 
       yield* adapter.stopSession(threadId);

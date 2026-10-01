@@ -16,6 +16,7 @@ import {
 describe("ClaudeAdapterLive", () => {
   it.effect("captures ExitPlanMode as a proposed plan and denies auto-exit", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -38,6 +39,7 @@ describe("ClaudeAdapterLive", () => {
       const createInput = harness.getLastCreateQueryInput();
       const canUseTool = createInput?.options.canUseTool;
       assert.equal(typeof canUseTool, "function");
+
       if (!canUseTool) {
         return;
       }
@@ -56,13 +58,17 @@ describe("ClaudeAdapterLive", () => {
 
       const proposedEvent = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(proposedEvent._tag, "Some");
+
       if (proposedEvent._tag !== "Some") {
         return;
       }
+
       assert.equal(proposedEvent.value.type, "turn.proposed.completed");
+
       if (proposedEvent.value.type !== "turn.proposed.completed") {
         return;
       }
+
       assert.equal(proposedEvent.value.payload.planMarkdown, "# Ship it\n\n- one\n- two");
       assert.deepEqual(proposedEvent.value.providerRefs, {
         providerItemId: ProviderItemId.make("tool-exit-1"),
@@ -70,9 +76,11 @@ describe("ClaudeAdapterLive", () => {
 
       const permissionResult = yield* Effect.promise(() => permissionPromise);
       assert.equal((permissionResult as PermissionResult).behavior, "deny");
+
       const deniedResult = permissionResult as PermissionResult & {
         message?: string;
       };
+
       assert.equal(deniedResult.message?.includes("captured your proposed plan"), true);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
@@ -84,6 +92,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("extracts proposed plans from assistant ExitPlanMode snapshots", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -136,13 +145,17 @@ describe("ClaudeAdapterLive", () => {
 
       const proposedEvent = yield* Fiber.join(proposedEventFiber);
       assert.equal(proposedEvent._tag, "Some");
+
       if (proposedEvent._tag !== "Some") {
         return;
       }
+
       assert.equal(proposedEvent.value.type, "turn.proposed.completed");
+
       if (proposedEvent.value.type !== "turn.proposed.completed") {
         return;
       }
+
       assert.equal(proposedEvent.value.payload.planMarkdown, "# Final plan\n\n- capture it");
       assert.deepEqual(proposedEvent.value.providerRefs, {
         providerItemId: ProviderItemId.make("tool-exit-2"),

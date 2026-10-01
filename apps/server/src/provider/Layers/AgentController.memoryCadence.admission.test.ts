@@ -58,6 +58,7 @@ describe("AgentControllerLive", () => {
     vi.spyOn(botMemoryStore, "reserveReviewCadence").mockImplementation(async (reservedBotId) => {
       const reservation = await reserve(reservedBotId);
       reservationReached.resolve();
+
       return reservation;
     });
 
@@ -67,8 +68,10 @@ describe("AgentControllerLive", () => {
           const reservation = yield* Effect.promise(() =>
             botMemoryStore.reserveReviewCadence(botId),
           );
+
           yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
         }
+
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
         yield* controller.startSession(codexThreadId, {
@@ -125,6 +128,7 @@ describe("AgentControllerLive", () => {
       const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mastra-review-"));
       const botMemoryStore = new BotMemoryStore(memoryDir);
       const botId = BotId.make("bot-mastra-review");
+
       const access = {
         tenantId: AkeruMemoryTenantId.make("local"),
         userId: AkeruMemoryUserId.make("owner"),
@@ -143,13 +147,16 @@ describe("AgentControllerLive", () => {
             const reservation = yield* Effect.promise(() =>
               botMemoryStore.reserveReviewCadence(botId),
             );
+
             yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
           }
+
           const acceptedRecorded = Promise.withResolvers<void>();
           const settleReviewClaim = botMemoryStore.settleReviewClaim.bind(botMemoryStore);
           vi.spyOn(botMemoryStore, "settleReviewClaim").mockImplementation(async (...args) => {
             const result = await settleReviewClaim(...args);
             acceptedRecorded.resolve();
+
             return result;
           });
           const controller = yield* AgentController;
@@ -180,6 +187,7 @@ describe("AgentControllerLive", () => {
 
           const runtime = mastra.harnessOptions[0]?.toolRuntime;
           assert.isDefined(runtime);
+
           for (let call = 0; call < successfulMemoryCalls; call += 1) {
             yield* Effect.promise(() =>
               runtime.execute({
@@ -231,13 +239,16 @@ describe("AgentControllerLive", () => {
           const reservation = yield* Effect.promise(() =>
             botMemoryStore.reserveReviewCadence(botId),
           );
+
           yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
         }
+
         const settled = Promise.withResolvers<void>();
         const settleReviewClaim = botMemoryStore.settleReviewClaim.bind(botMemoryStore);
         vi.spyOn(botMemoryStore, "settleReviewClaim").mockImplementation(async (...args) => {
           const result = await settleReviewClaim(...args);
           settled.resolve();
+
           return result;
         });
         const controller = yield* AgentController;
@@ -260,6 +271,7 @@ describe("AgentControllerLive", () => {
             groupMemberBotIds: [],
           },
         });
+
         // Effect's scheduler and the lock retry also use timers, so pump fake
         // time until the awaited receipt lands instead of advancing blindly.
         const pumpUntil = async (receipt: Promise<void>) => {
@@ -267,15 +279,19 @@ describe("AgentControllerLive", () => {
           void receipt.then(() => {
             landed = true;
           });
+
           while (!landed) await vi.advanceTimersByTimeAsync(15);
         };
+
         const secondRenewal = Promise.withResolvers<void>();
         renew.mockImplementation(async (...args) => {
           const result = await BotMemoryStore.prototype.renewReviewClaim.apply(
             botMemoryStore,
             args,
           );
+
           if (renew.mock.calls.length >= 2) secondRenewal.resolve();
+
           return result;
         });
 
@@ -313,13 +329,16 @@ describe("AgentControllerLive", () => {
     const mastra = makeMastraHarness();
     const usage = makeUsageLedger();
     const botId = BotId.make("bot-recovered-memory");
+
     return provideController(
       Effect.gen(function* () {
         // No startSession or turn: the durable queue drained after a restart.
         const options = mastra.harnessOptions[0]!;
+
         const callId = yield* Effect.promise(() =>
           options.startMemoryCall!({ threadId: "thread-recovered", category: "observer" }),
         );
+
         assert.isDefined(callId);
         yield* Effect.promise(() =>
           Promise.resolve(
@@ -366,6 +385,7 @@ describe("AgentControllerLive", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const usageLedger = makeUsageLedger();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -384,9 +404,11 @@ describe("AgentControllerLive", () => {
           botUsage: { botId, capLimit: 50_000 },
         });
         const options = mastra.harnessOptions[0]!;
+
         const callId = yield* Effect.promise(() =>
           options.startMemoryCall!({ threadId: codexThreadId, category: "observer" }),
         );
+
         assert.isDefined(callId);
         expect(usageLedger.reserve).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -455,6 +477,7 @@ describe("AgentControllerLive", () => {
       const botMemoryStore = new BotMemoryStore(memoryDir);
       const botId = BotId.make("bot-legacy-review");
       const groupId = GroupId.make("group-legacy-review");
+
       const memoryAccess = {
         tenantId: AkeruMemoryTenantId.make("local"),
         userId: AkeruMemoryUserId.make("owner"),
@@ -466,6 +489,7 @@ describe("AgentControllerLive", () => {
         respondingBotId: botId,
         groupMemberBotIds: [botId],
       } as const;
+
       const completedEvent: ProviderRuntimeEvent = {
         provider: ProviderDriverKind.make("opencode"),
         providerInstanceId: openCodeInstanceId,
@@ -476,6 +500,7 @@ describe("AgentControllerLive", () => {
         createdAt: "2026-09-14T12:00:00.000Z",
         payload: { state: "completed", stopReason: null },
       };
+
       bridge.sendTurn.mockImplementation((input) =>
         completeLegacyTurnWithMemoryReview(
           input,
@@ -495,8 +520,10 @@ describe("AgentControllerLive", () => {
                 text: `Group prompt ${prompt}`,
               }),
             );
+
             yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
           }
+
           const controller = yield* AgentController;
           yield* controller.resolveEngine({
             threadId: claudeThreadId,

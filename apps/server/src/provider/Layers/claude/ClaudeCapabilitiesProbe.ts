@@ -64,6 +64,7 @@ export function buildClaudeCapabilitiesProbeQueryOptions(input: {
 
 export function nonEmptyProbeString(value: string): string | undefined {
   const candidate = value.trim();
+
   return candidate ? candidate : undefined;
 }
 
@@ -86,6 +87,7 @@ export function parseClaudeInitializationCommands(
   return dedupeSlashCommands(
     (commands ?? []).flatMap((command) => {
       const name = nonEmptyProbeString(command.name);
+
       if (!name) {
         return [];
       }
@@ -111,12 +113,14 @@ export function dedupeSlashCommands(
 
   for (const command of commands) {
     const name = nonEmptyProbeString(command.name);
+
     if (!name) {
       continue;
     }
 
     const key = name.toLowerCase();
     const existing = commandsByName.get(key);
+
     if (!existing) {
       commandsByName.set(key, {
         ...command,
@@ -147,6 +151,7 @@ export function waitForAbortSignal(signal: AbortSignal): Promise<void> {
   if (signal.aborted) {
     return Promise.resolve();
   }
+
   return new Promise((resolve) => {
     signal.addEventListener("abort", () => resolve(), { once: true });
   });
@@ -171,12 +176,15 @@ export const probeClaudeCapabilities = (
   cwd?: string,
 ) => {
   const abort = new AbortController();
+
   return Effect.gen(function* () {
     const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
+
     const executablePath = yield* resolveClaudeSdkExecutablePath(
       claudeSettings.binaryPath,
       claudeEnvironment,
     );
+
     return yield* Effect.tryPromise(async () => {
       const q = claudeQuery({
         // Never yield — we only need initialization data, not a conversation.
@@ -192,7 +200,9 @@ export const probeClaudeCapabilities = (
           cwd,
         }),
       });
+
       const init = await q.initializationResult();
+
       const account = init.account as
         | {
             readonly email?: string;
@@ -201,6 +211,7 @@ export const probeClaudeCapabilities = (
             readonly apiProvider?: string;
           }
         | undefined;
+
       return {
         email: account?.email,
         subscriptionType: account?.subscriptionType,
@@ -219,6 +230,7 @@ export const probeClaudeCapabilities = (
     Effect.result,
     Effect.map((result) => {
       if (Result.isFailure(result)) return undefined;
+
       return Option.isSome(result.success) ? result.success.value : undefined;
     }),
   );

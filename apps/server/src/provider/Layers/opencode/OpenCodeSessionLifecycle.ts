@@ -20,6 +20,7 @@ export const abortOpenCodeDescendants = Effect.fn("abortOpenCodeDescendants")(fu
   ): Effect.Effect<OpenCodeRuntimeError | undefined> =>
     Effect.gen(function* () {
       let firstFailure: OpenCodeRuntimeError | undefined;
+
       if (abortSession) {
         const abortResult = yield* requestSemaphore
           .withPermits(1)(
@@ -34,6 +35,7 @@ export const abortOpenCodeDescendants = Effect.fn("abortOpenCodeDescendants")(fu
             ),
             Effect.result,
           );
+
         if (abortResult._tag === "Failure") {
           firstFailure = abortResult.failure;
         }
@@ -52,26 +54,34 @@ export const abortOpenCodeDescendants = Effect.fn("abortOpenCodeDescendants")(fu
           ),
           Effect.result,
         );
+
       if (childrenResult._tag === "Failure") {
         return firstFailure ?? childrenResult.failure;
       }
 
       const children = childrenResult.success?.data ?? [];
+
       const newChildren = children.filter((child) => {
         if (visited.has(child.id)) {
           return false;
         }
+
         visited.add(child.id);
+
         return true;
       });
+
       const childFailures = yield* Effect.forEach(newChildren, (child) => visit(child.id, true), {
         concurrency: 8,
       });
+
       firstFailure ??= childFailures.find((failure) => failure !== undefined);
+
       return firstFailure;
     });
 
   const firstFailure = yield* visit(context.openCodeSessionId, false);
+
   if (firstFailure) {
     return yield* firstFailure;
   }
@@ -109,5 +119,6 @@ export const stopOpenCodeContext = Effect.fn("stopOpenCodeContext")(function* (
   // runs each finalizer we registered — the `AbortController.abort()` call,
   // the child-process termination, etc.
   yield* Scope.close(context.sessionScope, Exit.void);
+
   return true;
 });

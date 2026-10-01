@@ -278,6 +278,7 @@ export const make = (
     const eventQueue = yield* Queue.unbounded<AcpSessionRuntimeEvent>();
     const modeStateRef = yield* Ref.make<AcpSessionModeState | undefined>(undefined);
     const toolCallsRef = yield* Ref.make(new Map<string, AcpToolCallTrackedState>());
+
     const assistantItemRuntimeId = yield* crypto.randomUUIDv4.pipe(
       Effect.mapError(
         (cause) =>
@@ -287,13 +288,16 @@ export const make = (
           }),
       ),
     );
+
     const assistantSegmentRef = yield* Ref.make<AcpAssistantSegmentState>({ nextSegmentIndex: 0 });
     const configOptionsRef = yield* Ref.make(sessionConfigOptionsFromSetup(undefined));
     const startStateRef = yield* Ref.make<AcpStartState>({ _tag: "NotStarted" });
     const promptSerializationSemaphore = yield* Semaphore.make(1);
+
     const activePromptFiberRef = yield* Ref.make<
       Option.Option<Fiber.Fiber<EffectAcpSchema.PromptResponse, EffectAcpErrors.AcpError>>
     >(Option.none());
+
     const sessionLoadGateRef = yield* Ref.make<Option.Option<SessionLoadGate>>(Option.none());
 
     const logRequest = (event: AcpSessionRequestLogEvent) =>
@@ -332,6 +336,7 @@ export const make = (
       options.spawn.args,
       options.spawn.env ? { env: options.spawn.env, extendEnv: true } : {},
     );
+
     const child = yield* spawner
       .spawn(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
@@ -368,6 +373,7 @@ export const make = (
     yield* acp.handleSessionUpdate((notification) =>
       Effect.gen(function* () {
         const gate = yield* Ref.get(sessionLoadGateRef);
+
         if (Option.isSome(gate) && gate.value.active) {
           const lastActivityAtMillis = yield* Clock.currentTimeMillis;
           yield* Ref.set(
@@ -377,12 +383,16 @@ export const make = (
               lastActivityAtMillis,
             }),
           );
+
           return;
         }
+
         if (sessionUpdateIsReplay(notification)) {
           return;
         }
+
         const startState = yield* Ref.get(startStateRef);
+
         // One runtime projects one root ACP session. Child-session updates need
         // explicit lineage routing and must never be flattened into this stream.
         if (
@@ -391,6 +401,7 @@ export const make = (
         ) {
           return;
         }
+
         yield* handleSessionUpdate({
           queue: eventQueue,
           modeStateRef,
@@ -401,6 +412,7 @@ export const make = (
         });
       }),
     );
+
     const initializeClientCapabilities = {
       fs: {
         readTextFile: false,
@@ -417,9 +429,11 @@ export const make = (
 
     const getStartedState = Effect.gen(function* () {
       const state = yield* Ref.get(startStateRef);
+
       if (state._tag === "Started") {
         return state.result;
       }
+
       return yield* new EffectAcpErrors.AcpTransportError({
         detail: "ACP session runtime has not been started",
         cause: "ACP session runtime has not been started",
@@ -432,13 +446,16 @@ export const make = (
     ): Effect.Effect<void, EffectAcpErrors.AcpError> =>
       Effect.gen(function* () {
         const configOption = findSessionConfigOption(yield* Ref.get(configOptionsRef), configId);
+
         if (!configOption) {
           return;
         }
+
         if (configOption.type === "boolean") {
           if (typeof value === "boolean") {
             return;
           }
+
           return yield* new EffectAcpErrors.AcpRequestError({
             code: -32602,
             errorMessage: `Invalid value ${formatConfigOptionValue(value)} for session config option "${configOption.id}": expected boolean`,
@@ -449,6 +466,7 @@ export const make = (
             },
           });
         }
+
         if (typeof value !== "string") {
           return yield* new EffectAcpErrors.AcpRequestError({
             code: -32602,
@@ -460,10 +478,13 @@ export const make = (
             },
           });
         }
+
         const allowedValues = collectSessionConfigOptionValues(configOption);
+
         if (allowedValues.includes(value)) {
           return;
         }
+
         return yield* new EffectAcpErrors.AcpRequestError({
           code: -32602,
           errorMessage: `Invalid value ${formatConfigOptionValue(value)} for session config option "${configOption.id}": expected one of ${allowedValues.join(", ")}`,
@@ -498,11 +519,13 @@ export const make = (
           Ref.get(configOptionsRef).pipe(
             Effect.flatMap((configOptions) => {
               const existing = findSessionConfigOption(configOptions, configId);
+
               if (existing && configOptionCurrentValueMatches(existing, value)) {
                 return Effect.succeed({
                   configOptions,
                 } satisfies EffectAcpSchema.SetSessionConfigOptionResponse);
               }
+
               const requestPayload =
                 typeof value === "boolean"
                   ? ({
@@ -516,6 +539,7 @@ export const make = (
                       configId,
                       value: String(value),
                     } satisfies EffectAcpSchema.SetSessionConfigOptionRequest);
+
               return runLoggedRequest(
                 "session/set_config_option",
                 requestPayload,
@@ -531,6 +555,7 @@ export const make = (
       clientCapabilities: initializeClientCapabilities,
       clientInfo: options.clientInfo,
     } satisfies EffectAcpSchema.InitializeRequest;
+
     const sendInitialize = runLoggedRequest(
       "initialize",
       initializePayload,
@@ -551,19 +576,23 @@ export const make = (
       );
 
       let sessionId: string;
+
       let sessionSetupResult:
         | EffectAcpSchema.LoadSessionResponse
         | EffectAcpSchema.NewSessionResponse
         | EffectAcpSchema.ResumeSessionResponse;
+
       if (options.resumeSessionId) {
         const loadPayload = {
           sessionId: options.resumeSessionId,
           cwd: options.cwd,
           mcpServers: options.mcpServers ?? [],
         } satisfies EffectAcpSchema.LoadSessionRequest;
+
         const sessionLoadTimeout = Duration.fromInputUnsafe(
           options.sessionLoadTimeout ?? defaultSessionLoadTimeout,
         );
+
         const sessionLoadReplayIdleGap = Duration.fromInputUnsafe(
           options.sessionLoadReplayIdleGap ?? defaultSessionLoadReplayIdleGap,
         );
@@ -589,6 +618,7 @@ export const make = (
           const idleFiber = yield* waitForSessionLoadReplayIdle({
             gateRef: sessionLoadGateRef,
           }).pipe(Effect.forkIn(runtimeScope));
+
           const loaded = yield* Effect.raceFirst(
             acp.agent.loadSession(loadPayload),
             Fiber.join(idleFiber),
@@ -634,11 +664,13 @@ export const make = (
           cwd: options.cwd,
           mcpServers: options.mcpServers ?? [],
         } satisfies EffectAcpSchema.NewSessionRequest;
+
         const created = yield* runLoggedRequest(
           "session/new",
           createPayload,
           acp.agent.createSession(createPayload),
         );
+
         sessionId = created.sessionId;
         sessionSetupResult = created;
       }
@@ -652,6 +684,7 @@ export const make = (
         sessionSetupResult,
         modelConfigId: extractModelConfigId(sessionSetupResult),
       } satisfies AcpStartedState;
+
       return nextState;
     });
 
@@ -660,6 +693,7 @@ export const make = (
         AcpSessionRuntimeStartResult,
         EffectAcpErrors.AcpError
       >();
+
       const effect = yield* Ref.modify(startStateRef, (state) => {
         switch (state._tag) {
           case "Started":
@@ -684,6 +718,7 @@ export const make = (
             ] as const;
         }
       });
+
       return yield* effect;
     });
 
@@ -724,22 +759,28 @@ export const make = (
               queue: eventQueue,
               assistantSegmentRef,
             });
+
             const requestPayload = {
               sessionId: started.sessionId,
               ...payload,
             } satisfies EffectAcpSchema.PromptRequest;
+
             const cancelledResponse = {
               stopReason: "cancelled",
             } satisfies EffectAcpSchema.PromptResponse;
+
             const promptRpcFiber = yield* runLoggedRequest(
               "session/prompt",
               requestPayload,
               acp.agent.prompt(requestPayload),
             ).pipe(Effect.forkIn(runtimeScope));
+
             yield* Ref.set(activePromptFiberRef, Option.some(promptRpcFiber));
+
             if (promptOptions?.dispatched) {
               yield* Deferred.succeed(promptOptions.dispatched, undefined);
             }
+
             return yield* Fiber.join(promptRpcFiber).pipe(
               Effect.catchCause((cause) =>
                 Cause.hasInterruptsOnly(cause)
@@ -765,9 +806,11 @@ export const make = (
         Effect.flatMap((started) =>
           Effect.gen(function* () {
             const activePromptFiber = yield* Ref.get(activePromptFiberRef);
+
             if (Option.isSome(activePromptFiber)) {
               yield* Fiber.interrupt(activePromptFiber.value).pipe(Effect.ignore);
             }
+
             // Await the notification write so a replacement session/prompt
             // cannot race ahead of session/cancel on the wire.
             yield* acp.agent.cancel({ sessionId: started.sessionId }).pipe(Effect.ignore);
@@ -780,6 +823,7 @@ export const make = (
             if (modeState?.currentModeId === modeId) {
               return Effect.succeed({} satisfies EffectAcpSchema.SetSessionModeResponse);
             }
+
             return setConfigOption("mode", modeId).pipe(
               Effect.tap(() => updateCurrentModeId(modeId)),
               Effect.as({} satisfies EffectAcpSchema.SetSessionModeResponse),
@@ -799,6 +843,7 @@ export const make = (
               sessionId: started.sessionId,
               modelId,
             } satisfies EffectAcpSchema.SetSessionModelRequest;
+
             return runLoggedRequest(
               "session/set_model",
               requestPayload,

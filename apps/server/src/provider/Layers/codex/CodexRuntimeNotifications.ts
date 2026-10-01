@@ -74,6 +74,7 @@ export function makeMemoryConsolidationNotificationFilter(): (
     if (notification.method === "thread/started") {
       const thread = notification.params.thread;
       const source = thread.source;
+
       if (
         thread.threadSource === "memory_consolidation" ||
         (typeof source === "object" &&
@@ -82,17 +83,20 @@ export function makeMemoryConsolidationNotificationFilter(): (
           source.subAgent === "memory_consolidation")
       ) {
         threadIds.add(thread.id);
+
         return true;
       }
     }
 
     const params = notification.params;
+
     const threadId =
       notification.method === "thread/started"
         ? notification.params.thread.id
         : "threadId" in params && typeof params.threadId === "string"
           ? params.threadId
           : undefined;
+
     if (!threadId || !threadIds.has(threadId)) {
       return false;
     }
@@ -104,6 +108,7 @@ export function makeMemoryConsolidationNotificationFilter(): (
     if (notification.method === "thread/closed") {
       threadIds.delete(threadId);
     }
+
     return true;
   };
 }
@@ -210,18 +215,25 @@ export function readThreadSpawnSource(thread: { readonly source: unknown }):
     }
   | undefined {
   const source = thread.source;
+
   if (typeof source !== "object" || source === null || !("subAgent" in source)) {
     return undefined;
   }
+
   const subAgent = (source as { subAgent: unknown }).subAgent;
+
   if (typeof subAgent !== "object" || subAgent === null || !("thread_spawn" in subAgent)) {
     return undefined;
   }
+
   const spawn = (subAgent as { thread_spawn: unknown }).thread_spawn;
+
   if (typeof spawn !== "object" || spawn === null) {
     return undefined;
   }
+
   const record = spawn as Record<string, unknown>;
+
   return {
     nickname: typeof record.agent_nickname === "string" ? record.agent_nickname : undefined,
     role: typeof record.agent_role === "string" ? record.agent_role : undefined,
@@ -332,9 +344,11 @@ export function routeCodexChildNotification(method: string): CodexChildNotificat
   if (CHILD_AGENT_EVENT_METHODS.has(method)) {
     return "agent-event";
   }
+
   if (CHILD_CHATTER_METHODS.has(method)) {
     return "drop";
   }
+
   // Unknown or parent-owned (serverRequest/resolved, approvals, …).
   return "parent";
 }

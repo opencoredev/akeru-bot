@@ -28,12 +28,15 @@ import { codexAccountAuthLabel, codexAccountEmail } from "./codex/CodexAccountMe
 
 const emptyCodexModelsFromSettings = (codexSettings: CodexSettings): ServerProvider["models"] => {
   const models = new Set<string>();
+
   for (const model of codexSettings.customModels) {
     const trimmed = model.trim();
+
     if (trimmed.length > 0) {
       models.add(trimmed);
     }
   }
+
   return Array.from(models, (model) => ({
     slug: model,
     name: model,
@@ -89,6 +92,7 @@ function accountProbeStatus(account: CodexAppServerProviderSnapshot["account"]):
 } {
   const authLabel = codexAccountAuthLabel(account.account);
   const authEmail = codexAccountEmail(account.account);
+
   const auth = {
     status: account.account ? ("authenticated" as const) : ("unknown" as const),
     ...(account.account?.type ? { type: account.account?.type } : {}),
@@ -168,6 +172,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
   if (Result.isFailure(probeResult)) {
     const error = probeResult.failure;
     const installed = !isCodexAppServerSpawnError(error);
+
     return buildServerProvider({
       presentation: CODEX_PRESENTATION,
       enabled: codexSettings.enabled,
@@ -239,7 +244,9 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
 export { makePendingCodexProvider };
 
 export { type CodexAppServerProviderSnapshot } from "./codex/CodexProviderState.ts";
+
 export { mapCodexModelCapabilities, applyPreferredCodexDefaultModel } from "./codex/CodexModels.ts";
+
 export {
   parseCodexSkillsListResponse,
   buildCodexInitializeParams,

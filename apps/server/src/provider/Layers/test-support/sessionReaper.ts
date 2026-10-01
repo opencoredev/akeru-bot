@@ -137,10 +137,12 @@ export function createReaperSupport() {
   }) {
     const stoppedThreadIds = new Set<ThreadId>();
     const stopWaiters = new Map<number, () => void>();
+
     const stopSession = vi.fn<AgentControllerShape["stopSession"]>((request) => {
       const operation = input.stopSessionImplementation
         ? input.stopSessionImplementation(request)
         : Effect.sync(() => stoppedThreadIds.add(request.threadId));
+
       return operation.pipe(
         Effect.ensuring(
           Effect.sync(() => {
@@ -158,9 +160,11 @@ export function createReaperSupport() {
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const providerSessionDirectoryLayer = ProviderSessionDirectoryLive.pipe(
       Layer.provide(runtimeRepositoryLayer),
     );
+
     const layer = makeProviderSessionReaperLive({
       inactivityThresholdMs: 1_000,
       sweepIntervalMs: 60_000,
@@ -204,10 +208,12 @@ export function createReaperSupport() {
       if (stopSession.mock.calls.length >= count) {
         return Promise.resolve();
       }
+
       return new Promise<void>((resolve) => stopWaiters.set(count, resolve));
     };
 
     runtime = ManagedRuntime.make(layer);
+
     return { stopSession, stoppedThreadIds, waitForStopCount };
   }
 
@@ -223,6 +229,7 @@ export function createReaperSupport() {
         await Effect.runPromise(Scope.close(scope, Exit.void));
         scope = null;
       }
+
       if (runtime) {
         await runtime.dispose();
         runtime = null;

@@ -21,6 +21,7 @@ export function createPreviewMcpSessions(deps: {
   readonly serverSettings: Option.Option<ServerSettings.ServerSettingsService["Service"]>;
 }) {
   const mcpSessionRegistry = deps.mcpSessionRegistry;
+
   const issueMcpCredential =
     deps.options?.issueMcpCredential ??
     (Option.isSome(mcpSessionRegistry)
@@ -30,11 +31,13 @@ export function createPreviewMcpSessions(deps: {
             Effect.map((credential) => ({ config: credential.config })),
           )
       : McpSessionRegistry.issueActiveMcpCredential);
+
   const revokeMcpCredential =
     deps.options?.revokeMcpCredential ??
     (Option.isSome(mcpSessionRegistry)
       ? mcpSessionRegistry.value.revokeThread
       : McpSessionRegistry.revokeActiveMcpThread);
+
   const clearPreviewMcpSession = (threadId: ThreadId) =>
     revokeMcpCredential(threadId).pipe(
       Effect.tap(() =>
@@ -44,6 +47,7 @@ export function createPreviewMcpSessions(deps: {
         }),
       ),
     );
+
   const preparePreviewMcpSession = (
     threadId: ThreadId,
     providerInstanceId: ProviderInstanceId,
@@ -61,23 +65,29 @@ export function createPreviewMcpSessions(deps: {
             Effect.orElseSucceed(() => ({ previewEnabled: false, imageEnabled: false })),
           )
         : { previewEnabled: true, imageEnabled: false };
+
       const capabilities = new Set<McpInvocationContext.McpCapability>([
         ...(previewEnabled ? (["preview"] as const) : []),
         ...(imageEnabled ? (["image"] as const) : []),
         ...(memoryHandler ? (["memory"] as const) : []),
       ]);
+
       if (capabilities.size === 0) {
         yield* clearPreviewMcpSession(threadId);
+
         return;
       }
+
       const credential = yield* issueMcpCredential({
         threadId,
         providerInstanceId,
         capabilities,
       });
+
       if (credential) {
         yield* Effect.sync(() => {
           McpProviderSession.setMcpProviderSession(credential.config);
+
           if (memoryHandler) {
             McpMemoryToolSession.setMcpMemoryToolSession(threadId, memoryHandler);
           } else {
@@ -86,6 +96,7 @@ export function createPreviewMcpSessions(deps: {
         });
       }
     });
+
   return {
     issueMcpCredential,
     revokeMcpCredential,

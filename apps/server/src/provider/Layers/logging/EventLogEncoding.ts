@@ -41,6 +41,7 @@ export function logWarning(message: string, context: Record<string, unknown>): E
 
 export function resolveThreadSegment(raw: string | null | undefined): string {
   const normalized = typeof raw === "string" ? toSafeThreadAttachmentSegment(raw) : null;
+
   return normalized ?? GLOBAL_THREAD_SEGMENT;
 }
 
@@ -51,6 +52,7 @@ export function resolveStreamLabel(stream: EventNdjsonStream): string {
 export function providerLogPrefix(filePath: string): string {
   const basename = NodePath.basename(filePath);
   const extension = NodePath.extname(basename);
+
   return `${extension.length > 0 ? basename.slice(0, -extension.length) : basename}.`;
 }
 
@@ -62,16 +64,20 @@ export function shouldPersist(stream: EventNdjsonStream, event: unknown): boolea
   if (stream === "orchestration" || typeof event !== "object" || event === null) {
     return true;
   }
+
   try {
     const type = Reflect.get(event, "type");
+
     if (typeof type === "string" && transientCanonicalEventTypes.has(type)) {
       return false;
     }
+
     if (stream !== "native") return true;
 
     const nested = Reflect.get(event, "event");
     const nativeEvent = typeof nested === "object" && nested !== null ? nested : event;
     const method = Reflect.get(nativeEvent, "method");
+
     if (
       typeof method === "string" &&
       (transientNativeMethods.has(method) ||
@@ -81,24 +87,31 @@ export function shouldPersist(stream: EventNdjsonStream, event: unknown): boolea
     }
 
     const nativeType = Reflect.get(nativeEvent, "type");
+
     if (nativeType === "message.part.delta") return false;
 
     const payload = Reflect.get(nativeEvent, "payload");
+
     if (typeof payload !== "object" || payload === null) return true;
 
     if (method === "session/update") {
       const update = Reflect.get(payload, "update");
+
       if (typeof update !== "object" || update === null) return true;
       const updateType = Reflect.get(update, "sessionUpdate");
+
       return typeof updateType !== "string" || !transientAcpUpdates.has(updateType);
     }
 
     if (nativeType === "message.part.updated") {
       const properties = Reflect.get(payload, "properties");
+
       if (typeof properties !== "object" || properties === null) return true;
       const part = Reflect.get(properties, "part");
+
       if (typeof part !== "object" || part === null) return true;
       const partType = Reflect.get(part, "type");
+
       return partType !== "text" && partType !== "reasoning";
     }
 

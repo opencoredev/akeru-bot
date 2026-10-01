@@ -93,6 +93,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")));
       const metadataUpdated = events.filter((event) => event.type === "thread.metadata.updated");
       NodeAssert.equal(metadataUpdated.length, 1);
+
       if (metadataUpdated[0]?.type === "thread.metadata.updated") {
         NodeAssert.equal(metadataUpdated[0].payload.name, "Investigate reconnect failures");
       }
@@ -111,6 +112,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           readonly type?: string;
         };
       }> = [];
+
       const nativeThreadIds: Array<string | null> = [];
       runtimeMock.state.subscribedEvents = [
         {
@@ -149,6 +151,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         write: (event: unknown, threadId: ThreadId | null) => {
           nativeEvents.push(event as (typeof nativeEvents)[number]);
           nativeThreadIds.push(threadId ?? null);
+
           return Effect.void;
         },
         close: () => Effect.void,
@@ -179,12 +182,15 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
 
       const session = yield* Effect.gen(function* () {
         const adapter = yield* OpenCodeAdapter;
+
         const started = yield* adapter.startSession({
           provider: ProviderDriverKind.make("opencode"),
           threadId: asThreadId("thread-native-log"),
           runtimeMode: "full-access",
         });
+
         yield* advanceTestClock(10);
+
         return started;
       }).pipe(Effect.provide(adapterLayer));
 
@@ -275,6 +281,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           runtimeMode: "full-access",
         });
         yield* advanceTestClock(10);
+
         return {
           sessions: yield* adapter.listSessions(),
           closeCallsDuringRun: [...runtimeMock.state.closeCalls],
@@ -337,6 +344,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const openedFiber = yield* adapter.streamEvents.pipe(
         Stream.filter(
           (event) => event.threadId === threadId && event.type === "user-input.requested",
@@ -355,8 +363,10 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const first = yield* adapter
         .respondToUserInput(threadId, ApprovalRequestId.make("que_expired"), { File: "a.ts" })
         .pipe(Effect.flip);
+
       NodeAssert.ok(first._tag === "ProviderAdapterRequestError");
       NodeAssert.equal(first.retryable === true, retryable);
+
       if (!retryable) {
         NodeAssert.equal(first.detail, "Unknown pending user-input request: que_expired");
       }
@@ -364,11 +374,14 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const second = yield* adapter
         .respondToUserInput(threadId, ApprovalRequestId.make("que_expired"), { File: "a.ts" })
         .pipe(Effect.flip);
+
       NodeAssert.ok(second._tag === "ProviderAdapterRequestError");
       NodeAssert.equal(second.retryable === true, retryable);
+
       if (!retryable) {
         NodeAssert.equal(second.detail, "Unknown pending user-input request: que_expired");
       }
+
       NodeAssert.deepEqual(
         runtimeMock.state.questionReplyCalls,
         retryable ? ["que_expired", "que_expired"] : ["que_expired"],
@@ -385,9 +398,11 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const adapter = yield* OpenCodeAdapter;
       const threadId = asThreadId("thread-opencode-full-access-auto-reply-timeout");
       let startReply!: () => void;
+
       const replyStarted = new Promise<void>((resolve) => {
         startReply = resolve;
       });
+
       let aborted = false;
       runtimeMock.state.permissionReplyImplementation = (_requestID, _reply, signal) =>
         new Promise<void>((_resolve, reject) => {
@@ -414,6 +429,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           },
         },
       ];
+
       const openedFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.threadId === threadId && event.type === "request.opened"),
         Stream.runHead,

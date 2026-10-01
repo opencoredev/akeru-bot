@@ -46,6 +46,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           const codexInstanceId = ProviderInstanceId.make("codex");
           const claudeDriver = ProviderDriverKind.make("claudeAgent");
           const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
+
           const codexProvider = {
             instanceId: codexInstanceId,
             driver: codexDriver,
@@ -59,6 +60,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             slashCommands: [],
             skills: [],
           } as const satisfies ServerProvider;
+
           const claudeProvider = {
             instanceId: claudeInstanceId,
             driver: claudeDriver,
@@ -72,6 +74,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             slashCommands: [],
             skills: [],
           } as const satisfies ServerProvider;
+
           const makeInstance = (provider: ServerProvider): ProviderInstance => ({
             instanceId: provider.instanceId,
             driverKind: provider.driver,
@@ -93,12 +96,14 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             adapter: {} as ProviderInstance["adapter"],
             textGeneration: {} as ProviderInstance["textGeneration"],
           });
+
           const codexInstance = makeInstance(codexProvider);
           const claudeInstance = makeInstance(claudeProvider);
           const changes = yield* PubSub.unbounded<void>();
           const instancesRef = yield* Ref.make<ReadonlyArray<ProviderInstance>>([codexInstance]);
           const failNextList = yield* Ref.make(false);
           const wait = () => Effect.yieldNow;
+
           const instanceRegistryLayer = Layer.succeed(
             ProviderInstanceRegistry.ProviderInstanceRegistry,
             {
@@ -118,10 +123,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 ),
               listInstances: Effect.gen(function* () {
                 const shouldFail = yield* Ref.get(failNextList);
+
                 if (shouldFail) {
                   yield* Ref.set(failNextList, false);
+
                   return yield* Effect.die(new Error("simulated registry list failure"));
                 }
+
                 return yield* Ref.get(instancesRef);
               }),
               listUnavailable: Effect.succeed([]),
@@ -129,8 +137,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               subscribeChanges: PubSub.subscribe(changes),
             },
           );
+
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+
           const runtimeServices = yield* Layer.build(
             ProviderRegistryLive.pipe(
               Layer.provideMerge(instanceRegistryLayer),
@@ -155,6 +165,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             yield* PubSub.publish(changes, undefined);
 
             let providers = yield* registry.getProviders;
+
             for (
               let attempt = 0;
               attempt < 50 &&
@@ -202,8 +213,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               }),
             ),
           );
+
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+
           const providerRegistryLayer = ProviderRegistryLive.pipe(
             Layer.provideMerge(ProviderInstanceRegistryHydrationLive),
             Layer.provideMerge(
@@ -226,6 +239,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             Layer.provideMerge(NodeServices.layer),
             Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
           );
+
           const runtimeServices = yield* Layer.build(providerRegistryLayer).pipe(
             Scope.provide(scope),
           );
@@ -268,9 +282,11 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 }),
               ),
             );
+
             let cursorSpawned = false;
             const scope = yield* Scope.make();
             yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+
             const providerRegistryLayer = ProviderRegistryLive.pipe(
               Layer.provideMerge(ProviderInstanceRegistryHydrationLive),
               Layer.provideMerge(
@@ -296,7 +312,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   if (command === "cursor-agent") {
                     cursorSpawned = true;
                   }
+
                   const joined = args.join(" ");
+
                   if (joined === "--version") {
                     return {
                       stdout: `${command} 1.0.0\n`,
@@ -304,6 +322,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                       code: 0,
                     };
                   }
+
                   if (joined === "auth status") {
                     return {
                       stdout: '{"authenticated":true}\n',
@@ -311,10 +330,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                       code: 0,
                     };
                   }
+
                   throw new Error(`Unexpected args: ${command} ${joined}`);
                 }),
               ),
             );
+
             const runtimeServices = yield* Layer.build(
               Layer.mergeAll(
                 Layer.succeed(ServerSettingsModule.ServerSettingsService, serverSettings),

@@ -44,9 +44,11 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some" || firstEvent.value.type !== "request.opened") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.payload.requestType, "mcp_elicitation_approval");
       NodeAssert.equal(firstEvent.value.payload.appName, "Safari");
       NodeAssert.equal(firstEvent.value.payload.detail, "Allow ChatGPT to use Safari?");
@@ -82,9 +84,11 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some" || firstEvent.value.type !== "request.resolved") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.payload.requestType, "mcp_elicitation_approval");
       NodeAssert.equal(firstEvent.value.payload.decision, "acceptAlways");
     }),
@@ -117,13 +121,17 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
 
       NodeAssert.equal(firstEvent._tag, "Some");
+
       if (firstEvent._tag !== "Some") {
         return;
       }
+
       NodeAssert.equal(firstEvent.value.type, "user-input.resolved");
+
       if (firstEvent.value.type !== "user-input.resolved") {
         return;
       }
+
       NodeAssert.deepEqual(firstEvent.value.payload.answers, {
         scope: [],
       });
@@ -137,6 +145,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
     () =>
       Effect.gen(function* () {
         const { adapter, runtime } = yield* startLifecycleRuntime();
+
         const eventsFiber = yield* Stream.runCollect(Stream.take(adapter.streamEvents, 2)).pipe(
           Effect.forkChild,
         );
@@ -187,6 +196,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
         const events = Array.from(yield* Fiber.join(eventsFiber));
         NodeAssert.equal(events[0]?.type, "user-input.requested");
+
         if (events[0]?.type === "user-input.requested") {
           NodeAssert.equal(events[0].requestId, "req-user-input-1");
           NodeAssert.equal(events[0].payload.questions[0]?.id, "sandbox_mode");
@@ -194,6 +204,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         }
 
         NodeAssert.equal(events[1]?.type, "user-input.resolved");
+
         if (events[1]?.type === "user-input.resolved") {
           NodeAssert.equal(events[1].requestId, "req-user-input-1");
           NodeAssert.deepEqual(events[1].payload.answers, {

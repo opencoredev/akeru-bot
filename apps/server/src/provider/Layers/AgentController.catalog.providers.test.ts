@@ -61,6 +61,7 @@ describe("usesMastraCode", () => {
     for (const provider of ["codex", "claudeAgent", "grok", "kimi", "opencodeGo"]) {
       expect(usesMastraCode(ProviderDriverKind.make(provider))).toBe(true);
     }
+
     // Standard OpenCode runs on the legacy bridge, which registers no tool session.
     expect(usesMastraCode(ProviderDriverKind.make("opencode"))).toBe(false);
   });
@@ -109,11 +110,14 @@ describe("AgentControllerLive", () => {
     () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       const memoryDir = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "akeru-mcp-gate-legacy-"),
       );
+
       const botMemoryStore = new BotMemoryStore(memoryDir);
       const botId = BotId.make("bot-mcp-gate-legacy");
+
       const access = {
         tenantId: AkeruMemoryTenantId.make("local"),
         userId: AkeruMemoryUserId.make("owner"),
@@ -125,12 +129,15 @@ describe("AgentControllerLive", () => {
         respondingBotId: botId,
         groupMemberBotIds: [],
       } as const;
+
       const credentials = makeMemoryOnlyCredentialOptions();
+
       const callMemoryTool = (input: { target: string; operations: Array<unknown> }) =>
         Effect.tryPromise({
           try: () => {
             const handler = McpMemoryToolSession.readMcpMemoryToolSession(claudeThreadId);
             assert.isDefined(handler);
+
             return handler({
               threadId: String(claudeThreadId),
               toolId: "memory",
@@ -169,24 +176,29 @@ describe("AgentControllerLive", () => {
             target: "user",
             operations: [{ action: "add", content: "The user prefers vim." }],
           });
+
           expect(enabled).toMatchObject({ success: true, changed: true });
 
           // The handler stays registered between turns, so it must re-check the
           // Memory setting on every call.
           yield* settings.updateSettings({ memory: { enabled: false } });
+
           const denied = yield* callMemoryTool({
             target: "user",
             operations: [],
           }).pipe(Effect.result);
+
           assert.equal(denied._tag, "Failure");
           expect(denied._tag === "Failure" ? denied.failure.cause.message : "").toContain(
             "disabled",
           );
           yield* controller.sendTurn({ threadId: claudeThreadId, input: "Memory off turn." });
+
           const deniedDuringTurn = yield* callMemoryTool({
             target: "user",
             operations: [],
           }).pipe(Effect.result);
+
           assert.equal(deniedDuringTurn._tag, "Failure");
           expect(
             deniedDuringTurn._tag === "Failure" ? deniedDuringTurn.failure.cause.message : "",
@@ -221,6 +233,7 @@ describe("AgentControllerLive", () => {
   it.effect("fails closed for MCP tools missing from the manager index", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
@@ -230,9 +243,11 @@ describe("AgentControllerLive", () => {
       })),
       getServerStatuses: vi.fn(() => []),
     };
+
     const makeMcpManager: NonNullable<AgentControllerLiveOptions["makeMcpManager"]> = vi.fn(
       () => mcpManager as never,
     );
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -258,12 +273,15 @@ describe("AgentControllerLive", () => {
         });
 
         const events: ProviderRuntimeEvent[] = [];
+
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Use tools." });
+
         for (const [toolCallId, toolName, args] of [
           ["builtin-safe", "execute_command", { command: "bun test" }],
           ["indexed-read", "indexed_read", { query: "status" }],
@@ -277,6 +295,7 @@ describe("AgentControllerLive", () => {
             args,
           } as AgentControllerEvent);
         }
+
         yield* Effect.yieldNow;
 
         expect(mastra.session.respondToToolApproval).toHaveBeenCalledWith({
@@ -311,15 +330,19 @@ describe("AgentControllerLive", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mastra-mcp-"));
+
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({ "builtin-exa_search": {}, akeru_preview_status: {} })),
       getServerStatuses: vi.fn(() => [{ name: "builtin-exa", connected: true }]),
     };
+
     const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
+
     const makeMcpManager: NonNullable<AgentControllerLiveOptions["makeMcpManager"]> =
       makeMcpManagerMock;
+
     const exaServer = {
       id: McpServerId.make("builtin-exa"),
       name: "Exa",
@@ -334,6 +357,7 @@ describe("AgentControllerLive", () => {
       Effect.gen(function* () {
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
+
         const session = yield* controller.startSession(codexThreadId, {
           threadId: codexThreadId,
           provider: ProviderDriverKind.make("codex"),
@@ -480,10 +504,12 @@ describe("AgentControllerLive", () => {
         });
 
         const events: ProviderRuntimeEvent[] = [];
+
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Control this Mac." });
         mastra.emit({
@@ -538,10 +564,12 @@ describe("AgentControllerLive", () => {
         expect(serialized).not.toContain("private/tester");
         expect(serialized).not.toContain("raw frame");
         expect(serialized).not.toContain("private content");
+
         const approval = events.find(
           (event): event is Extract<ProviderRuntimeEvent, { readonly type: "request.opened" }> =>
             event.type === "request.opened" && event.requestId === "computer-use-1",
         );
+
         assert.isDefined(approval);
         assert.isDefined(approval.payload.options);
         expect(approval.payload.options.map((option) => option.decision)).toEqual([

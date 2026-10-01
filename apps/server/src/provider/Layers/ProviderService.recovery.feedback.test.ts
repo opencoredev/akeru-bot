@@ -47,22 +47,28 @@ it.effect(
       const baseRegistry = makeAdapterRegistryMock({ [CODEX_DRIVER]: original.adapter });
       let swapAfterFirstLookup = false;
       let feedbackLookupCount = 0;
+
       const registry: ProviderAdapterRegistry.ProviderAdapterRegistry["Service"] = {
         ...baseRegistry,
         getByInstance: (instanceId) => {
           if (instanceId !== codexInstanceId) {
             return baseRegistry.getByInstance(instanceId);
           }
+
           const useReplacement = swapAfterFirstLookup && feedbackLookupCount++ > 0;
+
           return Effect.succeed(useReplacement ? replacement.adapter : original.adapter);
         },
       };
+
       const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
         Layer.provide(SqlitePersistenceMemory),
       );
+
       const directoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
       );
+
       const providerLayer = makeProviderServiceLive().pipe(
         Layer.provide(Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, registry)),
         Layer.provide(directoryLayer),
@@ -105,14 +111,17 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
     const dbPath = NodePath.join(tempDir, "orchestration.sqlite");
 
     const codex = makeFakeCodexAdapter();
+
     const registry = makeAdapterRegistryMock({
       [ProviderDriverKind.make("codex")]: codex.adapter,
     });
 
     const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(persistenceLayer),
     );
+
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
 
     yield* Effect.gen(function* () {
@@ -141,26 +150,32 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
 
     const persistedProvider = yield* Effect.gen(function* () {
       const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+
       return yield* directory.getProvider(asThreadId("thread-stale"));
     }).pipe(Effect.provide(directoryLayer));
+
     assert.equal(persistedProvider, "codex");
 
     const runtime = yield* Effect.gen(function* () {
       const repository = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+
       return yield* repository.getByThreadId({
         threadId: asThreadId("thread-stale"),
       });
     }).pipe(Effect.provide(runtimeRepositoryLayer));
+
     assert.equal(Option.isSome(runtime), true);
 
     const legacyTableRows = yield* Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+
       return yield* sql<{ readonly name: string }>`
         SELECT name
         FROM sqlite_master
         WHERE type = 'table' AND name = 'provider_sessions'
       `;
     }).pipe(Effect.provide(persistenceLayer));
+
     assert.equal(legacyTableRows.length, 0);
 
     NodeFS.rmSync(tempDir, { recursive: true, force: true });
@@ -174,13 +189,16 @@ it.effect(
       const tempDir = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "t3-provider-service-restart-"),
       );
+
       const dbPath = NodePath.join(tempDir, "orchestration.sqlite");
       const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+
       const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
         Layer.provide(persistenceLayer),
       );
 
       const firstCodex = makeFakeCodexAdapter();
+
       const firstRegistry = makeAdapterRegistryMock({
         [ProviderDriverKind.make("codex")]: firstCodex.adapter,
       });
@@ -188,6 +206,7 @@ it.effect(
       const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
       );
+
       const firstProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
           Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, firstRegistry),
@@ -202,6 +221,7 @@ it.effect(
           ),
         ),
       );
+
       const updatedResumeCursor = {
         threadId: asThreadId("thread-1"),
         resume: "resume-session-1",
@@ -212,6 +232,7 @@ it.effect(
       const startedSession = yield* Effect.gen(function* () {
         const provider = yield* ProviderService.ProviderService;
         const threadId = asThreadId("thread-1");
+
         const session = yield* provider.startSession(threadId, {
           provider: ProviderDriverKind.make("codex"),
           providerInstanceId: codexInstanceId,
@@ -219,34 +240,42 @@ it.effect(
           runtimeMode: "full-access",
           threadId,
         });
+
         firstCodex.updateSession(threadId, (existing) => ({
           ...existing,
           status: "ready",
           resumeCursor: updatedResumeCursor,
           updatedAt: "2026-01-01T00:00:01.000Z",
         }));
+
         return session;
       }).pipe(Effect.provide(firstProviderLayer));
 
       const persistedAfterStopAll = yield* Effect.gen(function* () {
         const repository = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+
         return yield* repository.getByThreadId({
           threadId: startedSession.threadId,
         });
       }).pipe(Effect.provide(runtimeRepositoryLayer));
+
       assert.equal(Option.isSome(persistedAfterStopAll), true);
+
       if (Option.isSome(persistedAfterStopAll)) {
         assert.equal(persistedAfterStopAll.value.status, "stopped");
         assert.deepEqual(persistedAfterStopAll.value.resumeCursor, updatedResumeCursor);
       }
 
       const secondCodex = makeFakeCodexAdapter();
+
       const secondRegistry = makeAdapterRegistryMock({
         [ProviderDriverKind.make("codex")]: secondCodex.adapter,
       });
+
       const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
       );
+
       const secondProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
           Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, secondRegistry),
@@ -276,6 +305,7 @@ it.effect(
       assert.equal(secondCodex.startSession.mock.calls.length, 1);
       const resumedStartInput = secondCodex.startSession.mock.calls[0]?.[0];
       assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+
       if (resumedStartInput && typeof resumedStartInput === "object") {
         const startPayload = resumedStartInput as {
           provider?: string;
@@ -283,11 +313,13 @@ it.effect(
           resumeCursor?: unknown;
           threadId?: string;
         };
+
         assert.equal(startPayload.provider, "codex");
         assert.equal(startPayload.cwd, "/tmp/project");
         assert.deepEqual(startPayload.resumeCursor, updatedResumeCursor);
         assert.equal(startPayload.threadId, startedSession.threadId);
       }
+
       assert.equal(secondCodex.rollbackThread.mock.calls.length, 1);
       const rollbackCall = secondCodex.rollbackThread.mock.calls[0];
       assert.equal(typeof rollbackCall?.[0], "string");
@@ -357,6 +389,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         cwd: "/tmp/project",
         runtimeMode: "full-access",
       });
+
       yield* routing.codex.stopSession(initial.threadId);
       routing.codex.startSession.mockClear();
       routing.codex.rollbackThread.mockClear();
@@ -369,6 +402,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(routing.codex.startSession.mock.calls.length, 1);
       const resumedStartInput = routing.codex.startSession.mock.calls[0]?.[0];
       assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+
       if (resumedStartInput && typeof resumedStartInput === "object") {
         const startPayload = resumedStartInput as {
           provider?: string;
@@ -376,11 +410,13 @@ routing.layer("ProviderServiceLive routing", (it) => {
           resumeCursor?: unknown;
           threadId?: string;
         };
+
         assert.equal(startPayload.provider, "codex");
         assert.equal(startPayload.cwd, "/tmp/project");
         assert.deepEqual(startPayload.resumeCursor, initial.resumeCursor);
         assert.equal(startPayload.threadId, initial.threadId);
       }
+
       assert.equal(routing.codex.rollbackThread.mock.calls.length, 1);
       const rollbackCall = routing.codex.rollbackThread.mock.calls[0];
       assert.equal(rollbackCall?.[1], 1);
@@ -407,7 +443,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const persistedAfterStop = yield* runtimeRepository.getByThreadId({
         threadId: initial.threadId,
       });
+
       assert.equal(Option.isSome(persistedAfterStop), true);
+
       if (Option.isSome(persistedAfterStop)) {
         assert.equal(persistedAfterStop.value.status, "stopped");
         assert.deepEqual(persistedAfterStop.value.resumeCursor, initial.resumeCursor);
@@ -425,6 +463,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(routing.codex.startSession.mock.calls.length, 1);
       const resumedStartInput = routing.codex.startSession.mock.calls[0]?.[0];
       assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+
       if (resumedStartInput && typeof resumedStartInput === "object") {
         const startPayload = resumedStartInput as {
           provider?: string;
@@ -432,11 +471,13 @@ routing.layer("ProviderServiceLive routing", (it) => {
           resumeCursor?: unknown;
           threadId?: string;
         };
+
         assert.equal(startPayload.provider, "codex");
         assert.equal(startPayload.cwd, "/tmp/project-reap-preserve");
         assert.deepEqual(startPayload.resumeCursor, initial.resumeCursor);
         assert.equal(startPayload.threadId, initial.threadId);
       }
+
       assert.equal(routing.codex.sendTurn.mock.calls.length, 1);
     }),
   );
@@ -501,6 +542,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(routing.codex.startSession.mock.calls.length, 1);
       const resumedStartInput = routing.codex.startSession.mock.calls[0]?.[0];
       assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+
       if (resumedStartInput && typeof resumedStartInput === "object") {
         const startPayload = resumedStartInput as {
           provider?: string;
@@ -508,11 +550,13 @@ routing.layer("ProviderServiceLive routing", (it) => {
           resumeCursor?: unknown;
           threadId?: string;
         };
+
         assert.equal(startPayload.provider, "codex");
         assert.equal(startPayload.cwd, "/tmp/project-send-turn");
         assert.deepEqual(startPayload.resumeCursor, initial.resumeCursor);
         assert.equal(startPayload.threadId, initial.threadId);
       }
+
       assert.equal(routing.codex.sendTurn.mock.calls.length, 1);
     }),
   );
@@ -549,6 +593,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(routing.claude.startSession.mock.calls.length, 1);
       const resumedStartInput = routing.claude.startSession.mock.calls[0]?.[0];
       assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+
       if (resumedStartInput && typeof resumedStartInput === "object") {
         const startPayload = resumedStartInput as {
           provider?: string;
@@ -557,6 +602,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
           resumeCursor?: unknown;
           threadId?: string;
         };
+
         assert.equal(startPayload.provider, "claudeAgent");
         assert.equal(startPayload.cwd, "/tmp/project-claude-send-turn");
         assert.deepEqual(
@@ -568,6 +614,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         assert.deepEqual(startPayload.resumeCursor, initial.resumeCursor);
         assert.equal(startPayload.threadId, initial.threadId);
       }
+
       assert.equal(routing.claude.sendTurn.mock.calls.length, 1);
     }),
   );
@@ -580,12 +627,14 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const runtimeRepository = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
 
       const threadId = asThreadId("thread-runtime-status");
+
       const session = yield* provider.startSession(threadId, {
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
         threadId,
         runtimeMode: "full-access",
       });
+
       yield* provider.sendTurn({
         threadId: session.threadId,
         input: "hello",
@@ -595,12 +644,15 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const runningRuntime = yield* runtimeRepository.getByThreadId({
         threadId: session.threadId,
       });
+
       assert.equal(Option.isSome(runningRuntime), true);
+
       if (Option.isSome(runningRuntime)) {
         assert.equal(runningRuntime.value.status, "running");
         assert.deepEqual(runningRuntime.value.resumeCursor, session.resumeCursor);
         const payload = runningRuntime.value.runtimePayload;
         assert.equal(payload !== null && typeof payload === "object", true);
+
         if (payload !== null && typeof payload === "object" && !Array.isArray(payload)) {
           const runtimePayload = payload as {
             cwd: string;
@@ -609,6 +661,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
             lastError: string | null;
             lastRuntimeEvent: string | null;
           };
+
           assert.equal(runtimePayload.cwd, session.cwd);
           assert.equal(runtimePayload.model, null);
           assert.equal(runtimePayload.activeTurnId, `turn-${String(session.threadId)}`);

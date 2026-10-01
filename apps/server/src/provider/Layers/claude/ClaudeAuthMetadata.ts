@@ -1,15 +1,18 @@
 export function toTitleCaseWords(value: string): string {
   const parts: Array<string> = [];
+
   for (const part of value.split(/[\s_-]+/g)) {
     if (part.length > 0) {
       parts.push(part[0]!.toUpperCase() + part.slice(1).toLowerCase());
     }
   }
+
   return parts.join(" ");
 }
 
 export function claudeSubscriptionLabel(subscriptionType: string | undefined): string | undefined {
   const normalized = subscriptionType?.toLowerCase().replace(/[\s_-]+/g, "");
+
   if (!normalized) return undefined;
 
   switch (normalized) {
@@ -49,7 +52,9 @@ export function claudeSubscriptionLabel(subscriptionType: string | undefined): s
 
 export function normalizeClaudeAuthMethod(authMethod: string | undefined): string | undefined {
   const normalized = authMethod?.toLowerCase().replace(/[\s_-]+/g, "");
+
   if (!normalized) return undefined;
+
   if (
     normalized === "apikey" ||
     normalized === "anthropicapikey" ||
@@ -57,23 +62,28 @@ export function normalizeClaudeAuthMethod(authMethod: string | undefined): strin
   ) {
     return "apiKey";
   }
+
   return undefined;
 }
 
 export function formatClaudeSubscriptionAuthLabel(subscriptionType: string): string {
   const subscriptionLabel =
     claudeSubscriptionLabel(subscriptionType) ?? toTitleCaseWords(subscriptionType);
+
   const normalized = subscriptionLabel.toLowerCase().replace(/[\s_-]+/g, "");
 
   if (normalized.startsWith("claude") && normalized.endsWith("subscription")) {
     return subscriptionLabel;
   }
+
   if (normalized.startsWith("claude")) {
     return `${subscriptionLabel} Subscription`;
   }
+
   if (normalized.endsWith("subscription")) {
     return `Claude ${subscriptionLabel}`;
   }
+
   return `Claude ${subscriptionLabel} Subscription`;
 }
 

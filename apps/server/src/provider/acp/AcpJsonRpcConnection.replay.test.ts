@@ -91,6 +91,7 @@ describe("AcpSessionRuntime", () => {
       const unexpectedReplayEvent = yield* Stream.runHead(runtime.getEvents()).pipe(
         Effect.timeoutOption("100 millis"),
       );
+
       expect(Option.isNone(unexpectedReplayEvent)).toBe(true);
     }).pipe(
       Effect.provide(

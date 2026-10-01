@@ -164,9 +164,11 @@ export class FakeCodexRuntime implements CodexSessionRuntimeShape {
 export function makeCodexAdapterHarness() {
   function makeRuntimeFactory() {
     const runtimes: Array<FakeCodexRuntime> = [];
+
     const factory = vi.fn((options: CodexSessionRuntimeOptions) => {
       const runtime = new FakeCodexRuntime(options);
       runtimes.push(runtime);
+
       return Effect.succeed(runtime);
     });
 
@@ -200,6 +202,7 @@ export function makeCodexAdapterHarness() {
 
         const runtime = new FakeCodexRuntime(runtimeOptions);
         runtimes.push(runtime);
+
         return runtime;
       }),
     );
@@ -229,6 +232,7 @@ export function makeCodexAdapterHarness() {
       CodexAdapter,
       Effect.gen(function* () {
         const codexConfig = decodeCodexSettings({});
+
         return yield* makeCodexAdapter(codexConfig, {
           makeRuntime: validationRuntimeFactory.factory,
         });
@@ -248,6 +252,7 @@ export function makeCodexAdapterHarness() {
       CodexAdapter,
       Effect.gen(function* () {
         const codexConfig = decodeCodexSettings({});
+
         return yield* makeCodexAdapter(codexConfig, {
           makeRuntime: sessionRuntimeFactory.factory,
         });
@@ -267,6 +272,7 @@ export function makeCodexAdapterHarness() {
       CodexAdapter,
       Effect.gen(function* () {
         const codexConfig = decodeCodexSettings({});
+
         return yield* makeCodexAdapter(codexConfig, {
           makeRuntime: lifecycleRuntimeFactory.factory,
         });
@@ -289,6 +295,7 @@ export function makeCodexAdapterHarness() {
       });
       const runtime = lifecycleRuntimeFactory.lastRuntime;
       NodeAssert.ok(runtime);
+
       return { adapter, runtime };
     });
   }
@@ -300,6 +307,7 @@ export function makeCodexAdapterHarness() {
       CodexAdapter,
       Effect.gen(function* () {
         const codexConfig = decodeCodexSettings({});
+
         return yield* makeCodexAdapter(codexConfig, {
           makeRuntime: scopedLifecycleRuntimeFactory.factory,
         });
@@ -319,6 +327,7 @@ export function makeCodexAdapterHarness() {
       CodexAdapter,
       Effect.gen(function* () {
         const codexConfig = decodeCodexSettings({});
+
         return yield* makeCodexAdapter(codexConfig, {
           makeRuntime: scopedFailureRuntimeFactory.factory,
         });
@@ -330,6 +339,7 @@ export function makeCodexAdapterHarness() {
       Layer.provideMerge(NodeServices.layer),
     ),
   );
+
   return {
     makeRuntimeFactory,
     makeScopedRuntimeFactory,

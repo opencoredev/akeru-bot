@@ -40,17 +40,22 @@ describe("AgentControllerLive", () => {
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-delegated-memory-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const readMemory = vi.spyOn(botMemoryStore, "readPromptSnapshot");
+
     const mcpManager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({ exa_search: {} })),
       getServerStatuses: vi.fn(() => [{ name: "web", connected: true }]),
     };
+
     const makeMcpManagerMock = vi.fn((_dataDir, _configDir, _servers) => mcpManager as never);
+
     const makeMcpManager: NonNullable<AgentControllerLiveOptions["makeMcpManager"]> =
       makeMcpManagerMock;
+
     const webId = McpServerId.make("web");
     const emailId = McpServerId.make("email");
+
     const access: AkeruDelegationAccessGrant = {
       allowedToolIds: ["Read", "ExternalRead", "CopyToBox", "CopyFromBox"],
       memoryScopes: [],
@@ -61,6 +66,7 @@ describe("AgentControllerLive", () => {
       disabledMcpServerIds: [emailId],
       approvalCeiling: "send",
     };
+
     const runtime = {
       send: vi.fn(async () => ({
         delegationId: DelegationId.make("delegation-child"),
@@ -75,6 +81,7 @@ describe("AgentControllerLive", () => {
       parentFinished: vi.fn(async () => undefined),
       accessForThread: () => access,
     };
+
     const layer = makeLayer(
       bridge.service,
       mastra.factory,
@@ -84,6 +91,7 @@ describe("AgentControllerLive", () => {
       { botMemoryStore },
       runtime,
     );
+
     const server = (id: typeof webId, name: string) => ({
       id,
       name,
@@ -97,6 +105,7 @@ describe("AgentControllerLive", () => {
     return Effect.gen(function* () {
       const controller = yield* AgentController;
       yield* resolveCodex(controller);
+
       const session = yield* controller.startSession(codexThreadId, {
         threadId: codexThreadId,
         provider: ProviderDriverKind.make("codex"),
@@ -122,9 +131,11 @@ describe("AgentControllerLive", () => {
       expect(makeMcpManagerMock.mock.calls[0]?.[2]).toEqual({
         web: { url: "https://web.example/mcp" },
       });
+
       const toolIds = mastra.harnessOptions[0]?.toolRuntime
         .toolsForThread(String(codexThreadId))
         .map((tool) => tool.id);
+
       expect(toolIds).not.toContain("ExternalRead");
       expect(toolIds).not.toContain("CopyToBox");
       expect(toolIds).not.toContain("CopyFromBox");
@@ -147,12 +158,14 @@ describe("AgentControllerLive", () => {
   it.effect("re-acquires the user-computer workspace when cwd changes locally", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const makeBotBrowser = vi.fn(() => ({
       tools: {},
       attachment: vi.fn(async () => undefined),
       reconnect: vi.fn(async () => undefined),
       close: vi.fn(async () => undefined),
     }));
+
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeBotBrowser: makeBotBrowser as never,
@@ -173,6 +186,7 @@ describe("AgentControllerLive", () => {
       yield* resolveCodex(controller);
       const firstCwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-cwd-a-"));
       const secondCwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-cwd-b-"));
+
       try {
         const input = {
           threadId: codexThreadId,
@@ -181,6 +195,7 @@ describe("AgentControllerLive", () => {
           modelSelection: codexSelection,
           runtimeMode: "full-access" as const,
         };
+
         yield* controller.startSession(codexThreadId, { ...input, cwd: firstCwd });
         yield* controller.startSession(codexThreadId, { ...input, cwd: secondCwd });
 

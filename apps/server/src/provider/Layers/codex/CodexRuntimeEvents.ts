@@ -31,6 +31,7 @@ export function mapToRuntimeEvents(
   }
 
   const requestEvents = mapCodexRequestEvents(event, canonicalThreadId);
+
   if (requestEvents !== undefined) return requestEvents;
 
   if (event.method === "session/connecting") {
@@ -87,9 +88,11 @@ export function mapToRuntimeEvents(
 
   if (event.method === "thread/started") {
     const payload = readPayload(EffectCodexSchema.V2ThreadStartedNotification, event.payload);
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -112,6 +115,7 @@ export function mapToRuntimeEvents(
       event.method === "thread/status/changed"
         ? readPayload(EffectCodexSchema.V2ThreadStatusChangedNotification, event.payload)
         : undefined;
+
     return [
       {
         type: "thread.state.changed",
@@ -135,6 +139,7 @@ export function mapToRuntimeEvents(
 
   if (event.method === "thread/name/updated") {
     const payload = readPayload(EffectCodexSchema.V2ThreadNameUpdatedNotification, event.payload);
+
     return [
       {
         type: "thread.metadata.updated",
@@ -161,15 +166,19 @@ export function mapToRuntimeEvents(
       EffectCodexSchema.V2ThreadTokenUsageUpdatedNotification,
       event.payload,
     );
+
     if (!payload) {
       return [];
     }
+
     const normalizedUsage = normalizeCodexTokenUsage(
       payload.tokenUsage,
       tokenUsageByTurnId?.get(payload.turnId),
     );
+
     if (!normalizedUsage) return [];
     tokenUsageByTurnId?.set(payload.turnId, normalizedUsage.total);
+
     return [
       {
         type: "thread.token-usage.updated",
@@ -183,10 +192,13 @@ export function mapToRuntimeEvents(
 
   if (event.method === "turn/started") {
     const turnId = event.turnId;
+
     if (!turnId) {
       return [];
     }
+
     tokenUsageByTurnId?.delete(turnId);
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -199,11 +211,14 @@ export function mapToRuntimeEvents(
 
   if (event.method === "turn/completed") {
     const payload = readPayload(EffectCodexSchema.V2TurnCompletedNotification, event.payload);
+
     if (!payload) {
       return [];
     }
+
     if (event.turnId) tokenUsageByTurnId?.delete(event.turnId);
     const errorMessage = trimText(payload.turn.error?.message);
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -218,6 +233,7 @@ export function mapToRuntimeEvents(
 
   if (event.method === "turn/aborted") {
     if (event.turnId) tokenUsageByTurnId?.delete(event.turnId);
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -231,9 +247,11 @@ export function mapToRuntimeEvents(
 
   if (event.method === "turn/plan/updated") {
     const payload = readPayload(EffectCodexSchema.V2TurnPlanUpdatedNotification, event.payload);
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -252,9 +270,11 @@ export function mapToRuntimeEvents(
 
   if (event.method === "turn/diff/updated") {
     const payload = readPayload(EffectCodexSchema.V2TurnDiffUpdatedNotification, event.payload);
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -268,21 +288,27 @@ export function mapToRuntimeEvents(
 
   if (event.method === "item/started") {
     const started = mapItemLifecycle(event, canonicalThreadId, "item.started");
+
     return started ? [started] : [];
   }
 
   if (event.method === "item/completed") {
     const payload = readPayload(EffectCodexSchema.V2ItemCompletedNotification, event.payload);
     const item = payload?.item;
+
     if (!item) {
       return [];
     }
+
     const itemType = toCanonicalItemType(item.type);
+
     if (itemType === "plan") {
       const detail = itemDetail(itemType, item);
+
       if (!detail) {
         return [];
       }
+
       return [
         {
           ...runtimeEventBase(event, canonicalThreadId),
@@ -293,7 +319,9 @@ export function mapToRuntimeEvents(
         },
       ];
     }
+
     const completed = mapItemLifecycle(event, canonicalThreadId, "item.completed");
+
     return completed ? [completed] : [];
   }
 
@@ -317,9 +345,11 @@ export function mapToRuntimeEvents(
   if (event.method === "item/plan/delta") {
     const payload = readPayload(EffectCodexSchema.V2PlanDeltaNotification, event.payload);
     const delta = event.textDelta ?? payload?.delta;
+
     if (!delta || delta.length === 0) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -334,9 +364,11 @@ export function mapToRuntimeEvents(
   if (event.method === "item/agentMessage/delta") {
     const payload = readPayload(EffectCodexSchema.V2AgentMessageDeltaNotification, event.payload);
     const delta = event.textDelta ?? payload?.delta;
+
     if (!delta || delta.length === 0) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -354,10 +386,13 @@ export function mapToRuntimeEvents(
       EffectCodexSchema.V2CommandExecutionOutputDeltaNotification,
       event.payload,
     );
+
     const delta = event.textDelta ?? payload?.delta;
+
     if (!delta || delta.length === 0) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -375,10 +410,13 @@ export function mapToRuntimeEvents(
       EffectCodexSchema.V2FileChangeOutputDeltaNotification,
       event.payload,
     );
+
     const delta = event.textDelta ?? payload?.delta;
+
     if (!delta || delta.length === 0) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -396,10 +434,13 @@ export function mapToRuntimeEvents(
       EffectCodexSchema.V2ReasoningSummaryTextDeltaNotification,
       event.payload,
     );
+
     const delta = event.textDelta ?? payload?.delta;
+
     if (!delta || delta.length === 0) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -416,9 +457,11 @@ export function mapToRuntimeEvents(
   if (event.method === "item/reasoning/textDelta") {
     const payload = readPayload(EffectCodexSchema.V2ReasoningTextDeltaNotification, event.payload);
     const delta = event.textDelta ?? payload?.delta;
+
     if (!delta || delta.length === 0) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -434,9 +477,11 @@ export function mapToRuntimeEvents(
 
   if (event.method === "item/mcpToolCall/progress") {
     const payload = readPayload(EffectCodexSchema.V2McpToolCallProgressNotification, event.payload);
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -453,10 +498,13 @@ export function mapToRuntimeEvents(
       EffectCodexSchema.V2ServerRequestResolvedNotification,
       event.payload,
     );
+
     if (!payload) {
       return [];
     }
+
     const requestType = toRequestTypeFromKind(event.requestKind);
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -471,9 +519,11 @@ export function mapToRuntimeEvents(
 
   if (event.method === "item/tool/requestUserInput/answered") {
     const payload = readPayload(EffectCodexSchema.ToolRequestUserInputResponse, event.payload);
+
     if (!payload) {
       return [];
     }
+
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),

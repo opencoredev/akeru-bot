@@ -34,6 +34,7 @@ export function toMcpServerConfig(
   browser?: BotBrowserAttachment,
 ): McpServerConfig {
   const runtimeHeaders = getMcpRuntimeHeaders(server);
+
   if (server.transport === "stdio") {
     const browserAttachment =
       browser && mcpServerNeedsBrowserAttachment(server, browser.availableToHostedPlugins)
@@ -43,6 +44,7 @@ export function toMcpServerConfig(
             AKERU_BROWSER_MCP_HEADERS: JSON.stringify(browser.localRequestHeaders),
           }
         : undefined;
+
     return {
       command: server.command,
       ...(server.args ? { args: [...server.args] } : {}),
@@ -60,6 +62,7 @@ export function toMcpServerConfig(
           "x-akeru-browser-mcp-headers": JSON.stringify(browser.requestHeaders),
         }
       : runtimeHeaders;
+
   return {
     url: server.url,
     ...(Object.keys(browserHeaders).length > 0 ? { headers: browserHeaders } : {}),

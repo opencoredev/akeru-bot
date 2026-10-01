@@ -48,9 +48,11 @@ export function createCodexNotifications(deps: {
       if (notification.method === "thread/started") {
         const thread = notification.params.thread;
         const spawn = readThreadSpawnSource(thread);
+
         if (!spawn) {
           return false;
         }
+
         // Merge with any subAgentActivity registration that got here
         // first. spawnTurnId is REGISTRATION-time-only on both paths: for
         // an already-known child we keep its value (set or unset) — a
@@ -59,9 +61,11 @@ export function createCodexNotifications(deps: {
         // child onto a new fleet's CTA (review finding). Only a genuinely
         // new registration captures the current turn.
         const existingChild = (yield* Ref.get(deps.collabChildAgentsRef)).get(thread.id);
+
         const spawnTurnId = existingChild
           ? existingChild.spawnTurnId
           : ((yield* Ref.get(deps.sessionRef)).activeTurnId ?? undefined);
+
         const state: CollabChildAgentState = {
           agentThreadId: thread.id,
           nickname: spawn.nickname ?? thread.agentNickname ?? existingChild?.nickname,
@@ -72,9 +76,11 @@ export function createCodexNotifications(deps: {
             spawn.parentThreadId ?? thread.parentThreadId ?? existingChild?.parentThreadId,
           spawnTurnId,
         };
+
         yield* Ref.update(deps.collabChildAgentsRef, (current) => {
           const next = new Map(current);
           next.set(thread.id, state);
+
           return next;
         });
         yield* deps.emitEvent({
@@ -91,6 +97,7 @@ export function createCodexNotifications(deps: {
             ...(state.parentThreadId ? { parentThreadId: state.parentThreadId } : {}),
           },
         });
+
         return true;
       }
 
@@ -108,6 +115,7 @@ export function createCodexNotifications(deps: {
         // assistant message and turn/completed — so the thread hung
         // "working" after all subagents finished (live-probe finding).
         const rootProviderThreadId = currentProviderThreadId(yield* Ref.get(deps.sessionRef));
+
         if (
           item.agentThreadId === rootProviderThreadId ||
           item.agentPath === "/root" ||
@@ -115,6 +123,7 @@ export function createCodexNotifications(deps: {
         ) {
           return false;
         }
+
         const activitySpawnTurnId = (yield* Ref.get(deps.sessionRef)).activeTurnId ?? undefined;
         yield* Ref.update(deps.collabChildAgentsRef, (current) => {
           const existing = current.get(item.agentThreadId);
@@ -137,6 +146,7 @@ export function createCodexNotifications(deps: {
             parentThreadId: existing?.parentThreadId,
             spawnTurnId: existing ? existing.spawnTurnId : activitySpawnTurnId,
           });
+
           return next;
         });
         const registeredChild = (yield* Ref.get(deps.collabChildAgentsRef)).get(item.agentThreadId);
@@ -151,45 +161,56 @@ export function createCodexNotifications(deps: {
             activityKind: item.kind,
           },
         });
+
         return true;
       }
 
       // Interception: notifications addressed to a registered child thread
       // become agent-scoped synthetic events instead of parent chatter.
       const providerConversationId = readNotificationThreadId(notification);
+
       if (!providerConversationId) {
         return false;
       }
+
       // Belt-and-braces: the root thread's traffic must never be
       // intercepted, whatever the registry says.
       const interceptRootId = currentProviderThreadId(yield* Ref.get(deps.sessionRef));
+
       if (providerConversationId === interceptRootId) {
         return false;
       }
+
       const children = yield* Ref.get(deps.collabChildAgentsRef);
       const child = children.get(providerConversationId);
+
       if (!child) {
         return false;
       }
+
       const childIdentity = {
         agentThreadId: child.agentThreadId,
         ...(child.nickname ? { nickname: child.nickname } : {}),
         ...(child.role ? { role: child.role } : {}),
         ...(child.agentPath ? { agentPath: child.agentPath } : {}),
       };
+
       switch (notification.method) {
         case "turn/started": {
           const childTurnId =
             typeof (notification.params as { turn?: { id?: unknown } }).turn?.id === "string"
               ? ((notification.params as { turn: { id: string } }).turn.id as string)
               : undefined;
+
           if (childTurnId) {
             yield* Ref.update(deps.collabChildLiveTurnsRef, (current) => {
               const next = new Map(current);
               next.set(child.agentThreadId, childTurnId);
+
               return next;
             });
           }
+
           yield* deps.emitEvent({
             kind: "notification",
             threadId: deps.options.threadId,
@@ -197,12 +218,15 @@ export function createCodexNotifications(deps: {
             method: "collabAgent/turnStarted",
             payload: childIdentity,
           });
+
           return true;
         }
+
         case "turn/completed":
           yield* Ref.update(deps.collabChildLiveTurnsRef, (current) => {
             const next = new Map(current);
             next.delete(child.agentThreadId);
+
             return next;
           });
           yield* deps.emitEvent({
@@ -215,6 +239,7 @@ export function createCodexNotifications(deps: {
               turn: notification.params.turn,
             },
           });
+
           return true;
         case "thread/status/changed":
           yield* deps.emitEvent({
@@ -227,6 +252,7 @@ export function createCodexNotifications(deps: {
               status: notification.params.status,
             },
           });
+
           return true;
         case "thread/tokenUsage/updated":
           yield* deps.emitEvent({
@@ -239,6 +265,7 @@ export function createCodexNotifications(deps: {
               tokenUsage: notification.params.tokenUsage,
             },
           });
+
           return true;
         case "item/started":
         case "item/completed":
@@ -252,6 +279,7 @@ export function createCodexNotifications(deps: {
               item: notification.params.item,
             },
           });
+
           return true;
         case "thread/closed":
           // The child is gone: drop its live-turn entry so a later Stop
@@ -260,6 +288,7 @@ export function createCodexNotifications(deps: {
           yield* Ref.update(deps.collabChildLiveTurnsRef, (current) => {
             const next = new Map(current);
             next.delete(child.agentThreadId);
+
             return next;
           });
           yield* deps.emitEvent({
@@ -269,6 +298,7 @@ export function createCodexNotifications(deps: {
             method: "collabAgent/closed",
             payload: childIdentity,
           });
+
           return true;
         case "error": {
           // A child error must surface as a failed agent, not vanish into
@@ -280,12 +310,15 @@ export function createCodexNotifications(deps: {
           // like thread/closed and reuse the statusChanged systemError
           // path.
           const willRetry = (notification.params as { willRetry?: boolean }).willRetry === true;
+
           if (willRetry) {
             return true;
           }
+
           yield* Ref.update(deps.collabChildLiveTurnsRef, (current) => {
             const next = new Map(current);
             next.delete(child.agentThreadId);
+
             return next;
           });
           yield* deps.emitEvent({
@@ -298,8 +331,10 @@ export function createCodexNotifications(deps: {
               status: { type: "systemError" },
             },
           });
+
           return true;
         }
+
         default:
           // Routing table decides (single source of truth, asserted
           // against captured wire traces): enumerated chatter is dropped,
@@ -308,6 +343,7 @@ export function createCodexNotifications(deps: {
           return routeCodexChildNotification(notification.method) === "drop";
       }
     });
+
   const handleRawNotification = (notification: CodexServerNotification) =>
     Effect.gen(function* () {
       const isMemoryConsolidationNotification =
@@ -316,12 +352,15 @@ export function createCodexNotifications(deps: {
       const payload = notification.params;
       const route = readRouteFields(notification);
       const collabReceiverTurns = yield* Ref.get(deps.collabReceiverTurnsRef);
+
       const childParentTurnId = (() => {
         const providerConversationId = readNotificationThreadId(notification);
+
         return providerConversationId ? collabReceiverTurns.get(providerConversationId) : undefined;
       })();
 
       rememberCollabReceiverTurns(collabReceiverTurns, notification, route.turnId);
+
       // Interception FIRST: a registered v2 child is usually also in the
       // receiver-turn map (collabAgentToolCall.receiverThreadIds), and the
       // legacy suppressor below would drop its lifecycle before it could
@@ -329,6 +368,7 @@ export function createCodexNotifications(deps: {
       // suppressor still covers UNREGISTERED children.
       if (yield* interceptCollabChildNotification(notification)) {
         yield* Ref.set(deps.collabReceiverTurnsRef, collabReceiverTurns);
+
         return;
       }
 
@@ -340,14 +380,17 @@ export function createCodexNotifications(deps: {
       // thread/* onto parent session state. Root-id-known guard keeps the
       // root's own early notifications flowing during session open.
       const suppressRootId = currentProviderThreadId(yield* Ref.get(deps.sessionRef));
+
       const foreignConversation = (() => {
         const providerConversationId = readNotificationThreadId(notification);
+
         return (
           providerConversationId !== undefined &&
           suppressRootId !== undefined &&
           providerConversationId !== suppressRootId
         );
       })();
+
       if (
         (childParentTurnId !== undefined || foreignConversation) &&
         shouldSuppressChildConversationNotification(notification.method)
@@ -360,16 +403,19 @@ export function createCodexNotifications(deps: {
         // conversation; interrupts are best-effort per child, so a
         // false-positive entry costs one ignored RPC at worst.
         const foreignThreadId = readNotificationThreadId(notification);
+
         if (foreignThreadId !== undefined) {
           if (notification.method === "turn/started") {
             const foreignTurnId =
               typeof (notification.params as { turn?: { id?: unknown } }).turn?.id === "string"
                 ? (notification.params as { turn: { id: string } }).turn.id
                 : undefined;
+
             if (foreignTurnId) {
               yield* Ref.update(deps.collabChildLiveTurnsRef, (current) => {
                 const next = new Map(current);
                 next.set(foreignThreadId, foreignTurnId);
+
                 return next;
               });
             }
@@ -380,11 +426,14 @@ export function createCodexNotifications(deps: {
             yield* Ref.update(deps.collabChildLiveTurnsRef, (current) => {
               const next = new Map(current);
               next.delete(foreignThreadId);
+
               return next;
             });
           }
         }
+
         yield* Ref.set(deps.collabReceiverTurnsRef, collabReceiverTurns);
+
         return;
       }
 
@@ -402,9 +451,11 @@ export function createCodexNotifications(deps: {
           typeof notification.params.requestId === "string"
             ? notification.params.requestId
             : String(notification.params.requestId);
+
         const correlation = rawRequestId
           ? (yield* Ref.get(deps.approvalCorrelationsRef)).get(rawRequestId)
           : undefined;
+
         if (correlation) {
           requestId = correlation.requestId;
           requestKind = correlation.requestKind;
@@ -413,6 +464,7 @@ export function createCodexNotifications(deps: {
           yield* Ref.update(deps.approvalCorrelationsRef, (current) => {
             const next = new Map(current);
             next.delete(rawRequestId);
+
             return next;
           });
         }
@@ -433,5 +485,6 @@ export function createCodexNotifications(deps: {
         ...(payload !== undefined ? { payload } : {}),
       });
     });
+
   return { interceptCollabChildNotification, handleRawNotification };
 }

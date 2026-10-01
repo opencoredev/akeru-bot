@@ -13,6 +13,7 @@ import {
   type ProviderRuntimeBindingWithMetadata,
   type ProviderSessionDirectoryShape,
 } from "../Services/ProviderSessionDirectory.ts";
+
 const decodeProviderDriverKindValue = Schema.decodeUnknownEffect(ProviderDriverKind);
 
 function toPersistenceError(operation: string) {
@@ -51,9 +52,11 @@ function mergeRuntimePayload(
   if (next === undefined) {
     return existing ?? null;
   }
+
   if (isRecord(existing) && isRecord(next)) {
     return { ...existing, ...next };
   }
+
   return next;
 }
 
@@ -107,6 +110,7 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
 
     const existingRuntime = Option.getOrUndefined(existing);
     const resolvedThreadId = binding.threadId ?? existingRuntime?.threadId;
+
     if (!resolvedThreadId) {
       return yield* new ProviderValidationError({
         operation: "ProviderSessionDirectory.upsert",
@@ -115,16 +119,20 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
     }
 
     const now = DateTime.formatIso(yield* DateTime.now);
+
     const providerChanged =
       existingRuntime !== undefined && existingRuntime.providerName !== binding.provider;
+
     const providerInstanceId =
       binding.providerInstanceId ?? (!providerChanged ? existingRuntime?.providerInstanceId : null);
+
     if (providerInstanceId === null || providerInstanceId === undefined) {
       return yield* new ProviderValidationError({
         operation: "ProviderSessionDirectory.upsert",
         issue: "providerInstanceId is required for provider session runtime bindings.",
       });
     }
+
     yield* repository
       .upsert({
         threadId: resolvedThreadId,

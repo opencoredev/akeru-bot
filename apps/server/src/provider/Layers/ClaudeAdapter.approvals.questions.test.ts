@@ -16,6 +16,7 @@ import {
 describe("ClaudeAdapterLive", () => {
   it.effect("routes AskUserQuestion through user-input flow even in full-access mode", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -32,6 +33,7 @@ describe("ClaudeAdapterLive", () => {
       const createInput = harness.getLastCreateQueryInput();
       const canUseTool = createInput?.options.canUseTool;
       assert.equal(typeof canUseTool, "function");
+
       if (!canUseTool) {
         return;
       }
@@ -58,10 +60,13 @@ describe("ClaudeAdapterLive", () => {
       // Should still get user-input.requested even in full-access mode.
       const requestedEvent = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(requestedEvent._tag, "Some");
+
       if (requestedEvent._tag !== "Some" || requestedEvent.value.type !== "user-input.requested") {
         assert.fail("Expected user-input.requested event");
+
         return;
       }
+
       const requestId = requestedEvent.value.requestId;
 
       yield* adapter.respondToUserInput(session.threadId, ApprovalRequestId.make(requestId!), {
@@ -73,8 +78,10 @@ describe("ClaudeAdapterLive", () => {
 
       const permissionResult = yield* Effect.promise(() => permissionPromise);
       assert.equal((permissionResult as PermissionResult).behavior, "allow");
+
       const updatedInput = (permissionResult as { updatedInput: Record<string, unknown> })
         .updatedInput;
+
       assert.deepEqual(updatedInput.answers, { "Deploy to which env?": "Staging" });
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
@@ -86,6 +93,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("denies AskUserQuestion when the waiting turn is aborted", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -100,11 +108,13 @@ describe("ClaudeAdapterLive", () => {
       const createInput = harness.getLastCreateQueryInput();
       const canUseTool = createInput?.options.canUseTool;
       assert.equal(typeof canUseTool, "function");
+
       if (!canUseTool) {
         return;
       }
 
       const controller = new AbortController();
+
       const permissionPromise = canUseTool(
         "AskUserQuestion",
         {
@@ -125,20 +135,26 @@ describe("ClaudeAdapterLive", () => {
 
       const requestedEvent = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(requestedEvent._tag, "Some");
+
       if (requestedEvent._tag !== "Some" || requestedEvent.value.type !== "user-input.requested") {
         assert.fail("Expected user-input.requested event");
+
         return;
       }
+
       assert.equal(requestedEvent.value.threadId, session.threadId);
 
       controller.abort();
 
       const resolvedEvent = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(resolvedEvent._tag, "Some");
+
       if (resolvedEvent._tag !== "Some" || resolvedEvent.value.type !== "user-input.resolved") {
         assert.fail("Expected user-input.resolved event");
+
         return;
       }
+
       assert.deepEqual(resolvedEvent.value.payload.answers, {});
 
       const permissionResult = yield* Effect.promise(() => permissionPromise);
@@ -156,6 +172,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("denies AskUserQuestion when the signal aborted before the listener registered", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -169,6 +186,7 @@ describe("ClaudeAdapterLive", () => {
 
       const canUseTool = harness.getLastCreateQueryInput()?.options.canUseTool;
       assert.equal(typeof canUseTool, "function");
+
       if (!canUseTool) {
         return;
       }
@@ -182,6 +200,7 @@ describe("ClaudeAdapterLive", () => {
       // never observe the abort event, only the recheck can.
       const controller = new AbortController();
       controller.abort();
+
       const permissionPromise = canUseTool(
         "AskUserQuestion",
         {
@@ -212,6 +231,7 @@ describe("ClaudeAdapterLive", () => {
         ["user-input.requested", "user-input.resolved"],
       );
       const resolvedEvent = runtimeEvents[1];
+
       if (resolvedEvent?.type === "user-input.resolved") {
         assert.deepEqual(resolvedEvent.payload.answers, {});
       }
@@ -225,6 +245,7 @@ describe("ClaudeAdapterLive", () => {
 describe("ClaudeAdapterLive", () => {
   it.effect("stopping a session settles pending user-input waits", () => {
     const harness = makeHarness();
+
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
@@ -238,6 +259,7 @@ describe("ClaudeAdapterLive", () => {
 
       const canUseTool = harness.getLastCreateQueryInput()?.options.canUseTool;
       assert.equal(typeof canUseTool, "function");
+
       if (!canUseTool) {
         return;
       }
@@ -258,8 +280,10 @@ describe("ClaudeAdapterLive", () => {
       );
 
       const requestedEvent = yield* Stream.runHead(adapter.streamEvents);
+
       if (requestedEvent._tag !== "Some" || requestedEvent.value.type !== "user-input.requested") {
         assert.fail("Expected user-input.requested event");
+
         return;
       }
 
@@ -267,10 +291,13 @@ describe("ClaudeAdapterLive", () => {
       yield* adapter.stopSession(THREAD_ID);
 
       const resolvedEvent = yield* Stream.runHead(adapter.streamEvents);
+
       if (resolvedEvent._tag !== "Some" || resolvedEvent.value.type !== "user-input.resolved") {
         assert.fail("Expected user-input.resolved event");
+
         return;
       }
+
       assert.deepEqual(resolvedEvent.value.payload.answers, {});
 
       const permissionResult = yield* Effect.promise(() => permissionPromise);

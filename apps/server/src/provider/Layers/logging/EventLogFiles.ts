@@ -26,11 +26,14 @@ export async function writeBatchedMessages(
     if (pendingBytes > 0 && pendingBytes + record.bytes > maxBytes) {
       await flush();
     }
+
     pendingRecords.push(record);
     pendingBytes += record.bytes;
+
     if (pendingBytes >= maxBytes) {
       await flush();
     }
   }
+
   await flush();
 }

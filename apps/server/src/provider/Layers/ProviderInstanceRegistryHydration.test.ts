@@ -10,12 +10,14 @@ describe("provider instance hydration", () => {
     expect(defaults[ProviderInstanceId.make("opencodeGo")]?.driver).toBe("opencodeGo");
 
     const legacyId = ProviderInstanceId.make("opencode_existing");
+
     const explicit = deriveProviderInstanceConfigMap({
       ...DEFAULT_SERVER_SETTINGS,
       providerInstances: {
         [legacyId]: { driver: ProviderDriverKind.make("opencode") },
       },
     });
+
     expect(explicit[legacyId]?.driver).toBe("opencode");
   });
 });

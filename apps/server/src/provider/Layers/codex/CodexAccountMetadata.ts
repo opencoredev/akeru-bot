@@ -2,8 +2,11 @@ import * as CodexSchema from "effect-codex-app-server/schema";
 
 export function codexAccountAuthLabel(account: CodexSchema.V2GetAccountResponse["account"]) {
   if (!account) return undefined;
+
   if (account.type === "apiKey") return "OpenAI API Key";
+
   if (account.type === "amazonBedrock") return "Amazon Bedrock";
+
   if (account.type !== "chatgpt") return undefined;
 
   switch (account.planType) {
@@ -36,11 +39,13 @@ export function codexAccountAuthLabel(account: CodexSchema.V2GetAccountResponse[
       return "ChatGPT Subscription";
     default:
       account.planType satisfies never;
+
       return undefined;
   }
 }
 
 export function codexAccountEmail(account: CodexSchema.V2GetAccountResponse["account"]) {
   if (!account || account.type !== "chatgpt") return undefined;
+
   return account.email;
 }

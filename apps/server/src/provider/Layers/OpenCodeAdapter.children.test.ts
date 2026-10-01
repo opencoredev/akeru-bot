@@ -35,6 +35,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         threadId,
         runtimeMode: "full-access",
       });
+
       const turn = yield* adapter.sendTurn({
         threadId,
         input: "Run child agents",
@@ -84,6 +85,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         threadId,
         runtimeMode: "full-access",
       });
+
       const turn = yield* adapter.sendTurn({
         threadId,
         input: "Run child agents",

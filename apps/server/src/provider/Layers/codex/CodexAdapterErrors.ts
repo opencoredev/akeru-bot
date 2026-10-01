@@ -60,5 +60,6 @@ export const FATAL_CODEX_STDERR_SNIPPETS = ["failed to connect to websocket"];
 
 export function isFatalCodexProcessStderrMessage(message: string): boolean {
   const normalized = message.toLowerCase();
+
   return FATAL_CODEX_STDERR_SNIPPETS.some((snippet) => normalized.includes(snippet));
 }

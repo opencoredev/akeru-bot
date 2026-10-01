@@ -25,22 +25,28 @@ export function mapCollabAgentEvent(
     typeof event.payload === "object" && event.payload !== null
       ? (event.payload as Record<string, unknown>)
       : undefined;
+
   const agentThreadId = typeof payload?.agentThreadId === "string" ? payload.agentThreadId : "";
+
   if (!payload || agentThreadId.length === 0) {
     return [];
   }
+
   const base = runtimeEventBase(event, canonicalThreadId);
   const taskId = RuntimeTaskId.make(agentThreadId);
   const agentPath = typeof payload.agentPath === "string" ? payload.agentPath : undefined;
   const pathLeaf = agentPath?.split("/").findLast((segment) => segment.length > 0);
   const nickname = typeof payload.nickname === "string" ? payload.nickname : undefined;
+
   const role =
     (typeof payload.role === "string" ? payload.role : undefined) ?? pathLeaf ?? "general-purpose";
+
   // A bare thread id is not a name. Omitting the title lets the client fold
   // keep the real one from task.started instead of clobbering it (probe
   // finding: progress rows renamed math_one to its UUID).
   const knownName = nickname ?? pathLeaf;
   const title = knownName ?? agentThreadId;
+
   // Identity repeated on every status patch so rows are self-describing when
   // the start row ages out of activity retention (review finding: a
   // reconstructed agent had a UUID name and no role/path).
@@ -72,6 +78,7 @@ export function mapCollabAgentEvent(
       ];
     case "collabAgent/activity": {
       const activityKind = typeof payload.activityKind === "string" ? payload.activityKind : "";
+
       if (activityKind === "interrupted") {
         return [
           {
@@ -81,6 +88,7 @@ export function mapCollabAgentEvent(
           },
         ];
       }
+
       if (activityKind === "started") {
         // Wire-probe finding: children often register via subAgentActivity
         // alone (no thread/started with a spawn source), so this is the one
@@ -101,10 +109,12 @@ export function mapCollabAgentEvent(
           },
         ];
       }
+
       // Reading a child's result also emits "interacted" after its turn is idle.
       // Only the child's turn or thread lifecycle can prove it resumed work.
       return [];
     }
+
     case "collabAgent/turnStarted":
       return [
         {
@@ -119,13 +129,16 @@ export function mapCollabAgentEvent(
         typeof payload.turn === "object" && payload.turn !== null
           ? (payload.turn as Record<string, unknown>)
           : undefined;
+
       const turnStatus = typeof turn?.status === "string" ? turn.status : undefined;
+
       const status =
         turnStatus === "failed"
           ? ("failed" as const)
           : turnStatus === "interrupted"
             ? ("interrupted" as const)
             : ("idle" as const);
+
       return [
         {
           ...base,
@@ -134,12 +147,15 @@ export function mapCollabAgentEvent(
         },
       ];
     }
+
     case "collabAgent/statusChanged": {
       const status =
         typeof payload.status === "object" && payload.status !== null
           ? (payload.status as Record<string, unknown>)
           : undefined;
+
       const statusType = typeof status?.type === "string" ? status.type : undefined;
+
       if (statusType === "systemError") {
         // Silently dropping this once left children stuck running forever.
         return [
@@ -150,11 +166,14 @@ export function mapCollabAgentEvent(
           },
         ];
       }
+
       if (statusType === "active") {
         const flags = Array.isArray(status?.activeFlags) ? status.activeFlags : [];
+
         const waiting = flags.some(
           (flag) => flag === "waitingOnApproval" || flag === "waitingOnUserInput",
         );
+
         return [
           {
             ...base,
@@ -163,6 +182,7 @@ export function mapCollabAgentEvent(
           },
         ];
       }
+
       if (statusType === "idle") {
         return [
           {
@@ -172,8 +192,10 @@ export function mapCollabAgentEvent(
           },
         ];
       }
+
       return [];
     }
+
     case "collabAgent/tokenUsage": {
       // Cumulative per child thread: always the `total` breakdown, never
       // `last` (which shrinks on follow-ups). Client folds max-merge.
@@ -181,18 +203,23 @@ export function mapCollabAgentEvent(
         typeof payload.tokenUsage === "object" && payload.tokenUsage !== null
           ? (payload.tokenUsage as Record<string, unknown>)
           : undefined;
+
       const total =
         typeof tokenUsage?.total === "object" && tokenUsage.total !== null
           ? (tokenUsage.total as Record<string, unknown>)
           : undefined;
+
       const count = (value: unknown): number | undefined =>
         typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+
       // Same validation as every other field: RuntimeTaskUsage.totalTokens
       // is NonNegativeInt, so NaN/Infinity/negative wire values must miss.
       const totalTokens = count(total?.totalTokens);
+
       if (totalTokens === undefined) {
         return [];
       }
+
       const typedUsage: RuntimeTaskUsage = {
         totalTokens,
         ...(count(total?.inputTokens) !== undefined
@@ -208,6 +235,7 @@ export function mapCollabAgentEvent(
           ? { reasoningOutputTokens: count(total?.reasoningOutputTokens) }
           : {}),
       };
+
       return [
         {
           ...base,
@@ -222,15 +250,19 @@ export function mapCollabAgentEvent(
         },
       ];
     }
+
     case "collabAgent/item": {
       const item =
         typeof payload.item === "object" && payload.item !== null
           ? (payload.item as Record<string, unknown>)
           : undefined;
+
       const itemTypeRaw = typeof item?.type === "string" ? item.type : undefined;
+
       if (!itemTypeRaw) {
         return [];
       }
+
       // A loose summary from the raw item: the child stream is untyped at
       // this boundary (synthetic event payload), so read best-effort fields
       // rather than force a schema decode.
@@ -238,8 +270,10 @@ export function mapCollabAgentEvent(
         (typeof item?.command === "string" ? item.command : undefined) ??
         (typeof item?.title === "string" ? item.title : undefined) ??
         (typeof item?.query === "string" ? item.query : undefined);
+
       const canonical = toCanonicalItemType(itemTypeRaw);
       const summary = looseSummary ?? canonical.replaceAll("_", " ");
+
       return [
         {
           ...base,
@@ -254,6 +288,7 @@ export function mapCollabAgentEvent(
         },
       ];
     }
+
     case "collabAgent/closed":
       return [
         {

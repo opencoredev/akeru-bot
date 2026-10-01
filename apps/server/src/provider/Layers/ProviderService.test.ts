@@ -49,17 +49,22 @@ it.effect("ProviderServiceLive catches stopAll failures during shutdown", () =>
         }),
       ),
     );
+
     const registry = makeAdapterRegistryMock({
       [CODEX_DRIVER]: codex.adapter,
     });
+
     const providerAdapterLayer = Layer.succeed(
       ProviderAdapterRegistry.ProviderAdapterRegistry,
       registry,
     );
+
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+
     const providerLayer = Layer.mergeAll(
       makeProviderServiceLive().pipe(
         Layer.provide(providerAdapterLayer),
@@ -77,6 +82,7 @@ it.effect("ProviderServiceLive catches stopAll failures during shutdown", () =>
       runtimeRepositoryLayer,
       NodeServices.layer,
     );
+
     const scope = yield* Scope.make();
     const runtimeServices = yield* Layer.build(providerLayer).pipe(Scope.provide(scope));
 
@@ -100,6 +106,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         cwd: "/tmp/project",
         runtimeMode: "full-access",
       });
+
       assert.equal(session.provider, "codex");
 
       const sessions = yield* provider.listSessions();
@@ -159,6 +166,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(routing.codex.startSession.mock.calls.length, 1);
       const resumedStartInput = routing.codex.startSession.mock.calls[0]?.[0];
       assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+
       if (resumedStartInput && typeof resumedStartInput === "object") {
         const startPayload = resumedStartInput as {
           provider?: string;
@@ -166,11 +174,13 @@ routing.layer("ProviderServiceLive routing", (it) => {
           resumeCursor?: unknown;
           threadId?: string;
         };
+
         assert.equal(startPayload.provider, "codex");
         assert.equal(startPayload.cwd, "/tmp/project");
         assert.deepEqual(startPayload.resumeCursor, session.resumeCursor);
         assert.equal(startPayload.threadId, session.threadId);
       }
+
       assert.equal(routing.codex.sendTurn.mock.calls.length, 1);
     }),
   );
@@ -243,12 +253,14 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(routing.claude.startSession.mock.calls.length, 1);
       const startInput = routing.claude.startSession.mock.calls[0]?.[0];
       assert.equal(typeof startInput === "object" && startInput !== null, true);
+
       if (startInput && typeof startInput === "object") {
         const startPayload = startInput as {
           provider?: string;
           providerInstanceId?: ProviderInstanceId;
           cwd?: string;
         };
+
         assert.equal(startPayload.provider, "claudeAgent");
         assert.equal(startPayload.providerInstanceId, claudeAgentInstanceId);
         assert.equal(startPayload.cwd, "/tmp/project-claude");
@@ -298,13 +310,17 @@ validation.layer("ProviderServiceLive validation", (it) => {
       );
 
       assert.equal(failure._tag, "Failure");
+
       if (failure._tag !== "Failure") {
         return;
       }
+
       assert.equal(failure.failure._tag, "ProviderValidationError");
+
       if (failure.failure._tag !== "ProviderValidationError") {
         return;
       }
+
       assert.equal(failure.failure.operation, "ProviderService.startSession");
       assert.equal(failure.failure.issue.includes("invalid-provider"), true);
     }),
@@ -320,6 +336,7 @@ validation.layer("ProviderServiceLive validation", (it) => {
       validation.codex.startSession.mockImplementationOnce((input: ProviderSessionStartInput) =>
         Effect.sync(() => {
           const now = "2026-01-01T00:00:00.000Z";
+
           return {
             provider: ProviderDriverKind.make("codex"),
             status: "ready",
@@ -345,7 +362,9 @@ validation.layer("ProviderServiceLive validation", (it) => {
       const runtime = yield* runtimeRepository.getByThreadId({
         threadId: session.threadId,
       });
+
       assert.equal(Option.isSome(runtime), true);
+
       if (Option.isSome(runtime)) {
         assert.equal(runtime.value.threadId, session.threadId);
       }

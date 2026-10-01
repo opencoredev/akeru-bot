@@ -22,7 +22,9 @@ import * as ProviderAdapterRegistryLayer from "./ProviderAdapterRegistry.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
 const CODEX_DRIVER = ProviderDriverKind.make("codex");
+
 const CLAUDE_AGENT_DRIVER = ProviderDriverKind.make("claudeAgent");
+
 const OPENCODE_DRIVER = ProviderDriverKind.make("opencode");
 
 const fakeCodexAdapter: CodexAdapter.CodexAdapterShape = {
@@ -87,6 +89,7 @@ const makeFakeInstance = (
   adapter: ProviderInstance["adapter"],
 ): ProviderInstance => {
   const driverKind = ProviderDriverKind.make(driverKindString);
+
   return {
     instanceId: defaultInstanceIdForDriver(driverKind),
     driverKind,

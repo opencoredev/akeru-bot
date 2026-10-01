@@ -84,6 +84,7 @@ export function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER
   const startSession = vi.fn((input: ProviderSessionStartInput) =>
     Effect.sync(() => {
       const now = "2026-01-01T00:00:00.000Z";
+
       const session: ProviderSession = {
         provider,
         ...(input.providerInstanceId !== undefined
@@ -99,7 +100,9 @@ export function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER
         createdAt: now,
         updatedAt: now,
       };
+
       sessions.set(session.threadId, session);
+
       return session;
     }),
   );
@@ -230,9 +233,11 @@ export function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER
     update: (session: ProviderSession) => ProviderSession,
   ): void => {
     const existing = sessions.get(threadId);
+
     if (!existing) {
       return;
     }
+
     sessions.set(threadId, update(existing));
   };
 
@@ -277,6 +282,7 @@ export function makeProviderServiceLayer(
   const codex = makeFakeCodexAdapter();
   const claude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
   const cursor = makeFakeCodexAdapter(CURSOR_DRIVER);
+
   const registry = makeAdapterRegistryMock({
     [ProviderDriverKind.make("codex")]: codex.adapter,
     [ProviderDriverKind.make("claudeAgent")]: claude.adapter,
@@ -287,9 +293,11 @@ export function makeProviderServiceLayer(
     ProviderAdapterRegistry.ProviderAdapterRegistry,
     registry,
   );
+
   const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
     Layer.provide(SqlitePersistenceMemory),
   );
+
   const directoryLayer =
     input.directory === undefined
       ? ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))
@@ -339,19 +347,24 @@ export const startSessionWith = (
     const issued: Array<ThreadId> = [];
     const capabilities: Array<ReadonlyArray<string>> = [];
     const codex = makeFakeCodexAdapter();
+
     const providerAdapterLayer = Layer.succeed(
       ProviderAdapterRegistry.ProviderAdapterRegistry,
       makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
     );
+
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
+
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+
     const providerLayer = makeProviderServiceLive({
       issueMcpCredential: (request) =>
         Effect.sync(() => {
           issued.push(request.threadId);
           capabilities.push([...(request.capabilities ?? [])].toSorted());
+
           return undefined;
         }),
       revokeMcpCredential: (revoked) => Effect.sync(() => void revokedThreads.push(revoked)),
@@ -375,6 +388,7 @@ export const startSessionWith = (
 
     yield* Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+
       return yield* provider.startSession(threadId, {
         provider: CODEX_DRIVER,
         providerInstanceId: codexInstanceId,
@@ -416,5 +430,6 @@ export function makeProviderServiceHarness() {
       listBindings: () => Effect.die("ProviderService.listSessions does not use listBindings"),
     },
   });
+
   return { routing, fanout, validation, listThreadIds, getBinding, boundedListing };
 }

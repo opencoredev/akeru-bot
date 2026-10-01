@@ -100,6 +100,7 @@ export function createClaudeMessages(deps: {
       const toolEntry = Array.from(context.inFlightTools.entries()).find(
         ([, tool]) => tool.itemId === toolResult.toolUseId,
       );
+
       if (!toolEntry) {
         continue;
       }
@@ -107,6 +108,7 @@ export function createClaudeMessages(deps: {
       const [index, tool] = toolEntry;
       const itemStatus = toolResult.isError ? "failed" : "completed";
       const toolUseResult = readClaudeToolUseResult(message);
+
       const toolData = {
         toolName: tool.toolName,
         input: tool.input,
@@ -142,6 +144,7 @@ export function createClaudeMessages(deps: {
       });
 
       const streamKind = toolResultStreamKind(tool.itemType);
+
       if (streamKind && toolResult.text.length > 0 && context.turnState) {
         const deltaStamp = yield* deps.makeEventStamp();
         yield* deps.offerRuntimeEvent({
@@ -200,6 +203,7 @@ export function createClaudeMessages(deps: {
       // the next task.* payload advertises them to clients.
       if (!toolResult.isError && tool.toolName.toLowerCase() === "workflow" && toolUseResult) {
         const workflowTaskId = trimmedString(toolUseResult.taskId);
+
         if (workflowTaskId) {
           const runHandles: TaskRunHandles = {
             ...(trimmedString(toolUseResult.runId)
@@ -215,6 +219,7 @@ export function createClaudeMessages(deps: {
               ? { sessionUrl: sanitizeSessionUrl(toolUseResult.sessionUrl) }
               : {}),
           };
+
           const existing = context.taskAgents.get(workflowTaskId);
           context.taskAgents.set(workflowTaskId, {
             taskId: workflowTaskId,
@@ -246,6 +251,7 @@ export function createClaudeMessages(deps: {
       context.inFlightTools.delete(index);
     }
   });
+
   const handleAssistantMessage = Effect.fn("handleAssistantMessage")(function* (
     context: ClaudeSessionContext,
     message: SDKMessage,
@@ -260,12 +266,14 @@ export function createClaudeMessages(deps: {
     // turns per subagent completion (which also reset the Working timer).
     const assistantParentToolUseId = (message as { parent_tool_use_id?: string | null })
       .parent_tool_use_id;
+
     if (assistantParentToolUseId !== null && assistantParentToolUseId !== undefined) {
       // The snapshot's message.model is the authoritative API model the
       // subagent actually ran on — refine the seeded launch-time value.
       const owningTaskId = agentIdForParentToolUse(context.taskAgents, assistantParentToolUseId);
       const snapshotModel = trimmedString(message.message.model);
       const owningAgent = owningTaskId ? context.taskAgents.get(owningTaskId) : undefined;
+
       if (snapshotModel) {
         if (owningAgent) {
           owningAgent.model = snapshotModel;
@@ -279,8 +287,10 @@ export function createClaudeMessages(deps: {
           );
         }
       }
+
       context.lastAssistantUuid = message.uuid;
       yield* deps.updateResumeCursor(context);
+
       return;
     }
 
@@ -318,24 +328,30 @@ export function createClaudeMessages(deps: {
     }
 
     const content = message.message?.content;
+
     if (Array.isArray(content)) {
       for (const block of content) {
         if (!block || typeof block !== "object") {
           continue;
         }
+
         const toolUse = block as {
           type?: unknown;
           id?: unknown;
           name?: unknown;
           input?: unknown;
         };
+
         if (toolUse.type !== "tool_use" || toolUse.name !== "ExitPlanMode") {
           continue;
         }
+
         const planMarkdown = extractExitPlanModePlan(toolUse.input);
+
         if (!planMarkdown) {
           continue;
         }
+
         yield* deps.emitProposedPlanCompleted(context, {
           planMarkdown,
           toolUseId: typeof toolUse.id === "string" ? toolUse.id : undefined,
@@ -350,6 +366,7 @@ export function createClaudeMessages(deps: {
       // Limited retries may only carry an assistant error, without a new window
       // event. Later parent responses replace this evidence if the turn recovers.
       context.turnState.latestAssistantRateLimited = message.error === "rate_limit";
+
       // The CLI can report authentication failure before ending the turn as a
       // generic API error, so retain that evidence for the result fallback.
       if (message.error === "authentication_failed") {
@@ -358,7 +375,9 @@ export function createClaudeMessages(deps: {
           cwd: deps.path.resolve(context.session.cwd ?? "."),
         });
       }
+
       context.turnState.items.push(message.message);
+
       if (
         normalizeClaudeActiveTokenUsage(
           message.message.usage,
@@ -369,12 +388,14 @@ export function createClaudeMessages(deps: {
         context.turnState.latestAssistantUsage = message.message.usage;
         context.turnState.compactedSinceLatestAssistantUsage = false;
       }
+
       yield* deps.backfillAssistantTextBlocksFromSnapshot(context, message);
     }
 
     context.lastAssistantUuid = message.uuid;
     yield* deps.updateResumeCursor(context);
   });
+
   const handleResultMessage = Effect.fn("handleResultMessage")(function* (
     context: ClaudeSessionContext,
     message: SDKMessage,
@@ -384,11 +405,13 @@ export function createClaudeMessages(deps: {
     }
 
     const turn = context.turnState;
+
     const failureHint =
       turn?.authenticationFailureMessage ??
       (turn && (turn.rejectedRateLimitTypes.size > 0 || turn.latestAssistantRateLimited)
         ? "Claude usage limit reached. Send the message again once the limit resets."
         : undefined);
+
     const { status, errorMessage } = resultOutcome(message, failureHint);
 
     if (status === "failed") {
@@ -397,5 +420,6 @@ export function createClaudeMessages(deps: {
 
     yield* deps.completeTurn(context, status, errorMessage, message);
   });
+
   return { handleUserMessage, handleAssistantMessage, handleResultMessage };
 }

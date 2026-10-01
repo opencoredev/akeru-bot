@@ -113,6 +113,7 @@ export function makeBridge() {
   let releaseNextDispatchAdmission: (() => void) | undefined;
   let nextDispatchAdmissionReached = Promise.resolve();
   let markNextDispatchAdmissionReached: (() => void) | undefined;
+
   const startSession = vi.fn<ProviderServiceShape["startSession"]>((threadId, input) =>
     Effect.succeed(
       makeProviderSession(
@@ -125,19 +126,24 @@ export function makeBridge() {
       ),
     ),
   );
+
   const sendTurn = vi.fn<ProviderServiceShape["sendTurn"]>((input) =>
     Effect.succeed({ threadId: input.threadId, turnId: TurnId.make("legacy-turn") }),
   );
+
   const interruptTurn = vi.fn<ProviderServiceShape["interruptTurn"]>(() => Effect.void);
   const respondToRequest = vi.fn<ProviderServiceShape["respondToRequest"]>(() => Effect.void);
   const respondToUserInput = vi.fn<ProviderServiceShape["respondToUserInput"]>(() => Effect.void);
   const stopSession = vi.fn<ProviderServiceShape["stopSession"]>(() => Effect.void);
+
   const rollbackConversation = vi.fn<ProviderServiceShape["rollbackConversation"]>(
     () => Effect.void,
   );
+
   const getCapabilities = vi.fn<ProviderServiceShape["getCapabilities"]>(() =>
     Effect.succeed({ sessionModelSwitch: "in-session" }),
   );
+
   const service: ProviderServiceShape = {
     startSession,
     sendTurn,
@@ -153,7 +159,9 @@ export function makeBridge() {
         const driverKind = ProviderDriverKind.make(
           instanceId === kimiInstanceId ? "kimi" : String(instanceId),
         );
+
         const advertisedModels = instanceModelCatalog.get(String(instanceId));
+
         return {
           instanceId,
           driverKind,
@@ -176,6 +184,7 @@ export function makeBridge() {
           disableBeforeNextDispatchAdmission = false;
           instanceEnabled = false;
         }
+
         return instanceEnabled
           ? Effect.sync(dispatch)
           : Effect.fail(
@@ -185,17 +194,20 @@ export function makeBridge() {
               }),
             );
       };
+
       return Effect.suspend(() => {
         const wait = nextDispatchAdmissionWait;
         nextDispatchAdmissionWait = undefined;
         markNextDispatchAdmissionReached?.();
         markNextDispatchAdmissionReached = undefined;
+
         return wait ? Effect.promise(() => wait).pipe(Effect.flatMap(dispatchNow)) : dispatchNow();
       });
     },
     uploadFeedback: (input) => Effect.succeed({ feedbackId: `feedback-${String(input.threadId)}` }),
     streamEvents: Stream.empty,
   };
+
   return {
     service,
     startSession,
@@ -361,6 +373,7 @@ export const openRoutineReview = (
       Stream.runForEach((event) =>
         Effect.sync(() => {
           events.push(event);
+
           if (event.type === "request.opened" && event.requestId) {
             Deferred.doneUnsafe(
               openedCount++ === 0 ? opened : nextOpened,
@@ -379,13 +392,16 @@ export const openRoutineReview = (
     });
     const createRoutine = mastra.harnessOptions[0]?.createRoutine;
     assert.isDefined(createRoutine);
+
     const toolCall = yield* Effect.promise(() =>
       createRoutine(String(codexThreadId), routineInput).then(
         (value) => Exit.succeed(value),
         (cause: unknown) => Exit.fail(cause),
       ),
     ).pipe(Effect.forkChild({ startImmediately: true }));
+
     const requestId = yield* Deferred.await(opened);
+
     return { controller, toolCall, requestId, nextOpened };
   });
 
@@ -436,15 +452,18 @@ export const groupParentSnapshot = {
 
 export const makeWorkerSession = (base: Session<Record<string, unknown>>) => {
   const listeners = new Set<(event: AgentControllerEvent) => void>();
+
   const session = {
     ...base,
     subscribe: vi.fn((listener: (event: AgentControllerEvent) => void) => {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     }),
     sendMessage: vi.fn(() => new Promise<void>(() => undefined)),
     respondToToolApproval: vi.fn(),
   } as unknown as Session<Record<string, unknown>>;
+
   return {
     session,
     emit: (event: AgentControllerEvent) => {

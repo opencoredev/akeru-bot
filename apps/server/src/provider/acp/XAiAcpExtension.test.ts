@@ -18,6 +18,7 @@ import {
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 
 const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
+
 const mockAgentPath = NodePath.join(__dirname, "../../../scripts/acp-mock-agent.ts");
 
 const makePromptCompletionRuntime = (env: NodeJS.ProcessEnv) =>
@@ -32,6 +33,7 @@ const makePromptCompletionRuntime = (env: NodeJS.ProcessEnv) =>
       clientInfo: { name: "t3-test", version: "0.0.0" },
       authMethodId: "test",
     });
+
     return yield* makeXAiPromptCompletionRuntime(runtime);
   });
 
@@ -85,6 +87,7 @@ describe("XAiAcpExtension", () => {
         ],
       },
     };
+
     const decoded = decodeXAiAskUserQuestionRequest(payload);
     const questions = extractXAiAskUserQuestions(decoded);
 
@@ -280,11 +283,13 @@ describe("XAiAcpExtension", () => {
       const runtime = yield* makePromptCompletionRuntime({
         T3_ACP_EMIT_XAI_PROMPT_COMPLETE_THEN_HANG: "1",
       });
+
       yield* runtime.start();
 
       const promptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "hi" }],
       });
+
       const promptId = promptResult._meta?.promptId;
 
       expect(typeof promptId).toBe("string");
@@ -304,11 +309,13 @@ describe("XAiAcpExtension", () => {
       const runtime = yield* makePromptCompletionRuntime({
         T3_ACP_EMIT_STALE_XAI_PROMPT_COMPLETE_BEFORE_SECOND_HANG: "1",
       });
+
       yield* runtime.start();
 
       const firstPromptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "first" }],
       });
+
       expect(firstPromptResult).toMatchObject({
         stopReason: "end_turn",
         _meta: { promptId: "mock-stale-xai-prompt-1" },
@@ -317,6 +324,7 @@ describe("XAiAcpExtension", () => {
       const secondPromptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "second" }],
       });
+
       const secondPromptId = secondPromptResult._meta?.promptId;
       expect(typeof secondPromptId).toBe("string");
       expect(secondPromptId).not.toBe("mock-stale-xai-prompt-1");

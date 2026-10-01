@@ -59,6 +59,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
   it.effect("fails sendTurn for missing sessions through the typed error channel", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
+
       const result = yield* adapter
         .sendTurn({
           threadId: asThreadId("thread-opencode-missing-send"),
@@ -79,6 +80,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
   it.effect("fails stopSession for missing sessions through the typed error channel", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
+
       const result = yield* adapter
         .stopSession(asThreadId("thread-opencode-missing-stop"))
         .pipe(Effect.result);
@@ -117,6 +119,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
       const threadId = asThreadId("thread-opencode-stop-event");
+
       const eventsFiber = yield* adapter.streamEvents.pipe(
         Stream.filter((event) => event.threadId === threadId),
         Stream.take(3),
@@ -190,6 +193,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           Layer.provideMerge(providerSessionDirectoryTestLayer),
           Layer.provideMerge(NodeServices.layer),
         );
+
         const context = yield* Layer.buildWithScope(adapterLayer, scope);
         const adapter = yield* Effect.service(OpenCodeAdapter).pipe(Effect.provide(context));
         const eventsFiber = yield* adapter.streamEvents.pipe(Stream.runCollect, Effect.forkChild);
@@ -242,9 +246,11 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         .pipe(Effect.flip);
 
       NodeAssert.equal(error._tag, "ProviderAdapterValidationError");
+
       if (error._tag !== "ProviderAdapterValidationError") {
         throw new Error("Unexpected error type");
       }
+
       NodeAssert.equal(
         error.issue,
         "OpenCode model selection must use the 'provider/model' format.",

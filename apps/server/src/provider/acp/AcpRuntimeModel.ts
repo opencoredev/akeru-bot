@@ -36,12 +36,15 @@ export function parsePermissionRequest(
     },
     { fallbackStatus: "pending" },
   );
+
   const kind = normalizeToolKind(params.toolCall.kind) ?? "unknown";
+
   const detail =
     toolCall?.command ??
     toolCall?.title ??
     toolCall?.detail ??
     (typeof params.sessionId === "string" ? `Session ${params.sessionId}` : undefined);
+
   return {
     kind,
     ...(detail ? { detail } : {}),
@@ -60,19 +63,23 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
   switch (upd.sessionUpdate) {
     case "current_mode_update": {
       modeId = upd.currentModeId.trim();
+
       if (modeId) {
         events.push({
           _tag: "ModeChanged",
           modeId,
         });
       }
+
       break;
     }
+
     case "plan": {
       const plan = upd.entries.map((entry, index) => ({
         step: entry.content.trim().length > 0 ? entry.content.trim() : `Step ${index + 1}`,
         status: normalizePlanStepStatus(entry.status),
       }));
+
       if (plan.length > 0) {
         events.push({
           _tag: "PlanUpdated",
@@ -82,12 +89,15 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
           rawPayload: params,
         });
       }
+
       break;
     }
+
     case "tool_call": {
       const toolCall = parseTypedToolCallState(upd, {
         fallbackStatus: "pending",
       });
+
       if (toolCall) {
         events.push({
           _tag: "ToolCallUpdated",
@@ -95,10 +105,13 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
           rawPayload: boundToolCallRawPayload(params, upd, toolCall),
         });
       }
+
       break;
     }
+
     case "tool_call_update": {
       const toolCall = parseTypedToolCallState(upd);
+
       if (toolCall) {
         events.push({
           _tag: "ToolCallUpdated",
@@ -106,8 +119,10 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
           rawPayload: boundToolCallRawPayload(params, upd, toolCall),
         });
       }
+
       break;
     }
+
     case "agent_message_chunk": {
       if (upd.content.type === "text" && upd.content.text.length > 0) {
         events.push({
@@ -116,8 +131,10 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
           rawPayload: params,
         });
       }
+
       break;
     }
+
     default:
       break;
   }
@@ -136,6 +153,7 @@ export {
   type AcpToolCallEmitDecision,
   type SessionLoadGate,
 } from "./AcpRuntimeTypes.ts";
+
 export {
   extractModelConfigId,
   findSessionConfigOption,
@@ -144,5 +162,7 @@ export {
   sessionModelStateFromInitialize,
   syntheticLoadSessionResponseFromInitialize,
 } from "./AcpSessionModel.ts";
+
 export { mergeToolCallState, decideToolCallUpdateEmission } from "./AcpToolCalls.ts";
+
 export { sessionUpdateIsReplay, waitForSessionLoadReplayIdle } from "./AcpSessionReplay.ts";

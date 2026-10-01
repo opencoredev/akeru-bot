@@ -127,8 +127,10 @@ export function createHarness(deps: {
   readonly botUsageLedger: BotUsageLedger["Service"];
 }) {
   const routineDispatcher = deps.routineDispatcher;
+
   return Effect.gen(function* () {
     const makeMastraHarness = deps.options?.makeMastraHarness ?? makeAkeruMastraHarness;
+
     const bundle = yield* makeMastraHarness({
       authStorage: deps.authStorage,
       getKimiAccess: (instanceId) => deps.subscriptionAuth.getKimiForCodingAccess(instanceId),
@@ -142,12 +144,14 @@ export function createHarness(deps: {
         deps.subscriptionAuth.getAccessToken(provider, instanceId),
       getModelConnection: (providerInstanceId) => {
         const connection = deps.modelConnections.get(providerInstanceId);
+
         return connection ? { ...connection, instanceId: providerInstanceId } : undefined;
       },
       memoryDbPath: NodePath.join(deps.config.stateDir, "mastra-observational-memory.sqlite"),
       syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
         const active = deps.sessions.get(threadId);
         const activeTurn = active?.activeTurn;
+
         if (
           !active ||
           !activeTurn ||
@@ -155,6 +159,7 @@ export function createHarness(deps: {
         ) {
           return;
         }
+
         const update = await deps.runPromise(
           deps.legacyProviderBridge.dispatchIfEnabled(
             active.providerInstanceId,
@@ -162,6 +167,7 @@ export function createHarness(deps: {
             () => {
               if (deps.sessions.get(threadId) !== active || active.activeTurn !== activeTurn)
                 return;
+
               return active.session.permissions.setForTool({
                 toolName,
                 policy: protectedAction ? "ask" : "allow",
@@ -169,6 +175,7 @@ export function createHarness(deps: {
             },
           ),
         );
+
         await update;
       },
       getThreadTools: (threadId) => deps.sessionResources.getConnectorTools(threadId),
@@ -237,10 +244,13 @@ export function createHarness(deps: {
             createRoutine: (threadId: string, input: AkeruCreateRoutineInput) => {
               const active = deps.sessions.get(threadId);
               const timezone = active?.toolSession.timezone;
+
               if (!timezone) {
                 return Promise.reject(new Error("Send a message before creating a routine."));
               }
+
               const requestId = `routine-${NodeCrypto.randomUUID()}`;
+
               return deps.runPromise(
                 deps.pendingRoutineRequests
                   .wait(
@@ -280,6 +290,7 @@ export function createHarness(deps: {
                       Effect.sync(() => {
                         // Close the review card so the chat no longer waits on the user.
                         const current = deps.sessions.get(threadId);
+
                         if (!current?.activeTurn) return;
                         current.activeTurn.waiting = deps.turnStillWaiting(threadId, current);
                         deps.publish({
@@ -315,6 +326,7 @@ export function createHarness(deps: {
         const context = deps.memoryUsageByThread.get(threadId);
         const active = deps.sessions.get(threadId);
         const callId = `${category}:${NodeCrypto.randomUUID()}`;
+
         if (!context || !active) {
           // A queued observation can drain after a restart before its chat
           // reopens. Attribute it to the chat's bot and record what it used.
@@ -324,6 +336,7 @@ export function createHarness(deps: {
               Effect.catchCause(() => Effect.succeed(null)),
             ),
           );
+
           if (!botId) return undefined;
           deps.unreservedMemoryCalls.set(callId, {
             botId,
@@ -332,8 +345,10 @@ export function createHarness(deps: {
             provider: active?.provider ?? null,
             model: active?.model ?? null,
           });
+
           return callId;
         }
+
         await deps.runPromise(
           deps.botUsageLedger.reserve({
             reservationId: AkeruUsageReservationId.make(callId),
@@ -349,15 +364,20 @@ export function createHarness(deps: {
             createdAt: nowIso(),
           }),
         );
+
         return callId;
       },
       finishMemoryCall: async ({ callId, usage, error }) => {
         const outputTokens = usage?.outputTokens ?? 0;
+
         const inputTokens =
           usage?.inputTokens ?? Math.max(0, (usage?.totalTokens ?? 0) - outputTokens);
+
         const unreserved = deps.unreservedMemoryCalls.get(callId);
+
         if (unreserved) {
           deps.unreservedMemoryCalls.delete(callId);
+
           if (!usage) return;
           await deps.runPromise(
             deps.botUsageLedger.recordMeasurement({
@@ -375,8 +395,10 @@ export function createHarness(deps: {
               createdAt: nowIso(),
             }),
           );
+
           return;
         }
+
         await deps.runPromise(
           deps.botUsageLedger.settle(
             usage
@@ -413,6 +435,7 @@ export function createHarness(deps: {
           }),
       ),
     );
+
     return { makeMastraHarness, bundle };
   });
 }

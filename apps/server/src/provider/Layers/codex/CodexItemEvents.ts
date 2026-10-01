@@ -17,16 +17,21 @@ export function mapItemLifecycle(
   const payload =
     readPayload(EffectCodexSchema.V2ItemStartedNotification, event.payload) ??
     readPayload(EffectCodexSchema.V2ItemCompletedNotification, event.payload);
+
   const item = payload?.item;
+
   if (!item) {
     return undefined;
   }
+
   const itemType = toCanonicalItemType(item.type);
+
   if (itemType === "unknown" && lifecycle !== "item.updated") {
     return undefined;
   }
 
   const detail = itemDetail(itemType, item);
+
   const status =
     lifecycle === "item.started"
       ? "inProgress"

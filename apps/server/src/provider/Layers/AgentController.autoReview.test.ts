@@ -42,14 +42,17 @@ describe("AgentControllerLive", () => {
   it.effect("auto review allows safe commands and asks before destructive commands", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         const events: ProviderRuntimeEvent[] = [];
+
         const collector = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* resolveCodex(controller);
         yield* controller.startSession(codexThreadId, {
           threadId: codexThreadId,
@@ -157,6 +160,7 @@ describe("AgentControllerLive", () => {
           toolCallId: "read-safe",
           decision: "approve",
         });
+
         for (const requestId of [
           "delete-risky",
           "shred-risky",
@@ -181,6 +185,7 @@ describe("AgentControllerLive", () => {
             expect.objectContaining({ type: "request.opened", requestId }),
           );
         }
+
         yield* Fiber.interrupt(collector);
       }),
       bridge.service,
@@ -193,14 +198,17 @@ describe("AgentControllerLive", () => {
   it.effect("keeps a turn waiting while another suspended question is open", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         const events: ProviderRuntimeEvent[] = [];
+
         const collector = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* resolveCodex(controller);
         yield* controller.startSession(codexThreadId, {
           threadId: codexThreadId,
@@ -211,6 +219,7 @@ describe("AgentControllerLive", () => {
           runtimeMode: "approval-required",
         });
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Ask two questions." });
+
         for (const toolCallId of ["question-a", "question-b"]) {
           mastra.emit({
             type: "tool_suspended",
@@ -220,9 +229,11 @@ describe("AgentControllerLive", () => {
             suspendPayload: {},
           } as AgentControllerEvent);
         }
+
         mastra.emit({ type: "agent_end", reason: "suspended" } as AgentControllerEvent);
         mastra.finishSend();
         yield* Effect.yieldNow;
+
         const latestState = () =>
           events.findLast((event) => event.type === "session.state.changed")?.payload.state;
 
@@ -253,14 +264,17 @@ describe("AgentControllerLive", () => {
   it.effect("keeps a question open when resuming its answer fails", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         const events: ProviderRuntimeEvent[] = [];
+
         const collector = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* resolveCodex(controller);
         yield* controller.startSession(codexThreadId, {
           threadId: codexThreadId,
@@ -271,6 +285,7 @@ describe("AgentControllerLive", () => {
           runtimeMode: "approval-required",
         });
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Ask two questions." });
+
         for (const toolCallId of ["question-a", "question-b"]) {
           mastra.emit({
             type: "tool_suspended",
@@ -280,15 +295,18 @@ describe("AgentControllerLive", () => {
             suspendPayload: {},
           } as AgentControllerEvent);
         }
+
         mastra.emit({ type: "agent_end", reason: "suspended" } as AgentControllerEvent);
         mastra.finishSend();
         yield* Effect.yieldNow;
+
         const latestState = () =>
           events.findLast((event) => event.type === "session.state.changed")?.payload.state;
 
         vi.mocked(mastra.session.respondToToolSuspension).mockRejectedValueOnce(
           new Error("connection lost"),
         );
+
         const failedExit = yield* controller
           .respondToUserInput({
             threadId: codexThreadId,
@@ -296,6 +314,7 @@ describe("AgentControllerLive", () => {
             answers: { "question-a": "First" },
           })
           .pipe(Effect.exit);
+
         assert.isTrue(Exit.isFailure(failedExit));
         expect(failedExit).toMatchObject({
           cause: { reasons: [{ error: { retryable: true } }] },
@@ -320,14 +339,17 @@ describe("AgentControllerLive", () => {
   it.effect("does not strand the turn on a failed answer to an unknown question", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         const events: ProviderRuntimeEvent[] = [];
+
         const collector = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* resolveCodex(controller);
         yield* controller.startSession(codexThreadId, {
           threadId: codexThreadId,
@@ -338,6 +360,7 @@ describe("AgentControllerLive", () => {
           runtimeMode: "approval-required",
         });
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Ask two questions." });
+
         for (const toolCallId of ["question-b"]) {
           mastra.emit({
             type: "tool_suspended",
@@ -347,15 +370,18 @@ describe("AgentControllerLive", () => {
             suspendPayload: {},
           } as AgentControllerEvent);
         }
+
         mastra.emit({ type: "agent_end", reason: "suspended" } as AgentControllerEvent);
         mastra.finishSend();
         yield* Effect.yieldNow;
+
         const latestState = () =>
           events.findLast((event) => event.type === "session.state.changed")?.payload.state;
 
         vi.mocked(mastra.session.respondToToolSuspension).mockRejectedValueOnce(
           new Error("connection lost"),
         );
+
         const failedExit = yield* controller
           .respondToUserInput({
             threadId: codexThreadId,
@@ -363,6 +389,7 @@ describe("AgentControllerLive", () => {
             answers: { "question-stale": "First" },
           })
           .pipe(Effect.exit);
+
         assert.isTrue(Exit.isFailure(failedExit));
         expect(failedExit).not.toMatchObject({
           cause: { reasons: [{ error: { retryable: true } }] },
@@ -389,14 +416,17 @@ describe("AgentControllerLive", () => {
     () => {
       const bridge = makeBridge();
       const mastra = makeMastraHarness();
+
       const readAttachment = vi.fn(async (path: string) =>
         path.endsWith("image-1.png")
           ? new Uint8Array([99, 1, 2, 3, 99]).subarray(1, 4)
           : new Uint8Array([4, 5]),
       );
+
       const layer = makeLayer(bridge.service, mastra.factory, undefined, undefined, undefined, {
         readAttachment,
       });
+
       return Effect.gen(function* () {
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
@@ -440,6 +470,7 @@ describe("AgentControllerLive", () => {
   it.effect("creates no workspace for a delegated sandbox denial", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const access: AkeruDelegationAccessGrant = {
       allowedToolIds: ["Shell", "Read"],
       memoryScopes: [],
@@ -450,6 +481,7 @@ describe("AgentControllerLive", () => {
       disabledMcpServerIds: [],
       approvalCeiling: "send",
     };
+
     const layer = makeLayer(
       bridge.service,
       mastra.factory,
@@ -498,6 +530,7 @@ describe("AgentControllerLive", () => {
   it.effect("creates a credentialed remote workspace for a delegated sandbox grant", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const access: AkeruDelegationAccessGrant = {
       allowedToolIds: ["Shell", "Read"],
       memoryScopes: [],
@@ -508,17 +541,21 @@ describe("AgentControllerLive", () => {
       disabledMcpServerIds: [],
       approvalCeiling: "secrets",
     };
+
     const remote = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
+
     const makeRemoteWorkspace = vi.fn(async () => remote);
+
     const makeBotBrowser = vi.fn(() => ({
       tools: {},
       attachment: vi.fn(async () => undefined),
       reconnect: vi.fn(async () => undefined),
       close: vi.fn(async () => undefined),
     }));
+
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,

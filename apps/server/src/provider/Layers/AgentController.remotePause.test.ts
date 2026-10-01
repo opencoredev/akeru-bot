@@ -49,21 +49,27 @@ describe("AgentControllerLive", () => {
   it.effect("retries failed remote pauses in the background without a new session", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
+
     let paused!: () => void;
+
     const pauseRetried = new Promise<void>((resolve) => {
       paused = resolve;
     });
+
     const sleep = vi
       .fn()
       .mockRejectedValueOnce(new Error("pause unavailable"))
       .mockImplementation(async () => {
         paused();
       });
+
     const destroy = vi.fn(async () => undefined);
+
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace: async () => ({
@@ -86,6 +92,7 @@ describe("AgentControllerLive", () => {
         ),
       ),
     );
+
     return Effect.gen(function* () {
       const controller = yield* AgentController;
       yield* resolveCodex(controller);
@@ -111,20 +118,25 @@ describe("AgentControllerLive", () => {
   it.effect("reuses the remote workspace when only cwd changes", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const remote = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
+
     const destroy = vi.spyOn(remote, "destroy");
+
     const makeRemoteWorkspace = vi.fn<
       NonNullable<AgentControllerLiveOptions["makeRemoteWorkspace"]>
     >(async () => remote);
+
     const makeBotBrowser = vi.fn(() => ({
       tools: {},
       attachment: vi.fn(async () => undefined),
       reconnect: vi.fn(async () => undefined),
       close: vi.fn(async () => undefined),
     }));
+
     const layer = makeAgentControllerLive({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
@@ -144,6 +156,7 @@ describe("AgentControllerLive", () => {
     return Effect.gen(function* () {
       const controller = yield* AgentController;
       yield* resolveCodex(controller);
+
       const input = {
         threadId: codexThreadId,
         provider: ProviderDriverKind.make("codex"),
@@ -152,6 +165,7 @@ describe("AgentControllerLive", () => {
         runtimeMode: "full-access" as const,
         botSandbox: "upstash" as const,
       };
+
       yield* controller.startSession(codexThreadId, { ...input, cwd: process.cwd() });
       yield* controller.startSession(codexThreadId, { ...input, cwd: NodeOS.tmpdir() });
 
@@ -168,8 +182,10 @@ describe("AgentControllerLive", () => {
   it.effect("adds finished child work to only the next Mastra turn", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const results =
       "<delegated-work-results>\n- Researcher completed: 42\n</delegated-work-results>";
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -209,8 +225,10 @@ describe("AgentControllerLive", () => {
   it.effect("adds finished child work to legacy turns for every legacy provider", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     const results =
       "<delegated-work-results>\n- Researcher completed: 42\n</delegated-work-results>";
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -277,6 +295,7 @@ describe("AgentControllerLive", () => {
   it.effect("adds compact personality instructions to legacy bot turns", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -331,6 +350,7 @@ describe("AgentControllerLive", () => {
       const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-review-failed-"));
       const botMemoryStore = new BotMemoryStore(memoryDir);
       const botId = BotId.make(`bot-legacy-${terminalState}`);
+
       const memoryAccess = {
         tenantId: AkeruMemoryTenantId.make("local"),
         userId: AkeruMemoryUserId.make("owner"),
@@ -342,6 +362,7 @@ describe("AgentControllerLive", () => {
         respondingBotId: botId,
         groupMemberBotIds: [],
       } as const;
+
       const event: ProviderRuntimeEvent =
         terminalState === "aborted"
           ? {
@@ -364,6 +385,7 @@ describe("AgentControllerLive", () => {
               createdAt: "2026-09-14T12:00:00.000Z",
               payload: { state: terminalState, stopReason: null },
             };
+
       const service = { ...bridge.service, streamEvents: Stream.succeed(event) };
 
       return provideController(
@@ -372,8 +394,10 @@ describe("AgentControllerLive", () => {
             const reservation = yield* Effect.promise(() =>
               botMemoryStore.reserveReviewCadence(botId),
             );
+
             yield* Effect.promise(() => botMemoryStore.settleReviewCadence(reservation, true));
           }
+
           const controller = yield* AgentController;
           yield* controller.resolveEngine({
             threadId: claudeThreadId,
@@ -418,6 +442,7 @@ describe("AgentControllerLive", () => {
   it.effect("rejects an OpenCode Go turn after the provider is disabled", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -438,14 +463,17 @@ describe("AgentControllerLive", () => {
         });
 
         bridge.setInstanceEnabled(false);
+
         const error = yield* controller
           .sendTurn({ threadId: openCodeGoThreadId, input: "Do not run this turn." })
           .pipe(Effect.flip);
 
         assert.equal(error._tag, "ProviderValidationError");
+
         if (error._tag === "ProviderValidationError") {
           assert.include(error.issue, "disabled in Akeru Bot settings");
         }
+
         expect(mastra.sendMessage).not.toHaveBeenCalled();
       }),
       bridge.service,
@@ -458,6 +486,7 @@ describe("AgentControllerLive", () => {
   it.effect("rejects an OpenCode Go turn disabled during dispatch admission", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -478,6 +507,7 @@ describe("AgentControllerLive", () => {
         });
 
         bridge.disableBeforeNextDispatchAdmission();
+
         const error = yield* controller
           .sendTurn({ threadId: openCodeGoThreadId, input: "Do not dispatch this turn." })
           .pipe(Effect.flip);
@@ -495,6 +525,7 @@ describe("AgentControllerLive", () => {
   it.effect("applies saved Codex options to initial and active Mastra sessions", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -557,10 +588,12 @@ describe("AgentControllerLive", () => {
   it.effect("does not fall back to the legacy Codex loop when its Mastra session is absent", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         yield* resolveCodex(controller);
+
         const error = yield* controller
           .sendTurn({ threadId: codexThreadId, input: "No legacy fallback." })
           .pipe(Effect.flip);

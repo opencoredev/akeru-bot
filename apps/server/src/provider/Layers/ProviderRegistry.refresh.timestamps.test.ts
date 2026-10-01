@@ -34,6 +34,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         Effect.gen(function* () {
           const claudeDriver = ProviderDriverKind.make("claudeAgent");
           const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
+
           const initialProvider = {
             instanceId: claudeInstanceId,
             driver: claudeDriver,
@@ -47,11 +48,14 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             slashCommands: [],
             skills: [],
           } as const satisfies ServerProvider;
+
           const reprobedProvider = {
             ...initialProvider,
             checkedAt: "2026-04-14T00:05:00.000Z",
           } satisfies ServerProvider;
+
           const changes = yield* PubSub.unbounded<ServerProvider>();
+
           const instance = {
             instanceId: claudeInstanceId,
             driverKind: claudeDriver,
@@ -73,6 +77,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             adapter: {} as ProviderInstance["adapter"],
             textGeneration: {} as ProviderInstance["textGeneration"],
           } satisfies ProviderInstance;
+
           const instanceRegistryLayer = Layer.succeed(
             ProviderInstanceRegistry.ProviderInstanceRegistry,
             {
@@ -92,8 +97,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
             },
           );
+
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+
           const runtimeServices = yield* Layer.build(
             ProviderRegistryLive.pipe(
               Layer.provideMerge(instanceRegistryLayer),
@@ -109,6 +116,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
 
           yield* Effect.gen(function* () {
             const registry = yield* ProviderRegistry.ProviderRegistry;
+
             const published = yield* registry.streamChanges.pipe(
               Stream.take(1),
               Stream.runCollect,
@@ -144,6 +152,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           Effect.gen(function* () {
             const openCodeDriver = ProviderDriverKind.make("opencode");
             const openCodeInstanceId = ProviderInstanceId.make("opencode");
+
             const initialProvider = {
               instanceId: openCodeInstanceId,
               driver: openCodeDriver,
@@ -172,11 +181,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               slashCommands: [],
               skills: [],
             } as const satisfies ServerProvider;
+
             const authoritativeProvider = {
               ...initialProvider,
               checkedAt: "2026-07-17T00:01:00.000Z",
               models: [initialProvider.models[0]!],
             } satisfies ServerProvider;
+
             const failedProvider = {
               ...authoritativeProvider,
               status: "error",
@@ -185,7 +196,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               models: [],
               message: "Failed to refresh OpenCode models.",
             } satisfies ServerProvider;
+
             const changes = yield* PubSub.unbounded<ServerProvider>();
+
             const instance = {
               instanceId: openCodeInstanceId,
               driverKind: openCodeDriver,
@@ -207,6 +220,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               adapter: {} as ProviderInstance["adapter"],
               textGeneration: {} as ProviderInstance["textGeneration"],
             } satisfies ProviderInstance;
+
             const instanceRegistryLayer = Layer.succeed(
               ProviderInstanceRegistry.ProviderInstanceRegistry,
               {
@@ -226,8 +240,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 ),
               },
             );
+
             const scope = yield* Scope.make();
             yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+
             const runtimeServices = yield* Layer.build(
               ProviderRegistryLive.pipe(
                 Layer.provideMerge(instanceRegistryLayer),
@@ -243,6 +259,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             yield* Effect.gen(function* () {
               const registry = yield* ProviderRegistry.ProviderRegistry;
               const config = yield* ServerConfig.ServerConfig;
+
               const filePath = yield* resolveProviderStatusCachePath({
                 cacheDir: config.providerStatusCacheDir,
                 instanceId: openCodeInstanceId,
@@ -251,6 +268,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               yield* PubSub.publish(changes, authoritativeProvider);
 
               let cachedProvider = yield* readProviderStatusCache(filePath);
+
               for (
                 let attempt = 0;
                 attempt < 50 && cachedProvider?.checkedAt !== authoritativeProvider.checkedAt;
@@ -264,6 +282,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               assert.deepStrictEqual(cachedProvider?.models, [authoritativeProvider.models[0]!]);
 
               yield* PubSub.publish(changes, failedProvider);
+
               for (
                 let attempt = 0;
                 attempt < 50 && cachedProvider?.checkedAt !== failedProvider.checkedAt;
@@ -293,6 +312,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         Effect.gen(function* () {
           const codexDriver = ProviderDriverKind.make("codex");
           const codexInstanceId = ProviderInstanceId.make("codex");
+
           const cachedProvider = {
             instanceId: codexInstanceId,
             driver: codexDriver,
@@ -306,6 +326,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             slashCommands: [],
             skills: [],
           } as const satisfies ServerProvider;
+
           const instance = {
             instanceId: codexInstanceId,
             driverKind: codexDriver,
@@ -327,6 +348,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             adapter: {} as ProviderInstance["adapter"],
             textGeneration: {} as ProviderInstance["textGeneration"],
           } satisfies ProviderInstance;
+
           const instanceRegistryLayer = Layer.succeed(
             ProviderInstanceRegistry.ProviderInstanceRegistry,
             {
@@ -346,8 +368,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
             },
           );
+
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+
           const runtimeServices = yield* Layer.build(
             ProviderRegistryLive.pipe(
               Layer.provideMerge(instanceRegistryLayer),
@@ -385,6 +409,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           const codexDriver = ProviderDriverKind.make("codex");
           const codexInstanceId = ProviderInstanceId.make("codex");
           yield* TestClock.setTime(Date.parse("2026-04-29T11:00:00.000Z"));
+
           const makeProvider = (checkedAt: string, version: string): ServerProvider =>
             ({
               instanceId: codexInstanceId,
@@ -399,9 +424,11 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               slashCommands: [],
               skills: [],
             }) as const satisfies ServerProvider;
+
           const cachedProvider = makeProvider("2026-04-29T10:00:00.000Z", "1.0.0");
           const olderProvider = makeProvider("2026-04-29T10:01:00.000Z", "1.0.1");
           const newerProvider = makeProvider("2026-04-29T10:02:00.000Z", "1.0.2");
+
           const probes = [
             {
               started: yield* Deferred.make<void>(),
@@ -414,8 +441,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               result: newerProvider,
             },
           ] as const;
+
           const probeCount = yield* Ref.make(0);
           const changes = yield* PubSub.unbounded<ServerProvider>();
+
           const instance = {
             instanceId: codexInstanceId,
             driverKind: codexDriver,
@@ -435,6 +464,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 const probe = probes[yield* Ref.getAndUpdate(probeCount, (count) => count + 1)]!;
                 yield* Deferred.succeed(probe.started, undefined);
                 yield* Deferred.await(probe.release);
+
                 return probe.result;
               }),
               streamChanges: Stream.fromPubSub(changes),
@@ -442,6 +472,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             adapter: {} as ProviderInstance["adapter"],
             textGeneration: {} as ProviderInstance["textGeneration"],
           } satisfies ProviderInstance;
+
           const instanceRegistryLayer = Layer.succeed(
             ProviderInstanceRegistry.ProviderInstanceRegistry,
             {
@@ -461,8 +492,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
             },
           );
+
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+
           const runtimeServices = yield* Layer.build(
             ProviderRegistryLive.pipe(
               Layer.provideMerge(instanceRegistryLayer),
@@ -483,10 +516,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             const olderProbe = yield* registry
               .refreshInstance(codexInstanceId)
               .pipe(Effect.forkScoped);
+
             yield* Deferred.await(probes[0].started);
+
             const newerProbe = yield* registry
               .refreshInstance(codexInstanceId)
               .pipe(Effect.forkScoped);
+
             yield* Deferred.await(probes[1].started);
 
             yield* Deferred.succeed(probes[1].release, undefined);
@@ -505,11 +541,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               status: "warning",
               auth: { status: "unauthenticated" },
             };
+
             const afterSignOut = yield* registry.streamChanges.pipe(
               Stream.take(1),
               Stream.runCollect,
               Effect.forkScoped({ startImmediately: true }),
             );
+
             yield* PubSub.publish(changes, olderProvider);
             yield* PubSub.publish(changes, signedOutProvider);
             assert.deepStrictEqual(yield* Fiber.join(afterSignOut), [[signedOutProvider]]);
@@ -517,11 +555,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             // If the clock moved back, a stored result from the "future" does
             // not block new results.
             yield* TestClock.setTime(Date.parse("2026-04-29T09:00:00.000Z"));
+
             const afterClockReset = yield* registry.streamChanges.pipe(
               Stream.take(1),
               Stream.runCollect,
               Effect.forkScoped({ startImmediately: true }),
             );
+
             yield* PubSub.publish(changes, olderProvider);
             assert.deepStrictEqual(yield* Fiber.join(afterClockReset), [[olderProvider]]);
           }).pipe(Effect.provide(runtimeServices), Effect.scoped);

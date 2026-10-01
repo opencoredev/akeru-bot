@@ -11,6 +11,7 @@ import { syntheticLoadSessionResponseFromInitialize } from "./AcpSessionModel.ts
 
 export function sessionUpdateIsReplay(params: EffectAcpSchema.SessionNotification): boolean {
   const meta = params._meta;
+
   return isRecord(meta) && meta.isReplay === true;
 }
 
@@ -20,6 +21,7 @@ export const waitForSessionLoadReplayIdle = (input: {
   Effect.gen(function* () {
     while (true) {
       const gate = yield* Ref.get(input.gateRef);
+
       if (
         Option.isSome(gate) &&
         gate.value.active &&
@@ -27,9 +29,11 @@ export const waitForSessionLoadReplayIdle = (input: {
       ) {
         const idleGapMillis = Duration.toMillis(gate.value.idleGap);
         const nowMillis = yield* Clock.currentTimeMillis;
+
         if (nowMillis - gate.value.lastActivityAtMillis >= idleGapMillis) {
           return syntheticLoadSessionResponseFromInitialize(gate.value.initializeResult);
         }
+
         yield* Effect.sleep(
           Duration.millis(
             Math.max(1, idleGapMillis - (nowMillis - gate.value.lastActivityAtMillis)),
@@ -37,6 +41,7 @@ export const waitForSessionLoadReplayIdle = (input: {
         );
         continue;
       }
+
       yield* Effect.sleep(Duration.millis(25));
     }
   });

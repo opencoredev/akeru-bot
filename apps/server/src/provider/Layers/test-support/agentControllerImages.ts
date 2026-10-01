@@ -32,6 +32,7 @@ export function makeImageRuntimeTestLayer(input: {
 }) {
   const dispatched: OrchestrationCommand[] = [];
   const imageUsage: Array<unknown> = [];
+
   const subscriptionAuth: ImageSubscriptionAuth = {
     statuses: () =>
       input.connected.map((provider) => ({
@@ -46,6 +47,7 @@ export function makeImageRuntimeTestLayer(input: {
     recordImageGenerationSuccess: () => undefined,
     recordImageRequestFailure: () => undefined,
   };
+
   const layer = imageGenerationRuntimeLayerWith({
     adapters: input.adapters,
     subscriptionAuth,
@@ -63,6 +65,7 @@ export function makeImageRuntimeTestLayer(input: {
           dispatch: (command) =>
             Effect.sync(() => {
               dispatched.push(command);
+
               return { sequence: dispatched.length };
             }),
           streamDomainEvents: Stream.empty,
@@ -111,6 +114,7 @@ export function makeImageRuntimeTestLayer(input: {
           recordMeasurement: (measurement) =>
             Effect.sync(() => {
               imageUsage.push(measurement);
+
               return {
                 ...measurement,
                 state: "reported",
@@ -126,5 +130,6 @@ export function makeImageRuntimeTestLayer(input: {
     Layer.provideMerge(ServerConfig.layerTest(process.cwd(), input.baseDir)),
     Layer.provideMerge(NodeServices.layer),
   );
+
   return { layer, dispatched, imageUsage };
 }

@@ -78,9 +78,11 @@ export function mastraConnectionIssue(
   savedCredentialConnected: boolean,
 ): string | undefined {
   if (!connection) return undefined;
+
   const env = connection.useSavedCredential
     ? connection.environment
     : connection.instanceEnvironment;
+
   if (connection.useSavedCredential) {
     const hasAmbientCredential = (() => {
       switch (String(provider)) {
@@ -100,11 +102,14 @@ export function mastraConnectionIssue(
           return false;
       }
     })();
+
     if (hasAmbientCredential) return undefined;
+
     return savedCredentialConnected
       ? undefined
       : `Connect ${provider} in Settings before starting.`;
   }
+
   switch (String(provider)) {
     case "codex":
       return env.OPENAI_API_KEY?.trim()
@@ -138,9 +143,11 @@ export function recordProviderAccessHealth(
 ): void {
   const provider = subscriptionProviderForDriver(event.provider);
   const providerInstanceId = event.providerInstanceId;
+
   if (event.type === "turn.completed") {
     if (event.payload.state === "failed") {
       const message = event.payload.errorMessage ?? "The provider request failed.";
+
       if (provider) {
         if (providerInstanceId)
           subscriptionAuth.recordAccountRequestFailure(
@@ -151,6 +158,7 @@ export function recordProviderAccessHealth(
           );
         else subscriptionAuth.recordRequestFailure(provider, message, event.createdAt);
       }
+
       if (providerInstanceId) {
         subscriptionAuth.recordProviderInstanceFailure(
           providerInstanceId,
@@ -169,13 +177,17 @@ export function recordProviderAccessHealth(
           );
         else subscriptionAuth.recordRequestSuccess(provider, event.createdAt);
       }
+
       if (providerInstanceId) {
         subscriptionAuth.recordProviderInstanceSuccess(providerInstanceId, event.createdAt);
       }
     }
+
     return;
   }
+
   if (event.type !== "runtime.error" || event.payload.class !== "provider_error") return;
+
   if (provider) {
     if (providerInstanceId)
       subscriptionAuth.recordAccountRequestFailure(
@@ -186,6 +198,7 @@ export function recordProviderAccessHealth(
       );
     else subscriptionAuth.recordRequestFailure(provider, event.payload.message, event.createdAt);
   }
+
   if (providerInstanceId) {
     subscriptionAuth.recordProviderInstanceFailure(
       providerInstanceId,

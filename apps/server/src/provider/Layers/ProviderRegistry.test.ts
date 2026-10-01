@@ -90,6 +90,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           slashCommands: [],
           skills: [],
         } as const satisfies ServerProvider;
+
         const rechecked = { ...provider, checkedAt: "2026-03-25T00:05:00.000Z" };
 
         assert.strictEqual(haveProvidersChanged([provider], [rechecked]), false);
@@ -135,6 +136,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           slashCommands: [],
           skills: [],
         } as const satisfies ServerProvider;
+
         const refreshedProvider = {
           ...previousProvider,
           checkedAt: "2026-04-14T00:01:00.000Z",
@@ -182,6 +184,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           slashCommands: [],
           skills: [],
         } as const satisfies ServerProvider;
+
         const refreshedProvider = {
           ...previousProvider,
           checkedAt: "2026-07-17T00:01:00.000Z",
@@ -230,6 +233,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           slashCommands: [],
           skills: [],
         } as const satisfies ServerProvider;
+
         const refreshedProvider = {
           ...previousProvider,
           status: "error",
@@ -258,6 +262,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           isCustom: false,
           capabilities: null,
         });
+
         const previousProvider = {
           instanceId: ProviderInstanceId.make("grok"),
           driver: ProviderDriverKind.make("grok"),
@@ -271,11 +276,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           slashCommands: [],
           skills: [],
         } as const satisfies ServerProvider;
+
         const cleanProbe = {
           ...previousProvider,
           checkedAt: "2026-07-17T00:01:00.000Z",
           models: [model("grok-build")],
         } satisfies ServerProvider;
+
         const failedProbe = {
           ...previousProvider,
           status: "error",
@@ -284,11 +291,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           models: [model("grok-build")],
           message: "Failed to execute Grok CLI health check.",
         } satisfies ServerProvider;
+
         const partialProbe = {
           ...cleanProbe,
           status: "warning",
           message: "Grok ACP initialize failed. Model options may be incomplete.",
         } satisfies ServerProvider;
+
         const signedOut = {
           ...failedProbe,
           auth: { status: "unauthenticated" },
@@ -349,6 +358,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           slashCommands: [],
           skills: [],
         } as const satisfies ServerProvider;
+
         const pendingProvider = {
           ...previousProvider,
           status: "warning",
@@ -359,6 +369,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           models: [],
           message: "OpenCode provider status has not been checked in this session yet.",
         } satisfies ServerProvider;
+
         const loggedOutProvider = {
           ...previousProvider,
           status: "warning",
@@ -367,6 +378,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           models: [],
           message: "OpenCode is available, but it did not report any connected upstream providers.",
         } satisfies ServerProvider;
+
         const missingProvider = {
           ...previousProvider,
           status: "error",
@@ -377,11 +389,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           models: [],
           message: "OpenCode CLI (`opencode`) is not installed or not on PATH.",
         } satisfies ServerProvider;
+
         const authoritativeProvider = {
           ...previousProvider,
           checkedAt: "2026-07-17T00:04:00.000Z",
           models: [previousProvider.models[0]!],
         } satisfies ServerProvider;
+
         const failedProvider = {
           ...authoritativeProvider,
           status: "error",
@@ -442,6 +456,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           slashCommands: [],
           skills: [],
         } as const satisfies ServerProvider;
+
         const refreshedProvider = {
           ...previousProvider,
           checkedAt: "2026-04-14T00:01:00.000Z",
@@ -473,6 +488,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         Effect.gen(function* () {
           const codexDriver = ProviderDriverKind.make("codex");
           const codexInstanceId = ProviderInstanceId.make("codex");
+
           const initialProvider = {
             instanceId: codexInstanceId,
             driver: codexDriver,
@@ -487,7 +503,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             slashCommands: [],
             skills: [],
           } as const satisfies ServerProvider;
+
           const refreshCalls = yield* Ref.make(0);
+
           const instance = {
             instanceId: codexInstanceId,
             driverKind: codexDriver,
@@ -511,6 +529,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             adapter: {} as ProviderInstance["adapter"],
             textGeneration: {} as ProviderInstance["textGeneration"],
           } satisfies ProviderInstance;
+
           const instanceRegistryLayer = Layer.succeed(
             ProviderInstanceRegistry.ProviderInstanceRegistry,
             {
@@ -528,8 +547,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), PubSub.subscribe),
             },
           );
+
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+
           const runtimeServices = yield* Layer.build(
             ProviderRegistryLive.pipe(
               Layer.provideMerge(instanceRegistryLayer),
@@ -541,6 +562,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               Layer.provideMerge(NodeServices.layer),
             ),
           ).pipe(Scope.provide(scope));
+
           yield* Effect.gen(function* () {
             const registry = yield* ProviderRegistry.ProviderRegistry;
             assert.deepStrictEqual(yield* registry.getProviders, [initialProvider]);
@@ -560,6 +582,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         Effect.gen(function* () {
           const cursorDriver = ProviderDriverKind.make("cursor");
           const cursorInstanceId = ProviderInstanceId.make("cursor");
+
           const initialProvider = {
             instanceId: cursorInstanceId,
             driver: cursorDriver,
@@ -586,12 +609,15 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             slashCommands: [],
             skills: [],
           } as const satisfies ServerProvider;
+
           const refreshedProvider = {
             ...initialProvider,
             checkedAt: "2026-04-14T00:01:00.000Z",
             models: [],
           } satisfies ServerProvider;
+
           const changes = yield* PubSub.unbounded<ServerProvider>();
+
           const instance = {
             instanceId: cursorInstanceId,
             driverKind: cursorDriver,
@@ -613,6 +639,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             adapter: {} as ProviderInstance["adapter"],
             textGeneration: {} as ProviderInstance["textGeneration"],
           } satisfies ProviderInstance;
+
           const instanceRegistryLayer = Layer.succeed(
             ProviderInstanceRegistry.ProviderInstanceRegistry,
             {
@@ -632,8 +659,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
             },
           );
+
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+
           const runtimeServices = yield* Layer.build(
             ProviderRegistryLive.pipe(
               Layer.provideMerge(instanceRegistryLayer),
@@ -650,6 +679,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           yield* Effect.gen(function* () {
             const registry = yield* ProviderRegistry.ProviderRegistry;
             const config = yield* ServerConfig.ServerConfig;
+
             const filePath = yield* resolveProviderStatusCachePath({
               cacheDir: config.providerStatusCacheDir,
               instanceId: cursorInstanceId,

@@ -36,6 +36,7 @@ describe("provider access health", () => {
   it("records a failed first request and recovery at the runtime event boundary", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-access-health-"));
     const authPath = NodePath.join(directory, "subscription-auth.json");
+
     try {
       NodeFS.writeFileSync(
         authPath,
@@ -44,11 +45,13 @@ describe("provider access health", () => {
         }),
       );
       const service = await makeTestSubscriptionAuthService(authPath);
+
       const base = {
         provider: ProviderDriverKind.make("grok"),
         providerInstanceId: ProviderInstanceId.make("grok"),
         threadId: ThreadId.make("thread-health"),
       };
+
       recordProviderAccessHealth(service, {
         ...base,
         type: "runtime.error",
@@ -84,6 +87,7 @@ describe("AgentControllerLive", () => {
     const childBotId = BotId.make("bot-child");
     const childThreadId = ThreadId.make("thread-child");
     const childTurnId = TurnId.make("turn-child");
+
     const receipt = delegatedUsageReceipt(
       {
         botId: childBotId,
@@ -117,6 +121,7 @@ describe("AgentControllerLive", () => {
   it.effect("adds every Mastra step usage update", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -129,10 +134,12 @@ describe("AgentControllerLive", () => {
           runtimeMode: "full-access",
         });
         const events: ProviderRuntimeEvent[] = [];
+
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Use two steps." });
         mastra.emit({
@@ -167,6 +174,7 @@ describe("AgentControllerLive", () => {
   it.effect("adds every Mastra step usage update", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -179,10 +187,12 @@ describe("AgentControllerLive", () => {
           runtimeMode: "full-access",
         });
         const events: ProviderRuntimeEvent[] = [];
+
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Use two steps." });
         mastra.emit({

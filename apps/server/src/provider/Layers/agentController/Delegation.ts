@@ -70,11 +70,14 @@ export function createDelegation(deps: {
     readonly activeChildDelegations: number;
   }): NonNullable<AkeruToolSession["delegation"]> => {
     const delegationRuntime = deps.wired().delegationRuntime;
+
     const parent = () => {
       const turnId = deps.sessions.get(String(input.threadId))?.activeTurn?.turnId;
+
       if (!turnId || !delegationRuntime) {
         throw new Error("Bot management requires an active parent turn.");
       }
+
       return {
         threadId: input.threadId,
         turnId,
@@ -85,9 +88,11 @@ export function createDelegation(deps: {
         access: input.access,
       };
     };
+
     const createAgent = delegationRuntime?.create;
     const checkAgent = delegationRuntime?.check;
     const stopAgent = delegationRuntime?.stop;
+
     return {
       depth: input.parentDelegation?.depth ?? 0,
       activeDelegations: input.activeChildDelegations,
@@ -98,6 +103,7 @@ export function createDelegation(deps: {
       ...(stopAgent ? { stop: (request) => stopAgent(parent(), request) } : {}),
     };
   };
+
   const makeDelegationRuntime = (input: {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;
     readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
@@ -108,6 +114,7 @@ export function createDelegation(deps: {
         deps.runPromise(
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
+
             return yield* deps.childWaiters.wait(
               String(threadId),
               null,
@@ -144,6 +151,7 @@ export function createDelegation(deps: {
         ),
       recordUsage: async (usage) => {
         const active = deps.sessions.get(String(usage.threadId));
+
         if (active) deps.publish(delegatedUsageReceipt(usage, active));
       },
       onWatchError: (delegationId, cause) =>
@@ -161,5 +169,6 @@ export function createDelegation(deps: {
           }),
         ),
     });
+
   return { delegationFor, makeDelegationRuntime };
 }

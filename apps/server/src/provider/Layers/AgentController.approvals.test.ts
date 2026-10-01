@@ -31,6 +31,7 @@ describe("AgentControllerLive", () => {
   it.effect("keeps product feedback approval-gated in full-access mode", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -90,6 +91,7 @@ describe("AgentControllerLive", () => {
   it.effect("keeps a pending approval across reconnect and grants one exact tool call", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -125,6 +127,7 @@ describe("AgentControllerLive", () => {
 
         const runtime = mastra.harnessOptions[0]?.toolRuntime;
         assert.isDefined(runtime);
+
         const execution = {
           threadId: String(codexThreadId),
           toolId: "Shell" as const,
@@ -132,12 +135,14 @@ describe("AgentControllerLive", () => {
           input: { command: "pwd" },
           approvalMode: "require-grant" as const,
         };
+
         const receiptsFiber = yield* controller.streamEvents.pipe(
           Stream.filter((event) => event.type === "tool.receipt"),
           Stream.take(2),
           Stream.runCollect,
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         yield* Effect.promise(() => runtime.execute(execution));
         const receipts = yield* Fiber.join(receiptsFiber);
@@ -168,6 +173,7 @@ describe("AgentControllerLive", () => {
           requestId: ApprovalRequestId.make("send-tool-1"),
           decision: "decline",
         });
+
         const duplicateResponseError = yield* controller
           .respondToRequest({
             threadId: codexThreadId,
@@ -175,6 +181,7 @@ describe("AgentControllerLive", () => {
             decision: "accept",
           })
           .pipe(Effect.flip);
+
         expect(duplicateResponseError.message).toContain("no longer active");
         expect(mastra.session.respondToToolApproval).toHaveBeenCalledTimes(2);
         expect(mastra.session.respondToToolApproval).toHaveBeenLastCalledWith({
@@ -193,6 +200,7 @@ describe("AgentControllerLive", () => {
           result: "cancelled",
           isError: true,
         } as AgentControllerEvent);
+
         const staleResponseError = yield* controller
           .respondToRequest({
             threadId: codexThreadId,
@@ -200,6 +208,7 @@ describe("AgentControllerLive", () => {
             decision: "accept",
           })
           .pipe(Effect.flip);
+
         expect(staleResponseError.message).toContain("no longer active");
         expect(mastra.session.respondToToolApproval).not.toHaveBeenCalledWith({
           toolCallId: "shell-tool-stale",
@@ -223,6 +232,7 @@ describe("AgentControllerLive", () => {
   it.effect("resolves pending approvals when a turn or session ends", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -236,13 +246,16 @@ describe("AgentControllerLive", () => {
           runtimeMode: "full-access",
         });
         const events: ProviderRuntimeEvent[] = [];
+
         const eventsFiber = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
 
         yield* controller.sendTurn({ threadId: codexThreadId, input: "Finish." });
+
         for (const requestId of ["finish-1", "finish-2"]) {
           mastra.emit({
             type: "tool_approval_required",
@@ -251,6 +264,7 @@ describe("AgentControllerLive", () => {
             args: { to: "person@example.com" },
           } as AgentControllerEvent);
         }
+
         mastra.emit({ type: "agent_end", reason: "complete" } as AgentControllerEvent);
         mastra.finishSend();
         yield* Effect.yieldNow;
@@ -282,6 +296,7 @@ describe("AgentControllerLive", () => {
           "interrupt-1",
           "stop-1",
         ]);
+
         for (const event of resolved) {
           expect(event.payload).toMatchObject({
             decision: "cancel",
@@ -289,6 +304,7 @@ describe("AgentControllerLive", () => {
             outcome: "cancelled",
           });
         }
+
         yield* Fiber.interrupt(eventsFiber);
       }),
       bridge.service,
@@ -301,14 +317,17 @@ describe("AgentControllerLive", () => {
   it.effect("approves question tools without showing an approval request", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
         const events: ProviderRuntimeEvent[] = [];
+
         const collector = yield* controller.streamEvents.pipe(
           Stream.runForEach((event) => Effect.sync(() => events.push(event))),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* resolveCodex(controller);
         yield* controller.startSession(codexThreadId, {
           threadId: codexThreadId,
@@ -375,6 +394,7 @@ describe("AgentControllerLive", () => {
   it.effect("keeps a suspended Mastra turn active until tool input resumes", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -426,6 +446,7 @@ describe("AgentControllerLive", () => {
   it.effect("rejects an OpenCode Go approval after the provider is disabled", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -453,6 +474,7 @@ describe("AgentControllerLive", () => {
         } as AgentControllerEvent);
 
         bridge.disableBeforeNextDispatchAdmission();
+
         const error = yield* controller
           .respondToRequest({
             threadId: openCodeGoThreadId,
@@ -475,6 +497,7 @@ describe("AgentControllerLive", () => {
   it.effect("rejects OpenCode Go user input after the provider is disabled", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
+
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
@@ -503,6 +526,7 @@ describe("AgentControllerLive", () => {
         } as AgentControllerEvent);
 
         bridge.disableBeforeNextDispatchAdmission();
+
         const error = yield* controller
           .respondToUserInput({
             threadId: openCodeGoThreadId,

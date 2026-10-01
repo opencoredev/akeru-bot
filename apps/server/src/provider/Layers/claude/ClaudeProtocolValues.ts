@@ -41,6 +41,7 @@ export const decodeUnknownJsonStringExit = Schema.decodeUnknownExit(
 
 export function encodeJsonStringForDiagnostics(input: unknown): string | undefined {
   const result = encodeUnknownJsonStringExit(input);
+
   return Exit.isSuccess(result) ? result.value : undefined;
 }
 
@@ -62,9 +63,11 @@ export function toSessionPermissionUpdates(
   const sessionScoped = (suggestions ?? []).map(
     (suggestion): PermissionUpdate => ({ ...suggestion, destination: "session" }),
   );
+
   if (sessionScoped.length > 0) {
     return sessionScoped;
   }
+
   return [
     {
       type: "addRules",
@@ -99,6 +102,7 @@ export function toMessage(cause: unknown, fallback: string): string {
   if (cause instanceof Error && cause.message.length > 0) {
     return cause.message;
   }
+
   return fallback;
 }
 
@@ -106,17 +110,21 @@ export function normalizeClaudeStreamMessages(
   cause: Cause.Cause<ProviderAdapterProcessError>,
 ): ReadonlyArray<string> {
   const errors: Array<string> = [];
+
   for (const error of Cause.prettyErrors(cause)) {
     const message = error.message.trim();
+
     if (message.length > 0) {
       errors.push(message);
     }
   }
+
   if (errors.length > 0) {
     return errors;
   }
 
   const squashed = toMessage(Cause.squash(cause), "").trim();
+
   return squashed.length > 0 ? [squashed] : [];
 }
 
@@ -125,6 +133,7 @@ export function getEffectiveClaudeAgentEffort(
   model: string | null | undefined,
 ): ClaudeSdkEffort | null {
   const normalized = normalizeClaudeCliEffort(effort, model);
+
   return normalized ? (normalized as ClaudeSdkEffort) : null;
 }
 
@@ -144,6 +153,7 @@ export function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState 
   if (!resumeCursor || typeof resumeCursor !== "object") {
     return undefined;
   }
+
   const cursor = resumeCursor as {
     threadId?: unknown;
     resume?: unknown;
@@ -153,19 +163,24 @@ export function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState 
   };
 
   const threadIdCandidate = typeof cursor.threadId === "string" ? cursor.threadId : undefined;
+
   const threadId =
     threadIdCandidate && !isSyntheticClaudeThreadId(threadIdCandidate)
       ? ThreadId.make(threadIdCandidate)
       : undefined;
+
   const resumeCandidate =
     typeof cursor.resume === "string"
       ? cursor.resume
       : typeof cursor.sessionId === "string"
         ? cursor.sessionId
         : undefined;
+
   const resume = resumeCandidate && isUuid(resumeCandidate) ? resumeCandidate : undefined;
+
   const resumeSessionAt =
     typeof cursor.resumeSessionAt === "string" ? cursor.resumeSessionAt : undefined;
+
   const turnCountValue = typeof cursor.turnCount === "number" ? cursor.turnCount : undefined;
 
   return {
@@ -180,9 +195,11 @@ export function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState 
 
 export function classifyToolItemType(toolName: string): CanonicalItemType {
   const normalized = toolName.toLowerCase();
+
   if (normalized.includes("agent")) {
     return "collab_agent_tool_call";
   }
+
   if (
     normalized === "task" ||
     normalized === "agent" ||
@@ -191,6 +208,7 @@ export function classifyToolItemType(toolName: string): CanonicalItemType {
   ) {
     return "collab_agent_tool_call";
   }
+
   if (
     normalized.includes("bash") ||
     normalized.includes("command") ||
@@ -199,6 +217,7 @@ export function classifyToolItemType(toolName: string): CanonicalItemType {
   ) {
     return "command_execution";
   }
+
   if (
     normalized.includes("edit") ||
     normalized.includes("write") ||
@@ -210,20 +229,25 @@ export function classifyToolItemType(toolName: string): CanonicalItemType {
   ) {
     return "file_change";
   }
+
   if (normalized.includes("mcp")) {
     return "mcp_tool_call";
   }
+
   if (normalized.includes("websearch") || normalized.includes("web search")) {
     return "web_search";
   }
+
   if (normalized.includes("image")) {
     return "image_view";
   }
+
   return "dynamic_tool_call";
 }
 
 export function isReadOnlyToolName(toolName: string): boolean {
   const normalized = toolName.toLowerCase();
+
   return (
     normalized === "read" ||
     normalized.includes("read file") ||
@@ -238,7 +262,9 @@ export function classifyRequestType(toolName: string): CanonicalRequestType {
   if (isReadOnlyToolName(toolName)) {
     return "file_read_approval";
   }
+
   const itemType = classifyToolItemType(toolName);
+
   return itemType === "command_execution"
     ? "command_execution_approval"
     : itemType === "file_change"
@@ -249,6 +275,7 @@ export function classifyRequestType(toolName: string): CanonicalRequestType {
 export function summarizeToolRequest(toolName: string, input: Record<string, unknown>): string {
   const commandValue = input.command ?? input.cmd;
   const command = typeof commandValue === "string" ? commandValue : undefined;
+
   if (command && command.trim().length > 0) {
     return `${toolName}: ${command.trim().slice(0, 400)}`;
   }
@@ -257,20 +284,25 @@ export function summarizeToolRequest(toolName: string, input: Record<string, unk
   // over raw JSON. The structured subagent_type is carried separately on the
   // task.* payloads (role) — the label is display-only.
   const itemType = classifyToolItemType(toolName);
+
   if (itemType === "collab_agent_tool_call") {
     const description =
       typeof input.description === "string" ? input.description.trim() : undefined;
+
     const prompt = typeof input.prompt === "string" ? input.prompt.trim() : undefined;
     const label = description || (prompt ? prompt.slice(0, 200) : undefined);
+
     if (label) {
       return label;
     }
   }
 
   const serialized = encodeJsonStringForDiagnostics(input) ?? "[unserializable input]";
+
   if (serialized.length <= 400) {
     return `${toolName}: ${serialized}`;
   }
+
   return `${toolName}: ${serialized.slice(0, 397)}...`;
 }
 
@@ -310,6 +342,7 @@ export function nativeProviderRefs(
       providerItemId: ProviderItemId.make(options.providerItemId),
     };
   }
+
   return {};
 }
 
@@ -319,16 +352,20 @@ export function extractAssistantTextBlocks(message: SDKMessage): Array<string> {
   }
 
   const content = (message.message as { content?: unknown } | undefined)?.content;
+
   if (!Array.isArray(content)) {
     return [];
   }
 
   const fragments: string[] = [];
+
   for (const block of content) {
     if (!block || typeof block !== "object") {
       continue;
     }
+
     const candidate = block as { type?: unknown; text?: unknown };
+
     if (
       candidate.type === "text" &&
       typeof candidate.text === "string" &&
@@ -347,6 +384,7 @@ export function extractContentBlockText(block: unknown): string {
   }
 
   const candidate = block as { type?: unknown; text?: unknown };
+
   return candidate.type === "text" && typeof candidate.text === "string" ? candidate.text : "";
 }
 
@@ -383,6 +421,7 @@ export function extractExitPlanModePlan(value: unknown): string | undefined {
   const record = value as {
     plan?: unknown;
   };
+
   return typeof record.plan === "string" && record.plan.trim().length > 0
     ? record.plan.trim()
     : undefined;
@@ -399,10 +438,13 @@ export function exitPlanCaptureKey(input: {
 
 export function tryParseJsonRecord(value: string): Record<string, unknown> | undefined {
   const result = decodeUnknownJsonStringExit(value);
+
   if (!Exit.isSuccess(result)) {
     return undefined;
   }
+
   const parsed = result.value;
+
   return parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? (parsed as Record<string, unknown>)
     : undefined;
@@ -436,6 +478,7 @@ export function toolResultBlocksFromUserMessage(message: SDKMessage): Array<{
   }
 
   const content = (message.message as { content?: unknown } | undefined)?.content;
+
   if (!Array.isArray(content)) {
     return [];
   }
@@ -453,11 +496,13 @@ export function toolResultBlocksFromUserMessage(message: SDKMessage): Array<{
     }
 
     const block = entry as Record<string, unknown>;
+
     if (block.type !== "tool_result") {
       continue;
     }
 
     const toolUseId = typeof block.tool_use_id === "string" ? block.tool_use_id : undefined;
+
     if (!toolUseId) {
       continue;
     }
@@ -478,6 +523,7 @@ export function toSessionError(
   cause: unknown,
 ): ProviderAdapterSessionNotFoundError | ProviderAdapterSessionClosedError | undefined {
   const normalized = toMessage(cause, "").toLowerCase();
+
   if (normalized.includes("unknown session") || normalized.includes("not found")) {
     return new ProviderAdapterSessionNotFoundError({
       provider: PROVIDER,
@@ -485,6 +531,7 @@ export function toSessionError(
       cause,
     });
   }
+
   if (normalized.includes("closed")) {
     return new ProviderAdapterSessionClosedError({
       provider: PROVIDER,
@@ -492,6 +539,7 @@ export function toSessionError(
       cause,
     });
   }
+
   return undefined;
 }
 
@@ -501,9 +549,11 @@ export function toRequestError(
   cause: unknown,
 ): ProviderAdapterError {
   const sessionError = toSessionError(threadId, cause);
+
   if (sessionError) {
     return sessionError;
   }
+
   return new ProviderAdapterRequestError({
     provider: PROVIDER,
     method,
@@ -516,7 +566,9 @@ export function sdkMessageType(value: unknown): string | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
   }
+
   const record = value as { type?: unknown };
+
   return typeof record.type === "string" ? record.type : undefined;
 }
 
@@ -524,26 +576,32 @@ export function sdkMessageSubtype(value: unknown): string | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
   }
+
   const record = value as { subtype?: unknown };
+
   return typeof record.subtype === "string" ? record.subtype : undefined;
 }
 
 export function sdkNativeMethod(message: SDKMessage): string {
   const subtype = sdkMessageSubtype(message);
+
   if (subtype) {
     return `claude/${message.type}/${subtype}`;
   }
 
   if (message.type === "stream_event") {
     const streamType = sdkMessageType(message.event);
+
     if (streamType) {
       const deltaType =
         streamType === "content_block_delta"
           ? sdkMessageType((message.event as { delta?: unknown }).delta)
           : undefined;
+
       if (deltaType) {
         return `claude/${message.type}/${streamType}/${deltaType}`;
       }
+
       return `claude/${message.type}/${streamType}`;
     }
   }
@@ -571,13 +629,17 @@ export function previewUnknownSdkContent(message: unknown): string | undefined {
   if (!message || typeof message !== "object") {
     return undefined;
   }
+
   const parts: string[] = [];
+
   for (const [key, value] of Object.entries(message as Record<string, unknown>)) {
     if (SDK_MESSAGE_NOISE_KEYS.has(key)) {
       continue;
     }
+
     if (typeof value === "string") {
       const trimmed = value.trim();
+
       if (trimmed.length > 0) {
         parts.push(`${key}: ${trimmed}`);
       }
@@ -585,24 +647,30 @@ export function previewUnknownSdkContent(message: unknown): string | undefined {
       parts.push(`${key}: ${String(value)}`);
     }
   }
+
   if (parts.length === 0) {
     return undefined;
   }
+
   const joined = parts.join(" · ");
+
   return joined.length > 280 ? `${joined.slice(0, 279)}…` : joined;
 }
 
 export function describeUnknownSdkMessage(kind: string, message: unknown): string {
   const preview = previewUnknownSdkContent(message);
+
   return preview ? `${kind} — ${preview}` : `${kind} (no displayable text content)`;
 }
 
 export function sdkNativeItemId(message: SDKMessage): string | undefined {
   if (message.type === "assistant") {
     const maybeId = (message.message as { id?: unknown }).id;
+
     if (typeof maybeId === "string") {
       return maybeId;
     }
+
     return undefined;
   }
 
@@ -615,6 +683,7 @@ export function sdkNativeItemId(message: SDKMessage): string | undefined {
       type?: unknown;
       content_block?: { id?: unknown };
     };
+
     if (event.type === "content_block_start" && typeof event.content_block?.id === "string") {
       return event.content_block.id;
     }

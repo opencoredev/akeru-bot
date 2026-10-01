@@ -34,6 +34,7 @@ describe("AgentControllerLive", () => {
     const mastra = makeMastraHarness();
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-delegated-grant-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
+
     const access: AkeruDelegationAccessGrant = {
       allowedToolIds: ["Read"],
       memoryScopes: ["bot"],
@@ -44,6 +45,7 @@ describe("AgentControllerLive", () => {
       disabledMcpServerIds: [],
       approvalCeiling: "send",
     };
+
     const runtime = {
       send: vi.fn(async () => {
         throw new Error("not used");
@@ -54,6 +56,7 @@ describe("AgentControllerLive", () => {
       parentFinished: vi.fn(async () => undefined),
       accessForThread: () => access,
     };
+
     const layer = makeLayer(
       bridge.service,
       mastra.factory,
@@ -63,6 +66,7 @@ describe("AgentControllerLive", () => {
       { botMemoryStore },
       runtime,
     );
+
     const memoryToolIds = () =>
       mastra.harnessOptions[0]?.toolRuntime
         .toolsForThread(String(codexThreadId))
@@ -113,6 +117,7 @@ describe("AgentControllerLive", () => {
     const mastra = makeMastraHarness();
     const destroyStarted = Promise.withResolvers<void>();
     const destroyReleased = Promise.withResolvers<void>();
+
     const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = (options) =>
       Effect.acquireRelease(mastra.factory(options), () =>
         Effect.promise(async () => {
@@ -125,6 +130,7 @@ describe("AgentControllerLive", () => {
       const scope = yield* Scope.make("sequential");
       yield* Layer.buildWithScope(makeLayer(bridge.service, factory), scope);
       let scopeClosed = false;
+
       const closeScope = yield* Scope.close(scope, Exit.void).pipe(
         Effect.tap(() => Effect.sync(() => (scopeClosed = true))),
         Effect.forkScoped,

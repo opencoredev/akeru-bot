@@ -46,6 +46,7 @@ export function createGrokEvents(deps: {
         }),
       ),
     );
+
   const emitPlanUpdate = (
     ctx: GrokSessionContext,
     turnId: TurnId | undefined,
@@ -62,9 +63,11 @@ export function createGrokEvents(deps: {
   ) =>
     Effect.gen(function* () {
       const fingerprint = `${turnId ?? "no-turn"}:${encodeJsonStringForDiagnostics(payload) ?? "[unserializable payload]"}`;
+
       if (ctx.lastPlanFingerprint === fingerprint) {
         return;
       }
+
       ctx.lastPlanFingerprint = fingerprint;
       yield* deps.offerRuntimeEvent(
         makeAcpPlanUpdatedEvent({
@@ -79,5 +82,6 @@ export function createGrokEvents(deps: {
         }),
       );
     });
+
   return { logNative, emitPlanUpdate };
 }

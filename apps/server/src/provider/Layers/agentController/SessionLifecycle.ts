@@ -64,9 +64,12 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
     "AgentController.startSession",
   )(function* (threadId, input) {
     const key = String(threadId);
+
     const { parentDelegation, workerParent, bot, botId, activeChildDelegations, threadTitle } =
       yield* readSessionStartContext(threadId, input.botId ?? null);
+
     const isWorkerThread = deps.workerRuntime.depthForThread(threadId) > 0;
+
     const botAccess: AkeruDelegationAccessGrant = {
       allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
       memoryScopes: ["private", "bot", "project", "group", "workspace"],
@@ -79,6 +82,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       disabledMcpServerIds: bot?.disabledMcpServerIds ?? [],
       approvalCeiling: "secrets",
     };
+
     // A restart drops the worker runtime's grants, so a worker chat it orphaned rebuilds
     // its grant from the parent chat: the parent's delegated grant, or the bot's own for a
     // top-level parent. Without a parent link it keeps no tools rather than gaining any.
@@ -91,32 +95,39 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
             })
           : { ...botAccess, allowedToolIds: [], enabledMcpServerIds: [] },
       );
+
     const delegatedAccess =
       deps.wired().delegationRuntime?.accessForThread(threadId) ??
       parentDelegation?.access ??
       deps.workerRuntime.accessForThread(threadId) ??
       (isWorkerThread ? orphanedWorkerAccess() : undefined);
+
     const access = delegatedAccess ?? botAccess;
+
     // A top-level bot's null sandbox is its local workspace, while a delegated
     // null sandbox has none, so workers receive the local workspace explicitly.
     const workerParentAccess: AkeruDelegationAccessGrant =
       delegatedAccess || access.sandbox !== null ? access : { ...access, sandbox: "local" };
+
     const mcpServers = (input.mcpServers ?? []).filter(
       (server) =>
         access.enabledMcpServerIds.includes(server.id) &&
         !access.disabledMcpServerIds.includes(server.id),
     );
+
     const workspaceType =
       delegatedAccess && access.sandbox === null
         ? "none"
         : access.sandbox === null || access.sandbox === "local"
           ? "local"
           : "cloud";
+
     const resourceScope = botRuntimeResourceScope({
       sharing: input.botSandboxBrowserSharing ?? DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
       ...(botId ? { botId } : {}),
       threadId: key,
     });
+
     const workspaceResourceKey = botWorkspaceResourceKey({
       resourceScope,
       sandbox: access.sandbox,
@@ -126,24 +137,30 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           }
         : {}),
     });
+
     const workspaceId = botWorkspaceIdentity(workspaceResourceKey);
     const existing = deps.sessions.get(key);
     const resolved = deps.resolvedByThread.get(key);
+
     if (!resolved) {
       return yield* new AgentControllerRuntimeError({
         operation: "startSession",
         detail: `Thread '${threadId}' has no resolved engine.`,
       });
     }
+
     const personalityTone =
       input.personalityTone ?? bot?.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE;
+
     deps.resolvedByThread.set(key, {
       ...resolved,
       ...(input.botName ? { botName: input.botName } : {}),
       personalityTone,
     });
+
     if (deps.usesMastraCode(resolved.provider)) {
       const routing = yield* deps.legacyProviderBridge.getInstanceInfo(resolved.providerInstanceId);
+
       if (!routing.enabled) {
         return yield* deps.disabledProviderError(
           "AgentController.startSession",
@@ -151,6 +168,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         );
       }
     }
+
     if (
       mcpServers.some((server) => isCodexComputerUseServer(String(server.id))) &&
       resolved.provider !== ProviderDriverKind.make("codex")
@@ -160,9 +178,12 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         detail: "Computer Use requires a Codex bot.",
       });
     }
+
     const migrationBotId = input.memoryAccess?.respondingBotId ?? input.memoryAccess?.botId;
+
     if (migrationBotId && input.memoryAccess && options?.entityMemoryRepository) {
       const migrationKeys = legacyMemoryMigrationKeys(input.memoryAccess);
+
       const migrationsComplete = yield* Effect.promise(() =>
         Promise.all(
           migrationKeys.map((migrationKey) =>
@@ -170,6 +191,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           ),
         ),
       );
+
       if (migrationsComplete.some((complete) => !complete)) {
         const revisions = yield* Effect.forEach(
           legacyMemoryMigrationAccesses(input.memoryAccess),
@@ -187,6 +209,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
               }),
           ),
         );
+
         yield* deps.runMastra("memory.migrate", () =>
           migrateLegacyBotMemory({
             store: deps.botMemoryStore,
@@ -196,6 +219,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         );
       }
     }
+
     // A cwd change invalidates reuse for local workspaces: the user-computer
     // workspace lease is keyed by cwd and the session tools would keep
     // acting on the old directory. Remote sandboxes have no user-computer
@@ -232,10 +256,12 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       delete toolSession.imageGeneration;
       const imageGeneration = yield* deps.imageToolSettings;
       const settings = yield* deps.memorySettings();
+
       const nextMemoryHandlers =
         access.memoryScopes.length > 0
           ? deps.memoryHandlers(input.memoryAccess, access.memoryScopes)
           : undefined;
+
       const configuredToolSession: AkeruToolSession = {
         ...toolSession,
         runtimeMode: access.runtimeMode,
@@ -262,6 +288,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           : {}),
         imageGeneration,
       };
+
       existing.configuredToolSession = configuredToolSession;
       existing.startInput = input;
       existing.configuredMemoryAccess = delegatedAccess
@@ -269,21 +296,26 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         : deps.memoryAccessFor(input.memoryAccess);
       existing.configuredEntityMemoryAccess = input.memoryAccess;
       existing.privateBotMemory = settings.privateBotMemory;
+
       if (!existing.activeTurn && !existing.admittingTurn && existing.pendingTurns.length === 0) {
         existing.toolSession = configuredToolSession;
         existing.memoryAccess = existing.configuredMemoryAccess;
         existing.entityMemoryAccess = existing.configuredEntityMemoryAccess;
         deps.toolRuntime.registerSession(key, existing.toolSession);
       }
+
       return deps.toProviderSession(threadId, existing);
     }
+
     const existingLegacy = deps.legacyResourceIdentity.get(key);
     const settings = yield* deps.memorySettings();
     const nextMemoryAccess = delegatedAccess ? undefined : deps.memoryAccessFor(input.memoryAccess);
+
     const nextMemoryHandlers =
       access.memoryScopes.length > 0
         ? deps.memoryHandlers(input.memoryAccess, access.memoryScopes)
         : undefined;
+
     if (
       !existing &&
       resolved &&
@@ -298,37 +330,45 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       const live = (yield* deps.legacyProviderBridge.listSessions()).find(
         (session) => session.threadId === threadId,
       );
+
       if (live) {
         existingLegacy.memoryAccess = nextMemoryAccess;
         existingLegacy.entityMemoryAccess = input.memoryAccess;
         existingLegacy.privateBotMemory = settings.privateBotMemory;
+
         if (nextMemoryHandlers?.memory) {
           McpMemoryToolSession.setMcpMemoryToolSession(threadId, nextMemoryHandlers.memory);
         } else {
           McpMemoryToolSession.clearMcpMemoryToolSession(threadId);
         }
+
         return live;
       }
+
       yield* deps
         .runMastra("resources.release", () => deps.sessionResources.release(key))
         .pipe(Effect.ignoreCause({ log: true }));
       deps.legacyResourceIdentity.delete(key);
     }
+
     if (existing || existingLegacy) {
       const previousWorkspaceResourceKey =
         existing?.workspaceResourceKey ?? existingLegacy?.workspaceResourceKey;
+
       yield* deps.stopSessionWithResources(
         { threadId },
         previousWorkspaceResourceKey !== undefined &&
           botWorkspaceIdentity(previousWorkspaceResourceKey) !== workspaceId,
       );
     }
+
     if (delegatedAccess && !deps.usesMastraCode(resolved.provider)) {
       return yield* new AgentControllerRuntimeError({
         operation: "startSession",
         detail: `Provider '${resolved.provider}' cannot enforce delegated access.`,
       });
     }
+
     if (!(delegatedAccess && access.sandbox === null)) {
       yield* deps.preparePreviewMcpSession(
         threadId,
@@ -336,6 +376,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         deps.usesMastraCode(resolved.provider) ? undefined : nextMemoryHandlers?.memory,
       );
     }
+
     const resources =
       delegatedAccess && access.sandbox === null
         ? ({ workspaceType: "none" } as const)
@@ -363,6 +404,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
               }),
             )
             .pipe(Effect.onError(() => deps.clearPreviewMcpSession(threadId)));
+
     if (!deps.usesMastraCode(resolved.provider)) {
       const frozenMemoryContext =
         nextMemoryAccess && settings.enabled
@@ -377,15 +419,18 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
               ),
             )
           : "";
+
       const entityPacket =
         nextMemoryAccess && settings.enabled
           ? yield* deps.runMastra("memory.packet", () =>
               deps.entityMemoryContext(input.memoryAccess),
             )
           : "";
+
       const combinedMemoryContext = [frozenMemoryContext, entityPacket]
         .filter(Boolean)
         .join("\n\n");
+
       return yield* deps.legacyProviderBridge
         .startSession(threadId, {
           ...input,
@@ -407,6 +452,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                 memoryAccessKey: deps.memoryAccessKey(nextMemoryAccess),
                 privateBotMemory: settings.privateBotMemory,
               });
+
               return session;
             }),
           ),
@@ -419,18 +465,23 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           ),
         );
     }
+
     const workspace = "botWorkspace" in resources ? resources.botWorkspace : undefined;
+
     const userComputerWorkspace =
       "workspace" in resources && access.hasUserComputer && workspaceType === "local" && input.cwd
         ? resources.workspace
         : undefined;
+
     const registeredMemoryHandlers = nextMemoryHandlers;
     const mcpManager = deps.sessionResources.getMcpManager(key);
     const imageGenerationSettings = yield* deps.imageToolSettings;
+
     const mcpDependencies =
       input.botId && input.botName
         ? { dependentBots: [{ id: input.botId, name: input.botName }], dependentRoutines: [] }
         : { dependentBots: [], dependentRoutines: [] };
+
     const toolSession: AkeruToolSession = {
       ...(botId ? { botId } : {}),
       ...(input.botName ? { botName: input.botName } : {}),
@@ -455,6 +506,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                 deps.subscriptionAuth.recordMcpRequestFailure(serverId, message, at),
               getDependencies: async (serverId) => {
                 const snapshot = await deps.wired().pluginRuntimeOptions?.readSnapshot();
+
                 return snapshot
                   ? {
                       dependentBots: mcpServerDependentBots(snapshot, serverId),
@@ -489,12 +541,14 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           // in-flight requests, so there is no outer deadline here.
           generateImage: async (request: unknown) => {
             const generate = options?.generateImage ?? runImageGenerationTool;
+
             return deps.runPromise(generate(threadId, request));
           },
           ...(deps.wired().pluginRuntimeOptions
             ? {
                 addMcpServer: async (input: unknown) => {
                   const value = decodeAkeruToolInput("AddMcpServer", input);
+
                   const base = {
                     type: "mcp-server.create" as const,
                     commandId: CommandId.make(`catalog:mcp-add:${NodeCrypto.randomUUID()}`),
@@ -503,6 +557,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                     enabled: true,
                     createdAt: nowIso(),
                   };
+
                   await deps.wired().pluginRuntimeOptions!.dispatch(
                     value.transport === "stdio"
                       ? {
@@ -513,6 +568,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                         }
                       : { ...base, transport: "url", url: value.url },
                   );
+
                   return { serverId: value.serverId, added: true };
                 },
                 uninstallMcpServer: (serverId: string) =>
@@ -529,16 +585,20 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                   ),
                 renameMcpAccount: async (input: unknown) => {
                   const value = decodeAkeruToolInput("RenameMcpAccount", input);
+
                   const server = (
                     await deps.wired().pluginRuntimeOptions!.readSnapshot()
                   ).mcpServers?.find((candidate) => candidate.id === value.serverId);
+
                   if (!server) throw new Error(`MCP server '${value.serverId}' was not found.`);
+
                   const base = {
                     type: "mcp-server.update" as const,
                     commandId: CommandId.make(`catalog:mcp-rename:${NodeCrypto.randomUUID()}`),
                     mcpServerId: server.id,
                     name: value.name,
                   };
+
                   await deps.wired().pluginRuntimeOptions!.dispatch(
                     server.transport === "stdio"
                       ? {
@@ -549,6 +609,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                         }
                       : { ...base, transport: "url", url: server.url },
                   );
+
                   return { serverId: value.serverId, name: value.name, renamed: true };
                 },
                 setMcpInstructions: async (value: {
@@ -563,6 +624,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                     mcpServerId: McpServerId.make(value.serverId),
                     instructions: value.instructions,
                   });
+
                   return {
                     serverId: value.serverId,
                     instructions: value.instructions.trim(),
@@ -579,7 +641,9 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
             sendToUser: async (request) => {
               const active = deps.sessions.get(key);
               const turnId = active?.activeTurn?.turnId;
+
               if (!turnId) throw new Error("User messaging requires an active turn.");
+
               return deps.wired().delegationRuntime!.sendToUser(
                 {
                   threadId,
@@ -616,7 +680,9 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           }
         : {}),
     };
+
     deps.toolRuntime.registerSession(key, toolSession);
+
     const session = yield* deps
       .runMastra("createSession", () =>
         deps.bundle.controller.createSession({
@@ -643,6 +709,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           ),
         ),
       );
+
     const cleanupCreatedSession = Effect.gen(function* () {
       yield* deps
         .runMastra("deleteSession", () => deps.bundle.controller.deleteSession({ resourceId: key }))
@@ -652,6 +719,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         .pipe(Effect.ignoreCause({ log: true }));
       deps.toolRuntime.unregisterSession(key);
     });
+
     const active = yield* Effect.gen(function* () {
       const modelOptions = deps.mastraModelOptions(resolved);
       yield* deps.runMastra("state.set", () =>
@@ -669,11 +737,13 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       yield* deps.runMastra("model.switch", () =>
         session.model.switch({ modelId: resolved.mastraModelId }),
       );
+
       if (session.mode.get() !== deps.DEFAULT_MODE_ID) {
         yield* deps.runMastra("mode.switch", () =>
           session.mode.switch({ modeId: deps.DEFAULT_MODE_ID }),
         );
       }
+
       yield* Effect.forEach(
         ["read", "edit", "execute", "mcp", "other"] as const,
         (category) =>
@@ -698,11 +768,15 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           ),
         { discard: true },
       );
+
       const unsubscribe = session.subscribe((event) => {
         const current = deps.sessions.get(key);
+
         if (current) deps.handleControllerEvent(threadId, current, event);
       });
+
       const turnPreparation = yield* Semaphore.make(1);
+
       return {
         session,
         turnPreparation,
@@ -737,6 +811,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         unsubscribe,
       } satisfies ActiveSession;
     }).pipe(Effect.onError(() => cleanupCreatedSession));
+
     deps.sessions.set(key, active);
     deps.publish({
       ...deps.baseEvent(threadId, active),
@@ -744,7 +819,9 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       payload: { message: "Mastra Code session ready" },
     });
     deps.publishSessionState(threadId, active, "ready");
+
     return deps.toProviderSession(threadId, active);
   });
+
   return { isOpenDelegation, isChildOf, readSessionStartContext, startSession };
 }

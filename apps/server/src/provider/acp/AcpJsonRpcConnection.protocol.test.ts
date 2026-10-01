@@ -12,6 +12,7 @@ import { mockAgentCommand, mockAgentArgs } from "./test-support/acpConnection.ts
 describe("AcpSessionRuntime", () => {
   it.effect("merges custom initialize client capabilities into the ACP handshake", () => {
     const requestEvents: Array<AcpSessionRuntime.AcpSessionRequestLogEvent> = [];
+
     return Effect.gen(function* () {
       const runtime = yield* AcpSessionRuntime.AcpSessionRuntime;
       yield* runtime.start();
@@ -19,6 +20,7 @@ describe("AcpSessionRuntime", () => {
       const initializeStarted = requestEvents.find(
         (event) => event.method === "initialize" && event.status === "started",
       );
+
       expect(initializeStarted?.payload).toMatchObject({
         protocolVersion: 1,
         clientCapabilities: {
@@ -57,6 +59,7 @@ describe("AcpSessionRuntime", () => {
 describe("AcpSessionRuntime", () => {
   it.effect("skips no-op session config writes when the requested value is already active", () => {
     const requestEvents: Array<AcpSessionRuntime.AcpSessionRequestLogEvent> = [];
+
     return Effect.gen(function* () {
       const runtime = yield* AcpSessionRuntime.AcpSessionRuntime;
       yield* runtime.start();
@@ -95,12 +98,14 @@ describe("AcpSessionRuntime", () => {
   it.effect("rejects invalid config option values before sending session/set_config_option", () => {
     const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "acp-runtime-"));
     const requestLogPath = NodePath.join(tempDir, "requests.ndjson");
+
     return Effect.gen(function* () {
       const runtime = yield* AcpSessionRuntime.AcpSessionRuntime;
       yield* runtime.start();
 
       const error = yield* runtime.setModel("composer-2[fast=false]").pipe(Effect.flip);
       expect(error._tag).toBe("AcpRequestError");
+
       if (error._tag === "AcpRequestError") {
         expect(error.code).toBe(-32602);
         expect(error.message).toContain(
@@ -114,6 +119,7 @@ describe("AcpSessionRuntime", () => {
         .split("\n")
         .filter((line) => line.length > 0)
         .map((line) => JSON.parse(line) as { method?: string; params?: { value?: unknown } });
+
       expect(
         recordedRequests.some(
           (message) =>

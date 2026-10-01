@@ -27,11 +27,13 @@ export function readPayload<A>(
   payload: ProviderEvent["payload"],
 ): A | undefined {
   const isPayload = Schema.is(schema);
+
   return isPayload(payload) ? payload : undefined;
 }
 
 export function trimText(value: string | undefined | null): string | undefined {
   const trimmed = value?.trim();
+
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
@@ -43,12 +45,14 @@ export function normalizeCodexTokenUsage(
   | undefined {
   const totalProcessedTokens = usage.total.totalTokens;
   const usedTokens = usage.last.totalTokens;
+
   if (usedTokens === undefined || usedTokens <= 0) {
     return undefined;
   }
 
   const isNewModelCall =
     previous === undefined || totalProcessedTokens > previous.threadTotalTokens;
+
   const total = isNewModelCall
     ? {
         threadTotalTokens: totalProcessedTokens,
@@ -60,6 +64,7 @@ export function normalizeCodexTokenUsage(
           (previous?.reasoningOutputTokens ?? 0) + usage.last.reasoningOutputTokens,
       }
     : previous;
+
   const maxTokens = usage.modelContextWindow ?? undefined;
   const inputTokens = usage.last.inputTokens;
   const cachedInputTokens = usage.last.cachedInputTokens;
@@ -104,7 +109,9 @@ export function toTurnStatus(
 
 export function normalizeItemType(raw: string | undefined | null): string {
   const type = trimText(raw);
+
   if (!type) return "item";
+
   return type
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[._/-]/g, " ")
@@ -115,22 +122,38 @@ export function normalizeItemType(raw: string | undefined | null): string {
 
 export function toCanonicalItemType(raw: string | undefined | null): CanonicalItemType {
   const type = normalizeItemType(raw);
+
   if (type.includes("user")) return "user_message";
+
   if (type.includes("agent message") || type.includes("assistant")) return "assistant_message";
+
   if (type.includes("reasoning") || type.includes("thought")) return "reasoning";
+
   if (type.includes("plan") || type.includes("todo")) return "plan";
+
   if (type.includes("command")) return "command_execution";
+
   if (type.includes("file change") || type.includes("patch") || type.includes("edit"))
     return "file_change";
+
   if (type.includes("mcp")) return "mcp_tool_call";
+
   if (type.includes("dynamic tool")) return "dynamic_tool_call";
+
   if (type.includes("collab")) return "collab_agent_tool_call";
+
   if (type.includes("web search")) return "web_search";
+
   if (type.includes("image")) return "image_view";
+
   if (type.includes("review entered")) return "review_entered";
+
   if (type.includes("review exited")) return "review_exited";
+
   if (type.includes("compact")) return "context_compaction";
+
   if (type.includes("error")) return "error";
+
   return "unknown";
 }
 
@@ -141,6 +164,7 @@ export function itemTitle(
   if (itemType === "mcp_tool_call" && item?.type === "mcpToolCall") {
     return `${item.server} · ${item.tool}`;
   }
+
   switch (itemType) {
     case "assistant_message":
       return "Assistant message";
@@ -176,6 +200,7 @@ export function itemDetail(
   const itemRecord = item as Record<string, unknown>;
   const action = itemRecord.action as Record<string, unknown> | undefined;
   const actionQueries = Array.isArray(action?.queries) ? action.queries : [];
+
   const candidates = [
     ...(itemType === "web_search"
       ? [itemRecord.query, action?.query, ...actionQueries, action?.pattern, action?.url]
@@ -190,9 +215,12 @@ export function itemDetail(
 
   for (const candidate of candidates) {
     const trimmed = typeof candidate === "string" ? trimText(candidate) : undefined;
+
     if (!trimmed) continue;
+
     return trimmed;
   }
+
   return undefined;
 }
 
@@ -242,6 +270,7 @@ export function toCanonicalUserInputAnswers(
   return Object.fromEntries(
     Object.entries(answers).map(([questionId, value]) => {
       const normalizedAnswers = value.answers.length === 1 ? value.answers[0]! : [...value.answers];
+
       return [questionId, normalizedAnswers] as const;
     }),
   );
@@ -253,18 +282,22 @@ export function toUserInputQuestions(questions: ReadonlyArray<CodexToolUserInput
       question.options?.flatMap((option) => {
         const label = trimText(option.label);
         const description = trimText(option.description);
+
         if (!label || !description) {
           return [];
         }
+
         return [{ label, description }];
       }) ?? [];
 
     const id = trimText(question.id);
     const header = trimText(question.header);
     const prompt = trimText(question.question);
+
     if (!id || !header || !prompt || options.length === 0) {
       return [];
     }
+
     return [
       {
         id,

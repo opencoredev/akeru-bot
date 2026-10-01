@@ -39,11 +39,14 @@ export function createGrokTurnLifecycle(deps: {
   ) =>
     Effect.gen(function* () {
       const liveCtx = deps.sessions.get(threadId);
+
       if (!liveCtx) {
         return;
       }
+
       const promptEpoch = options?.promptEpoch;
       const superseded = promptEpoch !== undefined && promptEpoch < liveCtx.discardBeforeEpoch;
+
       const settlementBelongsToLiveContext = grokPromptSettlementBelongsToContext({
         liveAcpSessionId: liveCtx.acpSessionId,
         expectedAcpSessionId,
@@ -51,6 +54,7 @@ export function createGrokTurnLifecycle(deps: {
         liveSessionActiveTurnId: liveCtx.session.activeTurnId,
         turnId,
       });
+
       if (!settlementBelongsToLiveContext) {
         // interruptTurn already consumed every prompt slot for this turn. A
         // late prompt result must neither emit a second terminal event nor
@@ -64,6 +68,7 @@ export function createGrokTurnLifecycle(deps: {
         ) {
           return;
         }
+
         if (options?.emitTurnCompletion !== false) {
           if (options?.errorMessage !== undefined) {
             yield* deps.offerRuntimeEvent({
@@ -91,14 +96,19 @@ export function createGrokTurnLifecycle(deps: {
             });
           }
         }
+
         return;
       }
+
       let settleTurnId = turnId;
+
       if (options?.settleAllPrompts) {
         liveCtx.promptsInFlight = 0;
         liveCtx.pendingTurnCompletion = undefined;
+
         if (liveCtx.activeTurnId !== turnId && liveCtx.session.activeTurnId !== turnId) {
           const fallbackTurnId = liveCtx.activeTurnId ?? liveCtx.session.activeTurnId;
+
           if (!fallbackTurnId) {
             if (liveCtx.session.status === "running" || liveCtx.session.status === "connecting") {
               const updatedAt = yield* deps.nowIso;
@@ -110,19 +120,23 @@ export function createGrokTurnLifecycle(deps: {
                 updatedAt,
               };
             }
+
             return;
           }
+
           settleTurnId = fallbackTurnId;
         }
       } else {
         const remainingPrompts = Math.max(0, liveCtx.promptsInFlight - 1);
         liveCtx.promptsInFlight = remainingPrompts;
+
         const incoming: GrokTurnTerminal | undefined =
           options?.errorMessage !== undefined
             ? { errorMessage: options.errorMessage }
             : options?.completedStopReason !== undefined
               ? { completedStopReason: options.completedStopReason }
               : undefined;
+
         const decision = grokTurnCompletionForPromptEpoch({
           promptEpoch: promptEpoch ?? liveCtx.promptEpoch,
           discardBeforeEpoch: liveCtx.discardBeforeEpoch,
@@ -131,7 +145,9 @@ export function createGrokTurnLifecycle(deps: {
           incoming,
           emitTurnCompletion: options?.emitTurnCompletion !== false,
         });
+
         liveCtx.pendingTurnCompletion = decision.stored;
+
         if (
           remainingPrompts > 0 ||
           liveCtx.activeTurnId !== settleTurnId ||
@@ -139,9 +155,12 @@ export function createGrokTurnLifecycle(deps: {
         ) {
           return;
         }
+
         const updatedAt = yield* deps.nowIso;
+
         const canEmitTurnCompletion =
           liveCtx.session.status === "running" || liveCtx.session.status === "connecting";
+
         const { activeTurnId: _activeTurnId, ...readySession } = liveCtx.session;
         liveCtx.activeTurnId = undefined;
         liveCtx.pendingTurnCompletion = undefined;
@@ -150,9 +169,11 @@ export function createGrokTurnLifecycle(deps: {
           status: "ready",
           updatedAt,
         };
+
         if (!canEmitTurnCompletion || decision.emit === undefined) {
           return;
         }
+
         if (decision.emit.errorMessage !== undefined) {
           yield* deps.offerRuntimeEvent({
             type: "turn.completed",
@@ -165,8 +186,10 @@ export function createGrokTurnLifecycle(deps: {
               errorMessage: decision.emit.errorMessage,
             },
           });
+
           return;
         }
+
         if (decision.emit.completedStopReason !== undefined) {
           yield* deps.offerRuntimeEvent({
             type: "turn.completed",
@@ -180,14 +203,20 @@ export function createGrokTurnLifecycle(deps: {
             },
           });
         }
+
         return;
       }
+
       const updatedAt = yield* deps.nowIso;
+
       const canEmitTurnCompletion =
         liveCtx.session.status === "running" || liveCtx.session.status === "connecting";
+
       const shouldEmitFailedTurn = options?.errorMessage !== undefined && canEmitTurnCompletion;
+
       const shouldEmitCompletedTurn =
         options?.completedStopReason !== undefined && canEmitTurnCompletion;
+
       const { activeTurnId: _activeTurnId, ...readySession } = liveCtx.session;
       liveCtx.activeTurnId = undefined;
       liveCtx.session = {
@@ -195,9 +224,11 @@ export function createGrokTurnLifecycle(deps: {
         status: "ready",
         updatedAt,
       };
+
       if (options?.emitTurnCompletion === false) {
         return;
       }
+
       if (shouldEmitFailedTurn) {
         yield* deps.offerRuntimeEvent({
           type: "turn.completed",
@@ -224,5 +255,6 @@ export function createGrokTurnLifecycle(deps: {
         });
       }
     });
+
   return { settlePromptInFlight };
 }

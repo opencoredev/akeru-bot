@@ -150,6 +150,7 @@ export function createClaudeSessionLifecycle(deps: {
       }
 
       const existingContext = deps.sessions.get(input.threadId);
+
       if (existingContext) {
         yield* Effect.logWarning("claude.session.replacing", {
           threadId: input.threadId,
@@ -165,8 +166,10 @@ export function createClaudeSessionLifecycle(deps: {
       const resumeState = readClaudeResumeState(input.resumeCursor);
       const threadId = input.threadId;
       const existingResumeSessionId = resumeState?.resume;
+
       const newSessionId =
         existingResumeSessionId === undefined ? yield* deps.randomUUIDv4 : undefined;
+
       const sessionId = existingResumeSessionId ?? newSessionId;
 
       const runtimeContext = yield* Effect.context<never>();
@@ -174,6 +177,7 @@ export function createClaudeSessionLifecycle(deps: {
       const runPromise = Effect.runPromiseWith(runtimeContext);
 
       const promptQueue = yield* Queue.unbounded<PromptQueueItem>();
+
       const prompt = Stream.fromQueue(promptQueue).pipe(
         Stream.filter((item) => item.type === "message"),
         Stream.map((item) => item.message),
@@ -214,6 +218,7 @@ export function createClaudeSessionLifecycle(deps: {
         // so the key the UI uses to keep its draft answer must match the SDK's
         // expected lookup key. See https://github.com/pingdotgg/t3code/issues/2388
         const rawQuestions = Array.isArray(toolInput.questions) ? toolInput.questions : [];
+
         const questions: Array<UserInputQuestion> = rawQuestions.map(
           (q: Record<string, unknown>, idx: number) => ({
             id: typeof q.question === "string" && q.question.length > 0 ? q.question : `q-${idx}`,
@@ -231,16 +236,20 @@ export function createClaudeSessionLifecycle(deps: {
 
         const answersDeferred = yield* Deferred.make<ProviderUserInputAnswers>();
         let aborted = false;
+
         const settleAsAborted = Effect.suspend(() => {
           if (!pendingUserInputs.has(requestId)) {
             return Effect.void;
           }
+
           aborted = true;
           pendingUserInputs.delete(requestId);
+
           return Deferred.succeed(answersDeferred, {} as ProviderUserInputAnswers).pipe(
             Effect.ignore,
           );
         });
+
         const pendingInput: PendingUserInput = {
           questions,
           answers: answersDeferred,
@@ -281,9 +290,11 @@ export function createClaudeSessionLifecycle(deps: {
         const onAbort = () => {
           runFork(settleAsAborted);
         };
+
         callbackOptions.signal.addEventListener("abort", onAbort, {
           once: true,
         });
+
         // The signal may have aborted during the awaited event emissions
         // above, before the listener existed; settle now so the dialog
         // cannot hang with a lingering pending question.
@@ -347,6 +358,7 @@ export function createClaudeSessionLifecycle(deps: {
         }
 
         const context = yield* Ref.get(contextRef);
+
         if (!context) {
           return { behavior: "cancelled" as const };
         }
@@ -358,6 +370,7 @@ export function createClaudeSessionLifecycle(deps: {
           ageMinutes: finiteNonNegativeInteger(request.payload.sessionAgeMinutes) ?? 0,
           estimatedTokens: finiteNonNegativeInteger(request.payload.estimatedTokens) ?? 0,
         });
+
         const result = yield* handleAskUserQuestion(
           context,
           {
@@ -394,10 +407,12 @@ export function createClaudeSessionLifecycle(deps: {
         }
 
         const answers = result.updatedInput.answers;
+
         const selection =
           answers && typeof answers === "object" && !Array.isArray(answers)
             ? (answers as Record<string, unknown>)[question]
             : undefined;
+
         const action =
           selection === "Compact and continue"
             ? "compact"
@@ -414,6 +429,7 @@ export function createClaudeSessionLifecycle(deps: {
         callbackOptions: Parameters<CanUseTool>[2],
       ) {
         const context = yield* Ref.get(contextRef);
+
         if (!context) {
           return {
             behavior: "deny",
@@ -430,6 +446,7 @@ export function createClaudeSessionLifecycle(deps: {
 
         if (toolName === "ExitPlanMode") {
           const planMarkdown = extractExitPlanModePlan(toolInput);
+
           if (planMarkdown) {
             yield* deps.emitProposedPlanCompleted(context, {
               planMarkdown,
@@ -451,6 +468,7 @@ export function createClaudeSessionLifecycle(deps: {
         }
 
         const runtimeMode = input.runtimeMode ?? "full-access";
+
         if (runtimeMode === "full-access") {
           return {
             behavior: "allow",
@@ -462,6 +480,7 @@ export function createClaudeSessionLifecycle(deps: {
         const requestType = classifyRequestType(toolName);
         const detail = summarizeToolRequest(toolName, toolInput);
         const decisionDeferred = yield* Deferred.make<ProviderApprovalDecision>();
+
         const pendingApproval: PendingApproval = {
           requestType,
           detail,
@@ -501,6 +520,7 @@ export function createClaudeSessionLifecycle(deps: {
           if (!pendingApprovals.has(requestId)) {
             return;
           }
+
           pendingApprovals.delete(requestId);
           runFork(Deferred.succeed(decisionDeferred, "cancel"));
         };
@@ -508,6 +528,7 @@ export function createClaudeSessionLifecycle(deps: {
         callbackOptions.signal.addEventListener("abort", onAbort, {
           once: true,
         });
+
         // Same late-listener race as handleAskUserQuestion: the signal may
         // have aborted while the request event emissions were awaited.
         if (callbackOptions.signal.aborted) {
@@ -568,6 +589,7 @@ export function createClaudeSessionLifecycle(deps: {
 
       const canUseTool: CanUseTool = (toolName, toolInput, callbackOptions) =>
         runPromise(canUseToolEffect(toolName, toolInput, callbackOptions));
+
       const onUserDialog: NonNullable<ClaudeQueryOptions["onUserDialog"]> = (
         request,
         callbackOptions,
@@ -575,36 +597,46 @@ export function createClaudeSessionLifecycle(deps: {
 
       const claudeBinaryPath = deps.claudeSdkExecutablePath;
       const extraArgs = parseCliArgs(deps.claudeSettings.launchArgs).flags;
+
       const modelSelection =
         input.modelSelection?.instanceId === deps.boundInstanceId
           ? input.modelSelection
           : undefined;
+
       const caps = getClaudeModelCapabilities(modelSelection?.model);
       const descriptors = getProviderOptionDescriptors({ caps });
       const apiModelId = modelSelection ? resolveClaudeApiModelId(modelSelection) : undefined;
       const initialContextWindow = selectedClaudeContextWindow(modelSelection);
       const rawEffort = getModelSelectionStringOptionValue(modelSelection, "effort");
       const effort = resolveClaudeEffort(caps, rawEffort) ?? null;
+
       const fastModeSupported = descriptors.some(
         (descriptor) => descriptor.type === "boolean" && descriptor.id === "fastMode",
       );
+
       const thinkingSupported = descriptors.some(
         (descriptor) => descriptor.type === "boolean" && descriptor.id === "thinking",
       );
+
       const fastMode =
         getModelSelectionBooleanOptionValue(modelSelection, "fastMode") === true &&
         fastModeSupported;
+
       const thinking = thinkingSupported
         ? getModelSelectionBooleanOptionValue(modelSelection, "thinking")
         : undefined;
+
       const ultracode = isClaudeUltracodeEffort(effort);
       const effectiveEffort = getEffectiveClaudeAgentEffort(effort, modelSelection?.model);
+
       const runtimeModeToPermission: Record<string, PermissionMode> = {
         "auto-accept-edits": "acceptEdits",
         auto: "auto",
         "full-access": "bypassPermissions",
       };
+
       const permissionMode = runtimeModeToPermission[input.runtimeMode];
+
       const settings = {
         ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
         ...(fastMode ? { fastMode: true } : {}),
@@ -613,7 +645,9 @@ export function createClaudeSessionLifecycle(deps: {
           ? { autoCompactWindow: Number(deps.claudeSettings.autoCompactWindow) }
           : {}),
       };
+
       const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
+
       const mcpServers = {
         ...toClaudeMcpServers(input.mcpServers ?? []),
         ...(mcpSession
@@ -626,6 +660,7 @@ export function createClaudeSessionLifecycle(deps: {
             }
           : {}),
       };
+
       // The attachments dir grant lets the agent Read/copy pasted images at
       // the paths ProviderService injects into the turn text, without an
       // approval prompt. It is a leaf directory holding only attachment
@@ -634,6 +669,7 @@ export function createClaudeSessionLifecycle(deps: {
         ...(input.cwd ? [input.cwd] : []),
         deps.serverConfig.attachmentsDir,
       ];
+
       const queryOptions: ClaudeQueryOptions = {
         ...(input.cwd ? { cwd: input.cwd } : {}),
         ...(apiModelId ? { model: apiModelId } : {}),
@@ -770,6 +806,7 @@ export function createClaudeSessionLifecycle(deps: {
         announcedUsageLimits: undefined,
         stopped: false,
       };
+
       yield* Ref.set(contextRef, context);
       deps.sessions.set(threadId, context);
 
@@ -823,9 +860,11 @@ export function createClaudeSessionLifecycle(deps: {
             if (context.stopped) {
               return Effect.void;
             }
+
             if (context.streamFiber === streamFiber) {
               context.streamFiber = undefined;
             }
+
             return deps
               .handleStreamExit(context, exit)
               .pipe(
@@ -848,5 +887,6 @@ export function createClaudeSessionLifecycle(deps: {
       };
     },
   );
+
   return { startSession };
 }

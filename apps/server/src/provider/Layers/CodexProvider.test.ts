@@ -250,6 +250,7 @@ describe("parseCodexSkillsListResponse", () => {
   it.effect("maps the small icon, falls back to the large icon, and omits absent icons", () =>
     Effect.gen(function* () {
       const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "codex-skills-icons-"));
+
       const response = makeResponse([
         {
           cwd: tempDir,

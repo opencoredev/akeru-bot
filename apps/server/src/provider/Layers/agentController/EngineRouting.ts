@@ -52,6 +52,7 @@ export function createEngineRouting(deps: {
   )(function* (modelSelection) {
     const provider = String(modelSelection.instanceId);
     const model = modelSelection.model;
+
     const unavailable = (cause: unknown) =>
       new AgentControllerUnsupportedEngineError({
         provider,
@@ -59,15 +60,18 @@ export function createEngineRouting(deps: {
         detail: `Provider instance '${provider}' is not available.`,
         cause,
       });
+
     const routing = yield* deps.legacyProviderBridge
       .getInstanceInfo(modelSelection.instanceId)
       .pipe(Effect.mapError(unavailable));
+
     if (deps.usesMastraCode(routing.driverKind) && !routing.enabled) {
       return yield* deps.disabledProviderError(
         "AgentController.inspectEngine",
         modelSelection.instanceId,
       );
     }
+
     // Fail closed on a model the instance's snapshot does not advertise.
     // The bot engine is applied after ws-level preflight ran against the
     // command's own selection, so this check is the only validation a
@@ -82,8 +86,10 @@ export function createEngineRouting(deps: {
       routing.instanceSnapshot.status === "ready"
     ) {
       const advertised = routing.instanceSnapshot.models;
+
       if (advertised.length > 0 && !advertised.some((entry) => entry.slug === model)) {
         const name = routing.instanceSnapshot.displayName ?? routing.driverKind;
+
         return yield* new AgentControllerUnsupportedEngineError({
           provider,
           model,
@@ -91,13 +97,16 @@ export function createEngineRouting(deps: {
         });
       }
     }
+
     if (routing.mastraConnection) {
       deps.modelConnections.set(String(modelSelection.instanceId), routing.mastraConnection);
     } else {
       deps.modelConnections.delete(String(modelSelection.instanceId));
     }
+
     if (deps.usesMastraCode(routing.driverKind)) {
       const subscriptionProvider = subscriptionProviderForDriver(routing.driverKind);
+
       const issue = mastraConnectionIssue(
         routing.driverKind,
         routing.mastraConnection,
@@ -105,15 +114,19 @@ export function createEngineRouting(deps: {
           ? deps.subscriptionAuth.isConnected(subscriptionProvider, modelSelection.instanceId)
           : false,
       );
+
       if (issue) return yield* unavailable(new Error(issue));
     }
+
     const capabilities = deps.usesMastraCode(routing.driverKind)
       ? { sessionModelSwitch: "in-session" as const }
       : yield* deps.legacyProviderBridge
           .getCapabilities(modelSelection.instanceId)
           .pipe(Effect.mapError(unavailable));
+
     return { modelSelection, routing, capabilities };
   });
+
   const resolveEngine: AgentControllerShape["resolveEngine"] = (input) =>
     deps.mutationLock.withPermits(1)(
       Effect.gen(function* () {
@@ -125,8 +138,10 @@ export function createEngineRouting(deps: {
                 model: input.engine.model,
                 ...(input.engine.options ? { options: input.engine.options } : {}),
               };
+
         const inspected = yield* inspectEngine(modelSelection);
         const previous = deps.resolvedByThread.get(String(input.threadId));
+
         const resolved: ResolvedEngine = {
           modelSelection,
           provider: inspected.routing.driverKind,
@@ -138,8 +153,10 @@ export function createEngineRouting(deps: {
             ? { personalityTone: previous.personalityTone }
             : {}),
         };
+
         deps.resolvedByThread.set(String(input.threadId), resolved);
         const active = deps.sessions.get(String(input.threadId));
+
         if (active && deps.usesMastraCode(resolved.provider)) {
           const { modelOptions: _priorModelOptions, ...activeState } = active.session.state.get();
           const nextModelOptions = deps.mastraModelOptions(resolved);
@@ -155,8 +172,10 @@ export function createEngineRouting(deps: {
           );
           active.model = modelSelection.model;
         }
+
         return { ...inspected, mode: "default" };
       }),
     );
+
   return { inspectEngine, resolveEngine };
 }

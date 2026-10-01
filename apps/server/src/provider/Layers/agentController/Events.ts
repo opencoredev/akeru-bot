@@ -127,6 +127,7 @@ export function createEvents(deps: {
     createdAt: nowIso(),
     ...(turnId ? { turnId } : {}),
   });
+
   const publishSessionState = (
     threadId: ThreadId,
     active: ActiveSession,
@@ -147,6 +148,7 @@ export function createEvents(deps: {
       payload: { state, ...(reason ? { reason } : {}) },
     });
   };
+
   const completeAssistantMessage = (
     threadId: ThreadId,
     active: ActiveSession,
@@ -156,10 +158,13 @@ export function createEvents(deps: {
     const text = message.text.startsWith(message.publishedText)
       ? message.text.slice(message.publishedText.length)
       : message.text;
+
     if (text.length === 0) return;
+
     const itemId = RuntimeItemId.make(
       `mastra-answer-${message.messageId}${message.revision === 0 ? "" : `-${message.revision}`}`,
     );
+
     deps.publish({
       ...baseEvent(threadId, active, turn.turnId),
       itemId,
@@ -182,6 +187,7 @@ export function createEvents(deps: {
     message.publishedText = message.text;
     message.revision += 1;
   };
+
   const completeAssistantMessages = (
     threadId: ThreadId,
     active: ActiveSession,
@@ -191,6 +197,7 @@ export function createEvents(deps: {
       completeAssistantMessage(threadId, active, turn, message);
     }
   };
+
   const publishAssistantText = (
     threadId: ThreadId,
     active: ActiveSession,
@@ -199,10 +206,12 @@ export function createEvents(deps: {
   ) => {
     if (message.role !== "assistant") return;
     const turn = active.activeTurn;
+
     if (!turn) return;
     const text = deps.messageText(message);
     const messageKey = String(message.id);
     let activeMessage = turn.assistantMessages.get(messageKey);
+
     if (!activeMessage) {
       completeAssistantMessages(threadId, active, turn);
       activeMessage = {
@@ -213,21 +222,26 @@ export function createEvents(deps: {
       };
       turn.assistantMessages.set(messageKey, activeMessage);
     }
+
     activeMessage.text = text;
+
     if (complete) completeAssistantMessage(threadId, active, turn, activeMessage);
   };
+
   const handleControllerEvent = (
     threadId: ThreadId,
     active: ActiveSession,
     event: AgentControllerEvent,
   ) => {
     const turn = active.activeTurn;
+
     const publishToolReceipt = (
       toolCallId: string,
       toolId: string,
       phase: "start" | "progress" | "success" | "failure",
     ) => {
       const billedBotId = active.toolSession.billedBotId;
+
       if (!billedBotId || !turn) return;
       const createdAt = nowIso();
       deps.publish({
@@ -245,12 +259,15 @@ export function createEvents(deps: {
         },
       });
     };
+
     switch (event.type) {
       case "message_update":
         publishAssistantText(threadId, active, event.message, false);
+
         return;
       case "message_end":
         publishAssistantText(threadId, active, event.message, true);
+
         return;
       case "tool_start": {
         if (!turn) return;
@@ -270,8 +287,10 @@ export function createEvents(deps: {
               : { args: event.args },
           },
         });
+
         return;
       }
+
       case "tool_update":
         if (!turn) return;
         publishToolReceipt(
@@ -291,10 +310,12 @@ export function createEvents(deps: {
               : { partialResult: event.partialResult },
           },
         });
+
         return;
       case "tool_end": {
         if (!turn) return;
         const toolName = active.toolNames.get(event.toolCallId) ?? "tool";
+
         const previewSnapshot =
           toolName === "preview_snapshot" && !event.isError && !event.denied
             ? persistAkeruPreviewSnapshot({
@@ -303,9 +324,11 @@ export function createEvents(deps: {
                 result: event.result,
               })
             : null;
+
         active.approvalRequests.delete(event.toolCallId);
         active.toolNames.delete(event.toolCallId);
         const mcpServerId = mcpServerIdForToolName(active.mcpServerIds, toolName);
+
         if (mcpServerId && !event.denied) {
           if (event.isError) {
             deps.subscriptionAuth.recordMcpRequestFailure(
@@ -316,16 +339,19 @@ export function createEvents(deps: {
             deps.subscriptionAuth.recordMcpRequestSuccess(mcpServerId);
           }
         }
+
         publishToolReceipt(
           event.toolCallId,
           toolName,
           event.isError || event.denied ? "failure" : "success",
         );
         const pending = active.pendingApprovals.get(event.toolCallId);
+
         if (pending) {
           deps.cancelPendingApproval(threadId, active, event.toolCallId, pending);
           active.pendingApprovals.delete(event.toolCallId);
         }
+
         deps.publish({
           ...baseEvent(threadId, active, turn.turnId),
           itemId: RuntimeItemId.make(event.toolCallId),
@@ -344,14 +370,17 @@ export function createEvents(deps: {
                 },
           },
         });
+
         return;
       }
+
       case "tool_approval_required": {
         if (!turn) return;
         completeAssistantMessages(threadId, active, turn);
         active.toolNames.set(event.toolCallId, event.toolName);
         const mcpManager = deps.sessionResources.getMcpManager(String(threadId));
         const connectorTools = mcpManager?.getTools();
+
         if (
           deps.APPROVAL_FREE_MASTRA_TOOL_NAMES.has(event.toolName) &&
           (!connectorTools || !Object.hasOwn(connectorTools, event.toolName))
@@ -360,13 +389,17 @@ export function createEvents(deps: {
             toolCallId: event.toolCallId,
             decision: "approve",
           });
+
           return;
         }
+
         const toolInput = deps.omitNullToolFields(event.args);
         const action = criticalAkeruAction(event.toolName, toolInput);
+
         const oneUseApproval =
           akeruActionNeedsApproval(event.toolName, toolInput) ||
           deps.mcpToolNeedsApproval(mcpManager, event.toolName);
+
         if (
           event.toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
           !oneUseApproval &&
@@ -381,10 +414,12 @@ export function createEvents(deps: {
                   "AgentController.handleControllerEvent",
                   () => {
                     if (active.activeTurn !== turn || turn.finished) return;
+
                     // Akeru runtime tools check their own grant before running.
                     const runtimeToolId =
                       AKERU_TOOL_CATALOG.find((tool) => tool.id === event.toolName)?.id ??
                       (isMemoryToolId(event.toolName) ? event.toolName : undefined);
+
                     if (runtimeToolId) {
                       deps.toolRuntime.grantApproval({
                         threadId: String(threadId),
@@ -393,6 +428,7 @@ export function createEvents(deps: {
                         input: event.args,
                       });
                     }
+
                     active.session.respondToToolApproval({
                       toolCallId: event.toolCallId,
                       decision: "approve",
@@ -404,18 +440,22 @@ export function createEvents(deps: {
               annotations: { threadId, turnId: turn.turnId, toolCallId: event.toolCallId },
               onFailure: (cause) => {
                 if (active.activeTurn !== turn || turn.finished) return;
+
                 return deps.failActiveTurn(active, threadId, turn.turnId, cause);
               },
             },
           );
+
           return;
         }
+
         // The session's own grant covers a worker chat a restart orphaned, which the
         // runtimes no longer track.
         const grant =
           deps.wired().delegationRuntime?.accessForThread(threadId) ??
           deps.workerRuntime.accessForThread(threadId) ??
           active.toolSession.delegation?.access;
+
         if (grant?.approvalCeiling === "none") {
           // Nobody can answer a prompt here, so the call fails now instead of waiting.
           active.session.respondToToolApproval({
@@ -426,8 +466,10 @@ export function createEvents(deps: {
               message: `Tool '${event.toolName}' needs approval, and this chat cannot ask anyone for it. Finish without it or report the blocker.`,
             },
           });
+
           return;
         }
+
         active.approvalRequests.set(event.toolCallId, {
           name: event.toolName,
           input: toolInput,
@@ -483,8 +525,10 @@ export function createEvents(deps: {
                       ],
           },
         });
+
         return;
       }
+
       case "tool_suspended":
         if (!turn) return;
         completeAssistantMessages(threadId, active, turn);
@@ -492,20 +536,25 @@ export function createEvents(deps: {
         turn.suspendedToolCalls.add(event.toolCallId);
         turn.waiting = true;
         publishSessionState(threadId, active, "waiting");
+
         const suspendPayload =
           event.suspendPayload && typeof event.suspendPayload === "object"
             ? (event.suspendPayload as Record<string, unknown>)
             : {};
+
         const question =
           typeof suspendPayload.question === "string" && suspendPayload.question.trim()
             ? suspendPayload.question.trim()
             : `Input required for ${event.toolName}`;
+
         const options = Array.isArray(suspendPayload.options)
           ? suspendPayload.options.flatMap((option) => {
               if (!option || typeof option !== "object") return [];
               const value = option as Record<string, unknown>;
+
               if (typeof value.label !== "string" || !value.label.trim()) return [];
               const label = value.label.trim();
+
               return [
                 {
                   label,
@@ -517,6 +566,7 @@ export function createEvents(deps: {
               ];
             })
           : [];
+
         deps.publish({
           ...baseEvent(threadId, active, turn.turnId),
           requestId: RuntimeRequestId.make(event.toolCallId),
@@ -533,6 +583,7 @@ export function createEvents(deps: {
             ],
           },
         });
+
         return;
       case "usage_update":
         if (!turn) return;
@@ -551,6 +602,7 @@ export function createEvents(deps: {
             },
           },
         });
+
         return;
       case "error": {
         const detail = deps.sessionFailureDetail(active, event.error);
@@ -563,14 +615,18 @@ export function createEvents(deps: {
           },
         });
         deps.finishTurn(threadId, active, "failed", detail);
+
         return;
       }
+
       case "agent_end":
         if (event.reason === "suspended") {
           if (turn) turn.waiting = true;
           publishSessionState(threadId, active, "waiting");
+
           return;
         }
+
         deps.finishTurn(
           threadId,
           active,
@@ -580,11 +636,13 @@ export function createEvents(deps: {
               ? "failed"
               : "completed",
         );
+
         return;
       default:
         return;
     }
   };
+
   return {
     baseEvent,
     publishSessionState,
