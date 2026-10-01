@@ -4,7 +4,6 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as TestClock from "effect/testing/TestClock";
-
 import { makePlanLimitsReader } from "./usagePlanLimits.ts";
 
 const fetchMock = vi.fn<(input: unknown, init?: RequestInit) => Promise<Response>>();

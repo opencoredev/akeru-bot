@@ -4,11 +4,9 @@ import { it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
-
 import {
   parseClaudeUsage,
   parseCodexUsage,
-  readPlanLimits,
   readPlanLimitsEffect,
   makePlanLimitsReader,
 } from "./usagePlanLimits.ts";

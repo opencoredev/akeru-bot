@@ -1,13 +1,5 @@
-import {
-  AkeruBotUsageSummary,
-  AkeruUsageEntry,
-  type AkeruUsageCategory,
-  type AkeruUsageReservationId,
-  type BotId,
-  type ProviderDriverKind,
-  type ThreadId,
-  type TurnId,
-} from "@akeru/contracts";
+import * as Predicate from "effect/Predicate";
+import { AkeruBotUsageSummary } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -15,225 +7,28 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-
 import {
-  type PersistenceDecodeError,
   PersistenceSqlError,
   toPersistenceDecodeError,
   toPersistenceSqlError,
 } from "../persistence/Errors.ts";
-
-export class BotUsageCapExceeded extends Schema.TaggedErrorClass<BotUsageCapExceeded>()(
-  "BotUsageCapExceeded",
-  {
-    botId: Schema.String,
-    limit: Schema.Number,
-    consumedTokens: Schema.Number,
-    reservedTokens: Schema.Number,
-    requestedTokens: Schema.Number,
-  },
-) {
-  override get message(): string {
-    return `Bot ${this.botId} reached its ${this.limit}-token usage cap.`;
-  }
-}
-
-export const AKERU_TURN_USAGE_RESERVATION_TOKENS = 32_000;
-
-export interface ReserveBotUsageInput {
-  readonly reservationId: AkeruUsageReservationId;
-  readonly sourceKey: string;
-  readonly botId: BotId;
-  readonly threadId: ThreadId | null;
-  readonly turnId: TurnId | null;
-  readonly category: AkeruUsageCategory;
-  readonly maximumTokens: number;
-  readonly capLimit: number;
-  readonly provider: ProviderDriverKind | null;
-  readonly model: string | null;
-  readonly createdAt: string;
-}
-
-type SettleBotUsageDetails =
-  | {
-      readonly state: "reported";
-      readonly inputTokens: number;
-      readonly cachedInputTokens?: number;
-      readonly cacheCreationTokens?: number;
-      readonly outputTokens: number;
-      readonly reasoningTokens: number | null;
-    }
-  | { readonly state: "unavailable"; readonly reason: string }
-  | { readonly state: "released" };
-
-export type SettleBotUsageInput = SettleBotUsageDetails & {
-  readonly reservationId: AkeruUsageReservationId;
-  readonly settledAt: string;
-};
-
-export type SettleBotUsageForTurnInput = SettleBotUsageDetails & {
-  readonly botId: BotId;
-  readonly threadId: ThreadId;
-  readonly turnId: TurnId;
-  readonly settledAt: string;
-};
-
-export type BotUsageLedgerError =
-  | BotUsageCapExceeded
-  | PersistenceSqlError
-  | PersistenceDecodeError;
-
-export interface BotUsageLedgerShape {
-  readonly pricingTotals: (botId: BotId) => Effect.Effect<
-    {
-      readonly complete: boolean;
-      readonly models: ReadonlyArray<{
-        readonly model: string;
-        readonly inputTokens: number;
-        readonly cachedInputTokens: number;
-        readonly cacheCreationTokens: number;
-        readonly outputTokens: number;
-        readonly reasoningTokens: number;
-      }>;
-    },
-    Exclude<BotUsageLedgerError, BotUsageCapExceeded>
-  >;
-  readonly reserve: (
-    input: ReserveBotUsageInput,
-  ) => Effect.Effect<AkeruUsageEntry, BotUsageLedgerError>;
-  readonly settle: (
-    input: SettleBotUsageInput,
-  ) => Effect.Effect<AkeruUsageEntry, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
-  readonly bindTurn: (input: {
-    readonly reservationId: AkeruUsageReservationId;
-    readonly turnId: TurnId;
-  }) => Effect.Effect<AkeruUsageEntry, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
-  readonly settleForTurn: (
-    input: SettleBotUsageForTurnInput,
-  ) => Effect.Effect<
-    ReadonlyArray<AkeruUsageEntry>,
-    Exclude<BotUsageLedgerError, BotUsageCapExceeded>
-  >;
-  readonly finalizeForTurn: (input: {
-    readonly botId: BotId;
-    readonly threadId: ThreadId;
-    readonly turnId: TurnId;
-    readonly settledAt: string;
-    readonly cancelled?: boolean;
-  }) => Effect.Effect<
-    ReadonlyArray<AkeruUsageEntry>,
-    Exclude<BotUsageLedgerError, BotUsageCapExceeded>
-  >;
-  readonly recordMeasurement: (input: {
-    readonly reservationId: AkeruUsageReservationId;
-    readonly sourceKey: string;
-    readonly botId: BotId;
-    readonly threadId: ThreadId | null;
-    readonly turnId: TurnId | null;
-    readonly category: AkeruUsageCategory;
-    readonly inputTokens: number;
-    readonly cachedInputTokens?: number;
-    readonly cacheCreationTokens?: number;
-    readonly outputTokens: number;
-    readonly reasoningTokens: number | null;
-    readonly provider: ProviderDriverKind | null;
-    readonly model: string | null;
-    readonly includedInReservation?: boolean;
-    readonly createdAt: string;
-  }) => Effect.Effect<AkeruUsageEntry, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
-  /** Records work that charges no tokens so a restart before it settles marks it interrupted. */
-  readonly recordStart: (
-    input: Omit<ReserveBotUsageInput, "maximumTokens" | "capLimit">,
-  ) => Effect.Effect<AkeruUsageEntry, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
-  readonly summarize: (
-    botId: BotId,
-  ) => Effect.Effect<AkeruBotUsageSummary, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
-}
-
+import {
+  BotUsageCapExceeded,
+  type SettleBotUsageDetails,
+  type BotUsageLedgerShape,
+} from "./BotUsageLedgerTypes.ts";
+import {
+  UsageRow,
+  entryColumns,
+  selectEntryByReservation,
+  selectEntryBySource,
+  selectEntryForTurn,
+  decodeEntry,
+  validateTokens,
+} from "./BotUsageRows.ts";
 export class BotUsageLedger extends Context.Service<BotUsageLedger, BotUsageLedgerShape>()(
   "akeru-bot/usage/BotUsageLedger",
 ) {}
-
-const UsageRow = Schema.Struct({
-  reservationId: Schema.String,
-  sourceKey: Schema.String,
-  botId: Schema.String,
-  threadId: Schema.NullOr(Schema.String),
-  turnId: Schema.NullOr(Schema.String),
-  category: Schema.String,
-  state: Schema.String,
-  reservedTokens: Schema.Number,
-  heldTokens: Schema.Number,
-  inputTokens: Schema.NullOr(Schema.Number),
-  cachedInputTokens: Schema.Number,
-  cacheCreationTokens: Schema.Number,
-  outputTokens: Schema.NullOr(Schema.Number),
-  reasoningTokens: Schema.NullOr(Schema.Number),
-  provider: Schema.NullOr(Schema.String),
-  model: Schema.NullOr(Schema.String),
-  unavailableReason: Schema.NullOr(Schema.String),
-  createdAt: Schema.String,
-  settledAt: Schema.NullOr(Schema.String),
-});
-type UsageRow = typeof UsageRow.Type;
-
-const entryColumns = (sql: SqlClient.SqlClient) =>
-  sql.unsafe(`
-  reservation_id AS "reservationId", source_key AS "sourceKey", bot_id AS "botId",
-  thread_id AS "threadId", turn_id AS "turnId", category, state,
-  reserved_tokens AS "reservedTokens", held_tokens AS "heldTokens",
-  input_tokens AS "inputTokens",
-  cached_input_tokens AS "cachedInputTokens", cache_creation_tokens AS "cacheCreationTokens",
-  output_tokens AS "outputTokens", reasoning_tokens AS "reasoningTokens",
-  provider, model, unavailable_reason AS "unavailableReason",
-  created_at AS "createdAt", settled_at AS "settledAt"
-`);
-
-const selectEntryByReservation = (sql: SqlClient.SqlClient, reservationId: string) =>
-  sql<UsageRow>`
-    SELECT ${entryColumns(sql)}
-    FROM akeru_bot_usage_entries
-    WHERE reservation_id = ${reservationId}
-  `;
-
-const selectEntryBySource = (sql: SqlClient.SqlClient, botId: string, sourceKey: string) =>
-  sql<UsageRow>`
-    SELECT ${entryColumns(sql)}
-    FROM akeru_bot_usage_entries
-    WHERE bot_id = ${botId} AND source_key = ${sourceKey}
-  `;
-
-const selectEntryForTurn = (
-  sql: SqlClient.SqlClient,
-  botId: string,
-  threadId: string,
-  turnId: string,
-) =>
-  sql<UsageRow>`
-    SELECT ${entryColumns(sql)}
-    FROM akeru_bot_usage_entries
-    WHERE bot_id = ${botId}
-      AND thread_id = ${threadId}
-      AND category = 'turn'
-      AND (turn_id = ${turnId} OR (turn_id IS NULL AND state = 'reserved'))
-    ORDER BY CASE WHEN turn_id = ${turnId} THEN 0 ELSE 1 END, created_at DESC
-    LIMIT 1
-  `;
-
-const decodeEntry = (row: UsageRow) =>
-  Schema.decodeUnknownEffect(AkeruUsageEntry)(row).pipe(
-    Effect.mapError(toPersistenceDecodeError("BotUsageLedger.decodeEntry")),
-  );
-
-function validateTokens(operation: string, values: ReadonlyArray<number>) {
-  const invalid = values.find((value) => !Number.isSafeInteger(value) || value < 0);
-  return invalid === undefined
-    ? Effect.void
-    : new PersistenceSqlError({
-        operation,
-        detail: "Token values must be non-negative safe integers.",
-      });
-}
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -397,9 +192,9 @@ const make = Effect.gen(function* () {
         )
         .pipe(
           Effect.mapError((cause) =>
-            cause._tag === "BotUsageCapExceeded"
+            Predicate.isTagged(cause, "BotUsageCapExceeded")
               ? cause
-              : cause._tag === "PersistenceDecodeError"
+              : Predicate.isTagged(cause, "PersistenceDecodeError")
                 ? cause
                 : toPersistenceSqlError("BotUsageLedger.reserve")(cause),
           ),
@@ -423,7 +218,8 @@ const make = Effect.gen(function* () {
         )
         .pipe(
           Effect.mapError((cause) =>
-            cause._tag === "PersistenceSqlError" || cause._tag === "PersistenceDecodeError"
+            Predicate.isTagged(cause, "PersistenceSqlError") ||
+            Predicate.isTagged(cause, "PersistenceDecodeError")
               ? cause
               : toPersistenceSqlError("BotUsageLedger.settle")(cause),
           ),
@@ -461,7 +257,8 @@ const make = Effect.gen(function* () {
         )
         .pipe(
           Effect.mapError((cause) =>
-            cause._tag === "PersistenceSqlError" || cause._tag === "PersistenceDecodeError"
+            Predicate.isTagged(cause, "PersistenceSqlError") ||
+            Predicate.isTagged(cause, "PersistenceDecodeError")
               ? cause
               : toPersistenceSqlError("BotUsageLedger.bindTurn")(cause),
           ),
@@ -487,7 +284,8 @@ const make = Effect.gen(function* () {
         )
         .pipe(
           Effect.mapError((cause) =>
-            cause._tag === "PersistenceSqlError" || cause._tag === "PersistenceDecodeError"
+            Predicate.isTagged(cause, "PersistenceSqlError") ||
+            Predicate.isTagged(cause, "PersistenceDecodeError")
               ? cause
               : toPersistenceSqlError("BotUsageLedger.settleForTurn")(cause),
           ),
@@ -565,7 +363,8 @@ const make = Effect.gen(function* () {
         )
         .pipe(
           Effect.mapError((cause) =>
-            cause._tag === "PersistenceSqlError" || cause._tag === "PersistenceDecodeError"
+            Predicate.isTagged(cause, "PersistenceSqlError") ||
+            Predicate.isTagged(cause, "PersistenceDecodeError")
               ? cause
               : toPersistenceSqlError("BotUsageLedger.finalizeForTurn")(cause),
           ),
@@ -626,7 +425,8 @@ const make = Effect.gen(function* () {
         )
         .pipe(
           Effect.mapError((cause) =>
-            cause._tag === "PersistenceSqlError" || cause._tag === "PersistenceDecodeError"
+            Predicate.isTagged(cause, "PersistenceSqlError") ||
+            Predicate.isTagged(cause, "PersistenceDecodeError")
               ? cause
               : toPersistenceSqlError("BotUsageLedger.recordMeasurement")(cause),
           ),
@@ -657,7 +457,7 @@ const make = Effect.gen(function* () {
         )
         .pipe(
           Effect.mapError((cause) =>
-            cause._tag === "PersistenceDecodeError"
+            Predicate.isTagged(cause, "PersistenceDecodeError")
               ? cause
               : toPersistenceSqlError("BotUsageLedger.recordStart")(cause),
           ),
@@ -736,7 +536,7 @@ const make = Effect.gen(function* () {
       }).pipe(Effect.mapError(toPersistenceDecodeError("BotUsageLedger.summarize")));
     }).pipe(
       Effect.mapError((cause) =>
-        cause._tag === "PersistenceDecodeError"
+        Predicate.isTagged(cause, "PersistenceDecodeError")
           ? cause
           : toPersistenceSqlError("BotUsageLedger.summarize")(cause),
       ),
@@ -846,3 +646,10 @@ const make = Effect.gen(function* () {
 });
 
 export const BotUsageLedgerLive = Layer.effect(BotUsageLedger, make);
+export { BotUsageCapExceeded } from "./BotUsageLedgerTypes.ts";
+export { AKERU_TURN_USAGE_RESERVATION_TOKENS } from "./BotUsageLedgerTypes.ts";
+export type { ReserveBotUsageInput } from "./BotUsageLedgerTypes.ts";
+export type { SettleBotUsageInput } from "./BotUsageLedgerTypes.ts";
+export type { SettleBotUsageForTurnInput } from "./BotUsageLedgerTypes.ts";
+export type { BotUsageLedgerError } from "./BotUsageLedgerTypes.ts";
+export type { BotUsageLedgerShape } from "./BotUsageLedgerTypes.ts";
