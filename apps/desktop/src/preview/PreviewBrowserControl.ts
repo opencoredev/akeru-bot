@@ -36,7 +36,7 @@ import {
   isPreviewAutomationEvaluationError,
   isPreviewAutomationInvalidSelectorError,
 } from "./PreviewErrors.ts";
-import type { makePreviewState } from "./PreviewState.ts";
+import type { createPreviewState } from "./PreviewState.ts";
 import {
   type PreviewTabState,
   DIAGNOSTIC_BUFFER_LIMIT,
@@ -51,7 +51,7 @@ import {
   type SendCommand,
 } from "./PreviewModel.ts";
 
-export const makePreviewBrowserControl = ({
+export const createPreviewBrowserControl = ({
   currentIso,
   diagnosticsRef,
   replaceMap,
@@ -74,33 +74,33 @@ export const makePreviewBrowserControl = ({
   playwrightInstallExpression,
   expectedAgentInputsRef,
 }: {
-  readonly currentIso: ReturnType<typeof makePreviewState>["currentIso"];
+  readonly currentIso: ReturnType<typeof createPreviewState>["currentIso"];
   readonly diagnosticsRef: Ref.Ref<ReadonlyMap<number, BrowserDiagnostics>>;
-  readonly replaceMap: ReturnType<typeof makePreviewState>["replaceMap"];
+  readonly replaceMap: ReturnType<typeof createPreviewState>["replaceMap"];
   readonly controlSessionsRef: SynchronizedRef.SynchronizedRef<
     ReadonlyMap<number, BrowserControlSession>
   >;
   readonly parentScope: Scope.Scope;
-  readonly attemptPromise: ReturnType<typeof makePreviewState>["attemptPromise"];
-  readonly tabIdForWebContents: ReturnType<typeof makePreviewState>["tabIdForWebContents"];
+  readonly attemptPromise: ReturnType<typeof createPreviewState>["attemptPromise"];
+  readonly tabIdForWebContents: ReturnType<typeof createPreviewState>["tabIdForWebContents"];
   readonly frameCaptureSessionsRef: SynchronizedRef.SynchronizedRef<
     ReadonlyMap<string, FrameCaptureSession>
   >;
   readonly recordingFrameListenersRef: Ref.Ref<ReadonlySet<RecordingFrameListener>>;
-  readonly deliverEvent: ReturnType<typeof makePreviewState>["deliverEvent"];
+  readonly deliverEvent: ReturnType<typeof createPreviewState>["deliverEvent"];
   readonly runFork: <A, E>(
     effect: Effect.Effect<A, E, never>,
     options?: Effect.RunOptions | undefined,
   ) => Fiber.Fiber<A, E>;
-  readonly attempt: ReturnType<typeof makePreviewState>["attempt"];
+  readonly attempt: ReturnType<typeof createPreviewState>["attempt"];
   readonly actionTimelineRef: Ref.Ref<
     ReadonlyMap<string, ReadonlyArray<PreviewAutomationActionEvent>>
   >;
-  readonly nextCounter: ReturnType<typeof makePreviewState>["nextCounter"];
+  readonly nextCounter: ReturnType<typeof createPreviewState>["nextCounter"];
   readonly actionSequenceRef: Ref.Ref<number>;
-  readonly currentMillis: ReturnType<typeof makePreviewState>["currentMillis"];
+  readonly currentMillis: ReturnType<typeof createPreviewState>["currentMillis"];
   readonly controlEpochRef: Ref.Ref<ReadonlyMap<string, number>>;
-  readonly update: ReturnType<typeof makePreviewState>["update"];
+  readonly update: ReturnType<typeof createPreviewState>["update"];
   readonly tabsRef: SynchronizedRef.SynchronizedRef<ReadonlyMap<string, PreviewTabState>>;
   readonly playwrightInstallExpression: ReturnType<
     typeof playwrightInjectedRuntimeInstallExpression

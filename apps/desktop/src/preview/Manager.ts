@@ -107,17 +107,17 @@ export {
   isPreviewEditingShortcut,
 } from "./PreviewModel.ts";
 export type { PreviewNavStatus, PreviewTabState } from "./PreviewModel.ts";
-import { makePreviewState } from "./PreviewState.ts";
-import { makePreviewBrowserControl } from "./PreviewBrowserControl.ts";
-import { makePreviewAnnotations } from "./PreviewAnnotations.ts";
-import { makePreviewTabListeners } from "./PreviewTabListeners.ts";
-import { makePreviewTabLifecycle } from "./PreviewTabLifecycle.ts";
-import { makePreviewFrameCapture } from "./PreviewFrameCapture.ts";
-import { makePreviewPictureInPicture } from "./PreviewPictureInPicture.ts";
-import { makePreviewArtifacts } from "./PreviewArtifacts.ts";
-import { makePreviewAutomationSnapshot } from "./PreviewAutomationSnapshot.ts";
-import { makePreviewAutomationInput } from "./PreviewAutomationInput.ts";
-import { makePreviewAutomationQuery } from "./PreviewAutomationQuery.ts";
+import { createPreviewState } from "./PreviewState.ts";
+import { createPreviewBrowserControl } from "./PreviewBrowserControl.ts";
+import { createPreviewAnnotations } from "./PreviewAnnotations.ts";
+import { createPreviewTabListeners } from "./PreviewTabListeners.ts";
+import { createPreviewTabLifecycle } from "./PreviewTabLifecycle.ts";
+import { createPreviewFrameCapture } from "./PreviewFrameCapture.ts";
+import { createPreviewPictureInPicture } from "./PreviewPictureInPicture.ts";
+import { createPreviewArtifacts } from "./PreviewArtifacts.ts";
+import { createPreviewAutomationSnapshot } from "./PreviewAutomationSnapshot.ts";
+import { createPreviewAutomationInput } from "./PreviewAutomationInput.ts";
+import { createPreviewAutomationQuery } from "./PreviewAutomationQuery.ts";
 const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function* (
   artifactDirectory: string,
   pictureInPicturePreloadPath: string,
@@ -217,7 +217,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     resolveArtifactPath,
     tabIdForWebContents,
     subscribe,
-  } = makePreviewState({ listenersRef, tabsRef, path, resolvedArtifactDirectory });
+  } = createPreviewState({ listenersRef, tabsRef, path, resolvedArtifactDirectory });
   const {
     detachControlSession,
     prepareAutomationInput,
@@ -229,7 +229,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     applyColorScheme,
     restoreControlSession,
     automationStatus,
-  } = makePreviewBrowserControl({
+  } = createPreviewBrowserControl({
     currentIso,
     diagnosticsRef,
     replaceMap,
@@ -252,7 +252,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     playwrightInstallExpression,
     expectedAgentInputsRef,
   });
-  const { cancelPickElement, setAnnotationTheme, pickElement } = makePreviewAnnotations({
+  const { cancelPickElement, setAnnotationTheme, pickElement } = createPreviewAnnotations({
     pickSessionsRef,
     annotationThemeRef,
     tabsRef,
@@ -261,7 +261,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     replaceMap,
     runFork,
   });
-  const { detachListeners, computeNavStatus, attachListeners } = makePreviewTabListeners({
+  const { detachListeners, computeNavStatus, attachListeners } = createPreviewTabListeners({
     attachedRef,
     replaceMap,
     parentScope,
@@ -279,7 +279,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     attemptPromise,
   });
   const { setWindowBackgroundThrottling, stopFrameCapture, stopAllRecordings, startFrameCapture } =
-    makePreviewFrameCapture({
+    createPreviewFrameCapture({
       attempt,
       mainWindowRef,
       frameCaptureSessionsRef,
@@ -297,7 +297,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       parentScope,
     });
   const { closePictureInPicture, closeAllPictureInPicture, openPictureInPicture } =
-    makePreviewPictureInPicture({
+    createPreviewPictureInPicture({
       pictureInPictureSessionsRef,
       replaceMap,
       pictureInPictureAspectRatiosRef,
@@ -329,7 +329,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     applyZoom,
     setColorScheme,
     setAudioMuted,
-  } = makePreviewTabLifecycle({
+  } = createPreviewTabLifecycle({
     currentIso,
     tabsRef,
     replaceMap,
@@ -364,7 +364,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     saveRecording,
     revealArtifact,
     copyArtifactToClipboard,
-  } = makePreviewArtifacts({
+  } = createPreviewArtifacts({
     requireWebContents,
     currentIso,
     currentMillis,
@@ -378,7 +378,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     attempt,
   });
   const { automationLocator, automationSelectorDiagnostics, automationSnapshot } =
-    makePreviewAutomationSnapshot({
+    createPreviewAutomationSnapshot({
       evaluateWithDebugger,
       diagnosticsRef,
       actionTimelineRef,
@@ -390,7 +390,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       requireWebContents,
       withControlSession,
     });
-  const { automationClick, automationType, automationPress } = makePreviewAutomationInput({
+  const { automationClick, automationType, automationPress } = createPreviewAutomationInput({
     automationLocator,
     ensurePlaywrightInjected,
     encodeJson,
@@ -408,7 +408,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     hostPlatform,
     attempt,
   });
-  const { automationScroll, automationEvaluate, automationWaitFor } = makePreviewAutomationQuery({
+  const { automationScroll, automationEvaluate, automationWaitFor } = createPreviewAutomationQuery({
     automationLocator,
     ensurePlaywrightInjected,
     encodeJson,

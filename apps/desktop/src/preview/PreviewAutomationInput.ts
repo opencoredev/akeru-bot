@@ -19,9 +19,9 @@ import {
   PreviewAutomationCoordinatesOutsideViewportError,
   PreviewAutomationInvalidSelectorError,
 } from "./PreviewErrors.ts";
-import type { makePreviewAutomationSnapshot } from "./PreviewAutomationSnapshot.ts";
-import type { makePreviewBrowserControl } from "./PreviewBrowserControl.ts";
-import type { makePreviewState } from "./PreviewState.ts";
+import type { createPreviewAutomationSnapshot } from "./PreviewAutomationSnapshot.ts";
+import type { createPreviewBrowserControl } from "./PreviewBrowserControl.ts";
+import type { createPreviewState } from "./PreviewState.ts";
 import {
   AGENT_CURSOR_MOVE_MS,
   AGENT_CURSOR_CLICK_LEAD_MS,
@@ -29,7 +29,7 @@ import {
   type SendCommand,
 } from "./PreviewModel.ts";
 
-export const makePreviewAutomationInput = ({
+export const createPreviewAutomationInput = ({
   automationLocator,
   ensurePlaywrightInjected,
   encodeJson,
@@ -47,30 +47,32 @@ export const makePreviewAutomationInput = ({
   hostPlatform,
   attempt,
 }: {
-  readonly automationLocator: ReturnType<typeof makePreviewAutomationSnapshot>["automationLocator"];
+  readonly automationLocator: ReturnType<
+    typeof createPreviewAutomationSnapshot
+  >["automationLocator"];
   readonly ensurePlaywrightInjected: ReturnType<
-    typeof makePreviewBrowserControl
+    typeof createPreviewBrowserControl
   >["ensurePlaywrightInjected"];
-  readonly encodeJson: ReturnType<typeof makePreviewState>["encodeJson"];
+  readonly encodeJson: ReturnType<typeof createPreviewState>["encodeJson"];
   readonly evaluateWithDebugger: ReturnType<
-    typeof makePreviewBrowserControl
+    typeof createPreviewBrowserControl
   >["evaluateWithDebugger"];
   readonly automationSelectorDiagnostics: ReturnType<
-    typeof makePreviewAutomationSnapshot
+    typeof createPreviewAutomationSnapshot
   >["automationSelectorDiagnostics"];
   readonly pointerEventListenersRef: Ref.Ref<ReadonlySet<PointerEventListener>>;
-  readonly deliverEvent: ReturnType<typeof makePreviewState>["deliverEvent"];
+  readonly deliverEvent: ReturnType<typeof createPreviewState>["deliverEvent"];
   readonly prepareAutomationInput: ReturnType<
-    typeof makePreviewBrowserControl
+    typeof createPreviewBrowserControl
   >["prepareAutomationInput"];
-  readonly nextCounter: ReturnType<typeof makePreviewState>["nextCounter"];
+  readonly nextCounter: ReturnType<typeof createPreviewState>["nextCounter"];
   readonly pointerSequenceRef: Ref.Ref<number>;
-  readonly currentIso: ReturnType<typeof makePreviewState>["currentIso"];
-  readonly expectAgentInput: ReturnType<typeof makePreviewBrowserControl>["expectAgentInput"];
-  readonly requireWebContents: ReturnType<typeof makePreviewState>["requireWebContents"];
-  readonly withControlSession: ReturnType<typeof makePreviewBrowserControl>["withControlSession"];
+  readonly currentIso: ReturnType<typeof createPreviewState>["currentIso"];
+  readonly expectAgentInput: ReturnType<typeof createPreviewBrowserControl>["expectAgentInput"];
+  readonly requireWebContents: ReturnType<typeof createPreviewState>["requireWebContents"];
+  readonly withControlSession: ReturnType<typeof createPreviewBrowserControl>["withControlSession"];
   readonly hostPlatform: NodeJS.Platform;
-  readonly attempt: ReturnType<typeof makePreviewState>["attempt"];
+  readonly attempt: ReturnType<typeof createPreviewState>["attempt"];
 }) => {
   const resolveClickPoint = Effect.fn("PreviewManager.resolveClickPoint")(function* (
     tabId: string,

@@ -16,8 +16,8 @@ import { HUMAN_INPUT_CHANNEL, MOUSE_NAVIGATE_CHANNEL } from "./GuestProtocol.ts"
 
 import { captureFavicon, safeHttpOrigin, selectFaviconCandidates } from "./FaviconCapture.ts";
 import { PreviewOperationError } from "./PreviewErrors.ts";
-import type { makePreviewState } from "./PreviewState.ts";
-import type { makePreviewBrowserControl } from "./PreviewBrowserControl.ts";
+import type { createPreviewState } from "./PreviewState.ts";
+import type { createPreviewBrowserControl } from "./PreviewBrowserControl.ts";
 import {
   type PreviewNavStatus,
   type PreviewTabState,
@@ -27,7 +27,7 @@ import {
   isPreviewInputSignal,
 } from "./PreviewModel.ts";
 
-export const makePreviewTabListeners = ({
+export const createPreviewTabListeners = ({
   attachedRef,
   replaceMap,
   parentScope,
@@ -45,25 +45,25 @@ export const makePreviewTabListeners = ({
   attemptPromise,
 }: {
   readonly attachedRef: Ref.Ref<ReadonlyMap<number, ManagedListeners>>;
-  readonly replaceMap: ReturnType<typeof makePreviewState>["replaceMap"];
+  readonly replaceMap: ReturnType<typeof createPreviewState>["replaceMap"];
   readonly parentScope: Scope.Scope;
-  readonly currentIso: ReturnType<typeof makePreviewState>["currentIso"];
+  readonly currentIso: ReturnType<typeof createPreviewState>["currentIso"];
   readonly tabsRef: SynchronizedRef.SynchronizedRef<ReadonlyMap<string, PreviewTabState>>;
-  readonly emitIfCurrent: ReturnType<typeof makePreviewState>["emitIfCurrent"];
+  readonly emitIfCurrent: ReturnType<typeof createPreviewState>["emitIfCurrent"];
   readonly runFork: <A, E>(
     effect: Effect.Effect<A, E, never>,
     options?: Effect.RunOptions | undefined,
   ) => Fiber.Fiber<A, E>;
-  readonly syncTabAudible: ReturnType<typeof makePreviewState>["syncTabAudible"];
-  readonly currentMillis: ReturnType<typeof makePreviewState>["currentMillis"];
-  readonly update: ReturnType<typeof makePreviewState>["update"];
+  readonly syncTabAudible: ReturnType<typeof createPreviewState>["syncTabAudible"];
+  readonly currentMillis: ReturnType<typeof createPreviewState>["currentMillis"];
+  readonly update: ReturnType<typeof createPreviewState>["update"];
   readonly consumeExpectedAgentInput: ReturnType<
-    typeof makePreviewBrowserControl
+    typeof createPreviewBrowserControl
   >["consumeExpectedAgentInput"];
   readonly controlEpochRef: Ref.Ref<ReadonlyMap<string, number>>;
-  readonly attempt: ReturnType<typeof makePreviewState>["attempt"];
+  readonly attempt: ReturnType<typeof createPreviewState>["attempt"];
   readonly hostPlatform: NodeJS.Platform;
-  readonly attemptPromise: ReturnType<typeof makePreviewState>["attemptPromise"];
+  readonly attemptPromise: ReturnType<typeof createPreviewState>["attemptPromise"];
 }) => {
   const detachListeners = Effect.fn("PreviewManager.detachListeners")(function* (
     webContentsId: number,

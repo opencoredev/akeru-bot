@@ -12,12 +12,12 @@ import {
   PreviewAutomationResultTooLargeError,
   PreviewAutomationTimeoutError,
 } from "./PreviewErrors.ts";
-import type { makePreviewAutomationSnapshot } from "./PreviewAutomationSnapshot.ts";
-import type { makePreviewBrowserControl } from "./PreviewBrowserControl.ts";
-import type { makePreviewState } from "./PreviewState.ts";
+import type { createPreviewAutomationSnapshot } from "./PreviewAutomationSnapshot.ts";
+import type { createPreviewBrowserControl } from "./PreviewBrowserControl.ts";
+import type { createPreviewState } from "./PreviewState.ts";
 import { MAX_EVALUATION_BYTES, type SendCommand } from "./PreviewModel.ts";
 
-export const makePreviewAutomationQuery = ({
+export const createPreviewAutomationQuery = ({
   automationLocator,
   ensurePlaywrightInjected,
   encodeJson,
@@ -27,20 +27,22 @@ export const makePreviewAutomationQuery = ({
   withControlSession,
   currentMillis,
 }: {
-  readonly automationLocator: ReturnType<typeof makePreviewAutomationSnapshot>["automationLocator"];
+  readonly automationLocator: ReturnType<
+    typeof createPreviewAutomationSnapshot
+  >["automationLocator"];
   readonly ensurePlaywrightInjected: ReturnType<
-    typeof makePreviewBrowserControl
+    typeof createPreviewBrowserControl
   >["ensurePlaywrightInjected"];
-  readonly encodeJson: ReturnType<typeof makePreviewState>["encodeJson"];
+  readonly encodeJson: ReturnType<typeof createPreviewState>["encodeJson"];
   readonly evaluateWithDebugger: ReturnType<
-    typeof makePreviewBrowserControl
+    typeof createPreviewBrowserControl
   >["evaluateWithDebugger"];
   readonly automationSelectorDiagnostics: ReturnType<
-    typeof makePreviewAutomationSnapshot
+    typeof createPreviewAutomationSnapshot
   >["automationSelectorDiagnostics"];
-  readonly requireWebContents: ReturnType<typeof makePreviewState>["requireWebContents"];
-  readonly withControlSession: ReturnType<typeof makePreviewBrowserControl>["withControlSession"];
-  readonly currentMillis: ReturnType<typeof makePreviewState>["currentMillis"];
+  readonly requireWebContents: ReturnType<typeof createPreviewState>["requireWebContents"];
+  readonly withControlSession: ReturnType<typeof createPreviewBrowserControl>["withControlSession"];
+  readonly currentMillis: ReturnType<typeof createPreviewState>["currentMillis"];
 }) => {
   const performAutomationScroll = Effect.fn("PreviewManager.performAutomationScroll")(function* (
     tabId: string,

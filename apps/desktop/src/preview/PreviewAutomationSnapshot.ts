@@ -12,8 +12,8 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 
 import { type PreviewAutomationSelectorKind, PreviewOperationError } from "./PreviewErrors.ts";
-import type { makePreviewBrowserControl } from "./PreviewBrowserControl.ts";
-import type { makePreviewState } from "./PreviewState.ts";
+import type { createPreviewBrowserControl } from "./PreviewBrowserControl.ts";
+import type { createPreviewState } from "./PreviewState.ts";
 import {
   MAX_VISIBLE_TEXT_LENGTH,
   MAX_INTERACTIVE_ELEMENTS,
@@ -25,7 +25,7 @@ import {
   type SendCommand,
 } from "./PreviewModel.ts";
 
-export const makePreviewAutomationSnapshot = ({
+export const createPreviewAutomationSnapshot = ({
   evaluateWithDebugger,
   diagnosticsRef,
   actionTimelineRef,
@@ -38,7 +38,7 @@ export const makePreviewAutomationSnapshot = ({
   withControlSession,
 }: {
   readonly evaluateWithDebugger: ReturnType<
-    typeof makePreviewBrowserControl
+    typeof createPreviewBrowserControl
   >["evaluateWithDebugger"];
   readonly diagnosticsRef: Ref.Ref<ReadonlyMap<number, BrowserDiagnostics>>;
   readonly actionTimelineRef: Ref.Ref<
@@ -55,15 +55,15 @@ export const makePreviewAutomationSnapshot = ({
     >
   >;
   readonly mainWindowRef: Ref.Ref<Option.Option<BrowserWindow>>;
-  readonly encodeJson: ReturnType<typeof makePreviewState>["encodeJson"];
-  readonly attemptPromise: ReturnType<typeof makePreviewState>["attemptPromise"];
-  readonly attempt: ReturnType<typeof makePreviewState>["attempt"];
+  readonly encodeJson: ReturnType<typeof createPreviewState>["encodeJson"];
+  readonly attemptPromise: ReturnType<typeof createPreviewState>["attemptPromise"];
+  readonly attempt: ReturnType<typeof createPreviewState>["attempt"];
   readonly runFork: <A, E>(
     effect: Effect.Effect<A, E, never>,
     options?: Effect.RunOptions | undefined,
   ) => Fiber.Fiber<A, E>;
-  readonly requireWebContents: ReturnType<typeof makePreviewState>["requireWebContents"];
-  readonly withControlSession: ReturnType<typeof makePreviewBrowserControl>["withControlSession"];
+  readonly requireWebContents: ReturnType<typeof createPreviewState>["requireWebContents"];
+  readonly withControlSession: ReturnType<typeof createPreviewBrowserControl>["withControlSession"];
 }) => {
   const automationLocator = (input: {
     readonly selector?: string | undefined;

@@ -15,7 +15,7 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 import { PREVIEW_PICTURE_IN_PICTURE_FRAME_CHANNEL } from "../ipc/channels.ts";
 
 import { PreviewTabNotFoundError, PreviewMainWindowClosedError } from "./PreviewErrors.ts";
-import type { makePreviewState } from "./PreviewState.ts";
+import type { createPreviewState } from "./PreviewState.ts";
 import {
   type PreviewTabState,
   RECORDING_FRAME_INTERVAL_MS,
@@ -28,7 +28,7 @@ import {
   type PictureInPictureSession,
 } from "./PreviewModel.ts";
 
-export const makePreviewFrameCapture = ({
+export const createPreviewFrameCapture = ({
   attempt,
   mainWindowRef,
   frameCaptureSessionsRef,
@@ -45,18 +45,18 @@ export const makePreviewFrameCapture = ({
   closingTabIdsRef,
   parentScope,
 }: {
-  readonly attempt: ReturnType<typeof makePreviewState>["attempt"];
+  readonly attempt: ReturnType<typeof createPreviewState>["attempt"];
   readonly mainWindowRef: Ref.Ref<Option.Option<BrowserWindow>>;
   readonly frameCaptureSessionsRef: SynchronizedRef.SynchronizedRef<
     ReadonlyMap<string, FrameCaptureSession>
   >;
-  readonly replaceMap: ReturnType<typeof makePreviewState>["replaceMap"];
-  readonly requireWebContents: ReturnType<typeof makePreviewState>["requireWebContents"];
-  readonly attemptPromise: ReturnType<typeof makePreviewState>["attemptPromise"];
+  readonly replaceMap: ReturnType<typeof createPreviewState>["replaceMap"];
+  readonly requireWebContents: ReturnType<typeof createPreviewState>["requireWebContents"];
+  readonly attemptPromise: ReturnType<typeof createPreviewState>["attemptPromise"];
   readonly tabsRef: SynchronizedRef.SynchronizedRef<ReadonlyMap<string, PreviewTabState>>;
-  readonly currentIso: ReturnType<typeof makePreviewState>["currentIso"];
+  readonly currentIso: ReturnType<typeof createPreviewState>["currentIso"];
   readonly recordingFrameListenersRef: Ref.Ref<ReadonlySet<RecordingFrameListener>>;
-  readonly deliverEvent: ReturnType<typeof makePreviewState>["deliverEvent"];
+  readonly deliverEvent: ReturnType<typeof createPreviewState>["deliverEvent"];
   readonly pictureInPictureSessionsRef: SynchronizedRef.SynchronizedRef<
     ReadonlyMap<string, PictureInPictureSession>
   >;

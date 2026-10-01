@@ -22,12 +22,12 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 import { ANNOTATION_THEME_CHANNEL } from "./GuestProtocol.ts";
 
 import { PreviewTabNotFoundError, PreviewWebContentsNotFoundError } from "./PreviewErrors.ts";
-import type { makePreviewState } from "./PreviewState.ts";
-import type { makePreviewAnnotations } from "./PreviewAnnotations.ts";
-import type { makePreviewPictureInPicture } from "./PreviewPictureInPicture.ts";
-import type { makePreviewFrameCapture } from "./PreviewFrameCapture.ts";
-import type { makePreviewBrowserControl } from "./PreviewBrowserControl.ts";
-import type { makePreviewTabListeners } from "./PreviewTabListeners.ts";
+import type { createPreviewState } from "./PreviewState.ts";
+import type { createPreviewAnnotations } from "./PreviewAnnotations.ts";
+import type { createPreviewPictureInPicture } from "./PreviewPictureInPicture.ts";
+import type { createPreviewFrameCapture } from "./PreviewFrameCapture.ts";
+import type { createPreviewBrowserControl } from "./PreviewBrowserControl.ts";
+import type { createPreviewTabListeners } from "./PreviewTabListeners.ts";
 import {
   type PreviewTabState,
   DEFAULT_ZOOM_FACTOR,
@@ -36,7 +36,7 @@ import {
   type ManagedListeners,
 } from "./PreviewModel.ts";
 
-export const makePreviewTabLifecycle = ({
+export const createPreviewTabLifecycle = ({
   currentIso,
   tabsRef,
   replaceMap,
@@ -64,41 +64,41 @@ export const makePreviewTabLifecycle = ({
   update,
   applyColorScheme,
 }: {
-  readonly currentIso: ReturnType<typeof makePreviewState>["currentIso"];
+  readonly currentIso: ReturnType<typeof createPreviewState>["currentIso"];
   readonly tabsRef: SynchronizedRef.SynchronizedRef<ReadonlyMap<string, PreviewTabState>>;
-  readonly replaceMap: ReturnType<typeof makePreviewState>["replaceMap"];
-  readonly emit: ReturnType<typeof makePreviewState>["emit"];
-  readonly cancelPickElement: ReturnType<typeof makePreviewAnnotations>["cancelPickElement"];
+  readonly replaceMap: ReturnType<typeof createPreviewState>["replaceMap"];
+  readonly emit: ReturnType<typeof createPreviewState>["emit"];
+  readonly cancelPickElement: ReturnType<typeof createPreviewAnnotations>["cancelPickElement"];
   readonly closePictureInPicture: ReturnType<
-    typeof makePreviewPictureInPicture
+    typeof createPreviewPictureInPicture
   >["closePictureInPicture"];
-  readonly stopFrameCapture: ReturnType<typeof makePreviewFrameCapture>["stopFrameCapture"];
+  readonly stopFrameCapture: ReturnType<typeof createPreviewFrameCapture>["stopFrameCapture"];
   readonly detachControlSession: ReturnType<
-    typeof makePreviewBrowserControl
+    typeof createPreviewBrowserControl
   >["detachControlSession"];
-  readonly detachListeners: ReturnType<typeof makePreviewTabListeners>["detachListeners"];
+  readonly detachListeners: ReturnType<typeof createPreviewTabListeners>["detachListeners"];
   readonly closingTabIdsRef: Ref.Ref<ReadonlySet<string>>;
   readonly mainWindowRef: Ref.Ref<Option.Option<BrowserWindow>>;
   readonly attachedRef: Ref.Ref<ReadonlyMap<number, ManagedListeners>>;
   readonly annotationThemeRef: Ref.Ref<DesktopPreviewAnnotationTheme>;
-  readonly assertTabZoom: ReturnType<typeof makePreviewState>["assertTabZoom"];
-  readonly attempt: ReturnType<typeof makePreviewState>["attempt"];
-  readonly attachListeners: ReturnType<typeof makePreviewTabListeners>["attachListeners"];
-  readonly computeNavStatus: ReturnType<typeof makePreviewTabListeners>["computeNavStatus"];
-  readonly assertTabAudioMuted: ReturnType<typeof makePreviewState>["assertTabAudioMuted"];
+  readonly assertTabZoom: ReturnType<typeof createPreviewState>["assertTabZoom"];
+  readonly attempt: ReturnType<typeof createPreviewState>["attempt"];
+  readonly attachListeners: ReturnType<typeof createPreviewTabListeners>["attachListeners"];
+  readonly computeNavStatus: ReturnType<typeof createPreviewTabListeners>["computeNavStatus"];
+  readonly assertTabAudioMuted: ReturnType<typeof createPreviewState>["assertTabAudioMuted"];
   readonly runFork: <A, E>(
     effect: Effect.Effect<A, E, never>,
     options?: Effect.RunOptions | undefined,
   ) => Fiber.Fiber<A, E>;
   readonly restoreControlSession: ReturnType<
-    typeof makePreviewBrowserControl
+    typeof createPreviewBrowserControl
   >["restoreControlSession"];
-  readonly emitIfCurrent: ReturnType<typeof makePreviewState>["emitIfCurrent"];
-  readonly syncTabAudible: ReturnType<typeof makePreviewState>["syncTabAudible"];
-  readonly attemptPromise: ReturnType<typeof makePreviewState>["attemptPromise"];
-  readonly requireWebContents: ReturnType<typeof makePreviewState>["requireWebContents"];
-  readonly update: ReturnType<typeof makePreviewState>["update"];
-  readonly applyColorScheme: ReturnType<typeof makePreviewBrowserControl>["applyColorScheme"];
+  readonly emitIfCurrent: ReturnType<typeof createPreviewState>["emitIfCurrent"];
+  readonly syncTabAudible: ReturnType<typeof createPreviewState>["syncTabAudible"];
+  readonly attemptPromise: ReturnType<typeof createPreviewState>["attemptPromise"];
+  readonly requireWebContents: ReturnType<typeof createPreviewState>["requireWebContents"];
+  readonly update: ReturnType<typeof createPreviewState>["update"];
+  readonly applyColorScheme: ReturnType<typeof createPreviewBrowserControl>["applyColorScheme"];
 }) => {
   const tabLifecycleLocks = new Map<
     string,

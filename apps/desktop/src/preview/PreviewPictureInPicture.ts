@@ -13,8 +13,8 @@ import * as Scope from "effect/Scope";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import { PreviewOperationError, type PreviewManagerError } from "./PreviewErrors.ts";
-import type { makePreviewState } from "./PreviewState.ts";
-import type { makePreviewFrameCapture } from "./PreviewFrameCapture.ts";
+import type { createPreviewState } from "./PreviewState.ts";
+import type { createPreviewFrameCapture } from "./PreviewFrameCapture.ts";
 import {
   type PreviewTabState,
   PICTURE_IN_PICTURE_INITIAL_WIDTH,
@@ -26,7 +26,7 @@ import {
   type PictureInPictureSession,
 } from "./PreviewModel.ts";
 
-export const makePreviewPictureInPicture = ({
+export const createPreviewPictureInPicture = ({
   pictureInPictureSessionsRef,
   replaceMap,
   pictureInPictureAspectRatiosRef,
@@ -47,14 +47,14 @@ export const makePreviewPictureInPicture = ({
   readonly pictureInPictureSessionsRef: SynchronizedRef.SynchronizedRef<
     ReadonlyMap<string, PictureInPictureSession>
   >;
-  readonly replaceMap: ReturnType<typeof makePreviewState>["replaceMap"];
+  readonly replaceMap: ReturnType<typeof createPreviewState>["replaceMap"];
   readonly pictureInPictureAspectRatiosRef: Ref.Ref<ReadonlyMap<string, number>>;
-  readonly stopFrameCapture: ReturnType<typeof makePreviewFrameCapture>["stopFrameCapture"];
+  readonly stopFrameCapture: ReturnType<typeof createPreviewFrameCapture>["stopFrameCapture"];
   readonly tabsRef: SynchronizedRef.SynchronizedRef<ReadonlyMap<string, PreviewTabState>>;
-  readonly update: ReturnType<typeof makePreviewState>["update"];
-  readonly attempt: ReturnType<typeof makePreviewState>["attempt"];
+  readonly update: ReturnType<typeof createPreviewState>["update"];
+  readonly attempt: ReturnType<typeof createPreviewState>["attempt"];
   readonly pictureInPictureMutationSemaphore: Semaphore.Semaphore;
-  readonly requireWebContents: ReturnType<typeof makePreviewState>["requireWebContents"];
+  readonly requireWebContents: ReturnType<typeof createPreviewState>["requireWebContents"];
   readonly hostPlatform: NodeJS.Platform;
   readonly parentScope: Scope.Scope;
   readonly runFork: <A, E>(
@@ -64,8 +64,8 @@ export const makePreviewPictureInPicture = ({
   readonly frameCaptureSessionsRef: SynchronizedRef.SynchronizedRef<
     ReadonlyMap<string, FrameCaptureSession>
   >;
-  readonly attemptPromise: ReturnType<typeof makePreviewState>["attemptPromise"];
-  readonly startFrameCapture: ReturnType<typeof makePreviewFrameCapture>["startFrameCapture"];
+  readonly attemptPromise: ReturnType<typeof createPreviewState>["attemptPromise"];
+  readonly startFrameCapture: ReturnType<typeof createPreviewFrameCapture>["startFrameCapture"];
   readonly pictureInPicturePreloadPath: string;
 }) => {
   const releasePictureInPicture = Effect.fn("PreviewManager.releasePictureInPicture")(function* (

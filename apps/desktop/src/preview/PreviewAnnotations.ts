@@ -23,7 +23,7 @@ import {
 import { isPreviewAnnotationPayload } from "./PickedElementPayload.ts";
 
 import { type PreviewManagerError } from "./PreviewErrors.ts";
-import type { makePreviewState } from "./PreviewState.ts";
+import type { createPreviewState } from "./PreviewState.ts";
 import {
   type PreviewTabState,
   normalizeCaptureRect,
@@ -31,7 +31,7 @@ import {
   type PickSession,
 } from "./PreviewModel.ts";
 
-export const makePreviewAnnotations = ({
+export const createPreviewAnnotations = ({
   pickSessionsRef,
   annotationThemeRef,
   tabsRef,
@@ -43,9 +43,9 @@ export const makePreviewAnnotations = ({
   readonly pickSessionsRef: Ref.Ref<ReadonlyMap<string, PickSession>>;
   readonly annotationThemeRef: Ref.Ref<DesktopPreviewAnnotationTheme>;
   readonly tabsRef: SynchronizedRef.SynchronizedRef<ReadonlyMap<string, PreviewTabState>>;
-  readonly attempt: ReturnType<typeof makePreviewState>["attempt"];
-  readonly requireWebContents: ReturnType<typeof makePreviewState>["requireWebContents"];
-  readonly replaceMap: ReturnType<typeof makePreviewState>["replaceMap"];
+  readonly attempt: ReturnType<typeof createPreviewState>["attempt"];
+  readonly requireWebContents: ReturnType<typeof createPreviewState>["requireWebContents"];
+  readonly replaceMap: ReturnType<typeof createPreviewState>["replaceMap"];
   readonly runFork: <A, E>(
     effect: Effect.Effect<A, E, never>,
     options?: Effect.RunOptions | undefined,

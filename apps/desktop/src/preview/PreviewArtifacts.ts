@@ -7,11 +7,11 @@ import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 
 import { PreviewOperationError, PreviewArtifactImageLoadError } from "./PreviewErrors.ts";
-import type { makePreviewState } from "./PreviewState.ts";
-import type { makePreviewFrameCapture } from "./PreviewFrameCapture.ts";
+import type { createPreviewState } from "./PreviewState.ts";
+import type { createPreviewFrameCapture } from "./PreviewFrameCapture.ts";
 import { artifactSiteSlug } from "./PreviewModel.ts";
 
-export const makePreviewArtifacts = ({
+export const createPreviewArtifacts = ({
   requireWebContents,
   currentIso,
   currentMillis,
@@ -24,17 +24,17 @@ export const makePreviewArtifacts = ({
   resolveArtifactPath,
   attempt,
 }: {
-  readonly requireWebContents: ReturnType<typeof makePreviewState>["requireWebContents"];
-  readonly currentIso: ReturnType<typeof makePreviewState>["currentIso"];
-  readonly currentMillis: ReturnType<typeof makePreviewState>["currentMillis"];
-  readonly attemptPromise: ReturnType<typeof makePreviewState>["attemptPromise"];
+  readonly requireWebContents: ReturnType<typeof createPreviewState>["requireWebContents"];
+  readonly currentIso: ReturnType<typeof createPreviewState>["currentIso"];
+  readonly currentMillis: ReturnType<typeof createPreviewState>["currentMillis"];
+  readonly attemptPromise: ReturnType<typeof createPreviewState>["attemptPromise"];
   readonly path: Path.Path;
   readonly resolvedArtifactDirectory: string;
   readonly fileSystem: FileSystem.FileSystem;
-  readonly startFrameCapture: ReturnType<typeof makePreviewFrameCapture>["startFrameCapture"];
-  readonly stopFrameCapture: ReturnType<typeof makePreviewFrameCapture>["stopFrameCapture"];
-  readonly resolveArtifactPath: ReturnType<typeof makePreviewState>["resolveArtifactPath"];
-  readonly attempt: ReturnType<typeof makePreviewState>["attempt"];
+  readonly startFrameCapture: ReturnType<typeof createPreviewFrameCapture>["startFrameCapture"];
+  readonly stopFrameCapture: ReturnType<typeof createPreviewFrameCapture>["stopFrameCapture"];
+  readonly resolveArtifactPath: ReturnType<typeof createPreviewState>["resolveArtifactPath"];
+  readonly attempt: ReturnType<typeof createPreviewState>["attempt"];
 }) => {
   const captureScreenshot = Effect.fn("PreviewManager.captureScreenshot")(function* (
     tabId: string,

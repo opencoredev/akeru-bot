@@ -24,7 +24,7 @@ import {
 
 import { type PreviewTabState, encodeUnknownJson, type Listener } from "./PreviewModel.ts";
 
-export const makePreviewState = ({
+export const createPreviewState = ({
   listenersRef,
   tabsRef,
   path,
