@@ -597,7 +597,7 @@ export function PluginsPage() {
   const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col text-foreground">
         {environmentId ? (
           <PluginsDialogForEnvironment environmentId={environmentId} standalone />
