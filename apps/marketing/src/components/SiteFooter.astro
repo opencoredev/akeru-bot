@@ -1,0 +1,199 @@
+---
+import { GITHUB_REPOSITORY_URL, T3_CODE_WEBSITE_URL, docsUrl } from "../lib/site";
+import { RELEASES_URL } from "../lib/releases";
+const year = new Date().getFullYear();
+---
+      <footer class="footer">
+        <div class="footer-top">
+          <div class="footer-brand-block">
+            <a href="/" class="footer-brand">akeru</a>
+            <p class="footer-desc">
+              Open-source Grok Bot alternative. Bring your own provider subscription and run the
+              environment where you choose. Akeru also supports Claude, Codex, Kimi, and OpenCode.
+            </p>
+          </div>
+          <div class="footer-cols">
+            <div class="footer-col">
+              <span class="footer-col-title">PRODUCT</span>
+              <a href="/#bots">Bots</a>
+              <a href="/#demos">Demos</a>
+              <a href="/open-source-grok-bot">Grok Bot alternative</a>
+              <a href="/blog">Blog</a>
+              <a href="/download">Download</a>
+              <a href={RELEASES_URL} target="_blank" rel="noopener noreferrer">Changelog</a>
+            </div>
+            <div class="footer-col">
+              <span class="footer-col-title">DOCS</span>
+              <a href={docsUrl("install")} target="_blank" rel="noopener noreferrer">Get started</a>
+              <a href={docsUrl("bots")} target="_blank" rel="noopener noreferrer">Bot profiles</a>
+              <a href={docsUrl("plugins")} target="_blank" rel="noopener noreferrer">Plugins</a>
+              <a href={docsUrl("remote-access")} target="_blank" rel="noopener noreferrer">Remote access</a>
+              <a href="/developers">Developer guide</a>
+            </div>
+            <div class="footer-col">
+              <span class="footer-col-title">PROJECT</span>
+              <a href="/about">About</a>
+              <a href="/contact">Contact</a>
+              <a href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
+              <a href={`${GITHUB_REPOSITORY_URL}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">License</a>
+              <a href={`${GITHUB_REPOSITORY_URL}/blob/main/CONTRIBUTING.md`} target="_blank" rel="noopener noreferrer">
+                Contributing
+              </a>
+            </div>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <div class="footer-attribution">
+            <span>&copy; {year} Akeru. MIT licensed.</span>
+            <a href={T3_CODE_WEBSITE_URL} target="_blank" rel="noopener noreferrer">
+              Thank you to the T3 Code team.
+            </a>
+          </div>
+          <span class="footer-legal">
+            <a href="/terms-of-service">Terms of Use</a>
+            <a href="/privacy-policy">Privacy</a>
+            <a href="/security-policy">Security</a>
+          </span>
+          <span class="footer-platforms">macOS &middot; Windows &middot; Linux</span>
+        </div>
+      </footer>
+<style>
+
+
+  .footer {
+    display: flex;
+    flex-direction: column;
+    background: var(--color-band);
+    border-top: 1px solid var(--color-border);
+    padding: 56px 64px 44px;
+  }
+
+  .footer-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 64px;
+    flex-wrap: wrap;
+    padding-bottom: 44px;
+  }
+
+  .footer-brand-block {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 320px;
+  }
+
+  .footer-brand {
+    font-family: var(--font-serif);
+    font-size: 22px;
+    line-height: 22px;
+    letter-spacing: -0.005em;
+    color: var(--color-foreground);
+  }
+
+  .footer-desc {
+    font-size: 14px;
+    line-height: 22px;
+    color: var(--color-muted-foreground);
+  }
+
+  .footer-cols {
+    display: flex;
+    align-items: flex-start;
+    gap: 88px;
+    flex-wrap: wrap;
+  }
+
+  .footer-col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 132px;
+  }
+
+  .footer-col-title {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--color-muted-foreground);
+  }
+
+  .footer-col a {
+    font-size: 14px;
+    line-height: 18px;
+    color: var(--color-foreground);
+    transition: color 0.15s ease;
+  }
+
+  .footer-col a:hover {
+    color: var(--color-muted-foreground);
+  }
+
+  .footer-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--color-border);
+    padding-top: 28px;
+    font-size: 13px;
+    line-height: 16px;
+    color: var(--color-muted-foreground);
+  }
+
+  .footer-legal {
+    display: flex;
+    gap: 20px;
+  }
+
+  .footer-attribution {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .footer-attribution a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .footer-attribution a:hover {
+    color: var(--color-foreground);
+  }
+
+  .footer-legal a:hover {
+    color: var(--color-foreground);
+  }
+
+  @media (max-width: 900px) {
+
+    .footer {
+      padding: 40px 24px 32px;
+    }
+
+    .footer-top {
+      gap: 36px;
+      padding-bottom: 32px;
+    }
+
+    .footer-brand-block {
+      width: 100%;
+    }
+
+    .footer-cols {
+      gap: 36px;
+    }
+
+    .footer-col {
+      width: 128px;
+    }
+
+    .footer-platforms {
+      display: none;
+    }
+  }
+
+</style>

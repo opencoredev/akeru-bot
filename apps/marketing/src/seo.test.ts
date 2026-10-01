@@ -7,6 +7,23 @@ import { describe, expect, it } from "vite-plus/test";
 const sourceFile = (path: string) =>
   NodeFS.readFileSync(NodePath.resolve(import.meta.dirname, path), "utf8");
 
+const homeSource = () =>
+  [
+    sourceFile("pages/index.astro"),
+    sourceFile("components/home/Hero.astro"),
+    sourceFile("components/home/BotFeatures.astro"),
+    sourceFile("components/home/HowItWorks.astro"),
+    sourceFile("components/home/DemoGallery.astro"),
+    sourceFile("components/home/DownloadSection.astro"),
+  ].join("\n");
+const layoutSource = () =>
+  [
+    sourceFile("layouts/Layout.astro"),
+    sourceFile("components/SiteHeader.astro"),
+    sourceFile("components/SiteFooter.astro"),
+    sourceFile("styles/site.css"),
+  ].join("\n");
+
 const jpegFrameMarker = (image: Buffer) => {
   let offset = 2;
 
@@ -27,7 +44,7 @@ const jpegFrameMarker = (image: Buffer) => {
 
 describe("marketing search metadata", () => {
   it("keeps search metadata while preserving the original home page", () => {
-    const home = sourceFile("pages/index.astro");
+    const home = homeSource();
 
     expect(home).toContain('title="Akeru Bot | Open-source Grok Bot alternative"');
     expect(home).toContain('description="Run named Grok bots in an open-source desktop app');
@@ -36,7 +53,7 @@ describe("marketing search metadata", () => {
   });
 
   it("keeps fallback and environment claims accurate", () => {
-    const home = sourceFile("pages/index.astro");
+    const home = homeSource();
     const download = sourceFile("pages/download.astro");
 
     expect(home).toContain('<span id="download-label">All downloads</span>');
@@ -70,7 +87,7 @@ describe("marketing search metadata", () => {
   });
 
   it("connects Grok discovery to setup without inventing product evidence", () => {
-    const home = sourceFile("pages/index.astro");
+    const home = homeSource();
     const openSource = sourceFile("pages/open-source-grok-bot.astro");
     const selfHosted = sourceFile("pages/guides/self-hosted-grok-bot.astro");
     const sitemap = sourceFile("../public/sitemap.xml");
@@ -100,7 +117,7 @@ describe("marketing search metadata", () => {
 
   it("publishes an editorial blog index that links every Grok article", () => {
     const blog = sourceFile("pages/blog/index.astro");
-    const layout = sourceFile("layouts/Layout.astro");
+    const layout = layoutSource();
 
     expect(blog).toContain('title="Akeru Blog | Open-source AI bot guides"');
     expect(blog).toContain("<h1>Blog</h1>");
@@ -117,8 +134,8 @@ describe("marketing search metadata", () => {
   });
 
   it("uses one sans-serif face across the marketing site", () => {
-    const layout = sourceFile("layouts/Layout.astro");
-    const home = sourceFile("pages/index.astro");
+    const layout = layoutSource();
+    const home = homeSource();
 
     expect(layout).toContain('src: url("/fonts/geist-latin.woff2") format("woff2");');
     expect(layout).toContain('src: url("/fonts/eb-garamond-500-latin.woff2") format("woff2");');
@@ -133,7 +150,7 @@ describe("marketing search metadata", () => {
 
   it("adds page and breadcrumb structured data to search pages", () => {
     const searchPage = sourceFile("components/SearchPage.astro");
-    const layout = sourceFile("layouts/Layout.astro");
+    const layout = layoutSource();
 
     expect(searchPage).toContain('"@type": "BreadcrumbList"');
     expect(searchPage).toContain('"@type": kind');
@@ -167,7 +184,7 @@ describe("marketing search metadata", () => {
   });
 
   it("serves a crawler-compatible social card from a cache-busted URL", () => {
-    const layout = sourceFile("layouts/Layout.astro");
+    const layout = layoutSource();
     const socialImage = NodeFS.readFileSync(
       NodePath.resolve(import.meta.dirname, "../public/og-v2.jpg"),
     );
@@ -185,7 +202,7 @@ describe("marketing search metadata", () => {
   });
 
   it("keeps missing pages out of search results", () => {
-    const layout = sourceFile("layouts/Layout.astro");
+    const layout = layoutSource();
     const notFound = sourceFile("pages/404.astro");
 
     expect(layout).toContain('<meta name="robots" content="noindex, follow" />');
