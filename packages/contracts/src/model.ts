@@ -133,6 +133,7 @@ const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
 const KIMI_DRIVER_KIND = ProviderDriverKind.make("kimi");
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
 const OPENCODE_GO_DRIVER_KIND = ProviderDriverKind.make("opencodeGo");
+const CUSTOM_OPENAI_DRIVER_KIND = ProviderDriverKind.make("customOpenai");
 
 export const DEFAULT_MODEL = "gpt-6-sol";
 
@@ -216,4 +217,5 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [KIMI_DRIVER_KIND]: "Kimi For Coding",
   [OPENCODE_DRIVER_KIND]: "OpenCode",
   [OPENCODE_GO_DRIVER_KIND]: "OpenCode Go",
+  [CUSTOM_OPENAI_DRIVER_KIND]: "Custom API",
 };

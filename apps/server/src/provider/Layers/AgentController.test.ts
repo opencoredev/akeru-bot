@@ -222,6 +222,31 @@ describe("mastraConnectionIssue", () => {
       ),
     );
   });
+
+  it("gates a Custom API instance on its configured base URL alone", () => {
+    const customOpenai = ProviderDriverKind.make("customOpenai");
+    assert.isUndefined(
+      mastraConnectionIssue(
+        customOpenai,
+        {
+          environment: { CUSTOM_OPENAI_BASE_URL: "http://localhost:11434/v1" },
+          instanceEnvironment: {},
+          useSavedCredential: true,
+        },
+        false,
+      ),
+    );
+    // A saved subscription credential is not a substitute for the endpoint:
+    // the branch must win over the generic saved-credential path.
+    assert.equal(
+      mastraConnectionIssue(
+        customOpenai,
+        { environment: {}, instanceEnvironment: {}, useSavedCredential: true },
+        true,
+      ),
+      "This Custom API instance needs a base URL.",
+    );
+  });
 });
 
 function computerUseServer() {

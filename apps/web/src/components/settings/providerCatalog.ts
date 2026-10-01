@@ -1,6 +1,6 @@
 import { ProviderDriverKind } from "@akeru/contracts";
 
-import type { Icon } from "../Icons";
+import { OpenCodeIcon, type Icon } from "../Icons";
 import {
   SUBSCRIPTION_PROVIDERS,
   type SubscriptionProviderDefinition,
@@ -45,6 +45,15 @@ export const PROVIDER_CATALOG: ReadonlyArray<ProviderCatalogEntry> = [
   subscriptionEntry("grok", "xai", ["grok"]),
   subscriptionEntry("kimi-for-coding", "kimi-for-coding", ["kimi"]),
   subscriptionEntry("opencode-go", "opencode-go", ["opencodeGo"]),
+  {
+    slug: "custom-api",
+    label: "Custom API",
+    icon: OpenCodeIcon,
+    planHint: "OpenAI-compatible endpoint",
+    description: "Bring any OpenAI-compatible API: set a base URL, an API key, and model names.",
+    account: null,
+    drivers: [ProviderDriverKind.make("customOpenai")],
+  },
 ];
 
 export function providerCatalogEntry(slug: string): ProviderCatalogEntry | undefined {

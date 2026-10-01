@@ -530,6 +530,52 @@ export const OpenCodeGoSettings = makeProviderSettingsSchema({
 });
 export type OpenCodeGoSettings = typeof OpenCodeGoSettings.Type;
 
+/**
+ * Any OpenAI-compatible HTTP endpoint: a base URL, an API key, and a
+ * user-authored model list. Unlike the subscription drivers there is no
+ * account to sign in to, so the base URL + key live in this config blob and
+ * drive both the connection state and the Mastra transport.
+ */
+export const CustomOpenaiSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    baseUrl: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Base URL",
+        description:
+          "OpenAI-compatible API root, e.g. https://api.openai.com/v1 or http://localhost:11434/v1.",
+        providerSettingsForm: {
+          placeholder: "https://api.openai.com/v1",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    apiKey: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "API key",
+        description:
+          "Sent as an Authorization Bearer header. Leave empty for local servers without auth.",
+        providerSettingsForm: {
+          control: "password",
+          placeholder: "sk-…",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    customModels: Schema.Array(Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+  },
+  { order: ["baseUrl", "apiKey"] },
+);
+export type CustomOpenaiSettings = typeof CustomOpenaiSettings.Type;
+
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
     // Off by default: the binding is not yet stable
@@ -849,6 +895,7 @@ export const ServerSettings = Schema.Struct({
     kimi: KimiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencodeGo: OpenCodeGoSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    customOpenai: CustomOpenaiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   // New driver-agnostic instance map. Keyed by `ProviderInstanceId`; values
   // are `ProviderInstanceConfig` envelopes. The driver-specific config blob
@@ -1006,6 +1053,13 @@ const OpenCodeGoSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
+const CustomOpenaiSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  baseUrl: Schema.optionalKey(TrimmedString),
+  apiKey: Schema.optionalKey(TrimmedString),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
 const OpenCodeSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
@@ -1102,6 +1156,7 @@ const ServerSettingsPatchFields = {
       kimi: Schema.optionalKey(KimiSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
       opencodeGo: Schema.optionalKey(OpenCodeGoSettingsPatch),
+      customOpenai: Schema.optionalKey(CustomOpenaiSettingsPatch),
     }),
   ),
   // Whole-map replacement for the new instance config. Patching individual

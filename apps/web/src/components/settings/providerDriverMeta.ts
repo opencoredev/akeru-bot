@@ -1,6 +1,7 @@
 import {
   ClaudeSettings,
   CodexSettings,
+  CustomOpenaiSettings,
   GrokSettings,
   KimiSettings,
   OpenCodeGoSettings,
@@ -66,6 +67,12 @@ export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = 
     label: "OpenCode Go",
     icon: OpenCodeIcon,
     settingsSchema: OpenCodeGoSettings,
+  },
+  {
+    value: ProviderDriverKind.make("customOpenai"),
+    label: "Custom API",
+    icon: OpenCodeIcon,
+    settingsSchema: CustomOpenaiSettings,
   },
 ];
 

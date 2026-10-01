@@ -343,7 +343,11 @@ function restoreUsedProviders(
 // Drivers kept in settings for compatibility that no longer have a runtime.
 const RETIRED_PROVIDER_DRIVERS: ReadonlySet<string> = new Set(["cursor"]);
 // Live drivers whose instances expose no text generation.
-const NO_TEXT_GENERATION_DRIVERS: ReadonlySet<string> = new Set(["kimi", "opencodeGo"]);
+const NO_TEXT_GENERATION_DRIVERS: ReadonlySet<string> = new Set([
+  "kimi",
+  "opencodeGo",
+  "customOpenai",
+]);
 
 function isRetiredProviderInstance(settings: ServerSettings, instanceId: string): boolean {
   const driver = settings.providerInstances[ProviderInstanceId.make(instanceId)]?.driver;

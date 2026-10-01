@@ -1821,6 +1821,39 @@ describe("AkeruMastraHarness", () => {
     expect(getCredential).not.toHaveBeenCalled();
   });
 
+  it("routes a Custom API model through its configured base URL and key", () => {
+    const authStorage = new AuthStorage("/tmp/akeru-unused-custom-openai-auth.json");
+    expect(
+      resolveAkeruMastraModel(
+        "custom-openai/local-model",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          environment: {
+            CUSTOM_OPENAI_API_KEY: "custom-key",
+            CUSTOM_OPENAI_BASE_URL: "http://localhost:11434/v1",
+          },
+          instanceEnvironment: {},
+          useSavedCredential: true,
+        },
+      ),
+    ).toMatchObject({ modelId: "local-model", provider: "custom-openai.chat" });
+    expect(() =>
+      resolveAkeruMastraModel(
+        "custom-openai/local-model",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { environment: {}, instanceEnvironment: {}, useSavedCredential: true },
+      ),
+    ).toThrow(/needs a base URL/);
+  });
+
   it("resolves a saved API key for the selected account instance", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-bound-auth.json");
     const getCredential = vi.fn((_provider: string, instanceId?: string) =>

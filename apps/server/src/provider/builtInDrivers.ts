@@ -22,6 +22,7 @@
  */
 import { ClaudeDriver, type ClaudeDriverEnv } from "./Drivers/ClaudeDriver.ts";
 import { CodexDriver, type CodexDriverEnv } from "./Drivers/CodexDriver.ts";
+import { CustomOpenaiDriver, type CustomOpenaiDriverEnv } from "./Drivers/CustomOpenaiDriver.ts";
 import { GrokDriver, type GrokDriverEnv } from "./Drivers/GrokDriver.ts";
 import { KimiDriver, type KimiDriverEnv } from "./Drivers/KimiDriver.ts";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "./Drivers/OpenCodeDriver.ts";
@@ -39,7 +40,8 @@ export type BuiltInDriversEnv =
   | GrokDriverEnv
   | KimiDriverEnv
   | OpenCodeDriverEnv
-  | OpenCodeGoDriverEnv;
+  | OpenCodeGoDriverEnv
+  | CustomOpenaiDriverEnv;
 
 /**
  * Ordered list of built-in drivers. Order matters only for tie-breaking in
@@ -53,4 +55,5 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   KimiDriver,
   OpenCodeDriver,
   OpenCodeGoDriver,
+  CustomOpenaiDriver,
 ];

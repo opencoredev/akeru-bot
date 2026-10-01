@@ -120,15 +120,21 @@ export function deriveProviderModelsForDisplay(input: {
     ),
   );
   const serverModels = input.liveModels?.filter((model) => !model.isCustom) ?? [];
-  const customModels = input.customModels.map(
-    (slug) =>
-      liveCustomModelsBySlug.get(slug) ?? {
-        slug,
-        name: slug,
-        isCustom: true,
-        capabilities: null,
-      },
-  );
+  // A hand-added slug the live catalog also reports is one model, not two: a
+  // discovery-capable driver (e.g. Custom API) reports both, and the catalog
+  // row already carries the correct name and capabilities.
+  const serverSlugs = new Set(serverModels.map((model) => model.slug));
+  const customModels = input.customModels
+    .filter((slug) => !serverSlugs.has(slug))
+    .map(
+      (slug) =>
+        liveCustomModelsBySlug.get(slug) ?? {
+          slug,
+          name: slug,
+          isCustom: true,
+          capabilities: null,
+        },
+    );
   return [...serverModels, ...customModels];
 }
 

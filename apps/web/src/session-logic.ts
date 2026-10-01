@@ -57,6 +57,11 @@ export const PROVIDER_OPTIONS: Array<{
     available: true,
     pickerSidebarBadge: "new",
   },
+  {
+    value: ProviderDriverKind.make("customOpenai"),
+    label: "Custom API",
+    available: true,
+  },
 ];
 
 export type WorkLogToolLifecycleStatus =
