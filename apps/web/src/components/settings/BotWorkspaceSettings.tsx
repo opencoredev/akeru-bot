@@ -183,7 +183,7 @@ export function FallbackModelSettingsRow() {
             instanceEntries={textGenerationModelInstanceEntries}
             modelOptionsByInstance={textGenerationModelOptionsByInstance}
             triggerVariant="outline"
-            triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+            triggerFit="settings-row"
             onInstanceModelChange={(instanceId, model) => {
               updateSettings({
                 textGenerationModelSelection: resolveAppModelSelectionState(
@@ -211,7 +211,7 @@ export function FallbackModelSettingsRow() {
             modelOptions={textGenModelOptions}
             allowPromptInjectedEffort={false}
             triggerVariant="outline"
-            triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+            triggerFit="settings-row"
             onModelOptionsChange={(nextOptions) => {
               updateSettings({
                 textGenerationModelSelection: resolveAppModelSelectionState(

@@ -61,7 +61,7 @@ export function BotModelPicker({
       compact
       disabled={disabled}
       triggerAriaLabel={t("Change model")}
-      triggerClassName="max-w-52"
+      triggerFit="capped"
       onInstanceModelChange={onChange}
     />
   );

@@ -48,7 +48,8 @@ export interface TraitsMenuContentProps {
   modelOptions?: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
-  triggerClassName?: string;
+  /** Sizes the trigger for a settings row instead of the composer. */
+  triggerFit?: "settings-row";
 }
 
 export const TraitsMenuContent = memo(function TraitsMenuContentImpl({

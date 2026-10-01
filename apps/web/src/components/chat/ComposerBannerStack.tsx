@@ -33,8 +33,6 @@ export interface ComposerBannerStackItem {
   readonly title: ReactNode;
   readonly description?: ReactNode;
   readonly actions?: ReactNode;
-  readonly className?: string;
-  readonly actionClassName?: string;
   readonly dismissLabel?: string;
   readonly onDismiss?: () => void;
 }
@@ -198,8 +196,6 @@ function ComposerBannerStackAlert({
     <Alert
       variant={visualVariant}
       presentation={attached ? "composer-drawer" : "glass"}
-      // oxlint-disable-next-line shadcn/require-static-classes -- caller-supplied per-banner class passthrough
-      className={item.className}
       data-variant={visualVariant}
     >
       {item.icon}
@@ -207,13 +203,11 @@ function ComposerBannerStackAlert({
       {item.description ? <AlertDescription>{item.description}</AlertDescription> : null}
       {item.actions || item.onDismiss ? (
         <AlertAction
-          className={cn(
-            // oxlint-disable-next-line shadcn/require-static-classes -- caller-supplied per-banner action class passthrough
-            item.actionClassName,
+          className={
             dismissOnly
               ? "max-sm:col-start-3 max-sm:row-start-1 max-sm:mt-0 max-sm:self-start"
-              : undefined,
-          )}
+              : undefined
+          }
         >
           {item.actions}
           {item.onDismiss ? (
