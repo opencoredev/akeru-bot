@@ -257,7 +257,7 @@ function ProviderSettingsFieldRow({
         ) : (
           <Input
             id={inputId}
-            className="bg-background"
+            surface="background"
             type={type}
             autoComplete={field.control === "password" ? "off" : undefined}
             value={readProviderConfigString(value, field.key)}

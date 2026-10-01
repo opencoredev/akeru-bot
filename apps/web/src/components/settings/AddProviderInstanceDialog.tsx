@@ -322,7 +322,7 @@ export function AddProviderInstanceDialog({
               <label className={cn("grid gap-2", wizardStep !== 1 && "hidden")}>
                 <span className="text-xs font-medium text-foreground">Label</span>
                 <Input
-                  className="bg-background"
+                  surface="background"
                   placeholder="e.g. Work"
                   value={label}
                   onChange={(event) => setLabel(event.target.value)}
@@ -335,7 +335,7 @@ export function AddProviderInstanceDialog({
               <label className={cn("grid gap-2", wizardStep !== 1 && "hidden")}>
                 <span className="text-xs font-medium text-foreground">Instance ID</span>
                 <Input
-                  className="bg-background"
+                  surface="background"
                   placeholder={`${driver}_work`}
                   value={instanceId}
                   onChange={(event) => {
@@ -375,6 +375,7 @@ export function AddProviderInstanceDialog({
                               ? "scale-110 border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background"
                               : "border-black/10 hover:scale-105 dark:border-white/20",
                           )}
+                          // oxlint-disable-next-line shadcn/no-inline-styles -- Preview uses the user-selected provider accent color.
                           style={{ backgroundColor: swatch }}
                           onClick={() => setAccentColor(swatch)}
                           aria-label={`Use ${swatch} accent`}
@@ -387,7 +388,7 @@ export function AddProviderInstanceDialog({
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="h-7 px-2 text-xs text-muted-foreground"
+                      presentation="wizard-preview-action"
                       onClick={() => setAccentColor("")}
                     >
                       Clear

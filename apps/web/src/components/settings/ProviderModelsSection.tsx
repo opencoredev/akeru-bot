@@ -280,7 +280,7 @@ export function ProviderModelsSection({
                         <Button
                           size="icon-micro"
                           variant="ghost"
-                          className="text-muted-foreground/60 hover:text-muted-foreground"
+                          presentation="model-visibility"
                           aria-label={`Details for ${model.name}`}
                         />
                       }
@@ -317,7 +317,7 @@ export function ProviderModelsSection({
                       <Button
                         size="icon-micro"
                         variant="ghost-muted"
-                        className={cn(isFavorite && "text-yellow-500 hover:text-yellow-600")}
+                        presentation={isFavorite ? "model-favorite" : undefined}
                         onClick={() => handleToggleFavorite(model.slug)}
                         aria-label={`${isFavorite ? "Remove" : "Add"} ${model.name} ${
                           isFavorite ? "from" : "to"
