@@ -3610,17 +3610,19 @@ const make = (options?: AgentControllerLiveOptions) =>
       function* (input) {
         const key = String(input.threadId);
         const resolved = resolvedByThread.get(key);
-        if (resolved && usesMastraCode(resolved.provider)) {
-          const routing = yield* legacyProviderBridge.getInstanceInfo(resolved.providerInstanceId);
-          if (!routing.enabled) {
-            return yield* disabledProviderError(
-              "AgentController.sendTurn",
-              resolved.providerInstanceId,
-            );
-          }
-        }
         const active = sessions.get(key);
         if (!active) {
+          if (resolved && usesMastraCode(resolved.provider)) {
+            const routing = yield* legacyProviderBridge.getInstanceInfo(
+              resolved.providerInstanceId,
+            );
+            if (!routing.enabled) {
+              return yield* disabledProviderError(
+                "AgentController.sendTurn",
+                resolved.providerInstanceId,
+              );
+            }
+          }
           if (
             usesMastraCode(resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"))
           ) {
@@ -3769,6 +3771,17 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         const turnId = yield* active.turnPreparation.withPermit(
           Effect.gen(function* () {
+            if (resolved && usesMastraCode(resolved.provider)) {
+              const routing = yield* legacyProviderBridge.getInstanceInfo(
+                resolved.providerInstanceId,
+              );
+              if (!routing.enabled) {
+                return yield* disabledProviderError(
+                  "AgentController.sendTurn",
+                  resolved.providerInstanceId,
+                );
+              }
+            }
             const turnAdmissionGeneration = active.turnAdmissionGeneration;
             if (input.timezone !== undefined) {
               active.configuredToolSession = {

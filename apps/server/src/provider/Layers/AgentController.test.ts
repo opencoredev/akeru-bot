@@ -3863,6 +3863,44 @@ describe("AgentControllerLive", () => {
     );
   });
 
+  it.effect("releases turn preparation when provider routing rejects a turn", () => {
+    const bridge = makeBridge();
+    const mastra = makeMastraHarness();
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* controller.resolveEngine({
+          threadId: openCodeGoThreadId,
+          engine: { provider: String(openCodeGoInstanceId), model: "gpt-5.6-luna" },
+          fallback: codexSelection,
+          mode: "default",
+          botConversation: true,
+        });
+        yield* controller.startSession(openCodeGoThreadId, {
+          threadId: openCodeGoThreadId,
+          provider: ProviderDriverKind.make("opencodeGo"),
+          providerInstanceId: openCodeGoInstanceId,
+          modelSelection: { instanceId: openCodeGoInstanceId, model: "gpt-5.6-luna" },
+          runtimeMode: "approval-required",
+        });
+
+        bridge.setInstanceEnabled(false);
+        const rejected = yield* Effect.exit(
+          controller.sendTurn({ threadId: openCodeGoThreadId, input: "Disabled" }),
+        );
+        assert.isTrue(Exit.isFailure(rejected));
+
+        bridge.setInstanceEnabled(true);
+        yield* controller.sendTurn({ threadId: openCodeGoThreadId, input: "Enabled again" });
+        yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
+        mastra.finishSend();
+        expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "Enabled again" });
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("serializes queued turns while dispatch admission is pending", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
