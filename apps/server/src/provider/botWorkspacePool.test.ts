@@ -201,6 +201,32 @@ describe("BotWorkspacePool", () => {
     await pool.destroyAll();
   });
 
+  it("accepts successful Railway deletion after an idle credential client fails", async () => {
+    const pool = new BotWorkspacePool();
+    const key = (token: string) =>
+      botWorkspaceResourceKey({
+        resourceScope: "bot-one",
+        sandbox: "railway",
+        credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
+      });
+    const revokedDestroy = vi.fn(async () => {
+      throw new Error("token revoked");
+    });
+    const currentDestroy = vi.fn(async () => undefined);
+    const first = await pool.acquire(key("old"), async () =>
+      remoteWorkspace({ provider: "railway", destroy: revokedDestroy }),
+    );
+    await first.release();
+    const second = await pool.acquire(key("new"), async () =>
+      remoteWorkspace({ provider: "railway", destroy: currentDestroy }),
+    );
+
+    await expect(second.release({ destroy: true })).resolves.toBeUndefined();
+    expect(revokedDestroy).toHaveBeenCalledOnce();
+    expect(currentDestroy).toHaveBeenCalledOnce();
+    await expect(pool.destroyAll()).resolves.toBeUndefined();
+  });
+
   it("closes the releasing Railway lease when identity cleanup throws", async () => {
     const pool = new BotWorkspacePool();
     const key = (token: string) =>

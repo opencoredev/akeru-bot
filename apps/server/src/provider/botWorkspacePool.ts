@@ -268,6 +268,7 @@ export class BotWorkspacePool {
               const { map } = await this.state;
               const keys = state.keys;
               let cleanupFailure: unknown;
+              let idleDeletionFailure: unknown;
               for (const pooledKey of keys) {
                 this.destroyRequested.add(pooledKey);
                 const sleeping = this.sleepers.get(pooledKey);
@@ -277,7 +278,7 @@ export class BotWorkspacePool {
                   try {
                     await this.run(Effect.promise(() => sleeping.destroy()));
                   } catch (cause) {
-                    cleanupFailure ??= cause;
+                    idleDeletionFailure ??= cause;
                   }
                 }
                 try {
@@ -294,6 +295,11 @@ export class BotWorkspacePool {
                 await lease.release({ destroy });
               } catch (cause) {
                 cleanupFailure ??= cause;
+              }
+              if (idleDeletionFailure !== undefined) {
+                // A current credential client can complete deletion after an idle client fails.
+                if (!state.destruction) throw idleDeletionFailure;
+                await state.destruction;
               }
               if (cleanupFailure !== undefined) throw cleanupFailure;
               return;
