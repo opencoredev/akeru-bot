@@ -21,7 +21,7 @@ export const isRelatedOpenCodeSession = Effect.fn("isRelatedOpenCodeSession")(fu
     runOpenCodeSdk("session.get", () => context.client.session.get({ sessionID })).pipe(
       Effect.catchIf(
         (cause) => isOpenCodeNotFound(cause),
-        () => Effect.succeed(undefined),
+        () => Effect.void,
       ),
     );
 

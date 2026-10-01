@@ -1,7 +1,8 @@
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
 import * as NodeCrypto from "node:crypto";
-import * as NodePath from "node:path";
+import * as Path from "effect/Path";
+import * as Effect from "effect/Effect";
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { type ProviderRuntimeEvent } from "@akeru/contracts";
 import {
@@ -14,9 +15,13 @@ import { type AkeruDelegationRuntimeOptions } from "../../AkeruDelegationRuntime
 
 import { nowIso, eventId } from "./EventIdentity.ts";
 
-export function createAkeruMastraAuthStorage(secretsDir: string): AuthStorage {
-  return new AuthStorage(NodePath.join(secretsDir, "subscription-auth.json"));
-}
+export const createAkeruMastraAuthStorage = Effect.fn("createAkeruMastraAuthStorage")(function* (
+  secretsDir: string,
+) {
+  const path = yield* Path.Path;
+
+  return new AuthStorage(path.join(secretsDir, "subscription-auth.json"));
+});
 
 export type DelegatedUsage = Parameters<
   NonNullable<AkeruDelegationRuntimeOptions["recordUsage"]>

@@ -1,5 +1,6 @@
-import * as NodeFS from "node:fs";
-import * as NodePath from "node:path";
+import * as FileSystem from "effect/FileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
+import * as Path from "effect/Path";
 
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import { SpawnExecutableResolution } from "@akeru/shared/shell";
@@ -24,15 +25,18 @@ const NPM_PACKAGE_ENTRY_CANDIDATES = [
   ["node_modules", "@anthropic-ai", "claude-code", "cli.js"],
 ] as const;
 
-export type ExecutableFileCheck = (filePath: string) => boolean;
+export type ExecutableFileCheck = (
+  filePath: string,
+) => Effect.Effect<boolean, never, FileSystem.FileSystem>;
 
-function isExistingFile(filePath: string): boolean {
-  try {
-    return NodeFS.statSync(filePath).isFile();
-  } catch {
-    return false;
-  }
-}
+const isExistingFile = Effect.fn("ClaudeExecutable.isExistingFile")(function* (filePath: string) {
+  const fileSystem = yield* FileSystem.FileSystem;
+
+  return yield* fileSystem.stat(filePath).pipe(
+    Effect.map((info) => info.type === "File"),
+    Effect.orElseSucceed(() => false),
+  );
+});
 
 /** Injectable file-existence check so tests can run against a fake filesystem. */
 export const ClaudeExecutableFileCheck = Context.Reference<ExecutableFileCheck>(
@@ -58,28 +62,32 @@ export const ClaudeExecutableFileCheck = Context.Reference<ExecutableFileCheck>(
  * platforms the configured value is returned unchanged.
  */
 export const resolveClaudeSdkExecutablePath = Effect.fn("resolveClaudeSdkExecutablePath")(
-  function* (binaryPath: string, environment: NodeJS.ProcessEnv): Effect.fn.Return<string> {
+  function* (
+    binaryPath: string,
+    environment: NodeJS.ProcessEnv,
+  ): Effect.fn.Return<string, never, FileSystem.FileSystem | Path.Path> {
     const platform = yield* HostProcessPlatform;
 
     if (platform !== "win32") {
       return binaryPath;
     }
 
+    const path = yield* Path.Path;
     const resolveExecutable = yield* SpawnExecutableResolution;
     const isFile = yield* ClaudeExecutableFileCheck;
     const resolved = resolveExecutable(binaryPath, platform, environment) ?? binaryPath;
-    const extension = NodePath.win32.extname(resolved).toLowerCase();
+    const extension = path.extname(resolved).toLowerCase();
 
     if (!WINDOWS_SHIM_EXTENSIONS.has(extension)) {
       return resolved;
     }
 
-    const shimDirectory = NodePath.win32.dirname(resolved);
+    const shimDirectory = path.dirname(resolved);
 
     for (const entrySegments of NPM_PACKAGE_ENTRY_CANDIDATES) {
-      const candidate = NodePath.win32.join(shimDirectory, ...entrySegments);
+      const candidate = path.join(shimDirectory, ...entrySegments);
 
-      if (isFile(candidate)) {
+      if (yield* isFile(candidate)) {
         return candidate;
       }
     }
@@ -91,4 +99,5 @@ export const resolveClaudeSdkExecutablePath = Effect.fn("resolveClaudeSdkExecuta
 
     return binaryPath;
   },
+  Effect.provide(NodePath.layerWin32),
 );

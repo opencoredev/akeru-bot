@@ -30,7 +30,7 @@ export interface CodexComputerUseServerConfig {
 
 const decodeObject = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Json));
 
-function object(value: typeof Schema.Json.Type | undefined, label: string) {
+function object(value: Schema.Json | undefined, label: string) {
   if (!Predicate.isObjectOrArray(value) || value === null || Array.isArray(value)) {
     throw new Error(`${label} is invalid.`);
   }
@@ -38,13 +38,13 @@ function object(value: typeof Schema.Json.Type | undefined, label: string) {
   return decodeObject(value);
 }
 
-function entries(value: typeof Schema.Json.Type | undefined) {
+function entries(value: Schema.Json | undefined) {
   if (!Array.isArray(value)) throw new Error("Codex returned an invalid plugin list.");
 
   return value.map((entry) => object(entry, "Codex plugin entry"));
 }
 
-function string(value: typeof Schema.Json.Type | undefined, label: string): string {
+function string(value: Schema.Json | undefined, label: string): string {
   if (!Predicate.isString(value) || value.length === 0) throw new Error(`${label} is invalid.`);
 
   return value;

@@ -168,7 +168,7 @@ describe("AgentControllerLive", () => {
         );
       });
 
-      const auth = createAkeruMastraAuthStorage(config.secretsDir);
+      const auth = yield* createAkeruMastraAuthStorage(config.secretsDir);
       assert.deepEqual(auth.get("openai-codex"), {
         type: "oauth",
         access: "subscription-access",
@@ -179,7 +179,7 @@ describe("AgentControllerLive", () => {
     }).pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-mastra-auth-test-" }).pipe(
-          Layer.provide(NodeServices.layer),
+          Layer.provideMerge(NodeServices.layer),
         ),
       ),
     ),

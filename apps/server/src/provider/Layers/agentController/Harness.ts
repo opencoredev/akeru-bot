@@ -1,4 +1,4 @@
-import type { createAkeruMastraAuthStorage } from "./ProviderAccess.ts";
+import type { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import type { createSessionContext } from "./SessionContext.ts";
 import type { AkeruToolRuntime } from "../../AkeruToolRuntime.ts";
 import type { AgentControllerLiveOptions } from "./Options.ts";
@@ -6,7 +6,7 @@ import { failureDetail, ThreadIdBrand } from "./Policy.ts";
 
 import * as NodeCrypto from "node:crypto";
 
-import * as NodePath from "node:path";
+import * as Path from "effect/Path";
 
 import {
   AkeruUsageReservationId,
@@ -54,7 +54,7 @@ import { nowIso } from "./EventIdentity.ts";
 
 export function createHarness(deps: {
   readonly options: AgentControllerLiveOptions | undefined;
-  readonly authStorage: ReturnType<typeof createAkeruMastraAuthStorage>;
+  readonly authStorage: AuthStorage;
   readonly subscriptionAuth: SubscriptionAuthService;
   readonly modelConnections: Map<
     string,
@@ -123,6 +123,7 @@ export function createHarness(deps: {
   const routineDispatcher = deps.routineDispatcher;
 
   return Effect.gen(function* () {
+    const path = yield* Path.Path;
     const makeMastraHarness = deps.options?.makeMastraHarness ?? makeAkeruMastraHarness;
 
     const bundle = yield* makeMastraHarness({
@@ -141,7 +142,7 @@ export function createHarness(deps: {
 
         return connection ? { ...connection, instanceId: providerInstanceId } : undefined;
       },
-      memoryDbPath: NodePath.join(deps.config.stateDir, "mastra-observational-memory.sqlite"),
+      memoryDbPath: path.join(deps.config.stateDir, "mastra-observational-memory.sqlite"),
       syncThreadToolApproval: async (threadId, toolName, protectedAction) => {
         const active = deps.sessions.get(threadId);
         const activeTurn = active?.activeTurn;

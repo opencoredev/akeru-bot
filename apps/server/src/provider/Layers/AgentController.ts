@@ -40,8 +40,8 @@ import { createTurnRequests } from "./agentController/TurnRequests.ts";
 import { createApprovals } from "./agentController/Approvals.ts";
 import { createConversation } from "./agentController/Conversation.ts";
 
-import * as NodeFS from "node:fs";
-import * as NodePath from "node:path";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import { createMcpManager } from "@mastra/code-sdk/mcp/index";
 
 import {
@@ -133,6 +133,8 @@ const APPROVAL_FREE_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(["ask_user"
 const make = (options?: AgentControllerLiveOptions) =>
   Effect.gen(function* () {
     const config = yield* ServerConfig;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
     const hostPlatform = yield* HostProcessPlatform;
     const legacyProviderBridge = yield* LegacyProviderBridge;
     const botUsageLedger = yield* BotUsageLedger;
@@ -320,11 +322,11 @@ const make = (options?: AgentControllerLiveOptions) =>
           }),
       });
 
-    yield* Effect.sync(() => {
-      NodeFS.mkdirSync(config.stateDir, { recursive: true, mode: 0o700 });
-    });
+    yield* fileSystem
+      .makeDirectory(config.stateDir, { recursive: true, mode: 0o700 })
+      .pipe(Effect.orDie);
 
-    const authStorage = createAkeruMastraAuthStorage(config.secretsDir);
+    const authStorage = yield* createAkeruMastraAuthStorage(config.secretsDir);
     const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
     const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
 
@@ -637,6 +639,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     });
 
     const { sendTurn, interruptTurn } = createTurnRequests({
+      fileSystem,
       resolvedByThread,
       sessions,
       usesMastraCode,
@@ -688,6 +691,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     });
 
     const { stopSessionWithResources, stopSession, rollbackConversation } = createConversation({
+      fileSystem,
       sessions,
       legacyProviderBridge,
       legacyPending,
@@ -842,7 +846,7 @@ const make = (options?: AgentControllerLiveOptions) =>
             managerThreadIds: managerSessions.map(({ threadId }) => threadId),
             createManager: () =>
               (options?.makeMcpManager ?? createMcpManager)(
-                NodePath.join(config.stateDir, "bot-mcp-runtime"),
+                path.join(config.stateDir, "bot-mcp-runtime"),
                 ".akeru-runtime",
                 toMcpServerConfigs([server]),
               ),
