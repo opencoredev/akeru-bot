@@ -4,7 +4,7 @@ import { testLayer } from "./testUtils/externalLauncher.ts";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
-import { isHostWindows } from "@akeru/shared/hostProcess";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -158,13 +158,10 @@ async function runWindowsRevealSmoke() {
   }
 }
 
-it.live(
+it.skipIf(HostProcessPlatform.defaultValue() !== "win32")(
   "delivers the raw /select switch for spaced paths through real PowerShell",
-  () =>
-    Effect.flatMap(isHostWindows, (windows) =>
-      windows ? Effect.promise(runWindowsRevealSmoke) : Effect.void,
-    ),
   { timeout: 60_000 },
+  runWindowsRevealSmoke,
 );
 
 it.effect("does not advertise reveal on Windows when PowerShell is missing", () =>
