@@ -1,7 +1,6 @@
 import type { ThreadSilentRun } from "@akeru/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
-import { type EnvironmentConnectionPhase } from "@akeru/client-runtime/connection";
-import { presentThreadError, type ThreadErrorContext } from "@akeru/client-runtime/errors";
+import type { EnvironmentConnectionPhase } from "@akeru/client-runtime/connection";
 import type { EnvironmentThreadStatus } from "@akeru/client-runtime/state/threads";
 import { useKeyboardChatComposerInset, useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
 import type { LegendListRef } from "@legendapp/list/react-native";
@@ -58,7 +57,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAtomValue } from "@effect/atom-react";
-
 import { ControlPill } from "../../components/ControlPill";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
@@ -91,6 +89,8 @@ import {
 import { ThreadFeed } from "./ThreadFeed";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-live-follow";
+import { useStreamingHaptics } from "./use-streaming-haptics";
+import { ResumeErrorSummary } from "./thread-detail-status";
 
 export interface ThreadDetailScreenProps {
   readonly selectedThread: OrchestrationThreadShell;
@@ -160,28 +160,6 @@ export interface ThreadDetailScreenProps {
   readonly showContent?: boolean;
 }
 
-function latestStreamingAssistantMessage(
-  feed: ReadonlyArray<ThreadFeedEntry>,
-): { readonly id: string; readonly textLength: number } | null {
-  for (let index = feed.length - 1; index >= 0; index -= 1) {
-    const entry = feed[index];
-    if (entry?.type !== "message" || entry.message.role !== "assistant") {
-      continue;
-    }
-    // Only the newest assistant message can be streaming, so stop there
-    // instead of walking the whole history after a turn settles.
-    if (!entry.message.streaming) {
-      return null;
-    }
-    return {
-      id: entry.message.id,
-      textLength: entry.message.text.length,
-    };
-  }
-
-  return null;
-}
-
 /** Submitted messages land at the tail, so search newest-first. */
 function feedHasMessageNearEnd(
   feed: ReadonlyArray<ThreadFeedEntry>,
@@ -194,56 +172,6 @@ function feedHasMessageNearEnd(
     }
   }
   return false;
-}
-
-function useStreamingHaptics(threadId: ThreadId, feed: ReadonlyArray<ThreadFeedEntry>) {
-  const lastStreamingAssistantRef = useRef<{
-    readonly id: string;
-    readonly textLength: number;
-  } | null>(null);
-  const lastStreamHapticAtRef = useRef(0);
-  const hydratedRef = useRef(false);
-  const previousThreadIdRef = useRef(threadId);
-
-  useEffect(() => {
-    if (previousThreadIdRef.current !== threadId) {
-      previousThreadIdRef.current = threadId;
-      hydratedRef.current = false;
-    }
-
-    const latestStreamingMessage = latestStreamingAssistantMessage(feed);
-
-    if (!hydratedRef.current) {
-      hydratedRef.current = true;
-      lastStreamingAssistantRef.current = latestStreamingMessage;
-      return;
-    }
-
-    if (!latestStreamingMessage) {
-      lastStreamingAssistantRef.current = null;
-      return;
-    }
-
-    const previousStreamingMessage = lastStreamingAssistantRef.current;
-    lastStreamingAssistantRef.current = latestStreamingMessage;
-
-    const isNewStream = previousStreamingMessage?.id !== latestStreamingMessage.id;
-    const textGrew =
-      previousStreamingMessage?.id === latestStreamingMessage.id &&
-      latestStreamingMessage.textLength > previousStreamingMessage.textLength;
-
-    if (!isNewStream && !textGrew) {
-      return;
-    }
-
-    const now = Date.now();
-    if (!isNewStream && now - lastStreamHapticAtRef.current < 320) {
-      return;
-    }
-
-    lastStreamHapticAtRef.current = now;
-    void Haptics.selectionAsync();
-  }, [threadId, feed]);
 }
 
 const USER_INPUT_TOGGLE_TIMING = {
@@ -896,24 +824,3 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     </View>
   );
 });
-
-function ResumeErrorSummary(props: {
-  readonly error: string | null;
-  readonly context: ThreadErrorContext;
-}) {
-  const { t } = useMobileI18n();
-  if (!props.error && !props.context.unavailability) {
-    return (
-      <Text className="min-w-0 flex-1 text-sm text-foreground">
-        {t("The request stopped before it could finish.")}
-      </Text>
-    );
-  }
-  const presentation = presentThreadError(props.error ?? "", props.context, t);
-  return (
-    <View className="min-w-0 flex-1 gap-0.5">
-      <Text className="text-sm font-semibold text-foreground">{presentation.title}</Text>
-      <Text className="text-sm text-foreground-muted">{presentation.description}</Text>
-    </View>
-  );
-}
