@@ -37,6 +37,7 @@ export const measureHttpGet = Effect.fn("TransferBudget.measureHttpGet")(functio
     try: () =>
       new Promise<HttpTransferMeasurement>((resolve, reject) => {
         let socketBytesBeforeResponse = 0;
+
         const request = NodeHttp.get(
           input.url,
           {
@@ -55,11 +56,14 @@ export const measureHttpGet = Effect.fn("TransferBudget.measureHttpGet")(functio
               try {
                 const encodedBody = Buffer.concat(chunks);
                 const header = response.headers["content-encoding"];
+
                 const contentEncoding = Array.isArray(header)
                   ? (header[0] ?? null)
                   : (header ?? null);
+
                 const decodedBody =
                   contentEncoding === "gzip" ? NodeZlib.gunzipSync(encodedBody) : encodedBody;
+
                 resolve({
                   status: response.statusCode ?? 0,
                   contentEncoding,
@@ -75,6 +79,7 @@ export const measureHttpGet = Effect.fn("TransferBudget.measureHttpGet")(functio
             });
           },
         );
+
         request.once("socket", (socket) => {
           socketBytesBeforeResponse = socket.bytesRead;
         });
@@ -113,6 +118,7 @@ function rawDataBytes(data: NodeSocket.NodeWS.RawData): number {
   if (Array.isArray(data)) {
     return data.reduce((total, chunk) => total + chunk.byteLength, 0);
   }
+
   return data.byteLength;
 }
 
@@ -127,12 +133,14 @@ export function makeWebSocketTransferRecorder(): WebSocketTransferRecorder {
         headers: { cookie },
         perMessageDeflate: true,
       }) as NodeWebSocketWithTransport;
+
       socket = nextSocket;
       nextSocket.on("message", (data) => {
         const bytes = rawDataBytes(data);
         decodedBytes += bytes;
         messages += 1;
       });
+
       return nextSocket as unknown as globalThis.WebSocket;
     },
     totals: () => ({
@@ -163,6 +171,7 @@ export function countingWsRpcProtocolLayer(input: {
   const webSocketConstructorLayer = Layer.succeed(Socket.WebSocketConstructor, (url, protocols) =>
     input.recorder.connect(url, protocols, input.cookie),
   );
+
   return RpcClient.layerProtocolSocket().pipe(
     Layer.provide(
       Socket.layerWebSocket(input.url, { openTimeout: "10 seconds" }).pipe(
@@ -174,4 +183,5 @@ export function countingWsRpcProtocolLayer(input: {
 }
 
 export const makeCountingWsRpcClient = RpcClient.make(WsRpcGroup);
+
 export type CountingWsRpcClient = Effect.Success<typeof makeCountingWsRpcClient>;

@@ -12,11 +12,14 @@ export function groupMentionCandidates(
 ): ReadonlyArray<BotId> {
   const memberBotIds = members.filter(isGroupBotMember).map((member) => member.botId);
   const candidates: BotId[] = [];
+
   for (const token of collectComposerInlineTokens(`${text}\n`).toReversed()) {
     if (token.type !== "bot-mention") continue;
     const botId = memberBotIds.find((id) => id === token.value);
+
     if (botId !== undefined && !candidates.includes(botId)) candidates.push(botId);
   }
+
   return candidates;
 }
 
@@ -36,8 +39,10 @@ export const resolveGroupResponderBotId = <E, R>(input: {
 }): Effect.Effect<BotId | null, E, R> =>
   Effect.gen(function* () {
     if (input.respondingBotId !== undefined) return input.respondingBotId;
+
     for (const botId of groupMentionCandidates(input.group.members, input.text)) {
       if (yield* input.isActive(botId)) return botId;
     }
+
     return input.group.bossBotId;
   });

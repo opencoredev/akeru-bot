@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { OrchestrationThreadActivity } from "@akeru/contracts";
+import { EventId, type OrchestrationThreadActivity } from "@akeru/contracts";
 import { projectActivityPayload } from "./ActivityPayloadProjection.ts";
 
 function activity(payload: Record<string, unknown>): OrchestrationThreadActivity {
   return {
-    id: "activity-1",
+    id: EventId.make("activity-1"),
     tone: "tool",
     kind: "tool.completed",
     summary: "Tool",
     payload,
     turnId: null,
     createdAt: "2026-08-01T10:00:00.000Z",
-  } as unknown as OrchestrationThreadActivity;
+  };
 }
 
 /**
@@ -21,6 +21,19 @@ function activity(payload: Record<string, unknown>): OrchestrationThreadActivity
  * assertions are the tripwire.
  */
 describe("projectActivityPayload", () => {
+  it.each([
+    ["x".repeat(4094) + "😀z", "x".repeat(4094) + "…"],
+    ["x".repeat(4093) + "😀zz", "x".repeat(4093) + "😀…"],
+    ["x".repeat(4094) + "😀", "x".repeat(4094) + "😀"],
+    ["x".repeat(4097), "x".repeat(4095) + "…"],
+  ])("preserves Unicode at the MCP string budget", (text, expected) => {
+    const projected = projectActivityPayload(
+      activity({ itemType: "mcp_tool_call", data: { input: { text } } }),
+    );
+
+    expect(projected.payload).toMatchObject({ data: { input: { text: expected } } });
+    expect(expected.isWellFormed()).toBe(true);
+  });
   it("keeps a Mastra command while dropping its unused arguments", () => {
     const projected = projectActivityPayload(
       activity({
@@ -28,6 +41,7 @@ describe("projectActivityPayload", () => {
         data: { args: { command: 'printf "hi\\n"', cwd: null, background: null } },
       }),
     );
+
     const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
     expect(data).toEqual({ command: 'printf "hi\\n"' });
   });
@@ -39,6 +53,7 @@ describe("projectActivityPayload", () => {
         data: { args: { operations: [{ op: "add", text: "secret" }] } },
       }),
     );
+
     expect((write.payload as Record<string, unknown>).data).toEqual({ memoryOperationCount: 1 });
   });
 
@@ -57,6 +72,7 @@ describe("projectActivityPayload", () => {
         },
       }),
     );
+
     const payload = projected.payload as Record<string, unknown>;
     expect(payload.agentId).toBe("task-123");
     expect(payload.parentToolUseId).toBe("toolu_abc");
@@ -77,6 +93,7 @@ describe("projectActivityPayload", () => {
         },
       }),
     );
+
     const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
     expect(data.item).toEqual({
       command: "/bin/zsh -lc 'printf hello'",
@@ -92,6 +109,7 @@ describe("projectActivityPayload", () => {
         data: { rawOutput: `\`\`\`\n  actual\tresult  \n${"x".repeat(5000)}` },
       }),
     );
+
     const fences = projectActivityPayload(
       activity({
         itemType: "command_execution",
@@ -117,6 +135,7 @@ describe("projectActivityPayload", () => {
         },
       }),
     );
+
     const acp = projectActivityPayload(
       activity({
         itemType: "command_execution",
@@ -152,6 +171,7 @@ describe("projectActivityPayload", () => {
         },
       }),
     );
+
     const openCode = projectActivityPayload(
       activity({
         itemType: "command_execution",
@@ -201,6 +221,7 @@ describe("projectActivityPayload", () => {
         },
       }),
     );
+
     const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
     const item = data.item as Record<string, unknown>;
     expect(item.tool).toBe("fetch_pr");
@@ -226,6 +247,7 @@ describe("projectActivityPayload", () => {
         },
       }),
     );
+
     const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
     expect(data.toolName).toBe("mcp__github__fetch_pr");
     expect(data.input).toEqual({ pr: 42 });
@@ -235,6 +257,7 @@ describe("projectActivityPayload", () => {
 
   it("bounds large MCP arguments and inputs in client projections", () => {
     const oversized = "x".repeat(10_000_000);
+
     const codex = projectActivityPayload(
       activity({
         itemType: "mcp_tool_call",
@@ -247,6 +270,7 @@ describe("projectActivityPayload", () => {
         },
       }),
     );
+
     const claude = projectActivityPayload(
       activity({
         itemType: "mcp_tool_call",
@@ -275,6 +299,7 @@ describe("projectActivityPayload", () => {
       runHandles: { runId: "run-1", scriptPath: "/tmp/wf.js" },
       timelineBypass: true,
     });
+
     const projected = projectActivityPayload(source);
     expect(projected.payload).toEqual(source.payload);
   });
@@ -304,6 +329,7 @@ describe("projectActivityPayload", () => {
       }),
       summary: "SearchPlugins",
     });
+
     const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
 
     expect(data.result).toMatchObject({

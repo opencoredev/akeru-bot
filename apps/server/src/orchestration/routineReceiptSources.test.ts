@@ -13,6 +13,7 @@ describe("deleted routine receipt sources", () => {
       deletedAt: null,
       procedure: "Private active instructions",
     } as Routine;
+
     const deleted = {
       ...active,
       id: "deleted",

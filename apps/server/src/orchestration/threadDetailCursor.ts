@@ -36,18 +36,23 @@ export function encodeThreadDetailPageCursor(cursor: ThreadDetailPageCursor): st
  */
 export function decodeThreadDetailPageCursor(encoded: string): ThreadDetailPageCursor | null {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
   } catch {
     return null;
   }
+
   if (parsed === null || typeof parsed !== "object") {
     return null;
   }
+
   const record = parsed as Record<string, unknown>;
+
   if (typeof record.t !== "string" || record.t.length === 0) {
     return null;
   }
+
   // Empty strings are valid boundary values, not malformed input: the anchor
   // is COALESCE(requested_at, started_at, ''), so a boundary turn with no
   // timestamps encodes a: "" (and sorts before every real anchor, correctly
@@ -55,8 +60,10 @@ export function decodeThreadDetailPageCursor(encoded: string): ThreadDetailPageC
   if (typeof record.a !== "string") {
     return null;
   }
+
   if (typeof record.i !== "string") {
     return null;
   }
+
   return { threadId: record.t as ThreadId, beforeAnchorAt: record.a, beforeTurnId: record.i };
 }

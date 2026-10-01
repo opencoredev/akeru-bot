@@ -84,9 +84,11 @@ export function requireProject(input: {
   readonly projectId: ProjectId;
 }): Effect.Effect<OrchestrationProject, OrchestrationCommandInvariantError> {
   const project = findProjectById(input.readModel, input.projectId);
+
   if (project) {
     return Effect.succeed(project);
   }
+
   return Effect.fail(
     invariantError(
       input.command.type,
@@ -103,6 +105,7 @@ export function requireProjectAbsent(input: {
   if (!findProjectById(input.readModel, input.projectId)) {
     return Effect.void;
   }
+
   return Effect.fail(
     invariantError(
       input.command.type,
@@ -118,14 +121,17 @@ export function requireProjectWorkspaceRootAbsent(input: {
   readonly exceptProjectId?: ProjectId;
 }): Effect.Effect<void, OrchestrationCommandInvariantError> {
   const normalizedWorkspaceRoot = normalizeProjectPathForComparison(input.workspaceRoot);
+
   const existingProject = input.readModel.projects.find(
     (project) =>
       normalizeProjectPathForComparison(project.workspaceRoot) === normalizedWorkspaceRoot &&
       project.id !== input.exceptProjectId,
   );
+
   if (existingProject === undefined) {
     return Effect.void;
   }
+
   return Effect.fail(
     invariantError(
       input.command.type,
@@ -140,6 +146,7 @@ export function requireBot(input: {
   readonly botId: BotId;
 }): Effect.Effect<OrchestrationBot, OrchestrationCommandInvariantError> {
   const bot = findBotById(input.readModel, input.botId);
+
   return bot
     ? Effect.succeed(bot)
     : Effect.fail(
@@ -171,6 +178,7 @@ export function requireDelegation(input: {
   readonly delegationId: DelegationId;
 }): Effect.Effect<AkeruDelegationRecord, OrchestrationCommandInvariantError> {
   const delegation = findDelegationById(input.readModel, input.delegationId);
+
   return delegation
     ? Effect.succeed(delegation)
     : Effect.fail(
@@ -221,9 +229,11 @@ export function requireMcpServer(input: {
   readonly mcpServerId: McpServerId;
 }): Effect.Effect<McpServer, OrchestrationCommandInvariantError> {
   const mcpServer = findMcpServerById(input.readModel, input.mcpServerId);
+
   if (mcpServer) {
     return Effect.succeed(mcpServer);
   }
+
   return Effect.fail(
     invariantError(
       input.command.type,
@@ -259,6 +269,7 @@ export function requireMcpServerAbsent(input: {
   if (!findMcpServerById(input.readModel, input.mcpServerId)) {
     return Effect.void;
   }
+
   return Effect.fail(
     invariantError(
       input.command.type,
@@ -273,6 +284,7 @@ export function requireGroup(input: {
   readonly groupId: GroupId;
 }): Effect.Effect<OrchestrationGroup, OrchestrationCommandInvariantError> {
   const group = findGroupById(input.readModel, input.groupId);
+
   return group
     ? Effect.succeed(group)
     : Effect.fail(
@@ -289,6 +301,7 @@ function requireMutationActorAuthorized(input: {
   readonly actor: OrchestrationDispatchActor | undefined;
 }): Effect.Effect<void, OrchestrationCommandInvariantError> {
   const actor = input.actor;
+
   if (
     actor === undefined ||
     actor.canManageGroups ||
@@ -298,6 +311,7 @@ function requireMutationActorAuthorized(input: {
   ) {
     return Effect.void;
   }
+
   return Effect.fail(
     invariantError(
       input.command.type,
@@ -322,6 +336,7 @@ export function requireGroupOwnedThreadMutationAuthorized(input: {
 }): Effect.Effect<void, OrchestrationCommandInvariantError> {
   if (input.thread.groupId == null) return Effect.void;
   const group = findGroupById(input.readModel, input.thread.groupId);
+
   if (!group) {
     return Effect.fail(
       invariantError(
@@ -330,6 +345,7 @@ export function requireGroupOwnedThreadMutationAuthorized(input: {
       ),
     );
   }
+
   return requireMutationActorAuthorized({ group, command: input.command, actor: input.actor });
 }
 
@@ -356,9 +372,11 @@ export function requireGroupMember(input: {
 }): Effect.Effect<OrchestrationBot, OrchestrationCommandInvariantError> {
   return Effect.gen(function* () {
     const group = yield* requireGroup(input);
+
     const member = group.members.find(
       (entry) => isGroupBotMember(entry) && entry.botId === input.botId,
     );
+
     if (!member) {
       return yield* Effect.fail(
         invariantError(
@@ -367,6 +385,7 @@ export function requireGroupMember(input: {
         ),
       );
     }
+
     return yield* requireBot(input);
   });
 }
@@ -397,9 +416,11 @@ export function requireThread(input: {
   readonly threadId: ThreadId;
 }): Effect.Effect<OrchestrationThread, OrchestrationCommandInvariantError> {
   const thread = findThreadById(input.readModel, input.threadId);
+
   if (thread) {
     return Effect.succeed(thread);
   }
+
   return Effect.fail(
     invariantError(
       input.command.type,
@@ -455,9 +476,11 @@ export function requireThreadAbsent(input: {
   // across retries, so only a live row blocks creation. Projectors reset the
   // thread's rows when the id is created again.
   const existing = findThreadById(input.readModel, input.threadId);
+
   if (existing === undefined || existing.deletedAt !== null) {
     return Effect.void;
   }
+
   return Effect.fail(
     invariantError(
       input.command.type,

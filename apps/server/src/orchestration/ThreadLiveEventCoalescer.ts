@@ -16,6 +16,7 @@ import { projectActivityEvent } from "./ActivityPayloadProjection.ts";
 import { makeLiveStreamBudget, type RetainedLiveItem } from "./LiveStreamBudget.ts";
 
 const COALESCE_WINDOW = Duration.millis(50);
+
 const MAX_PENDING_UPDATES = 512;
 
 export type ThreadLiveInput =
@@ -32,7 +33,9 @@ function asTrimmedString(value: unknown): string | null {
   if (!Predicate.isString(value)) {
     return null;
   }
+
   const trimmed = value.trim();
+
   return trimmed.length > 0 ? trimmed : null;
 }
 
@@ -40,11 +43,15 @@ function stableToolCallIdentity(event: OrchestrationEvent): string | null {
   if (event.type !== "thread.activity-appended") {
     return null;
   }
+
   const payload = event.payload.activity.payload;
+
   if (!Predicate.isObject(payload)) {
     return null;
   }
+
   const data = Predicate.isObject(payload.data) ? payload.data : null;
+
   return asTrimmedString(payload.toolCallId) ?? asTrimmedString(data?.toolCallId);
 }
 
@@ -62,20 +69,27 @@ export function coalesceLiveToolUpdatedEvents(
   const flushUpdates = () => {
     const seen = new Set<string>();
     const latestUpdates: Array<OrchestrationEvent> = [];
+
     for (let index = pendingUpdates.length - 1; index >= 0; index -= 1) {
       const event = pendingUpdates[index]!;
       const identity = stableToolCallIdentity(event);
+
       const activity =
         event.type === "thread.activity-appended" ? event.payload.activity : undefined;
+
       const key = identity ? `${activity?.turnId ?? ""}\u0000${identity}` : null;
+
       if (key && seen.has(key)) {
         continue;
       }
+
       if (key) {
         seen.add(key);
       }
+
       latestUpdates.push(event);
     }
+
     latestUpdates.reverse();
     survivors.push(...latestUpdates);
     pendingUpdates = [];
@@ -86,10 +100,13 @@ export function coalesceLiveToolUpdatedEvents(
       pendingUpdates.push(event);
       continue;
     }
+
     flushUpdates();
     survivors.push(event);
   }
+
   flushUpdates();
+
   return survivors;
 }
 
@@ -102,10 +119,12 @@ export const makeThreadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoales
     const coalescerScope = yield* Effect.scope;
     const budget = yield* makeLiveStreamBudget(options);
     const cleanupComplete = yield* Deferred.make<void>();
+
     const output = yield* Queue.unbounded<
       RetainedLiveItem<OrchestrationThreadStreamItem>,
       OrchestrationGetSnapshotError
     >();
+
     const mutex = yield* Semaphore.make(1);
     const coalesceWindow = options?.coalesceWindow ?? COALESCE_WINDOW;
     let pendingUpdates: Array<RetainedLiveItem<OrchestrationEvent>> = [];
@@ -115,9 +134,11 @@ export const makeThreadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoales
 
     const cancelWindow = Effect.fn("ThreadLiveEventCoalescer.cancelWindow")(function* () {
       const fiber = windowFiber;
+
       if (!fiber) {
         return;
       }
+
       windowFiber = null;
       yield* Fiber.interrupt(fiber);
     });
@@ -126,6 +147,7 @@ export const makeThreadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoales
       if (pendingUpdates.length === 0) {
         return;
       }
+
       const items = yield* budget.replace(
         pendingUpdates,
         coalesceLiveToolUpdatedEvents(pendingUpdates.map((item) => item.value)).map((event) => ({
@@ -134,6 +156,7 @@ export const makeThreadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoales
         })),
         (item) => item.event,
       );
+
       pendingUpdates = [];
       yield* Queue.offerAll(output, items);
     }, Effect.uninterruptible);
@@ -166,6 +189,7 @@ export const makeThreadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoales
           (input) =>
             Effect.gen(function* () {
               yield* budget.check;
+
               if (input.kind === "event") {
                 // Charge the budget for what the client receives. A large raw
                 // tool result would otherwise count at its full stored size.
@@ -174,16 +198,19 @@ export const makeThreadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoales
                   Effect.uninterruptible,
                 );
               }
+
               if (input.kind === "event" && isToolUpdated(input.event)) {
                 if (pendingUpdates.length === 1) {
                   const generation = ++windowGeneration;
                   windowFiber = yield* Effect.forkIn(flushWindow(generation), coalescerScope);
                 }
+
                 if (pendingUpdates.length >= MAX_PENDING_UPDATES) {
                   yield* cancelWindow();
                   windowGeneration += 1;
                   yield* flushPending();
                 }
+
                 return;
               }
 
@@ -192,6 +219,7 @@ export const makeThreadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoales
               // A non-update event closes the run immediately. The coalescer keeps
               // that boundary after the final update from the run.
               yield* flushPending();
+
               if (input.kind === "synchronized") {
                 yield* budget.retain({ kind: "synchronized" as const }).pipe(
                   Effect.flatMap((marker) => Queue.offer(output, marker)),
@@ -210,15 +238,18 @@ export const makeThreadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoales
           if (closed) {
             return;
           }
+
           closed = true;
           windowGeneration += 1;
           yield* cancelWindow();
           budget.release(pendingUpdates);
           pendingUpdates = [];
           budget.release(yield* Queue.clear(output).pipe(Effect.orDie));
+
           if (error) {
             yield* Queue.fail(output, error);
           }
+
           yield* Queue.shutdown(output);
           yield* Deferred.succeed(cleanupComplete, undefined);
         }),

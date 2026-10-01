@@ -42,10 +42,15 @@ import * as ServerSettings from "../src/serverSettings.ts";
 import * as AnalyticsService from "../src/telemetry/AnalyticsService.ts";
 
 const providerInstanceId = ProviderInstanceId.make("codex");
+
 const projectId = ProjectId.make("project-startup-orphan");
+
 const threadId = ThreadId.make("thread-startup-orphan");
+
 const stoppedBindingThreadId = ThreadId.make("thread-startup-orphan-stopped-binding");
+
 const resumeCursor = { schemaVersion: 1, sessionId: "provider-session-before-restart" };
+
 const stoppedBindingResumeCursor = {
   schemaVersion: 1,
   sessionId: "provider-session-stopped-before-restart",
@@ -53,14 +58,17 @@ const stoppedBindingResumeCursor = {
 
 const makePersistedRuntimeLayer = (dbPath: string) => {
   const persistence = makeSqlitePersistenceLive(dbPath);
+
   const orchestration = OrchestrationLayerLive.pipe(
     Layer.provideMerge(RepositoryIdentityResolver.layer),
     Layer.provideMerge(persistence),
   );
+
   const directory = ProviderSessionDirectoryLive.pipe(
     Layer.provide(ProviderSessionRuntime.layer),
     Layer.provide(persistence),
   );
+
   return Layer.mergeAll(orchestration, directory);
 };
 
@@ -251,6 +259,7 @@ it.effect(
       }).pipe(Effect.provide(firstRuntime));
 
       const secondRuntime = makePersistedRuntimeLayer(config.dbPath);
+
       const startupLayer = ServerRuntimeStartup.layer.pipe(
         Layer.provideMerge(secondRuntime),
         Layer.provideMerge(startupDependencies),
@@ -267,9 +276,11 @@ it.effect(
         yield* startup.awaitCommandReady;
 
         const restartedThread = Option.getOrThrow(yield* query.getThreadDetailById(threadId));
+
         const restartedStoppedBindingThread = Option.getOrThrow(
           yield* query.getThreadDetailById(stoppedBindingThreadId),
         );
+
         const pendingRows = yield* sql<{ readonly threadId: string }>`
           SELECT thread_id AS "threadId"
           FROM projection_turns
@@ -277,6 +288,7 @@ it.effect(
             AND turn_id IS NULL
             AND state = 'pending'
         `;
+
         const settleExit = yield* Effect.exit(
           engine.dispatch({
             type: "thread.settle",
@@ -284,6 +296,7 @@ it.effect(
             threadId,
           }),
         );
+
         const snoozeExit = yield* Effect.exit(
           engine.dispatch({
             type: "thread.snooze",
@@ -292,6 +305,7 @@ it.effect(
             snoozedUntil: DateTime.formatIso(DateTime.add(now, { hours: 1 })),
           }),
         );
+
         const newTurnExit = yield* Effect.exit(
           engine.dispatch({
             type: "thread.turn.start",
@@ -308,7 +322,9 @@ it.effect(
             createdAt,
           }),
         );
+
         const binding = Option.getOrThrow(yield* directory.getBinding(threadId));
+
         const stoppedBinding = Option.getOrThrow(
           yield* directory.getBinding(stoppedBindingThreadId),
         );

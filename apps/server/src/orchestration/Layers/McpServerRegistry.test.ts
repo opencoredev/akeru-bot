@@ -110,9 +110,11 @@ registryLayer("MCP server registry", (it) => {
         snapshot = yield* snapshots.getShellSnapshot();
         assert.equal(snapshot.mcpServers?.[0]?.name, "Remote Filesystem");
         assert.equal(snapshot.mcpServers?.[0]?.transport, "url");
+
         if (snapshot.mcpServers?.[0]?.transport === "url") {
           assert.equal(snapshot.mcpServers[0].url, "https://mcp.example.com/filesystem");
         }
+
         assert.equal(snapshot.mcpServers?.[0]?.enabled, true);
         assert.equal(snapshot.mcpServers?.[0]?.createdAt, createdAt);
 
@@ -163,9 +165,11 @@ registryLayer("MCP server registry", (it) => {
         mcpServerId,
         instructions: "  Search the docs before answering.  ",
       });
+
       let server = (yield* snapshots.getShellSnapshot()).mcpServers?.find(
         (candidate) => candidate.id === mcpServerId,
       );
+
       assert.equal(server?.instructions, "Search the docs before answering.");
 
       yield* engine.dispatch({
@@ -201,6 +205,7 @@ registryLayer("MCP server registry", (it) => {
           instructions: "Anything",
         })
         .pipe(Effect.flip);
+
       assert.match(String(missing), /does not exist/);
 
       yield* engine.dispatch({
@@ -238,9 +243,11 @@ registryLayer("MCP server registry", (it) => {
           createdAt,
         })
         .pipe(Effect.flip);
+
       assert.match(String(duplicate), /already exists/);
 
       const missingId = McpServerId.make("mcp-missing");
+
       const missingCommands = [
         {
           type: "mcp-server.delete",
@@ -258,6 +265,7 @@ registryLayer("MCP server registry", (it) => {
           mcpServerId: missingId,
         },
       ] as const;
+
       for (const command of missingCommands) {
         const failure = yield* engine.dispatch(command).pipe(Effect.flip);
         assert.match(String(failure), /does not exist/);
@@ -273,6 +281,7 @@ registryLayer("MCP server registry", (it) => {
           command: "bunx",
         })
         .pipe(Effect.flip);
+
       assert.match(String(missingUpdate), /does not exist/);
 
       // Delete frees the id for a fresh create.

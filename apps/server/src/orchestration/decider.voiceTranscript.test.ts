@@ -18,8 +18,11 @@ import { decideOrchestrationCommand } from "./decider.ts";
 import { createEmptyReadModel } from "./projector.ts";
 
 const NOW = "2026-08-27T12:00:00.000Z";
+
 const BOT_ID = BotId.make("bot-akeru");
+
 const THREAD_ID = ThreadId.make("thread-voice");
+
 const GROUP_ID = GroupId.make("group-product");
 
 function makeBot(archivedAt: string | null = null): OrchestrationBot {
@@ -117,6 +120,7 @@ it.layer(NodeServices.layer)("voice transcript decider", (it) => {
         command: appendCommand(),
         readModel: makeReadModel(),
       });
+
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
@@ -139,6 +143,7 @@ it.layer(NodeServices.layer)("voice transcript decider", (it) => {
         command: appendCommand({ threadId: ThreadId.make("thread-missing") }),
         readModel: makeReadModel(),
       }).pipe(Effect.flip);
+
       expect(String(error)).toContain("thread-missing");
     }),
   );
@@ -149,6 +154,7 @@ it.layer(NodeServices.layer)("voice transcript decider", (it) => {
         command: appendCommand({ role: "user" }),
         readModel: makeReadModel({ archived: true }),
       }).pipe(Effect.flip);
+
       expect(String(error)).toContain("is archived");
     }),
   );
@@ -156,10 +162,12 @@ it.layer(NodeServices.layer)("voice transcript decider", (it) => {
   it.effect("rejects user speech without a bot id, as the web client sends it", () =>
     Effect.gen(function* () {
       const { respondingBotId: _omitted, ...command } = appendCommand({ role: "user" });
+
       const error = yield* decideOrchestrationCommand({
         command,
         readModel: makeReadModel({ archived: true }),
       }).pipe(Effect.flip);
+
       expect(String(error)).toContain("is archived");
     }),
   );
@@ -173,6 +181,7 @@ it.layer(NodeServices.layer)("voice transcript decider", (it) => {
         },
         readModel: makeReadModel({ archived: true }),
       }).pipe(Effect.flip);
+
       expect(String(error)).toContain("cannot address a different bot");
     }),
   );
@@ -180,10 +189,12 @@ it.layer(NodeServices.layer)("voice transcript decider", (it) => {
   it.effect("rejects user speech in a group chat whose boss was archived", () =>
     Effect.gen(function* () {
       const { respondingBotId: _omitted, ...command } = appendCommand({ role: "user" });
+
       const error = yield* decideOrchestrationCommand({
         command,
         readModel: makeReadModel({ archived: true, group: true }),
       }).pipe(Effect.flip);
+
       expect(String(error)).toContain(`is archived and cannot respond for group '${GROUP_ID}'`);
     }),
   );
@@ -191,10 +202,12 @@ it.layer(NodeServices.layer)("voice transcript decider", (it) => {
   it.effect("accepts user speech without a bot id for an active bot", () =>
     Effect.gen(function* () {
       const { respondingBotId: _omitted, ...command } = appendCommand({ role: "user" });
+
       const decided = yield* decideOrchestrationCommand({
         command,
         readModel: makeReadModel(),
       });
+
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events[0]?.type).toBe("thread.message-sent");
     }),
@@ -206,6 +219,7 @@ it.layer(NodeServices.layer)("voice transcript decider", (it) => {
         command: appendCommand({ role: "assistant" }),
         readModel: makeReadModel({ archived: true }),
       });
+
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events[0]?.type).toBe("thread.message-sent");
     }),

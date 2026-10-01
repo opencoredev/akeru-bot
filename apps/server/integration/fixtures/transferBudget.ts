@@ -6,12 +6,17 @@ import type {
 } from "../TestProviderAdapter.integration.ts";
 
 const FIXTURE_THREAD_ID = "transfer-budget-thread";
+
 const FIXTURE_TURN_ID = "transfer-budget-turn";
 
 export const TRANSFER_HISTORY_TURN_COUNT = 10;
+
 export const TRANSFER_HISTORY_TOOLS_PER_TURN = 5;
+
 export const TRANSFER_MEASURED_TOOLS = 20;
+
 export const TRANSFER_HISTORY_MCP_RESULT_BYTES = 900_000;
+
 export const TRANSFER_MEASURED_MCP_RESULT_BYTES = 1_100_000;
 
 const sourceModules = [
@@ -38,6 +43,7 @@ function fixtureTimestamp(turnIndex: number, eventIndex: number): string {
   const minute = String(turnIndex).padStart(2, "0");
   const second = String(Math.floor(eventIndex / 1_000)).padStart(2, "0");
   const millisecond = String(eventIndex % 1_000).padStart(3, "0");
+
   return `2026-06-01T00:${minute}:${second}.${millisecond}Z`;
 }
 
@@ -48,6 +54,7 @@ function mix(value: number): number {
   mixed ^= mixed >>> 15;
   mixed = Math.imul(mixed, 0x846ca68b);
   mixed ^= mixed >>> 16;
+
   return mixed >>> 0;
 }
 
@@ -75,12 +82,15 @@ function diagnosticOutput(input: {
 
   while (length < input.targetBytes) {
     const modulePath = sourceModules[(input.toolIndex + lineIndex) % sourceModules.length];
+
     const seed =
       providerSeed + input.turnIndex * 100_003 + input.toolIndex * 10_007 + lineIndex * 101;
+
     const line =
       `${String(lineIndex + 1).padStart(6, "0")} ${modulePath} ` +
       `operation=project-transfer-${input.turnIndex + 1}-${input.toolIndex + 1} ` +
       `cursor=${mix(seed)} digest=${digest(seed)} status=completed\n`;
+
     chunks.push(line);
     length += line.length;
     lineIndex += 1;
@@ -91,10 +101,13 @@ function diagnosticOutput(input: {
 
 function assistantChunks(provider: ProviderDriverKind, turnIndex: number): ReadonlyArray<string> {
   const providerName = provider === "codex" ? "Codex" : "Claude";
+
   const paragraphs: string[] = [
     `I traced the ${providerName} request through the environment connection and orchestration layers. `,
   ];
+
   let paragraphIndex = 0;
+
   while (paragraphs.join("").length < 4_096) {
     const modulePath = sourceModules[paragraphIndex % sourceModules.length];
     paragraphs.push(
@@ -103,7 +116,9 @@ function assistantChunks(provider: ProviderDriverKind, turnIndex: number): Reado
     );
     paragraphIndex += 1;
   }
+
   const text = paragraphs.join("").slice(0, 4_096);
+
   return Array.from({ length: Math.ceil(text.length / 256) }, (_, index) =>
     text.slice(index * 256, (index + 1) * 256),
   );
@@ -128,6 +143,7 @@ function unifiedDiff(provider: ProviderDriverKind, turnIndex: number): string {
       `+const transferTurn = ${turnIndex + 1};`,
       `+const transferSample = ${1_500 + index * 97};`,
     ]);
+
   return lines.join("\n");
 }
 
@@ -172,10 +188,12 @@ export function makeRecordedTransferTurn(
 
   for (let toolIndex = 0; toolIndex < toolCount; toolIndex += 1) {
     const itemId = `tool-${turnIndex + 1}-${toolIndex + 1}`;
+
     const command =
       provider === "codex"
         ? `vp test transfer-budget-${toolIndex + 1}`
         : `review transfer budget ${toolIndex + 1}`;
+
     events.push(
       {
         type: "item.started",
@@ -242,9 +260,11 @@ export function makeRecordedTransferTurn(
   }
 
   const mcpItemId = `mcp-${turnIndex + 1}`;
+
   const mcpResultBytes = measuredTurn
     ? TRANSFER_MEASURED_MCP_RESULT_BYTES
     : TRANSFER_HISTORY_MCP_RESULT_BYTES;
+
   events.push(
     {
       type: "item.started",
@@ -314,6 +334,7 @@ export function makeRecordedTransferTurn(
   );
 
   const chunks = assistantChunks(provider, turnIndex);
+
   for (const [contentIndex, delta] of chunks.entries()) {
     events.push({
       type: "content.delta",

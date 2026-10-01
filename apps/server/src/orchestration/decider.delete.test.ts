@@ -16,13 +16,17 @@ import { decideOrchestrationCommand } from "./decider.ts";
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
 
 const asCommandId = (value: string): CommandId => CommandId.make(value);
+
 const asEventId = (value: string): EventId => EventId.make(value);
+
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
+
 const asThreadId = (value: string): ThreadId => ThreadId.make(value);
 
 const seedReadModel = Effect.gen(function* () {
   const now = "2026-01-01T00:00:00.000Z";
   const initial = createEmptyReadModel(now);
+
   const withProject = yield* projectEvent(initial, {
     sequence: 1,
     eventId: asEventId("evt-project-create"),
@@ -106,6 +110,7 @@ type PlannedEvent = Omit<OrchestrationEvent, "sequence">;
 
 function normalizeDeleteEvent(event: PlannedEvent | ReadonlyArray<PlannedEvent>) {
   const events = Array.isArray(event) ? event : [event];
+
   return events.map((entry) => {
     switch (entry.type) {
       case "thread.deleted":
@@ -140,6 +145,7 @@ it.layer(NodeServices.layer)("decider deletion flows", (it) => {
   it.effect("rejects deleting a non-empty project without force", () =>
     Effect.gen(function* () {
       const readModel = yield* seedReadModel;
+
       const error = yield* Effect.flip(
         decideOrchestrationCommand({
           command: {
@@ -150,6 +156,7 @@ it.layer(NodeServices.layer)("decider deletion flows", (it) => {
           readModel,
         }),
       );
+
       expect(error.message).toContain("cannot be deleted without force=true");
     }),
   );
@@ -157,6 +164,7 @@ it.layer(NodeServices.layer)("decider deletion flows", (it) => {
   it.effect("reuses thread.delete semantics when force-deleting a non-empty project", () =>
     Effect.gen(function* () {
       const readModel = yield* seedReadModel;
+
       const projectDeleteCommand: Extract<OrchestrationCommand, { type: "project.delete" }> = {
         type: "project.delete",
         commandId: asCommandId("cmd-project-delete-force"),
@@ -168,6 +176,7 @@ it.layer(NodeServices.layer)("decider deletion flows", (it) => {
         command: projectDeleteCommand,
         readModel,
       });
+
       const forcedEvents = Array.isArray(forcedResult) ? forcedResult : [forcedResult];
 
       expect(forcedEvents.map((event) => event.type)).toEqual([
@@ -179,6 +188,7 @@ it.layer(NodeServices.layer)("decider deletion flows", (it) => {
       let sequentialReadModel = readModel;
       let nextSequence = readModel.snapshotSequence;
       const sequentialEvents: PlannedEvent[] = [];
+
       for (const nextCommand of [
         {
           type: "thread.delete",
@@ -200,8 +210,10 @@ it.layer(NodeServices.layer)("decider deletion flows", (it) => {
           command: nextCommand,
           readModel: sequentialReadModel,
         });
+
         const nextEvents = Array.isArray(decided) ? decided : [decided];
         sequentialEvents.push(...nextEvents);
+
         for (const nextEvent of nextEvents) {
           nextSequence += 1;
           sequentialReadModel = yield* projectEvent(sequentialReadModel, {

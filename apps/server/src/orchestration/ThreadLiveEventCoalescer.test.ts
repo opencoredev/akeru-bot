@@ -20,7 +20,9 @@ import {
 } from "./ThreadLiveEventCoalescer.ts";
 
 const threadId = ThreadId.make("thread-coalescer-test");
+
 const turnId = TurnId.make("turn-coalescer-test");
+
 const encodeEvent = Schema.encodeSync(Schema.fromJsonString(OrchestrationEvent));
 
 function makeToolActivity(
@@ -36,6 +38,7 @@ function makeToolActivity(
     toolCallId = "call-edit",
     turnId: activityTurnId = turnId,
   } = options;
+
   const activity: OrchestrationThreadActivity = {
     id: EventId.make(`activity-${sequence}`),
     tone: "tool",
@@ -49,6 +52,7 @@ function makeToolActivity(
     turnId: activityTurnId,
     createdAt: "2026-01-01T00:00:01.000Z",
   };
+
   return {
     sequence,
     eventId: EventId.make(`event-${sequence}`),
@@ -175,10 +179,12 @@ describe("ThreadLiveEventCoalescer", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const first = makeToolActivity(1);
+
         const coalescer = yield* makeThreadLiveEventCoalescer({
           coalesceWindow: "500 millis",
           maxSerializedBytes: Buffer.byteLength(encodeEvent(first)),
         });
+
         yield* coalescer.offer({ kind: "event", event: first });
         expect(yield* coalescer.usage).toEqual({
           retainedItems: 1,
@@ -188,6 +194,7 @@ describe("ThreadLiveEventCoalescer", () => {
         const overflow = yield* coalescer
           .offer({ kind: "event", event: makeToolActivity(2) })
           .pipe(Effect.result);
+
         expect(overflow._tag).toBe("Failure");
         yield* coalescer.closed;
         expect(yield* coalescer.usage).toEqual({ retainedItems: 0, retainedSerializedBytes: 0 });
@@ -234,6 +241,7 @@ describe("ThreadLiveEventCoalescer", () => {
             const overflow = yield* coalescer
               .offer({ kind: "event", event: makeToolActivity(4, { kind: "tool.completed" }) })
               .pipe(Effect.result);
+
             expect(overflow._tag).toBe("Failure");
             // Do not pull or acknowledge the batch. Cleanup must still finish.
             yield* coalescer.closed;

@@ -47,10 +47,13 @@ import {
   type OrchestrationDispatchActor,
   type OrchestrationEngineShape,
 } from "../Services/OrchestrationEngine.ts";
+
 const isOrchestrationCommandPreviouslyRejectedError = Schema.is(
   OrchestrationCommandPreviouslyRejectedError,
 );
+
 const isOrchestrationCommandIdConflictError = Schema.is(OrchestrationCommandIdConflictError);
+
 const isOrchestrationCommandInvariantError = Schema.is(OrchestrationCommandInvariantError);
 
 interface CommandEnvelope {
@@ -170,9 +173,11 @@ const makeOrchestrationEngine = Effect.gen(function* () {
   ): Effect.Effect<OrchestrationReadModel, OrchestrationProjectorDecodeError, never> =>
     Effect.gen(function* () {
       let nextReadModel = baseReadModel;
+
       for (const event of events) {
         nextReadModel = yield* projectEvent(nextReadModel, event);
       }
+
       return nextReadModel;
     });
 
@@ -180,14 +185,17 @@ const makeOrchestrationEngine = Effect.gen(function* () {
     const dispatchStartSequence = commandReadModel.snapshotSequence;
     let processingStartedAtMs = 0;
     const aggregateRef = commandToAggregateRef(envelope.command);
+
     const baseMetricAttributes = {
       commandType: envelope.command.type,
       aggregateKind: aggregateRef.aggregateKind,
     } as const;
+
     const reconcileReadModelAfterDispatchFailure = Effect.gen(function* () {
       const persistedEvents = yield* Stream.runCollect(
         eventStore.readFromSequence(dispatchStartSequence),
       ).pipe(Effect.map((chunk): OrchestrationEvent[] => Array.from(chunk)));
+
       if (persistedEvents.length === 0) {
         return;
       }
@@ -212,6 +220,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
         const existingReceipt = yield* commandReceiptRepository.getByCommandId({
           commandId: envelope.command.commandId,
         });
+
         if (Option.isSome(existingReceipt)) {
           // A receipt only proves this exact command was handled. Replaying it
           // for a command aimed at another aggregate would report success for
@@ -228,20 +237,54 @@ const makeOrchestrationEngine = Effect.gen(function* () {
               commandAggregateId: aggregateRef.aggregateId,
             });
           }
+
           if (existingReceipt.value.status === "accepted") {
             return {
               sequence: existingReceipt.value.resultSequence,
             };
           }
+
           return yield* new OrchestrationCommandPreviouslyRejectedError({
             commandId: envelope.command.commandId,
             detail: existingReceipt.value.error ?? "Previously rejected.",
           });
         }
 
+        let decisionReadModel = commandReadModel;
+        const command = envelope.command;
+
+        if (
+          (command.type === "thread.settle" || command.type === "thread.snooze") &&
+          projectionSnapshotQuery.getThreadCommandContext
+        ) {
+          const context = yield* projectionSnapshotQuery.getThreadCommandContext(command.threadId);
+          decisionReadModel = {
+            ...commandReadModel,
+            threads: commandReadModel.threads.map((thread) =>
+              thread.id === command.threadId ? { ...thread, ...context } : thread,
+            ),
+          };
+        } else if (
+          command.type === "thread.message.reaction.set" &&
+          projectionSnapshotQuery.getCommandMessage
+        ) {
+          const message = yield* projectionSnapshotQuery.getCommandMessage(command);
+          decisionReadModel = {
+            ...commandReadModel,
+            threads: commandReadModel.threads.map((thread) =>
+              thread.id === command.threadId
+                ? {
+                    ...thread,
+                    messages: Option.isSome(message) ? [message.value] : [],
+                  }
+                : thread,
+            ),
+          };
+        }
+
         const eventBase = yield* decideOrchestrationCommand({
           command: envelope.command,
-          readModel: commandReadModel,
+          readModel: decisionReadModel,
           ...(envelope.actor !== undefined ? { actor: envelope.actor } : {}),
         }).pipe(
           Effect.provideService(Crypto.Crypto, crypto),
@@ -255,7 +298,9 @@ const makeOrchestrationEngine = Effect.gen(function* () {
                 }),
           ),
         );
+
         const plannedEvents = Array.isArray(eventBase) ? eventBase : [eventBase];
+
         // Stamp the dispatching client's origin onto every event the command
         // produced. The decider stays pure; attribution is an engine concern.
         const eventBases =
@@ -265,6 +310,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
                 ...planned,
                 metadata: { ...planned.metadata, origin: envelope.origin },
               }));
+
         const committedCommand = yield* sql
           .withTransaction(
             Effect.gen(function* () {
@@ -281,6 +327,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
               }
 
               const lastSavedEvent = committedEvents.at(-1) ?? null;
+
               if (lastSavedEvent === null) {
                 return yield* new OrchestrationCommandInvariantError({
                   commandType: envelope.command.type,
@@ -315,11 +362,14 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           );
 
         commandReadModel = committedCommand.nextCommandReadModel;
+
         for (const cleanup of committedCommand.attachmentCleanups) {
           yield* cleanup;
         }
+
         for (const [index, event] of committedCommand.committedEvents.entries()) {
           yield* PubSub.publish(eventPubSub, event);
+
           if (index === 0) {
             yield* Metric.update(
               Metric.withAttributes(
@@ -333,6 +383,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
             );
           }
         }
+
         return { sequence: committedCommand.lastSequence };
       }).pipe(Effect.withSpan(`orchestration.command.${envelope.command.type}`)),
     ).pipe(
@@ -343,6 +394,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
             : Cause.hasInterruptsOnly(exit.cause)
               ? "interrupt"
               : "failure";
+
           yield* Metric.update(
             Metric.withAttributes(
               orchestrationCommandDuration,
@@ -363,10 +415,12 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
           if (Exit.isSuccess(exit)) {
             yield* Deferred.succeed(envelope.result, exit.value);
+
             return;
           }
 
           const error = Cause.squash(exit.cause) as OrchestrationDispatchError;
+
           if (
             !isOrchestrationCommandPreviouslyRejectedError(error) &&
             !isOrchestrationCommandIdConflictError(error)
@@ -448,13 +502,16 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           command.type === "thread.turn.start" || command.type === "thread.turn.resume"
             ? (options?.admission?.retain() ?? tryAdmitTurnStart())
             : undefined;
+
         if (admission === null) {
           return yield* new OrchestrationCommandInvariantError({
             commandType: command.type,
             detail: "The server is installing an update. Try again in a moment.",
           });
         }
+
         const result = yield* Deferred.make<{ sequence: number }, OrchestrationDispatchError>();
+
         const offered = yield* Queue.offer(commandQueue, {
           command,
           actor: options?.actor,
@@ -463,7 +520,9 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           startedAtMs: yield* Clock.currentTimeMillis,
           admission,
         });
+
         if (!offered) admission?.release();
+
         return yield* restore(Deferred.await(result));
       }),
     );
