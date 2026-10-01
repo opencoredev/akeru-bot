@@ -5,9 +5,16 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { groupMemberRemovalHint, isGroupMemberRemovalBlocked } from "./GroupDetailsPanel";
 
+/** The panel, its editor, and the removal rules, which together hold the panel's markup. */
+function readGroupDetailsSources(): string {
+  return ["./GroupDetailsPanel.tsx", "./GroupEditor.tsx", "./groupMemberRemoval.logic.ts"]
+    .map((file) => NodeFS.readFileSync(new URL(file, import.meta.url), "utf8"))
+    .join("\n");
+}
+
 describe("GroupDetailsPanel", () => {
   it("uses the bot sidebar behavior and group management commands", () => {
-    const source = NodeFS.readFileSync(new URL("./GroupDetailsPanel.tsx", import.meta.url), "utf8");
+    const source = readGroupDetailsSources();
     expect(source).toContain('resolveShortcutCommand(event, keybindings) !== "rightPanel.toggle"');
     expect(source).toContain("RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY");
     expect(source).toContain("botEnvironment.groups.rename");
@@ -40,7 +47,7 @@ describe("GroupDetailsPanel", () => {
     expect(isGroupMemberRemovalBlocked({ memberCount: 3, isBoss: true })).toBe(true);
     expect(isGroupMemberRemovalBlocked({ memberCount: 3, isBoss: false })).toBe(false);
 
-    const source = NodeFS.readFileSync(new URL("./GroupDetailsPanel.tsx", import.meta.url), "utf8");
+    const source = readGroupDetailsSources();
     expect(source).toContain("aria-describedby={removalHint && blockedByRule ? removalHintId");
     expect(source).toContain('<SelectValue placeholder={t("Choose bot")} />');
     expect(source).toContain("Every bot is already in this group.");
