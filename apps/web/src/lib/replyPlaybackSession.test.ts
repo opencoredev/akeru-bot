@@ -1,5 +1,8 @@
+import type { storedReplySynthesisCapability } from "@akeru/client-runtime/reply-playback";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createWebReplyPlaybackSession } from "./replyPlaybackSession";
+
+type VoiceSettingsSnapshot = Parameters<typeof storedReplySynthesisCapability>[0];
 
 describe("web reply playback synthesis", () => {
   it("uses the configured synthesis capability", () => {
@@ -55,7 +58,7 @@ describe("web reply playback synthesis", () => {
   });
 
   it("keeps other environments unavailable after a voice change", () => {
-    let voice: { enabled: boolean; provider: "composed"; synthesisVoices?: { openai: string } } = {
+    let voice: VoiceSettingsSnapshot = {
       enabled: true,
       provider: "composed",
     };

@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import { hasTag } from "~/lib/taggedUnion";
 import { useAtomValue } from "@effect/atom-react";
 import { resolveAssetUrl } from "@akeru/client-runtime/state/assets";
@@ -20,6 +21,8 @@ export type AssetUrlState =
       readonly imageDimensions?: AssetImageDimensions;
     };
 
+const AssetUrlState = Data.taggedEnum<AssetUrlState>();
+
 export function useAssetUrlState(
   environmentId: EnvironmentId,
   resource: AssetResource,
@@ -34,25 +37,24 @@ export function useAssetUrlState(
   );
 
   if (hasTag(result, "Failure")) {
-    return { _tag: "Failure" };
+    return AssetUrlState.Failure();
   }
 
   if (hasTag(preparedConnection, "None") || !hasTag(result, "Success")) {
-    return { _tag: "Loading" };
+    return AssetUrlState.Loading();
   }
 
   const url = resolveAssetUrl(preparedConnection.value.httpBaseUrl, result.value.relativeUrl);
 
   return url === null
-    ? { _tag: "Failure" }
-    : {
-        _tag: "Success",
+    ? AssetUrlState.Failure()
+    : AssetUrlState.Success({
         url,
         ...(result.value.sourcePath !== undefined ? { sourcePath: result.value.sourcePath } : {}),
         ...(result.value.imageDimensions !== undefined
           ? { imageDimensions: result.value.imageDimensions }
           : {}),
-      };
+      });
 }
 
 export function useAssetUrl(environmentId: EnvironmentId, resource: AssetResource): string | null {

@@ -1,3 +1,4 @@
+import { ViewportSetting } from "./browserViewportSetting";
 import { hasTag } from "~/lib/taggedUnion";
 /**
  * Browser defaults - resolves the configured starting state for preview tabs.
@@ -112,5 +113,5 @@ export function browserResponsiveViewportForToggle(input: {
     ? resolveResponsiveBrowserViewportSize(input.panelRect, input.zoomFactor)
     : FALLBACK_RESPONSIVE_VIEWPORT_SIZE;
 
-  return { _tag: "freeform", ...size };
+  return ViewportSetting.freeform({ ...size });
 }

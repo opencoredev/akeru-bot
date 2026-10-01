@@ -50,7 +50,7 @@ describe("browser recording", () => {
       }
     }
 
-    vi.stubGlobal("Image", DeferredImage as unknown as typeof Image);
+    vi.stubGlobal("Image", DeferredImage);
     vi.stubGlobal("document", {
       createElement: () => ({
         width: 0,

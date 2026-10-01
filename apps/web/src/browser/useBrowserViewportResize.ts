@@ -1,5 +1,7 @@
 "use client";
 
+import { ViewportSetting } from "./browserViewportSetting";
+
 import { hasTag } from "~/lib/taggedUnion";
 
 import type { PreviewViewportSetting, PreviewViewportSize } from "@akeru/contracts";
@@ -50,11 +52,10 @@ export function useBrowserViewportResize(options: {
   const activeDrag = dragViewport?.sourceKey === sourceViewportKey ? dragViewport : null;
 
   const effectiveViewport = activeDrag
-    ? ({
-        _tag: "freeform",
+    ? (ViewportSetting.freeform({
         width: activeDrag.width,
         height: activeDrag.height,
-      } as const satisfies PreviewViewportSetting)
+      }) satisfies PreviewViewportSetting)
     : viewport;
 
   const normalizedZoomFactor = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1;
@@ -175,7 +176,7 @@ export function useBrowserViewportResize(options: {
 
       if (!latest || latest.sourceKey !== sourceViewportKeyRef.current) return;
       keyboardViewportRef.current = null;
-      commitDrag({ _tag: "freeform", width: latest.width, height: latest.height });
+      commitDrag(ViewportSetting.freeform({ width: latest.width, height: latest.height }));
     }, KEYBOARD_RESIZE_COMMIT_DELAY_MS);
   };
 
@@ -270,11 +271,7 @@ export function useBrowserViewportResize(options: {
         return;
       }
 
-      commitDrag({
-        _tag: "freeform",
-        width: latest.width,
-        height: latest.height,
-      });
+      commitDrag(ViewportSetting.freeform({ width: latest.width, height: latest.height }));
     }
 
     function cancel(cancelEvent: PointerEvent) {

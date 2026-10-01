@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import { hasTag } from "~/lib/taggedUnion";
 import { PlatformConnectionSource } from "@akeru/client-runtime/platform";
 import {
@@ -160,13 +161,15 @@ export type PrimaryEnvironmentTargetRead =
       readonly cause: unknown;
     };
 
+const PrimaryEnvironmentTargetRead = Data.taggedEnum<PrimaryEnvironmentTargetRead>();
+
 export function readPrimaryEnvironmentTargetResult(
   readTarget: () => PrimaryEnvironmentTarget | null = readPrimaryEnvironmentTarget,
 ): PrimaryEnvironmentTargetRead {
   try {
-    return { _tag: "Success", target: readTarget() };
+    return PrimaryEnvironmentTargetRead.Success({ target: readTarget() });
   } catch (cause) {
-    return { _tag: "Failure", cause };
+    return PrimaryEnvironmentTargetRead.Failure({ cause });
   }
 }
 
@@ -329,7 +332,7 @@ export const platformConnectionSourceLayer = Layer.effect(
 
       yield* Ref.set(cacheRef, next);
 
-      return registrations as ReadonlyArray<PlatformConnectionRegistration>;
+      return registrations;
     }).pipe(Effect.provide(FetchHttpClient.layer));
 
     return PlatformConnectionSource.of({

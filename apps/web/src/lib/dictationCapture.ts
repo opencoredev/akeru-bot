@@ -1,8 +1,17 @@
-export interface DictationCaptureDependencies {
-  mediaDevices: Pick<MediaDevices, "getUserMedia" | "addEventListener" | "removeEventListener">;
+type CaptureTrack = Pick<
+  MediaStreamTrack,
+  "readyState" | "stop" | "addEventListener" | "removeEventListener"
+>;
+
+type CaptureStream = { getTracks: () => CaptureTrack[] };
+
+export interface DictationCaptureDependencies<Stream extends CaptureStream = MediaStream> {
+  mediaDevices: Pick<MediaDevices, "addEventListener" | "removeEventListener"> & {
+    getUserMedia: (constraints: MediaStreamConstraints) => Promise<Stream>;
+  };
   document: Pick<Document, "hidden" | "addEventListener" | "removeEventListener">;
   createRecorder: (
-    stream: MediaStream,
+    stream: Stream,
   ) => Pick<
     MediaRecorder,
     "start" | "stop" | "state" | "mimeType" | "addEventListener" | "removeEventListener"
@@ -43,9 +52,9 @@ function browserDependencies(): DictationCaptureDependencies {
 }
 
 /** Captures audio in memory only; cancellation also handles permission grants arriving late. */
-export async function startDictationCapture(
+export async function startDictationCapture<Stream extends CaptureStream = MediaStream>(
   options: DictationCaptureOptions = {},
-  dependencies?: DictationCaptureDependencies,
+  dependencies?: DictationCaptureDependencies<Stream>,
 ): Promise<DictationCapture> {
   const aborted = () => new DOMException("Microphone capture was cancelled.", "AbortError");
 
@@ -62,8 +71,9 @@ export async function startDictationCapture(
     throw new RangeError("Capture limits must be positive finite numbers.");
   }
 
-  const deps = dependencies ?? browserDependencies();
-  let stream: MediaStream | undefined;
+  if (!dependencies) return startDictationCapture(options, browserDependencies());
+  const deps = dependencies;
+  let stream: Stream | undefined;
   let recorder: ReturnType<DictationCaptureDependencies["createRecorder"]> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let finished = false;
@@ -72,7 +82,7 @@ export async function startDictationCapture(
   const chunks: Blob[] = [];
   const removers: Array<() => void> = [];
   let resolveResult!: (blob: Blob) => void;
-  let rejectResult!: (error: unknown) => void;
+  let rejectResult!: (cause: unknown) => void;
 
   const result = new Promise<Blob>((resolve, reject) => {
     resolveResult = resolve;
@@ -81,13 +91,13 @@ export async function startDictationCapture(
 
   // Interruptions can precede the caller awaiting release.
   void result.catch(() => {});
-  let rejectStart!: (error: unknown) => void;
+  let rejectStart!: (cause: unknown) => void;
 
   const interrupted = new Promise<never>((_resolve, reject) => {
     rejectStart = reject;
   });
 
-  const stopTracks = (value: MediaStream) => {
+  const stopTracks = (value: CaptureStream) => {
     for (const track of value.getTracks()) track.stop();
   };
 
@@ -99,7 +109,7 @@ export async function startDictationCapture(
     if (stream) stopTracks(stream);
   };
 
-  const fail = (error: unknown) => {
+  const fail = (cause: unknown) => {
     if (finished) return;
     finished = true;
     cleanup();
@@ -111,8 +121,8 @@ export async function startDictationCapture(
     }
 
     chunks.length = 0;
-    rejectResult(error);
-    rejectStart(error);
+    rejectResult(cause);
+    rejectStart(cause);
   };
 
   const listen = (
@@ -163,6 +173,7 @@ export async function startDictationCapture(
 
     recorder = deps.createRecorder(stream);
     listen(recorder, "dataavailable", (event) => {
+      // SAFETY: This listener is registered for MediaRecorder dataavailable events, whose payload is BlobEvent.
       const { data } = event as BlobEvent;
       bytes += data.size;
 

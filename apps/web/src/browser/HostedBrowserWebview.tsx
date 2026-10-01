@@ -35,7 +35,6 @@ interface ElectronWebview extends HTMLElement {
   preload?: string;
   webpreferences?: string;
   getWebContentsId: () => number;
-  executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>;
 }
 
 declare global {
@@ -107,6 +106,7 @@ export function HostedBrowserWebview(props: {
   }, [initialUrl]);
 
   const setWebviewRef = useCallback((node: HTMLElement | null) => {
+    // SAFETY: This ref belongs to Electron’s webview custom element, whose methods are not included in HTMLElement typings.
     webviewRef.current = node as ElectronWebview | null;
 
     if (node && !node.hasAttribute("allowpopups")) node.setAttribute("allowpopups", "true");

@@ -1,5 +1,7 @@
 "use client";
 
+import { ViewportSetting } from "./browserViewportSetting";
+
 import { hasTag } from "~/lib/taggedUnion";
 
 import {
@@ -100,7 +102,7 @@ export function BrowserDeviceToolbar({
       return;
     }
 
-    apply({ _tag: "freeform", width: customWidth, height: customHeight });
+    apply(ViewportSetting.freeform({ width: customWidth, height: customHeight }));
   };
 
   const updateCustomDimension = (axis: "width" | "height", value: string) => {
@@ -140,7 +142,7 @@ export function BrowserDeviceToolbar({
 
     if (value === RESPONSIVE_VALUE) {
       if (hasTag(setting, "freeform")) return;
-      apply({ _tag: "freeform", width: setting.width, height: setting.height });
+      apply(ViewportSetting.freeform({ width: setting.width, height: setting.height }));
 
       return;
     }
@@ -159,7 +161,7 @@ export function BrowserDeviceToolbar({
       customValid && (customWidth !== setting.width || customHeight !== setting.height);
 
     const source = hasCustomSize
-      ? ({ _tag: "freeform", width: customWidth, height: customHeight } as const)
+      ? ViewportSetting.freeform({ width: customWidth, height: customHeight })
       : setting;
 
     apply(
@@ -347,7 +349,7 @@ export function BrowserDeviceToolbar({
         className="sticky right-0 ml-auto bg-background/95"
         disabled={pending}
         onClick={() => {
-          apply({ _tag: "fill" }, null);
+          apply(ViewportSetting.fill(), null);
         }}
       >
         <X />

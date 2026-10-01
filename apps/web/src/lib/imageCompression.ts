@@ -270,7 +270,7 @@ async function encodeCanvas(
   mimeType: string,
   budgetChars: number,
 ): Promise<{ dataUrl: string | null; mimeType: string } | null> {
-  if (typeof HTMLCanvasElement !== "undefined" && canvas instanceof HTMLCanvasElement) {
+  if ("toDataURL" in canvas) {
     const dataUrl = canvas.toDataURL(mimeType, quality);
 
     // toDataURL silently returns a PNG when the requested type is unsupported.
@@ -279,7 +279,7 @@ async function encodeCanvas(
     return { dataUrl: dataUrl.length <= budgetChars ? dataUrl : null, mimeType };
   }
 
-  const blob = await (canvas as OffscreenCanvas).convertToBlob({ type: mimeType, quality });
+  const blob = await canvas.convertToBlob({ type: mimeType, quality });
 
   if (blob.type && blob.type !== mimeType) return null;
   const dataUrlLength = `data:${mimeType};base64,`.length + 4 * Math.ceil(blob.size / 3);

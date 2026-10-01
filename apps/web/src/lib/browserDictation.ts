@@ -16,6 +16,7 @@ export function createBrowserDictationSession(
     {
       ...dependencies,
       schedule: (callback, milliseconds) => globalThis.setTimeout(callback, milliseconds),
+      // SAFETY: The dictation controller returns the opaque handle created by this same setTimeout scheduler.
       cancelSchedule: (timer) => globalThis.clearTimeout(timer as ReturnType<typeof setTimeout>),
       capture: async ({ signal, limits, onError }) => {
         const capture = await startDictationCapture(
@@ -55,7 +56,7 @@ export function browserDictationCaptureReason(
     readonly isSecureContext?: boolean;
     readonly navigator?: { readonly mediaDevices?: { readonly getUserMedia?: unknown } };
     readonly MediaRecorder?: unknown;
-  } = globalThis as never,
+  } = globalThis,
 ): string | null {
   if (scope.isSecureContext === false) {
     return "The browser only opens the microphone on HTTPS pages. Open this page over HTTPS.";

@@ -1,7 +1,7 @@
 import { hasTag } from "~/lib/taggedUnion";
+import type { AssetResource } from "@akeru/contracts";
 import type {
   AssetCreateUrlResult,
-  AssetResource,
   EnvironmentId,
   PreviewOpenInput,
   PreviewSessionSnapshot,
@@ -19,6 +19,8 @@ import {
   rememberPreviewUrl,
 } from "~/previewStateStore";
 import { useRightPanelStore } from "~/rightPanelStore";
+
+const assetResource = Data.taggedEnum<AssetResource>();
 
 export const isBrowserPreviewFile = (path: string): boolean =>
   /\.(?:html?|pdf)$/i.test(path.split(/[?#]/, 1)[0] ?? "");
@@ -74,11 +76,10 @@ export async function openFileInPreview<AssetError, PreviewError>(input: {
   const assetResult = await input.createAssetUrl({
     environmentId: input.threadRef.environmentId,
     input: {
-      resource: {
-        _tag: "workspace-file",
+      resource: assetResource["workspace-file"]({
         threadId: input.threadRef.threadId,
         path: input.filePath,
-      },
+      }),
     },
   });
 

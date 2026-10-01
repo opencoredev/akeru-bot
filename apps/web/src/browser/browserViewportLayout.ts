@@ -1,3 +1,4 @@
+import { ViewportSetting } from "./browserViewportSetting";
 import { hasTag } from "~/lib/taggedUnion";
 import {
   PREVIEW_VIEWPORT_MAX_AREA,
@@ -55,8 +56,7 @@ export function resolveFittedBrowserViewport(
   const normalizedZoomFactor = normalizeZoomFactor(zoomFactor);
 
   if (sourceContent) {
-    return {
-      _tag: "freeform",
+    return ViewportSetting.freeform({
       width: Math.max(
         1,
         Math.round(sourceContent.width / sourceContent.scale / normalizedZoomFactor),
@@ -65,10 +65,10 @@ export function resolveFittedBrowserViewport(
         1,
         Math.round(sourceContent.height / sourceContent.scale / normalizedZoomFactor),
       ),
-    };
+    });
   }
 
-  return { _tag: "freeform", width: 1280, height: 800 };
+  return ViewportSetting.freeform({ width: 1280, height: 800 });
 }
 
 export function resolveBrowserDeviceViewportArea(container: {

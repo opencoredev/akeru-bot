@@ -40,7 +40,14 @@ export function useWebReplyPlaybackSession() {
       createWebReplyPlaybackSession({
         ...(environmentId ? { environmentId } : {}),
         voice: () => voiceRef.current,
-        ...(environmentId ? { synthesize: synthesize as never, cancel: cancel as never } : {}),
+        ...(environmentId
+          ? {
+              synthesize: ({ input }) => synthesize({ environmentId, input }),
+              cancel: async ({ input }) => {
+                await cancel({ environmentId, input });
+              },
+            }
+          : {}),
       }),
     [cancel, environmentId, synthesize],
   );
@@ -68,7 +75,7 @@ export function createWebReplyPlaybackSession(
     readonly cancel?: (target: {
       environmentId: string;
       input: { operationId: string };
-    }) => Promise<unknown>;
+    }) => Promise<void>;
   } = {},
 ) {
   const environmentId = options.environmentId ?? null;

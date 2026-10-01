@@ -36,6 +36,7 @@ import {
   threadCacheKey,
 } from "./indexedDbStorage";
 import { migrateLegacyConnectionDatabase } from "./legacyDatabaseMigration";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This persistence composition root creates catalog stores and provides their layers.
 import { makeCatalogBackend, makeCatalogStore } from "./catalogStorage";
 
 const SHELL_SNAPSHOT_CACHE_SCHEMA_VERSION = 1;

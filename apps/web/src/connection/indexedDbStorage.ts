@@ -77,11 +77,11 @@ export function readDatabaseValue(database: IDBDatabase, storeName: string, key:
   }).pipe(Effect.withSpan("web.connectionStorage.readDatabaseValue"));
 }
 
-export function writeDatabaseValue(
+export function writeDatabaseValue<Value>(
   database: IDBDatabase,
   storeName: string,
   key: IDBValidKey,
-  value: unknown,
+  value: Value,
 ) {
   return Effect.callback<void, ConnectionTransientError>((resume) => {
     const transaction = database.transaction(storeName, "readwrite");

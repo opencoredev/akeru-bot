@@ -22,8 +22,11 @@ class Recorder extends EventTarget {
 }
 
 function fixture() {
-  const track = Object.assign(new EventTarget(), { readyState: "live", stop: vi.fn() });
-  const stream = { getTracks: () => [track] } as unknown as MediaStream;
+  type TrackState = { readyState: MediaStreamTrackState; stop: () => void };
+
+  const trackState: TrackState = { readyState: "live", stop: vi.fn() };
+  const track = Object.assign(new EventTarget(), trackState);
+  const stream = { getTracks: () => [track] };
 
   const mediaDevices = Object.assign(new EventTarget(), {
     getUserMedia: vi.fn(async () => stream),
@@ -32,7 +35,7 @@ function fixture() {
   const document = Object.assign(new EventTarget(), { hidden: false });
   const recorder = new Recorder();
 
-  const deps: DictationCaptureDependencies = {
+  const deps: DictationCaptureDependencies<typeof stream> = {
     mediaDevices,
     document,
     createRecorder: vi.fn(() => recorder),
@@ -80,7 +83,7 @@ describe("startDictationCapture", () => {
 
   it("aborts pending permission immediately and stops a late stream", async () => {
     const f = fixture();
-    let grant!: (stream: MediaStream) => void;
+    let grant!: (stream: typeof f.stream) => void;
     f.mediaDevices.getUserMedia.mockReturnValue(
       new Promise((resolve) => {
         grant = resolve;
@@ -191,7 +194,7 @@ describe("startDictationCapture", () => {
 
   it.each(["hidden", "devicechange"])("interrupts pending permission on %s", async (reason) => {
     const f = fixture();
-    let grant!: (stream: MediaStream) => void;
+    let grant!: (stream: typeof f.stream) => void;
     f.mediaDevices.getUserMedia.mockReturnValue(
       new Promise((resolve) => {
         grant = resolve;

@@ -1,3 +1,4 @@
+import type { appAtomRegistry } from "~/rpc/atomRegistry";
 import * as Predicate from "effect/Predicate";
 import { vi } from "vite-plus/test";
 
@@ -21,13 +22,29 @@ const {
     readonly receivedAt: string;
   };
 
-  const frameSubscription: { listener: ((frame: Frame) => void) | null } = {
+  type FrameSubscription = { listener: ((frame: Frame) => void) | null };
+
+  const frameSubscription: FrameSubscription = {
     listener: null,
   };
 
-  const surfaceState = {
-    byTabId: {} as Record<string, unknown>,
+  type Surface = {
+    visible: boolean;
+    content?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      scale: number;
+      scrollLeft: number;
+      scrollTop: number;
+    };
+    rect?: { x: number; y: number; width: number; height: number };
   };
+
+  type SurfaceState = { byTabId: Record<string, Surface> };
+
+  const surfaceState: SurfaceState = { byTabId: {} };
 
   return {
     events,
@@ -39,11 +56,16 @@ const {
         if (frameSubscription.listener === listener) frameSubscription.listener = null;
       };
     }),
-    registrySet: vi.fn((_atom: unknown, value: { readonly tabIds: ReadonlySet<string> }) => {
-      events.push(
-        value.tabIds.size === 0 ? "clear" : `publish:${Array.from(value.tabIds).join(",")}`,
-      );
-    }),
+    registrySet: vi.fn(
+      (
+        _atom: Parameters<typeof appAtomRegistry.set>[0],
+        value: { readonly tabIds: ReadonlySet<string> },
+      ) => {
+        events.push(
+          value.tabIds.size === 0 ? "clear" : `publish:${Array.from(value.tabIds).join(",")}`,
+        );
+      },
+    ),
     save: vi.fn(async (tabId: string) => ({
       id: "recording-test",
       tabId,
@@ -55,12 +77,7 @@ const {
     startScreencast: vi.fn(async (tabId: string) => {
       events.push("start-screencast");
 
-      const surface = surfaceState.byTabId[tabId] as
-        | {
-            readonly content?: { readonly width: number; readonly height: number };
-            readonly rect?: { readonly width: number; readonly height: number };
-          }
-        | undefined;
+      const surface = surfaceState.byTabId[tabId];
 
       const size = surface?.content ?? surface?.rect;
       frameSubscription.listener?.({
@@ -142,7 +159,7 @@ export function setupRecordingTest() {
   };
   vi.clearAllMocks();
   vi.stubGlobal("window", globalThis);
-  vi.stubGlobal("MediaRecorder", FakeMediaRecorder as unknown as typeof MediaRecorder);
+  vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
 
   class ImmediateImage {
     private loadListener: EventListenerOrEventListenerObject | undefined;
@@ -159,7 +176,7 @@ export function setupRecordingTest() {
     }
   }
 
-  vi.stubGlobal("Image", ImmediateImage as unknown as typeof Image);
+  vi.stubGlobal("Image", ImmediateImage);
   vi.stubGlobal("document", {
     createElement: () => ({
       width: 0,

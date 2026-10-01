@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { EnvironmentHttpCommonError } from "@akeru/contracts";
 import type { EnvironmentHttpCommonError as EnvironmentHttpCommonErrorType } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
@@ -100,28 +101,24 @@ export const isPrimaryEnvironmentPairingCredentialRequiredError = Schema.is(
 
 export const isEnvironmentHttpCommonError = Schema.is(EnvironmentHttpCommonError);
 
-function readHttpApiStatus(error: unknown): number | null {
-  if (isEnvironmentHttpCommonError(error)) {
-    return readEnvironmentHttpErrorStatus(error);
+function readHttpApiStatus(cause: unknown): number | null {
+  if (isEnvironmentHttpCommonError(cause)) {
+    return readEnvironmentHttpErrorStatus(cause);
   }
 
-  return HttpClientError.isHttpClientError(error) && error.response !== undefined
-    ? error.response.status
+  return HttpClientError.isHttpClientError(cause) && cause.response !== undefined
+    ? cause.response.status
     : null;
 }
 
 function readEnvironmentHttpErrorStatus(error: EnvironmentHttpCommonErrorType): number {
-  switch (error._tag) {
-    case "EnvironmentRequestInvalidError":
-      return 400;
-    case "EnvironmentAuthInvalidError":
-      return 401;
-    case "EnvironmentScopeRequiredError":
-    case "EnvironmentOperationForbiddenError":
-      return 403;
-    case "EnvironmentResourceNotFoundError":
-      return 404;
-    case "EnvironmentInternalError":
-      return 500;
-  }
+  return Match.value(error).pipe(
+    Match.tag("EnvironmentRequestInvalidError", () => 400),
+    Match.tag("EnvironmentAuthInvalidError", () => 401),
+    Match.tag("EnvironmentScopeRequiredError", () => 403),
+    Match.tag("EnvironmentOperationForbiddenError", () => 403),
+    Match.tag("EnvironmentResourceNotFoundError", () => 404),
+    Match.tag("EnvironmentInternalError", () => 500),
+    Match.exhaustive,
+  );
 }
