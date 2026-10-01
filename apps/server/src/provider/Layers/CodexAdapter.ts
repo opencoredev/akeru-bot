@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * CodexAdapterLive - Scoped live implementation for the Codex provider adapter.
  *
@@ -24,7 +25,7 @@ import * as Queue from "effect/Queue";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/unstable/process";
-import * as EffectCodexSchema from "effect-codex-app-server/schema";
+
 import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
 import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
@@ -37,6 +38,7 @@ import {
 import { type CodexAdapterShape } from "../Services/CodexAdapter.ts";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root constructs the session runtime for this provider instance.
 import { makeCodexSessionRuntime } from "./CodexSessionRuntime.ts";
 import { type CodexSessionRuntimeError } from "./codex/CodexRuntimeErrors.ts";
 import {
@@ -44,6 +46,7 @@ import {
   type CodexSessionRuntimeShape,
 } from "./codex/CodexRuntimeState.ts";
 import { type EventNdjsonLogger } from "./logging/EventLogTypes.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root creates the scoped logger with this adapter configuration.
 import { makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import { resolveCodexLaunchArgs } from "./codexLaunchArgs.ts";
 
@@ -300,7 +303,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           : {}),
         ...(reasoningEffort
           ? {
-              effort: reasoningEffort as EffectCodexSchema.V2TurnStartParams__ReasoningEffort,
+              effort: reasoningEffort,
             }
           : {}),
         ...(serviceTier ? { serviceTier } : {}),
@@ -327,7 +330,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     requireSession(threadId).pipe(
       Effect.flatMap((session) => session.runtime.interruptTurn(turnId)),
       Effect.mapError((cause) =>
-        cause._tag === "ProviderAdapterSessionNotFoundError"
+        Predicate.isTagged(cause, "ProviderAdapterSessionNotFoundError")
           ? cause
           : mapCodexRuntimeError(threadId, "turn/interrupt", cause),
       ),
@@ -337,7 +340,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     requireSession(threadId).pipe(
       Effect.flatMap((session) => session.runtime.readThread),
       Effect.mapError((cause) =>
-        cause._tag === "ProviderAdapterSessionNotFoundError"
+        Predicate.isTagged(cause, "ProviderAdapterSessionNotFoundError")
           ? cause
           : mapCodexRuntimeError(threadId, "thread/read", cause),
       ),
@@ -361,7 +364,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     return requireSession(threadId).pipe(
       Effect.flatMap((session) => session.runtime.rollbackThread(numTurns)),
       Effect.mapError((cause) =>
-        cause._tag === "ProviderAdapterSessionNotFoundError"
+        Predicate.isTagged(cause, "ProviderAdapterSessionNotFoundError")
           ? cause
           : mapCodexRuntimeError(threadId, "thread/rollback", cause),
       ),
@@ -377,7 +380,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
       Effect.flatMap((session) => session.runtime.uploadFeedback(input.reason)),
       Effect.map(({ threadId }) => ({ feedbackId: threadId })),
       Effect.mapError((cause) =>
-        cause._tag === "ProviderAdapterSessionNotFoundError"
+        Predicate.isTagged(cause, "ProviderAdapterSessionNotFoundError")
           ? cause
           : mapCodexRuntimeError(input.threadId, "feedback/upload", cause),
       ),
@@ -387,7 +390,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     requireSession(threadId).pipe(
       Effect.flatMap((session) => session.runtime.respondToRequest(requestId, decision)),
       Effect.mapError((cause) =>
-        cause._tag === "ProviderAdapterSessionNotFoundError"
+        Predicate.isTagged(cause, "ProviderAdapterSessionNotFoundError")
           ? cause
           : mapCodexRuntimeError(threadId, "item/requestApproval/decision", cause),
       ),
@@ -401,7 +404,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     requireSession(threadId).pipe(
       Effect.flatMap((session) => session.runtime.respondToUserInput(requestId, answers)),
       Effect.mapError((cause) =>
-        cause._tag === "ProviderAdapterSessionNotFoundError"
+        Predicate.isTagged(cause, "ProviderAdapterSessionNotFoundError")
           ? cause
           : mapCodexRuntimeError(threadId, "item/tool/requestUserInput", cause),
       ),

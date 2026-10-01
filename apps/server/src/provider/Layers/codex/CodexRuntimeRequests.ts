@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_MODEL,
   type ProviderInteractionMode,
@@ -68,13 +69,13 @@ export function normalizeCodexModelSlug(
   return normalized;
 }
 
-export function runtimeModeToThreadConfig(input: RuntimeMode): {
-  readonly approvalPolicy: EffectCodexSchema.V2ThreadStartParams__AskForApproval;
-  readonly sandbox: EffectCodexSchema.V2ThreadStartParams__SandboxMode;
-  // Always explicit: omitting the field on resume keeps the thread's previous
-  // reviewer, which would leave auto_review sticky after switching modes.
-  readonly approvalsReviewer: EffectCodexSchema.V2ThreadStartParams__ApprovalsReviewer;
-} {
+type CodexThreadRuntimePolicy = {
+  [Key in "approvalPolicy" | "sandbox" | "approvalsReviewer"]-?: NonNullable<
+    EffectCodexSchema.V2ThreadStartParams[Key]
+  >;
+};
+
+export function runtimeModeToThreadConfig(input: RuntimeMode): CodexThreadRuntimePolicy {
   switch (input) {
     case "approval-required":
       return {
@@ -238,12 +239,12 @@ export function toCodexUserInputAnswer(
   EffectCodexSchema.ToolRequestUserInputResponse__ToolRequestUserInputAnswer,
   CodexSessionRuntimeInvalidUserInputAnswersError
 > {
-  if (typeof value === "string") {
+  if (Predicate.isString(value)) {
     return Effect.succeed({ answers: [value] });
   }
 
   if (Array.isArray(value)) {
-    const answers = value.filter((entry): entry is string => typeof entry === "string");
+    const answers = value.filter((entry): entry is string => Predicate.isString(entry));
 
     return Effect.succeed({ answers });
   }

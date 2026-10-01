@@ -7,7 +7,7 @@ import type {
 import { PREFERRED_DEFAULT_CODEX_MODELS } from "@akeru/contracts";
 import { createModelCapabilities } from "@akeru/shared/model";
 
-export const REASONING_EFFORT_LABELS: Readonly<Record<string, string>> = {
+export const REASONING_EFFORT_LABELS = {
   none: "None",
   minimal: "Minimal",
   low: "Low",
@@ -16,12 +16,15 @@ export const REASONING_EFFORT_LABELS: Readonly<Record<string, string>> = {
   xhigh: "Extra High",
   max: "Max",
   ultra: "Ultra",
-};
+} satisfies Record<string, string>;
 
 export const DEFAULT_SERVICE_TIER_ID = "default";
 
 export function reasoningEffortLabel(reasoningEffort: string): string {
-  return REASONING_EFFORT_LABELS[reasoningEffort] ?? reasoningEffort;
+  return (
+    Object.entries(REASONING_EFFORT_LABELS).find(([effort]) => effort === reasoningEffort)?.[1] ??
+    reasoningEffort
+  );
 }
 
 export function mapCodexModelCapabilities(

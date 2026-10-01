@@ -1,3 +1,6 @@
+import * as Match from "effect/Match";
+import { readProtocolJson } from "../ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 import { type ProviderApprovalDecision, type ProviderApprovalOption } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import * as EffectCodexSchema from "effect-codex-app-server/schema";
@@ -117,10 +120,15 @@ export function isMcpElicitationPersistenceField(
   );
 }
 
+export interface McpElicitationDescription {
+  readonly appName: string;
+  readonly options: ReadonlyArray<ProviderApprovalOption>;
+}
+
 /** Returns the app and approval choices advertised by an MCP elicitation. */
 export function describeMcpElicitation(
   payload: EffectCodexSchema.McpServerElicitationRequestParams,
-): { readonly appName: string; readonly options: ReadonlyArray<ProviderApprovalOption> } {
+): McpElicitationDescription {
   const metadata = isMcpElicitationMetadata(payload._meta) ? payload._meta : undefined;
 
   const appName =
@@ -139,7 +147,7 @@ export function describeMcpElicitation(
   const persistenceOptions = new Map<McpElicitationPersistenceDecision, string>();
   const persist = metadata?.persist;
 
-  for (const value of typeof persist === "string" ? [persist] : (persist ?? [])) {
+  for (const value of Predicate.isString(persist) ? [persist] : (persist ?? [])) {
     const decision = mcpElicitationPersistenceDecision(value);
 
     if (decision) persistenceOptions.set(decision, "");
@@ -204,15 +212,14 @@ export function toMcpElicitationResponse(
     return { action: "decline" };
   }
 
-  const persist =
-    decision === "acceptForSession"
-      ? "session"
-      : decision === "acceptAlways"
-        ? "always"
-        : undefined;
+  const persist = Match.value(decision).pipe(
+    Match.when("acceptForSession", () => "session" as const),
+    Match.when("acceptAlways", () => "always" as const),
+    Match.orElse(() => undefined),
+  );
 
   const form = mcpElicitationFormFields(payload);
-  const content: Record<string, unknown> = {};
+  const content: Record<string, Schema.Json> = {};
 
   for (const [key, field] of Object.entries(form?.properties ?? {})) {
     const options = mcpElicitationFieldOptions(field);
@@ -229,7 +236,9 @@ export function toMcpElicitationResponse(
     } else if (field.type === "boolean" && isMcpElicitationPersistenceField(key, field)) {
       content[key] = decision === "acceptAlways";
     } else if (field.default !== undefined && field.default !== null) {
-      content[key] = field.default;
+      const defaultValue = readProtocolJson(field.default);
+
+      if (defaultValue !== undefined) content[key] = defaultValue;
     }
   }
 

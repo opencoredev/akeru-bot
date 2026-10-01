@@ -7,7 +7,7 @@ import * as Result from "effect/Result";
 import * as Scope from "effect/Scope";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import * as CodexErrors from "effect-codex-app-server/errors";
-import type { CodexSettings, ServerProvider, ServerProviderState } from "@akeru/contracts";
+import type { CodexSettings, ServerProvider } from "@akeru/contracts";
 import { ServerSettingsError } from "@akeru/contracts";
 import { resolveCodexLaunchArgs } from "./codexLaunchArgs.ts";
 import {
@@ -85,11 +85,13 @@ const makePendingCodexProvider = (
     });
   });
 
-function accountProbeStatus(account: CodexAppServerProviderSnapshot["account"]): {
-  readonly status: Exclude<ServerProviderState, "disabled">;
-  readonly auth: ServerProvider["auth"];
-  readonly message?: string;
-} {
+type CodexAccountProbeStatus = Pick<ServerProvider, "auth" | "message"> & {
+  readonly status: Exclude<ServerProvider["status"], "disabled">;
+};
+
+function accountProbeStatus(
+  account: CodexAppServerProviderSnapshot["account"],
+): CodexAccountProbeStatus {
   const authLabel = codexAccountAuthLabel(account.account);
   const authEmail = codexAccountEmail(account.account);
 

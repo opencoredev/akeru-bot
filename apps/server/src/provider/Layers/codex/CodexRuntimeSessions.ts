@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { type ProviderSession, TurnId } from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -19,7 +20,7 @@ export function updateSession(
     const updatedAt = DateTime.formatIso(yield* DateTime.now);
     yield* Ref.update(sessionRef, (session) => ({
       ...session,
-      ...(typeof updates === "function" ? updates(session) : updates),
+      ...(Predicate.isFunction(updates) ? updates(session) : updates),
       updatedAt,
     }));
   });

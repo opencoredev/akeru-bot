@@ -1,3 +1,5 @@
+import { readProtocolRecord } from "../ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 import {
   type CanonicalItemType,
   type CanonicalRequestType,
@@ -197,8 +199,8 @@ export function itemDetail(
   itemType: CanonicalItemType,
   item: CodexLifecycleItem,
 ): string | undefined {
-  const itemRecord = item as Record<string, unknown>;
-  const action = itemRecord.action as Record<string, unknown> | undefined;
+  const itemRecord = readProtocolRecord(item) ?? {};
+  const action = readProtocolRecord(itemRecord.action);
   const actionQueries = Array.isArray(action?.queries) ? action.queries : [];
 
   const candidates = [
@@ -214,7 +216,7 @@ export function itemDetail(
   ];
 
   for (const candidate of candidates) {
-    const trimmed = typeof candidate === "string" ? trimText(candidate) : undefined;
+    const trimmed = Predicate.isString(candidate) ? trimText(candidate) : undefined;
 
     if (!trimmed) continue;
 
