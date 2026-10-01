@@ -123,7 +123,7 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
           startedAt: running.startedAt,
           completedAt,
           failureCode,
-          message,
+          message: message.trim() || "The worker could not start.",
         }),
       ),
     );
