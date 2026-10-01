@@ -181,7 +181,7 @@ export function summarizeEnabledPlugins(
   catalog: readonly PluginDefinition[] = PLUGIN_CATALOG,
 ): { readonly enabledPlugins: readonly PluginDefinition[]; readonly enabledCount: number } {
   const enabledIds = new Set<string>(
-    servers.filter((server) => server.enabled).map((server) => server.id),
+    servers.flatMap((server) => (server.enabled ? [server.id] : [])),
   );
   const installations = resolveCatalogInstallations(servers, catalog);
   const enabledPluginIds = new Set(
@@ -326,9 +326,9 @@ function ComputerUseControlForEnvironment({
   };
 
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5" role="status">
+    <div className="rounded-xl border border-warning/30 bg-warning-surface p-2.5" role="status">
       <div className="flex items-center gap-2 text-xs font-medium">
-        <span className="size-2 rounded-full bg-amber-500" aria-hidden="true" />
+        <span className="size-2 rounded-full bg-warning" aria-hidden="true" />
         <span className="min-w-0 truncate">
           {t("{name} controls this Mac", { name: control.botName })}
         </span>

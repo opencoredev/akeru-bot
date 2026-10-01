@@ -91,7 +91,7 @@ export const PluginSearchResultCard = memo(function PluginSearchResultCard({
           </span>
         </div>
         {connected ? (
-          <p className="flex items-center gap-1 text-xs text-emerald-500">
+          <p className="flex items-center gap-1 text-xs text-success-foreground">
             <CheckCircle2Icon aria-hidden="true" className="size-3" />
             {t("Connected")}
           </p>

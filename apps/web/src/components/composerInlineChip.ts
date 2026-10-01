@@ -6,7 +6,7 @@ const INLINE_CHIP_GEOMETRY_CLASS_NAME =
 
 const INLINE_CHIP_CLASS_NAME = `${INLINE_CHIP_GEOMETRY_CLASS_NAME} border border-border/70 bg-accent/40 text-foreground`;
 
-export const CHAT_INLINE_CHIP_CLASS_NAME = `${INLINE_CHIP_CLASS_NAME} text-[12px]`;
+export const CHAT_INLINE_CHIP_CLASS_NAME = `${INLINE_CHIP_CLASS_NAME} text-xs`;
 
 export const COMPOSER_INLINE_CHIP_CLASS_NAME = `${INLINE_CHIP_CLASS_NAME} text-[0.86em] select-none`;
 
@@ -31,7 +31,7 @@ const INLINE_SKILL_CHIP_CLASS_NAME =
 
 export const COMPOSER_INLINE_SKILL_CHIP_CLASS_NAME = `${INLINE_SKILL_CHIP_CLASS_NAME} text-[0.9em] select-none`;
 
-export const CHAT_INLINE_SKILL_CHIP_CLASS_NAME = `${INLINE_SKILL_CHIP_CLASS_NAME} text-[12px]`;
+export const CHAT_INLINE_SKILL_CHIP_CLASS_NAME = `${INLINE_SKILL_CHIP_CLASS_NAME} text-xs`;
 
 // Holds either the skill's emoji or the fallback skill glyph at the same box
 // and full opacity, so adjacent chips with and without an emoji match.
