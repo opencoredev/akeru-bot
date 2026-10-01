@@ -1,3 +1,7 @@
+import {
+  makeEventNdjsonLogger,
+  makeEventNdjsonLogStore,
+} from "./test-support/eventLogFactories.ts";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -8,12 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as TestClock from "effect/testing/TestClock";
 import * as ResourceAttribution from "../../resourceTelemetry/ResourceAttribution.ts";
-import {
-  makeEventNdjsonLogger,
-  makeEventNdjsonLogStore,
-  type PendingRecord,
-  writeBatchedMessages,
-} from "./EventNdjsonLogger.ts";
+import { type PendingRecord, writeBatchedMessages } from "./EventNdjsonLogger.ts";
 import { encodeUnknownJson, ownedLogPath, parseLogLine } from "./test-support/eventLogs.ts";
 
 describe("EventNdjsonLogger", () => {

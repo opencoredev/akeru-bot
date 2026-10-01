@@ -82,15 +82,17 @@
             }
           },
           {
-            // Code that runs before or outside any Effect runtime: Electron guest-page preload
-            // bundles, synchronous pre-ready desktop startup and its native key watchdog, the
-            // standalone service launcher bundle, and the server entry detection.
+            // Electron guest-page preload bundles and standalone launchers run outside Effect.
+            // Desktop pre-ready reads preserve synchronous startup ordering; the native key
+            // watchdog and server entry detection also require their platform boundaries.
             "include": [
               "**/apps/desktop/src/preview/*Preload.ts",
               "**/apps/desktop/src/preview/AnnotationElementCapture.ts",
               "**/apps/desktop/src/app/*PreReadyPlatform.ts",
               "**/apps/desktop/src/window/QuitHold.ts",
-              "**/apps/server/src/serviceLauncher*.ts",
+              "**/apps/server/src/serviceLauncher.ts",
+              "**/apps/server/src/serviceLauncherDatabase.ts",
+              "**/apps/server/src/serviceLauncherState.ts",
               "**/apps/server/src/entrypoint.ts"
             ],
             "options": {
@@ -102,24 +104,22 @@
             }
           },
           {
-            // Native filesystem features that Effect's FileSystem does not expose: lstat,
-            // descriptor fstat and duplication, ctime and nanosecond mtime, inode identity,
-            // POSIX X_OK access checks, and statfs.
+            // Native filesystem capabilities absent from FileSystem: adopting or duplicating
+            // inherited raw descriptors, non-following lstat, bigint/nanosecond metadata,
+            // POSIX X_OK access checks, and statfs. File.stat and ino/dev are available.
             "include": [
               "**/apps/server/src/bootstrap.ts",
               "**/apps/server/src/http.ts",
               "**/apps/server/src/orchestration/workflowScriptQuery.ts",
               "**/apps/server/src/resourceTelemetry/DesktopTelemetryTransport.ts",
-              "**/apps/server/src/memory/BotMemory*.ts",
+              "**/apps/server/src/memory/BotMemory.ts",
+              "**/apps/server/src/memory/BotMemoryFileStorage.ts",
+              "**/apps/server/src/memory/BotMemoryTypes.ts",
               "**/apps/server/src/provider/Layers/EventNdjsonLogger.ts",
-              "**/apps/server/src/provider/Layers/logging/EventLogEncoding.ts",
               "**/apps/server/src/subscription-auth/credentialStore.ts",
-              "**/apps/server/src/subscription-auth/healthService.ts",
               "**/apps/server/src/subscription-auth/service.ts",
               "**/apps/server/src/remote/diagnostics.ts",
-              "**/packages/shared/src/logging.ts",
-              "**/packages/shared/src/shell/commandResolution.ts",
-              "**/packages/shared/src/shell/environment.ts"
+              "**/packages/shared/src/shell/commandResolution.ts"
             ],
             "options": {
               "diagnosticSeverity": {
@@ -128,37 +128,38 @@
             }
           },
           {
-            // Adapters that implement Promise-based third-party interfaces (Mastra workspace and
-            // MCP callbacks, the Ascii and Lightpanda sandboxes, CDP, the realtime voice API, and
-            // the DNS-pinned web fetch transport). The SDK owns their lifetimes, deadlines, and
-            // Date values, so there is no Effect scope to provide services from.
+            // SDK boundaries requiring native transport/process cancellation or synchronous
+            // snapshot dispatch ordering.
+            // Promise signatures alone do not justify avoiding Effect services.
             "include": [
               "**/apps/server/src/provider/AkeruPreviewSnapshotAttachment.ts",
-              "**/apps/server/src/provider/AkeruSessionResources.ts",
               "**/apps/server/src/provider/AkeruWebFetch.ts",
               "**/apps/server/src/provider/CodexComputerUse.ts",
-              "**/apps/server/src/provider/botWorkspace.ts",
-              "**/apps/server/src/provider/botWorkspaceFilesystem.ts",
-              "**/apps/server/src/provider/computerCdp.ts",
-              "**/apps/server/src/provider/workspace/BotWorkspaceLifecycle.ts",
-              "**/apps/server/src/provider/workspace/adapters/Ascii.ts",
-              "**/apps/server/src/provider/browser/LightpandaInstall.ts",
               "**/apps/server/src/provider/browser/LightpandaProcess.ts",
               "**/apps/server/src/voiceCall/ChatGptRealtime.ts"
             ],
             "options": {
               "diagnosticSeverity": {
                 "nodeBuiltinImport": "off",
-                "globalDate": "off",
                 "globalFetch": "off",
                 "globalTimers": "off"
               }
             }
           },
           {
-            // Migration backlog: synchronous subsystems whose callers must move to Effect
-            // services together. This list should only shrink. Remove a file once it is migrated.
+            // The Mastra SDK FileStat interface requires native Date values, including Invalid Date.
+            "include": ["**/apps/server/src/provider/botWorkspaceFilesystem.ts"],
+            "options": { "diagnosticSeverity": { "globalDate": "off" } }
+          },
+          {
+            // Migration backlog: synchronous APIs, initialization, and constructor-owned sink
+            // lifecycles whose callers must move together. Also retained: interactive inherited-
+            // terminal child semantics (triage) and measured native streaming performance
+            // (usageTranscriptReader). Remove a file once its constraint is addressed.
             "include": [
+              "**/apps/server/src/subscription-auth/healthService.ts",
+              "**/packages/shared/src/logging.ts",
+              "**/packages/shared/src/shell/environment.ts",
               "**/apps/server/src/attachmentPaths.ts",
               "**/apps/server/src/attachmentStore.ts",
               "**/apps/server/src/bot-inbox/service.ts",

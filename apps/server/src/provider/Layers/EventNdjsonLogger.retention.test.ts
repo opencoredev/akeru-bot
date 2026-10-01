@@ -6,7 +6,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
-import { makeEventNdjsonLogStore } from "./EventNdjsonLogger.ts";
+import { makeEventNdjsonLogStore } from "./test-support/eventLogFactories.ts";
 import { ownedLogPath } from "./test-support/eventLogs.ts";
 
 describe("EventNdjsonLogger", () => {

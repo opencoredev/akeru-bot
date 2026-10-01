@@ -195,14 +195,20 @@ its reason beside it and only the rules that category needs:
 - Tests and test harnesses.
 - Build, release, and dev scripts.
 - The feedback Worker, a plain Cloudflare fetch handler.
-- Code with no Effect runtime: Electron preload bundles, pre-ready desktop startup, the quit-key
-  watchdog, the standalone service launcher, and the server entry detection.
-- Native filesystem features that `FileSystem` lacks: `lstat`, descriptor `fstat` and
-  duplication, ctime and nanosecond mtime, inode identity, `X_OK` access checks, and `statfs`.
-- Adapters behind Promise-based third-party interfaces such as Mastra callbacks, sandbox SDKs,
-  CDP, and the realtime voice API, where the SDK owns lifetimes and deadlines.
-- A migration backlog of synchronous subsystems whose callers must move together. This list
-  should only shrink; remove a file from it once it is migrated.
+- Platform startup boundaries: Electron preload bundles and standalone launchers run outside
+  Effect; pre-ready desktop reads require synchronous startup ordering. The quit-key watchdog
+  and server entry detection retain their native platform boundaries.
+- Native filesystem capabilities absent from `FileSystem`: adopting or duplicating inherited
+  raw descriptors, non-following `lstat`, bigint/nanosecond metadata, `X_OK` access checks, and
+  `statfs`. `File.stat` and inode/device identity (`ino`/`dev`) are available.
+- SDK boundaries requiring native transport/process cancellation or synchronous snapshot
+  dispatch ordering. Promise signatures alone do not justify avoiding Effect services.
+- Mastra filesystem results requiring native `Date` values, including Invalid Date; this
+  category disables only the Date diagnostic.
+- A migration backlog of synchronous APIs, initialization, and constructor-owned log sink
+  lifecycles whose callers must move together. It also retains the interactive inherited-terminal
+  child in `cli/triage.ts` and the measured native streaming performance of
+  `usage/usageTranscriptReader.ts`. Remove a file once its constraint is addressed.
 
 A new file does not join a category because it is convenient. Fix the code first, and add a
 category entry only when the file shares that category's real constraint.

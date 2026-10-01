@@ -6,7 +6,6 @@
  */
 import type * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
-import * as NodePath from "node:path";
 import type { ThreadId } from "@akeru/contracts";
 import { RotatingFileSink } from "@akeru/shared/logging";
 import { errorTag } from "@akeru/shared/observability";
@@ -14,6 +13,7 @@ import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Path from "effect/Path";
 import * as Scope from "effect/Scope";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
@@ -66,6 +66,7 @@ async function isProviderLogFile(
 }
 
 async function enforceRetention(input: {
+  readonly path: Path.Path;
   readonly directory: string;
   readonly maxTotalBytes: number;
   readonly maxAgeMs: number;
@@ -86,7 +87,7 @@ async function enforceRetention(input: {
 
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    const filePath = NodePath.join(input.directory, entry.name);
+    const filePath = input.path.join(input.directory, entry.name);
 
     try {
       if (!(await isProviderLogFile(filePath, entry.name, input.filePrefix))) continue;
@@ -131,6 +132,7 @@ async function enforceRetention(input: {
 }
 
 async function drainPending(input: {
+  readonly path: Path.Path;
   readonly directory: string;
   readonly options: ResolvedOptions;
   readonly state: StoreState;
@@ -160,7 +162,7 @@ async function drainPending(input: {
   }
 
   for (const [threadSegment, records] of recordsBySegment) {
-    const filePath = providerLogPath(input.directory, input.filePrefix, threadSegment);
+    const filePath = providerLogPath(input.path, input.directory, input.filePrefix, threadSegment);
     let sink = sinks.get(threadSegment);
 
     if (!sink) {
@@ -204,12 +206,13 @@ async function drainPending(input: {
 
   const retention = retentionDue
     ? await enforceRetention({
+        path: input.path,
         directory: input.directory,
         maxTotalBytes: input.options.maxTotalBytes,
         maxAgeMs: input.options.maxAgeMs,
         activeFilePaths: new Set(
           Array.from(sinks.keys(), (threadSegment) =>
-            providerLogPath(input.directory, input.filePrefix, threadSegment),
+            providerLogPath(input.path, input.directory, input.filePrefix, threadSegment),
           ),
         ),
         filePrefix: input.filePrefix,
@@ -223,7 +226,7 @@ async function drainPending(input: {
         await sink.close();
       } catch (cause) {
         failures.push({
-          filePath: providerLogPath(input.directory, input.filePrefix, segment),
+          filePath: providerLogPath(input.path, input.directory, input.filePrefix, segment),
           cause,
         });
       }
@@ -254,10 +257,11 @@ async function drainPending(input: {
 export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
   filePath: string,
   options: EventNdjsonLogStoreOptions = {},
-): Effect.fn.Return<EventNdjsonLogStore, EventNdjsonLogStoreError> {
+): Effect.fn.Return<EventNdjsonLogStore, EventNdjsonLogStoreError, Path.Path> {
+  const path = yield* Path.Path;
   const resolved = yield* resolveOptions(filePath, options);
-  const directory = NodePath.dirname(filePath);
-  const filePrefix = providerLogPrefix(filePath);
+  const directory = path.dirname(filePath);
+  const filePrefix = providerLogPrefix(path, filePath);
 
   yield* Effect.tryPromise({
     try: () => NodeFSP.mkdir(directory, { recursive: true }),
@@ -268,6 +272,7 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
 
   const initialRetention = yield* Effect.promise(() =>
     enforceRetention({
+      path,
       directory,
       maxTotalBytes: resolved.maxTotalBytes,
       maxAgeMs: resolved.maxAgeMs,
@@ -297,7 +302,16 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
 
   const drain = (state: StoreState, now: number, timerFired = false, close = false) =>
     Effect.promise(() =>
-      drainPending({ directory, options: resolved, state, filePrefix, now, timerFired, close }),
+      drainPending({
+        path,
+        directory,
+        options: resolved,
+        state,
+        filePrefix,
+        now,
+        timerFired,
+        close,
+      }),
     );
 
   const reportDrain = Effect.fnUntraced(function* (result: DrainResult, startedAt: number) {
@@ -437,7 +451,7 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
 export const makeEventNdjsonLogger = Effect.fnUntraced(function* (
   filePath: string,
   options: EventNdjsonLoggerOptions,
-): Effect.fn.Return<EventNdjsonLogger | undefined> {
+): Effect.fn.Return<EventNdjsonLogger | undefined, never, Path.Path> {
   const store = yield* makeEventNdjsonLogStore(filePath, options).pipe(
     Effect.catch((error) =>
       logWarning(error.message, { error }).pipe(

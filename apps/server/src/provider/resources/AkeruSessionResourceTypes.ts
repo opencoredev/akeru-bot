@@ -1,3 +1,4 @@
+import type { BotWorkspaceIO } from "../workspace/BotWorkspaceIO.ts";
 import { createMcpManager, type McpServerConfig } from "@mastra/code-sdk/mcp/index";
 import type { Workspace } from "@mastra/core/workspace";
 import type { BotId, BotSandbox, McpServer } from "@akeru/contracts";
@@ -33,6 +34,7 @@ export interface AkeruSessionResourceView {
 }
 
 export interface AkeruSessionResourcesOptions {
+  readonly io: BotWorkspaceIO;
   readonly stateDir: string;
   readonly makeMcpManager?: typeof createMcpManager;
   readonly makeRemoteWorkspace?: (

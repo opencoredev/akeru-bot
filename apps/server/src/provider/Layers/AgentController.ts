@@ -1,3 +1,4 @@
+import { makeBotWorkspaceIO } from "../workspace/BotWorkspaceIO.ts";
 import { createSessionResources } from "./agentController/SessionResources.ts";
 import { createAuxiliaryOperations } from "./agentController/AuxiliaryOperations.ts";
 import { createPreviewMcpSessions } from "./agentController/PreviewMcpSessions.ts";
@@ -331,6 +332,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
 
     const { sessionResources } = createSessionResources({
+      io: makeBotWorkspaceIO(fileSystem, path, runPromise),
       get config() {
         return config;
       },

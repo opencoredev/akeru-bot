@@ -1,3 +1,4 @@
+import { workspaceIO } from "./test-support/workspaceIO.ts";
 import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
 import { SandboxState } from "@daytona/sdk";
 import { describe } from "vite-plus/test";
@@ -35,6 +36,7 @@ describe("createBotWorkspace", () => {
     const connect = vi.spyOn(Sandbox, "connect").mockResolvedValue(sandbox);
 
     const input = {
+      io: workspaceIO,
       threadId: "railway-thread",
       workspaceId: "akeru-railway",
       identityFile,

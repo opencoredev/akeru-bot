@@ -1,3 +1,4 @@
+import { workspaceIO } from "./test-support/workspaceIO.ts";
 import { probeTool } from "./test-support/toolProbe.ts";
 import { describe } from "vite-plus/test";
 import * as NodeFS from "node:fs";
@@ -61,6 +62,7 @@ describe("AkeruSessionResources", () => {
           const toMcpServerConfigs = vi.fn(() => ({}));
 
           const resources = new AkeruSessionResources({
+            io: workspaceIO,
             stateDir: stateDir(),
             makeRemoteWorkspace: async () => workspace(),
             makeBotBrowser: () => ({ ...botBrowser, attachment: acquireAttachment }),
@@ -121,6 +123,7 @@ describe("AkeruSessionResources", () => {
     const close = vi.fn(async () => undefined);
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => workspace(),
       makeBotBrowser: (input) =>
@@ -151,6 +154,7 @@ describe("AkeruSessionResources", () => {
 
   it("does not advertise browser tools for Tenki while retaining MCP tools", async () => {
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => workspace(),
       makeBotBrowser: () => ({
@@ -191,6 +195,7 @@ describe("AkeruSessionResources", () => {
     manager.init.mockRejectedValueOnce(new Error("connector failed"));
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => remote,
       makeMcpManager: () => manager as never,
@@ -229,6 +234,7 @@ describe("AkeruSessionResources", () => {
     manager.init.mockRejectedValueOnce(new Error("connector failed"));
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => remote,
       makeMcpManager: () => manager as never,
@@ -270,6 +276,7 @@ describe("AkeruSessionResources", () => {
     };
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => workspace(),
       makeBotBrowser: () => browser(),
@@ -294,6 +301,7 @@ describe("AkeruSessionResources", () => {
     };
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => workspace(),
       makeBotBrowser: () => browser(),
@@ -335,6 +343,7 @@ describe("AkeruSessionResources", () => {
     failedManager.init.mockRejectedValueOnce(new Error("MCP init failed after rotation"));
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: directory,
       makeRemoteWorkspace,
       makeMcpManager: () => failedManager as never,
@@ -406,6 +415,7 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
 
     const restarted = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: directory,
       makeRemoteWorkspace,
       toMcpServerConfigs: () => ({}),
@@ -451,6 +461,7 @@ describe("AkeruSessionResources", () => {
     const toMcpServerConfigs = vi.fn(() => ({}));
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => remote,
       makeBotBrowser,
@@ -491,6 +502,7 @@ describe("AkeruSessionResources", () => {
     });
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       hostPlatform: "darwin",
       makeRemoteWorkspace: async () => workspace(),

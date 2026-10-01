@@ -37,3 +37,28 @@ describe("ComputerCdp.connect", () => {
     );
   });
 });
+
+it("follows discovery redirects and preserves headers", async () => {
+  const server = NodeHttp.createServer((request, response) => {
+    if (request.url === "/json/list") {
+      response.writeHead(302, { location: "/targets" });
+      response.end();
+
+      return;
+    }
+
+    expect(request.headers["x-daytona-preview-token"]).toBe("token");
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify([{ type: "worker" }]));
+  });
+
+  servers.push(server);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${(server.address() as NodeNet.AddressInfo).port}/json/list`;
+  await expect(
+    ComputerCdp.connect({
+      url: url.replace("/json/list", ""),
+      requestHeaders: { "x-daytona-preview-token": "token" },
+    }),
+  ).rejects.toThrow("Graphical browser page is unavailable.");
+});

@@ -1,4 +1,3 @@
-import * as NodeFS from "node:fs";
 import { TOOL_NAME_OVERRIDES } from "@mastra/code-sdk/tool-names";
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import type { BotSandbox } from "@akeru/contracts";
@@ -37,6 +36,7 @@ export async function createBotWorkspace(
 ): Promise<AkeruBotWorkspace | undefined> {
   if (isRemoteBotSandbox(input.sandbox)) {
     const remote = await (input.makeRemoteWorkspace ?? createRemoteBotWorkspace)({
+      io: input.io,
       threadId: input.threadId,
       sandbox: input.sandbox,
       ...(input.identityFile ? { identityFile: input.identityFile } : {}),
@@ -50,7 +50,7 @@ export async function createBotWorkspace(
   const root = input.localRoot ?? input.cwd;
 
   if (!root) return undefined;
-  await NodeFS.promises.mkdir(root, { recursive: true, mode: 0o700 });
+  await input.io.mkdir(root);
 
   const workspace = new Workspace({
     id: input.workspaceId ?? `akeru-${input.threadId}`,
@@ -69,7 +69,7 @@ export async function createRemoteBotWorkspace(
   if (!input.identityFile || !input.workspaceId)
     throw new Error(`Remote sandbox '${input.sandbox}' needs a stable workspace identity.`);
   const identityFile = input.identityFile;
-  const persisted = await readIdentity(identityFile);
+  const persisted = await readIdentity(input.io, identityFile);
 
   if (persisted && persisted.provider !== input.sandbox)
     throw new Error(
@@ -93,7 +93,7 @@ export async function createRemoteBotWorkspace(
 
   if (!persisted || persisted.providerId !== session.providerId) {
     try {
-      await writeIdentity(identityFile, {
+      await writeIdentity(input.io, identityFile, {
         provider: input.sandbox,
         providerId: session.providerId,
       });
@@ -127,7 +127,7 @@ export async function createRemoteBotWorkspace(
     destroy: async () => {
       await session.computer?.close();
       await workspace.destroy();
-      await NodeFS.promises.rm(identityFile, { force: true });
+      await input.io.remove(identityFile);
     },
   };
 }

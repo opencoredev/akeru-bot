@@ -1,3 +1,4 @@
+import type { BotWorkspaceIO } from "../../workspace/BotWorkspaceIO.ts";
 import type { AgentControllerLiveOptions } from "./Options.ts";
 
 import { ThreadId } from "@akeru/contracts";
@@ -18,6 +19,7 @@ import { AkeruSessionResources } from "../../AkeruSessionResources.ts";
 import { toMcpServerConfigs } from "./McpConfiguration.ts";
 
 export function createSessionResources(deps: {
+  readonly io: BotWorkspaceIO;
   readonly config: ServerConfig["Service"];
   readonly hostPlatform: NodeJS.Platform;
   readonly subscriptionAuth: SubscriptionAuthService;
@@ -25,6 +27,7 @@ export function createSessionResources(deps: {
   readonly options: AgentControllerLiveOptions | undefined;
 }) {
   const sessionResources = new AkeruSessionResources({
+    io: deps.io,
     stateDir: deps.config.stateDir,
     hostPlatform: deps.hostPlatform,
     getPreviewMcpServerConfig: (threadId) => {

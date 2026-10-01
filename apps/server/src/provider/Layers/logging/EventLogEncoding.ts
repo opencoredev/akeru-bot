@@ -2,7 +2,7 @@ import * as Match from "effect/Match";
 
 import * as Predicate from "effect/Predicate";
 
-import * as NodePath from "node:path";
+import type * as Path from "effect/Path";
 import { errorTag } from "@akeru/shared/observability";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -58,15 +58,20 @@ export function resolveStreamLabel(stream: EventNdjsonStream): string {
   );
 }
 
-export function providerLogPrefix(filePath: string): string {
-  const basename = NodePath.basename(filePath);
-  const extension = NodePath.extname(basename);
+export function providerLogPrefix(path: Path.Path, filePath: string): string {
+  const basename = path.basename(filePath);
+  const extension = path.extname(basename);
 
   return `${extension.length > 0 ? basename.slice(0, -extension.length) : basename}.`;
 }
 
-export function providerLogPath(directory: string, prefix: string, threadSegment: string): string {
-  return NodePath.join(directory, `${prefix}${threadSegment}.log`);
+export function providerLogPath(
+  path: Path.Path,
+  directory: string,
+  prefix: string,
+  threadSegment: string,
+): string {
+  return path.join(directory, `${prefix}${threadSegment}.log`);
 }
 
 export function shouldPersist<Input0>(stream: EventNdjsonStream, eventInput: Input0): boolean {

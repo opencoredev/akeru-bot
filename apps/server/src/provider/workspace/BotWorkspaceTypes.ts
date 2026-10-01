@@ -1,3 +1,4 @@
+import type { BotWorkspaceIO } from "./BotWorkspaceIO.ts";
 import { Workspace } from "@mastra/core/workspace";
 import type { BotSandbox } from "@akeru/contracts";
 import { WorkspaceComputer } from "../workspaceComputer.ts";
@@ -50,6 +51,7 @@ export interface AkeruRemoteSession {
 }
 
 export interface CreateRemoteBotWorkspaceInput {
+  readonly io: BotWorkspaceIO;
   readonly threadId: string;
   readonly sandbox: RemoteBotSandbox;
   readonly identityFile?: string;
@@ -59,6 +61,7 @@ export interface CreateRemoteBotWorkspaceInput {
 }
 
 export interface CreateBotWorkspaceInput {
+  readonly io: BotWorkspaceIO;
   readonly threadId: string;
   readonly cwd?: string;
   readonly identityFile?: string;
