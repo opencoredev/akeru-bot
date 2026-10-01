@@ -57,7 +57,7 @@ function shouldPersistThread(thread: OrchestrationThread): boolean {
   return status !== "starting" && status !== "running";
 }
 
-export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make")(function* (
+export const environmentThreadState = Effect.fn("EnvironmentThreadState.make")(function* (
   threadId: ThreadIdType,
 ) {
   const supervisor = yield* EnvironmentSupervisor;
@@ -711,7 +711,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
 export function threadStateChanges(environmentId: EnvironmentIdType, threadId: ThreadIdType) {
   return followStreamInEnvironment(
     environmentId,
-    Stream.unwrap(makeEnvironmentThreadState(threadId).pipe(Effect.map(SubscriptionRef.changes))),
+    Stream.unwrap(environmentThreadState(threadId).pipe(Effect.map(SubscriptionRef.changes))),
   );
 }
 

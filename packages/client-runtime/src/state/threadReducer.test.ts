@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import { CommandId, ProjectId, ProviderInstanceId, ThreadId } from "@akeru/contracts";
+import {
+  ApprovalRequestId,
+  CommandId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@akeru/contracts";
 import type { OrchestrationThread } from "@akeru/contracts";
 import { applyThreadDetailEvent } from "./threadReducer.ts";
 import { baseEventFields, baseThread } from "./threadReducer.test-support.ts";
@@ -23,9 +29,8 @@ describe("applyThreadDetailEvent", () => {
           scripts: [],
           createdAt: "2026-04-01T01:00:00.000Z",
           updatedAt: "2026-04-01T01:00:00.000Z",
-          deletedAt: null,
         },
-      } as any);
+      });
 
       expect(result.kind).toBe("unchanged");
     });
@@ -343,11 +348,11 @@ describe("applyThreadDetailEvent", () => {
         type: "thread.approval-response-requested",
         payload: {
           threadId: ThreadId.make("thread-1"),
-          requestId: "req-1",
-          decision: "approve",
+          requestId: ApprovalRequestId.make("req-1"),
+          decision: "accept",
           createdAt: "2026-04-01T13:00:00.000Z",
         },
-      } as any);
+      });
 
       expect(result.kind).toBe("unchanged");
     });

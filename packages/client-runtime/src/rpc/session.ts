@@ -10,8 +10,7 @@ import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as Socket from "effect/unstable/socket/Socket";
 
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This client boundary creates an HTTP or RPC transport for its environment.
-import { makeWsRpcProtocolClient, type WsRpcProtocolClient } from "./protocol.ts";
+import { wsRpcProtocolClient, type WsRpcProtocolClient } from "./protocol.ts";
 import type {
   ConnectionAttemptError,
   ConnectionTransientError,
@@ -131,7 +130,7 @@ export const make = Effect.gen(function* () {
       Effect.withSpan("environment.websocket.connect"),
     );
 
-    const client = yield* makeWsRpcProtocolClient.pipe(Effect.provide(protocolContext));
+    const client = yield* wsRpcProtocolClient.pipe(Effect.provide(protocolContext));
 
     const initialConfig = yield* Effect.cached(
       client[WS_METHODS.serverGetConfig]({}).pipe(

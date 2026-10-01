@@ -91,7 +91,7 @@ const remoteApiBaseUrl = (httpBaseUrl: string): string => {
   return url.toString();
 };
 
-export const makeEnvironmentHttpApiClient = (httpBaseUrl: string) =>
+export const environmentHttpApiClient = (httpBaseUrl: string) =>
   HttpApiClient.make(EnvironmentHttpApi, {
     baseUrl: remoteApiBaseUrl(httpBaseUrl),
   });

@@ -141,8 +141,12 @@ describe("applyShellStreamEvent", () => {
   });
 
   it("returns original snapshot for unrecognized event kinds", () => {
-    const unknownEvent = { kind: "unknown-future-event", sequence: 99 } as any;
-    const next = applyShellStreamEvent(baseSnapshot, unknownEvent);
+    const unknownEvent = {
+      kind: "unknown-future-event",
+      sequence: 99,
+    };
+
+    const next = applyShellStreamEvent(baseSnapshot, unknownEvent as OrchestrationShellStreamEvent);
     expect(next).toBe(baseSnapshot);
   });
 });
