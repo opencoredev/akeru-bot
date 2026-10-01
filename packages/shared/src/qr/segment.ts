@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-useless-escape */
 /*
  * QR Code generator library (TypeScript)
  *
@@ -205,7 +204,7 @@ export class QrSegment {
   private static readonly NUMERIC_REGEX: RegExp = /^[0-9]*$/;
 
   // Describes precisely all strings that are encodable in alphanumeric mode.
-  private static readonly ALPHANUMERIC_REGEX: RegExp = /^[A-Z0-9 $%*+.\/:-]*$/;
+  private static readonly ALPHANUMERIC_REGEX: RegExp = /^[A-Z0-9 $%*+./:-]*$/;
 
   // The set of all legal characters in alphanumeric mode,
   // where each character value maps to the index in the string.

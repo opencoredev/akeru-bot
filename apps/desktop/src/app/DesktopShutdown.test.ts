@@ -7,7 +7,7 @@ import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Tracer from "effect/Tracer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { makeLocalFileTracer, makeTraceSink } from "@akeru/shared/observability";
+import { makeLocalFileTracer, traceSink } from "@akeru/shared/observability";
 import { DesktopTraceShutdown } from "./DesktopObservability.ts";
 import * as DesktopShutdown from "./DesktopShutdown.ts";
 
@@ -47,7 +47,7 @@ for (const fail of [false, true]) {
           const fs = yield* FileSystem.FileSystem;
           const directory = yield* fs.makeTempDirectoryScoped();
 
-          const sink = yield* makeTraceSink({
+          const sink = yield* traceSink({
             filePath: `${directory}/desktop.trace.ndjson`,
             maxBytes: 100_000,
             maxFiles: 1,

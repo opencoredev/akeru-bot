@@ -1,4 +1,4 @@
-import { makeLocalFileTracer, makeTraceSink } from "@akeru/shared/observability";
+import { makeLocalFileTracer, traceSink } from "@akeru/shared/observability";
 import { parsePersistedServerObservabilitySettings } from "@akeru/shared/serverSettings";
 import * as Context from "effect/Context";
 
@@ -54,7 +54,7 @@ export const tracerLayer = Layer.unwrap(
     const otlpTracesUrl = yield* resolveOtlpTracesUrl;
     const tracePath = environment.path.join(environment.logDir, "desktop.trace.ndjson");
 
-    const sink = yield* makeTraceSink({
+    const sink = yield* traceSink({
       filePath: tracePath,
       maxBytes: DESKTOP_LOG_FILE_MAX_BYTES,
       maxFiles: DESKTOP_LOG_FILE_MAX_FILES,

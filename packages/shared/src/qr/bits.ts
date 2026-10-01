@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-useless-escape */
 /*
  * QR Code generator library (TypeScript)
  *

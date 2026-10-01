@@ -2,7 +2,6 @@ import { type bit, type byte, type int, appendBits, getBit, assert } from "./qr/
 import { QrSegment } from "./qr/segment.ts";
 import { QrCodeEcc } from "./qr/ecc.ts";
 
-/* oxlint-disable eslint/no-useless-escape */
 /*
  * QR Code generator library (TypeScript)
  *

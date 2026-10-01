@@ -30,7 +30,7 @@ export interface TraceSink {
   close: () => Effect.Effect<void>;
 }
 
-export const makeTraceSink = Effect.fn("makeTraceSink")(function* (options: TraceSinkOptions) {
+export const traceSink = Effect.fn("makeTraceSink")(function* (options: TraceSinkOptions) {
   const maxBufferedBytes = options.maxBufferedBytes ?? DEFAULT_MAX_BUFFERED_BYTES;
 
   const sink = new RotatingFileSink({
