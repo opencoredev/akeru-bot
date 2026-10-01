@@ -5,7 +5,6 @@ import {
   stripTrailingExitCode,
   extractWorkLogItemType,
 } from "@akeru/client-runtime/work-log-command";
-import { type WorkLogEntry } from "./workLogTypes";
 
 export function normalizeCompactToolLabel(value: string): string {
   return value.replace(/\s+(?:complete|completed)\s*$/i, "").trim();
