@@ -13,6 +13,7 @@ import { useThreadSearch } from "../../state/queries";
 import { environmentServerConfigsAtom } from "../../state/server";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import type { WorkspaceEnvironment } from "../../state/workspaceModel";
+import type { ThreadCapability } from "../home/environment-thread-capabilities";
 import { buildHomeProjectScopes } from "../home/homeThreadList";
 import {
   buildThreadListV2Items,
@@ -23,12 +24,6 @@ import {
 import { useThreadListV2ShelfPreferences } from "./use-thread-list-v2-shelf-preferences";
 
 type ServerConfigs = ReadonlyMap<EnvironmentId, ServerConfig>;
-type ThreadCapability =
-  | "threadSettlement"
-  | "threadSnooze"
-  | "threadPinning"
-  | "threadPinReorder"
-  | "threadTitleRegeneration";
 
 function environmentIdsWithCapability(
   serverConfigs: ServerConfigs,
