@@ -7,7 +7,6 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
-
 import {
   NativeTelemetryRequestTimedOut,
   NativeTelemetryStreamClosed,

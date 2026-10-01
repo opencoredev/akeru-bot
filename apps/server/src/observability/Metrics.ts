@@ -4,7 +4,6 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Metric from "effect/Metric";
 import { dual } from "effect/Function";
-
 import {
   compactMetricAttributes,
   normalizeModelMetricLabel,
@@ -64,14 +63,6 @@ export const gitCommandsTotal = Metric.counter("t3_git_commands_total", {
 
 export const gitCommandDuration = Metric.timer("t3_git_command_duration", {
   description: "Git command execution duration.",
-});
-
-export const terminalSessionsTotal = Metric.counter("t3_terminal_sessions_total", {
-  description: "Total terminal sessions started.",
-});
-
-export const terminalRestartsTotal = Metric.counter("t3_terminal_restarts_total", {
-  description: "Total terminal restart requests handled.",
 });
 
 export const metricAttributes = (

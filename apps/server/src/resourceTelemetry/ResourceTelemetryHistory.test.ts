@@ -7,7 +7,6 @@ import type {
 import { describe, expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
-
 import {
   buildResourceTelemetryHistory,
   normalizeResourceTelemetryHistoryInput,

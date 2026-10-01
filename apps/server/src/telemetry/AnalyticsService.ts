@@ -1,18 +1,11 @@
 import * as NodeCrypto from "node:crypto";
 import {
   USAGE_3H_COUNTER_KEYS,
-  USAGE_3H_COUNTER_MAX,
   USAGE_BASE_COUNTER_KEYS,
   USAGE_PLUGIN_IDS,
   USAGE_TOOL_IDS,
-  Usage3hEvent,
   decodeUsage3hEvent,
   type Usage3hEvent as Usage3hEventType,
-  type UsageAnalyticsProvider,
-  type UsageArchitecture,
-  type UsageClientType,
-  type UsageOperatingSystem,
-  type UsageSandboxProvider,
 } from "@akeru/contracts";
 import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Config from "effect/Config";
@@ -23,72 +16,49 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
-
 import packageJson from "../../package.json" with { type: "json" };
 import { writeFileStringAtomically } from "../atomicWrite.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
-
-const BUCKET_HOURS = 3;
-const BUCKET_MS = BUCKET_HOURS * 60 * 60 * 1_000;
-const MAX_PENDING_BUCKETS = 256;
+import {
+  MAX_PENDING_BUCKETS,
+  AnalyticsState,
+  decodeState,
+  encodeState,
+  migrateLegacyState,
+  encodeJson,
+} from "./AnalyticsState.ts";
+import {
+  type BucketAggregateRow,
+  type TurnUsageRow,
+  type ToolUsageRow,
+  type EnabledPluginRow,
+  bucketStartAt,
+  bucketEnd,
+  clampCounter,
+  collapse,
+  providerValues,
+  normalizeProvider,
+  sandboxValues,
+  normalizeSandbox,
+  clientValues,
+  normalizeClient,
+  operatingSystem,
+  architecture,
+  insertId,
+  hasActivity,
+} from "./AnalyticsAggregation.ts";
 const MAX_BUCKETS_PER_PASS = 8;
+
 const MAX_BATCH_BYTES = 64 * 1_024;
+
 const DEFAULT_POSTHOG_KEY = "phc_yuXg3geGrykvtEkQdeG6jWf2jvdA2WSZnQdrKVnMKUa7";
-
-const AnalyticsState = Schema.Struct({
-  version: Schema.Literal(1),
-  installationId: Schema.String.check(Schema.isUUID()),
-  cursorBucketStart: Schema.String.check(
-    Schema.isPattern(/^\d{4}-\d{2}-\d{2}T(?:00|03|06|09|12|15|18|21):00:00\.000Z$/),
-  ),
-  deliveryDay: Schema.String.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/)),
-  deliveredToday: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 8 })),
-  firstActiveInstallReported: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  pending: Schema.Array(Usage3hEvent).check(Schema.isMaxLength(MAX_PENDING_BUCKETS)),
-});
-type AnalyticsState = typeof AnalyticsState.Type;
-
-const decodeState = Schema.decodeUnknownSync(Schema.fromJsonString(AnalyticsState), {
-  onExcessProperty: "error",
-});
-const encodeState = Schema.encodeSync(Schema.fromJsonString(AnalyticsState));
-
-const RETIRED_PROVIDER_COUNTERS = [
-  ["provider_turns_cursor", "provider_turns_other"],
-  ["browser_searches_cursor", "browser_searches_other"],
-] as const;
-
-// Folds counters for retired providers into `other` so events queued before an
-// upgrade still decode and deliver.
-const migrateLegacyState = (encoded: string): string => {
-  const state: unknown = JSON.parse(encoded);
-  if (typeof state !== "object" || state === null || !("pending" in state)) return encoded;
-  if (!Array.isArray(state.pending)) return encoded;
-  for (const event of state.pending) {
-    const properties: unknown = event?.properties;
-    if (typeof properties !== "object" || properties === null) continue;
-    const record = properties as Record<string, unknown>;
-    for (const [retired, other] of RETIRED_PROVIDER_COUNTERS) {
-      const count = record[retired];
-      if (count === undefined) continue;
-      delete record[retired];
-      if (typeof count === "number" && typeof record[other] === "number") {
-        record[other] = Math.min(record[other] + count, USAGE_3H_COUNTER_MAX);
-      }
-    }
-    if (record.provider === "cursor") record.provider = "other";
-  }
-  return JSON.stringify(state);
-};
-const encodeJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 const TelemetryEnvConfig = Config.all({
   posthogKey: Config.string("T3CODE_POSTHOG_KEY").pipe(
@@ -102,123 +72,6 @@ const TelemetryEnvConfig = Config.all({
   nodeEnvironment: Config.option(Config.string("NODE_ENV")),
   ci: Config.option(Config.boolean("CI")),
 });
-
-interface BucketAggregateRow {
-  readonly botsCreated: number;
-  readonly botsDeleted: number;
-  readonly botsRestored: number;
-  readonly botsTotalCreated: number;
-  readonly botsTotalGone: number;
-  readonly userMessages: number;
-  readonly botReplies: number;
-  readonly failedTurns: number;
-  readonly groupMessages: number;
-  readonly approvalsRequested: number;
-  readonly approvalsAccepted: number;
-  readonly approvalsRejected: number;
-  readonly clientSurfaces: string | null;
-  readonly providers: string | null;
-  readonly sandboxes: string | null;
-}
-
-interface TurnUsageRow {
-  readonly provider: string | null;
-  readonly sandbox: string | null;
-  readonly count: number;
-}
-
-interface ToolUsageRow {
-  readonly itemType: string | null;
-  readonly provider: string | null;
-  readonly count: number;
-}
-
-interface EnabledPluginRow {
-  readonly pluginId: string;
-}
-
-export function bucketStartAt(timestamp: number): string {
-  return DateTime.formatIso(DateTime.makeUnsafe(Math.floor(timestamp / BUCKET_MS) * BUCKET_MS));
-}
-
-function bucketEnd(bucketStart: string): string {
-  return DateTime.formatIso(
-    DateTime.add(DateTime.makeUnsafe(bucketStart), { hours: BUCKET_HOURS }),
-  );
-}
-
-function clampCounter(value: number): number {
-  return Math.min(USAGE_3H_COUNTER_MAX, Math.max(0, Math.floor(value)));
-}
-
-function collapse<T extends string>(
-  encoded: string | null,
-  allowed: ReadonlySet<string>,
-  normalize: (value: string) => T,
-  none: T,
-  mixed: T,
-): T {
-  const values = new Set(
-    (encoded ?? "")
-      .split(",")
-      .filter(Boolean)
-      .map((value) => (allowed.has(value) ? normalize(value) : normalize("other"))),
-  );
-  if (values.size === 0) return none;
-  if (values.size > 1) return mixed;
-  return values.values().next().value ?? none;
-}
-
-// Retired providers such as Cursor fall through to "other" so historical
-// buckets still match the event schema.
-const providerValues = new Set(["codex", "claude", "claudeagent", "grok", "kimi", "opencode"]);
-export function normalizeProvider(value: string): UsageAnalyticsProvider {
-  if (value === "claudeagent") return "claude";
-  if (value === "other") return "other";
-  return providerValues.has(value) ? (value as UsageAnalyticsProvider) : "other";
-}
-
-const sandboxValues = new Set([
-  "none",
-  "local",
-  "e2b",
-  "daytona",
-  "vercel",
-  "upstash",
-  "ascii",
-  "railway",
-  "tenki",
-]);
-function normalizeSandbox(value: string): UsageSandboxProvider {
-  if (value === "other") return "other";
-  return sandboxValues.has(value) ? (value as UsageSandboxProvider) : "other";
-}
-
-const clientValues = new Set(["web", "desktop", "mobile"]);
-function normalizeClient(value: string): UsageClientType {
-  if (value === "other") return "none";
-  return clientValues.has(value) ? (value as UsageClientType) : "none";
-}
-
-function operatingSystem(value: string): UsageOperatingSystem {
-  return value === "darwin" || value === "linux" || value === "win32" ? value : "other";
-}
-
-function architecture(value: string): UsageArchitecture {
-  return value === "x64" || value === "arm64" || value === "arm" || value === "ia32"
-    ? value
-    : "other";
-}
-
-function insertId(installationId: string, start: string): string {
-  return NodeCrypto.createHash("sha256").update(`${installationId}:${start}`).digest("hex");
-}
-
-function hasActivity(properties: Usage3hEventType["properties"]): boolean {
-  return USAGE_3H_COUNTER_KEYS.some(
-    (key) => key !== "bots_total" && !key.startsWith("plugin_enabled_") && properties[key] > 0,
-  );
-}
 
 export class AnalyticsService extends Context.Service<
   AnalyticsService,
@@ -573,4 +426,7 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(AnalyticsService, make);
+
 export const layerTest = AnalyticsService.layerTest;
+export { bucketStartAt } from "./AnalyticsAggregation.ts";
+export { normalizeProvider } from "./AnalyticsAggregation.ts";

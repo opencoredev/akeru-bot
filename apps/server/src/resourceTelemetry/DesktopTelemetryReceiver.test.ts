@@ -4,7 +4,6 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeStream from "node:stream";
-
 import { it } from "@effect/vitest";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Context from "effect/Context";
@@ -14,7 +13,6 @@ import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import { assert, describe, expect } from "vite-plus/test";
-
 import {
   type DesktopTelemetryReceiverHealth,
   initialDesktopTelemetryContactAt,
