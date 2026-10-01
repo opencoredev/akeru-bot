@@ -41,10 +41,13 @@ export function environmentRpcKey<Input>(target: {
   return JSON.stringify([target.environmentId, target.input]);
 }
 
-function parseEnvironmentRpcKey<Input>(key: string): {
+type ParseEnvironmentRpcKeyResult<Input> = {
   readonly environmentId: EnvironmentIdType;
   readonly input: Input;
-} {
+};
+
+function parseEnvironmentRpcKey<Input>(key: string): ParseEnvironmentRpcKeyResult<Input> {
+  // SAFETY: Atom family keys come from environmentRpcKey for this family's Input type; the environment id is validated below.
   const decoded = JSON.parse(key) as [EnvironmentIdType, Input];
 
   return {

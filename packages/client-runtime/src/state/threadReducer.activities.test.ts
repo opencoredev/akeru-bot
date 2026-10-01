@@ -60,7 +60,7 @@ describe("applyThreadDetailEvent", () => {
         thread: OrchestrationThread,
         sequence: number,
         kind: string,
-        payload: unknown,
+        payload: OrchestrationThread["activities"][number]["payload"],
       ) => {
         const result = applyThreadDetailEvent(thread, {
           ...baseEventFields,
@@ -286,7 +286,11 @@ describe("applyThreadDetailEvent", () => {
     });
 
     it("replaces earlier resolvable context-window updates for the same turn", () => {
-      const contextWindowActivity = (id: string, sequence: number, usedTokens: unknown) => ({
+      const contextWindowActivity = (
+        id: string,
+        sequence: number,
+        usedTokens: number | undefined,
+      ) => ({
         id: EventId.make(id),
         tone: "info" as const,
         kind: "context-window.updated",

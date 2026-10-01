@@ -1,3 +1,4 @@
+import { testRpcClient, testEnvironmentRegistry } from "../test-support/services.ts";
 import { BotId, EnvironmentId, WS_METHODS } from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
@@ -16,7 +17,7 @@ import {
 } from "../connection/model.ts";
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
-import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
+
 import type { RpcSession } from "../rpc/session.ts";
 import { createBotUsageEnvironmentAtoms } from "./botUsage.ts";
 
@@ -41,8 +42,8 @@ const snapshotFor = (botId: BotId) => ({
   },
   entries: [],
   usageCap: null,
-  estimatedCost: { status: "unavailable", usd: null },
-  subscriptionPool: { status: "unavailable", used: null, limit: null, unit: null },
+  estimatedCost: { status: "unavailable" as const, usd: null },
+  subscriptionPool: { status: "unavailable" as const, used: null, limit: null, unit: null },
 });
 
 /**
@@ -52,14 +53,14 @@ const snapshotFor = (botId: BotId) => ({
 const connectedEnvironment = Effect.fn(function* () {
   const calls = { count: 0 };
 
-  const client = {
+  const client = testRpcClient({
     [WS_METHODS.botUsage]: (input: { readonly botId: BotId }) =>
       Effect.sync(() => {
         calls.count += 1;
 
         return snapshotFor(input.botId);
       }),
-  } as unknown as WsRpcProtocolClient;
+  });
 
   const rpcSession: RpcSession = {
     client,
@@ -87,7 +88,7 @@ const connectedEnvironment = Effect.fn(function* () {
     retryIfDesired: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
 
-  const registryService = EnvironmentRegistry.EnvironmentRegistry.of({
+  const registryService = testEnvironmentRegistry({
     run: ((_id, effect) =>
       Effect.provideService(
         effect,
@@ -101,7 +102,7 @@ const connectedEnvironment = Effect.fn(function* () {
         supervisor,
       )) as EnvironmentRegistry.EnvironmentRegistry["Service"]["followStream"],
     stateChanges: () => SubscriptionRef.changes(supervisor.state),
-  } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+  });
 
   return {
     calls,
@@ -122,7 +123,7 @@ describe("bot usage environment atoms", () => {
           resolveRequest = resolve;
         });
 
-        const client = {
+        const client = testRpcClient({
           [WS_METHODS.botUsage]: (input: { readonly botId: BotId }) =>
             Effect.sync(() => {
               requestedBotId = input.botId;
@@ -140,16 +141,16 @@ describe("bot usage environment atoms", () => {
                 },
                 entries: [],
                 usageCap: null,
-                estimatedCost: { status: "unavailable", usd: null },
+                estimatedCost: { status: "unavailable" as const, usd: null },
                 subscriptionPool: {
-                  status: "unavailable",
+                  status: "unavailable" as const,
                   used: null,
                   limit: null,
                   unit: null,
                 },
               };
             }),
-        } as unknown as WsRpcProtocolClient;
+        });
 
         const rpcSession: RpcSession = {
           client,
@@ -185,11 +186,11 @@ describe("bot usage environment atoms", () => {
           stream,
         ) => Stream.provideService(stream, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
 
-        const registryService = EnvironmentRegistry.EnvironmentRegistry.of({
+        const registryService = testEnvironmentRegistry({
           run,
           followStream,
           stateChanges: () => SubscriptionRef.changes(supervisor.state),
-        } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+        });
 
         const atoms = createBotUsageEnvironmentAtoms(
           Atom.runtime(Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, registryService)),

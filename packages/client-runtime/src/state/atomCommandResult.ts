@@ -53,9 +53,7 @@ export function isAtomCommandInterrupted(result: AtomCommandResult<unknown, unkn
   return Predicate.isTagged(result, "Failure") && Cause.hasInterruptsOnly(result.cause);
 }
 
-export function squashAtomCommandFailure(result: {
-  readonly cause: Cause.Cause<unknown>;
-}): unknown {
+export function squashAtomCommandFailure(result: { readonly cause: Cause.Cause<unknown> }) {
   return Cause.squash(result.cause);
 }
 

@@ -1,3 +1,4 @@
+import { testRpcClient } from "../test-support/services.ts";
 import {
   EnvironmentId,
   ORCHESTRATION_WS_METHODS,
@@ -65,9 +66,9 @@ describe("environment shell synchronization", () => {
     Effect.gen(function* () {
       const events = yield* Queue.unbounded<OrchestrationShellStreamItem>();
 
-      const client = {
+      const client = testRpcClient({
         [ORCHESTRATION_WS_METHODS.subscribeShell]: () => Stream.fromQueue(events),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const supervisorState = yield* SubscriptionRef.make(AVAILABLE_CONNECTION_STATE);
 
@@ -189,7 +190,7 @@ describe("environment shell synchronization", () => {
 
       const loaderCalls = yield* Ref.make(0);
 
-      const client = {
+      const client = testRpcClient({
         [ORCHESTRATION_WS_METHODS.subscribeShell]: (input: {
           readonly afterSequence?: number;
           readonly requestCompletionMarker?: boolean;
@@ -197,7 +198,7 @@ describe("environment shell synchronization", () => {
           Stream.unwrap(
             Queue.offer(subscribeInputs, input).pipe(Effect.as(Stream.fromQueue(events))),
           ),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const supervisorState = yield* SubscriptionRef.make(AVAILABLE_CONNECTION_STATE);
 
@@ -275,7 +276,7 @@ describe("environment shell synchronization", () => {
       const loaderCalls = yield* Ref.make(0);
       const capturedAfterSequences = yield* Ref.make<ReadonlyArray<number | undefined>>([]);
 
-      const client = {
+      const client = testRpcClient({
         [ORCHESTRATION_WS_METHODS.subscribeShell]: (input: { readonly afterSequence?: number }) =>
           Stream.unwrap(
             Ref.update(capturedAfterSequences, (captured) => [
@@ -283,7 +284,7 @@ describe("environment shell synchronization", () => {
               input.afterSequence,
             ]).pipe(Effect.as(Stream.fromQueue(events))),
           ),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const supervisorState = yield* SubscriptionRef.make(AVAILABLE_CONNECTION_STATE);
       const activeSession = yield* SubscriptionRef.make(Option.some(session(client)));

@@ -1,6 +1,10 @@
+import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
+import { TEST_SERVER_CONFIG, testRpcClient } from "../test-support/services.ts";
 import {
   EnvironmentId,
   EventId,
+  MessageId,
+  CheckpointRef,
   ORCHESTRATION_WS_METHODS,
   ProjectId,
   ProviderInstanceId,
@@ -18,7 +22,7 @@ import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
+
 import {
   AVAILABLE_CONNECTION_STATE,
   PrimaryConnectionTarget,
@@ -30,7 +34,7 @@ import * as Persistence from "../platform/persistence.ts";
 import * as RpcSession from "../rpc/session.ts";
 import type { ThreadSnapshotWindow } from "./threadSnapshotHttp.ts";
 import {
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition builds isolated runtime fixtures.
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition builds isolated runtime fixtures.
   makeEnvironmentThreadState,
   ThreadSnapshotLoader,
   type EnvironmentThreadState,
@@ -56,7 +60,7 @@ const PREPARED: PreparedConnection = {
 
 function message(id: string, turnId: string, createdAt: string): OrchestrationMessage {
   return {
-    id: id as OrchestrationMessage["id"],
+    id: MessageId.make(id),
     role: "assistant",
     text: `text of ${id}`,
     turnId: TurnId.make(turnId),
@@ -77,8 +81,7 @@ function checkpoint(turnId: string, turnCount: number): OrchestrationThread["che
   return {
     turnId: TurnId.make(turnId),
     checkpointTurnCount: turnCount,
-    checkpointRef:
-      `checkpoint-${turnCount}` as OrchestrationThread["checkpoints"][number]["checkpointRef"],
+    checkpointRef: CheckpointRef.make(`checkpoint-${turnCount}`),
     status: "ready",
     files: [],
     assistantMessageId: null,
@@ -139,7 +142,11 @@ export const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(functio
   const inputs = yield* Queue.unbounded<OrchestrationThreadStreamItem>();
   const observed = yield* Queue.unbounded<EnvironmentThreadState>();
   const loaderWindows = yield* Ref.make<ReadonlyArray<ThreadSnapshotWindow | undefined>>([]);
-  const lastSubscribeInput = yield* Ref.make<Record<string, unknown> | undefined>(undefined);
+
+  const lastSubscribeInput = yield* Ref.make<
+    Parameters<WsRpcProtocolClient[typeof ORCHESTRATION_WS_METHODS.subscribeThread]>[0] | undefined
+  >(undefined);
+
   const savedThreads = yield* Ref.make<ReadonlyArray<OrchestrationThreadDetailSnapshot>>([]);
   // Older-page responses resolve through deferreds so tests can interleave
   // live events with an in-flight page fetch.
@@ -149,16 +156,19 @@ export const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(functio
     AVAILABLE_CONNECTION_STATE,
   );
 
-  const client = {
-    [ORCHESTRATION_WS_METHODS.subscribeThread]: (input: Record<string, unknown>) =>
+  const client = testRpcClient({
+    [ORCHESTRATION_WS_METHODS.subscribeThread]: (
+      input: Parameters<WsRpcProtocolClient[typeof ORCHESTRATION_WS_METHODS.subscribeThread]>[0],
+    ) =>
       Stream.unwrap(Ref.set(lastSubscribeInput, input).pipe(Effect.as(Stream.fromQueue(inputs)))),
-  } as unknown as WsRpcProtocolClient;
+  });
 
   const session: RpcSession.RpcSession = {
     client,
     initialConfig: Effect.succeed({
+      ...TEST_SERVER_CONFIG,
       threadSnapshotPagination: options?.paginationCapability !== false,
-    } as never),
+    }),
     ready: Effect.void,
     probe: Effect.void,
     closed: Effect.never,

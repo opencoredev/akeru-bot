@@ -1,19 +1,23 @@
+import * as Effect from "effect/Effect";
 import { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Layer from "effect/Layer";
 import { Atom } from "effect/unstable/reactivity";
 
-import type { EnvironmentRegistry } from "../connection/registry.ts";
-import type { EnvironmentCacheStore } from "../platform/persistence.ts";
+import { EnvironmentRegistry } from "../connection/registry.ts";
+import { EnvironmentCacheStore } from "../platform/persistence.ts";
 import { THREAD_STATE_IDLE_TTL_MS } from "./threadRetention.ts";
-import { createEnvironmentThreadStateAtoms, type ThreadSnapshotLoader } from "./threads.ts";
+import { createEnvironmentThreadStateAtoms, ThreadSnapshotLoader } from "./threads.ts";
 
 describe("createEnvironmentThreadStateAtoms", () => {
   it("retains thread state across short subscriber gaps", () => {
-    const runtime = Atom.runtime(Layer.empty) as unknown as Atom.AtomRuntime<
-      EnvironmentRegistry | EnvironmentCacheStore | ThreadSnapshotLoader,
-      never
-    >;
+    const runtime = Atom.runtime(
+      Layer.mergeAll(
+        Layer.effect(EnvironmentRegistry, Effect.die("Unused test service")),
+        Layer.effect(EnvironmentCacheStore, Effect.die("Unused test service")),
+        Layer.effect(ThreadSnapshotLoader, Effect.die("Unused test service")),
+      ),
+    );
 
     const threads = createEnvironmentThreadStateAtoms(runtime);
     const environmentId = EnvironmentId.make("environment-1");

@@ -562,13 +562,10 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
       ORCHESTRATION_WS_METHODS.subscribeThread,
       Effect.fn("EnvironmentThreadState.makeSubscribeInput")(function* (session) {
         const config = yield* session.initialConfig.pipe(
-          Effect.orElseSucceed(
-            () =>
-              ({}) as {
-                threadResumeCompletionMarker?: boolean;
-                threadSnapshotPagination?: boolean;
-              },
-          ),
+          Effect.orElseSucceed(() => ({
+            threadResumeCompletionMarker: false,
+            threadSnapshotPagination: false,
+          })),
         );
 
         const supportsCompletionMarker = config.threadResumeCompletionMarker === true;

@@ -1,5 +1,6 @@
 import {
   AkeruDelegationRecord,
+  AkeruDelegationPhase,
   BotId,
   GroupId,
   McpServerId,
@@ -48,7 +49,7 @@ export const stubDelegation = decodeDelegationRecord({
     disabledMcpServerIds: [],
     approvalCeiling: "none",
   },
-  phase: { _tag: "Queued" },
+  phase: AkeruDelegationPhase.cases.Queued.make({}),
   billedBotId: "bot-child",
   keep: false,
   createdAt: "2026-04-01T00:00:00.000Z",
@@ -61,15 +62,18 @@ export const completedDelegation = (delegationId: string, createdAt: string, upd
     delegationId,
     createdAt,
     updatedAt,
-    phase: {
-      _tag: "Completed",
-      childThreadId: "thread-child",
+    phase: AkeruDelegationPhase.cases.Completed.make({
+      childThreadId: ThreadId.make("thread-child"),
       childTurnId: null,
       startedAt: createdAt,
       completedAt: updatedAt,
-      result: { summary: "Finished", childThreadId: "thread-child", childTurnId: null },
+      result: {
+        summary: "Finished",
+        childThreadId: ThreadId.make("thread-child"),
+        childTurnId: null,
+      },
       acknowledgedAt: null,
-    },
+    }),
   });
 
 export const stubProject = {

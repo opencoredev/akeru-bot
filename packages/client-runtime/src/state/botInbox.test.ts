@@ -1,3 +1,4 @@
+import { testRpcClient, testEnvironmentRegistry } from "../test-support/services.ts";
 import { EnvironmentId, WS_METHODS } from "@akeru/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -34,10 +35,10 @@ it.effect("routes incident resolution and refreshes the environment inbox", () =
     Effect.gen(function* () {
       const resolved: string[] = [];
 
-      const client = {
+      const client = testRpcClient({
         [WS_METHODS.botInboxResolve]: ({ id }: { id: string }) =>
           Effect.sync(() => resolved.push(id)),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
         target: new PrimaryConnectionTarget({
@@ -69,9 +70,9 @@ it.effect("routes incident resolution and refreshes the environment inbox", () =
         Atom.runtime(
           Layer.succeed(
             EnvironmentRegistry.EnvironmentRegistry,
-            EnvironmentRegistry.EnvironmentRegistry.of({
+            testEnvironmentRegistry({
               run,
-            } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]),
+            }),
           ),
         ),
       );
