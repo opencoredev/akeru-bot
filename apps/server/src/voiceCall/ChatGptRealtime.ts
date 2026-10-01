@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -143,6 +144,6 @@ export function instructionsForBot(bot: {
     "For any request that needs files, tools, code, the workspace, permissions, or stored memory, call send_to_chat with one clear request. Then tell the user that the work continues in the chat.",
     "Answer ordinary conversation directly in this live voice session.",
   ]
-    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .filter((part): part is string => Predicate.isString(part) && part.trim().length > 0)
     .join("\n\n");
 }

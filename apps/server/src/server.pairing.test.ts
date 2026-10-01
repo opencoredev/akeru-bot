@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -34,9 +35,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       };
 
       assert.equal(response.status, 200);
-      assert.equal(typeof body.credential, "string");
+      assert.equal(Predicate.isString(body.credential), true);
       assert.isTrue(body.credential.length > 0);
-      assert.equal(typeof body.expiresAt, "string");
+      assert.equal(Predicate.isString(body.expiresAt), true);
 
       const bootstrapResult = yield* bootstrapBrowserSession(body.credential);
       assert.equal(bootstrapResult.response.status, 200);
@@ -196,7 +197,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(pairedBody._tag, "EnvironmentScopeRequiredError");
       assert.equal(pairedBody.code, "insufficient_scope");
       assert.equal(pairedBody.requiredScope, "access:write");
-      assert.equal(typeof pairedBody.traceId, "string");
+      assert.equal(Predicate.isString(pairedBody.traceId), true);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
@@ -318,7 +319,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(pairedClientPairingBody._tag, "EnvironmentAuthInvalidError");
       assert.equal(pairedClientPairingBody.code, "auth_invalid");
       assert.equal(pairedClientPairingBody.reason, "invalid_credential");
-      assert.equal(typeof pairedClientPairingBody.traceId, "string");
+      assert.equal(Predicate.isString(pairedClientPairingBody.traceId), true);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

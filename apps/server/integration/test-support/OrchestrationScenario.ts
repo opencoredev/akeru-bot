@@ -17,6 +17,7 @@ import { assert } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import type { TestTurnResponse } from "../TestProviderAdapter.integration.ts";
 import {
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration scenario assembles the isolated orchestration test environment.
   makeOrchestrationIntegrationHarness,
   type OrchestrationIntegrationHarness,
 } from "../OrchestrationEngineHarness.integration.ts";

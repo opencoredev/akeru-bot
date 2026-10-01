@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -9,6 +10,10 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { getRemoteDoctorStatus, repairRemoteDoctor } from "./remoteDoctorRpc.ts";
+
+const encodeDoctorStatus = Schema.encodeEffect(Schema.fromJsonString(RemoteDoctorStatus));
+
+const decodeDoctorStatus = Schema.decodeEffect(Schema.fromJsonString(RemoteDoctorStatus));
 
 const withContainerHome = <A, E>(use: (baseDir: string) => Effect.Effect<A, E>) =>
   Effect.acquireUseRelease(
@@ -41,14 +46,12 @@ it.effect("serializes a remote doctor report over the wire schema", () =>
     Effect.gen(function* () {
       const status = yield* getRemoteDoctorStatus({ baseDir, remote: true });
       assert.isTrue(status.applicable);
-      const encoded = yield* Schema.encodeEffect(Schema.fromJsonString(RemoteDoctorStatus))(status);
+      const encoded = yield* encodeDoctorStatus(status);
 
-      const decoded = yield* Schema.decodeEffect(Schema.fromJsonString(RemoteDoctorStatus))(
-        encoded,
-      );
+      const decoded = yield* decodeDoctorStatus(encoded);
 
       assert.deepEqual(decoded.report?.checks, status.report?.checks);
-      assert.equal(typeof JSON.parse(encoded).report.generatedAt, "string");
+      assert.equal(Predicate.isString(JSON.parse(encoded).report.generatedAt), true);
     }),
   ),
 );

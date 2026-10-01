@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import { createDiscordAdapter } from "@chat-adapter/discord";
 import { createSlackAdapter } from "@chat-adapter/slack";
 import { createMemoryState } from "@chat-adapter/state-memory";
@@ -110,6 +112,7 @@ export const startTelegram = (botId: BotId, token: string, onDirectMessage: Inbo
     if (!installation || !adapter)
       return yield* failWith("Telegram did not create an active adapter.");
 
+    // SAFETY: The SDK adapter implements the Chat transport protocol; the assertion bridges separately packaged adapter type declarations.
     const chat = new Chat({
       userName: installation.username ?? "Akeru Bot",
       adapters: { telegram: adapter as Adapter },
@@ -354,6 +357,7 @@ export const startWhatsApp = (
       userName: context.botName,
     });
 
+    // SAFETY: The SDK adapter implements the Chat transport protocol; the assertion bridges separately packaged adapter type declarations.
     const chat = new Chat({
       userName: context.botName,
       adapters: { whatsapp: adapter as Adapter },
@@ -431,14 +435,9 @@ export const validateSlackAppToken = (
       ),
     );
 
-    if (typeof body === "object" && body !== null && "ok" in body && body.ok === true) return;
+    if (Predicate.isObjectOrArray(body) && "ok" in body && body.ok === true) return;
 
-    if (
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      SLACK_TOKEN_ERRORS.has(body.error)
-    )
+    if (Predicate.isObjectOrArray(body) && "error" in body && SLACK_TOKEN_ERRORS.has(body.error))
       return yield* failWith(SLACK_APP_TOKEN_INVALID, "credentials");
 
     return yield* failWith(SLACK_UNREACHABLE, "network");
@@ -466,6 +465,7 @@ export const startSlack = (
       Promise.all(context.subscribedThreadIds.map((threadId) => state.subscribe(threadId))),
     );
 
+    // SAFETY: The SDK adapter implements the Chat transport protocol; the assertion bridges separately packaged adapter type declarations.
     const chat = new Chat({
       userName: context.botName,
       adapters: { slack: adapter as Adapter },
@@ -518,6 +518,7 @@ export const startDiscord = (
       logger: new ConsoleLogger("warn", "discord"),
     });
 
+    // SAFETY: The SDK adapter implements the Chat transport protocol; the assertion bridges separately packaged adapter type declarations.
     const chat = new Chat({
       userName: context.botName,
       adapters: { discord: adapter as Adapter },
@@ -567,12 +568,12 @@ export const startBuiltInTransport = (
   context: ChannelTransportContext,
   onDirectMessage: InboundCallback,
 ): Effect.Effect<StartedTransport, ChannelRuntimeError | ChannelTransportError, Scope.Scope> =>
-  input.provider === "telegram"
-    ? startTelegram(botId, input.token, onDirectMessage)
-    : input.provider === "imessage"
-      ? startIMessage(input, context, onDirectMessage)
-      : input.provider === "whatsapp"
-        ? startWhatsApp(input, context, onDirectMessage)
-        : input.provider === "slack"
-          ? startSlack(input, context, onDirectMessage)
-          : startDiscord(input, context, onDirectMessage);
+  Match.value(input).pipe(
+    Match.when({ provider: "telegram" }, (input) =>
+      startTelegram(botId, input.token, onDirectMessage),
+    ),
+    Match.when({ provider: "imessage" }, (input) => startIMessage(input, context, onDirectMessage)),
+    Match.when({ provider: "whatsapp" }, (input) => startWhatsApp(input, context, onDirectMessage)),
+    Match.when({ provider: "slack" }, (input) => startSlack(input, context, onDirectMessage)),
+    Match.orElse((input) => startDiscord(input, context, onDirectMessage)),
+  );

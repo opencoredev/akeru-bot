@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import {
   adapters,
   NOW,
@@ -114,7 +115,7 @@ describe("channel transports", () => {
   });
 
   describe("discord", () => {
-    const gatewayEvent = (id: string, data: Record<string, unknown>) =>
+    const gatewayEvent = (id: string, data: Schema.JsonObject) =>
       new Request("https://akeru.example/discord", {
         method: "POST",
         headers: { "x-discord-gateway-token": "discord-token" },
@@ -176,7 +177,7 @@ describe("channel transports", () => {
   describe("telegram", () => {
     it.effect("ignores group messages, including mentions, and answers direct messages", () =>
       Effect.gen(function* () {
-        const update = (updateId: number, chat: Record<string, unknown>, text: string) => ({
+        const update = (updateId: number, chat: Schema.JsonObject, text: string) => ({
           update_id: updateId,
           message: {
             message_id: updateId,

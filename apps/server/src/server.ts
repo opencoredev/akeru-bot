@@ -30,6 +30,7 @@ import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
 import {
   clearPersistedServerRuntimeState,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The server entry point owns the persisted runtime-state layer.
   makePersistedServerRuntimeState,
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
@@ -53,7 +54,7 @@ const HttpServerLive = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
 
-    if (typeof Bun !== "undefined") {
+    if (!Predicate.isUndefined(Bun)) {
       const BunHttpServer = yield* Effect.promise(
         () => import("@effect/platform-bun/BunHttpServer"),
       );
@@ -101,7 +102,7 @@ const HttpServerLive = Layer.unwrap(
 
 const PlatformServicesLive = Layer.unwrap(
   Effect.gen(function* () {
-    if (typeof Bun !== "undefined") {
+    if (!Predicate.isUndefined(Bun)) {
       const { layer } = yield* Effect.promise(() => import("@effect/platform-bun/BunServices"));
 
       return layer;

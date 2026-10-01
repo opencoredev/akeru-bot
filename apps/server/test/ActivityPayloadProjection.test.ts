@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import {
   EventId,
   ProjectId,
@@ -22,7 +23,7 @@ import {
 function makeActivity(
   id: string,
   itemType: string,
-  data: Record<string, unknown>,
+  data: Schema.JsonObject,
 ): OrchestrationThreadActivity {
   return {
     id: EventId.make(id),

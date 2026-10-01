@@ -1,3 +1,5 @@
+import type { RawMetricAttributes } from "./Attributes.ts";
+import * as Predicate from "effect/Predicate";
 import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -66,24 +68,20 @@ export const gitCommandDuration = Metric.timer("t3_git_command_duration", {
 });
 
 export const metricAttributes = (
-  attributes: Readonly<Record<string, unknown>>,
+  attributes: RawMetricAttributes,
 ): ReadonlyArray<[string, string]> => Object.entries(compactMetricAttributes(attributes));
 
-export const increment = (
-  metric: Metric.Metric<number, unknown>,
-  attributes: Readonly<Record<string, unknown>>,
+export const increment = <Output>(
+  metric: Metric.Metric<number, Output>,
+  attributes: RawMetricAttributes,
   amount = 1,
 ) => Metric.update(Metric.withAttributes(metric, metricAttributes(attributes)), amount);
 
 export interface WithMetricsOptions {
   readonly counter?: Metric.Metric<number, unknown>;
   readonly timer?: Metric.Metric<Duration.Duration, unknown>;
-  readonly attributes?:
-    | Readonly<Record<string, unknown>>
-    | (() => Readonly<Record<string, unknown>>);
-  readonly outcomeAttributes?: (
-    outcome: ReturnType<typeof outcomeFromExit>,
-  ) => Readonly<Record<string, unknown>>;
+  readonly attributes?: RawMetricAttributes | (() => RawMetricAttributes);
+  readonly outcomeAttributes?: (outcome: ReturnType<typeof outcomeFromExit>) => RawMetricAttributes;
 }
 
 const withMetricsImpl = <A, E, R>(
@@ -97,8 +95,9 @@ const withMetricsImpl = <A, E, R>(
     const elapsedNanos = endedAt > startedAt ? endedAt - startedAt : 0n;
     const duration = Duration.nanos(elapsedNanos);
 
-    const baseAttributes =
-      typeof options.attributes === "function" ? options.attributes() : (options.attributes ?? {});
+    const baseAttributes = Predicate.isFunction(options.attributes)
+      ? options.attributes()
+      : (options.attributes ?? {});
 
     if (options.timer) {
       yield* Metric.update(
@@ -136,10 +135,7 @@ export const withMetrics: {
   <A, E, R>(effect: Effect.Effect<A, E, R>, options: WithMetricsOptions): Effect.Effect<A, E, R>;
 } = dual(2, withMetricsImpl);
 
-export const providerMetricAttributes = (
-  provider: string,
-  extra?: Readonly<Record<string, unknown>>,
-) =>
+export const providerMetricAttributes = (provider: string, extra?: RawMetricAttributes) =>
   compactMetricAttributes({
     provider,
     ...extra,
@@ -148,7 +144,7 @@ export const providerMetricAttributes = (
 export const providerTurnMetricAttributes = (input: {
   readonly provider: string;
   readonly model: string | null | undefined;
-  readonly extra?: Readonly<Record<string, unknown>>;
+  readonly extra?: RawMetricAttributes;
 }) => {
   const modelFamily = normalizeModelMetricLabel(input.model);
 

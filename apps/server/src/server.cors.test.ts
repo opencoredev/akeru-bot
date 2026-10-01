@@ -94,7 +94,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(tokenResponse.status, 200);
       assertBrowserApiCorsResponseHeaders(tokenResponse.headers);
       assert.equal(tokenBody.token_type, "Bearer");
-      assert.equal(typeof tokenBody.access_token, "string");
+      assert.equal(Predicate.isString(tokenBody.access_token), true);
 
       const sessionUrl = yield* getHttpServerUrl("/api/auth/session");
 
@@ -131,7 +131,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       assert.equal(wsTicketResponse.status, 200);
       assertBrowserApiCorsResponseHeaders(wsTicketResponse.headers);
-      assert.equal(typeof wsTicketBody.ticket, "string");
+      assert.equal(Predicate.isString(wsTicketBody.ticket), true);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
@@ -263,7 +263,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(body._tag, "EnvironmentAuthInvalidError");
       assert.equal(body.code, "auth_invalid");
       assert.equal(body.reason, "missing_credential");
-      assert.equal(typeof body.traceId, "string");
+      assert.equal(Predicate.isString(body.traceId), true);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 });

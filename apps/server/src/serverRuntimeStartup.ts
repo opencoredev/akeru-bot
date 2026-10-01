@@ -29,6 +29,7 @@ import { RoutineRuntime } from "./routines/Runtime.ts";
 
 import { type StartupOptions, restoreExternalChannels } from "./startupChannels.ts";
 import {
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Server startup owns the command gate used by the routes and shutdown path.
   makeCommandGate,
   ServerRuntimeStartupError,
   ServerRuntimeStartup,

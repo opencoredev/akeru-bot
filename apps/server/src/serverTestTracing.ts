@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as Duration from "effect/Duration";
 
@@ -62,7 +63,7 @@ export const makeBrowserOtlpPayload = (spanName: string) =>
           server.listen(0, "127.0.0.1", () => {
             const address = server.address();
 
-            if (!address || typeof address === "string") {
+            if (!address || Predicate.isString(address)) {
               reject(new Error("Expected TCP collector address"));
 
               return;
@@ -118,6 +119,7 @@ export const makeBrowserOtlpPayload = (spanName: string) =>
       ),
     );
 
+    // SAFETY: The test collector receives JSON from the OTLP exporter and reads its TraceData wire fields.
     // @effect-diagnostics-next-line preferSchemaOverJson:off
     return JSON.parse(request.body) as OtlpTracer.TraceData;
   });

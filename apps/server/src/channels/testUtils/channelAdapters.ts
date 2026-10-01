@@ -1,3 +1,8 @@
+type SlackRetryOptions = {
+  retries?: number | undefined;
+  rejectRateLimitedCalls?: boolean | undefined;
+};
+
 import type { iMessageAdapter } from "@photon-ai/chat-adapter-imessage";
 import { type Adapter, type ChatInstance } from "chat";
 import { vi } from "vite-plus/test";
@@ -23,10 +28,7 @@ const externalAdapters = vi.hoisted(() => ({
     { status: number; data: unknown; headers?: Record<string, string> } | Error
   >,
   slackPostRequests: 0,
-  slackRetryOptions: {} as {
-    retries?: number | undefined;
-    rejectRateLimitedCalls?: boolean | undefined;
-  },
+  slackRetryOptions: {} as SlackRetryOptions,
   discordAdapter: null as Adapter | null,
   discordChat: null as ChatInstance | null,
   discordGatewayStarts: 0,

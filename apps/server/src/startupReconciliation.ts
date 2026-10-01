@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+
 import * as Predicate from "effect/Predicate";
 import { type AkeruDelegationRecord, CommandId } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
@@ -130,15 +132,14 @@ export const reconcileDelegations = Effect.gen(function* () {
 
       const failed: AkeruDelegationRecord = {
         ...delegation,
-        phase: {
-          _tag: "Failed",
+        phase: DelegationPhase["Failed"]({
           childThreadId: Predicate.isTagged(phase, "Queued") ? null : phase.childThreadId,
           childTurnId: Predicate.isTagged(phase, "Queued") ? null : phase.childTurnId,
           startedAt: Predicate.isTagged(phase, "Queued") ? null : phase.startedAt,
           completedAt,
           failure: { failureCode: "internal", message: DELEGATION_RESTART_FAILURE_MESSAGE },
           acknowledgedAt: null,
-        },
+        }),
         updatedAt: completedAt,
       };
 
@@ -166,3 +167,5 @@ export const reconcileDelegations = Effect.gen(function* () {
       : Effect.logWarning("delegation startup reconciliation failed", { cause }),
   ),
 );
+
+const DelegationPhase = Data.taggedEnum<AkeruDelegationRecord["phase"]>();

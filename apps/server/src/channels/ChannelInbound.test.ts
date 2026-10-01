@@ -27,7 +27,6 @@ import {
 } from "./testUtils/channelRuntime.ts";
 import * as NodeCrypto from "node:crypto";
 import { MessageId, ThreadId, TurnId, type OrchestrationThread } from "@akeru/contracts";
-import { type Thread } from "chat";
 import * as Effect from "effect/Effect";
 import { it } from "@effect/vitest";
 import { describe, expect, vi } from "vite-plus/test";
@@ -299,7 +298,7 @@ describe("channel runtime", () => {
         id: threadId,
         recentMessages: [...history, current],
         refresh: async () => undefined,
-      } as unknown as Thread;
+      };
 
       const normalized = yield* Effect.promise(() => mentionWithContext(thread, current));
 
@@ -331,7 +330,7 @@ describe("channel runtime", () => {
           current,
         ],
         refresh: async () => undefined,
-      } as unknown as Thread;
+      };
 
       const normalized = yield* Effect.promise(() => mentionWithContext(thread, current));
 

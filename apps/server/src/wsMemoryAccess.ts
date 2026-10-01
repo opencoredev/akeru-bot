@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import {
@@ -101,13 +102,12 @@ export const createWsMemoryAccess = (
         const projectIds = new Set(
           shell.projects
             .filter((project) =>
-              target === "all"
-                ? true
-                : target === "project"
-                  ? project.id === anchor.projectId
-                  : target === "workspace"
-                    ? project.workspaceRoot === anchor.workspaceRoot
-                    : true,
+              Match.value(target).pipe(
+                Match.when("all", () => true),
+                Match.when("project", () => project.id === anchor.projectId),
+                Match.when("workspace", () => project.workspaceRoot === anchor.workspaceRoot),
+                Match.orElse(() => true),
+              ),
             )
             .map((project) => project.id),
         );

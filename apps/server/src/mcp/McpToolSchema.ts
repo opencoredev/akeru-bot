@@ -1,9 +1,11 @@
+import * as Schema from "effect/Schema";
+import { decodeJson, jsonObject } from "../json.ts";
+import * as Predicate from "effect/Predicate";
 import * as Data from "effect/Data";
 import { McpSchema } from "effect/unstable/ai";
 import { type ToolInputSchema } from "./PreviewToolRegistration.ts";
 
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+export const isRecord = Predicate.isObject;
 
 export const providerScalarAllOfKeys = new Set([
   "description",
@@ -33,27 +35,31 @@ export const providerScalarAllOfKeys = new Set([
  * object intersections keep their original JSON Schema semantics.
  */
 export const normalizeProviderToolInputSchema = (schema: ToolInputSchema): ToolInputSchema => {
-  const visit = (value: unknown): unknown => {
+  const visit = (value: Schema.Json): Schema.Json => {
     if (Array.isArray(value)) return value.map(visit);
 
-    if (!isRecord(value)) return value;
+    const record = jsonObject(value);
+
+    if (!record) return value;
 
     const normalized = Object.fromEntries(
-      Object.entries(value)
+      Object.entries(record)
         .filter(([key]) => key !== "allOf")
         .map(([key, child]) => [key, visit(child)]),
     );
 
-    const allOf = Array.isArray(value.allOf) ? value.allOf.map(visit) : undefined;
-    const scalar = ["string", "number", "integer", "boolean"].includes(String(value.type));
+    const allOf = Array.isArray(record.allOf) ? record.allOf.map(visit) : undefined;
+    const scalar = ["string", "number", "integer", "boolean"].includes(String(record.type));
     const occupiedKeys = new Set(Object.keys(normalized));
 
     const canFlatten =
       scalar &&
       allOf?.every((member) => {
-        if (!isRecord(member)) return false;
+        const memberObject = jsonObject(member);
 
-        return Object.keys(member).every((key) => {
+        if (!memberObject) return false;
+
+        return Object.keys(memberObject).every((key) => {
           if (!providerScalarAllOfKeys.has(key)) return false;
 
           if (key === "description") return true;
@@ -67,9 +73,11 @@ export const normalizeProviderToolInputSchema = (schema: ToolInputSchema): ToolI
 
     if (canFlatten && allOf) {
       for (const member of allOf) {
-        if (!isRecord(member)) continue;
+        const memberObject = jsonObject(member);
 
-        for (const [key, child] of Object.entries(member)) {
+        if (!memberObject) continue;
+
+        for (const [key, child] of Object.entries(memberObject)) {
           if (key === "description" && "description" in normalized) continue;
           normalized[key] = child;
         }
@@ -81,7 +89,7 @@ export const normalizeProviderToolInputSchema = (schema: ToolInputSchema): ToolI
     return allOf ? { ...normalized, allOf } : normalized;
   };
 
-  return visit(schema) as ToolInputSchema;
+  return jsonObject(visit(decodeJson(schema))) ?? {};
 };
 
 export const toolErrorResult = (message: string) =>

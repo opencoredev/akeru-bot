@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as ServerConfig from "../../config.ts";
 import * as TextGeneration from "../TextGeneration.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test helper builds an isolated Claude text-generation service with fake processes.
 import { makeClaudeTextGeneration } from "../ClaudeTextGeneration.ts";
 
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);

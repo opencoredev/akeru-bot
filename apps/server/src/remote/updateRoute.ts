@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
@@ -42,19 +43,17 @@ export function hasActiveTurns(dbPath: string, nowMs: number): boolean {
       .prepare(
         "SELECT COUNT(*) AS count FROM projection_thread_sessions WHERE status IN ('starting', 'running') OR active_turn_id IS NOT NULL",
       )
-      .get() as { count: number };
+      .get();
 
-    if (sessions.count > 0) return true;
+    if (Number(sessions?.count) > 0) return true;
 
     const pending = db
       .prepare(
         "SELECT COUNT(*) AS count FROM projection_turns WHERE turn_id IS NULL AND state = 'pending' AND pending_message_id IS NOT NULL AND requested_at >= ?",
       )
-      .get(DateTime.formatIso(DateTime.makeUnsafe(nowMs - PENDING_TURN_START_WINDOW_MS))) as {
-      count: number;
-    };
+      .get(DateTime.formatIso(DateTime.makeUnsafe(nowMs - PENDING_TURN_START_WINDOW_MS)));
 
-    return pending.count > 0;
+    return Number(pending?.count) > 0;
   } finally {
     db.close();
   }
@@ -88,7 +87,7 @@ export const remoteMachineUpdateRouteLayer = Layer.unwrap(
         const payload = yield* request.json.pipe(Effect.orElseSucceed(() => null));
 
         const targetVersion =
-          typeof payload === "object" && payload !== null && "targetVersion" in payload
+          Predicate.isObjectOrArray(payload) && "targetVersion" in payload
             ? String(payload.targetVersion)
             : "";
 

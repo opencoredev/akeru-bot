@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import * as NodeCrypto from "node:crypto";
@@ -29,6 +30,7 @@ import * as ServerConfig from "../config.ts";
 import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import {
   classifyVoiceFailure,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- VoiceCallManager owns its private HTTP adapters and accepts replacements for tests.
   makeVoiceAdapters,
   voiceFailure,
   type VoiceAdapters,
@@ -155,16 +157,16 @@ const make = (options?: VoiceCallManagerOptions) =>
     });
 
     const selectedProviders = (settings: VoiceSettings): ReadonlyArray<VoiceApiProvider> =>
-      settings.provider === "chatgpt"
-        ? []
-        : settings.provider === "openai"
-          ? ["openai"]
-          : [
-              ...new Set([
-                settings.transcriptionProvider ?? "openai",
-                settings.synthesisProvider ?? "openai",
-              ]),
-            ];
+      Match.value(settings).pipe(
+        Match.when({ provider: "chatgpt" }, (_settings) => []),
+        Match.when({ provider: "openai" }, (): ReadonlyArray<VoiceApiProvider> => ["openai"]),
+        Match.orElse((settings) => [
+          ...new Set([
+            settings.transcriptionProvider ?? "openai",
+            settings.synthesisProvider ?? "openai",
+          ]),
+        ]),
+      );
 
     const selectedVoice = (settings: VoiceSettings) => {
       const provider = settings.synthesisProvider ?? "openai";

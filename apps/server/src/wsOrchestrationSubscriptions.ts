@@ -13,7 +13,9 @@ import {
   projectActivityEvent,
   projectThreadDetailSnapshot,
 } from "./orchestration/ActivityPayloadProjection.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Each WebSocket subscription owns a separate event coalescer; it is not a contextual service.
 import { makeThreadLiveEventCoalescer } from "./orchestration/ThreadLiveEventCoalescer.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Each WebSocket subscription owns its own flow-control budget.
 import { makeLiveStreamBudget, type RetainedLiveItem } from "./orchestration/LiveStreamBudget.ts";
 
 import {

@@ -13,6 +13,8 @@ import {
   writeRemoteSupportBundle,
 } from "../remote/diagnostics.ts";
 
+const encodeDoctorReport = Schema.encodeEffect(Schema.fromJsonString(RemoteDoctorReport));
+
 /**
  * Akeru Remote diagnostics read only Akeru's home: an explicit `--base-dir`, then `AKERU_HOME`,
  * then `~/.akeru`. An ambient `T3CODE_HOME` is ignored so T3 Code's `~/.t3` is never inspected
@@ -47,9 +49,7 @@ export const remoteDoctorCommand = Command.make(
       }
 
       const output = flags.json
-        ? yield* Schema.encodeEffect(Schema.fromJsonString(RemoteDoctorReport))(report).pipe(
-            Effect.orDie,
-          )
+        ? yield* encodeDoctorReport(report).pipe(Effect.orDie)
         : renderRemoteDoctor(report);
 
       yield* Console.log(output);

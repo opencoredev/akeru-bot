@@ -23,7 +23,7 @@ import type * as NodeHttp from "node:http";
  */
 export function guardHttpResponseWriteErrors<T extends NodeHttp.Server>(
   server: T,
-  onError?: (error: unknown) => void,
+  onError?: (cause: unknown) => void,
 ): T {
   server.on("request", (_request, response) => {
     response.on("error", (error) => {

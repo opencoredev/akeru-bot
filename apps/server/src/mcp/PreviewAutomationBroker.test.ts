@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import {
   makeBroker,
   scope,
@@ -77,12 +78,16 @@ it.effect("tracks the tab returned by a targeted recording stop", () =>
           connectionId: request.connectionId,
           requestId: request.requestId,
           ok: true,
-          result:
-            request.operation === "open"
-              ? { available: true, tabId: browsingTabId }
-              : request.operation === "recordingStop"
-                ? recordingResult(recordingTabId)
-                : snapshotResult,
+          result: Match.value(request).pipe(
+            Match.when({ operation: "open" }, (_request) => ({
+              available: true,
+              tabId: browsingTabId,
+            })),
+            Match.when({ operation: "recordingStop" }, (_request) =>
+              recordingResult(recordingTabId),
+            ),
+            Match.orElse((_request) => snapshotResult),
+          ),
         });
       }).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;

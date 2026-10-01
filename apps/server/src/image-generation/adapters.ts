@@ -1,3 +1,6 @@
+import type * as Schema from "effect/Schema";
+import { decodeJsonString, jsonObject, isJsonObject } from "../json.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off
 /**
  * Image provider adapters.
@@ -159,8 +162,8 @@ function dataUrl(image: ImageAdapterInputImage): string {
   return `data:${image.mimeType};base64,${Buffer.from(image.bytes).toString("base64")}`;
 }
 
-function decodeBase64Image(value: unknown): Uint8Array | undefined {
-  if (typeof value !== "string" || value.length === 0) return undefined;
+function decodeBase64Image(value: Schema.Json | undefined): Uint8Array | undefined {
+  if (!Predicate.isString(value) || value.length === 0) return undefined;
   const bytes = Buffer.from(value, "base64");
 
   return bytes.length > 0 ? new Uint8Array(bytes) : undefined;
@@ -206,11 +209,11 @@ function rethrowFetchFailure(label: string, cause: unknown): never {
   throw new ImageAdapterFailure("provider-failed", `${label} could not be reached.`);
 }
 
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+function finiteNumber(value: Schema.Json | undefined): number | undefined {
+  return Predicate.isNumber(value) && Number.isFinite(value) ? value : undefined;
 }
 
-function* sseEvents(body: string): Generator<Record<string, unknown>> {
+function* sseEvents(body: string): Generator<Schema.JsonObject> {
   for (const line of body.split(/\r?\n/)) {
     if (!line.startsWith("data:")) continue;
     const data = line.slice(5).trim();
@@ -218,9 +221,9 @@ function* sseEvents(body: string): Generator<Record<string, unknown>> {
     if (!data || data === "[DONE]") continue;
 
     try {
-      const parsed: unknown = JSON.parse(data);
+      const parsed = decodeJsonString(data);
 
-      if (parsed && typeof parsed === "object") yield parsed as Record<string, unknown>;
+      if (isJsonObject(parsed)) yield parsed;
     } catch {
       // Ignore keep-alive fragments; missing images are reported below.
     }
@@ -241,7 +244,7 @@ export function parseChatGptImageStream(body: string): {
     const type = event.type;
 
     if (type === "response.output_item.done") {
-      const item = event.item as Record<string, unknown> | undefined;
+      const item = jsonObject(event.item);
 
       if (item?.type === "image_generation_call") {
         const image = decodeBase64Image(item.result);
@@ -253,8 +256,8 @@ export function parseChatGptImageStream(body: string): {
     }
 
     if (type === "response.failed" || type === "error") {
-      const response = event.response as Record<string, unknown> | undefined;
-      const error = (response?.error ?? event.error ?? event) as Record<string, unknown>;
+      const response = jsonObject(event.response);
+      const error = jsonObject(response?.error ?? event.error) ?? event;
       const code = `${String(error.code ?? "")} ${String(error.type ?? "")}`;
       throw MODERATION_CODE.test(code)
         ? new ImageAdapterFailure(
@@ -265,13 +268,13 @@ export function parseChatGptImageStream(body: string): {
     }
 
     if (type === "response.completed") {
-      const response = event.response as Record<string, unknown> | undefined;
-      const raw = response?.usage as Record<string, unknown> | undefined;
+      const response = jsonObject(event.response);
+      const raw = jsonObject(response?.usage);
       const inputTokens = finiteNumber(raw?.input_tokens);
       const outputTokens = finiteNumber(raw?.output_tokens);
 
       if (inputTokens !== undefined && outputTokens !== undefined) {
-        const details = raw?.output_tokens_details as Record<string, unknown> | undefined;
+        const details = jsonObject(raw?.output_tokens_details);
         usage = {
           inputTokens,
           outputTokens,
@@ -458,7 +461,7 @@ export function makeGrokImageAdapter(deps: {
             ...(request.aspectRatio ? { aspect_ratio: request.aspectRatio } : {}),
           };
 
-      let payload: unknown;
+      let payload: Schema.Json;
 
       try {
         const response = await fetchFn(`${baseUrl}/images/${edit ? "edits" : "generations"}`, {
@@ -477,16 +480,16 @@ export function makeGrokImageAdapter(deps: {
           throw failureForStatus(label, response.status);
         }
 
-        payload = JSON.parse(await readBoundedText(response, label));
+        payload = decodeJsonString(await readBoundedText(response, label));
       } catch (cause) {
         rethrowFetchFailure(label, cause);
       }
 
-      const record = (payload ?? {}) as Record<string, unknown>;
-      const data = Array.isArray(record.data) ? (record.data as Record<string, unknown>[]) : [];
+      const record = jsonObject(payload) ?? {};
+      const data = Array.isArray(record.data) ? record.data : [];
 
       const images = data
-        .map((entry) => decodeBase64Image(entry?.b64_json))
+        .map((entry) => decodeBase64Image(jsonObject(entry)?.b64_json))
         .filter((image): image is Uint8Array => image !== undefined)
         .slice(0, request.count);
 
@@ -495,7 +498,7 @@ export function makeGrokImageAdapter(deps: {
       }
 
       const model =
-        typeof record.model === "string" && record.model ? record.model : GROK_IMAGE_MODEL;
+        Predicate.isString(record.model) && record.model ? record.model : GROK_IMAGE_MODEL;
 
       return { images, model };
     },

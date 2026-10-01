@@ -324,7 +324,7 @@ export const recordStartFailure = (
   ctx: ChannelRuntimeContext,
   previous: ChannelBinding | undefined,
   input: ChannelConnectInput,
-  error: unknown,
+  cause: unknown,
   connectionId: ChannelConnectionId | undefined,
 ) =>
   Effect.gen(function* () {
@@ -350,7 +350,7 @@ export const recordStartFailure = (
             sentMessageIds: [],
           };
 
-    const failure = channelFailurePresentation(error);
+    const failure = channelFailurePresentation(cause);
     const { failureCategory: _previousCategory, ...base } = target;
 
     const annotated: ChannelBinding = {

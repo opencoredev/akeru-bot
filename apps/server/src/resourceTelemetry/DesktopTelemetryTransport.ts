@@ -1,3 +1,6 @@
+import * as Option from "effect/Option";
+import { flow } from "effect/Function";
+
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeNet from "node:net";
@@ -28,25 +31,22 @@ export const isDecodeFailed = Schema.is(DesktopTelemetryDecodeFailed);
 
 export const isStreamFailed = Schema.is(DesktopTelemetryStreamFailed);
 
-export function normalizeReceiverError(error: unknown): DesktopTelemetryReceiverError {
+export function normalizeReceiverError(cause: unknown): DesktopTelemetryReceiverError {
   if (
-    isDescriptorUnavailable(error) ||
-    isProtocolMismatch(error) ||
-    isDecodeFailed(error) ||
-    isStreamFailed(error)
+    isDescriptorUnavailable(cause) ||
+    isProtocolMismatch(cause) ||
+    isDecodeFailed(cause) ||
+    isStreamFailed(cause)
   ) {
-    return error;
+    return cause;
   }
 
-  return new DesktopTelemetryDecodeFailed({ cause: error });
+  return new DesktopTelemetryDecodeFailed({ cause: cause });
 }
 
-export function messageVersion(value: unknown): number | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const version = Reflect.get(value, "version");
+const decodeVersion = Schema.decodeUnknownOption(Schema.Struct({ version: Schema.Number }));
 
-  return typeof version === "number" ? version : undefined;
-}
+export const messageVersion = flow(decodeVersion, Option.getOrUndefined, (value) => value?.version);
 
 export const writeAllToFileDescriptor = Effect.fn(
   "resourceTelemetry.desktopTelemetryReceiver.writeAllToFileDescriptor",

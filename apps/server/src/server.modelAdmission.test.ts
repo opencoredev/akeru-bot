@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import * as NodeFS from "node:fs";
@@ -104,7 +105,7 @@ it.describe("ws bot engine model routing preflight", () => {
 
   let turnCommandCounter = 0;
 
-  const turnStartCommand = (threadId: ThreadId, overrides: Record<string, unknown> = {}) => ({
+  const turnStartCommand = (threadId: ThreadId, overrides: Schema.JsonObject = {}) => ({
     type: "thread.turn.start" as const,
     commandId: CommandId.make(`cmd-turn-${++turnCommandCounter}`),
     threadId,
@@ -211,7 +212,7 @@ it.describe("ws bot engine model routing preflight", () => {
       });
 
       assert.equal(response.status, 400);
-      const error = (yield* response.json) as Record<string, unknown>;
+      const error = (yield* response.json) as Schema.JsonObject;
       assert.equal(error.unavailability, "unsupported-model");
       assert.equal(dispatch.mock.calls.length, 0);
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),

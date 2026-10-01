@@ -310,7 +310,13 @@ export async function runImageProviderHealthTest(input: {
     return;
   }
 
-  const headers: Record<string, string> = {
+  type ImageProbeHeaders = {
+    Authorization: string;
+    "User-Agent": string;
+    "ChatGPT-Account-ID"?: string;
+  };
+
+  const headers: ImageProbeHeaders = {
     Authorization: `Bearer ${token}`,
     "User-Agent": "akeru-bot/0.0.37",
   };
@@ -364,9 +370,7 @@ export async function runImageProviderHealthTest(input: {
 const decodePatch = Schema.decodeUnknownSync(ImageGenerationSettingsPatch);
 
 /** Decodes an untrusted patch body; throws ImageGenerationError on bad input. */
-export function decodeImageGenerationPatch(input: unknown): ImageGenerationSettingsPatch {
-  return decodePatch(input);
-}
+export const decodeImageGenerationPatch = decodePatch;
 
 export function imageGenerationSettingsFromServerSettings(
   settings: ServerSettings,

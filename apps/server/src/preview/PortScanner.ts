@@ -159,17 +159,16 @@ const webProbeCacheKey = (raw: string): string => {
 
 const normalizeConfiguredUrls = (urls: ReadonlyArray<string>): ReadonlyArray<string> => [
   ...new Set(
-    urls
-      .slice(0, CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS)
-      .filter((raw) => raw.length <= PREVIEW_URL_MAX_LENGTH)
-      .map(parseConfiguredUrl)
-      .filter((url): url is URL => url !== null && url.href.length <= PREVIEW_URL_MAX_LENGTH)
-      .map((url) => {
-        if (url.hostname === "0.0.0.0") url.hostname = "localhost";
+    urls.slice(0, CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS).flatMap((raw) => {
+      if (raw.length > PREVIEW_URL_MAX_LENGTH) return [];
+      const url = parseConfiguredUrl(raw);
 
-        return url.href;
-      })
-      .filter((url) => url.length <= PREVIEW_URL_MAX_LENGTH),
+      if (url === null || url.href.length > PREVIEW_URL_MAX_LENGTH) return [];
+
+      if (url.hostname === "0.0.0.0") url.hostname = "localhost";
+
+      return url.href.length <= PREVIEW_URL_MAX_LENGTH ? [url.href] : [];
+    }),
   ),
 ];
 

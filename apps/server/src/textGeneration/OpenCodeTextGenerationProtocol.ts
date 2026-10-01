@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import { NonNegativeInt } from "@akeru/contracts";
 
@@ -91,23 +92,23 @@ export interface OpenCodeTextPart {
   readonly text: string;
 }
 
-export function getOpenCodePromptFailure(error: unknown): OpenCodePromptFailure | null {
-  if (!error || typeof error !== "object") {
+export function getOpenCodePromptFailure(cause: unknown): OpenCodePromptFailure | null {
+  if (!cause || !Predicate.isObjectKeyword(cause)) {
     return null;
   }
 
   const name =
-    "name" in error && typeof error.name === "string" && error.name.trim().length > 0
-      ? error.name.trim()
+    "name" in cause && Predicate.isString(cause.name) && cause.name.trim().length > 0
+      ? cause.name.trim()
       : undefined;
 
   const message =
-    "data" in error &&
-    error.data &&
-    typeof error.data === "object" &&
-    "message" in error.data &&
-    typeof error.data.message === "string"
-      ? error.data.message.trim()
+    "data" in cause &&
+    cause.data &&
+    Predicate.isObjectKeyword(cause.data) &&
+    "message" in cause.data &&
+    Predicate.isString(cause.data.message)
+      ? cause.data.message.trim()
       : "";
 
   if (message.length > 0) {
@@ -126,12 +127,11 @@ export function getOpenCodePromptFailure(error: unknown): OpenCodePromptFailure 
 
 export function isOpenCodeTextPart(part: unknown): part is OpenCodeTextPart {
   return (
-    part !== null &&
-    typeof part === "object" &&
+    Predicate.isObjectOrArray(part) &&
     "type" in part &&
     part.type === "text" &&
     "text" in part &&
-    typeof part.text === "string"
+    Predicate.isString(part.text)
   );
 }
 

@@ -44,10 +44,8 @@ export const PERSISTED_SERVER_SETTINGS_DEFAULTS = {
   },
 };
 
-export function stripDefaultServerSettings(
-  current: unknown,
-  defaults: unknown,
-): unknown | undefined {
+// oxlint-disable-next-line anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns -- Provider option values are opaque settings; this recursive walker compares and preserves them without decoding their contents.
+export function stripDefaultServerSettings(current: unknown, defaults: unknown): unknown {
   if (Array.isArray(current) || Array.isArray(defaults)) {
     return Equal.equals(current, defaults) ? undefined : current;
   }
@@ -55,18 +53,18 @@ export function stripDefaultServerSettings(
   if (Predicate.isObject(current) && Predicate.isObject(defaults)) {
     const currentRecord = current;
     const defaultsRecord = defaults;
-    const next: typeof currentRecord = {};
+    const next = { ...currentRecord };
 
     for (const key of Object.keys(currentRecord)) {
       if (ATOMIC_SETTINGS_KEYS.has(key)) {
-        if (!Equal.equals(currentRecord[key], defaultsRecord[key])) {
-          next[key] = currentRecord[key];
-        }
+        if (Equal.equals(currentRecord[key], defaultsRecord[key])) delete next[key];
       } else {
         const stripped = stripDefaultServerSettings(currentRecord[key], defaultsRecord[key]);
 
         if (stripped !== undefined) {
           next[key] = stripped;
+        } else {
+          delete next[key];
         }
       }
     }

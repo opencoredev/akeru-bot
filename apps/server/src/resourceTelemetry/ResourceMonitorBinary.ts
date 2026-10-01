@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import {
   HostProcessArchitecture,
   HostProcessEnvironment,
@@ -70,15 +72,14 @@ export type ResourceMonitorLinuxLibc = "gnu" | "musl";
 
 function detectResourceMonitorLinuxLibc(): ResourceMonitorLinuxLibc {
   try {
-    const report = process.report?.getReport() as
-      | {
-          readonly header?: {
-            readonly glibcVersionRuntime?: unknown;
-          };
-        }
-      | undefined;
+    const report = process.report?.getReport();
+    const header = Predicate.hasProperty(report, "header") ? report.header : undefined;
 
-    return typeof report?.header?.glibcVersionRuntime === "string" ? "gnu" : "musl";
+    const glibc = Predicate.hasProperty(header, "glibcVersionRuntime")
+      ? header.glibcVersionRuntime
+      : undefined;
+
+    return Predicate.isString(glibc) ? "gnu" : "musl";
   } catch {
     return "musl";
   }
@@ -111,11 +112,11 @@ export function resourceMonitorRustTarget(
   linuxLibc?: ResourceMonitorLinuxLibc,
 ): string | undefined {
   if (platform === "darwin") {
-    return architecture === "arm64"
-      ? "aarch64-apple-darwin"
-      : architecture === "x64"
-        ? "x86_64-apple-darwin"
-        : undefined;
+    return Match.value(architecture).pipe(
+      Match.when("arm64", () => "aarch64-apple-darwin"),
+      Match.when("x64", () => "x86_64-apple-darwin"),
+      Match.orElse(() => undefined),
+    );
   }
 
   if (platform === "linux") {
@@ -123,19 +124,19 @@ export function resourceMonitorRustTarget(
       return undefined;
     }
 
-    return architecture === "arm64"
-      ? "aarch64-unknown-linux-gnu"
-      : architecture === "x64"
-        ? "x86_64-unknown-linux-gnu"
-        : undefined;
+    return Match.value(architecture).pipe(
+      Match.when("arm64", () => "aarch64-unknown-linux-gnu"),
+      Match.when("x64", () => "x86_64-unknown-linux-gnu"),
+      Match.orElse(() => undefined),
+    );
   }
 
   if (platform === "win32") {
-    return architecture === "arm64"
-      ? "aarch64-pc-windows-msvc"
-      : architecture === "x64"
-        ? "x86_64-pc-windows-msvc"
-        : undefined;
+    return Match.value(architecture).pipe(
+      Match.when("arm64", () => "aarch64-pc-windows-msvc"),
+      Match.when("x64", () => "x86_64-pc-windows-msvc"),
+      Match.orElse(() => undefined),
+    );
   }
 
   return undefined;

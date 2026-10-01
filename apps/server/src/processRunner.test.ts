@@ -24,7 +24,9 @@ type ChildProcessCommand = {
 };
 
 // Accesses private properties of ChildProcessCommand for testing purposes
-function asChildProcessCommand(command: unknown): ChildProcessCommand {
+function asChildProcessCommand(
+  command: Parameters<Parameters<typeof ChildProcessSpawner.make>[0]>[0],
+): ChildProcessCommand {
   return command as ChildProcessCommand;
 }
 
@@ -42,14 +44,12 @@ function makeHandle(input: {
     kill: () => Effect.void,
     unref: Effect.succeed(Effect.void),
     stdin: input.stdin ?? Sink.drain,
-    stdout:
-      typeof input.stdout === "string"
-        ? Stream.encodeText(Stream.make(input.stdout))
-        : (input.stdout ?? Stream.empty),
-    stderr:
-      typeof input.stderr === "string"
-        ? Stream.encodeText(Stream.make(input.stderr))
-        : (input.stderr ?? Stream.empty),
+    stdout: Predicate.isString(input.stdout)
+      ? Stream.encodeText(Stream.make(input.stdout))
+      : (input.stdout ?? Stream.empty),
+    stderr: Predicate.isString(input.stderr)
+      ? Stream.encodeText(Stream.make(input.stderr))
+      : (input.stderr ?? Stream.empty),
     all: Stream.empty,
     getInputFd: () => Sink.drain,
     getOutputFd: () => Stream.empty,

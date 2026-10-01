@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+
 import * as Predicate from "effect/Predicate";
 import {
   AuthAdministrativeScopes,
@@ -267,11 +269,10 @@ export const make = Effect.gen(function* () {
 
           if (!grant) {
             return [
-              {
-                _tag: "error",
+              Consumption["error"]({
                 reason: "not-found",
                 error: new UnknownBootstrapCredentialError({}),
-              },
+              }),
               current,
             ];
           }
@@ -282,18 +283,17 @@ export const make = Effect.gen(function* () {
             next.delete(credential);
 
             return [
-              {
-                _tag: "error",
+              Consumption["error"]({
                 reason: "expired",
                 error: new ExpiredBootstrapCredentialError({}),
-              },
+              }),
               next,
             ];
           }
 
           const remainingUses = grant.remainingUses;
 
-          if (typeof remainingUses === "number") {
+          if (Predicate.isNumber(remainingUses)) {
             if (remainingUses <= 1) {
               next.delete(credential);
             } else {
@@ -305,8 +305,7 @@ export const make = Effect.gen(function* () {
           }
 
           return [
-            {
-              _tag: "success",
+            Consumption["success"]({
               grant: {
                 method: grant.method,
                 scopes: grant.scopes,
@@ -314,7 +313,7 @@ export const make = Effect.gen(function* () {
                 ...(grant.label ? { label: grant.label } : {}),
                 expiresAt: grant.expiresAt,
               } satisfies BootstrapGrant,
-            },
+            }),
             next,
           ];
         },
@@ -424,3 +423,5 @@ export { isBootstrapCredentialError } from "./PairingGrantErrors.ts";
 export type { IssuedBootstrapCredential } from "./PairingGrantErrors.ts";
 
 export type { BootstrapCredentialChange } from "./PairingGrantErrors.ts";
+
+const Consumption = Data.taggedEnum<ConsumeResult>();

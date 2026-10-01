@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import { Composio } from "@composio/core";
 import {
   ComposioOperationError,
@@ -27,7 +29,44 @@ const textDecoder = new TextDecoder();
 
 const textEncoder = new TextEncoder();
 
-type ComposioClient = InstanceType<typeof Composio>;
+type ComposioSdk = InstanceType<typeof Composio>;
+
+type HostedSession = Awaited<ReturnType<ComposioSdk["sessions"]["create"]>>;
+
+type ComposioClient = {
+  toolkits: {
+    get: (...args: Parameters<ComposioSdk["toolkits"]["get"]>) => Promise<
+      ReadonlyArray<{
+        slug: string;
+        name: string;
+        meta: {
+          description?: string | null | undefined;
+          logo?: string | null | undefined;
+          categories?: ReadonlyArray<{ name: string }> | null | undefined;
+          toolsCount?: number | null | undefined;
+        };
+      }>
+    >;
+  };
+  connectedAccounts: {
+    list: (
+      ...args: Parameters<ComposioSdk["connectedAccounts"]["list"]>
+    ) => Promise<{ items: ReadonlyArray<Parameters<typeof toConnection>[0]> }>;
+    delete: (...args: Parameters<ComposioSdk["connectedAccounts"]["delete"]>) => Promise<object>;
+  };
+  sessions: {
+    create: (
+      userId: string,
+      options: Parameters<ComposioSdk["sessions"]["create"]>[1] & { mcp: true },
+    ) => Promise<{
+      mcp: { url: string; headers?: Record<string, string> | undefined };
+      authorize: (
+        ...args: Parameters<HostedSession["authorize"]>
+      ) => Promise<{ id: string; redirectUrl?: string | null | undefined }>;
+      delete: () => Promise<object | void>;
+    }>;
+  };
+};
 
 type ComposioClientFactory = (apiKey: string) => ComposioClient;
 
@@ -56,29 +95,20 @@ export class ComposioService extends Context.Service<ComposioService, ComposioSe
 
 function operationError(operation: string, cause: unknown): ComposioOperationError {
   const status =
-    typeof cause === "object" && cause !== null && "status" in cause
-      ? Number((cause as { readonly status?: unknown }).status)
-      : undefined;
+    Predicate.isObjectOrArray(cause) && "status" in cause ? Number(cause.status) : undefined;
 
-  const message =
-    status === 401
-      ? "The Composio API key is invalid."
-      : status === 403
-        ? "The Composio API key does not have permission for this operation."
-        : status === 429
-          ? "Composio rate-limited this request. Try again shortly."
-          : `Composio could not ${operation}.`;
+  const message = Match.value(status).pipe(
+    Match.when(401, () => "The Composio API key is invalid."),
+    Match.when(403, () => "The Composio API key does not have permission for this operation."),
+    Match.when(429, () => "Composio rate-limited this request. Try again shortly."),
+    Match.orElse(() => `Composio could not ${operation}.`),
+  );
 
   return new ComposioOperationError({ operation, message });
 }
 
 function isNotFoundError(cause: unknown): boolean {
-  return (
-    typeof cause === "object" &&
-    cause !== null &&
-    "status" in cause &&
-    Number((cause as { readonly status?: unknown }).status) === 404
-  );
+  return Predicate.isObjectOrArray(cause) && "status" in cause && Number(cause.status) === 404;
 }
 
 const tryComposio = <A>(operation: string, run: () => Promise<A>) =>
@@ -105,9 +135,22 @@ function toConnection(input: {
   };
 }
 
+function createComposioClient(apiKey: string): ComposioClient {
+  const sdk = new Composio({ apiKey });
+
+  return {
+    toolkits: { get: (...args) => sdk.toolkits.get(...args) },
+    connectedAccounts: {
+      list: (...args) => sdk.connectedAccounts.list(...args),
+      delete: (...args) => sdk.connectedAccounts.delete(...args),
+    },
+    sessions: { create: (userId, options) => sdk.sessions.create(userId, options) },
+  };
+}
+
 export function make(
   secretStore: ServerSecretStore["Service"],
-  createClient: ComposioClientFactory = (apiKey) => new Composio({ apiKey }),
+  createClient: ComposioClientFactory = createComposioClient,
 ): ComposioServiceShape {
   let runtimeConfigurationGeneration = 0;
   const pendingHostedSessionDeletes = new Set<() => Promise<void>>();
@@ -308,12 +351,12 @@ export function make(
         })
         .then(
           (value) => ({ ok: true as const, value }),
-          (error: unknown) => ({ ok: false as const, error }),
+          (cause: unknown) => ({ ok: false as const, error: cause }),
         );
 
       const cleanup = await deletePendingHostedSession(deleteSession).then(
         () => ({ ok: true as const }),
-        (error: unknown) => ({ ok: false as const, error }),
+        (cause: unknown) => ({ ok: false as const, error: cause }),
       );
 
       if (!authorization.ok) {

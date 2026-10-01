@@ -15,7 +15,7 @@ const isServerRuntimeStateError = Schema.is(ServerRuntimeState.ServerRuntimeStat
 
 interface CapturedLog {
   readonly message: unknown;
-  readonly annotations: Readonly<Record<string, unknown>>;
+  readonly annotations: typeof References.CurrentLogAnnotations.Service;
 }
 
 describe("serverRuntimeState", () => {

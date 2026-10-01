@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off - CLI integration exercises Node HTTP and filesystem boundaries.
 import * as NodeHttp from "node:http";
 import * as NodeFS from "node:fs";
@@ -196,8 +197,8 @@ const runCliCaptured = (args: ReadonlyArray<string>) =>
     Effect.gen(function* () {
       const exit = yield* Effect.exit(runCli(args));
 
-      const errorLines = (yield* TestConsole.errorLines).filter(
-        (line): line is string => typeof line === "string",
+      const errorLines = (yield* TestConsole.errorLines).filter((line): line is string =>
+        Predicate.isString(line),
       );
 
       return { exit, errorLines };
@@ -216,8 +217,8 @@ const captureStdout = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       yield* effect;
 
       return (
-        (yield* TestConsole.logLines).findLast(
-          (line): line is string => typeof line === "string",
+        (yield* TestConsole.logLines).findLast((line): line is string =>
+          Predicate.isString(line),
         ) ?? ""
       );
     }),
@@ -251,7 +252,7 @@ const withDescriptorServer = <A, E, R>(run: (origin: string) => Effect.Effect<A,
     (server) => {
       const address = server.address();
 
-      if (address === null || typeof address === "string") {
+      if (address === null || Predicate.isString(address)) {
         return Effect.die(new Error("Expected a TCP address"));
       }
 
@@ -516,7 +517,7 @@ describe("akeru pair", () => {
       assert.isFalse(Runtime.getErrorReported(error));
 
       const rendered = String(
-        typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
+        Predicate.isObjectOrArray(error) && "cause" in error ? error.cause : error,
       );
 
       assert.include(rendered, "No running Akeru Bot server found.");

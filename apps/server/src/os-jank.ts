@@ -12,9 +12,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as NodeOS from "node:os";
 
-function logPathHydrationWarning(message: string, error?: unknown): void {
+function logPathHydrationWarning(message: string, cause?: unknown): void {
   process.stderr.write(
-    `[server] ${message} ${error instanceof Error ? error.message : (error ?? "")}\n`,
+    `[server] ${message} ${cause instanceof Error ? cause.message : (cause ?? "")}\n`,
   );
 }
 

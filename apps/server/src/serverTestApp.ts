@@ -25,6 +25,7 @@ import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 
 import * as ServerConfig from "./config.ts";
 
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test composition root builds routes with the requested fake dependencies.
 import { makeRoutesLayer } from "./server.ts";
 
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
@@ -63,6 +64,7 @@ import * as AgentController from "./provider/Services/AgentController.ts";
 
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test composition root disables background provider maintenance.
 import { makeManualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
 
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
@@ -130,11 +132,13 @@ import { RoutineRuntime, type RoutineRuntimeShape } from "./routines/Runtime.ts"
 import {
   defaultDesktopBootstrapToken,
   TEST_EPOCH,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This pure fixture creates the initial read model for an isolated test server.
   makeDefaultOrchestrationReadModel,
   defaultThreadId,
   testEnvironmentDescriptor,
 } from "./serverTestFixtures.ts";
 
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test composition root assembles authentication for its sandbox environment.
 import { makeAuthTestLayer } from "./serverTestClients.ts";
 
 export const buildAppUnderTest = (options?: {

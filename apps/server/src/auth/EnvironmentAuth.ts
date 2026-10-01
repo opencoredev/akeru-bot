@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   AuthAccessTokenType,
   AuthAccessWriteScope,
@@ -132,7 +133,7 @@ export class EnvironmentAuth extends Context.Service<
       currentSessionId: AuthSessionId,
     ) => Effect.Effect<number, ServerAuthInternalError>;
     readonly authenticateHttpRequest: (
-      request: HttpServerRequest.HttpServerRequest,
+      request: Pick<HttpServerRequest.HttpServerRequest, "cookies" | "headers">,
     ) => Effect.Effect<AuthenticatedSession, ServerAuthCredentialError | ServerAuthInternalError>;
     readonly authenticateWebSocketUpgrade: (
       request: HttpServerRequest.HttpServerRequest,
@@ -193,10 +194,12 @@ const mapSessionVerificationErrors = <A, R>(
     ),
   );
 
-function parseBearerToken(request: HttpServerRequest.HttpServerRequest): string | null {
+function parseBearerToken(
+  request: Pick<HttpServerRequest.HttpServerRequest, "headers">,
+): string | null {
   const header = request.headers["authorization"];
 
-  if (typeof header !== "string" || !header.startsWith(AUTHORIZATION_PREFIX)) {
+  if (!Predicate.isString(header) || !header.startsWith(AUTHORIZATION_PREFIX)) {
     return null;
   }
 
@@ -206,7 +209,7 @@ function parseBearerToken(request: HttpServerRequest.HttpServerRequest): string 
 }
 
 export function selectRequestCredential(
-  request: HttpServerRequest.HttpServerRequest,
+  request: Pick<HttpServerRequest.HttpServerRequest, "cookies" | "headers">,
   cookieName: string,
   legacyCookieName: string | undefined,
 ) {
@@ -267,7 +270,7 @@ export const make = Effect.gen(function* () {
     );
 
   const authenticateRequest = (
-    request: HttpServerRequest.HttpServerRequest,
+    request: Pick<HttpServerRequest.HttpServerRequest, "cookies" | "headers">,
   ): Effect.Effect<AuthenticatedSession, ServerAuthCredentialError | ServerAuthInternalError> => {
     const credential = selectRequestCredential(
       request,

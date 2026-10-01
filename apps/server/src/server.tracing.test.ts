@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -107,7 +109,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             server.listen(0, "127.0.0.1", () => {
               const address = server.address();
 
-              if (!address || typeof address === "string") {
+              if (!address || Predicate.isString(address)) {
                 reject(new Error("Expected TCP collector address"));
 
                 return;
@@ -282,14 +284,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           readonly traceId: string;
           readonly spanId: string;
           readonly kind: string;
-          readonly attributes: Readonly<Record<string, unknown>>;
+          readonly attributes: Readonly<Schema.JsonObject>;
           readonly events: ReadonlyArray<unknown>;
           readonly links: ReadonlyArray<unknown>;
           readonly scope: {
             readonly name?: string;
-            readonly attributes: Readonly<Record<string, unknown>>;
+            readonly attributes: Readonly<Schema.JsonObject>;
           };
-          readonly resourceAttributes: Readonly<Record<string, unknown>>;
+          readonly resourceAttributes: Readonly<Schema.JsonObject>;
           readonly status?: {
             readonly code?: string;
           };

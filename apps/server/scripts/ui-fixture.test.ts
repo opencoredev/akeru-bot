@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -43,7 +44,11 @@ it.layer(NodeServices.layer)("ui-fixture", (it) => {
             const snapshot = yield* query.getSnapshot();
             assert.equal(
               snapshot.threads.length,
-              scenario === "empty" ? 0 : scenario === "edge" ? 3 : 2,
+              Match.value(scenario).pipe(
+                Match.when("empty", () => 0),
+                Match.when("edge", () => 3),
+                Match.orElse(() => 2),
+              ),
             );
 
             for (const thread of snapshot.threads.filter((thread) => thread.messages.length > 0)) {
@@ -76,7 +81,14 @@ it.layer(NodeServices.layer)("ui-fixture", (it) => {
           assert.deepStrictEqual(before, after);
 
           if (after.operation === "query") {
-            assert.equal(after.rows.length, scenario === "empty" ? 0 : scenario === "edge" ? 3 : 2);
+            assert.equal(
+              after.rows.length,
+              Match.value(scenario).pipe(
+                Match.when("empty", () => 0),
+                Match.when("edge", () => 3),
+                Match.orElse(() => 2),
+              ),
+            );
           }
 
           const counts = yield* runSqliteState({

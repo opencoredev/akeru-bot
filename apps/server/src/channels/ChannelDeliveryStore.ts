@@ -89,7 +89,7 @@ export const makeChannelDeliveryStore = Effect.gen(function* () {
       readonly messageId: string;
       readonly botId: string;
       readonly threadId: string;
-      readonly provider: string;
+      readonly provider: ChannelDeliveryClaim["provider"];
       readonly externalThreadId: string;
       readonly requestedAt: string;
     }>`
@@ -109,7 +109,7 @@ export const makeChannelDeliveryStore = Effect.gen(function* () {
             messageId: MessageId.make(row.messageId),
             botId: BotId.make(row.botId),
             threadId: ThreadId.make(row.threadId),
-            provider: row.provider as ChannelDeliveryClaim["provider"],
+            provider: row.provider,
             externalThreadId: row.externalThreadId,
             requestedAt: IsoDateTime.make(row.requestedAt),
           }),

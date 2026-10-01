@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import * as Predicate from "effect/Predicate";
 
 // @effect-diagnostics nodeBuiltinImport:off - node:os resolves the shared T3 home guard.
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
@@ -173,7 +174,7 @@ const resolveSqlSource = Effect.fn("resolveSqliteStateSqlSource")(function* (
 });
 
 function normalizeSqliteValue(value: RawSqliteValue): typeof SqliteStateValue.Type {
-  if (typeof value === "bigint") {
+  if (Predicate.isBigInt(value)) {
     const numericValue = Number(value);
 
     return Number.isSafeInteger(numericValue) ? numericValue : value.toString();

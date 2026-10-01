@@ -1,3 +1,4 @@
+import { decodeJsonString, jsonObject } from "../../json.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -28,7 +29,7 @@ function fixture() {
 
 function seedOAuth(authPath: string, provider: string) {
   const existing = NodeFS.existsSync(authPath)
-    ? (JSON.parse(NodeFS.readFileSync(authPath, "utf-8")) as Record<string, unknown>)
+    ? { ...jsonObject(decodeJsonString(NodeFS.readFileSync(authPath, "utf-8"))) }
     : {};
 
   existing[provider] = {
@@ -43,7 +44,7 @@ function seedOAuth(authPath: string, provider: string) {
 
 function seedChatGptSignIn(authPath: string) {
   const existing = NodeFS.existsSync(authPath)
-    ? (JSON.parse(NodeFS.readFileSync(authPath, "utf-8")) as Record<string, unknown>)
+    ? { ...jsonObject(decodeJsonString(NodeFS.readFileSync(authPath, "utf-8"))) }
     : {};
 
   existing["openai-codex"] = {
@@ -58,7 +59,7 @@ function seedChatGptSignIn(authPath: string) {
 
 function seedApiKey(authPath: string, provider: string, access = `${provider}-key`) {
   const existing = NodeFS.existsSync(authPath)
-    ? (JSON.parse(NodeFS.readFileSync(authPath, "utf-8")) as Record<string, unknown>)
+    ? { ...jsonObject(decodeJsonString(NodeFS.readFileSync(authPath, "utf-8"))) }
     : {};
 
   existing[provider] = { type: "api-key", access };

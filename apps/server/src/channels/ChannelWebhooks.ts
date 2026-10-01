@@ -1,3 +1,6 @@
+import type * as Schema from "effect/Schema";
+import { decodeJsonString, isJsonObject } from "../json.ts";
+
 import * as NodeCrypto from "node:crypto";
 import { BotId, ChannelConnectionId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
@@ -74,9 +77,9 @@ export const readBoundedWebhookBody = async (
   return Buffer.concat(chunks);
 };
 
-export const parseWebhookJson = (body: Buffer): unknown => {
+export const parseWebhookJson = (body: Buffer): Schema.Json => {
   try {
-    return JSON.parse(body.toString("utf8")) as unknown;
+    return decodeJsonString(body.toString("utf8"));
   } catch {
     return null;
   }
@@ -143,12 +146,10 @@ export const handleBotWhatsAppWebhook = (
     Effect.catchCause(() => Effect.succeed(new Response("Not Found", { status: 404 }))),
   );
 
-export const record = (value: unknown): Readonly<Record<string, unknown>> | null =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : null;
+export const record = (value: Schema.Json | undefined): Schema.JsonObject | null =>
+  isJsonObject(value) ? value : null;
 
-export const whatsAppChangePhone = (change: unknown): unknown =>
+export const whatsAppChangePhone = (change: Schema.Json | undefined): Schema.Json | undefined =>
   record(record(record(change)?.value)?.metadata)?.phone_number_id;
 
 export const whatsAppSignature = (body: Buffer, appSecret: string) =>
@@ -172,13 +173,13 @@ export const scopeWhatsAppWebhookToPhone = (
 
   if (!payload || !Array.isArray(entries)) return { body, headers };
 
-  const otherPhone = (change: unknown) => {
+  const otherPhone = (change: Schema.Json | undefined) => {
     const phone = whatsAppChangePhone(change);
 
     return phone !== undefined && phone !== phoneNumberId;
   };
 
-  const hasOtherPhone = entries.some((entry: unknown) => {
+  const hasOtherPhone = entries.some((entry: Schema.Json) => {
     const changes = record(entry)?.changes;
 
     return Array.isArray(changes) && changes.some(otherPhone);
@@ -195,12 +196,12 @@ export const scopeWhatsAppWebhookToPhone = (
     return { body, headers };
   }
 
-  const scopedEntries = entries.flatMap((entry: unknown) => {
+  const scopedEntries = entries.flatMap((entry: Schema.Json): Schema.Json[] => {
     const current = record(entry);
     const changes = current?.changes;
 
     if (!current || !Array.isArray(changes)) return [entry];
-    const kept = changes.filter((change: unknown) => !otherPhone(change));
+    const kept = changes.filter((change: Schema.Json | undefined) => !otherPhone(change));
 
     return kept.length > 0 ? [{ ...current, changes: kept }] : [];
   });

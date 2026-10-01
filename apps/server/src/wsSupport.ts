@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -142,91 +143,96 @@ export function unexpectedCompatibilityError(error: never): never {
   throw new Error(`Unhandled compatibility error: ${String(error)}`);
 }
 
-export function projectEntriesFailureContext(error: WorkspaceEntries.WorkspaceEntriesError): {
-  readonly failure: ProjectEntriesFailure;
-  readonly normalizedCwd?: string;
-  readonly timeout?: string;
-  readonly detail?: string;
-} {
-  switch (error._tag) {
-    case "WorkspaceRootNotExistsError":
+export function projectEntriesFailureContext(
+  error: WorkspaceEntries.WorkspaceEntriesError,
+): ProjectEntriesFailureContextResult {
+  return Match.value(error).pipe(
+    Match.tag("WorkspaceRootNotExistsError", (error): ProjectEntriesFailureContextResult => {
       return {
         failure: "workspace_root_not_found",
         normalizedCwd: error.normalizedWorkspaceRoot,
       };
-    case "WorkspaceRootCreateFailedError":
+    }),
+    Match.tag("WorkspaceRootCreateFailedError", (error): ProjectEntriesFailureContextResult => {
       return {
         failure: "workspace_root_create_failed",
         normalizedCwd: error.normalizedWorkspaceRoot,
       };
-    case "WorkspaceRootStatFailedError":
+    }),
+    Match.tag("WorkspaceRootStatFailedError", (error): ProjectEntriesFailureContextResult => {
       return {
         failure: "workspace_root_stat_failed",
         normalizedCwd: error.normalizedWorkspaceRoot,
         detail: error.phase,
       };
-    case "WorkspaceRootNotDirectoryError":
+    }),
+    Match.tag("WorkspaceRootNotDirectoryError", (error): ProjectEntriesFailureContextResult => {
       return {
         failure: "workspace_root_not_directory",
         normalizedCwd: error.normalizedWorkspaceRoot,
       };
-    case "WorkspaceSearchIndexCreateFailed":
+    }),
+    Match.tag("WorkspaceSearchIndexCreateFailed", (error): ProjectEntriesFailureContextResult => {
       return {
         failure: "search_index_create_failed",
         normalizedCwd: error.cwd,
         detail: error.reason,
       };
-    case "WorkspaceSearchIndexScanTimedOut":
+    }),
+    Match.tag("WorkspaceSearchIndexScanTimedOut", (error): ProjectEntriesFailureContextResult => {
       return {
         failure: "search_index_scan_timed_out",
         normalizedCwd: error.cwd,
         timeout: error.timeout,
       };
-    case "WorkspaceSearchIndexSearchFailed":
+    }),
+    Match.tag("WorkspaceSearchIndexSearchFailed", (error): ProjectEntriesFailureContextResult => {
       return {
         failure: "search_index_search_failed",
         normalizedCwd: error.cwd,
         detail: error.reason,
       };
-    default:
+    }),
+    Match.orElse((error): ProjectEntriesFailureContextResult => {
       return unexpectedCompatibilityError(error);
-  }
+    }),
+  );
 }
 
 export function projectFileFailureContext(
   error:
     | WorkspaceFileSystem.WorkspaceFileSystemError
     | WorkspacePaths.WorkspacePathOutsideRootError,
-): {
-  readonly failure: ProjectFileFailure;
-  readonly resolvedPath?: string;
-  readonly resolvedWorkspaceRoot?: string;
-  readonly operation?: ProjectFileOperation;
-  readonly operationPath?: string;
-} {
-  switch (error._tag) {
-    case "WorkspacePathOutsideRootError":
+): ProjectFileFailureContextResult {
+  return Match.value(error).pipe(
+    Match.tag("WorkspacePathOutsideRootError", (_error): ProjectFileFailureContextResult => {
       return { failure: "workspace_path_outside_root" };
-    case "WorkspaceFileSystemOperationError":
+    }),
+    Match.tag("WorkspaceFileSystemOperationError", (error): ProjectFileFailureContextResult => {
       return {
         failure: "operation_failed",
         resolvedPath: error.resolvedPath,
         operation: error.operation,
         operationPath: error.operationPath,
       };
-    case "WorkspaceFilePathEscapeError":
+    }),
+    Match.tag("WorkspaceFilePathEscapeError", (error): ProjectFileFailureContextResult => {
       return {
         failure: "resolved_path_outside_root",
         resolvedPath: error.resolvedPath,
         resolvedWorkspaceRoot: error.resolvedWorkspaceRoot,
       };
-    case "WorkspacePathNotFileError":
+    }),
+    Match.tag("WorkspacePathNotFileError", (error): ProjectFileFailureContextResult => {
       return { failure: "path_not_file", resolvedPath: error.resolvedPath };
-    case "WorkspaceBinaryFileError":
+    }),
+    Match.tag("WorkspaceBinaryFileError", (error): ProjectFileFailureContextResult => {
       return { failure: "binary_file", resolvedPath: error.resolvedPath };
-    default:
+    }),
+    Match.orElse((error): ProjectFileFailureContextResult => {
       return unexpectedCompatibilityError(error);
-  }
+    }),
+  );
 }
 
 export function isThreadDetailEvent(event: OrchestrationEvent): event is Extract<
@@ -446,3 +452,18 @@ export function readClientConnectionOrigin(
       : {}),
   };
 }
+
+type ProjectEntriesFailureContextResult = {
+  readonly failure: ProjectEntriesFailure;
+  readonly normalizedCwd?: string;
+  readonly timeout?: string;
+  readonly detail?: string;
+};
+
+type ProjectFileFailureContextResult = {
+  readonly failure: ProjectFileFailure;
+  readonly resolvedPath?: string;
+  readonly resolvedWorkspaceRoot?: string;
+  readonly operation?: ProjectFileOperation;
+  readonly operationPath?: string;
+};

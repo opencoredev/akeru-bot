@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeUtil from "node:util";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -202,8 +203,8 @@ it.effect("resolveAutoBootstrapWelcomeTargets creates a project and thread when 
       Effect.provide(NodeServices.layer),
     );
 
-    assert.equal(typeof targets.bootstrapProjectId, "string");
-    assert.equal(typeof targets.bootstrapThreadId, "string");
+    assert.equal(Predicate.isString(targets.bootstrapProjectId), true);
+    assert.equal(Predicate.isString(targets.bootstrapThreadId), true);
     assert.deepStrictEqual(yield* Ref.get(dispatchCalls), ["project.create", "thread.create"]);
   }),
 );
@@ -255,8 +256,8 @@ it.effect(
         Effect.provide(NodeServices.layer),
       );
 
-      assert.equal(typeof targets.bootstrapProjectId, "string");
-      assert.equal(typeof targets.bootstrapThreadId, "string");
+      assert.equal(Predicate.isString(targets.bootstrapProjectId), true);
+      assert.equal(Predicate.isString(targets.bootstrapThreadId), true);
       assert.deepStrictEqual(yield* Ref.get(dispatchCalls), ["project.create", "thread.create"]);
     }),
 );

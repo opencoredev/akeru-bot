@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -37,7 +38,7 @@ vi.mock("node:fs", async (importOriginal) => {
       const [filePath, flags] = args;
 
       if (
-        typeof filePath === "string" &&
+        Predicate.isString(filePath) &&
         filePath === openSyncInterceptor.failPath &&
         flags === "r"
       ) {

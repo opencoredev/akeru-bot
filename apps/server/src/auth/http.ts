@@ -178,15 +178,15 @@ const appendSessionCookie = (cookieName: string, token: string, expiresAt: DateT
     ),
   );
 
-export function failEnvironmentInternal(reason: EnvironmentInternalErrorReason, error?: unknown) {
+export function failEnvironmentInternal(reason: EnvironmentInternalErrorReason, cause?: unknown) {
   return Effect.gen(function* () {
     const traceId = yield* currentEnvironmentTraceId;
 
-    if (error !== undefined) {
+    if (cause !== undefined) {
       yield* Effect.logError("environment api operation failed", {
         reason,
         traceId,
-        cause: error,
+        cause: cause,
       });
     }
 

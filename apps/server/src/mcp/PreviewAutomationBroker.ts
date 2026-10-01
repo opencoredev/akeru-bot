@@ -360,6 +360,7 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
         const completion = yield* Deferred.poll(deferred);
 
         if (Option.isSome(completion)) {
+          // SAFETY: The caller selects A for its operation; the browser host supplies the operation result through the correlated deferred.
           return (yield* completion.value) as A;
         }
 
@@ -368,6 +369,7 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
 
       const result = yield* Deferred.await(deferred).pipe(Effect.timeoutOption(timeoutMs));
 
+      // SAFETY: The caller selects A for its operation; the browser host supplies the operation result through the correlated deferred.
       return yield* Option.match(result, {
         onNone: () => Effect.fail(new PreviewAutomationTimeoutError(requestContext)),
         onSome: (value) => Effect.succeed(value as A),

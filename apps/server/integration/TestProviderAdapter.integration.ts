@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   normalizeFixtureEvent,
   type FixtureProviderRuntimeEvent,
@@ -201,18 +202,22 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
           };
 
           const runtimeEvent = normalizeFixtureEvent(rawEvent);
-          const runtimeType = (runtimeEvent as { type: string }).type;
+          const runtimeType: string = runtimeEvent.type;
 
           if (runtimeType === "content.delta") {
-            const payload = runtimeEvent.payload as { delta?: unknown } | undefined;
+            const payload = Predicate.hasProperty(runtimeEvent, "payload")
+              ? runtimeEvent.payload
+              : undefined;
 
-            if (typeof payload?.delta === "string") {
+            if (Predicate.hasProperty(payload, "delta") && Predicate.isString(payload.delta)) {
               assistantDeltas.push(payload.delta);
             }
           } else if (runtimeType === "message.delta") {
-            const legacyDelta = (runtimeEvent as { delta?: unknown }).delta;
+            const legacyDelta = Predicate.hasProperty(runtimeEvent, "delta")
+              ? runtimeEvent.delta
+              : undefined;
 
-            if (typeof legacyDelta === "string") {
+            if (Predicate.isString(legacyDelta)) {
               assistantDeltas.push(legacyDelta);
             }
           }

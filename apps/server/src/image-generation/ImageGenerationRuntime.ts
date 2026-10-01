@@ -1,3 +1,4 @@
+import type { AkeruToolExecution } from "../provider/AkeruToolRuntime.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 
@@ -41,7 +42,9 @@ import {
   type ImageAdapterFailure,
   type ImageAdapterInputImage,
   type ImageProviderAdapter,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- ImageGenerationRuntime owns its stateless HTTP image adapters; these are not Effect services.
   makeChatGptImageAdapter,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- ImageGenerationRuntime owns its stateless HTTP image adapters; these are not Effect services.
   makeGrokImageAdapter,
 } from "./adapters.ts";
 import { sniffImage } from "./imageBytes.ts";
@@ -61,7 +64,10 @@ export interface ImageGenerationRuntimeShape {
    * problem becomes a `failed` result the calling bot can read. Interrupting
    * the effect aborts the provider request.
    */
-  readonly generate: (threadId: ThreadId, input: unknown) => Effect.Effect<ImageGenerationResult>;
+  readonly generate: (
+    threadId: ThreadId,
+    input: AkeruToolExecution["input"],
+  ) => Effect.Effect<ImageGenerationResult>;
   /** Interrupts every in-flight image request for the chat. */
   readonly cancelThread: (threadId: ThreadId) => Effect.Effect<void>;
 }
@@ -334,7 +340,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
       });
     });
 
-  const run = (threadId: ThreadId, rawInput: unknown) =>
+  const run = (threadId: ThreadId, rawInput: AkeruToolExecution["input"]) =>
     Effect.gen(function* () {
       const decoded = decodeImageGenerationRequest(rawInput);
 
@@ -529,7 +535,7 @@ export const layer = layerWith();
 /** Runs the image tool through the active runtime; the entry point for tool registrations. */
 export const runImageGenerationTool = (
   threadId: ThreadId,
-  input: unknown,
+  input: AkeruToolExecution["input"],
 ): Effect.Effect<ImageGenerationResult> =>
   activeImageGenerationRuntime
     ? activeImageGenerationRuntime.generate(threadId, input)

@@ -30,8 +30,8 @@ it("ignores directory sync errors only from filesystems that cannot sync a direc
   }
 
   let rejected: unknown;
-  await syncDirectory("/state", failingOpen("EIO")).catch((error: unknown) => {
-    rejected = error;
+  await syncDirectory("/state", failingOpen("EIO")).catch((cause: unknown) => {
+    rejected = cause;
   });
   assert.strictEqual((rejected as NodeJS.ErrnoException | undefined)?.code, "EIO");
 });

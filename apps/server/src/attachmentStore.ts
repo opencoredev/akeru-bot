@@ -11,7 +11,7 @@ import {
 } from "./attachmentPaths.ts";
 import { inferImageExtension, SAFE_IMAGE_FILE_EXTENSIONS } from "./imageMime.ts";
 
-const FILE_EXTENSION_BY_MIME_TYPE: Readonly<Record<string, string>> = {
+const FILE_EXTENSION_BY_MIME_TYPE = {
   "application/json": ".json",
   "application/pdf": ".pdf",
   "application/toml": ".toml",
@@ -135,7 +135,9 @@ export function attachmentRelativePath(attachment: ChatAttachment): string {
 }
 
 export function inferFileExtension(input: { readonly mimeType: string; readonly name?: string }) {
-  const fromMime = FILE_EXTENSION_BY_MIME_TYPE[input.mimeType.toLowerCase()];
+  const fromMime = Object.entries(FILE_EXTENSION_BY_MIME_TYPE).find(
+    ([key]) => key === input.mimeType.toLowerCase(),
+  )?.[1];
 
   if (fromMime) return fromMime;
   const match = /\.([a-z0-9]{1,12})$/i.exec(input.name?.trim() ?? "");
@@ -254,7 +256,7 @@ export function planAttachmentClaim(input: {
 export function sweepStalePendingAttachments(input: {
   readonly attachmentsDir: string;
   readonly nowMs: number;
-}): { readonly deleted: number } {
+}): SweepStalePendingAttachmentsResult {
   let entries: string[];
 
   try {
@@ -320,3 +322,5 @@ export function parseAttachmentIdFromRelativePath(relativePath: string): string 
 
   return id.length > 0 && !id.includes(".") ? id : null;
 }
+
+type SweepStalePendingAttachmentsResult = { readonly deleted: number };

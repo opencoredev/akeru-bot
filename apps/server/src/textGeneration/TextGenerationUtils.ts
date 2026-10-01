@@ -9,7 +9,7 @@ const decodeJsonThreadTitle = Schema.decodeOption(
 );
 
 /** Convert an Effect Schema to a flat JSON Schema object, inlining `$defs` when present. */
-export function toJsonSchemaObject(schema: Schema.Top): unknown {
+export function toJsonSchemaObject(schema: Schema.Top) {
   const document = Schema.toJsonSchemaDocument(schema);
 
   if (document.definitions && Object.keys(document.definitions).length > 0) {
@@ -67,38 +67,38 @@ function cliLabel(cliName: string): string {
 export function normalizeCliError(
   cliName: string,
   operation: string,
-  error: unknown,
+  cause: unknown,
   fallback: string,
 ): TextGenerationError {
-  if (isTextGenerationError(error)) {
-    return error;
+  if (isTextGenerationError(cause)) {
+    return cause;
   }
 
-  if (error instanceof Error) {
-    const lower = error.message.toLowerCase();
+  if (cause instanceof Error) {
+    const lower = cause.message.toLowerCase();
 
     if (
-      error.message.includes(`Command not found: ${cliName}`) ||
+      cause.message.includes(`Command not found: ${cliName}`) ||
       lower.includes(`spawn ${cliName}`) ||
       lower.includes("enoent")
     ) {
       return new TextGenerationError({
         operation,
         detail: `${cliLabel(cliName)} is required but not available on PATH.`,
-        cause: error,
+        cause: cause,
       });
     }
 
     return new TextGenerationError({
       operation,
       detail: fallback,
-      cause: error,
+      cause: cause,
     });
   }
 
   return new TextGenerationError({
     operation,
     detail: fallback,
-    cause: error,
+    cause: cause,
   });
 }

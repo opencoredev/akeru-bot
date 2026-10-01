@@ -27,6 +27,7 @@ import { ProjectionCheckpointRepository } from "../src/persistence/Services/Proj
 import { ProjectionPendingApprovalRepository } from "../src/persistence/Services/ProjectionPendingApprovals.ts";
 import { usesMastraCode } from "../src/provider/Layers/AgentController.ts";
 import { AgentController } from "../src/provider/Services/AgentController.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root injects a deterministic Mastra harness.
 import { makeTestMastraHarness, type TestMastraHarness } from "./TestMastraHarness.integration.ts";
 import { ProviderCommandReactor } from "../src/orchestration/Services/ProviderCommandReactor.ts";
 import { CheckpointReactor } from "../src/orchestration/Services/CheckpointReactor.ts";
@@ -42,6 +43,7 @@ import {
   type OrchestrationRuntimeReceipt,
 } from "../src/orchestration/Services/RuntimeReceiptBus.ts";
 import {
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root injects deterministic provider adapters.
   makeTestProviderAdapterHarness,
   type TestProviderAdapterHarness,
 } from "./TestProviderAdapter.integration.ts";
@@ -226,6 +228,7 @@ export const makeOrchestrationIntegrationHarness = (
       runtime.runPromise(reactor.start().pipe(Scope.provide(scope))),
     ).pipe(Effect.orDie);
 
+    // SAFETY: The readUntil predicate rejects null and narrows to the requested projected record before this test helper returns.
     const waitForThread: OrchestrationIntegrationHarness["waitForThread"] = (
       threadId,
       predicate,
@@ -252,6 +255,7 @@ export const makeOrchestrationIntegrationHarness = (
         .waitFor(predicate, "domain event", timeoutMs)
         .pipe(Effect.map(() => events.snapshot()));
 
+    // SAFETY: The readUntil predicate rejects null and narrows to the requested projected record before this test helper returns.
     const waitForPendingApproval: OrchestrationIntegrationHarness["waitForPendingApproval"] = (
       requestId,
       predicate,

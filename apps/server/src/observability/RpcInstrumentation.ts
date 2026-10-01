@@ -1,3 +1,4 @@
+import type { RawMetricAttributes } from "./Attributes.ts";
 import { WS_METHODS } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
@@ -28,10 +29,7 @@ function shouldTraceRpc(method: string): boolean {
   return !RPC_METHODS_WITH_TRACING_DISABLED.has(method);
 }
 
-const rpcSpanAttributes = (
-  method: string,
-  traceAttributes?: Readonly<Record<string, unknown>>,
-): Record<string, unknown> => ({
+const rpcSpanAttributes = (method: string, traceAttributes?: RawMetricAttributes) => ({
   ...DEFAULT_RPC_SPAN_ATTRIBUTES,
   "rpc.method": method,
   ...traceAttributes,
@@ -40,7 +38,7 @@ const rpcSpanAttributes = (
 const withRpcEffectTracing = <A, E, R>(
   method: string,
   effect: Effect.Effect<A, E, R>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
+  traceAttributes?: RawMetricAttributes,
 ): Effect.Effect<A, E, R> =>
   shouldTraceRpc(method)
     ? effect.pipe(
@@ -53,7 +51,7 @@ const withRpcEffectTracing = <A, E, R>(
 const withRpcStreamTracing = <A, E, R>(
   method: string,
   stream: Stream.Stream<A, E, R>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
+  traceAttributes?: RawMetricAttributes,
 ): Stream.Stream<A, E, R> =>
   shouldTraceRpc(method)
     ? stream.pipe(
@@ -63,10 +61,10 @@ const withRpcStreamTracing = <A, E, R>(
       )
     : stream.pipe(Stream.provideService(References.TracerEnabled, false));
 
-const recordRpcStreamMetrics = <E>(
+const recordRpcStreamMetrics = <A, E>(
   method: string,
   startedAt: bigint,
-  exit: Exit.Exit<unknown, E>,
+  exit: Exit.Exit<A, E>,
 ): Effect.Effect<void, never, never> =>
   Effect.gen(function* () {
     const endedAt = yield* Clock.currentTimeNanos;
@@ -91,7 +89,7 @@ const recordRpcStreamMetrics = <E>(
 export const observeRpcEffect = <A, E, R>(
   method: string,
   effect: Effect.Effect<A, E, R>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
+  traceAttributes?: RawMetricAttributes,
 ): Effect.Effect<A, E, R> => {
   const instrumented = effect.pipe(
     withMetrics({
@@ -109,7 +107,7 @@ export const observeRpcEffect = <A, E, R>(
 export const observeRpcStream = <A, E, R>(
   method: string,
   stream: Stream.Stream<A, E, R>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
+  traceAttributes?: RawMetricAttributes,
 ): Stream.Stream<A, E, R> => {
   const instrumented = Stream.unwrap(
     Effect.gen(function* () {
@@ -125,7 +123,7 @@ export const observeRpcStream = <A, E, R>(
 export const observeRpcStreamEffect = <A, StreamError, StreamContext, EffectError, EffectContext>(
   method: string,
   effect: Effect.Effect<Stream.Stream<A, StreamError, StreamContext>, EffectError, EffectContext>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
+  traceAttributes?: RawMetricAttributes,
 ): Stream.Stream<A, StreamError | EffectError, StreamContext | EffectContext> => {
   const instrumented = Stream.unwrap(
     Effect.gen(function* () {

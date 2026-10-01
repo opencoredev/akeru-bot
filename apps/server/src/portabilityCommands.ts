@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as NodeCrypto from "node:crypto";
 import {
   BotId,
@@ -172,14 +173,7 @@ export function commandsForPortabilityImport(
   settings: ServerSettings,
   availableProviderIds: ReadonlySet<string>,
   projectFolders: PortabilityProjectFolderMap = {},
-): {
-  commands: OrchestrationCommand[];
-  commandItems: PortabilityImportItem[];
-  settingsPatch?: ServerSettingsPatch;
-  settingsItem?: PortabilityImportItem;
-  applied: number;
-  skipped: number;
-} {
+): CommandsForPortabilityImportResult {
   const preview = previewPortabilityImport(
     archive,
     snapshot,
@@ -225,12 +219,11 @@ export function commandsForPortabilityImport(
   let applied = 0;
 
   const unmappedProjectRecordCount = archive.records.filter((record) => {
-    const match =
-      record.type === "project"
-        ? projectMatches.get(record.id)
-        : record.type === "thread"
-          ? projectMatches.get(record.data.projectId)
-          : undefined;
+    const match = Match.value(record).pipe(
+      Match.when({ type: "project" }, (record) => projectMatches.get(record.id)),
+      Match.when({ type: "thread" }, (record) => projectMatches.get(record.data.projectId)),
+      Match.orElse((_record) => undefined),
+    );
 
     return match?.kind === "unsupported";
   }).length;
@@ -677,3 +670,12 @@ export function commandsForPortabilityImport(
     skipped,
   };
 }
+
+type CommandsForPortabilityImportResult = {
+  commands: OrchestrationCommand[];
+  commandItems: PortabilityImportItem[];
+  settingsPatch?: ServerSettingsPatch;
+  settingsItem?: PortabilityImportItem;
+  applied: number;
+  skipped: number;
+};

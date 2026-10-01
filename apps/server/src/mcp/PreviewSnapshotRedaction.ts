@@ -1,3 +1,6 @@
+import type { PreviewAutomationResponse } from "@akeru/contracts";
+import { decodeJson } from "../json.ts";
+import * as Predicate from "effect/Predicate";
 import {
   PreviewAutomationRecordingArtifact,
   PreviewAutomationSnapshot,
@@ -22,10 +25,22 @@ const decodeSnapshot = Schema.decodeUnknownSync(PreviewAutomationSnapshot);
 
 const decodeRecordingArtifact = Schema.decodeUnknownSync(PreviewAutomationRecordingArtifact);
 
-function redactValue(value: unknown, fieldName?: string): { value: unknown; redacted: boolean } {
+type PreviewValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ReadonlyArray<PreviewValue>
+  | { readonly [key: string]: PreviewValue };
+
+const isPreviewObject = (value: PreviewValue): value is { readonly [key: string]: PreviewValue } =>
+  Predicate.isObject(value);
+
+function redactValue(value: PreviewValue, fieldName?: string): RedactValueResult {
   if (fieldName && secretField.test(fieldName)) return { value: REDACTED, redacted: true };
 
-  if (typeof value === "string") return redactSensitiveText(value);
+  if (Predicate.isString(value)) return redactSensitiveText(value);
 
   if (Array.isArray(value)) {
     let redacted = false;
@@ -40,10 +55,10 @@ function redactValue(value: unknown, fieldName?: string): { value: unknown; reda
     return { value: items, redacted };
   }
 
-  if (typeof value !== "object" || value === null) return { value, redacted: false };
+  if (!isPreviewObject(value)) return { value, redacted: false };
 
   let redacted = false;
-  const entries: Array<[string, unknown]> = [];
+  const entries: Array<[string, PreviewValue]> = [];
 
   for (const [key, item] of Object.entries(value)) {
     const result = redactValue(item, key);
@@ -54,8 +69,8 @@ function redactValue(value: unknown, fieldName?: string): { value: unknown; reda
   return { value: Object.fromEntries(entries), redacted };
 }
 
-function rejectScreenshotPayload(value: unknown, fieldName?: string): void {
-  if (typeof value === "string" && fieldName && screenshotField.test(fieldName)) {
+function rejectScreenshotPayload(value: PreviewValue, fieldName?: string): void {
+  if (Predicate.isString(value) && fieldName && screenshotField.test(fieldName)) {
     throw new Error("Unredacted screenshot data is not provider-safe.");
   }
 
@@ -65,7 +80,7 @@ function rejectScreenshotPayload(value: unknown, fieldName?: string): void {
     return;
   }
 
-  if (typeof value !== "object" || value === null) return;
+  if (!isPreviewObject(value)) return;
 
   if (
     Object.hasOwn(value, "data") &&
@@ -138,7 +153,7 @@ export function redactComputerScreenshot(input: {
 }
 
 export function redactPreviewSnapshot(
-  page: Readonly<Record<string, unknown>>,
+  page: Readonly<Record<string, PreviewValue>>,
   screenshot: PreviewScreenshotInput,
 ) {
   const bytes = Buffer.from(screenshot.data, "base64");
@@ -150,12 +165,12 @@ export function redactPreviewSnapshot(
 
   const redactedPage = redactValue(page);
 
-  if (typeof redactedPage.value !== "object" || redactedPage.value === null) {
+  if (!isPreviewObject(redactedPage.value)) {
     throw new Error("Preview snapshot data is invalid.");
   }
 
   return {
-    page: redactedPage.value as Readonly<Record<string, unknown>>,
+    page: redactedPage.value,
     screenshot: redactComputerScreenshot({ mediaType: "image/png", data: bytes }).data,
     frameRedacted: true,
   };
@@ -163,8 +178,8 @@ export function redactPreviewSnapshot(
 
 export function redactProviderVisiblePreviewResult(
   operation: PreviewAutomationOperation,
-  input: unknown,
-): unknown {
+  input: PreviewAutomationResponse["result"],
+) {
   if (operation === "evaluate") {
     return { redactionStatus: "omitted-unverified-preview-evaluation" };
   }
@@ -184,11 +199,14 @@ export function redactProviderVisiblePreviewResult(
     };
   }
 
-  rejectScreenshotPayload(input);
+  const value = input === undefined ? undefined : decodeJson(input);
+  rejectScreenshotPayload(value);
 
   if (operation === "recordingStop") {
     return { ...decodeRecordingArtifact(input), path: REDACTED };
   }
 
-  return redactValue(input).value;
+  return redactValue(value).value;
 }
+
+type RedactValueResult = { value: PreviewValue; redacted: boolean };

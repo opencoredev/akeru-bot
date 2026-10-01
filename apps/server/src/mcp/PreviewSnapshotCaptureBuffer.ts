@@ -1,3 +1,6 @@
+import type { PreviewAutomationResponse } from "@akeru/contracts";
+import * as Predicate from "effect/Predicate";
+
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 const MAX_BUFFERED_SCREENSHOTS_PER_THREAD = 4;
@@ -6,17 +9,16 @@ const MAX_BUFFERED_THREADS = 100;
 
 const screenshotsByThread = new Map<string, ReadonlyArray<Buffer>>();
 
-function screenshotBytes(result: unknown): Buffer | null {
-  if (typeof result !== "object" || result === null || !("screenshot" in result)) return null;
+function screenshotBytes(result: PreviewAutomationResponse["result"]): Buffer | null {
+  if (!Predicate.isObjectOrArray(result) || !("screenshot" in result)) return null;
   const screenshot = result.screenshot;
 
   if (
-    typeof screenshot !== "object" ||
-    screenshot === null ||
+    !Predicate.isObjectOrArray(screenshot) ||
     !("mimeType" in screenshot) ||
     screenshot.mimeType !== "image/png" ||
     !("data" in screenshot) ||
-    typeof screenshot.data !== "string"
+    !Predicate.isString(screenshot.data)
   ) {
     return null;
   }
@@ -26,7 +28,10 @@ function screenshotBytes(result: unknown): Buffer | null {
   return bytes.subarray(0, PNG_SIGNATURE.byteLength).equals(PNG_SIGNATURE) ? bytes : null;
 }
 
-export function stagePreviewSnapshot(threadId: string, result: unknown): void {
+export function stagePreviewSnapshot(
+  threadId: string,
+  result: PreviewAutomationResponse["result"],
+): void {
   const bytes = screenshotBytes(result);
 
   if (!bytes) return;

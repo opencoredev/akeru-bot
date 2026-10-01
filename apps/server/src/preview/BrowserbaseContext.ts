@@ -1,3 +1,4 @@
+import { flow } from "effect/Function";
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 import * as RcMap from "effect/RcMap";
@@ -26,15 +27,15 @@ const BrowserbaseSession = Schema.Struct({
 
 const decodeSession = Schema.decodeUnknownEffect(BrowserbaseSession);
 
-export const decodeBrowserbaseSession = (value: unknown) =>
-  decodeSession(value).pipe(
-    Effect.mapError(
-      () =>
-        new BrowserConfigurationError({
-          message: "Browserbase returned an invalid browser connection URL.",
-        }),
-    ),
-  );
+export const decodeBrowserbaseSession = flow(
+  decodeSession,
+  Effect.mapError(
+    () =>
+      new BrowserConfigurationError({
+        message: "Browserbase returned an invalid browser connection URL.",
+      }),
+  ),
+);
 
 export const requireBrowserbaseApiKey = (settingsService: ServerSettingsService["Service"]) =>
   Effect.gen(function* () {

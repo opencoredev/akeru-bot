@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as NodeCrypto from "node:crypto";
 import {
   BotId,
@@ -72,15 +73,13 @@ export const randomId = (ctx: ChannelRuntimeContext, prefix: string) =>
   ctx.deps.randomUuid.pipe(Effect.map((uuid) => `${prefix}-${uuid}`));
 
 export const channelProviderName = (provider: ChannelProvider) =>
-  provider === "imessage"
-    ? "iMessage"
-    : provider === "whatsapp"
-      ? "WhatsApp"
-      : provider === "telegram"
-        ? "Telegram"
-        : provider === "slack"
-          ? "Slack"
-          : "Discord";
+  Match.value(provider).pipe(
+    Match.when("imessage", () => "iMessage"),
+    Match.when("whatsapp", () => "WhatsApp"),
+    Match.when("telegram", () => "Telegram"),
+    Match.when("slack", () => "Slack"),
+    Match.orElse(() => "Discord"),
+  );
 
 export const decodeSecret = (stored: Option.Option<Uint8Array>) =>
   Option.isNone(stored)
