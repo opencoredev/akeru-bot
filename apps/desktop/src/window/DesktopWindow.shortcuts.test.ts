@@ -10,7 +10,7 @@ import * as Ref from "effect/Ref";
 
 import * as NodeEvents from "node:events";
 
-import { Electron } from "./test-support/DesktopWindowHarness.ts";
+import type * as Electron from "electron";
 
 import { vi } from "vite-plus/test";
 
@@ -47,6 +47,7 @@ describe("DesktopWindow", () => {
       const host = makeFakeBrowserWindow();
       const popup = makeFakeBrowserWindow();
       let focusedContents: unknown = host.window.webContents;
+
       const makeContents = () => {
         const contents = Object.assign(new NodeEvents.EventEmitter(), {
           isDestroyed: vi.fn(() => false),
@@ -56,16 +57,21 @@ describe("DesktopWindow", () => {
           copyImageAt: vi.fn(),
           replaceMisspelling: vi.fn(),
         });
+
         return contents;
       };
+
       const guest = makeContents();
       const popupContents = makeContents();
       const popupWindow = { ...popup.window, webContents: popupContents };
+
       const menus = yield* Queue.unbounded<{
         input: ElectronMenu.ElectronMenuTemplateInput;
         focusedContents: unknown;
       }>();
+
       const copiedTexts: string[] = [];
+
       const layer = makeTestLayer({
         window: host.window,
         createCount: yield* Ref.make(0),
@@ -91,6 +97,7 @@ describe("DesktopWindow", () => {
         ] as const) {
           const frame = { routingId: 7 } as Electron.WebFrameMain;
           const preventDefault = vi.fn();
+
           const params = {
             frame,
             x: 12,
@@ -101,6 +108,7 @@ describe("DesktopWindow", () => {
             mediaType: "none",
             editFlags: { canCut: false, canCopy: true, canPaste: true, canSelectAll: true },
           };
+
           focusedContents = host.window.webContents;
           contents.emit("context-menu", { preventDefault }, params);
           const menu = yield* Queue.take(menus);
@@ -161,6 +169,7 @@ describe("DesktopWindow", () => {
       const fakeWindow = makeFakeBrowserWindow();
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -172,12 +181,14 @@ describe("DesktopWindow", () => {
         yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
 
         const beforeInput = fakeWindow.webContentsListeners.get("before-input-event");
+
         if (!beforeInput) {
           return yield* Effect.die("before-input-event listener was not registered");
         }
 
         let prevented = false;
         const event = { preventDefault: () => (prevented = true) };
+
         const input = {
           type: "keyDown",
           isAutoRepeat: true,
@@ -187,6 +198,7 @@ describe("DesktopWindow", () => {
           alt: false,
           shift: false,
         };
+
         beforeInput(event, input);
         assert.isTrue(prevented);
 
@@ -210,6 +222,7 @@ describe("DesktopWindow", () => {
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const previewZoomReapplies: number[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -242,6 +255,7 @@ describe("DesktopWindow", () => {
       const fakeWindow = makeFakeBrowserWindow();
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -254,6 +268,7 @@ describe("DesktopWindow", () => {
 
         const enterFullscreen = fakeWindow.windowListeners.get("enter-full-screen");
         const leaveFullscreen = fakeWindow.windowListeners.get("leave-full-screen");
+
         if (!enterFullscreen || !leaveFullscreen) {
           return yield* Effect.die("fullscreen listeners were not registered");
         }

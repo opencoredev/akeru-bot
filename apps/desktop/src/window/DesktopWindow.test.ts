@@ -18,7 +18,7 @@ import * as References from "effect/References";
 
 import * as TestClock from "effect/testing/TestClock";
 
-import { Electron } from "./test-support/DesktopWindowHarness.ts";
+import type * as Electron from "electron";
 
 import { vi } from "vite-plus/test";
 
@@ -26,11 +26,16 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 
 import * as DesktopWindow from "./DesktopWindow.ts";
 
-import { makeFakeBrowserWindow, makeTestLayer } from "./test-support/DesktopWindowHarness.ts";
+import {
+  failDisplayLookupOnce,
+  makeFakeBrowserWindow,
+  makeTestLayer,
+} from "./test-support/DesktopWindowHarness.ts";
 
 describe("DesktopWindow", () => {
   it("restores bounds only when the window fits within a connected display", () => {
     const persistedBounds = { x: 2040, y: 80, width: 1320, height: 880 };
+
     const displays = [
       { x: 0, y: 0, width: 1920, height: 1080 },
       { x: 1920, y: 0, width: 2560, height: 1440 },
@@ -52,6 +57,7 @@ describe("DesktopWindow", () => {
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const createdWindowOptions: Electron.BrowserWindowConstructorOptions[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -85,6 +91,7 @@ describe("DesktopWindow", () => {
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const createdWindowOptions: Electron.BrowserWindowConstructorOptions[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -113,6 +120,7 @@ describe("DesktopWindow", () => {
       const fakeWindow = makeFakeBrowserWindow();
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -130,9 +138,11 @@ describe("DesktopWindow", () => {
 
         assert.equal(fakeWindow.maximize.mock.calls.length, 0);
         const readyToShow = fakeWindow.windowListeners.get("ready-to-show");
+
         if (!readyToShow) {
           return yield* Effect.die("window ready-to-show listener was not registered");
         }
+
         readyToShow();
         assert.equal(fakeWindow.maximize.mock.calls.length, 1);
       }).pipe(Effect.provide(layer));
@@ -147,6 +157,7 @@ describe("DesktopWindow", () => {
       const fakeWindow = makeFakeBrowserWindow();
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -159,9 +170,11 @@ describe("DesktopWindow", () => {
 
         assert.equal(fakeWindow.setBackgroundThrottling.mock.calls.length, 0);
         const readyToShow = fakeWindow.windowListeners.get("ready-to-show");
+
         if (!readyToShow) {
           return yield* Effect.die("window ready-to-show listener was not registered");
         }
+
         readyToShow();
         assert.deepEqual(fakeWindow.setBackgroundThrottling.mock.calls, [[true]]);
       }).pipe(Effect.provide(layer));
@@ -174,6 +187,7 @@ describe("DesktopWindow", () => {
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const mainWindowBoundsUpdates: DesktopAppSettings.DesktopWindowBounds[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -187,6 +201,7 @@ describe("DesktopWindow", () => {
 
         const move = fakeWindow.windowListeners.get("move");
         const resize = fakeWindow.windowListeners.get("resize");
+
         if (!move || !resize) {
           return yield* Effect.die("window bounds listeners were not registered");
         }
@@ -217,6 +232,7 @@ describe("DesktopWindow", () => {
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const mainWindowBoundsUpdates: DesktopAppSettings.DesktopWindowBounds[] = [];
       const mainWindowMaximizedUpdates: boolean[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -230,9 +246,11 @@ describe("DesktopWindow", () => {
         yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
 
         const close = fakeWindow.windowListeners.get("close");
+
         if (!close) {
           return yield* Effect.die("window close listener was not registered");
         }
+
         close();
         yield* Effect.promise(() => Promise.resolve());
 
@@ -251,6 +269,7 @@ describe("DesktopWindow", () => {
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const mainWindowBoundsUpdates: DesktopAppSettings.DesktopWindowBounds[] = [];
       const mainWindowMaximizedUpdates: boolean[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -264,6 +283,7 @@ describe("DesktopWindow", () => {
         yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
 
         const maximize = fakeWindow.windowListeners.get("maximize");
+
         if (!maximize) {
           return yield* Effect.die("window maximize listener was not registered");
         }
@@ -288,6 +308,7 @@ describe("DesktopWindow", () => {
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const mainWindowBoundsUpdates: DesktopAppSettings.DesktopWindowBounds[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -300,9 +321,11 @@ describe("DesktopWindow", () => {
         yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
 
         const resize = fakeWindow.windowListeners.get("resize");
+
         if (!resize) {
           return yield* Effect.die("window resize listener was not registered");
         }
+
         resize();
         yield* TestClock.adjust(500);
         yield* Effect.promise(() => Promise.resolve());
@@ -318,6 +341,7 @@ describe("DesktopWindow", () => {
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const mainWindowBoundsUpdates: DesktopAppSettings.DesktopWindowBounds[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -335,6 +359,7 @@ describe("DesktopWindow", () => {
 
         const close = fakeWindow.windowListeners.get("close");
         const move = fakeWindow.windowListeners.get("move");
+
         if (!close || !move) {
           return yield* Effect.die("window lifecycle listeners were not registered");
         }
@@ -360,6 +385,7 @@ describe("DesktopWindow", () => {
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const mainWindowBoundsUpdates: DesktopAppSettings.DesktopWindowBounds[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -372,9 +398,11 @@ describe("DesktopWindow", () => {
         yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
 
         const resize = fakeWindow.windowListeners.get("resize");
+
         if (!resize) {
           return yield* Effect.die("window resize listener was not registered");
         }
+
         resize();
         yield* TestClock.adjust(250);
         fakeWindow.isFullScreen.mockReturnValue(true);
@@ -396,6 +424,7 @@ describe("DesktopWindow", () => {
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const mainWindowBoundsUpdates: DesktopAppSettings.DesktopWindowBounds[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -408,9 +437,11 @@ describe("DesktopWindow", () => {
         yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
 
         const resize = fakeWindow.windowListeners.get("resize");
+
         if (!resize) {
           return yield* Effect.die("window resize listener was not registered");
         }
+
         resize();
         yield* TestClock.adjust(250);
         fakeWindow.isMinimized.mockReturnValue(true);
@@ -427,23 +458,25 @@ describe("DesktopWindow", () => {
   it.effect("logs display lookup failures before falling back to the default size", () =>
     Effect.gen(function* () {
       const displayLookupFailure = new Error("screen API unavailable");
-      vi.mocked(Electron.screen.getAllDisplays).mockImplementationOnce(() => {
-        throw displayLookupFailure;
-      });
+      failDisplayLookupOnce(displayLookupFailure);
+
       const logRecords: Array<{
         readonly message: unknown;
         readonly annotations: Readonly<Record<string, unknown>>;
       }> = [];
+
       const logger = Logger.make(({ fiber, message }) => {
         logRecords.push({
           message,
           annotations: { ...fiber.getRef(References.CurrentLogAnnotations) },
         });
       });
+
       const fakeWindow = makeFakeBrowserWindow();
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const createdWindowOptions: Electron.BrowserWindowConstructorOptions[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -463,6 +496,7 @@ describe("DesktopWindow", () => {
           Array.isArray(record.message) &&
           record.message[0] === "failed to read connected displays; using defaults",
       );
+
       assert.isDefined(warning);
       assert.strictEqual(warning.annotations.cause, displayLookupFailure);
       assert.equal(createdWindowOptions[0]?.width, 1100);
@@ -482,6 +516,7 @@ describe("DesktopWindow", () => {
       const writeStarted = yield* Deferred.make<void>();
       const allowWrite = yield* Deferred.make<void>();
       const flushCompleted = yield* Deferred.make<void>();
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -499,9 +534,11 @@ describe("DesktopWindow", () => {
         yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
 
         const close = fakeWindow.windowListeners.get("close");
+
         if (!close) {
           return yield* Effect.die("window close listener was not registered");
         }
+
         close();
         yield* Deferred.await(writeStarted);
         fakeWindow.isDestroyed.mockReturnValue(true);
@@ -510,6 +547,7 @@ describe("DesktopWindow", () => {
           Effect.andThen(Deferred.succeed(flushCompleted, undefined)),
           Effect.forkChild({ startImmediately: true }),
         );
+
         yield* Effect.yieldNow;
         assert.isFalse(yield* Deferred.isDone(flushCompleted));
 

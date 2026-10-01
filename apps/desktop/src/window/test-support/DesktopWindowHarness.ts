@@ -11,7 +11,6 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 
 import * as Electron from "electron";
-export { Electron };
 
 import { vi } from "vite-plus/test";
 
@@ -60,6 +59,12 @@ vi.mock("electron", async (importOriginal) => ({
     ]),
   },
 }));
+
+export function failDisplayLookupOnce(error: Error) {
+  vi.mocked(Electron.screen.getAllDisplays).mockImplementationOnce(() => {
+    throw error;
+  });
+}
 
 export const environmentInput = {
   dirname: "/repo/apps/desktop/dist-electron",

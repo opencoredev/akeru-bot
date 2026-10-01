@@ -8,7 +8,7 @@ import * as Ref from "effect/Ref";
 
 import * as TestClock from "effect/testing/TestClock";
 
-import { Electron } from "./test-support/DesktopWindowHarness.ts";
+import type * as Electron from "electron";
 
 import * as DesktopWindow from "./DesktopWindow.ts";
 
@@ -41,6 +41,7 @@ describe("DesktopWindow", () => {
       const fakeWindow = makeFakeBrowserWindow();
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -53,6 +54,7 @@ describe("DesktopWindow", () => {
 
         const didFailLoad = fakeWindow.webContentsListeners.get("did-fail-load");
         const didFinishLoad = fakeWindow.webContentsListeners.get("did-finish-load");
+
         if (!didFailLoad || !didFinishLoad) {
           return yield* Effect.die("renderer load listeners were not registered");
         }
@@ -109,6 +111,7 @@ describe("DesktopWindow", () => {
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const openedExternalUrls: unknown[] = [];
+
       const layer = makeTestLayer({
         window: fakeWindow.window,
         createCount,
@@ -121,9 +124,11 @@ describe("DesktopWindow", () => {
         yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
 
         const willNavigate = fakeWindow.webContentsListeners.get("will-navigate");
+
         if (!willNavigate) {
           return yield* Effect.die("will-navigate listener was not registered");
         }
+
         let prevented = false;
         willNavigate(
           {

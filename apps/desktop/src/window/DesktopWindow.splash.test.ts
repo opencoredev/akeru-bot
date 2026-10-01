@@ -42,6 +42,7 @@ describe("DesktopWindow", () => {
           const readyExit = yield* Effect.exit(
             desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773")),
           );
+
           assert.equal(readyExit._tag, "Failure");
           assert.equal(yield* Ref.get(scenario.createCalls), 2);
           assert.isTrue(Option.isNone(yield* Ref.get(scenario.mainWindow)));
@@ -110,9 +111,11 @@ describe("DesktopWindow", () => {
         const desktopWindow = yield* DesktopWindow.DesktopWindow;
 
         yield* desktopWindow.showConnectingSplash;
+
         const readyExit = yield* Effect.exit(
           desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773")),
         );
+
         assert.equal(readyExit._tag, "Failure");
 
         yield* desktopWindow.dispatchMenuAction("open-settings");
