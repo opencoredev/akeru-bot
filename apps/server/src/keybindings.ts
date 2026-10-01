@@ -6,19 +6,7 @@
  *
  * @module Keybindings
  */
-import {
-  KeybindingRule,
-  KeybindingsConfig,
-  KeybindingsConfigError,
-  KeybindingShortcut,
-  KeybindingWhenNode,
-  MAX_KEYBINDINGS_COUNT,
-  ResolvedKeybindingRule,
-  ResolvedKeybindingsConfig,
-  type ServerRemoveKeybindingInput,
-  type ServerUpsertKeybindingInput,
-  type ServerConfigIssue,
-} from "@akeru/contracts";
+import { KeybindingRule, KeybindingsConfigError, MAX_KEYBINDINGS_COUNT, ResolvedKeybindingsConfig, type ServerRemoveKeybindingInput, type ServerUpsertKeybindingInput, type ServerConfigIssue } from "@akeru/contracts";
 import * as Array from "effect/Array";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
@@ -33,8 +21,6 @@ import * as Predicate from "effect/Predicate";
 import * as PubSub from "effect/PubSub";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import * as SchemaIssue from "effect/SchemaIssue";
-import * as SchemaTransformation from "effect/SchemaTransformation";
 import * as Ref from "effect/Ref";
 import * as Context from "effect/Context";
 import * as Scope from "effect/Scope";
@@ -42,14 +28,10 @@ import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
 import * as ServerConfig from "./config.ts";
 import { writeFileStringAtomically } from "./atomicWrite.ts";
-import { fromJsonStringPretty, fromLenientJson } from "@akeru/shared/schemaJson";
-import {
-  DEFAULT_KEYBINDINGS,
-  DEFAULT_RESOLVED_KEYBINDINGS,
-  compileResolvedKeybindingRule,
-  compileResolvedKeybindingsConfig,
-  parseKeybindingShortcut,
-} from "@akeru/shared/keybindings";
+import { DEFAULT_KEYBINDINGS, compileResolvedKeybindingRule, compileResolvedKeybindingsConfig, parseKeybindingShortcut } from "@akeru/shared/keybindings";
+
+import { type KeybindingsConfigState, type KeybindingsChangeEvent, RawKeybindingsEntries, decodeKeybindingRuleExit, decodeResolvedKeybindingFromConfigExit, decodeRawKeybindingsEntriesExit, malformedConfigIssue, invalidEntryIssue, encodeKeybindingsConfigPrettyJson, mergeWithDefaultKeybindings, RETIRED_DEFAULT_KEYBINDINGS } from "./keybindingConfig.ts";
+import { isSameKeybindingRule, hasSameShortcutContext, keybindingRuleFromUpsertInput, replaceTargetFromUpsertInput, keybindingRuleFromRemoveInput } from "./keybindingRules.ts";
 
 export {
   DEFAULT_KEYBINDINGS,
@@ -57,205 +39,6 @@ export {
   compileResolvedKeybindingsConfig,
   parseKeybindingShortcut,
 };
-
-/**
- * Exact former defaults that startup removes without touching user overrides.
- * The commands stay in the contract so older keybindings.json files still decode.
- */
-const RETIRED_DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
-  { key: "mod+n", command: "chat.new", when: "!terminalFocus" },
-  { key: "mod+j", command: "terminal.toggle" },
-  { key: "mod+d", command: "terminal.split", when: "terminalFocus" },
-  { key: "mod+shift+d", command: "terminal.splitVertical", when: "terminalFocus" },
-  { key: "mod+n", command: "terminal.new", when: "terminalFocus" },
-  { key: "mod+w", command: "terminal.close", when: "terminalFocus" },
-  { key: "mod+d", command: "diff.toggle", when: "!terminalFocus" },
-  { key: "mod+p", command: "filePicker.toggle", when: "!terminalFocus" },
-  { key: "mod+shift+f", command: "projectSearch.toggle", when: "!terminalFocus" },
-  { key: "mod+shift+o", command: "chat.new", when: "!terminalFocus" },
-  { key: "mod+shift+n", command: "chat.newLocal", when: "!terminalFocus" },
-  { key: "mod+shift+m", command: "modelPicker.toggle", when: "!terminalFocus" },
-  { key: "mod+o", command: "editor.openFavorite" },
-  { key: "mod+shift+[", command: "thread.previous" },
-  { key: "mod+shift+]", command: "thread.next" },
-  { key: "mod+shift+s", command: "thread.settle", when: "!terminalFocus" },
-  { key: "mod+shift+j", command: "preview.toggle" },
-  { key: "mod+r", command: "preview.refresh", when: "previewFocus" },
-  { key: "mod+l", command: "preview.focusUrl", when: "previewFocus" },
-  { key: "mod+=", command: "preview.zoomIn", when: "previewFocus" },
-  { key: "mod++", command: "preview.zoomIn", when: "previewFocus" },
-  { key: "mod+-", command: "preview.zoomOut", when: "previewFocus" },
-  { key: "mod+0", command: "preview.resetZoom", when: "previewFocus" },
-  // Replaced by the same shortcut without the retired terminal condition.
-  { key: "mod+k", command: "commandPalette.toggle", when: "!terminalFocus" },
-  { key: "mod+s", command: "composer.stash", when: "!terminalFocus" },
-];
-
-export const ResolvedKeybindingFromConfig = KeybindingRule.pipe(
-  Schema.decodeTo(
-    Schema.toType(ResolvedKeybindingRule),
-    SchemaTransformation.transformOrFail({
-      decode: (rule) =>
-        Effect.succeed(compileResolvedKeybindingRule(rule)).pipe(
-          Effect.filterOrFail(
-            Predicate.isNotNull,
-            () =>
-              new SchemaIssue.InvalidValue({
-                message: "Invalid keybinding rule",
-              }),
-          ),
-          Effect.map((resolved) => resolved),
-        ),
-
-      encode: (resolved) =>
-        Effect.gen(function* () {
-          const key = encodeShortcut(resolved.shortcut);
-          if (!key) {
-            return yield* Effect.fail(
-              new SchemaIssue.InvalidValue({
-                message: "Resolved shortcut cannot be encoded to key string",
-              }),
-            );
-          }
-
-          const when = resolved.whenAst ? encodeWhenAst(resolved.whenAst) : undefined;
-          return {
-            key,
-            command: resolved.command,
-            when,
-          };
-        }),
-    }),
-  ),
-);
-
-export const ResolvedKeybindingsFromConfig = Schema.Array(ResolvedKeybindingFromConfig).check(
-  Schema.isMaxLength(MAX_KEYBINDINGS_COUNT),
-);
-
-function isSameKeybindingRule(left: KeybindingRule, right: KeybindingRule): boolean {
-  return (
-    left.command === right.command &&
-    left.key === right.key &&
-    (left.when ?? undefined) === (right.when ?? undefined)
-  );
-}
-
-function keybindingShortcutContext(rule: KeybindingRule): string | null {
-  const parsed = parseKeybindingShortcut(rule.key);
-  if (!parsed) return null;
-  const encoded = encodeShortcut(parsed);
-  if (!encoded) return null;
-  return `${encoded}\u0000${rule.when ?? ""}`;
-}
-
-function hasSameShortcutContext(left: KeybindingRule, right: KeybindingRule): boolean {
-  const leftContext = keybindingShortcutContext(left);
-  const rightContext = keybindingShortcutContext(right);
-  if (!leftContext || !rightContext) return false;
-  return leftContext === rightContext;
-}
-
-function keybindingRuleFromUpsertInput(input: ServerUpsertKeybindingInput): KeybindingRule {
-  return input.when === undefined
-    ? { key: input.key, command: input.command }
-    : { key: input.key, command: input.command, when: input.when };
-}
-
-function replaceTargetFromUpsertInput(input: ServerUpsertKeybindingInput): KeybindingRule | null {
-  if (!input.replace) return null;
-  return input.replace.when === undefined
-    ? { key: input.replace.key, command: input.replace.command }
-    : { key: input.replace.key, command: input.replace.command, when: input.replace.when };
-}
-
-function keybindingRuleFromRemoveInput(input: ServerRemoveKeybindingInput): KeybindingRule {
-  return input.when === undefined
-    ? { key: input.key, command: input.command }
-    : { key: input.key, command: input.command, when: input.when };
-}
-
-function encodeShortcut(shortcut: KeybindingShortcut): string | null {
-  const modifiers: string[] = [];
-  if (shortcut.modKey) modifiers.push("mod");
-  if (shortcut.metaKey) modifiers.push("meta");
-  if (shortcut.ctrlKey) modifiers.push("ctrl");
-  if (shortcut.altKey) modifiers.push("alt");
-  if (shortcut.shiftKey) modifiers.push("shift");
-  if (!shortcut.key) return null;
-  if (shortcut.key !== "+" && shortcut.key.includes("+")) return null;
-  const key = shortcut.key === " " ? "space" : shortcut.key;
-  return [...modifiers, key].join("+");
-}
-
-function encodeWhenAst(node: KeybindingWhenNode): string {
-  switch (node.type) {
-    case "identifier":
-      return node.name;
-    case "not":
-      return `!(${encodeWhenAst(node.node)})`;
-    case "and":
-      return `(${encodeWhenAst(node.left)} && ${encodeWhenAst(node.right)})`;
-    case "or":
-      return `(${encodeWhenAst(node.left)} || ${encodeWhenAst(node.right)})`;
-  }
-}
-
-const RawKeybindingsEntries = fromLenientJson(Schema.Array(Schema.Unknown));
-const KeybindingsConfigPrettyJson = fromJsonStringPretty(KeybindingsConfig);
-const decodeKeybindingRuleExit = Schema.decodeUnknownExit(KeybindingRule);
-const decodeResolvedKeybindingFromConfigExit = Schema.decodeExit(ResolvedKeybindingFromConfig);
-const decodeRawKeybindingsEntriesExit = Schema.decodeUnknownExit(RawKeybindingsEntries);
-const encodeKeybindingsConfigPrettyJson = Schema.encodeEffect(KeybindingsConfigPrettyJson);
-
-export interface KeybindingsConfigState {
-  readonly keybindings: ResolvedKeybindingsConfig;
-  readonly issues: readonly ServerConfigIssue[];
-}
-
-export interface KeybindingsChangeEvent {
-  readonly keybindings: ResolvedKeybindingsConfig;
-  readonly issues: readonly ServerConfigIssue[];
-}
-
-function trimIssueMessage(message: string): string {
-  const trimmed = message.trim();
-  return trimmed.length > 0 ? trimmed : "Invalid keybindings configuration.";
-}
-
-function malformedConfigIssue(detail: string): ServerConfigIssue {
-  return {
-    kind: "keybindings.malformed-config",
-    message: trimIssueMessage(detail),
-  };
-}
-
-function invalidEntryIssue(index: number, detail: string): ServerConfigIssue {
-  return {
-    kind: "keybindings.invalid-entry",
-    index,
-    message: trimIssueMessage(detail),
-  };
-}
-
-function mergeWithDefaultKeybindings(custom: ResolvedKeybindingsConfig): ResolvedKeybindingsConfig {
-  if (custom.length === 0) {
-    return [...DEFAULT_RESOLVED_KEYBINDINGS];
-  }
-
-  const overriddenCommands = new Set(custom.map((binding) => binding.command));
-  const retainedDefaults = DEFAULT_RESOLVED_KEYBINDINGS.filter(
-    (binding) => !overriddenCommands.has(binding.command),
-  );
-  const merged = [...retainedDefaults, ...custom];
-
-  if (merged.length <= MAX_KEYBINDINGS_COUNT) {
-    return merged;
-  }
-
-  // Keep the latest rules when the config exceeds max size; later rules have higher precedence.
-  return merged.slice(-MAX_KEYBINDINGS_COUNT);
-}
 
 /**
  * Keybindings - Service tag for keybinding configuration operations.
@@ -750,3 +533,6 @@ const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(Keybindings, make);
+
+export { ResolvedKeybindingFromConfig, ResolvedKeybindingsFromConfig } from "./keybindingRules.ts";
+export { type KeybindingsConfigState, type KeybindingsChangeEvent } from "./keybindingConfig.ts";

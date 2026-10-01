@@ -10,234 +10,28 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-
-import type {
-  PendingServiceUpdate,
-  ServiceLauncherChildMessage,
-  ServiceLauncherContext,
-  ServiceLauncherParentMessage,
-  ServiceState,
-  ServiceUpdateRecord,
-} from "./cloud/serviceProtocol.ts";
-import {
-  compareExactServiceVersions,
-  decodeServiceLauncherChildMessage,
-  isExactServiceVersion,
-  parseServiceState,
-  SERVICE_LAUNCHER_CONTEXT_ENV,
-  SERVICE_LAUNCHER_PROTOCOL,
-  SERVICE_STATE_FILE,
-  SERVICE_STOP_MARKER_FILE,
-} from "./cloud/serviceProtocol.ts";
+import type { PendingServiceUpdate, ServiceLauncherChildMessage, ServiceLauncherContext, ServiceLauncherParentMessage, ServiceState, ServiceUpdateRecord } from "./cloud/serviceProtocol.ts";
+import { compareExactServiceVersions, decodeServiceLauncherChildMessage, isExactServiceVersion, SERVICE_LAUNCHER_CONTEXT_ENV, SERVICE_LAUNCHER_PROTOCOL, SERVICE_STATE_FILE } from "./cloud/serviceProtocol.ts";
 import { isEntrypoint } from "./entrypoint.ts";
 import { readAliasedEnv } from "./cli/envAliases.ts";
 
+import { stopMarkerPath, runtimeExists, runtimePaths, runtimeNodePath, writeServiceState, readServiceState } from "./serviceLauncherState.ts";
+import { discardDatabaseBackup, databaseRestorePending, backupDatabaseOnce, restoreDatabaseBackup } from "./serviceLauncherDatabase.ts";
+
 const HANDOFF_DELAY_MS = 2_000;
+
 const PREPARED_TIMEOUT_MS = 120_000;
+
 const TERMINATE_GRACE_MS = 5_000;
 
 type TerminalStatus = "committed" | "rolled-back" | "failed";
+
 type ChildRole = "active" | "trial";
 
 interface ManagedChild {
   readonly version: string;
   role: ChildRole;
   readonly process: NodeChildProcess.ChildProcess;
-}
-
-const runtimePaths = (baseDir: string, version: string) => {
-  const versionDir = NodePath.join(baseDir, "runtime", "versions", version);
-  return {
-    versionDir,
-    entryPath: NodePath.join(versionDir, "node_modules", "akeru-bot", "dist", "bin.mjs"),
-    sentinelPath: NodePath.join(versionDir, ".install-complete"),
-  };
-};
-
-/**
- * The Node binary that runs one runtime version. Windows archives bundle their own Node, so an
- * update runs on the Node it was built for; other installs keep the launcher's Node.
- */
-export async function runtimeNodePath(versionDir: string): Promise<string> {
-  const bundled = NodePath.join(versionDir, "node", "node.exe");
-  const stat = await NodeFSP.stat(bundled).catch(() => undefined);
-  return stat?.isFile() ? bundled : process.execPath;
-}
-
-/** SQLite persists across the main file plus its WAL and shared-memory sidecars. */
-const DB_FILE_SUFFIXES = ["", "-wal", "-shm"] as const;
-const RESTORE_MARKER = ".restore-pending";
-
-const databaseBackupDir = (baseDir: string, updateId: string) =>
-  NodePath.join(baseDir, "runtime", "db-backup", updateId);
-
-const databaseBackupFile = (backupDir: string, suffix: (typeof DB_FILE_SUFFIXES)[number]) =>
-  NodePath.join(backupDir, suffix === "" ? "database" : `database${suffix}`);
-
-async function pathExists(target: string): Promise<boolean> {
-  try {
-    await NodeFSP.access(target);
-    return true;
-  } catch (cause) {
-    if (cause instanceof Error && "code" in cause && cause.code === "ENOENT") return false;
-    throw cause;
-  }
-}
-
-async function syncFile(filePath: string): Promise<void> {
-  const handle = await NodeFSP.open(filePath, "r");
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-}
-
-const UNSUPPORTED_DIRECTORY_SYNC = new Set(["EISDIR", "EPERM", "EINVAL", "ENOTSUP"]);
-
-/**
- * Flushes a directory entry where the platform allows it. Windows cannot sync a directory.
- * `open` is replaceable so tests can simulate filesystems that reject a directory sync.
- */
-export async function syncDirectory(
-  directory: string,
-  open: (
-    path: string,
-    flags: string,
-  ) => Promise<Pick<NodeFSP.FileHandle, "sync" | "close">> = NodeFSP.open,
-): Promise<void> {
-  try {
-    const handle = await open(directory, "r");
-    try {
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code !== undefined && UNSUPPORTED_DIRECTORY_SYNC.has(code)) return;
-    throw error;
-  }
-}
-
-/**
- * Snapshots the database once per update before the first trial. A completed
- * backup is never overwritten because a restarted launcher may be looking at
- * database writes from an earlier attempt by the same trial.
- */
-async function backupDatabaseOnce(baseDir: string, pending: PendingServiceUpdate): Promise<void> {
-  const backupDir = databaseBackupDir(baseDir, pending.id);
-  if (await pathExists(backupDir)) return;
-
-  const stagingDir = `${backupDir}.staging`;
-  await NodeFSP.rm(stagingDir, { recursive: true, force: true });
-  await NodeFSP.mkdir(stagingDir, { recursive: true, mode: 0o700 });
-  try {
-    for (const suffix of DB_FILE_SUFFIXES) {
-      const source = `${pending.dbPath}${suffix}`;
-      if (suffix !== "" && !(await pathExists(source))) continue;
-      const destination = databaseBackupFile(stagingDir, suffix);
-      await NodeFSP.copyFile(source, destination);
-      await syncFile(destination);
-    }
-    await NodeFSP.rename(stagingDir, backupDir);
-    await syncDirectory(NodePath.dirname(backupDir));
-  } catch (cause) {
-    await NodeFSP.rm(stagingDir, { recursive: true, force: true }).catch(() => undefined);
-    throw cause;
-  }
-}
-
-const restoreMarkerPath = (baseDir: string, updateId: string) =>
-  NodePath.join(databaseBackupDir(baseDir, updateId), RESTORE_MARKER);
-
-const databaseRestorePending = (baseDir: string, pending: PendingServiceUpdate) =>
-  pathExists(restoreMarkerPath(baseDir, pending.id));
-
-/** Mark rollback before changing live files so launcher recovery cannot boot a partial restore. */
-async function markDatabaseRestorePending(backupDir: string): Promise<void> {
-  const markerPath = NodePath.join(backupDir, RESTORE_MARKER);
-  if (!(await pathExists(markerPath))) {
-    const handle = await NodeFSP.open(markerPath, "wx", 0o600);
-    try {
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    await syncDirectory(backupDir);
-  }
-}
-
-/** Restore is retryable after any process crash while the backup directory remains. */
-async function restoreDatabaseBackup(
-  baseDir: string,
-  pending: PendingServiceUpdate,
-): Promise<void> {
-  const backupDir = databaseBackupDir(baseDir, pending.id);
-  if (!(await pathExists(backupDir))) return;
-
-  await markDatabaseRestorePending(backupDir);
-  for (const suffix of DB_FILE_SUFFIXES) {
-    const target = `${pending.dbPath}${suffix}`;
-    const source = databaseBackupFile(backupDir, suffix);
-    if (await pathExists(source)) {
-      await NodeFSP.copyFile(source, target);
-      await syncFile(target);
-    } else {
-      await NodeFSP.rm(target, { force: true });
-    }
-  }
-  await syncDirectory(NodePath.dirname(pending.dbPath));
-}
-
-async function discardDatabaseBackup(baseDir: string, updateId: string): Promise<void> {
-  const backupDir = databaseBackupDir(baseDir, updateId);
-  if (!(await pathExists(backupDir))) return;
-  await NodeFSP.rm(backupDir, { recursive: true, force: true });
-  await syncDirectory(NodePath.dirname(backupDir));
-}
-
-export async function readServiceState(filePath: string): Promise<ServiceState> {
-  const contents = await NodeFSP.readFile(filePath, "utf8");
-  const state = parseServiceState(contents);
-  if (state === undefined) throw new Error("Service state is invalid or unsupported.");
-  return state;
-}
-
-/** Durable same-directory replacement used for every runtime state transition. */
-export async function writeServiceState(filePath: string, state: ServiceState): Promise<void> {
-  const directory = NodePath.dirname(filePath);
-  await NodeFSP.mkdir(directory, { recursive: true, mode: 0o700 });
-  const tempPath = NodePath.join(
-    directory,
-    `.${NodePath.basename(filePath)}.${process.pid}.${NodeCrypto.randomUUID()}`,
-  );
-  let handle: NodeFSP.FileHandle | undefined;
-  try {
-    handle = await NodeFSP.open(tempPath, "wx", 0o600);
-    await handle.writeFile(`${JSON.stringify(state, null, 2)}\n`, "utf8");
-    await handle.sync();
-    await handle.close();
-    handle = undefined;
-    await NodeFSP.rename(tempPath, filePath);
-    await syncDirectory(directory);
-  } finally {
-    await handle?.close().catch(() => undefined);
-    await NodeFSP.rm(tempPath, { force: true }).catch(() => undefined);
-  }
-}
-
-async function runtimeExists(baseDir: string, version: string): Promise<boolean> {
-  const paths = runtimePaths(baseDir, version);
-  try {
-    const [entry, sentinel] = await Promise.all([
-      NodeFSP.stat(paths.entryPath),
-      NodeFSP.readFile(paths.sentinelPath, "utf8"),
-    ]);
-    return entry.isFile() && sentinel.trim() === version;
-  } catch {
-    return false;
-  }
 }
 
 function terminalUpdate<S extends TerminalStatus>(input: {
@@ -285,9 +79,6 @@ async function terminateChild(
     clearTimeout(force);
   }
 }
-
-const stopMarkerPath = (baseDir: string) =>
-  NodePath.join(baseDir, "runtime", SERVICE_STOP_MARKER_FILE);
 
 export class Launcher {
   readonly #baseDir: string;
@@ -654,3 +445,6 @@ if (
     process.exitCode = 1;
   });
 }
+
+export { runtimeNodePath, readServiceState, writeServiceState } from "./serviceLauncherState.ts";
+export { syncDirectory } from "./serviceLauncherDatabase.ts";

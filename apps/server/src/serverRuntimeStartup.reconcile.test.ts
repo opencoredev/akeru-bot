@@ -8,6 +8,7 @@ import {
 } from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
@@ -61,9 +62,9 @@ const makeAgentController = (liveThreadIds: ReadonlyArray<ThreadId> = []) =>
   }) satisfies AgentController.AgentController["Service"];
 
 const queryWithThreads = (threads: ReadonlyArray<ReturnType<typeof makeThread>>) =>
-  ({
+  Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
     getCommandReadModel: () => Effect.succeed({ threads } as never),
-  }) as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"];
+  });
 
 const runReconciliation = (input: {
   readonly threads: ReadonlyArray<ReturnType<typeof makeThread>>;
@@ -72,10 +73,7 @@ const runReconciliation = (input: {
   readonly dispatch: OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"];
 }) =>
   ServerRuntimeStartup.reconcileProviderSessions.pipe(
-    Effect.provideService(
-      ProjectionSnapshotQuery.ProjectionSnapshotQuery,
-      queryWithThreads(input.threads),
-    ),
+    Effect.provide(queryWithThreads(input.threads)),
     Effect.provideService(
       AgentController.AgentController,
       makeAgentController(input.liveThreadIds),
@@ -271,13 +269,13 @@ it.effect("retries failed projections and continues after a persistent failure",
 it.effect("does not fail startup when the live provider session inventory cannot be read", () => {
   let queried = false;
   return ServerRuntimeStartup.reconcileProviderSessions.pipe(
-    Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+    Effect.provide(Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
       getCommandReadModel: () =>
         Effect.sync(() => {
           queried = true;
           return { threads: [] } as never;
         }),
-    } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
+    })),
     Effect.provideService(AgentController.AgentController, {
       ...makeAgentController(),
       listSessions: () => Effect.die("provider inventory unavailable"),
