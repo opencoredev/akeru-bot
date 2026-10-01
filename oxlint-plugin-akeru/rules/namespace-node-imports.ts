@@ -1,3 +1,5 @@
+import type { ESTree } from "@oxlint/plugins";
+import * as Predicate from "effect/Predicate";
 import { defineRule } from "@oxlint/plugins";
 
 const NODE_MODULE_ALIASES = new Map([
@@ -31,22 +33,22 @@ const expectedNamespaceAlias = (source: string) => {
     .join("")}`;
 };
 
-const literalStringValue = (node: unknown): string | undefined => {
-  if (typeof node !== "object" || node === null) return undefined;
+const literalStringValue = (node: ESTree.Node | undefined): string | undefined => {
+  if (node === undefined) return undefined;
 
-  if (!("type" in node) || node.type !== "Literal") return undefined;
+  if (node.type !== "Literal") return undefined;
 
-  if (!("value" in node) || typeof node.value !== "string") return undefined;
+  if (!Predicate.isString(node.value)) return undefined;
 
   return node.value;
 };
 
-const identifierName = (node: unknown): string | undefined => {
-  if (typeof node !== "object" || node === null) return undefined;
+const identifierName = (node: ESTree.Node | undefined): string | undefined => {
+  if (node === undefined) return undefined;
 
-  if (!("type" in node) || node.type !== "Identifier") return undefined;
+  if (node.type !== "Identifier") return undefined;
 
-  if (!("name" in node) || typeof node.name !== "string") return undefined;
+  if (!Predicate.isString(node.name)) return undefined;
 
   return node.name;
 };

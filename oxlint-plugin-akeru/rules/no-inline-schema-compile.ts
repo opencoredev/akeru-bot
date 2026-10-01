@@ -1,12 +1,12 @@
+import type { ESTree } from "@oxlint/plugins";
 import { defineRule } from "@oxlint/plugins";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 
 import { getPropertyName, isIdentifier, unwrapExpression } from "../utils.ts";
 
 // Effect Schema decoder/encoder APIs allocate compiled functions. Keep them
 // outside function bodies so hot paths do not rebuild compilers per call.
-const COMPILER_METHODS = new Set<keyof typeof Schema>([
+const COMPILER_METHODS = new Set<string>([
   "is",
   "asserts",
   "decodeEffect",
@@ -36,7 +36,7 @@ const COMPILER_METHODS = new Set<keyof typeof Schema>([
   "encodeUnknownSync",
 ]);
 
-const getSchemaCompilerMethod = (callee: unknown): Option.Option<string> => {
+const getSchemaCompilerMethod = (callee: ESTree.Node | null | undefined): Option.Option<string> => {
   const expression = unwrapExpression(callee);
 
   if (Option.isNone(expression) || expression.value.type !== "MemberExpression") {
@@ -48,11 +48,11 @@ const getSchemaCompilerMethod = (callee: unknown): Option.Option<string> => {
   if (!isIdentifier(object, "Schema")) return Option.none();
 
   return Option.filter(getPropertyName(expression.value.property), (method) =>
-    COMPILER_METHODS.has(method as keyof typeof Schema),
+    COMPILER_METHODS.has(method),
   );
 };
 
-const isStaticSchemaReference = (node: unknown): boolean => {
+const isStaticSchemaReference = (node: ESTree.Node | null | undefined): boolean => {
   const expression = unwrapExpression(node);
 
   if (Option.isNone(expression)) return false;
@@ -66,7 +66,7 @@ const isStaticSchemaReference = (node: unknown): boolean => {
   return expression.value.type === "MemberExpression";
 };
 
-const isNestedStaticSchemaCall = (node: unknown): boolean => {
+const isNestedStaticSchemaCall = (node: ESTree.Node | null | undefined): boolean => {
   const expression = unwrapExpression(node);
 
   if (Option.isNone(expression) || expression.value.type !== "CallExpression") return false;
@@ -90,7 +90,7 @@ const isNestedStaticSchemaCall = (node: unknown): boolean => {
   return true;
 };
 
-const isImmediatelyInvoked = (node: unknown): boolean => {
+const isImmediatelyInvoked = (node: ESTree.Node | null | undefined): boolean => {
   const expression = unwrapExpression(node);
 
   if (Option.isNone(expression)) return false;
