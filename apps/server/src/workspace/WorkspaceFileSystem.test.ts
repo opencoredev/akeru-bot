@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
@@ -111,7 +112,7 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
         expect(Exit.isFailure(exit)).toBe(true);
 
         if (Exit.isFailure(exit)) {
-          expect(Cause.squash(exit.cause)).toMatchObject({
+          expect(Option.getOrThrow(Cause.findErrorOption(exit.cause))).toMatchObject({
             _tag: "WorkspaceFileSystemOperationError",
             operation: "close",
             cause,

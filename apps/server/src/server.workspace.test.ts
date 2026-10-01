@@ -16,6 +16,9 @@ import {
 import { assert, it } from "@effect/vitest";
 import { assertFailure, assertTrue } from "@effect/vitest/utils";
 import * as Effect from "effect/Effect";
+import * as Cause from "effect/Cause";
+import * as Exit from "effect/Exit";
+import * as PlatformError from "effect/PlatformError";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -53,6 +56,69 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.isAtLeast(response.entries.length, 1);
       assert.isTrue(response.entries.some((entry) => entry.path === "needle-file.ts"));
       assert.equal(response.truncated, false);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
+  );
+
+  it.effect("maps workspace close failures to ProjectReadFileError over RPC", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-ws-close-" });
+      const target = path.join(cwd, "read.txt");
+
+      yield* fs.writeFileString(target, "content");
+
+      const closeError = PlatformError.systemError({
+        _tag: "Unknown",
+        module: "FileSystem",
+        method: "open",
+        cause: new Error("close failed"),
+      });
+
+      yield* buildAppUnderTest().pipe(
+        Effect.provideService(FileSystem.FileSystem, {
+          ...fs,
+          open: (filePath, options) =>
+            Effect.gen(function* () {
+              const handle = yield* fs.open(filePath, options);
+
+              if (filePath === target) {
+                yield* Effect.addFinalizer(() => Effect.die(closeError));
+              }
+
+              return handle;
+            }),
+        }),
+      );
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+
+      const exit = yield* Effect.exit(
+        Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[WS_METHODS.projectsReadFile]({
+              cwd,
+              relativePath: "read.txt",
+            }),
+          ),
+        ),
+      );
+
+      assert.isTrue(Exit.isFailure(exit));
+
+      if (Exit.isFailure(exit)) {
+        const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+
+        assert.isTrue(Predicate.isTagged(error, "ProjectReadFileError"));
+
+        if (Predicate.isTagged(error, "ProjectReadFileError")) {
+          assert.equal(error.cwd, cwd);
+          assert.equal(error.relativePath, "read.txt");
+          assert.equal(error.operation, "close");
+          assert.equal(error.operationPath, target);
+          assert.equal(error.resolvedPath, target);
+        }
+      }
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
 

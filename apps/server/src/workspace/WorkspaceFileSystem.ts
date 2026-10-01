@@ -257,18 +257,18 @@ export const make = Effect.gen(function* () {
       }),
     ).pipe(
       Effect.catchDefect((cause) =>
-        Effect.die(
-          Predicate.isTagged(cause, "PlatformError") && Predicate.hasProperty(cause, "cause")
-            ? new WorkspaceFileSystemOperationError({
+        Predicate.isTagged(cause, "PlatformError") && Predicate.hasProperty(cause, "cause")
+          ? Effect.fail(
+              new WorkspaceFileSystemOperationError({
                 workspaceRoot: input.cwd,
                 relativePath: input.relativePath,
                 resolvedPath: realTargetPath,
                 operationPath: realTargetPath,
                 operation: "close",
                 cause: cause.cause,
-              })
-            : cause,
-        ),
+              }),
+            )
+          : Effect.die(cause),
       ),
     );
   });
