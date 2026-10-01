@@ -7854,19 +7854,20 @@ describe("AgentControllerLive", () => {
     }).pipe(Effect.provide(layer.pipe(Layer.provideMerge(NodeServices.layer))), Effect.orDie);
   });
 
-  it.effect("runs Claude through the Akeru Mastra harness", () => {
+  it.effect("normalizes legacy plan input when running Claude through Mastra", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     return provideController(
       Effect.gen(function* () {
         const controller = yield* AgentController;
-        yield* controller.resolveEngine({
+        const resolved = yield* controller.resolveEngine({
           threadId: claudeThreadId,
           engine: { provider: "claudeAgent", model: "claude-fable-5" },
           fallback: codexSelection,
           mode: "plan",
           botConversation: true,
         });
+        assert.equal(resolved.mode, "default");
         yield* controller.startSession(claudeThreadId, {
           threadId: claudeThreadId,
           provider: ProviderDriverKind.make("claudeAgent"),
@@ -7886,6 +7887,7 @@ describe("AgentControllerLive", () => {
         expect(mastra.session.model.switch).toHaveBeenCalledWith({
           modelId: "anthropic/claude-fable-5",
         });
+        expect(mastra.session.mode.switch).not.toHaveBeenCalledWith({ modeId: "plan" });
         expect(mastra.sendMessage).toHaveBeenCalledOnce();
       }),
       bridge.service,

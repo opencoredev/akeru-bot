@@ -212,7 +212,6 @@ const DEFAULT_MEMORY_TOOL_SETTINGS = {
   privateBotMemory: true,
   sharedProjectMemory: "ask",
 } as const;
-const PLAN_MODE_ID = "plan";
 const BUILTIN_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(
   Object.values(TOOL_NAME_OVERRIDES).map((tool) => tool.name),
 );
@@ -229,7 +228,6 @@ interface ResolvedEngine {
   readonly provider: ProviderDriverKind;
   readonly providerInstanceId: ProviderInstanceId;
   readonly mastraModelId: string;
-  readonly mode: "default" | "plan";
   readonly botConversation: boolean;
   readonly botName?: string;
   readonly personalityTone?: BotPersonalityTone;
@@ -508,10 +506,6 @@ function messageText(message: MastraDBMessage): string {
     )
     .map((part) => part.text)
     .join("");
-}
-
-function mastraModeId(mode: "default" | "plan"): string {
-  return mode === "plan" ? PLAN_MODE_ID : DEFAULT_MODE_ID;
 }
 
 export function toMcpServerConfigs(
@@ -2841,7 +2835,6 @@ const make = (options?: AgentControllerLiveOptions) =>
             provider: inspected.routing.driverKind,
             providerInstanceId: modelSelection.instanceId,
             mastraModelId: mastraModelId(inspected.routing.driverKind, modelSelection.model),
-            mode: input.mode,
             botConversation: input.botConversation,
             ...(previous?.botName ? { botName: previous.botName } : {}),
             ...(previous?.personalityTone !== undefined
@@ -2863,15 +2856,9 @@ const make = (options?: AgentControllerLiveOptions) =>
             yield* runMastra("model.switch", () =>
               active.session.model.switch({ modelId: resolved.mastraModelId }),
             );
-            const nextMode = mastraModeId(input.mode);
-            if (active.session.mode.get() !== nextMode) {
-              yield* runMastra("mode.switch", () =>
-                active.session.mode.switch({ modeId: nextMode }),
-              );
-            }
             active.model = modelSelection.model;
           }
-          return { ...inspected, mode: input.mode };
+          return { ...inspected, mode: "default" };
         }),
       );
 
@@ -3540,9 +3527,8 @@ const make = (options?: AgentControllerLiveOptions) =>
         yield* runMastra("model.switch", () =>
           session.model.switch({ modelId: resolved.mastraModelId }),
         );
-        const modeId = mastraModeId(resolved.mode);
-        if (session.mode.get() !== modeId) {
-          yield* runMastra("mode.switch", () => session.mode.switch({ modeId }));
+        if (session.mode.get() !== DEFAULT_MODE_ID) {
+          yield* runMastra("mode.switch", () => session.mode.switch({ modeId: DEFAULT_MODE_ID }));
         }
         yield* Effect.forEach(
           ["read", "edit", "execute", "mcp", "other"] as const,
