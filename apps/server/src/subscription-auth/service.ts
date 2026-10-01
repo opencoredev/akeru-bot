@@ -1,18 +1,4 @@
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
-/**
- * Subscription auth service: one API over OAuth and API-key login flows.
- *
- * Storage follows Mastra Code's `AuthStorage` (mastra-ai/mastra,
- * `mastracode/sdk/src/auth/storage.ts`, Apache-2.0): a mode-0600 JSON file of
- * Provider credentials. They live in the server's secrets directory, never inside
- * a workspace or sandbox. Provider runtimes request credentials from this
- * service and do not copy refresh credentials into a sandbox.
- *
- * Login flows are client-driven: `start` returns a URL (and user code) to
- * show, then the client calls `poll` until the flow settles. Every pending
- * state is JSON-serializable, so a login survives a server restart and any
- * replica can continue it.
- */
 
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -27,7 +13,6 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-
 import {
   isSubscriptionCredential,
   subscriptionCredentialStore,
@@ -36,7 +21,6 @@ import {
   type SubscriptionCredentialStore,
   type SubscriptionCredentialStoreError,
 } from "./credentialStore.ts";
-
 import {
   completeAnthropicLogin,
   refreshAnthropicToken,
@@ -320,6 +304,7 @@ export class SubscriptionAuthService {
   private readonly healthPath: string;
   private health: ProviderHealthData = {};
   private readonly pendingLogins = new Map<string, BoundLogin>();
+  private readonly completedOAuthLogins = new Map<string, OAuthCredentials>();
   private readonly refreshInFlight = new Map<string, Promise<string | undefined>>();
   private readonly healthChecks = new Map<string, Promise<void>>();
   private readonly healthProbeVersions = new Map<string, number>();
@@ -1093,6 +1078,9 @@ export class SubscriptionAuthService {
   async pollLogin(loginId: string): Promise<LoginPollStatus> {
     await this.reloadAsync();
     const login = this.pendingLogins.get(loginId);
+    const completed = this.completedOAuthLogins.get(loginId);
+    if (login && completed)
+      return this.foldPoll(loginId, login.provider, { status: "complete", credentials: completed });
     if (!login) {
       return { status: "failed", error: "Login expired or already completed. Start again." };
     }
@@ -1149,13 +1137,8 @@ export class SubscriptionAuthService {
         await this.reloadAsync();
         const login = this.pendingLogins.get(loginId);
         if (!login) return { status: "failed", error: "Login cancelled. Start again." };
-        this.pendingLogins.delete(loginId);
-        this.savePending();
-        this.reloadHealth();
-        delete this.health[credentialKey(provider, login.instanceId)];
-        this.clearImageHealth(provider, login.instanceId);
-        this.saveHealth();
-        await this.setCredential(provider, result.credentials, login.instanceId);
+        if (!(await this.claimOAuthLogin(loginId, login, result.credentials)))
+          return { status: "failed", error: "Login cancelled. Start again." };
         return this.startHealthCheck(provider, login.instanceId);
       }
       case "failed":
@@ -1215,16 +1198,11 @@ export class SubscriptionAuthService {
     }
 
     try {
-      const credentials = await completeAnthropicLogin(code, login.verifier);
-      await this.reloadAsync();
-      if (!this.pendingLogins.has(loginId))
+      const credentials =
+        this.completedOAuthLogins.get(loginId) ??
+        (await completeAnthropicLogin(code, login.verifier));
+      if (!(await this.claimOAuthLogin(loginId, login, credentials)))
         return { status: "failed", error: "Login cancelled. Start again." };
-      this.pendingLogins.delete(loginId);
-      this.savePending();
-      this.reloadHealth();
-      delete this.health[credentialKey("anthropic", login.instanceId)];
-      this.saveHealth();
-      await this.setCredential("anthropic", credentials, login.instanceId);
       return this.startHealthCheck("anthropic", login.instanceId);
     } catch (error) {
       // Keep the pending login: a mangled paste should not force a restart.
@@ -1237,6 +1215,7 @@ export class SubscriptionAuthService {
 
   cancelLogin(loginId: string): void {
     this.reloadLocal();
+    this.completedOAuthLogins.delete(loginId);
     this.pendingLogins.delete(loginId);
     this.savePending();
   }
@@ -1245,8 +1224,10 @@ export class SubscriptionAuthService {
     this.reloadLocal();
     const key = credentialKey(provider, instanceId);
     for (const [loginId, pending] of this.pendingLogins) {
-      if (credentialKey(pending.provider, pending.instanceId) === key)
+      if (credentialKey(pending.provider, pending.instanceId) === key) {
         this.pendingLogins.delete(loginId);
+        this.completedOAuthLogins.delete(loginId);
+      }
     }
     this.savePending();
     await this.updateCredentials(({ [key]: _removed, ...rest }) => rest);
@@ -1277,24 +1258,53 @@ export class SubscriptionAuthService {
     }
   }
 
-  private async setCredential(
-    provider: SubscriptionProviderId,
+  private async claimOAuthLogin(
+    loginId: string,
+    login: BoundLogin,
     credentials: OAuthCredentials,
-    instanceId?: string,
-    preserveHealth = false,
-  ): Promise<void> {
-    const key = credentialKey(provider, instanceId);
-    if (!preserveHealth && credentialAt(this.data, key)?.type === "api-key") {
-      this.reloadHealth();
-      delete this.health[key];
-      this.clearImageHealth(provider, instanceId);
-      this.saveHealth();
+  ): Promise<boolean> {
+    const key = credentialKey(login.provider, login.instanceId);
+    let claimed = false;
+    let claimedPendingInode: bigint | undefined;
+    this.completedOAuthLogins.set(loginId, credentials);
+    try {
+      await this.updateCredentials((data) => {
+        this.reloadLocal();
+        const current = this.pendingLogins.get(loginId);
+        if (
+          !current ||
+          current.provider !== login.provider ||
+          current.instanceId !== login.instanceId
+        )
+          return data;
+        claimed = true;
+        this.pendingLogins.delete(loginId);
+        this.savePending();
+        claimedPendingInode = NodeFS.statSync(this.pendingPath, { bigint: true }).ino;
+        return {
+          ...data,
+          [key]: { ...credentials, type: "oauth", connectionId: NodeCrypto.randomUUID() },
+        };
+      });
+    } catch (error) {
+      this.reloadLocal();
+      if (
+        claimed &&
+        NodeFS.existsSync(this.pendingPath) &&
+        NodeFS.statSync(this.pendingPath, { bigint: true }).ino === claimedPendingInode
+      ) {
+        this.pendingLogins.set(loginId, login);
+        this.savePending();
+      }
+      throw error;
     }
-    // A login is a new connection, so usage readings from the previous account do not carry over.
-    await this.updateCredentials((data) => ({
-      ...data,
-      [key]: { ...credentials, type: "oauth", connectionId: NodeCrypto.randomUUID() },
-    }));
+    this.completedOAuthLogins.delete(loginId);
+    if (!claimed) return false;
+    this.reloadHealth();
+    delete this.health[key];
+    this.clearImageHealth(login.provider, login.instanceId);
+    this.saveHealth();
+    return true;
   }
 
   /**
