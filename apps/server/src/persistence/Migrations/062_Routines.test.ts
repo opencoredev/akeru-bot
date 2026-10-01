@@ -34,6 +34,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("062_Routines", (it) =>
       const rows = yield* sql<{ readonly runId: string }>`
         SELECT run_id AS "runId" FROM routine_run_claims
       `;
+
       assert.deepEqual(rows, [{ runId: "run-1" }]);
 
       yield* sql`
@@ -45,10 +46,12 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("062_Routines", (it) =>
           ('manual-2', 'routine-1', 'dry-run', NULL, 'claimed',
             '2026-08-31T13:01:00.000Z', '2026-08-31T13:01:00.000Z')
       `;
+
       const manualRows = yield* sql<{ readonly runId: string }>`
         SELECT run_id AS "runId" FROM routine_run_claims
         WHERE scheduled_for IS NULL ORDER BY run_id
       `;
+
       assert.deepEqual(manualRows, [{ runId: "manual-1" }, { runId: "manual-2" }]);
     }),
   );

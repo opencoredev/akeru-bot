@@ -7,6 +7,7 @@ import {
   type BootServiceManager,
 } from "./bootServiceTypes.ts";
 import { escapeXmlText } from "./bootServiceLaunchd.ts";
+
 /** systemd expands `%` specifiers, including in unquoted append-log paths. */
 export function escapeSystemdSpecifiers(value: string): string {
   return value.replaceAll("%", "%%");
@@ -14,6 +15,7 @@ export function escapeSystemdSpecifiers(value: string): string {
 
 export function quoteSystemdValue(value: string): string {
   const escaped = escapeSystemdSpecifiers(value);
+
   return /[\s"'\\]/.test(escaped)
     ? `"${escaped.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
     : escaped;
@@ -73,6 +75,7 @@ export function systemdManager(input: {
 }): BootServiceManager {
   const unitFile = input.unitFile ?? BOOT_SERVICE_UNIT_FILE;
   const unitPath = input.path.join(input.homeDir, ".config", "systemd", "user", unitFile);
+
   return {
     kind: "systemd",
     unitPath,

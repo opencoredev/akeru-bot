@@ -13,6 +13,7 @@ import {
   isNonRepositoryGitStderr,
 } from "./GitCoreHelpers.ts";
 import type { makeGitExecution } from "./GitExecution.ts";
+
 export const makeGitRepositoryPaths = (dependencies: {
   fileSystem: Effect.Success<ReturnType<typeof makeGitExecution>>["fileSystem"];
   path: Effect.Success<ReturnType<typeof makeGitExecution>>["path"];
@@ -36,11 +37,14 @@ export const makeGitRepositoryPaths = (dependencies: {
           allowNonZeroExit: true,
         },
       );
+
       if (commonDirResult.exitCode !== 0) {
         const stderr = commonDirResult.stderr.trim();
+
         if (isNonRepositoryGitStderr(stderr)) {
           return null;
         }
+
         return yield* new GitCommandError({
           ...gitCommandContext({
             operation: "GitVcsDriver.resolveRepositoryPaths.commonDir",
@@ -55,12 +59,15 @@ export const makeGitRepositoryPaths = (dependencies: {
       }
 
       const commonDirOutput = commonDirResult.stdout.trim();
+
       const resolvedGitCommonDir = path.isAbsolute(commonDirOutput)
         ? path.normalize(commonDirOutput)
         : path.resolve(cwd, commonDirOutput);
+
       const gitCommonDir = yield* fileSystem
         .realPath(resolvedGitCommonDir)
         .pipe(Effect.orElseSucceed(() => resolvedGitCommonDir));
+
       const [worktreeRootResult, currentBranchResult] = yield* Effect.all(
         [
           executeGit(
@@ -84,7 +91,9 @@ export const makeGitRepositoryPaths = (dependencies: {
         ],
         { concurrency: 2 },
       );
+
       const worktreeRootOutput = worktreeRootResult.stdout.trim();
+
       const worktreeRoot =
         worktreeRootResult.exitCode === 0 && worktreeRootOutput.length > 0
           ? path.normalize(
@@ -93,7 +102,9 @@ export const makeGitRepositoryPaths = (dependencies: {
                 : path.resolve(cwd, worktreeRootOutput),
             )
           : null;
+
       const currentBranchOutput = currentBranchResult.stdout.trim();
+
       const currentBranch =
         currentBranchResult.exitCode === 0 && currentBranchOutput.length > 0
           ? currentBranchOutput
@@ -139,8 +150,10 @@ export const makeGitRepositoryPaths = (dependencies: {
 
     const resolveRepositoryPaths = (cwd: string, refresh = false) => {
       const cacheKey = normalizeRepositoryPathsCacheKey(cwd);
+
       return Cache.get(refresh ? repositoryPathsRefreshCache : repositoryPathsCache, cacheKey);
     };
+
     return {
       repositoryPathsCache,
       repositoryPathsRefreshCache,

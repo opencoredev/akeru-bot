@@ -18,6 +18,7 @@ const alternateTabId = PreviewTabId.make("tab-mcp-alternate");
 const screenshot = (() => {
   const png = new PNG({ width: 10, height: 5 });
   png.data.fill(255);
+
   return PNG.sync.write(png).toString("base64");
 })();
 
@@ -45,6 +46,7 @@ const TestLayer = McpHttpServer.PreviewToolkitRegistrationLive.pipe(
   Layer.provideMerge(McpServer.McpServer.layer),
   Layer.provideMerge(PreviewAutomationBroker.layer.pipe(Layer.provide(NodeServices.layer))),
 );
+
 export {
   environmentId,
   threadId,

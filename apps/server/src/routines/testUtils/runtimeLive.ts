@@ -75,13 +75,17 @@ const harness = (
   const log: string[] = [];
   const summaries: string[] = [];
   const settledStatuses: string[] = [];
+
   const events = {
     push: (event: string) => {
       log.push(event);
+
       if (options.signals) Queue.offerUnsafe(options.signals, event);
+
       return log.length;
     },
   };
+
   const repository = RoutineRepository.of({
     listAll: Effect.succeed([value]),
     listEnabled: Effect.succeed([value]),
@@ -115,9 +119,11 @@ const harness = (
       Effect.sync(() => {
         const key =
           claim.scheduledFor === null ? claim.runId : `${claim.routineId}:${claim.scheduledFor}`;
+
         if (claims.has(key)) return false;
         claims.set(key, claim);
         events.push(`claimed:${claim.trigger}:${claim.scheduledFor}`);
+
         return true;
       }),
     markDispatched: (runId, threadRef) =>
@@ -148,6 +154,7 @@ const harness = (
       }),
     listRecoverable: Effect.succeed(recoverable),
   } satisfies RoutineRepositoryShape);
+
   const adapter = RoutineRuntimeAdapter.of({
     isTargetBusy: () => Effect.succeed(targetBusy),
     checkDependencies: () => Effect.succeed(dependencyFailure),
@@ -169,9 +176,11 @@ const harness = (
     dispatchTurn: () =>
       Effect.sync(() => {
         events.push("turn");
+
         return options.dispatched ?? { threadRef: ThreadId.make("thread-1") };
       }),
   } satisfies RoutineRuntimeAdapterShape);
+
   const layer = RoutineRuntimeLive.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -189,6 +198,7 @@ const harness = (
       ),
     ),
   );
+
   return { events: log, summaries, settledStatuses, layer };
 };
 
@@ -257,6 +267,7 @@ const startDelegatedRoutine = (
   domain: Queue.Queue<OrchestrationEvent>,
 ) => {
   const value = routine({ delegateToBotId: BotId.make("bot-helper") });
+
   return {
     value,
     test: harness(value, [], null, false, Stream.fromQueue(domain), null, {
@@ -272,6 +283,7 @@ const takeUntil = (signals: Queue.Queue<string>, expected: string) =>
       // Earlier signals belong to steps the test already asserted.
     }
   });
+
 export {
   routine,
   harness,

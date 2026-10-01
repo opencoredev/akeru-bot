@@ -18,6 +18,7 @@ for (const input of [
     }),
   );
 }
+
 it.effect("accepts a CDP connection URL without depending on unused provider fields", () =>
   Effect.gen(function* () {
     assert.deepEqual(

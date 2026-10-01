@@ -22,6 +22,7 @@ const decodeImagePatch = Schema.decodeUnknownExit(ImageGenerationSettingsPatch);
 function fixture() {
   const directory = NodePath.join(NodeOS.tmpdir(), `akeru-image-gen-${NodeCrypto.randomUUID()}`);
   NodeFS.mkdirSync(directory, { recursive: true });
+
   return { directory, authPath: NodePath.join(directory, "subscription-auth.json") };
 }
 
@@ -29,6 +30,7 @@ function seedOAuth(authPath: string, provider: string) {
   const existing = NodeFS.existsSync(authPath)
     ? (JSON.parse(NodeFS.readFileSync(authPath, "utf-8")) as Record<string, unknown>)
     : {};
+
   existing[provider] = {
     type: "oauth",
     access: `${provider}-expired-access`,
@@ -43,6 +45,7 @@ function seedChatGptSignIn(authPath: string) {
   const existing = NodeFS.existsSync(authPath)
     ? (JSON.parse(NodeFS.readFileSync(authPath, "utf-8")) as Record<string, unknown>)
     : {};
+
   existing["openai-codex"] = {
     type: "oauth",
     access: "chatgpt-access",
@@ -57,6 +60,7 @@ function seedApiKey(authPath: string, provider: string, access = `${provider}-ke
   const existing = NodeFS.existsSync(authPath)
     ? (JSON.parse(NodeFS.readFileSync(authPath, "utf-8")) as Record<string, unknown>)
     : {};
+
   existing[provider] = { type: "api-key", access };
   NodeFS.writeFileSync(authPath, JSON.stringify(existing));
 }
@@ -76,6 +80,7 @@ function rows(service: SubscriptionAuthService, settings: ImageGenerationSetting
     requestHealth: (provider: ImageProviderId) => service.imageRequestHealth(provider),
   });
 }
+
 export {
   decodeServerSettings,
   encodeServerSettings,

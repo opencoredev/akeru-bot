@@ -1,5 +1,7 @@
 import { photon, externalAdapters } from "./channelAdapters.ts";
+
 export { photon, externalAdapters } from "./channelAdapters.ts";
+
 import * as NodeCrypto from "node:crypto";
 import {
   BotId,
@@ -62,11 +64,14 @@ let latestChannelRuntime: ChannelRuntimeShape | undefined;
 const channelRuntimeFor = (dependencies: ChannelRuntimeDependencies) =>
   Effect.gen(function* () {
     const existing = channelRuntimes.get(dependencies);
+
     if (existing) {
       const runtime = yield* Deferred.await(existing);
       latestChannelRuntime = runtime;
+
       return runtime;
     }
+
     const built = Deferred.makeUnsafe<ChannelRuntimeShape>();
     channelRuntimes.set(dependencies, built);
     const scope = yield* Scope.Scope;
@@ -74,11 +79,13 @@ const channelRuntimeFor = (dependencies: ChannelRuntimeDependencies) =>
     const runtime = Context.get(context, ChannelRuntime);
     yield* Deferred.succeed(built, runtime);
     latestChannelRuntime = runtime;
+
     return runtime;
   });
 
 const latestRuntime = () => {
   if (!latestChannelRuntime) throw new Error("No channel runtime was built in this test.");
+
   return latestChannelRuntime;
 };
 
@@ -235,6 +242,7 @@ const makeGatewayListener = (cleanup: Promise<void> = Promise.resolve()) =>
       readonly signal: AbortSignal;
       readonly durationMs: number;
     }>();
+
     const start: Parameters<typeof startRenewingGateway>[0] = async (
       waitUntil,
       durationMs,
@@ -246,8 +254,10 @@ const makeGatewayListener = (cleanup: Promise<void> = Promise.resolve()) =>
         }),
       );
       Queue.offerUnsafe(starts, { signal, durationMs });
+
       return new Response(null, { status: 200 });
     };
+
     return { starts, start };
   });
 
@@ -256,6 +266,7 @@ const startTestGateway = (...args: Parameters<typeof startRenewingGateway>) =>
   Effect.gen(function* () {
     const gateway = yield* startRenewingGateway(...args);
     const runInTest = yield* FiberSet.makeRuntimePromise();
+
     return {
       isHealthy: gateway.isHealthy,
       settled: gateway.settled,
@@ -418,6 +429,7 @@ function makeThread(
 
 function makeMemorySecretStore() {
   const values = new Map<string, Uint8Array>();
+
   const store: ServerSecretStore["Service"] = {
     get: (name) => Effect.succeed(Option.fromUndefinedOr(values.get(name))),
     set: (name, value) => Effect.sync(() => void values.set(name, value)),
@@ -426,10 +438,12 @@ function makeMemorySecretStore() {
       Effect.sync(() => {
         const value = values.get(name) ?? new Uint8Array(bytes);
         values.set(name, value);
+
         return value;
       }),
     remove: (name) => Effect.sync(() => void values.delete(name)),
   };
+
   return { store, values };
 }
 
@@ -470,16 +484,20 @@ function makeHarness(input: {
   const secretStore = input.secretStore ?? memorySecretStore;
   let sequence = model.snapshotSequence;
   let botUpdateIndex = 0;
+
   const dispatch = (command: OrchestrationCommand) =>
     Effect.sync(() => {
       if (command.type === "bot.update") {
         botUpdateIndex += 1;
         const failure = input.failBotUpdate?.(botUpdateIndex);
+
         if (failure) throw failure;
       }
+
       commands.push(command);
       sequence += 1;
       const channelBindings = command.type === "bot.update" ? command.channelBindings : undefined;
+
       if (channelBindings !== undefined) {
         const botId = command.type === "bot.update" ? command.botId : undefined;
         model = {
@@ -489,12 +507,15 @@ function makeHarness(input: {
         };
         input.onBindings?.(channelBindings);
       }
+
       if (command.type === "thread.create") {
         threads.push(makeThread(command.threadId, command.botId!, []));
         model = { ...model, threads };
       }
+
       return { sequence };
     });
+
   const engine = {
     readEvents: () => Stream.empty,
     readThreadEvents: () => Stream.empty,
@@ -504,6 +525,7 @@ function makeHarness(input: {
     subscribeDomainEvents: Effect.succeed(Stream.empty),
     latestSequence: Effect.sync(() => sequence),
   } satisfies OrchestrationEngineShape;
+
   const dependencies: ChannelRuntimeDependencies = {
     engine,
     secretStore,
@@ -512,6 +534,7 @@ function makeHarness(input: {
       updateSettings: (patch) =>
         Effect.sync(() => {
           settings = { ...settings, ...patch } as typeof settings;
+
           return settings;
         }),
     },
@@ -545,12 +568,14 @@ function makeHarness(input: {
             })),
         }),
   };
+
   const archive = (botId: BotId) => {
     model = {
       ...model,
       bots: model.bots.map((bot) => (bot.id === botId ? { ...bot, archivedAt: NOW } : bot)),
     };
   };
+
   return {
     commands,
     dependencies,
@@ -568,6 +593,7 @@ function makeAdapterDeliveryHarness(
 ) {
   const messageId = MessageId.make(`adapter-reply-${provider}`);
   const threadId = ThreadId.make(`adapter-thread-${provider}`);
+
   const harness = makeHarness({
     startTransport: null,
     threads: [
@@ -580,33 +606,43 @@ function makeAdapterDeliveryHarness(
       ]),
     ],
   });
+
   return { harness, input: { botId: BOT_ID, threadId, messageId } };
 }
 
 function mockTelegramDelivery(responses: Array<Response | Error>) {
   const sends = vi.fn(async () => {
     const response = responses.shift();
+
     if (response instanceof Error) throw response;
+
     if (!response) throw new Error("Missing Telegram response");
+
     return response;
   });
+
   vi.stubGlobal(
     "fetch",
     vi.fn<(...args: Parameters<typeof globalThis.fetch>) => Promise<Response>>(
       async (input, init) => {
         const method = String(input).split("/").at(-1);
+
         if (method === "sendMessage") return sends();
+
         if (method === "getMe")
           return Response.json({
             ok: true,
             result: { id: 1, is_bot: true, first_name: "Akeru", username: "akeru" },
           });
+
         if (method === "deleteWebhook" || method === "deleteMyCommands") {
           return Response.json({ ok: true, result: true });
         }
+
         if (method === "getUpdates")
           return new Promise<Response>((_resolve, reject) => {
             const abort = () => reject(new DOMException("Aborted", "AbortError"));
+
             if (init?.signal?.aborted) abort();
             else init?.signal?.addEventListener("abort", abort, { once: true });
           });
@@ -614,6 +650,7 @@ function mockTelegramDelivery(responses: Array<Response | Error>) {
       },
     ),
   );
+
   return sends;
 }
 
@@ -707,6 +744,7 @@ afterEach(() => {
   externalAdapters.discordSubscriptions.length = 0;
   externalAdapters.reactions.length = 0;
 });
+
 export {
   channelRuntimes,
   latestChannelRuntime,

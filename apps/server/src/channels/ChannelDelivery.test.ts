@@ -25,6 +25,7 @@ import * as Effect from "effect/Effect";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
 import { ChannelPostRejectedError, channelThreadId } from "./ChannelRuntime.ts";
+
 describe("channel runtime", () => {
   it.effect.each(["slack", "discord"] as const)(
     "cleans persisted and terminal %s reactions through adapter APIs",
@@ -34,6 +35,7 @@ describe("channel runtime", () => {
         const threadId = channelThreadId(BOT_ID, PROJECT_ID, provider, externalThreadId);
         const turnId = TurnId.make("reaction-turn");
         const requestMessageId = MessageId.make("reaction-request");
+
         const thread: OrchestrationThread = {
           ...makeThread(threadId, BOT_ID, [
             makeMessage(requestMessageId, "user", "Question", {
@@ -53,11 +55,13 @@ describe("channel runtime", () => {
             respondingBotId: BOT_ID,
           },
         };
+
         const harness = makeHarness({
           startTransport: null,
           threads: [thread],
           commandModelOmitsMessages: true,
         });
+
         yield* connectChannel(
           harness.dependencies,
           provider === "slack" ? slackConnect(BOT_ID) : discordConnect(BOT_ID),
@@ -104,6 +108,7 @@ describe("channel runtime", () => {
   it.effect("appends the Open in Akeru footer only from a server-advertised public origin", () =>
     Effect.gen(function* () {
       const url = `https://akeru.example.com/bots/${BOT_ID}`;
+
       const cases = [
         {
           provider: "whatsapp" as const,
@@ -145,13 +150,16 @@ describe("channel runtime", () => {
       for (const entry of cases) {
         const build = (publicOrigin?: string | null) => {
           const messageId = MessageId.make(`${entry.provider}-reply-footer`);
+
           const threadId = channelThreadId(
             BOT_ID,
             PROJECT_ID,
             entry.provider,
             entry.externalThreadId,
           );
+
           const posts: Array<{ readonly externalThreadId: string; readonly text: string }> = [];
+
           const harness = makeHarness({
             threads: [
               makeThread(threadId, BOT_ID, [
@@ -166,6 +174,7 @@ describe("channel runtime", () => {
             post: async (target, text) => void posts.push({ externalThreadId: target, text }),
             ...(publicOrigin !== undefined ? { publicOrigin } : {}),
           });
+
           return { harness, posts, messageId, threadId };
         };
 
@@ -199,6 +208,7 @@ describe("channel runtime", () => {
       const messageId = MessageId.make("whatsapp-reply-delivery");
       const externalThreadId = "whatsapp:phone-number-id:15551234567";
       const threadId = channelThreadId(BOT_ID, PROJECT_ID, "whatsapp", externalThreadId);
+
       const harness = makeHarness({
         threads: [
           makeThread(threadId, BOT_ID, [
@@ -212,6 +222,7 @@ describe("channel runtime", () => {
         ],
         post: async () => undefined,
       });
+
       yield* connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
 
       yield* sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId });
@@ -219,6 +230,7 @@ describe("channel runtime", () => {
       const deliveries = harness.commands
         .filter((command) => command.type === "thread.channel-delivery.set")
         .map((command) => (command.type === "thread.channel-delivery.set" ? command.delivery : ""));
+
       expect(deliveries).toEqual(["pending", "sent"]);
     }),
   );
@@ -228,6 +240,7 @@ describe("channel runtime", () => {
       const messageId = MessageId.make("message-restart-delivery");
       const threadId = ThreadId.make("thread-restart-delivery");
       let posts = 0;
+
       const harness = makeHarness({
         threads: [
           makeThread(threadId, BOT_ID, [
@@ -241,12 +254,15 @@ describe("channel runtime", () => {
         post: async () => void (posts += 1),
         commandModelOmitsMessages: true,
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       yield* sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId });
       expect(posts).toBe(1);
+
       const deliveries = harness.commands
         .filter((command) => command.type === "thread.channel-delivery.set")
         .map((command) => (command.type === "thread.channel-delivery.set" ? command.delivery : ""));
+
       expect(deliveries).toEqual(["pending", "sent"]);
     }),
   );
@@ -272,6 +288,7 @@ describe("channel runtime", () => {
           throw new ChannelPostRejectedError({ message: "channel rejected" });
         },
       });
+
       yield* connectChannel(rejectedHarness.dependencies, slackConnect(BOT_ID));
       yield* expectFailureMessage(
         sendChannelMessage(rejectedHarness.dependencies, {
@@ -281,9 +298,11 @@ describe("channel runtime", () => {
         }),
         "rejected",
       );
+
       const rejectedDeliveries = rejectedHarness.commands
         .filter((command) => command.type === "thread.channel-delivery.set")
         .map((command) => (command.type === "thread.channel-delivery.set" ? command.delivery : ""));
+
       expect(rejectedDeliveries).toEqual(["pending", "failed"]);
 
       const ambiguousHarness = makeHarness({
@@ -300,7 +319,9 @@ describe("channel runtime", () => {
           throw new Error("socket closed mid-post");
         },
       });
+
       yield* connectChannel(ambiguousHarness.dependencies, slackConnect(BOT_ID));
+
       const ambiguousFailure = yield* failureOf(
         sendChannelMessage(ambiguousHarness.dependencies, {
           botId: BOT_ID,
@@ -308,10 +329,13 @@ describe("channel runtime", () => {
           messageId: ambiguousMessageId,
         }),
       );
+
       expect(ambiguousFailure).toMatchObject({ _tag: "ChannelTransportError" });
+
       const ambiguousDeliveries = ambiguousHarness.commands
         .filter((command) => command.type === "thread.channel-delivery.set")
         .map((command) => (command.type === "thread.channel-delivery.set" ? command.delivery : ""));
+
       expect(ambiguousDeliveries).toEqual(["pending", "unknown"]);
     }),
   );

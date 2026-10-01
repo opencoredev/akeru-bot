@@ -10,6 +10,7 @@ import {
   makeTestSubscriptionAuthService,
   runWithNodeServices,
 } from "./testUtils/subscriptionAuthService.ts";
+
 describe("subscription auth storage", () => {
   it("keeps a persisted plan account identity across OAuth refresh and service restarts", async () => {
     const { directory, authPath } = fixture();
@@ -44,6 +45,7 @@ describe("subscription auth storage", () => {
           ),
       ),
     );
+
     try {
       expect(await service.getPlanAccess("anthropic")).toEqual({
         accessToken: "refreshed-token",
@@ -100,6 +102,7 @@ describe("subscription auth storage", () => {
     const { authPath } = fixture();
     NodeFS.writeFileSync(authPath, "{not json");
     const service = await makeTestSubscriptionAuthService(authPath);
+
     for (const status of service.statuses()) {
       expect(status).toMatchObject({
         connected: false,
@@ -107,6 +110,7 @@ describe("subscription auth storage", () => {
         lastFailedRequest: { message: expect.stringMatching(/damaged/) },
       });
     }
+
     expect(service.getApiKeyCredential("xai")).toBeUndefined();
     expect(service.isConnected("xai")).toBe(false);
     expect(await service.getAccessToken("xai")).toBeUndefined();
@@ -157,9 +161,11 @@ describe("subscription auth storage", () => {
       }),
     );
     const service = await makeTestSubscriptionAuthService(authPath);
+
     const login = await service.startLogin("anthropic", {
       instanceId: ProviderInstanceId.make("claude_work"),
     });
+
     const state = new URL(login.url).searchParams.get("state");
     vi.stubGlobal(
       "fetch",
@@ -174,6 +180,7 @@ describe("subscription auth storage", () => {
         ),
       ),
     );
+
     try {
       expect(await service.completeLogin(login.loginId, `code#${state}`)).toEqual({
         status: "connected",
@@ -191,10 +198,12 @@ describe("subscription auth storage", () => {
   it("switches back to OAuth without retaining the API endpoint or key", async () => {
     const { authPath } = fixture();
     const service = await makeTestSubscriptionAuthService(authPath);
+
     const keyLogin = await service.startLogin("anthropic", {
       authMode: "api-key",
       baseUrl: "https://proxy.example/v1",
     });
+
     await service.completeLogin(keyLogin.loginId, "old-api-key");
     service.recordRequestFailure("anthropic", "Key rejected");
     const oauth = await service.startLogin("anthropic");
@@ -212,6 +221,7 @@ describe("subscription auth storage", () => {
         ),
       ),
     );
+
     try {
       expect(await service.completeLogin(oauth.loginId, `code#${state}`)).toEqual({
         status: "connected",
@@ -237,18 +247,25 @@ describe("subscription auth storage", () => {
       );
       const service = await makeTestSubscriptionAuthService(authPath);
       let completeRequest!: (response: Response) => void;
+
       const response = new Promise<Response>((resolve) => {
         completeRequest = resolve;
       });
+
       const { requested, markRequested } = requestSignal();
+
       const request = vi.fn(() => {
         markRequested();
+
         return response;
       });
+
       vi.stubGlobal("fetch", request);
+
       try {
         const refreshing =
           operation === "refresh" ? service.getAccessToken("xai") : service.testHealth("xai");
+
         await requested;
         expect(request).toHaveBeenCalledOnce();
         const login = await service.startLogin("xai", { authMode: "api-key" });
@@ -280,19 +297,24 @@ describe("subscription auth storage", () => {
     const held = new Promise<void>((resolve) => (releaseUpdate = resolve));
     let reachedUpdate!: () => void;
     const reached = new Promise<void>((resolve) => (reachedUpdate = resolve));
+
     const updateSpy = vi.spyOn(store, "update").mockImplementationOnce((f) => {
       reachedUpdate();
+
       return Effect.promise(() => held).pipe(Effect.andThen(originalUpdate(f)));
     });
+
     let completeRequest!: (response: Response) => void;
     const { requested, markRequested } = requestSignal();
     vi.stubGlobal(
       "fetch",
       vi.fn(() => {
         markRequested();
+
         return new Promise<Response>((resolve) => (completeRequest = resolve));
       }),
     );
+
     try {
       const refreshing = service.getAccessToken("xai");
       await requested;
@@ -323,10 +345,13 @@ describe("subscription auth storage", () => {
     const held = new Promise<void>((resolve) => (releaseUpdate = resolve));
     let reachedUpdate!: () => void;
     const reached = new Promise<void>((resolve) => (reachedUpdate = resolve));
+
     const updateSpy = vi.spyOn(store, "update").mockImplementationOnce((f) => {
       reachedUpdate();
+
       return Effect.promise(() => held).pipe(Effect.andThen(originalUpdate(f)));
     });
+
     try {
       const completing = service.completeLogin(login.loginId, "cancelled-key");
       await reached;
@@ -357,13 +382,17 @@ describe("subscription auth storage", () => {
     const other = await makeTestSubscriptionAuthService(authPath);
     let completeRequest!: (response: Response) => void;
     const { requested, markRequested } = requestSignal();
+
     const request = vi.fn(() => {
       markRequested();
+
       return new Promise<Response>((resolve) => {
         completeRequest = resolve;
       });
     });
+
     vi.stubGlobal("fetch", request);
+
     try {
       const pending = checking.testHealth("xai");
       await requested;
@@ -411,6 +440,7 @@ describe("subscription auth storage", () => {
           }),
       ),
     );
+
     try {
       await checking.testHealth("xai");
       expect(calls).toBeGreaterThan(0);
@@ -435,6 +465,7 @@ describe("subscription auth storage", () => {
       "fetch",
       vi.fn(async () => new Response("{}", { status: 200 })),
     );
+
     try {
       await service.testHealth("xai");
       expect(update).not.toHaveBeenCalled();
@@ -450,10 +481,12 @@ describe("subscription auth storage", () => {
     "ignores a rejected health check for replaced %s credentials",
     async (authMode) => {
       const { authPath } = fixture();
+
       const credential = (access: string) =>
         authMode === "api-key"
           ? { type: "api-key", access }
           : { type: "oauth", access, refresh: `${access}-refresh`, expires: Date.now() + 60_000 };
+
       NodeFS.writeFileSync(authPath, JSON.stringify({ xai: credential("old-key") }));
       const responses = new Map<string, (response: Response) => void>();
       const oldRequest = requestSignal();
@@ -464,14 +497,18 @@ describe("subscription auth storage", () => {
           (_url: string, init: RequestInit) =>
             new Promise<Response>((resolve) => {
               const authorization = new Headers(init.headers).get("Authorization");
+
               if (authorization) {
                 responses.set(authorization, resolve);
+
                 if (authorization === "Bearer old-key") oldRequest.markRequested();
+
                 if (authorization === "Bearer new-key") newRequest.markRequested();
               }
             }),
         ),
       );
+
       try {
         const oldService = await makeTestSubscriptionAuthService(authPath);
         const oldCheck = oldService.testHealth("xai");
@@ -482,6 +519,7 @@ describe("subscription auth storage", () => {
         await newRequest.requested;
         const respondNew = responses.get("Bearer new-key");
         const respondOld = responses.get("Bearer old-key");
+
         if (!respondNew || !respondOld) throw new TypeError("Expected both health requests.");
         respondNew(new Response("{}", { status: 200 }));
         await newCheck;
@@ -563,13 +601,16 @@ describe("subscription auth storage", () => {
   it("checks custom API endpoints without exposing network errors or using OAuth refresh", async () => {
     const { authPath } = fixture();
     const service = await makeTestSubscriptionAuthService(authPath);
+
     const started = await service.startLogin("anthropic", {
       authMode: "api-key",
       baseUrl: "https://proxy.example/v1",
     });
+
     await service.completeLogin(started.loginId, "private-key");
     const request = vi.fn().mockRejectedValue(new Error("private-key"));
     vi.stubGlobal("fetch", request);
+
     try {
       await service.testHealth("anthropic");
       expect(request).toHaveBeenCalledWith(
@@ -589,10 +630,12 @@ describe("subscription auth storage", () => {
   it("returns API-key Kimi access without an OAuth device identity", async () => {
     const { authPath } = fixture();
     const service = await makeTestSubscriptionAuthService(authPath);
+
     const started = await service.startLogin("kimi-for-coding", {
       authMode: "api-key",
       baseUrl: "http://localhost:8888/v1",
     });
+
     await service.completeLogin(started.loginId, "kimi-key");
     expect(await service.getKimiForCodingAccess()).toEqual({
       accessToken: "kimi-key",
@@ -606,12 +649,15 @@ describe("subscription auth storage", () => {
       authPath,
       JSON.stringify({ "opencode-go": { type: "api-key", access: "go-secret-key" } }),
     );
+
     const request = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
       expect(headers.get("authorization")).toBe("Bearer go-secret-key");
       expect(headers.get("user-agent")).toBe("akeru-bot/0.0.37");
+
       return new Response("{}", { status: 200 });
     });
+
     vi.stubGlobal("fetch", request);
 
     const service = await makeTestSubscriptionAuthService(authPath);

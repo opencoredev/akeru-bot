@@ -20,6 +20,7 @@ layer("NodeSqliteClient", (it) => {
   it.effect("applies safe integers to prepared and unprepared positional values", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+
       for (const query of [
         sql`SELECT 9007199254740993 AS value`.values,
         sql`SELECT 9007199254740993 AS value`.valuesUnprepared,
@@ -36,9 +37,11 @@ layer("NodeSqliteClient", (it) => {
           [9007199254740993n],
         ]);
       }
+
       const rows = yield* sql`SELECT 9007199254740993 AS value`.pipe(
         Effect.provideService(SqlClient.SafeIntegers, true),
       );
+
       assert.deepEqual(rows, [{ value: 9007199254740993n }]);
     }),
   );
@@ -52,6 +55,7 @@ layer("NodeSqliteClient", (it) => {
       const rows = yield* sql<{ readonly id: number; readonly name: string }>`
       SELECT id, name FROM entries ORDER BY id
     `;
+
       assert.equal(rows.length, 2);
       assert.equal(rows[0]?.name, "alpha");
       assert.equal(rows[1]?.name, "beta");
@@ -63,6 +67,7 @@ layer("NodeSqliteClient", (it) => {
 
       const unpreparedValues = yield* sql`SELECT id, name FROM entries ORDER BY id`
         .valuesUnprepared;
+
       assert.deepEqual(unpreparedValues, values);
     }),
   );

@@ -27,6 +27,7 @@ import {
 } from "./ChannelRuntimeTypes.ts";
 import { runtimeKey, randomId, channelProviderName } from "./ChannelSecrets.ts";
 import { replaceBinding, withChannelOperation } from "./ChannelOperations.ts";
+
 /**
  * Appends the server-advertised "Open in Akeru" link to an external reply.
  * Only the server-resolved public origin is used; the browser origin is never
@@ -41,6 +42,7 @@ export const channelReplyTextWithFooter = (
 ): string => {
   if (publicOrigin === undefined) return text;
   const url = `${publicOrigin.replace(/\/$/, "")}/bots/${botId}`;
+
   // Posts go out as plain strings; only Discord renders Markdown link syntax.
   return provider === "discord"
     ? `${text}\n\n[Open in Akeru](${url})`
@@ -68,6 +70,7 @@ export const updateChannelStatus = (
   Effect.gen(function* () {
     const { react, removeReaction } = runtime;
     const externalMessageId = origin.externalMessageId;
+
     if (
       (origin.provider !== "slack" && origin.provider !== "discord") ||
       !externalMessageId ||
@@ -78,18 +81,23 @@ export const updateChannelStatus = (
     const statuses = ctx.statuses.get(runtime) ?? new Map<string, ChannelStatus>();
     ctx.statuses.set(runtime, statuses);
     const key = channelStatusKey(origin);
+
     if (status && statuses.get(key)?.status === status) return;
     statuses.delete(key);
+
     for (const emoji of channelStatusReactions) {
       yield* removeReaction(origin.externalThreadId, externalMessageId, emoji).pipe(
         Effect.ignoreCause,
       );
     }
+
     if (status) {
       if (statuses.size >= CHANNEL_SENT_MESSAGE_RECOVERY_LIMIT) {
         const oldest = statuses.values().next().value;
+
         if (oldest) yield* updateChannelStatus(ctx, runtime, oldest.origin);
       }
+
       yield* react(origin.externalThreadId, externalMessageId, status).pipe(Effect.ignoreCause);
       statuses.set(key, { origin, status, ...(threadId ? { threadId } : {}) });
     }
@@ -104,11 +112,14 @@ export const clearPersistedChannelStatuses = (
   Effect.gen(function* () {
     if (provider !== "slack" && provider !== "discord") return;
     const model = yield* ctx.deps.readModel;
+
     for (const summary of model.threads) {
       if (summary.botId !== botId) continue;
       const thread = yield* ctx.deps.readThread(summary.id);
+
       for (const message of thread?.messages ?? []) {
         const origin = message.channelOrigin;
+
         if (origin?.provider === provider) {
           yield* updateChannelStatus(ctx, runtime, origin);
         }
@@ -131,8 +142,10 @@ const withChannelTurnOrigin = (
 ) =>
   Effect.gen(function* () {
     const thread = yield* ctx.deps.readThread(threadId);
+
     if (!thread?.botId) return;
     const botId = thread.botId;
+
     const request = requestMessageId
       ? thread.messages.find((message) => message.id === requestMessageId)
       : !turnId
@@ -142,7 +155,9 @@ const withChannelTurnOrigin = (
               message.id === thread.latestTurn?.requestMessageId &&
               thread.latestTurn?.turnId === turnId,
           );
+
     const origin = request?.channelOrigin;
+
     if (!request || !origin) return;
     yield* withChannelOperation(
       ctx,
@@ -150,8 +165,10 @@ const withChannelTurnOrigin = (
     )(
       Effect.gen(function* () {
         const runtime = ctx.runtimes.get(runtimeKey(botId, origin.provider));
+
         if (!runtime) return;
         const current = yield* ctx.deps.readThread(threadId);
+
         if (current?.messages.findLast((message) => message.role === "user")?.id !== request.id)
           return;
         yield* update(runtime, origin, ctx.statuses.get(runtime));
@@ -180,8 +197,11 @@ const markChannelTurnWaiting = (
 ) =>
   withChannelTurnOrigin(ctx, threadId, turnId, undefined, (runtime, origin, statuses) => {
     const current = statuses?.get(channelStatusKey(origin))?.status;
+
     if (waiting && current !== undefined && current !== "eyes") return Effect.void;
+
     if (!waiting && current !== "hourglass") return Effect.void;
+
     return updateChannelStatus(ctx, runtime, origin, waiting ? "hourglass" : "eyes", threadId);
   });
 
@@ -194,11 +214,13 @@ const setChannelDelivery = (
 ) =>
   Effect.gen(function* () {
     const thread = yield* ctx.deps.readThread(threadId);
+
     if (
       thread?.messages.find((message) => message.id === messageId)?.channelDelivery === delivery
     ) {
       return;
     }
+
     yield* ctx.deps.engine.dispatch({
       type: "thread.channel-delivery.set",
       commandId: CommandId.make(yield* randomId(ctx, "channel-delivery")),
@@ -217,19 +239,24 @@ export const sendChannelMessage = (
   Effect.gen(function* () {
     const deps = ctx.deps;
     const thread = yield* deps.readThread(input.threadId);
+
     const messageIndex = thread?.messages.findIndex(
       (message) => message.id === input.messageId && message.role === "assistant",
     );
+
     if (!thread || thread.botId !== input.botId || messageIndex === undefined || messageIndex < 0) {
       return yield* failWith("Channel reply approval does not match this bot thread.");
     }
+
     const origin = thread.messages
       .slice(0, messageIndex)
       .toReversed()
       .find((message) => message.role === "user")?.channelOrigin;
+
     if (!origin)
       return yield* failWith("Channel reply approval does not match an inbound channel message.");
     const text = thread.messages[messageIndex]?.text;
+
     if (!text?.trim()) return yield* failWith("Channel reply is empty.");
 
     return yield* withChannelOperation(
@@ -239,14 +266,18 @@ export const sendChannelMessage = (
       Effect.gen(function* () {
         const model = yield* deps.readModel;
         const bot = model.bots.find((candidate) => candidate.id === input.botId);
+
         const binding = bot?.channelBindings?.find(
           (candidate) => candidate.provider === origin.provider,
         );
+
         if (!bot || bot.archivedAt !== null || !binding)
           return yield* failWith("Channel binding is unavailable.");
+
         if (binding.projectId !== thread.projectId) {
           return yield* failWith("This reply belongs to a previous channel project assignment.");
         }
+
         // A not-live WhatsApp binding can still hear messages through an unconfigured tunnel.
         if (
           binding.status !== "connected" &&
@@ -254,6 +285,7 @@ export const sendChannelMessage = (
         ) {
           return yield* failWith("Reconnect this channel before sending a reply.");
         }
+
         const claim = yield* deps.deliveryStore.claim({
           messageId: input.messageId,
           botId: input.botId,
@@ -262,11 +294,14 @@ export const sendChannelMessage = (
           externalThreadId: origin.externalThreadId,
           requestedAt: yield* deps.nowIso,
         });
+
         const alreadySent = binding.sentMessageIds.includes(input.messageId);
+
         // A retry of a reply that already landed keeps its sent label.
         if (!alreadySent) {
           yield* setChannelDelivery(ctx, input.threadId, input.messageId, "pending");
         }
+
         if (claim === "requested" && !alreadySent) {
           yield* replaceBinding(ctx, {
             ...binding,
@@ -274,29 +309,37 @@ export const sendChannelMessage = (
             lastError: channelDeliveryUnknownError,
           });
           yield* setChannelDelivery(ctx, input.threadId, input.messageId, "unknown");
+
           return yield* failWith(channelDeliveryUnknownError);
         }
+
         if (claim === "claimed" && !alreadySent) {
           const runtime = ctx.runtimes.get(runtimeKey(input.botId, origin.provider));
+
           if (!runtime) {
             yield* deps.deliveryStore.releaseRequested(input.messageId);
             yield* setChannelDelivery(ctx, input.threadId, input.messageId, "failed");
+
             return yield* failWith(
               `${channelProviderName(origin.provider)} needs reconnect before this reply can send.`,
             );
           }
+
           const posted = yield* Effect.exit(
             runtime.post(
               origin.externalThreadId,
               channelReplyTextWithFooter(text, input.botId, origin.provider, deps.publicOrigin),
             ),
           );
+
           if (Exit.isFailure(posted)) {
             const failure = Cause.squash(posted.cause);
             const rejected = isChannelPostRejected(failure);
+
             if (rejected) {
               yield* deps.deliveryStore.releaseRequested(input.messageId);
             }
+
             yield* replaceBinding(ctx, {
               ...binding,
               lastAttemptAt: yield* deps.nowIso,
@@ -313,8 +356,10 @@ export const sendChannelMessage = (
               input.messageId,
               rejected ? "failed" : "unknown",
             );
+
             return yield* Effect.failCause(posted.cause);
           }
+
           const marked = yield* Effect.exit(
             Effect.gen(function* () {
               yield* deps.deliveryStore.markSent({
@@ -323,6 +368,7 @@ export const sendChannelMessage = (
               });
             }),
           );
+
           if (Exit.isFailure(marked)) {
             yield* replaceBinding(ctx, {
               ...binding,
@@ -331,6 +377,7 @@ export const sendChannelMessage = (
             // The post landed even though the durable mark failed, so the
             // delivery is known sent rather than ambiguous.
             yield* setChannelDelivery(ctx, input.threadId, input.messageId, "sent");
+
             return yield* Effect.failCause(marked.cause);
           }
         } else if (claim !== "sent") {
@@ -339,8 +386,10 @@ export const sendChannelMessage = (
             sentAt: yield* deps.nowIso,
           });
         }
+
         yield* setChannelDelivery(ctx, input.threadId, input.messageId, "sent");
         const { lastError, ...sentBinding } = binding;
+
         return alreadySent
           ? model.snapshotSequence
           : yield* replaceBinding(ctx, {
@@ -361,6 +410,7 @@ export const resolveCompletedChannelReply = (
   Effect.gen(function* () {
     const thread = yield* ctx.deps.readThread(threadId);
     const latestTurn = thread?.latestTurn;
+
     if (
       !thread?.botId ||
       latestTurn?.state !== "completed" ||
@@ -377,7 +427,9 @@ export const resolveCompletedChannelReply = (
         message.role === "user" &&
         message.channelOrigin !== undefined,
     );
+
     if (inboundIndex < 0) return null;
+
     // Only the owning bot answers the channel, from the thread the channel message landed on.
     // The decider never gives a delegated child thread a channel origin, so the parent turn is
     // the only delivery point and this branch should not see child threads. Turns answered by
@@ -391,8 +443,10 @@ export const resolveCompletedChannelReply = (
         turnId,
         reason: thread.parentThreadId ? "delegated-child-thread" : "other-responding-bot",
       });
+
       return null;
     }
+
     const assistantIndex = thread.messages.findIndex(
       (message) =>
         message.id === latestTurn.assistantMessageId &&
@@ -401,6 +455,7 @@ export const resolveCompletedChannelReply = (
         !message.streaming &&
         Boolean(message.text.trim()),
     );
+
     if (assistantIndex <= inboundIndex) return null;
 
     return {

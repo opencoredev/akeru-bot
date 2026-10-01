@@ -24,6 +24,7 @@ export const AkeruMemoryToolInputSchema = Schema.Struct({
     }),
   ),
 });
+
 export type AkeruMemoryToolInput = typeof AkeruMemoryToolInputSchema.Type;
 
 export interface AkeruMemoryShareRequest {
@@ -67,13 +68,16 @@ export function createBotMemoryToolHandler(
       // A share with no document edits never touches the target document, so an agent
       // granted only shared scopes can still share.
       const shareOnly = decoded.share !== undefined && decoded.operations.length === 0;
+
       if (!shareOnly && !allowedTargets.has(decoded.target)) {
         throw new Error(`Memory target '${decoded.target}' is outside this bot's access grant.`);
       }
+
       if (decoded.share) {
         if (!shareFact) throw new Error("Shared memory is not available in this chat.");
         assertSafeContent(decoded.share.fact);
       }
+
       // Document writes go first so a failed write never leaves a shared fact
       // or pending approval behind; a retry of the write is idempotent.
       const result =
@@ -84,14 +88,17 @@ export function createBotMemoryToolHandler(
               target: decoded.target,
               operations: decoded.operations,
             });
+
       let shared: AkeruMemoryShareOutcome | undefined;
       let shareError: string | undefined;
+
       if (decoded.share && shareFact) {
         const request = {
           fact: decoded.share.fact,
           scope: decoded.share.scope,
           sensitive: decoded.share.sensitive ?? false,
         };
+
         if (result === null) {
           shared = await shareFact(request);
         } else {
@@ -99,10 +106,12 @@ export function createBotMemoryToolHandler(
           // beside it so the bot does not retry a write that cannot match again.
           shared = await shareFact(request).catch((cause: unknown) => {
             shareError = cause instanceof Error ? cause.message : "The shared fact was not saved.";
+
             return undefined;
           });
         }
       }
+
       const shareResult = shared
         ? {
             share: {
@@ -117,6 +126,7 @@ export function createBotMemoryToolHandler(
         : shareError !== undefined
           ? { share: { scope: decoded.share!.scope, status: "failed", message: shareError } }
           : {};
+
       if (result === null) {
         if (shared) {
           return {
@@ -126,7 +136,9 @@ export function createBotMemoryToolHandler(
             note: "Do not repeat this share request.",
           };
         }
+
         const document = await store.readDocument(access, decoded.target);
+
         return {
           success: true,
           done: true,
@@ -136,6 +148,7 @@ export function createBotMemoryToolHandler(
           changed: false,
         };
       }
+
       return {
         success: true,
         done: true,

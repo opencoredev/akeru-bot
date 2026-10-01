@@ -32,6 +32,7 @@ const spawnWriteLockHolder = (dbPath: string, holdMs: number) =>
           ["-e", lockHolderSource, dbPath, String(holdMs)],
           { stdio: ["ignore", "pipe", "ignore"] },
         );
+
         holder.stdout.once("data", () => resolve());
         holder.on("error", reject);
         holder.on("exit", () =>

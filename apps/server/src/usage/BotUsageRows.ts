@@ -78,6 +78,7 @@ export const decodeEntry = (row: UsageRow) =>
 
 export function validateTokens(operation: string, values: ReadonlyArray<number>) {
   const invalid = values.find((value) => !Number.isSafeInteger(value) || value < 0);
+
   return invalid === undefined
     ? Effect.void
     : new PersistenceSqlError({

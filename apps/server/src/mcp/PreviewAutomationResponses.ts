@@ -15,16 +15,20 @@ import {
 } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { type PreviewAutomationRequestErrorContext } from "./PreviewAutomationState.ts";
+
 export const selectorDiagnosticsFromInput = (
   input: unknown,
 ): Pick<PreviewAutomationRequestErrorContext, "selectorKind" | "selectorLength"> => {
   if (typeof input !== "object" || input === null) return {};
+
   if ("locator" in input && typeof input.locator === "string") {
     return { selectorKind: "locator", selectorLength: input.locator.length };
   }
+
   if ("selector" in input && typeof input.selector === "string") {
     return { selectorKind: "selector", selectorLength: input.selector.length };
   }
+
   return {};
 };
 
@@ -33,6 +37,7 @@ export const isPreviewTabId = Schema.is(PreviewTabId);
 export const readResultTabId = (result: unknown): PreviewTabId | null | undefined => {
   if (typeof result !== "object" || result === null || !("tabId" in result)) return undefined;
   const tabId = result.tabId;
+
   return tabId === null || isPreviewTabId(tabId) ? tabId : undefined;
 };
 
@@ -40,7 +45,9 @@ export type RemoteDetailKind = "null" | "array" | "object" | "string" | "number"
 
 export function remoteDetailKind(detail: unknown): RemoteDetailKind {
   if (detail === null) return "null";
+
   if (Array.isArray(detail)) return "array";
+
   switch (typeof detail) {
     case "string":
       return "string";
@@ -63,6 +70,7 @@ export const classifyResponseError = (
     ...(error.detail === undefined ? {} : { remoteDetailKind: remoteDetailKind(error.detail) }),
     cause: error,
   };
+
   switch (error._tag) {
     case "PreviewAutomationNoAvailableHostError":
       return new PreviewAutomationNoAvailableHostError({
@@ -95,9 +103,11 @@ export const classifyResponseError = (
         ...remoteDiagnostics,
       });
     }
+
     case "PreviewAutomationTargetNotEditableError": {
       const detail =
         typeof error.detail === "object" && error.detail !== null ? error.detail : undefined;
+
       const remoteSelectorKind =
         detail &&
         "selectorKind" in detail &&
@@ -106,6 +116,7 @@ export const classifyResponseError = (
           detail.selectorKind === "selector")
           ? detail.selectorKind
           : undefined;
+
       const remoteSelectorLength =
         detail &&
         "selectorLength" in detail &&
@@ -114,6 +125,7 @@ export const classifyResponseError = (
         detail.selectorLength >= 0
           ? detail.selectorLength
           : undefined;
+
       return new PreviewAutomationTargetNotEditableError({
         ...context,
         ...remoteDiagnostics,
@@ -125,9 +137,11 @@ export const classifyResponseError = (
           : { selectorLength: remoteSelectorLength ?? context.selectorLength }),
       });
     }
+
     case "PreviewAutomationResultTooLargeError": {
       const detail =
         typeof error.detail === "object" && error.detail !== null ? error.detail : undefined;
+
       const maximumBytes =
         detail &&
         "maximumBytes" in detail &&
@@ -136,12 +150,14 @@ export const classifyResponseError = (
         detail.maximumBytes > 0
           ? detail.maximumBytes
           : undefined;
+
       return new PreviewAutomationResultTooLargeError({
         ...context,
         ...remoteDiagnostics,
         ...(maximumBytes === undefined ? {} : { maximumBytes }),
       });
     }
+
     case "PreviewAutomationUnavailableError":
       return new PreviewAutomationRemoteUnavailableError({
         ...context,

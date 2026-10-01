@@ -5,11 +5,13 @@ import { AkeruMemoryId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import { MemoryApprovals, memoryApprovalIncidentKey } from "./MemoryApprovals.ts";
 import { EntityMemoryRepository } from "./Services/EntityMemoryRepository.ts";
+
 it.layer(testLayer)("MemoryApprovals", (it) => {
   it.effect("reconciles inbox and activity after a lost first side effect", () =>
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
       const botInbox = yield* inbox;
+
       const proposed = yield* approvals.propose({
         access,
         fact: "The release bot owns the project checklist.",
@@ -17,12 +19,16 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
       failureInjection.failResolvedActivityOnce = true;
+
       const first = yield* approvals
         .decide({ access, decision: { candidateId: proposed.candidateId, decision: "approve" } })
         .pipe(Effect.flip);
+
       assert.equal(first._tag, "MemoryApprovalError");
       botInbox.reload();
       assert.equal(
@@ -32,10 +38,12 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
           ?.status,
         "open",
       );
+
       const retry = yield* approvals.decide({
         access,
         decision: { candidateId: proposed.candidateId, decision: "approve" },
       });
+
       assert.equal(retry.status, "approved");
       botInbox.reload();
       assert.equal(
@@ -52,6 +60,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
       const repository = yield* EntityMemoryRepository;
+
       const proposed = yield* approvals.propose({
         access,
         fact: "The release train runs on Fridays.",
@@ -59,7 +68,9 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
       yield* repository.insertScopedFact({
         access,
@@ -76,6 +87,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         access,
         decision: { candidateId: proposed.candidateId, decision: "approve" },
       });
+
       assert.equal(receipt.status, "approved");
       assert.equal(receipt.fact, "The release train runs on Fridays.");
       assert.equal(receipt.scope, "project");
@@ -90,6 +102,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
   it.effect("retries an approve after the scoped fact write crashes", () =>
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
+
       const proposed = yield* approvals.propose({
         access,
         fact: "The release train runs after review.",
@@ -97,20 +110,26 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
       failureInjection.crashAfterScopedFactOnce = true;
+
       const failed = yield* Effect.exit(
         approvals.decide({
           access,
           decision: { candidateId: proposed.candidateId, decision: "approve" },
         }),
       );
+
       assert.equal(failed._tag, "Failure");
+
       const retry = yield* approvals.decide({
         access,
         decision: { candidateId: proposed.candidateId, decision: "approve" },
       });
+
       assert.equal(retry.status, "approved");
     }),
   );
@@ -119,6 +138,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
       const repository = yield* EntityMemoryRepository;
+
       const proposed = yield* approvals.propose({
         access,
         fact: "The release train runs after review.",
@@ -126,13 +146,18 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
+
       const first = yield* approvals.decide({
         access,
         decision: { candidateId: proposed.candidateId, decision: "approve" },
       });
+
       assert.equal(first.status, "approved");
+
       // Recreate the pending crash window with a fresh candidate and an orphan.
       const second = yield* approvals.propose({
         access,
@@ -141,7 +166,9 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(second.status, "pending");
+
       if (second.status !== "pending") return;
       yield* repository.insertScopedFact({
         access,
@@ -154,16 +181,20 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         createdAt: "2026-01-01T00:00:00.000Z",
       });
       failureInjection.crashAfterRetractOnce = true;
+
       const rejected = yield* Effect.exit(
         approvals.decide({
           access,
           decision: { candidateId: second.candidateId, decision: "reject" },
         }),
       );
+
       assert.equal(rejected._tag, "Failure");
+
       const competing = yield* approvals
         .decide({ access, decision: { candidateId: second.candidateId, decision: "approve" } })
         .pipe(Effect.flip);
+
       assert.equal(competing._tag, "MemoryApprovalError");
       assert.match(competing.message, /different approved fact or scope/);
     }),
@@ -173,6 +204,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
       const repository = yield* EntityMemoryRepository;
+
       const proposed = yield* approvals.propose({
         access,
         fact: "The release train leaves at noon.",
@@ -180,7 +212,9 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
       yield* repository.insertScopedFact({
         access,
@@ -193,17 +227,21 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         createdAt: "2026-01-01T00:00:00.000Z",
       });
       failureInjection.crashAfterRetractOnce = true;
+
       const crashed = yield* Effect.exit(
         approvals.decide({
           access,
           decision: { candidateId: proposed.candidateId, decision: "reject" },
         }),
       );
+
       assert.equal(crashed._tag, "Failure");
+
       const retried = yield* approvals.decide({
         access,
         decision: { candidateId: proposed.candidateId, decision: "reject" },
       });
+
       assert.equal(retried.status, "rejected");
     }),
   );
@@ -211,6 +249,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
   it.effect("reconciles an approve crash followed by reject as rejected", () =>
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
+
       const proposed = yield* approvals.propose({
         access,
         fact: "The release train runs after review.",
@@ -218,20 +257,26 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
       failureInjection.crashAfterScopedFactOnce = true;
+
       const failed = yield* Effect.exit(
         approvals.decide({
           access,
           decision: { candidateId: proposed.candidateId, decision: "approve" },
         }),
       );
+
       assert.equal(failed._tag, "Failure");
+
       const rejected = yield* approvals.decide({
         access,
         decision: { candidateId: proposed.candidateId, decision: "reject" },
       });
+
       assert.equal(rejected.status, "rejected");
       assert.isNull(rejected.memoryRootId);
     }),
@@ -241,6 +286,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
       const repository = yield* EntityMemoryRepository;
+
       const proposed = yield* approvals.propose({
         access,
         fact: "The release train runs on Mondays.",
@@ -248,7 +294,9 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
       yield* repository.insertScopedFact({
         access,
@@ -271,6 +319,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
           },
         })
         .pipe(Effect.flip);
+
       assert.equal(error._tag, "MemoryApprovalError");
       assert.match(error.message, /different approved fact or scope/);
       assert.isTrue(
@@ -285,6 +334,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
       const repository = yield* EntityMemoryRepository;
+
       const proposed = yield* approvals.propose({
         access,
         fact: "The release train runs on Wednesdays.",
@@ -292,7 +342,9 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
       yield* repository.insertScopedFact({
         access,
@@ -309,6 +361,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         access,
         decision: { candidateId: proposed.candidateId, decision: "reject" },
       });
+
       assert.equal(receipt.status, "rejected");
       assert.isNull(receipt.memoryRootId);
       assert.isFalse(

@@ -32,6 +32,7 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
     reactions: Schema.fromJsonString(Schema.Array(OrchestrationMessageReaction)),
   }),
 );
+
 const ProjectionThreadMessageExistsDbRowSchema = Schema.Struct({ exists: Schema.Number });
 
 function toProjectionThreadMessage(
@@ -64,7 +65,9 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
     execute: (row) => {
       const nextAttachmentsJson =
         row.attachments !== undefined ? JSON.stringify(row.attachments) : null;
+
       const reactionsJson = JSON.stringify(row.reactions ?? []);
+
       return sql`
         INSERT INTO projection_thread_messages (
           message_id,
@@ -147,6 +150,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
     execute: (row) => {
       const nextAttachmentsJson =
         row.attachments !== undefined ? JSON.stringify(row.attachments) : null;
+
       return sql`
         INSERT INTO projection_thread_messages (
           message_id,

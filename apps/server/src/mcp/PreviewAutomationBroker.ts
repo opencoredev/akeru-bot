@@ -39,6 +39,7 @@ import {
   readResultTabId,
   classifyResponseError,
 } from "./PreviewAutomationResponses.ts";
+
 export class PreviewAutomationBroker extends Context.Service<
   PreviewAutomationBroker,
   {
@@ -57,6 +58,7 @@ export class PreviewAutomationBroker extends Context.Service<
 
 export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
   const crypto = yield* Crypto.Crypto;
+
   const state = yield* SynchronizedRef.make<BrokerState>({
     clients: new Map(),
     assignments: new Map(),
@@ -84,8 +86,10 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
   ) {
     const disconnected = yield* SynchronizedRef.modify(state, (current) => {
       const removed = removeConnectionFromState(current, clientId, queue);
+
       return [removed.disconnected, removed.state] as const;
     });
+
     yield* closeConnection(queue, disconnected);
   });
 
@@ -96,6 +100,7 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
     const queue = yield* Queue.unbounded<PreviewAutomationStreamEvent>();
     const connectionId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
     yield* Queue.offer(queue, { type: "connected", connectionId });
+
     const connection: ClientConnection = {
       clientId,
       connectionId,
@@ -105,15 +110,19 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
       focusOrder: 0,
       queue,
     };
+
     const registration = yield* SynchronizedRef.modify(state, (current) => {
       const previousConnection = current.clients.get(clientId);
+
       const removed = previousConnection
         ? removeConnectionFromState(current, clientId, previousConnection.queue)
         : { state: current, disconnected: [] };
+
       const clients = new Map(removed.state.clients);
       const focusSequence = removed.state.focusSequence + 1;
       const registeredConnection = { ...connection, focusOrder: focusSequence };
       clients.set(clientId, registeredConnection);
+
       return [
         {
           previousConnection,
@@ -123,9 +132,11 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
         { ...removed.state, clients, focusSequence },
       ] as const;
     });
+
     if (registration.previousConnection) {
       yield* closeConnection(registration.previousConnection.queue, registration.disconnected);
     }
+
     return registration.registeredConnection;
   });
 
@@ -146,6 +157,7 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
   )(function* (host) {
     yield* SynchronizedRef.update(state, (current) => {
       const currentHost = current.clients.get(host.clientId);
+
       if (
         !currentHost ||
         currentHost.environmentId !== host.environmentId ||
@@ -153,6 +165,7 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
       ) {
         return current;
       }
+
       const clients = new Map(current.clients);
       const focusSequence = host.focused ? current.focusSequence + 1 : current.focusSequence;
       clients.set(host.clientId, {
@@ -160,6 +173,7 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
         focused: host.focused,
         focusOrder: host.focused ? focusSequence : currentHost.focusOrder,
       });
+
       return { ...current, clients, focusSequence };
     });
   });
@@ -169,6 +183,7 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
   )(function* (response) {
     const pending = yield* SynchronizedRef.modify(state, (current) => {
       const entry = current.pending.get(response.requestId);
+
       if (
         !entry ||
         entry.context.clientId !== response.clientId ||
@@ -176,11 +191,15 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
       ) {
         return [undefined, current] as const;
       }
+
       const next = new Map(current.pending);
       next.delete(response.requestId);
+
       return [entry, { ...current, pending: next }] as const;
     });
+
     if (!pending) return;
+
     if (response.ok) {
       yield* Effect.try({
         try: () => redactProviderVisiblePreviewResult(pending.context.operation, response.result),
@@ -211,20 +230,24 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
   ): Effect.fn.Return<A, PreviewAutomationError> {
     const timeoutMs = input.timeoutMs ?? 15_000;
     const deferred = yield* Deferred.make<unknown, PreviewAutomationError>();
+
     const route = yield* SynchronizedRef.modify(state, (current) => {
       const assignments = new Map(
         Array.from(current.assignments).filter(([, assignment]) => {
           const connection = current.clients.get(assignment.clientId);
+
           return (
             connection?.connectionId === assignment.connectionId &&
             connection.queue === assignment.queue
           );
         }),
       );
+
       const assignmentKey = hostAssignmentKey(input.scope);
       const assigned = assignments.get(assignmentKey);
       const assignedConnection = assigned ? current.clients.get(assigned.clientId) : undefined;
       const hasLiveAssignment = assignedConnection?.environmentId === input.scope.environmentId;
+
       // Keep one provider session on one physical desktop runtime so a
       // multi-step browser interaction cannot jump between independent
       // Electron cookie/DOM state. A live assignment that predates an
@@ -248,14 +271,18 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
                     Number(right.focused) - Number(left.focused) ||
                     right.focusOrder - left.focusOrder,
                 )[0];
+
       if (!connection) {
         if (!hasLiveAssignment) assignments.delete(assignmentKey);
+
         return [undefined, { ...current, assignments }] as const;
       }
+
       const canReuseAssignedTab =
         assigned !== undefined &&
         assigned.connectionId === connection.connectionId &&
         assigned.queue === connection.queue;
+
       assignments.set(assignmentKey, {
         clientId: connection.clientId,
         connectionId: connection.connectionId,
@@ -270,6 +297,7 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
       const requestId = `preview-${requestSequence}`;
       const tabId = input.tabId ?? (canReuseAssignedTab ? assigned.tabId : undefined);
       const selectorDiagnostics = selectorDiagnosticsFromInput(input.input);
+
       const context: PreviewAutomationRequestErrorContext = {
         operation: input.operation,
         environmentId: input.scope.environmentId,
@@ -283,13 +311,16 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
         timeoutMs,
         ...selectorDiagnostics,
       };
+
       const pending = new Map(current.pending);
       pending.set(requestId, { queue: connection.queue, deferred, context });
+
       return [
         { connection, requestId, requestContext: context, requestSequence },
         { ...current, assignments, pending, requestSequence: current.requestSequence + 1 },
       ] as const;
     });
+
     if (!route) {
       return yield* new PreviewAutomationNoAvailableHostError({
         operation: input.operation,
@@ -299,13 +330,17 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
         providerInstanceId: input.scope.providerInstanceId,
       });
     }
+
     const { connection, requestId, requestContext, requestSequence } = route;
+
     const removePending = SynchronizedRef.update(state, (next) => {
       if (!next.pending.has(requestId)) return next;
       const pending = new Map(next.pending);
       pending.delete(requestId);
+
       return { ...next, pending };
     });
+
     const awaitResponse = Effect.fn("PreviewAutomationBroker.awaitResponse")(function* () {
       const offered = yield* Queue.offer(connection.queue, {
         type: "request",
@@ -320,26 +355,34 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
           timeoutMs,
         },
       });
+
       if (!offered) {
         const completion = yield* Deferred.poll(deferred);
+
         if (Option.isSome(completion)) {
           return (yield* completion.value) as A;
         }
+
         return yield* new PreviewAutomationRequestQueueClosedError(requestContext);
       }
+
       const result = yield* Deferred.await(deferred).pipe(Effect.timeoutOption(timeoutMs));
+
       return yield* Option.match(result, {
         onNone: () => Effect.fail(new PreviewAutomationTimeoutError(requestContext)),
         onSome: (value) => Effect.succeed(value as A),
       });
     });
+
     const result = yield* awaitResponse().pipe(Effect.ensuring(removePending));
     const responseTabId = readResultTabId(result);
     const resultTabId = responseTabId === undefined ? input.tabId : responseTabId;
+
     if (resultTabId === undefined) return result;
     const assignmentKey = hostAssignmentKey(input.scope);
     yield* SynchronizedRef.update(state, (current) => {
       const assignment = current.assignments.get(assignmentKey);
+
       if (
         !assignment ||
         assignment.connectionId !== connection.connectionId ||
@@ -348,7 +391,9 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
       ) {
         return current;
       }
+
       const assignments = new Map(current.assignments);
+
       if (resultTabId === null) {
         const { tabId: _tabId, ...withoutTabId } = assignment;
         assignments.set(assignmentKey, { ...withoutTabId, tabSequence: requestSequence });
@@ -359,8 +404,10 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
           tabSequence: requestSequence,
         });
       }
+
       return { ...current, assignments };
     });
+
     return result;
   });
 
@@ -368,4 +415,5 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
 }).pipe(Effect.withSpan("PreviewAutomationBroker.make"));
 
 export const layer = Layer.effect(PreviewAutomationBroker, make);
+
 export type { PreviewAutomationInvokeInput } from "./PreviewAutomationState.ts";

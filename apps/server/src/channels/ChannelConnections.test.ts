@@ -41,19 +41,24 @@ import {
   channelBindingsForRuntime as channelBindingsWith,
   type ChannelRuntimeDependencies,
 } from "./ChannelRuntime.ts";
+
 describe("channel runtime", () => {
   it.effect("clears the connecting binding when a start is interrupted", () =>
     Effect.gen(function* () {
       const starting = Promise.withResolvers<void>();
+
       const harness = makeHarness({
         startTransport: () => {
           starting.resolve();
+
           return new Promise(() => {});
         },
       });
+
       const attempt = yield* Effect.forkChild(
         connectChannel(harness.dependencies, telegramConnect(BOT_ID)),
       );
+
       yield* Effect.promise(() => starting.promise);
       expect(harness.readModel().bots[0]?.channelBindings[0]?.status).toBe("connecting");
       yield* Fiber.interrupt(attempt);
@@ -66,10 +71,13 @@ describe("channel runtime", () => {
       const callbacks: Array<
         Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
       > = [];
+
       let stops = 0;
+
       const harness = makeHarness({
         startTransport: async (_input, onDirectMessage) => {
           callbacks.push(onDirectMessage);
+
           return {
             externalIdentity: "@akeru",
             runtime: {
@@ -82,6 +90,7 @@ describe("channel runtime", () => {
           };
         },
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
       yield* expectFailureMessage(
@@ -109,9 +118,11 @@ describe("channel runtime", () => {
       const callbacks: Array<
         Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
       > = [];
+
       const harness = makeHarness({
         startTransport: async (_input, onDirectMessage) => {
           callbacks.push(onDirectMessage);
+
           return {
             externalIdentity: "@akeru",
             runtime: {
@@ -121,13 +132,16 @@ describe("channel runtime", () => {
           };
         },
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       yield* disconnectChannel(harness.dependencies, BOT_ID, "telegram");
+
       const message = {
         externalThreadId: "telegram:retired",
         externalMessageId: "late",
         text: "Late event",
       };
+
       yield* Effect.promise(async () => callbacks[0]?.(message));
       expect(
         harness.commands.filter((command) => command.type === "thread.turn.start"),
@@ -166,6 +180,7 @@ describe("channel runtime", () => {
   it.effect("rejects archived bot connections and skips them during restore", () =>
     Effect.gen(function* () {
       let starts = 0;
+
       const binding: ChannelBinding = {
         botId: BOT_ID,
         provider: "telegram",
@@ -174,6 +189,7 @@ describe("channel runtime", () => {
         connectedAt: NOW,
         sentMessageIds: [],
       };
+
       const harness = makeHarness({
         bots: [makeBot(BOT_ID, { archivedAt: NOW, channelBindings: [binding] })],
         startTransport: async () => {
@@ -202,6 +218,7 @@ describe("channel runtime", () => {
         connectedAt: NOW,
         sentMessageIds: [],
       };
+
       const harness = makeHarness({
         bots: [makeBot(BOT_ID, { channelBindings: [binding] })],
         startTransport: async () => {
@@ -228,6 +245,7 @@ describe("channel runtime", () => {
         connectedAt: NOW,
         sentMessageIds: [],
       };
+
       const harness = makeHarness({
         bots: [makeBot(BOT_ID, { channelBindings: [binding] })],
       });
@@ -246,6 +264,7 @@ describe("channel runtime", () => {
       const harness = makeHarness({ shutdown: async () => void (stops += 1) });
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       yield* connectChannel(harness.dependencies, imessageConnect(BOT_ID));
+
       const eventBase = {
         sequence: 13,
         eventId: EventId.make("event-bot-lifecycle"),
@@ -282,9 +301,11 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       let starts = 0;
       let stops = 0;
+
       const harness = makeHarness({
         startTransport: async () => {
           starts += 1;
+
           return {
             externalIdentity: "@akeru",
             runtime: {
@@ -319,6 +340,7 @@ describe("channel runtime", () => {
         const messageId = MessageId.make(`not-live-reply-${provider}`);
         const threadId = ThreadId.make(`thread-not-live-${provider}`);
         let posts = 0;
+
         const harness = makeHarness({
           threads: [
             makeThread(threadId, BOT_ID, [
@@ -331,11 +353,13 @@ describe("channel runtime", () => {
           ],
           post: async () => void (posts += 1),
         });
+
         yield* connectChannel(
           harness.dependencies,
           provider === "telegram" ? telegramConnect(BOT_ID) : whatsappConnect(BOT_ID),
         );
         const update = harness.commands.findLast((command) => command.type === "bot.update");
+
         if (!update) throw new Error("Expected a connected channel binding");
         yield* harness.dependencies.engine.dispatch({
           ...update,
@@ -351,6 +375,7 @@ describe("channel runtime", () => {
           threadId,
           messageId,
         });
+
         if (provider === "telegram") {
           yield* expectFailureMessage(send, "Reconnect this channel before sending a reply.");
           expect(posts).toBe(0);
@@ -366,9 +391,11 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       let failNextRead = false;
       let stops = 0;
+
       const harness = makeHarness({
         startTransport: async () => {
           failNextRead = true;
+
           return {
             externalIdentity: "@akeru",
             runtime: {
@@ -378,12 +405,15 @@ describe("channel runtime", () => {
           };
         },
       });
+
       const readModel = harness.dependencies.readModel;
+
       const dependencies = {
         ...harness.dependencies,
         readModel: Effect.suspend(() => {
           if (!failNextRead) return readModel;
           failNextRead = false;
+
           return Effect.die(new Error("projection read failed"));
         }),
       };
@@ -402,6 +432,7 @@ describe("channel runtime", () => {
       const messageId = MessageId.make("message-definite-rejection");
       const threadId = ThreadId.make("thread-definite-rejection");
       let posts = 0;
+
       const harness = makeHarness({
         threads: [
           makeThread(threadId, BOT_ID, [
@@ -414,10 +445,12 @@ describe("channel runtime", () => {
         ],
         post: async () => {
           posts += 1;
+
           if (posts === 1)
             throw new ChannelPostRejectedError({ message: "provider rejected secret-token" });
         },
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       const input = { botId: BOT_ID, threadId, messageId };
       expect(yield* failureOf(sendChannelMessage(harness.dependencies, input))).toMatchObject({
@@ -445,6 +478,7 @@ describe("channel runtime", () => {
       const messageId = MessageId.make("message-before-transport");
       const threadId = ThreadId.make("thread-before-transport");
       let posts = 0;
+
       const harness = makeHarness({
         threads: [
           makeThread(threadId, BOT_ID, [
@@ -457,6 +491,7 @@ describe("channel runtime", () => {
         ],
         post: async () => void (posts += 1),
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       yield* shutdownAllChannels();
 
@@ -476,6 +511,7 @@ describe("channel runtime", () => {
       const messageId = MessageId.make("message-binding-retry");
       const threadId = ThreadId.make("thread-binding-retry");
       let posts = 0;
+
       const harness = makeHarness({
         failBotUpdate: (updateIndex) =>
           updateIndex === 3 ? new Error("binding persistence failed") : undefined,
@@ -490,6 +526,7 @@ describe("channel runtime", () => {
         ],
         post: async () => void (posts += 1),
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
       yield* expectFailureMessage(
@@ -510,6 +547,7 @@ describe("channel runtime", () => {
       const threadId = ThreadId.make("thread-recovery-bound");
       const messages: OrchestrationMessage[] = [];
       const assistantIds: MessageId[] = [];
+
       for (let index = 0; index < CHANNEL_SENT_MESSAGE_RECOVERY_LIMIT + 2; index += 1) {
         messages.push(
           makeMessage(MessageId.make(`inbound-${index}`), "user", `Question ${index}`, {
@@ -521,11 +559,14 @@ describe("channel runtime", () => {
         assistantIds.push(assistantId);
         messages.push(makeMessage(assistantId, "assistant", `Answer ${index}`));
       }
+
       let posts = 0;
+
       const harness = makeHarness({
         threads: [makeThread(threadId, BOT_ID, messages)],
         post: async () => void (posts += 1),
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
       for (const messageId of assistantIds) {

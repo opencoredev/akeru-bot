@@ -18,10 +18,13 @@ import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 import * as ServerSelfUpdate from "./selfUpdate.ts";
 
 const ARCHIVE_SHA256 = "a".repeat(64);
+
 const releaseKeys = NodeCrypto.generateKeyPairSync("ed25519");
+
 const releaseManifest = new TextEncoder().encode(
   `${ARCHIVE_SHA256}  Akeru-Remote-1.1.0-win32-x64.zip\n`,
 );
+
 const releaseSignature = NodeCrypto.sign(null, releaseManifest, releaseKeys.privateKey);
 
 /** Serves the signed stub release that the Windows update verifies. */
@@ -51,6 +54,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
   const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-self-update-test-" });
   const order: string[] = [];
   const preflightCommands: string[] = [];
+
   const runner = ProcessRunner.ProcessRunner.of({
     run: (input) =>
       Effect.gen(function* () {
@@ -58,11 +62,15 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
           order.push("archive");
           expect(input.args).toContain("v1.1.0");
           expect(input.args).toContain(input.command === "sh" ? "--prepare-only" : "-PrepareOnly");
+
           if (input.command === "powershell.exe") {
             expect(input.args[input.args.indexOf("-ExpectedSha256") + 1]).toBe(ARCHIVE_SHA256);
           }
+
           const installRoot = input.env?.AKERU_INSTALL_ROOT;
+
           if (installRoot === undefined) return yield* Effect.die("missing archive install root");
+
           const entry = path.join(
             installRoot,
             "versions",
@@ -72,13 +80,16 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
             "dist",
             "bin.mjs",
           );
+
           yield* fs.makeDirectory(path.dirname(entry), { recursive: true }).pipe(Effect.orDie);
           yield* fs.writeFileString(entry, "verified archive bytes\n").pipe(Effect.orDie);
+
           if (options.platform === "win32") {
             const node = path.join(installRoot, "versions", "1.1.0", "node", "node.exe");
             yield* fs.makeDirectory(path.dirname(node), { recursive: true }).pipe(Effect.orDie);
             yield* fs.writeFileString(node, "bundled node\n").pipe(Effect.orDie);
           }
+
           return {
             stdout: "",
             stderr: "",
@@ -90,13 +101,16 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
             stderrInvalidUtf8: false,
           };
         }
+
         if (input.command === "npm") {
           order.push("install");
           const prefix = input.args[input.args.indexOf("--prefix") + 1];
+
           if (prefix === undefined) return yield* Effect.die("missing npm prefix");
           const entry = path.join(prefix, "node_modules", "akeru-bot", "dist", "bin.mjs");
           yield* fs.makeDirectory(path.dirname(entry), { recursive: true }).pipe(Effect.orDie);
           yield* fs.writeFileString(entry, "export {};\n").pipe(Effect.orDie);
+
           return {
             stdout: "",
             stderr: "",
@@ -108,8 +122,10 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
             stderrInvalidUtf8: false,
           };
         }
+
         order.push("preflight");
         preflightCommands.push(input.command);
+
         const result =
           options.preflight === "blocked"
             ? { status: "blocked", version: "1.1.0", reason: "local update required" }
@@ -118,6 +134,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
                 version: "1.1.0",
                 launcherProtocol: SERVICE_LAUNCHER_PROTOCOL,
               };
+
         return {
           // @effect-diagnostics-next-line preferSchemaOverJson:off - fake child-process stdout.
           stdout: JSON.stringify(result),
@@ -131,6 +148,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
         };
       }),
   });
+
   const launcher = ServiceLauncherClient.ServiceLauncherClient.of({
     managed: options.managed ?? true,
     requestUpdate:
@@ -138,13 +156,16 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
       (() =>
         Effect.sync(() => {
           order.push("accept");
+
           return "launcher-id";
         })),
     prepareTrial: Effect.sync((): undefined => undefined),
   });
+
   const config = yield* ServerConfig.ServerConfig.pipe(
     Effect.provide(ServerConfig.layerTest(process.cwd(), baseDir)),
   );
+
   const selfUpdate = yield* ServerSelfUpdate.make({
     manifestKey: releaseKeys.publicKey.export({ type: "spki", format: "pem" }).toString(),
   }).pipe(
@@ -155,6 +176,7 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
     Effect.provideService(HostProcessPlatform, options.platform ?? "linux"),
     Effect.provide(ServerConfig.layer({ ...config, mode: options.mode ?? "web" })),
   );
+
   return { selfUpdate, order, preflightCommands, baseDir };
 });
 
@@ -176,6 +198,7 @@ it.layer(NodeServices.layer)("server self update", (it) => {
         expect(yield* fs.exists(path.join(versionDir, ".archive-verified"))).toBe(true);
         // Windows archives preflight on their own Node, the one the launcher will run them on.
         expect(preflightCommands).toHaveLength(1);
+
         if (platform === "win32") {
           expect(preflightCommands[0]).toMatch(
             /[/\\]runtime[/\\]versions[/\\].+[/\\]node[/\\]node\.exe$/,
@@ -190,9 +213,11 @@ it.layer(NodeServices.layer)("server self update", (it) => {
   it.effect("does not activate an archive rejected by the installer", () =>
     Effect.gen(function* () {
       const { selfUpdate, order } = yield* makeHarness({ archiveFailure: true });
+
       const error = yield* selfUpdate
         .update({ targetVersion: "1.1.0", source: "remote-archive" })
         .pipe(Effect.flip);
+
       expect(error.reason).toContain("Could not prepare");
       expect(order).toEqual(["archive"]);
     }),
@@ -236,13 +261,16 @@ it.layer(NodeServices.layer)("server self update", (it) => {
     Effect.gen(function* () {
       const requested = yield* Deferred.make<void>();
       const accepted = yield* Deferred.make<string>();
+
       const { selfUpdate } = yield* makeHarness({
         requestUpdate: () =>
           Deferred.succeed(requested, undefined).pipe(Effect.andThen(Deferred.await(accepted))),
       });
+
       const first = yield* Effect.forkChild(selfUpdate.update({ targetVersion: "1.1.0" }), {
         startImmediately: true,
       });
+
       yield* Deferred.await(requested);
       expect((yield* selfUpdate.update({ targetVersion: "1.1.1" }).pipe(Effect.flip)).reason).toBe(
         "A server update is already in progress.",

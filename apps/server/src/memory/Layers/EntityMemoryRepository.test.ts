@@ -26,6 +26,7 @@ import {
   EntityMemoryRepository,
 } from "../Services/EntityMemoryRepository.ts";
 import { deriveAkeruWorkspaceId, resolveMemoryArchivePartitions } from "../EntityMemoryAccess.ts";
+
 it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
   it.effect("queries only explicit authorized partitions", () =>
     Effect.gen(function* () {
@@ -38,6 +39,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         query: "prefers vim",
         limit: 10,
       });
+
       assert.deepEqual(
         rows.map((row) => row.id),
         ["first"],
@@ -48,6 +50,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
   it.effect("rejects unapproved, forged, and mismatched direct inserts", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
+
       const invalid = [
         makeRevision("pending-insert", "bot:user", { approvalState: "pending" }),
         makeRevision("forged-user-insert", "bot:user", {
@@ -65,6 +68,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       const exits = yield* Effect.forEach(invalid, (revision) =>
         repository.insert({ access: botAccess, revision }).pipe(Effect.exit),
       );
+
       assert.isTrue(exits.every((exit) => Predicate.isTagged(exit, "Failure")));
     }),
   );
@@ -75,12 +79,14 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       const rootId = AkeruMemoryRootId.make("root");
       const initial = makeRevision("memory-1", "bot:user", { rootId });
       yield* repository.insert({ access: botAccess, revision: initial });
+
       const next = makeRevision("memory-2", "bot:user", {
         rootId,
         revision: 2,
         supersedesId: initial.id,
         fact: "The user prefers helix.",
       });
+
       yield* repository.revise({ access: botAccess, revision: next, expectedRevision: 1 });
       const current = yield* repository.getCurrent({ access: botAccess, rootId });
       assert.equal(current.id, "memory-2");
@@ -97,7 +103,9 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
           expectedRevision: 1,
         })
         .pipe(Effect.exit);
+
       assert.isTrue(Predicate.isTagged(stale, "Failure"));
+
       if (Predicate.isTagged(stale, "Failure")) {
         assert.instanceOf(Cause.squash(stale.cause), EntityMemoryConflictError);
       }
@@ -136,6 +144,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
           rootId,
         })
         .pipe(Effect.exit);
+
       assert.isTrue(Predicate.isTagged(exit, "Failure"));
     }),
   );
@@ -161,19 +170,25 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         memoryId: AkeruMemoryId.make("tombstone"),
         updatedAt: "2026-08-30T22:00:00.000Z",
       });
+
       const rows = yield* repository.search({
         access: botAccess,
         query: "secret-disappear-value",
         limit: 10,
       });
+
       assert.equal(rows.length, 0);
+
       const ftsRows = yield* sql<{
         readonly memory_id: string;
       }>`SELECT memory_id FROM akeru_memory_fts WHERE memory_id = ${"active"}`;
+
       assert.deepEqual(ftsRows, []);
+
       const derivedRows = yield* sql<{
         readonly root_id: string;
       }>`SELECT root_id FROM akeru_memory_derived_copies WHERE root_id = ${rootId}`;
+
       assert.deepEqual(derivedRows, []);
       const current = yield* repository.getCurrent({ access: botAccess, rootId });
       assert.equal(current.deletionState, "tombstoned");
@@ -196,7 +211,9 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
           }),
         })
         .pipe(Effect.exit);
+
       assert.isTrue(Predicate.isTagged(resurrection, "Failure"));
+
       if (Predicate.isTagged(resurrection, "Failure")) {
         assert.instanceOf(Cause.squash(resurrection.cause), EntityMemoryConflictError);
       }
@@ -211,12 +228,14 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         access: privateAccess("bot-1"),
         revision: makeRevision("private-memory", "bot-1:user", { rootId }),
       });
+
       const exit = yield* repository
         .getCurrent({
           access: privateAccess("bot-2"),
           rootId,
         })
         .pipe(Effect.exit);
+
       assert.isTrue(Predicate.isTagged(exit, "Failure"));
     }),
   );
@@ -224,12 +243,14 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
   it.effect("rejects private partitions for shared threads", () =>
     Effect.gen(function* () {
       const repository = yield* EntityMemoryRepository;
+
       const exit = yield* repository
         .insert({
           access: sharedAccess,
           revision: makeRevision("shared-private", "bot:user"),
         })
         .pipe(Effect.exit);
+
       assert.isTrue(Predicate.isTagged(exit, "Failure"));
     }),
   );
@@ -240,6 +261,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       const sql = yield* SqlClient.SqlClient;
       const partitions = yield* resolveMemoryArchivePartitions(botAccess, "bot");
       const rootId = AkeruMemoryRootId.make("classified-import-root");
+
       const first = makeRevision("classified-import-1", "bot", {
         rootId,
         partition: {
@@ -255,6 +277,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         initiatingUserId: botAccess.userId,
         affectedBotIds: [botAccess.botId!],
       });
+
       yield* repository.insert({ access: botAccess, revision: first });
 
       const skipped = yield* repository.previewImport!({
@@ -262,6 +285,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         partitions,
         revisions: [first],
       });
+
       assert.equal(skipped.items[0]?.classification, "skipped");
 
       const second = makeRevision("classified-import-2", "bot", {
@@ -273,12 +297,15 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         fact: "The bot now uses Helix.",
         updatedAt: "2026-08-30T22:00:00.000Z",
       });
+
       const extendingFirst = { ...first, supersededById: second.id };
+
       const changed = yield* repository.previewImport!({
         access: botAccess,
         partitions,
         revisions: [extendingFirst, second],
       });
+
       assert.equal(changed.items[0]?.classification, "changed");
       yield* sql`INSERT INTO akeru_memory_derived_copies (tenant_id, root_id, revision_id, thread_id, created_at)
         VALUES (${botAccess.tenantId}, ${rootId}, ${first.id}, ${botAccess.threadId}, ${first.updatedAt})`;
@@ -298,7 +325,9 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         partitions,
         revisions: [{ ...first, fact: "A divergent history." }],
       });
+
       assert.equal(divergent.items[0]?.classification, "conflicting");
+
       const unresolved = yield* repository
         .applyImport({
           access: botAccess,
@@ -307,6 +336,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
           previewHash: divergent.previewHash,
         })
         .pipe(Effect.exit);
+
       assert.isTrue(Predicate.isTagged(unresolved, "Failure"));
       yield* repository.applyImport!({
         access: botAccess,
@@ -333,11 +363,13 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
           visibility: "shared",
         }),
       });
+
       const rehome = yield* repository.previewImport!({
         access: botAccess,
         partitions,
         revisions: [makeRevision("rehome-archive", "bot", { rootId: sharedRootId })],
       }).pipe(Effect.exit);
+
       assert.isTrue(Predicate.isTagged(rehome, "Failure"));
     }),
   );
@@ -347,12 +379,15 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       const repository = yield* EntityMemoryRepository;
       const workspaceAccess = privateAccess("bot-legacy-workspace");
       const workspaceId = deriveAkeruWorkspaceId(workspaceAccess.projectId);
+
       const legacyWorkspaceId = (yield* resolveMemoryArchivePartitions(
         workspaceAccess,
         "workspace",
       )).find((partition) => partition.partitionId !== workspaceId)?.partitionId;
+
       if (!legacyWorkspaceId) return assert.fail("Expected a legacy workspace partition.");
       const rootId = AkeruMemoryRootId.make("legacy-workspace-root");
+
       const initial = makeRevision("legacy-workspace-1", legacyWorkspaceId, {
         rootId,
         partition: {
@@ -368,6 +403,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         initiatingUserId: workspaceAccess.userId,
         affectedBotIds: [workspaceAccess.botId!],
       });
+
       const edited = {
         ...initial,
         id: AkeruMemoryId.make("legacy-workspace-2"),
@@ -375,6 +411,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         supersedesId: initial.id,
         fact: "The legacy workspace fact was edited.",
       };
+
       const pinned = {
         ...edited,
         id: AkeruMemoryId.make("legacy-workspace-3"),
@@ -401,6 +438,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         access: botAccess,
         revision: makeRevision("mutate-scope-1", "bot:user", { rootId }),
       });
+
       const moved = yield* repository.applyMutation({
         access: botAccess,
         mutation: {
@@ -413,9 +451,11 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         updatedAt: "2026-08-30T22:30:00.000Z",
         sharedProjectApproval: "approved",
       });
+
       assert.equal(moved!.partition.scope, "project");
       assert.equal(moved!.entityKind, "project");
       assert.equal(moved!.visibility, "shared");
+
       const back = yield* repository.applyMutation({
         access: botAccess,
         mutation: {
@@ -428,8 +468,10 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         updatedAt: "2026-08-30T22:31:00.000Z",
         sharedProjectApproval: "approved",
       });
+
       assert.equal(back!.partition.scope, "bot");
       assert.equal(back!.visibility, "private");
+
       // A group scope is not owned by a one-to-one thread and must fail.
       const denied = yield* repository
         .applyMutation({
@@ -445,6 +487,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
           sharedProjectApproval: "approved",
         })
         .pipe(Effect.exit);
+
       assert.isTrue(Predicate.isTagged(denied, "Failure"));
     }),
   );

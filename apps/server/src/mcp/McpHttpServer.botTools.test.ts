@@ -12,9 +12,11 @@ it.effect("requires both memory capability and a thread-scoped handler", () =>
     let calls = 0;
     McpMemoryToolSession.setMcpMemoryToolSession(threadId, async ({ input }) => {
       calls += 1;
+
       return { success: true, message: "Memory updated.", input };
     });
     const memoryInvocation = { ...invocation, capabilities: new Set(["memory"] as const) };
+
     const previewOnly = yield* server
       .callTool({
         name: "memory",
@@ -27,6 +29,7 @@ it.effect("requires both memory capability and a thread-scoped handler", () =>
         Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
         Effect.provideService(McpSchema.McpServerClient, client),
       );
+
     expect(previewOnly.isError).toBe(true);
     expect(calls).toBe(0);
 
@@ -51,6 +54,7 @@ it.effect("requires both memory capability and a thread-scoped handler", () =>
     });
 
     McpMemoryToolSession.clearMcpMemoryToolSession(threadId);
+
     const denied = yield* server
       .callTool({
         name: "memory",
@@ -60,6 +64,7 @@ it.effect("requires both memory capability and a thread-scoped handler", () =>
         Effect.provideService(McpInvocationContext.McpInvocationContext, memoryInvocation),
         Effect.provideService(McpSchema.McpServerClient, client),
       );
+
     expect(denied.isError).toBe(true);
   }).pipe(
     Effect.ensuring(Effect.sync(() => McpMemoryToolSession.clearMcpMemoryToolSession(threadId))),
@@ -76,6 +81,7 @@ it.effect("gates generate_image on the image capability and returns metadata onl
         generate: (_threadId, input) =>
           Effect.sync(() => {
             received.push(input);
+
             return {
               status: "completed" as const,
               provider: "grok" as const,
@@ -94,6 +100,7 @@ it.effect("gates generate_image on the image capability and returns metadata onl
           }),
         cancelThread: () => Effect.void,
       });
+
       const call = (capabilities: ReadonlySet<McpInvocationContext.McpCapability>) =>
         server
           .callTool({
@@ -130,6 +137,7 @@ it.effect("gates generate_image on the image capability and returns metadata onl
 it.effect("reports generate_image as unavailable when no runtime is running", () =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
+
     const result = yield* server
       .callTool({ name: "generate_image", arguments: { operation: "generate", prompt: "A kite" } })
       .pipe(
@@ -139,6 +147,7 @@ it.effect("reports generate_image as unavailable when no runtime is running", ()
         }),
         Effect.provideService(McpSchema.McpServerClient, client),
       );
+
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({ status: "failed", kind: "unavailable" });
   }).pipe(Effect.provide(TestLayer)),

@@ -15,6 +15,7 @@ import {
 import type { makeGitExecution } from "./GitExecution.ts";
 import type { makeGitRepositoryPaths } from "./GitRepositoryPaths.ts";
 import type { makeGitRemoteStatus } from "./GitRemoteStatus.ts";
+
 export const makeGitLocalStatus = (dependencies: {
   executeGitWithStableDiagnostics: Effect.Success<
     ReturnType<typeof makeGitExecution>
@@ -76,6 +77,7 @@ export const makeGitLocalStatus = (dependencies: {
         if (isNonRepositoryGitStderr(statusResult.stderr)) {
           return NON_REPOSITORY_STATUS_DETAILS;
         }
+
         return yield* new GitCommandError({
           ...gitCommandContext({
             operation: "GitVcsDriver.statusDetails.status",
@@ -92,7 +94,9 @@ export const makeGitLocalStatus = (dependencies: {
       const repositoryPaths = yield* resolveRepositoryPaths(cwd).pipe(
         Effect.catchTags({ GitCommandError: () => Effect.succeed(null) }),
       );
+
       const statusCacheKey = repositoryPaths?.gitCommonDir;
+
       const [numstatStdout, defaultBranch, hasPrimaryRemote] = yield* Effect.all(
         [
           executeGitWithStableDiagnostics(
@@ -103,6 +107,7 @@ export const makeGitLocalStatus = (dependencies: {
           ).pipe(
             Effect.flatMap((result) => {
               if (result.exitCode === 0) return Effect.succeed(result.stdout);
+
               if (isUnbornHeadStderr(result.stderr)) {
                 return Effect.map(
                   Effect.all([
@@ -120,21 +125,25 @@ export const makeGitLocalStatus = (dependencies: {
                     const staged = parseNumstatEntries(stagedStdout);
                     const unstaged = parseNumstatEntries(unstagedStdout);
                     const map = new Map<string, { insertions: number; deletions: number }>();
+
                     for (const entry of [...staged, ...unstaged]) {
                       const existing = map.get(entry.path) ?? {
                         insertions: 0,
                         deletions: 0,
                       };
+
                       existing.insertions += entry.insertions;
                       existing.deletions += entry.deletions;
                       map.set(entry.path, existing);
                     }
+
                     return Array.from(map.entries())
                       .map(([p, s]) => `${s.insertions}\t${s.deletions}\t${p}`)
                       .join("\n");
                   },
                 );
               }
+
               return Effect.fail(
                 new GitCommandError({
                   ...gitCommandContext({
@@ -159,6 +168,7 @@ export const makeGitLocalStatus = (dependencies: {
         ],
         { concurrency: "unbounded" },
       );
+
       const statusStdout = statusResult.stdout;
 
       let refName: string | null = null;
@@ -175,11 +185,13 @@ export const makeGitLocalStatus = (dependencies: {
           refName = value.startsWith("(") ? null : value;
           continue;
         }
+
         if (line.startsWith("# branch.upstream ")) {
           const value = line.slice("# branch.upstream ".length).trim();
           upstreamRef = value.length > 0 ? value : null;
           continue;
         }
+
         if (line.startsWith("# branch.ab ")) {
           const value = line.slice("# branch.ab ".length).trim();
           const parsed = parseBranchAb(value);
@@ -187,9 +199,11 @@ export const makeGitLocalStatus = (dependencies: {
           behindCount = parsed.behind;
           continue;
         }
+
         if (line.trim().length > 0 && !line.startsWith("#")) {
           hasWorkingTreeChanges = true;
           const pathValue = parsePorcelainPath(line);
+
           if (pathValue) changedFilesWithoutNumstat.add(pathValue);
         }
       }
@@ -208,6 +222,7 @@ export const makeGitLocalStatus = (dependencies: {
         refName !== null &&
         (refName === defaultBranch ||
           (defaultBranch === null && (refName === "main" || refName === "master")));
+
       if (refName && !isDefaultBranch) {
         aheadOfDefaultCount =
           fallbackAheadCount !== null
@@ -217,16 +232,19 @@ export const makeGitLocalStatus = (dependencies: {
 
       const numstatEntries = parseNumstatEntries(numstatStdout);
       const fileStatMap = new Map<string, { insertions: number; deletions: number }>();
+
       for (const entry of numstatEntries) {
         fileStatMap.set(entry.path, { insertions: entry.insertions, deletions: entry.deletions });
       }
 
       let insertions = 0;
       let deletions = 0;
+
       const files = Array.from(fileStatMap.entries())
         .map(([filePath, stat]) => {
           insertions += stat.insertions;
           deletions += stat.deletions;
+
           return { path: filePath, insertions: stat.insertions, deletions: stat.deletions };
         })
         .toSorted((a, b) => a.path.localeCompare(b.path));
@@ -235,6 +253,7 @@ export const makeGitLocalStatus = (dependencies: {
         if (fileStatMap.has(filePath)) continue;
         files.push({ path: filePath, insertions: 0, deletions: 0 });
       }
+
       files.sort((a, b) => a.path.localeCompare(b.path));
 
       return {
@@ -271,6 +290,7 @@ export const makeGitLocalStatus = (dependencies: {
         }),
         Effect.ignoreCause({ log: true }),
       );
+
       return yield* readStatusDetailsLocal(cwd);
     });
 
@@ -285,6 +305,7 @@ export const makeGitLocalStatus = (dependencies: {
             Effect.ignoreCause({ log: true }),
           );
         }
+
         return yield* readStatusDetailsRemote(cwd);
       });
 
@@ -303,5 +324,6 @@ export const makeGitLocalStatus = (dependencies: {
           aheadOfDefaultCount: details.aheadOfDefaultCount,
         })),
       );
+
     return { statusDetailsLocal, statusDetails, statusDetailsRemote, status };
   });

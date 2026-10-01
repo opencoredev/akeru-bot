@@ -20,6 +20,7 @@ import {
 } from "./ChannelRuntimeTypes.ts";
 import { randomId } from "./ChannelSecrets.ts";
 import { replaceBinding } from "./ChannelOperations.ts";
+
 export const CHANNEL_MENTION_CONTEXT_LIMIT = 10;
 
 export const CHANNEL_MENTION_CONTEXT_CHARACTER_LIMIT = 8_000;
@@ -80,6 +81,7 @@ export async function mentionWithContext(
   message: Message,
 ): Promise<InboundChannelMessage> {
   await thread.refresh().catch(() => undefined);
+
   const context = thread.recentMessages
     .filter(
       (candidate) =>
@@ -93,7 +95,9 @@ export async function mentionWithContext(
       (candidate) =>
         `${candidate.author.fullName || candidate.author.userName || candidate.author.userId}: ${candidate.text}`,
     );
+
   const boundedContext = context.join("\n").slice(-CHANNEL_MENTION_CONTEXT_CHARACTER_LIMIT);
+
   return normalizedInboundMessage(
     thread,
     message,
@@ -117,18 +121,23 @@ export const subscribedExternalThreadIds = (
         ? [thread.id]
         : [],
     );
+
     const threads = yield* Effect.forEach(candidateIds, ctx.deps.readThread, {
       concurrency: "unbounded",
     });
+
     const ids = new Set<string>();
+
     for (const thread of threads) {
       if (!thread) continue;
+
       for (const message of thread.messages) {
         if (message.channelOrigin?.provider === provider) {
           ids.add(message.channelOrigin.externalThreadId);
         }
       }
     }
+
     return [...ids];
   });
 
@@ -162,26 +171,33 @@ export const dispatchInboundChannelMessage = (
   input: InboundDispatchInput,
 ) => {
   const deps = ctx.deps;
+
   const preferredThreadId = channelThreadId(
     input.botId,
     input.projectId,
     input.provider,
     input.externalThreadId,
   );
+
   return ctx.withLock(`inbound:${preferredThreadId}`)(
     Effect.gen(function* () {
       const model = yield* deps.readModel;
+
       const bot = model.bots.find(
         (candidate) => candidate.id === input.botId && candidate.archivedAt === null,
       );
+
       if (!bot) return yield* failWith(`Bot '${input.botId}' is unavailable.`);
+
       const project = model.projects.find(
         (candidate) => candidate.id === input.projectId && candidate.deletedAt === null,
       );
+
       if (!project) {
         const binding = bot.channelBindings.find(
           (entry) => entry.provider === input.provider && entry.projectId === input.projectId,
         );
+
         if (binding) {
           yield* Effect.gen(function* () {
             yield* replaceBinding(ctx, {
@@ -192,8 +208,10 @@ export const dispatchInboundChannelMessage = (
             });
           }).pipe(Effect.ignoreCause);
         }
+
         return yield* failWith("The channel project is unavailable.");
       }
+
       const modelSelection = bot.engine
         ? {
             instanceId: ProviderInstanceId.make(bot.engine.provider),
@@ -201,6 +219,7 @@ export const dispatchInboundChannelMessage = (
             ...(bot.engine.options ? { options: bot.engine.options } : {}),
           }
         : project.defaultModelSelection;
+
       if (!modelSelection)
         return yield* failWith(`Bot '${bot.name}' needs a model before channel messages.`);
 
@@ -209,14 +228,17 @@ export const dispatchInboundChannelMessage = (
         input.provider,
         input.externalThreadId,
       );
+
       const existing = model.threads.find(
         (thread) =>
           (thread.id === preferredThreadId || thread.id === legacyThreadId) &&
           thread.projectId === input.projectId &&
           thread.deletedAt === null,
       );
+
       const threadId = existing?.id ?? preferredThreadId;
       const createdAt = yield* deps.nowIso;
+
       if (!existing) {
         yield* deps.engine.dispatch({
           type: "thread.create",
@@ -250,16 +272,19 @@ export const dispatchInboundChannelMessage = (
             externalMessageId: input.externalMessageId,
           }
         : null;
+
       const commandId = CommandId.make(
         deterministicInput
           ? deterministicChannelId("channel-turn", deterministicInput)
           : yield* randomId(ctx, "channel-turn"),
       );
+
       const messageId = MessageId.make(
         deterministicInput
           ? deterministicChannelId("channel-message", deterministicInput)
           : yield* randomId(ctx, "channel-message"),
       );
+
       yield* deps.engine.dispatch({
         type: "thread.turn.start",
         commandId,

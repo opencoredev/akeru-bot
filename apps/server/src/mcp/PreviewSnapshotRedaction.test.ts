@@ -11,6 +11,7 @@ import {
 function testScreenshot() {
   const png = new PNG({ width: 2, height: 2 });
   png.data.fill(255);
+
   return {
     mimeType: "image/png" as const,
     data: PNG.sync.write(png).toString("base64"),
@@ -22,14 +23,18 @@ function testScreenshot() {
 function pngChunk(type: string, data: Buffer) {
   const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
   let crc = 0xffffffff;
+
   for (const byte of body) {
     crc ^= byte;
+
     for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
   }
+
   const chunk = Buffer.alloc(12 + data.length);
   chunk.writeUInt32BE(data.length, 0);
   body.copy(chunk, 4);
   chunk.writeUInt32BE((crc ^ 0xffffffff) >>> 0, 8 + data.length);
+
   return chunk;
 }
 
@@ -106,6 +111,7 @@ describe("preview snapshot redaction", () => {
     const text = Buffer.from("secret metadata", "utf8");
     const original = Buffer.from(screenshot.data, "base64");
     const iend = original.length - 12;
+
     const bytes = Buffer.concat([
       original.subarray(0, iend),
       pngChunk("tEXt", Buffer.concat([Buffer.from("Comment\0"), text])),

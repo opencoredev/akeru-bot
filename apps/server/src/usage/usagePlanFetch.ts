@@ -18,6 +18,7 @@ import {
   parseKimiUsage,
   fetchJson,
 } from "./usagePlanParsers.ts";
+
 export async function fetchClaude(accessToken: string): Promise<UsageProviderPlanLimits | null> {
   const result = await fetchJson(CLAUDE_USAGE_URL, {
     method: "GET",
@@ -28,9 +29,12 @@ export async function fetchClaude(accessToken: string): Promise<UsageProviderPla
       "User-Agent": "claude-code/2.1.69",
     },
   });
+
   if (result.status < 200 || result.status >= 300) return null;
   const parsed = parseClaudeUsage(result.body);
+
   if (parsed.windows.length === 0) return null;
+
   return {
     provider: "anthropic",
     status: "ok",
@@ -49,14 +53,18 @@ export async function fetchCodex(accessToken: string): Promise<UsageProviderPlan
       "User-Agent": "Akeru Bot",
     },
   });
+
   if (result.status < 200 || result.status >= 300) return null;
   const primary = asNumber(result.headers.get("x-codex-primary-used-percent"));
   const secondary = asNumber(result.headers.get("x-codex-secondary-used-percent"));
+
   const parsed = parseCodexUsage(result.body, {
     ...(primary === null ? {} : { primary }),
     ...(secondary === null ? {} : { secondary }),
   });
+
   if (parsed.windows.length === 0) return null;
+
   return {
     provider: "openai-codex",
     status: "ok",
@@ -72,18 +80,23 @@ export async function fetchGrok(accessToken: string): Promise<UsageProviderPlanL
     "X-XAI-Token-Auth": "xai-grok-cli",
     Accept: "application/json",
   };
+
   const [credits, settings] = await Promise.all([
     fetchJson(GROK_CREDITS_URL, { method: "GET", headers }),
     fetchJson(GROK_SETTINGS_URL, { method: "GET", headers }).catch(() => null),
   ]);
+
   if (credits.status < 200 || credits.status >= 300) return null;
   const parsed = parseGrokUsage(credits.body);
+
   if (parsed.windows.length === 0) return null;
+
   const plan =
     parsed.plan ??
     (settings && settings.status >= 200 && settings.status < 300
       ? asString(asRecord(settings.body)?.subscription_tier_display)
       : null);
+
   return {
     provider: "xai",
     status: "ok",
@@ -101,9 +114,12 @@ export async function fetchKimi(accessToken: string): Promise<UsageProviderPlanL
       Accept: "application/json",
     },
   });
+
   if (result.status < 200 || result.status >= 300) return null;
   const parsed = parseKimiUsage(result.body);
+
   if (parsed.windows.length === 0) return null;
+
   return {
     provider: "kimi-for-coding",
     status: "ok",

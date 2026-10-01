@@ -15,6 +15,7 @@ const TestLayer = Layer.empty.pipe(
 
 const makeTempDir = Effect.fn("makeTempDir")(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
+
   return yield* fileSystem.makeTempDirectoryScoped({
     prefix: "t3code-project-paths-",
   });
@@ -72,6 +73,7 @@ it.layer(TestLayer)("WorkspacePathsLive", (it) => {
         const resolved = yield* workspacePaths.normalizeWorkspaceRoot(missingPath, {
           createIfMissing: true,
         });
+
         const stat = yield* fileSystem.stat(resolved);
 
         expect(resolved).toBe(missingPath);
@@ -96,6 +98,7 @@ it.layer(TestLayer)("WorkspacePathsLive", (it) => {
     it.effect("preserves non-NotFound stat failures while validating the root", () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
+
         const workspacePaths = yield* WorkspacePaths.make.pipe(
           Effect.provideService(FileSystem.FileSystem, {
             ...fileSystem,
@@ -111,6 +114,7 @@ it.layer(TestLayer)("WorkspacePathsLive", (it) => {
               ),
           }),
         );
+
         const path = yield* Path.Path;
         const workspaceRoot = " ./permission-denied ";
         const normalizedWorkspaceRoot = path.resolve(workspaceRoot.trim());
@@ -130,12 +134,14 @@ it.layer(TestLayer)("WorkspacePathsLive", (it) => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         let statCalls = 0;
+
         const workspacePaths = yield* WorkspacePaths.make.pipe(
           Effect.provideService(FileSystem.FileSystem, {
             ...fileSystem,
             stat: (path) => {
               statCalls += 1;
               const reason = statCalls === 1 ? "NotFound" : "PermissionDenied";
+
               return Effect.fail(
                 PlatformError.systemError({
                   _tag: reason,
@@ -149,6 +155,7 @@ it.layer(TestLayer)("WorkspacePathsLive", (it) => {
             makeDirectory: () => Effect.void,
           }),
         );
+
         const path = yield* Path.Path;
         const workspaceRoot = " ./created-then-unreadable ";
         const normalizedWorkspaceRoot = path.resolve(workspaceRoot.trim());

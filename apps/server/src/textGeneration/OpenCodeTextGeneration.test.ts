@@ -51,6 +51,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
           runtimeMock.state.closeCalls.push(url);
         }),
       );
+
       return {
         url,
         exitCode: Effect.never,
@@ -70,6 +71,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
           if (runtimeMock.state.sessionCreateError !== undefined) {
             throw runtimeMock.state.sessionCreateError;
           }
+
           return runtimeMock.state.sessionResult ?? { data: { id: `${baseUrl}/session` } };
         },
         prompt: async () => {
@@ -77,9 +79,11 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
           runtimeMock.state.authHeaders.push(
             serverPassword ? `Basic ${btoa(`opencode:${serverPassword}`)}` : null,
           );
+
           if (runtimeMock.state.promptRequestError !== undefined) {
             throw runtimeMock.state.promptRequestError;
           }
+
           return (
             runtimeMock.state.promptResult ?? {
               data: {
@@ -119,6 +123,7 @@ const DEFAULT_TEST_MODEL_SELECTION = {
   instanceId: ProviderInstanceId.make("opencode"),
   model: "openai/gpt-5",
 };
+
 const DEFAULT_THREAD_TITLE_INPUT = {
   cwd: process.cwd(),
   message: "Add important change",
@@ -156,6 +161,7 @@ const OpenCodeTextGenerationExistingServerTestLayer = Layer.succeed(
 const DEFAULT_OPENCODE_SETTINGS = Schema.decodeSync(OpenCodeSettings)({
   binaryPath: "fake-opencode",
 });
+
 const EXISTING_SERVER_OPENCODE_SETTINGS = Schema.decodeSync(OpenCodeSettings)({
   binaryPath: "fake-opencode",
   serverUrl: "http://127.0.0.1:9999",
@@ -168,6 +174,7 @@ function withOpenCodeTextGeneration<A, E, R>(
 ) {
   return Effect.gen(function* () {
     const textGeneration = yield* OpenCodeTextGeneration.makeOpenCodeTextGeneration(settings);
+
     return yield* effectFn(textGeneration);
   }).pipe(Effect.scoped);
 }

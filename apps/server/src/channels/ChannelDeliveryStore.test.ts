@@ -19,6 +19,7 @@ it.layer(TestLayer)("channel delivery store", (it) => {
       yield* runMigrations();
       const store = yield* makeChannelDeliveryStore;
       const sql = yield* SqlClient.SqlClient;
+
       const claim = {
         messageId: MessageId.make("message-1"),
         botId: BotId.make("bot-1"),
@@ -31,6 +32,7 @@ it.layer(TestLayer)("channel delivery store", (it) => {
       const concurrentClaims = yield* Effect.all([store.claim(claim), store.claim(claim)], {
         concurrency: "unbounded",
       });
+
       assert.deepEqual(concurrentClaims.toSorted(), ["claimed", "requested"]);
       yield* store.markSent({
         messageId: claim.messageId,
@@ -43,6 +45,7 @@ it.layer(TestLayer)("channel delivery store", (it) => {
         FROM channel_deliveries
         WHERE message_id = ${claim.messageId}
       `;
+
       assert.deepEqual(rows, [{ status: "sent", sentAt: "2026-08-27T20:00:01.000Z" }]);
     }),
   );
@@ -51,6 +54,7 @@ it.layer(TestLayer)("channel delivery store", (it) => {
     Effect.gen(function* () {
       yield* runMigrations();
       const store = yield* makeChannelDeliveryStore;
+
       const claim = {
         messageId: MessageId.make("message-ambiguous"),
         botId: BotId.make("bot-1"),
@@ -59,6 +63,7 @@ it.layer(TestLayer)("channel delivery store", (it) => {
         externalThreadId: "chat-1",
         requestedAt: "2026-08-27T20:00:00.000Z",
       };
+
       assert.equal(yield* store.claim(claim), "claimed");
       const restored = yield* makeChannelDeliveryStore;
       assert.equal(yield* restored.claim(claim), "requested");
@@ -71,6 +76,7 @@ it.layer(TestLayer)("channel delivery store", (it) => {
     Effect.gen(function* () {
       yield* runMigrations();
       const sqlStore = yield* makeChannelDeliveryStore;
+
       for (const store of [sqlStore, makeMemoryChannelDeliveryStore()]) {
         const claim = {
           messageId: MessageId.make("message-store-parity"),
@@ -80,6 +86,7 @@ it.layer(TestLayer)("channel delivery store", (it) => {
           externalThreadId: "chat-1",
           requestedAt: "2026-08-27T20:00:00.000Z",
         };
+
         yield* store.markSent({ messageId: claim.messageId, sentAt: claim.requestedAt });
         assert.equal(yield* store.claim(claim), "claimed");
         yield* store.releaseRequested(claim.messageId);
@@ -95,6 +102,7 @@ it.layer(TestLayer)("channel delivery store", (it) => {
     Effect.gen(function* () {
       yield* runMigrations();
       const store = yield* makeChannelDeliveryStore;
+
       const claim = {
         messageId: MessageId.make("message-retry"),
         botId: BotId.make("bot-1"),

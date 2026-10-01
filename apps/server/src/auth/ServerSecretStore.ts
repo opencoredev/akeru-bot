@@ -126,7 +126,9 @@ export const SecretStoreError = Schema.Union([
   SecretStoreDecodeError,
   SecretStoreEncodeError,
 ]);
+
 export type SecretStoreError = typeof SecretStoreError.Type;
+
 export const isSecretStoreError = Schema.is(SecretStoreError);
 
 const isPlatformError = (value: unknown): value is PlatformError.PlatformError =>
@@ -188,6 +190,7 @@ export const make = Effect.gen(function* () {
 
   const set: ServerSecretStore["Service"]["set"] = (name, value) => {
     const secretPath = resolveSecretPath(name);
+
     return crypto.randomUUIDv4.pipe(
       Effect.mapError(
         (cause) =>
@@ -198,6 +201,7 @@ export const make = Effect.gen(function* () {
       ),
       Effect.flatMap((uuid) => {
         const tempPath = `${secretPath}.${uuid}.tmp`;
+
         return Effect.gen(function* () {
           yield* fileSystem.writeFile(tempPath, value);
           yield* fileSystem.chmod(tempPath, 0o600);
@@ -225,12 +229,14 @@ export const make = Effect.gen(function* () {
 
   const create: ServerSecretStore["Service"]["create"] = (name, value) => {
     const secretPath = resolveSecretPath(name);
+
     return Effect.scoped(
       Effect.gen(function* () {
         const file = yield* fileSystem.open(secretPath, {
           flag: "wx",
           mode: 0o600,
         });
+
         yield* file.writeAll(value);
         yield* file.sync;
         yield* fileSystem.chmod(secretPath, 0o600);

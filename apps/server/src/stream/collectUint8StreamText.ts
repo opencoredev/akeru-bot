@@ -47,6 +47,7 @@ export const collectUint8StreamText = <E>(input: {
         }
 
         const remainingBytes = maxBytes - state.bytes;
+
         if (remainingBytes <= 0) {
           return {
             ...state,
@@ -56,6 +57,7 @@ export const collectUint8StreamText = <E>(input: {
 
         const nextChunk =
           chunk.byteLength > remainingBytes ? chunk.slice(0, remainingBytes) : chunk;
+
         state.chunks.push(nextChunk);
         const bytes = state.bytes + nextChunk.byteLength;
         const truncated = chunk.byteLength > remainingBytes;
@@ -69,6 +71,7 @@ export const collectUint8StreamText = <E>(input: {
     ),
     Effect.map((state): CollectedUint8StreamText => {
       const decoded = decodeUtf8(Buffer.concat(state.chunks, state.bytes));
+
       return {
         text:
           state.truncated && truncatedMarker.length > 0

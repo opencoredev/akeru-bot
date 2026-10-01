@@ -11,10 +11,12 @@ import { outcomeFromExit } from "./Attributes.ts";
 import { metricAttributes, rpcRequestDuration, rpcRequestsTotal, withMetrics } from "./Metrics.ts";
 
 const RPC_SPAN_PREFIX = "ws.rpc";
+
 const DEFAULT_RPC_SPAN_ATTRIBUTES = {
   "rpc.transport": "websocket",
   "rpc.system": "effect-rpc",
 } as const;
+
 const RPC_METHODS_WITH_TRACING_DISABLED: ReadonlySet<string> = new Set([
   WS_METHODS.serverGetTraceDiagnostics,
   WS_METHODS.serverGetProcessDiagnostics,
@@ -112,6 +114,7 @@ export const observeRpcStream = <A, E, R>(
   const instrumented = Stream.unwrap(
     Effect.gen(function* () {
       const startedAt = yield* Clock.currentTimeNanos;
+
       return stream.pipe(Stream.onExit((exit) => recordRpcStreamMetrics(method, startedAt, exit)));
     }),
   );
@@ -131,6 +134,7 @@ export const observeRpcStreamEffect = <A, StreamError, StreamContext, EffectErro
 
       if (Exit.isFailure(exit)) {
         yield* recordRpcStreamMetrics(method, startedAt, exit);
+
         return yield* Effect.failCause(exit.cause);
       }
 

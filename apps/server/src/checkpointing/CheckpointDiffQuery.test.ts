@@ -46,6 +46,7 @@ describe("CheckpointDiffQuery.layer", () => {
       const toCheckpointRef = checkpointRefForThreadTurn(threadId, 4);
       let getThreadCheckpointContextCalls = 0;
       let getFullThreadDiffContextCalls = 0;
+
       const diffCheckpointsCalls: Array<{
         readonly fromCheckpointRef: CheckpointRef;
         readonly toCheckpointRef: CheckpointRef;
@@ -66,6 +67,7 @@ describe("CheckpointDiffQuery.layer", () => {
               cwd,
               ignoreWhitespace,
             });
+
             return "full thread diff patch";
           }),
         deleteCheckpointRefs: () => Effect.void,
@@ -93,11 +95,13 @@ describe("CheckpointDiffQuery.layer", () => {
             getThreadCheckpointContext: () =>
               Effect.sync(() => {
                 getThreadCheckpointContextCalls += 1;
+
                 return Option.none();
               }),
             getFullThreadDiffContext: () =>
               Effect.sync(() => {
                 getFullThreadDiffContextCalls += 1;
+
                 return Option.some({
                   threadId,
                   projectId,
@@ -119,6 +123,7 @@ describe("CheckpointDiffQuery.layer", () => {
 
       const result = yield* Effect.gen(function* () {
         const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+
         return yield* query.getFullThreadDiff({
           threadId,
           toTurnCount: 4,
@@ -150,6 +155,7 @@ describe("CheckpointDiffQuery.layer", () => {
       const projectId = ProjectId.make("project-1");
       const threadId = ThreadId.make("thread-1");
       const toCheckpointRef = checkpointRefForThreadTurn(threadId, 1);
+
       const diffCheckpointsCalls: Array<{
         readonly fromCheckpointRef: CheckpointRef;
         readonly toCheckpointRef: CheckpointRef;
@@ -179,6 +185,7 @@ describe("CheckpointDiffQuery.layer", () => {
               cwd,
               ignoreWhitespace,
             });
+
             return "diff patch";
           }),
         deleteCheckpointRefs: () => Effect.void,
@@ -217,6 +224,7 @@ describe("CheckpointDiffQuery.layer", () => {
 
       const result = yield* Effect.gen(function* () {
         const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+
         return yield* query.getTurnDiff({
           threadId,
           fromTurnCount: 0,
@@ -267,6 +275,7 @@ describe("CheckpointDiffQuery.layer", () => {
         diffCheckpoints: ({ ignoreWhitespace }) =>
           Effect.sync(() => {
             diffCheckpointsCalls.push({ ignoreWhitespace });
+
             return "diff patch";
           }),
         deleteCheckpointRefs: () => Effect.void,
@@ -305,6 +314,7 @@ describe("CheckpointDiffQuery.layer", () => {
 
       yield* Effect.gen(function* () {
         const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+
         return yield* query.getTurnDiff({
           threadId,
           fromTurnCount: 0,
@@ -338,6 +348,7 @@ describe("CheckpointDiffQuery.layer", () => {
         hasCheckpointRef: () =>
           Effect.sync(() => {
             hasCheckpointRefCallCount += 1;
+
             return true;
           }),
         restoreCheckpoint: () => Effect.succeed(true),
@@ -378,6 +389,7 @@ describe("CheckpointDiffQuery.layer", () => {
 
       yield* Effect.gen(function* () {
         const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+
         return yield* query.getTurnDiff({
           threadId,
           fromTurnCount: 0,
@@ -436,6 +448,7 @@ describe("CheckpointDiffQuery.layer", () => {
 
       const error = yield* Effect.gen(function* () {
         const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+
         return yield* query.getTurnDiff({
           threadId,
           fromTurnCount: 0,

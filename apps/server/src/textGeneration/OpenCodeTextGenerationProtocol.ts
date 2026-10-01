@@ -63,6 +63,7 @@ export class OpenCodeTextGenerationPromptResponseError extends Schema.TaggedErro
 ) {
   override get message(): string {
     const providerError = this.providerErrorName ? ` ${this.providerErrorName}` : "";
+
     return `OpenCode prompt${providerError} failed for ${this.operation} in ${this.cwd} using ${this.providerId}/${this.modelId} (session ${this.sessionId}): ${this.providerMessage}`;
   }
 }
@@ -99,6 +100,7 @@ export function getOpenCodePromptFailure(error: unknown): OpenCodePromptFailure 
     "name" in error && typeof error.name === "string" && error.name.trim().length > 0
       ? error.name.trim()
       : undefined;
+
   const message =
     "data" in error &&
     error.data &&
@@ -107,6 +109,7 @@ export function getOpenCodePromptFailure(error: unknown): OpenCodePromptFailure 
     typeof error.data.message === "string"
       ? error.data.message.trim()
       : "";
+
   if (message.length > 0) {
     return {
       ...(name ? { name } : {}),

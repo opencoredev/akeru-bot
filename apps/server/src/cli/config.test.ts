@@ -12,6 +12,7 @@ import * as Path from "effect/Path";
 import * as NetService from "@akeru/shared/Net";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { resolveServerConfig } from "./config.ts";
+
 it.layer(NodeServices.layer)("cli config resolution", (it) => {
   const defaultObservabilityConfig = {
     traceMinLevel: "Info",
@@ -30,10 +31,12 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     Effect.gen(function* () {
       const { join } = yield* Path.Path;
       const baseDir = join(NodeOS.tmpdir(), "t3-cli-config-env-base");
+
       const derivedPaths = yield* deriveExplicitServerPaths(
         baseDir,
         new URL("http://127.0.0.1:5173"),
       );
+
       const resolved = yield* resolveServerConfig(
         {
           mode: Option.none(),
@@ -104,6 +107,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     Effect.gen(function* () {
       const { join } = yield* Path.Path;
       const baseDir = join(NodeOS.tmpdir(), "akeru-cli-config-env-base");
+
       const resolved = yield* resolveServerConfig(
         {
           mode: Option.none(),
@@ -151,10 +155,12 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     Effect.gen(function* () {
       const { join } = yield* Path.Path;
       const baseDir = join(NodeOS.tmpdir(), "t3-cli-config-flags-base");
+
       const derivedPaths = yield* deriveExplicitServerPaths(
         baseDir,
         new URL("http://127.0.0.1:4173"),
       );
+
       const resolved = yield* resolveServerConfig(
         {
           mode: Option.some("web"),
@@ -264,6 +270,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
       ]) {
         expect(yield* fs.exists(directory)).toBe(true);
       }
+
       expect(resolved.cwd).toBe(path.resolve(customCwd));
     }),
   );

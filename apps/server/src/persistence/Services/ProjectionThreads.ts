@@ -62,21 +62,25 @@ export const ProjectionThread = Schema.Struct({
   hasActionableProposedPlan: NonNegativeInt,
   deletedAt: Schema.NullOr(IsoDateTime),
 });
+
 export type ProjectionThread = typeof ProjectionThread.Type;
 
 export const GetProjectionThreadInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type GetProjectionThreadInput = typeof GetProjectionThreadInput.Type;
 
 export const DeleteProjectionThreadInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type DeleteProjectionThreadInput = typeof DeleteProjectionThreadInput.Type;
 
 export const ListProjectionThreadsByProjectInput = Schema.Struct({
   projectId: ProjectId,
 });
+
 export type ListProjectionThreadsByProjectInput = typeof ListProjectionThreadsByProjectInput.Type;
 
 /**

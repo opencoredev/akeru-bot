@@ -28,6 +28,7 @@ import {
 import { resolveBrowserLaunch } from "./browserLauncher.ts";
 import { resolveAvailableEditors, resolveEditorLaunch } from "./editorLauncher.ts";
 import { resolveFileManagerRevealKind } from "./fileManagerLauncher.ts";
+
 /**
  * ExternalLauncher - Service tag for browser/editor launch operations.
  */
@@ -73,6 +74,7 @@ const launchBrowser = Effect.fn("externalLauncher.launchBrowser")(function* (
   target: string,
 ): Effect.fn.Return<void, ExternalLauncherError, ChildProcessSpawner.ChildProcessSpawner> {
   const launch = yield* resolveBrowserLaunch(target);
+
   return yield* launchAndUnref(
     launch,
     (cause) =>
@@ -93,6 +95,7 @@ const launchEditorProcess = Effect.fn("externalLauncher.launchEditorProcess")(fu
   ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
 > {
   const env = yield* readCommandLookupEnv;
+
   if (!(yield* isCommandAvailable(launch.command, { env }))) {
     return yield* new ExternalLauncherCommandNotFoundError({
       editor: launch.editor,
@@ -140,15 +143,19 @@ export const make = Effect.gen(function* () {
   const editorDiscoveryCache = yield* Ref.make<Option.Option<EditorDiscoveryCacheEntry>>(
     Option.none(),
   );
+
   const cachedAvailableEditors = Effect.gen(function* () {
     const nowNanos = yield* Clock.currentTimeNanos;
     const entry = yield* Ref.get(editorDiscoveryCache);
+
     if (Option.isSome(entry) && entry.value.expiresAtNanos > nowNanos) {
       return entry.value.editors;
     }
+
     const editors = yield* provideCommandResolutionServices(resolveAvailableEditors()).pipe(
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
     );
+
     yield* Ref.set(
       editorDiscoveryCache,
       Option.some({
@@ -156,6 +163,7 @@ export const make = Effect.gen(function* () {
         expiresAtNanos: nowNanos + EDITOR_DISCOVERY_CACHE_TTL_NANOS,
       }),
     );
+
     return editors;
   });
 
@@ -177,6 +185,7 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(ExternalLauncher, make);
+
 export { buildFileExplorerRevealPowerShellSource } from "./fileManagerLauncher.ts";
 
 export {
@@ -188,4 +197,5 @@ export {
   ExternalLauncherUnsupportedEditorError,
   isExternalLauncherError,
 } from "@akeru/contracts";
+
 export type { LaunchEditorInput };

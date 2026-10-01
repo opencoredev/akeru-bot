@@ -11,6 +11,7 @@ import {
   ProjectIdentifierEmptyError,
   ProjectNotFoundError,
 } from "./projectErrors.ts";
+
 export const projectCommandUuid = Crypto.Crypto.pipe(
   Effect.flatMap((crypto) => crypto.randomUUIDv4),
   Effect.mapError(
@@ -26,6 +27,7 @@ export const normalizeWorkspaceRootForProjectCommand = Effect.fn(
   "normalizeWorkspaceRootForProjectCommand",
 )(function* (workspaceRoot: string) {
   const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
+
   return yield* workspacePaths.normalizeWorkspaceRoot(workspaceRoot);
 });
 
@@ -35,9 +37,11 @@ export const resolveProjectTitle = Effect.fn("resolveProjectTitle")(function* (
 ) {
   if (explicitTitle !== undefined) {
     const trimmed = explicitTitle.trim();
+
     if (trimmed.length > 0) {
       return trimmed;
     }
+
     return yield* new ProjectTitleEmptyError({
       operation: "validateProjectTitle",
       title: explicitTitle,
@@ -46,6 +50,7 @@ export const resolveProjectTitle = Effect.fn("resolveProjectTitle")(function* (
 
   const path = yield* Path.Path;
   const basename = path.basename(workspaceRoot).trim();
+
   return basename.length > 0 ? basename : "project";
 });
 
@@ -54,6 +59,7 @@ export const findActiveProjectTarget = Effect.fn("findActiveProjectTarget")(func
   readonly identifier: string;
 }) {
   const trimmedIdentifier = input.identifier.trim();
+
   if (trimmedIdentifier.length === 0) {
     return yield* new ProjectIdentifierEmptyError({
       operation: "resolveProjectTarget",
@@ -63,6 +69,7 @@ export const findActiveProjectTarget = Effect.fn("findActiveProjectTarget")(func
 
   const activeProjects = input.snapshot.projects.filter((project) => project.deletedAt === null);
   const exactIdMatch = activeProjects.find((project) => project.id === trimmedIdentifier);
+
   if (exactIdMatch) {
     return {
       id: exactIdMatch.id,
@@ -74,6 +81,7 @@ export const findActiveProjectTarget = Effect.fn("findActiveProjectTarget")(func
   const normalizedWorkspaceRootResult = yield* Effect.result(
     normalizeWorkspaceRootForProjectCommand(trimmedIdentifier),
   );
+
   const normalizedWorkspaceRoot = Predicate.isTagged(normalizedWorkspaceRootResult, "Success")
     ? normalizedWorkspaceRootResult.success
     : null;
@@ -84,6 +92,7 @@ export const findActiveProjectTarget = Effect.fn("findActiveProjectTarget")(func
       : activeProjects.find((project) => project.workspaceRoot === normalizedWorkspaceRoot);
 
   const resolved = exactWorkspaceMatch;
+
   if (!resolved) {
     return yield* new ProjectNotFoundError({
       operation: "resolveProjectTarget",

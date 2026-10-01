@@ -17,6 +17,7 @@ import {
 } from "./PreviewToolRegistration.ts";
 import { registerMemoryTool } from "./MemoryToolRegistration.ts";
 import { registerImageTool } from "./ImageToolRegistration.ts";
+
 const unauthorized = HttpServerResponse.jsonUnsafe(
   {
     error: "invalid_mcp_credential",
@@ -52,6 +53,7 @@ export const normalizeMcpHttpResponse = (
     Predicate.isTagged(response.body, "Empty") ||
     (Predicate.isTagged(response.body, "Uint8Array") && response.body.contentLength === 0) ||
     (Predicate.isTagged(response.body, "Raw") && response.body.contentLength === 0);
+
   return response.status === 200 && bodyIsEmpty
     ? HttpServerResponse.setStatus(response, 202)
     : response;
@@ -63,11 +65,14 @@ const makeMcpAuthMiddleware = McpSessionRegistry.McpSessionRegistry.pipe(
       Effect.fn("McpHttpServer.authenticateRequest")(function* (httpEffect) {
         const request = yield* HttpServerRequest.HttpServerRequest;
         const authorization = request.headers.authorization;
+
         const token =
           authorization?.startsWith("Bearer ") === true
             ? authorization.slice("Bearer ".length).trim()
             : "";
+
         const invocation = yield* registry.resolve(token);
+
         if (!invocation) {
           // Without this the only symptom of a dead credential is the agent
           // quietly losing the whole `akeru` toolkit for the rest of its
@@ -75,8 +80,10 @@ const makeMcpAuthMiddleware = McpSessionRegistry.McpSessionRegistry.pipe(
           yield* Effect.logWarning("rejected MCP request with an unusable credential", {
             reason: token.length === 0 ? "missing_bearer_token" : "unknown_or_expired_token",
           });
+
           return unauthorized;
         }
+
         return yield* httpEffect.pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.map(normalizeMcpHttpResponse),
@@ -113,5 +120,7 @@ const McpTransportLive = McpServer.layerHttp({
 }).pipe(Layer.provide(McpAuthMiddlewareLive));
 
 export const layer = PreviewToolkitRegistrationLive.pipe(Layer.provideMerge(McpTransportLive));
+
 export { normalizeProviderToolInputSchema } from "./McpToolSchema.ts";
+
 export { IMAGE_TOOL_DESCRIPTION } from "./ImageToolRegistration.ts";

@@ -24,14 +24,18 @@ import * as Exit from "effect/Exit";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
 import { CHANNEL_GATEWAY_RENEWAL_INTERVAL, startRenewingGateway } from "./ChannelRuntime.ts";
+
 describe("channel runtime", () => {
   it.effect("exposes gateway failure in runtime channel health", () =>
     Effect.gen(function* () {
       const failed = Promise.withResolvers<void>();
+
       const gateway = yield* startTestGateway(async (waitUntil) => {
         waitUntil(failed.promise);
+
         return new Response(null, { status: 200 });
       }, "Test gateway");
+
       const harness = makeHarness({
         startTransport: async () => ({
           externalIdentity: "test",
@@ -42,6 +46,7 @@ describe("channel runtime", () => {
           },
         }),
       });
+
       yield* connectChannel(harness.dependencies, discordConnect(BOT_ID));
       const bindings = harness.readModel().bots[0]!.channelBindings;
       expect(channelBindingsForRuntime(bindings)[0]?.status).toBe("connected");
@@ -98,9 +103,11 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const listener = yield* makeGatewayListener();
       const scope = yield* Scope.make();
+
       const gateway = yield* startRenewingGateway(listener.start, "Test gateway").pipe(
         Scope.provide(scope),
       );
+
       const first = yield* Queue.take(listener.starts);
 
       yield* TestClock.adjust(
@@ -147,10 +154,13 @@ describe("channel runtime", () => {
   it.effect("fails when the first gateway listener cannot launch", () =>
     Effect.gen(function* () {
       let starts = 0;
+
       const exit = yield* startRenewingGateway(async () => {
         starts += 1;
+
         return new Response(null, { status: 503 });
       }, "Test gateway").pipe(Effect.exit);
+
       expect(Exit.isFailure(exit)).toBe(true);
       yield* TestClock.adjust(Duration.times(CHANNEL_GATEWAY_RENEWAL_INTERVAL, 2));
       expect(starts).toBe(1);
@@ -160,11 +170,14 @@ describe("channel runtime", () => {
   it.effect("marks an early gateway exit unhealthy instead of restarting it", () =>
     Effect.gen(function* () {
       let starts = 0;
+
       const gateway = yield* startRenewingGateway(async (waitUntil) => {
         starts += 1;
         waitUntil(Promise.resolve());
+
         return new Response(null, { status: 200 });
       }, "Test gateway");
+
       yield* gateway.settled;
       expect(gateway.isHealthy()).toBe(false);
       yield* TestClock.adjust(Duration.times(CHANNEL_GATEWAY_RENEWAL_INTERVAL, 2));

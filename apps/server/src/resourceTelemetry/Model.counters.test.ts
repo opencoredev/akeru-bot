@@ -8,6 +8,7 @@ import {
   merge,
 } from "./testUtils/processModel.ts";
 import { describe, expect, it } from "@effect/vitest";
+
 describe("resource telemetry process model", () => {
   it("derives cumulative CPU time for synthetic Electron-only processes", () => {
     const first = merge({
@@ -23,6 +24,7 @@ describe("resource telemetry process model", () => {
         }),
       ]),
     });
+
     const second = merge({
       previous: first,
       native: nativeSnapshot(
@@ -56,6 +58,7 @@ describe("resource telemetry process model", () => {
       ]),
       desktop: desktopSnapshot(BASE_TIME_MS + 10_000, []),
     });
+
     const second = merge({
       previous: first,
       native: nativeSnapshot(
@@ -91,6 +94,7 @@ describe("resource telemetry process model", () => {
         }),
       ]),
     });
+
     const second = merge({
       previous: first,
       native: nativeSnapshot(
@@ -109,6 +113,7 @@ describe("resource telemetry process model", () => {
         2,
       ),
     });
+
     const server = second.processes[0]!;
 
     expect(server.cpuPercent).toBe(25);
@@ -133,6 +138,7 @@ describe("resource telemetry process model", () => {
         }),
       ]),
     });
+
     const second = merge({
       previous: first,
       native: nativeSnapshot(
@@ -172,6 +178,7 @@ describe("resource telemetry process model", () => {
         }),
       ]),
     });
+
     const decreased = merge({
       previous: first,
       native: nativeSnapshot(
@@ -189,6 +196,7 @@ describe("resource telemetry process model", () => {
         2,
       ),
     });
+
     const delayed = merge({
       previous: decreased,
       native: nativeSnapshot(
@@ -225,6 +233,7 @@ describe("resource telemetry process model", () => {
         processSample({ pid: 200, ppid: SERVER_PID, startTimeMs: 2_000 }),
       ]),
     });
+
     const second = merge({
       previous: first,
       native: nativeSnapshot(
@@ -243,6 +252,7 @@ describe("resource telemetry process model", () => {
         2,
       ),
     });
+
     const reused = second.processes.find((process) => process.identity.pid === 200)!;
 
     expect(reused.identity.startTimeMs).toBe(9_000);

@@ -81,10 +81,12 @@ const tokenFromBytes = (bytes: Uint8Array): string => Buffer.from(bytes).toStrin
 
 const getHttpMcpEndpointHost = (hostname: string): string => {
   const normalized = hostname.toLowerCase();
+
   const endpointHostname =
     normalized === "0.0.0.0" || normalized === "::" || normalized === "[::]"
       ? "127.0.0.1"
       : hostname;
+
   return endpointHostname.includes(":") && !endpointHostname.startsWith("[")
     ? `[${endpointHostname}]`
     : endpointHostname;
@@ -100,6 +102,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
   const state = yield* SynchronizedRef.make<RegistryState>({ records: new Map() });
   const currentTimeMillis = options.now ? Effect.sync(options.now) : Clock.currentTimeMillis;
   const livenessWindowMs = options.livenessWindowMs ?? DEFAULT_LIVENESS_WINDOW_MS;
+
   const endpoint = Predicate.isTagged(httpServer.address, "TcpAddress")
     ? `http://${getHttpMcpEndpointHost(httpServer.address.hostname)}:${httpServer.address.port}/mcp`
     : "http://127.0.0.1/mcp";
@@ -115,6 +118,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         ([, record]) => timestamp - record.lastAliveAt <= livenessWindowMs,
       ),
     );
+
     return next.size === records.size ? records : next;
   };
 
@@ -124,6 +128,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       const providerSessionId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
       const rawToken = yield* crypto.randomBytes(32).pipe(Effect.map(tokenFromBytes), Effect.orDie);
       const tokenHash = yield* hashToken(rawToken);
+
       const scope: McpInvocationContext.McpInvocationScope = {
         environmentId,
         threadId: ThreadId.make(request.threadId),
@@ -132,11 +137,14 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         capabilities: new Set(request.capabilities ?? ["preview"]),
         issuedAt,
       };
+
       yield* SynchronizedRef.update(state, ({ records }) => {
         const next = new Map(pruneDead(records, issuedAt));
         next.set(tokenHash, { tokenHash, scope, lastAliveAt: issuedAt });
+
         return { records: next };
       });
+
       return {
         config: {
           environmentId,
@@ -155,12 +163,15 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       if (rawToken.length === 0) return undefined;
       const tokenHash = yield* hashToken(rawToken);
       const timestamp = yield* currentTimeMillis;
+
       return yield* SynchronizedRef.modify(state, ({ records }) => {
         const current = pruneDead(records, timestamp);
         const record = current.get(tokenHash);
+
         if (!record) return [undefined, { records: current }] as const;
         const next = new Map(current);
         next.set(tokenHash, { ...record, lastAliveAt: timestamp });
+
         return [record.scope, { records: next }] as const;
       });
     },
@@ -172,11 +183,13 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       yield* SynchronizedRef.update(state, ({ records }) => {
         const current = pruneDead(records, timestamp);
         const next = new Map(current);
+
         for (const [tokenHash, record] of current) {
           if (record.scope.threadId === threadId) {
             next.set(tokenHash, { ...record, lastAliveAt: timestamp });
           }
         }
+
         return { records: next };
       });
     },

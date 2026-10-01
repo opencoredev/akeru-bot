@@ -22,12 +22,15 @@ import * as PortScanner from "./PortScanner.ts";
 effectIt.effect("revalidates a successful HTML probe after its cache entry expires", () => {
   let responds = true;
   const requests: string[] = [];
+
   const fetchFn = ((input: Parameters<typeof globalThis.fetch>[0]) => {
     requests.push(String(input));
+
     return responds
       ? Promise.resolve(new Response("hello", { headers: { "content-type": "text/html" } }))
       : Promise.reject(new TypeError("not HTTP"));
   }) as typeof globalThis.fetch;
+
   const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
 
   return Effect.gen(function* () {
@@ -50,9 +53,11 @@ effectIt.effect("revalidates a successful HTML probe after its cache entry expir
 effectIt.effect("keeps a full configured URL when the discovered server root fails", () => {
   const requests: string[] = [];
   const configuredUrl = `http://localhost:${LSOF_TEST_PORT}/docs`;
+
   const fetchFn = ((input: Parameters<typeof globalThis.fetch>[0]) => {
     const url = String(input);
     requests.push(url);
+
     return Promise.resolve(
       url === configuredUrl
         ? new Response("docs", { headers: { "content-type": "text/html" } })
@@ -62,6 +67,7 @@ effectIt.effect("keeps a full configured URL when the discovered server root fai
           }),
     );
   }) as typeof globalThis.fetch;
+
   const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
 
   return Effect.gen(function* () {
@@ -78,10 +84,13 @@ effectIt.effect("probes configured custom ports through a canonical loopback hos
   const configuredUrl = `http://0.0.0.0:${customPort}/docs`;
   const expectedUrl = `http://localhost:${customPort}/docs`;
   const requests: string[] = [];
+
   const fetchFn = ((input: Parameters<typeof globalThis.fetch>[0]) => {
     requests.push(String(input));
+
     return Promise.resolve(new Response("docs", { headers: { "content-type": "text/html" } }));
   }) as typeof globalThis.fetch;
+
   const layer = makeProbeFailureLayer(processProbeFailure, fetchFn);
 
   return Effect.gen(function* () {
@@ -98,14 +107,17 @@ effectIt.effect("probes configured custom ports through a canonical loopback hos
 effectIt.effect("projects configured paths independently for simultaneous subscribers", () => {
   const docsUrl = `http://localhost:${LSOF_TEST_PORT}/docs`;
   const adminUrl = `http://localhost:${LSOF_TEST_PORT}/admin`;
+
   const fetchFn = ((input: Parameters<typeof globalThis.fetch>[0]) => {
     const url = String(input);
+
     return Promise.resolve(
       url === docsUrl || url === adminUrl
         ? new Response("app", { headers: { "content-type": "text/html" } })
         : new Response("not found", { status: 404 }),
     );
   }) as typeof globalThis.fetch;
+
   const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
 
   return Effect.gen(function* () {
@@ -132,13 +144,16 @@ effectIt.effect(
       { length: CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS },
       (_, index) => `http://localhost:${LSOF_TEST_PORT}/app-${index}`,
     );
+
     const secondSubscriberUrl = `http://localhost:${LSOF_TEST_PORT}/app-${CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS}`;
+
     const fetchFn = ((input: Parameters<typeof globalThis.fetch>[0]) =>
       Promise.resolve(
         String(input) === secondSubscriberUrl
           ? new Response("app", { headers: { "content-type": "text/html" } })
           : new Response("not found", { status: 404 }),
       )) as typeof globalThis.fetch;
+
     const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
 
     return Effect.gen(function* () {
@@ -163,15 +178,18 @@ effectIt.effect("stops probing a subscriber's configured paths after its scope c
   const docsUrl = `http://localhost:${LSOF_TEST_PORT}/docs`;
   const adminUrl = `http://localhost:${LSOF_TEST_PORT}/admin`;
   const requests: string[] = [];
+
   const fetchFn = ((input: Parameters<typeof globalThis.fetch>[0]) => {
     const url = String(input);
     requests.push(url);
+
     return Promise.resolve(
       url === docsUrl || url === adminUrl
         ? new Response("app", { headers: { "content-type": "text/html" } })
         : new Response("not found", { status: 404 }),
     );
   }) as typeof globalThis.fetch;
+
   const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
 
   return Effect.gen(function* () {
@@ -196,10 +214,13 @@ effectIt.effect("stops probing a subscriber's configured paths after its scope c
 
 effectIt.effect("uses the current configured fragment when readiness comes from cache", () => {
   const requests: string[] = [];
+
   const fetchFn = ((input: Parameters<typeof globalThis.fetch>[0]) => {
     requests.push(String(input));
+
     return Promise.resolve(new Response("docs", { headers: { "content-type": "text/html" } }));
   }) as typeof globalThis.fetch;
+
   const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
   const oldUrl = `http://localhost:${LSOF_TEST_PORT}/docs#old`;
   const newUrl = `http://localhost:${LSOF_TEST_PORT}/docs#new`;
@@ -216,10 +237,13 @@ effectIt.effect("uses the current configured fragment when readiness comes from 
 effectIt.effect("shares a configured root probe with discovered-root classification", () => {
   const requests: string[] = [];
   const rootUrl = `http://localhost:${LSOF_TEST_PORT}/`;
+
   const fetchFn = ((input: Parameters<typeof globalThis.fetch>[0]) => {
     requests.push(String(input));
+
     return Promise.resolve(new Response("app", { headers: { "content-type": "text/html" } }));
   }) as typeof globalThis.fetch;
+
   const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
 
   return Effect.gen(function* () {
@@ -239,16 +263,21 @@ effectIt.effect("starts fresh cache entries after the probing batch completes", 
     const times = [0, 20_000, 20_000, 20_000];
     let timeIndex = 0;
     const currentTimeMillis = () => times[Math.min(timeIndex++, times.length - 1)]!;
+
     const clock: Clock.Clock = {
       ...baseClock,
       currentTimeMillisUnsafe: currentTimeMillis,
       currentTimeMillis: Effect.sync(currentTimeMillis),
     };
+
     const requests: string[] = [];
+
     const fetchFn = ((input: Parameters<typeof globalThis.fetch>[0]) => {
       requests.push(String(input));
+
       return Promise.resolve(new Response("app", { headers: { "content-type": "text/html" } }));
     }) as typeof globalThis.fetch;
+
     const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
 
     yield* Effect.gen(function* () {
@@ -263,12 +292,15 @@ effectIt.effect("starts fresh cache entries after the probing batch completes", 
 effectIt.effect("caches a failed web probe until its bounded cache entry expires", () => {
   let responds = false;
   const requests: string[] = [];
+
   const fetchFn = ((input: Parameters<typeof globalThis.fetch>[0]) => {
     requests.push(String(input));
+
     return responds
       ? Promise.resolve(new Response("hello", { headers: { "content-type": "text/html" } }))
       : Promise.reject(new TypeError("not HTTP"));
   }) as typeof globalThis.fetch;
+
   const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
 
   return Effect.gen(function* () {
@@ -286,14 +318,18 @@ effectIt.effect("caches a failed web probe until its bounded cache entry expires
 
 effectIt.effect("falls back to HTTPS and does not follow redirects while probing", () => {
   const redirects: Array<string | undefined> = [];
+
   const fetchFn = (async (
     input: Parameters<typeof globalThis.fetch>[0],
     init?: Parameters<typeof globalThis.fetch>[1],
   ) => {
     redirects.push(init?.redirect);
+
     if (String(input).startsWith("http:")) throw new TypeError("TLS listener");
+
     return new Response(null, { status: 302, headers: { location: "https://example.com" } });
   }) as typeof globalThis.fetch;
+
   const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
 
   return Effect.gen(function* () {
@@ -309,10 +345,13 @@ effectIt.effect(
   "excludes HTTP errors, non-navigation responses, and successful non-documents",
   () => {
     let pid = 1;
+
     let makeResponse = () =>
       new Response("not found", { status: 404, headers: { "content-type": "text/html" } });
+
     const fetchFn = ((_input: Parameters<typeof globalThis.fetch>[0]) =>
       Promise.resolve(makeResponse())) as typeof globalThis.fetch;
+
     const layer = makeLsofScannerLayer({ pid: () => pid, fetch: fetchFn });
 
     return Effect.gen(function* () {
@@ -355,22 +394,26 @@ effectIt.effect(
 
 effectIt.effect("aborts HTTP and HTTPS probes when they time out", () => {
   const aborted: string[] = [];
+
   const fetchFn = ((
     input: Parameters<typeof globalThis.fetch>[0],
     init?: Parameters<typeof globalThis.fetch>[1],
   ) =>
     new Promise<Response>((_resolve, reject) => {
       const signal = init?.signal;
+
       const onAbort = () => {
         aborted.push(String(input));
         reject(new DOMException("Aborted", "AbortError"));
       };
+
       if (signal?.aborted) {
         onAbort();
       } else {
         signal?.addEventListener("abort", onAbort, { once: true });
       }
     })) as typeof globalThis.fetch;
+
   const layer = makeLsofScannerLayer({ pid: () => 1234, fetch: fetchFn });
 
   return Effect.gen(function* () {

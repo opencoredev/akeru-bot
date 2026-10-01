@@ -35,7 +35,9 @@ export const ATTACHMENT_UPLOAD_ROUTE_PREFIX = "/api/attachments/upload";
 
 // Asset download tokens share this key, but their signed claim kind is different.
 const SIGNING_SECRET_NAME = "asset-access-signing-key";
+
 const PENDING_ATTACHMENT_SWEEP_INTERVAL_MS = 15 * 60_000;
+
 const lastPendingSweepByDirectory = new Map<string, number>();
 
 const AttachmentUploadClaims = Schema.Struct({
@@ -47,10 +49,13 @@ const AttachmentUploadClaims = Schema.Struct({
   sizeBytes: Schema.Number,
   expiresAt: Schema.Number,
 });
+
 export type AttachmentUploadClaims = typeof AttachmentUploadClaims.Type;
 
 const attachmentUploadClaimsJson = Schema.fromJsonString(AttachmentUploadClaims);
+
 const decodeAttachmentUploadClaims = Schema.decodeUnknownOption(attachmentUploadClaimsJson);
+
 const encodeAttachmentUploadClaims = Schema.encodeSync(attachmentUploadClaimsJson);
 
 function decodeClaims(encodedPayload: string): AttachmentUploadClaims | null {
@@ -63,6 +68,7 @@ function decodeClaims(encodedPayload: string): AttachmentUploadClaims | null {
 
 const loadSigningSecret = Effect.gen(function* () {
   const secretStore = yield* ServerSecretStore.ServerSecretStore;
+
   return yield* secretStore.getOrCreateRandom(SIGNING_SECRET_NAME, 32);
 });
 
@@ -72,18 +78,22 @@ export const issueAttachmentUploadUrl = Effect.fn("AttachmentUpload.issueUrl")(f
   const secret = yield* loadSigningSecret.pipe(
     Effect.mapError((cause) => new AttachmentUploadSigningKeyError({ cause })),
   );
+
   const config = yield* ServerConfig.ServerConfig;
   const nowMs = yield* Clock.currentTimeMillis;
   const previousSweep = lastPendingSweepByDirectory.get(config.attachmentsDir);
+
   if (
     previousSweep === undefined ||
     nowMs - previousSweep >= PENDING_ATTACHMENT_SWEEP_INTERVAL_MS
   ) {
     lastPendingSweepByDirectory.set(config.attachmentsDir, nowMs);
+
     const swept = sweepStalePendingAttachments({
       attachmentsDir: config.attachmentsDir,
       nowMs,
     });
+
     if (swept.deleted > 0) {
       yield* Effect.logInfo("Removed expired attachment uploads.", { deleted: swept.deleted });
     }
@@ -91,6 +101,7 @@ export const issueAttachmentUploadUrl = Effect.fn("AttachmentUpload.issueUrl")(f
 
   const attachmentId = createPendingAttachmentId();
   const expiresAt = nowMs + ATTACHMENT_UPLOAD_URL_TTL_MS;
+
   const encodedPayload = base64UrlEncode(
     encodeAttachmentUploadClaims({
       version: 1,
@@ -114,6 +125,7 @@ export const validateAttachmentUploadToken = Effect.fn("AttachmentUpload.validat
   token: string,
 ) {
   const [encodedPayload, signature, unexpectedSegment] = token.split(".");
+
   if (!encodedPayload || !signature || unexpectedSegment) {
     return null;
   }
@@ -124,14 +136,17 @@ export const validateAttachmentUploadToken = Effect.fn("AttachmentUpload.validat
     ),
     Effect.orElseSucceed(() => null),
   );
+
   if (!secret || !timingSafeEqualBase64Url(signature, signPayload(encodedPayload, secret))) {
     return null;
   }
 
   const claims = decodeClaims(encodedPayload);
+
   if (!claims || claims.expiresAt <= (yield* Clock.currentTimeMillis)) {
     return null;
   }
+
   return claims;
 });
 
@@ -154,24 +169,29 @@ export const storeAttachmentUpload = Effect.fn("AttachmentUpload.store")(functio
   const config = yield* ServerConfig.ServerConfig;
   const extension = inferAttachmentExtension({ mimeType: claims.mimeType, name: claims.name });
   const relativePath = `${claims.attachmentId}${extension}`;
+
   const finalPath = resolveAttachmentRelativePath({
     attachmentsDir: config.attachmentsDir,
     relativePath,
   });
+
   const partPath = resolveAttachmentRelativePath({
     attachmentsDir: config.attachmentsDir,
     relativePath: `${relativePath}.${NodeCrypto.randomUUID()}.part`,
   });
+
   if (!finalPath || !partPath) {
     return { ok: false, status: 500, detail: "Failed to resolve attachment path." };
   }
 
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
   return yield* Effect.gen(function* () {
     yield* fileSystem.makeDirectory(path.dirname(finalPath), { recursive: true });
     yield* fileSystem.writeFile(partPath, bytes);
     yield* fileSystem.rename(partPath, finalPath);
+
     return { ok: true } satisfies StoreAttachmentUploadResult;
   }).pipe(
     Effect.catch((cause) =>
@@ -201,10 +221,12 @@ export const deletePendingAttachment = Effect.fn("AttachmentUpload.deletePending
   }
 
   const config = yield* ServerConfig.ServerConfig;
+
   const attachmentPath = resolveAttachmentPathById({
     attachmentsDir: config.attachmentsDir,
     attachmentId,
   });
+
   if (!attachmentPath) {
     return;
   }

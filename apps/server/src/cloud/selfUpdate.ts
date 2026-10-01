@@ -40,6 +40,7 @@ export function resolveServerSelfUpdateCapability(input: {
   readonly launcherManaged: boolean;
 }): ServerSelfUpdateCapability | null {
   if (input.desktopManaged) return "desktop-managed" as const;
+
   return input.launcherManaged ? ("boot-service" as const) : null;
 }
 
@@ -66,13 +67,16 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
   const execPath = yield* HostProcessExecutablePath;
   const platform = yield* HostProcessPlatform;
   const environment = yield* HostProcessEnvironment;
+
   const artifactRoot =
     environment.AKERU_SERVICE_RUNTIME_ROOT ??
     path.resolve(path.dirname(execPath), platform === "win32" ? ".." : "../..");
+
   const inFlight = yield* Ref.make(false);
 
   const capability: ServerSelfUpdateCapability | null =
     serverConfig.mode === "desktop" ? "desktop-managed" : launcher.managed ? "boot-service" : null;
+
   const failWith = (reason: string, cause?: unknown) =>
     cause === undefined
       ? new ServerSelfUpdateError({ reason })
@@ -84,10 +88,12 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
       Effect.flatMap((response) => response.arrayBuffer),
       Effect.map((bytes) => new Uint8Array(bytes)),
     );
+
   const verifiedWindowsArchiveChecksum = (version: string) =>
     Effect.gen(function* () {
       const repository = environment.AKERU_REMOTE_REPOSITORY || "opencoredev/akeru-bot";
       const base = `https://github.com/${repository}/releases/download/v${version}`;
+
       const [manifest, signature] = yield* Effect.all(
         [
           downloadReleaseAsset(`${base}/AKERU-REMOTE-MANIFEST.txt`),
@@ -95,6 +101,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
         ],
         { concurrency: 2 },
       );
+
       return yield* Effect.try(() =>
         signedArchiveChecksum({
           manifest,
@@ -118,6 +125,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
         "This server is managed by the Akeru Bot desktop app on its machine; update the desktop app to update it.",
       );
     }
+
     if (capability === null) {
       return yield* failWith(
         "Remote updates require the Akeru Bot background service. Run `akeru service install` on the server machine.",
@@ -125,15 +133,18 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
     }
 
     const targetVersion = input.targetVersion.trim();
+
     if (!isExactServiceVersion(targetVersion)) {
       return yield* failWith(`'${targetVersion}' is not an exact akeru-bot version.`);
     }
+
     if (yield* Ref.getAndSet(inFlight, true)) {
       return yield* failWith("A server update is already in progress.");
     }
 
     return yield* Effect.gen(function* () {
       yield* reportProgress("downloading");
+
       const paths = yield* ensurePinnedRuntimeInstalled({
         baseDir: serverConfig.baseDir,
         version: targetVersion,
@@ -149,16 +160,20 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
                       directory: path.dirname(runtime.versionDir),
                       prefix: ".archive-",
                     });
+
                     const windows = platform === "win32";
+
                     // Windows PowerShell cannot check an Ed25519 signature, so the running server
                     // verifies the signed manifest and hands the installer the checksum to enforce.
                     const expectedSha256 = windows
                       ? yield* verifiedWindowsArchiveChecksum(targetVersion)
                       : undefined;
+
                     const installer = path.join(
                       artifactRoot,
                       windows ? "install-remote.ps1" : "install-remote.sh",
                     );
+
                     const result = yield* runner.run({
                       command: windows ? "powershell.exe" : "sh",
                       args: windows
@@ -184,6 +199,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
                       },
                       timeout: Duration.minutes(10),
                     });
+
                     if (result.code !== 0)
                       return yield* new PinnedRuntimeInstallError({
                         step: "verifying the remote release archive",
@@ -252,7 +268,9 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
                       }),
                     );
                   }
+
                   let parsed: unknown;
+
                   try {
                     parsed = JSON.parse(result.stdout.trim());
                   } catch (cause) {
@@ -263,7 +281,9 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
                       }),
                     );
                   }
+
                   const preflight = decodeServicePreflightResult(parsed);
+
                   if (preflight === undefined || preflight.version !== targetVersion) {
                     return Effect.fail(
                       new PinnedRuntimeInstallError({
@@ -271,6 +291,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
                       }),
                     );
                   }
+
                   return preflight.status === "ready"
                     ? Effect.void
                     : Effect.fail(
@@ -291,6 +312,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
       );
 
       yield* reportProgress("installing");
+
       const updateId = yield* launcher
         .requestUpdate({ targetVersion, dbPath: serverConfig.dbPath })
         .pipe(
@@ -309,6 +331,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
         targetVersion,
         runtimePath: paths.entryPath,
       });
+
       return { targetVersion, method: "boot-service" as const, updateId };
     }).pipe(Effect.onError(() => Ref.set(inFlight, false)));
   });

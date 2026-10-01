@@ -22,6 +22,7 @@ memoryLayer()("044_LinkedPullRequestAndAuthSessionClientColumns", (it) => {
       const threadColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_threads)
       `;
+
       const sessionColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(auth_sessions)
       `;
@@ -47,9 +48,11 @@ memoryLayer()("044_LinkedPullRequestAndAuthSessionClientColumns collision", (it)
       const threadColumnsBefore = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_threads)
       `;
+
       const sessionColumnsBefore = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(auth_sessions)
       `;
+
       assert.ok(!columnNames(threadColumnsBefore).includes("linked_pull_request_json"));
       assert.ok(!columnNames(sessionColumnsBefore).includes("client_surface"));
       assert.ok(!columnNames(sessionColumnsBefore).includes("client_app_version"));
@@ -59,9 +62,11 @@ memoryLayer()("044_LinkedPullRequestAndAuthSessionClientColumns collision", (it)
       const threadColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_threads)
       `;
+
       const sessionColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(auth_sessions)
       `;
+
       assert.ok(columnNames(threadColumns).includes("linked_pull_request_json"));
       assert.ok(columnNames(threadColumns).includes("unsettled_at"));
       assert.ok(columnNames(sessionColumns).includes("client_surface"));

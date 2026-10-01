@@ -52,6 +52,7 @@ import {
   reconnectChannel,
   restoreConnectedChannels,
 } from "./ChannelConnections.ts";
+
 export { defaultProjectIdForBot } from "@akeru/shared/channelProject";
 
 const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
@@ -60,6 +61,7 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
     // Created before the callback set and the shutdown finalizer, so it closes last.
     const transportScope = yield* Scope.fork(serviceScope);
     const runSdkCallback = yield* FiberSet.makeRuntimePromise();
+
     const ctx: ChannelRuntimeContext = {
       deps,
       runtimes: new Map(),
@@ -70,12 +72,14 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       connecting: new Set(),
       closed: false,
     };
+
     const shutdown = shutdownAllChannels(ctx);
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
         ctx.closed = true;
       }).pipe(Effect.andThen(shutdown)),
     );
+
     return {
       connect: (input) => connectChannel(ctx, input),
       saveConnection: (input) => saveChannelConnection(ctx, input),
@@ -138,6 +142,7 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
           bindings,
           (botId, provider) => {
             const runtime = ctx.runtimes.get(runtimeKey(botId, provider));
+
             return runtime !== undefined && (runtime.isHealthy?.() ?? true);
           },
           (botId, provider) => ctx.connecting.has(runtimeKey(botId, provider)),
@@ -165,6 +170,7 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
     Effect.gen(function* () {
       const secretStore = yield* Effect.serviceOption(ServerSecretStore);
       const deliveryStore = yield* Effect.serviceOption(ChannelDeliveryStore);
+
       if (Option.isNone(secretStore) || Option.isNone(deliveryStore)) return Layer.empty;
       const engine = yield* OrchestrationEngineService;
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
@@ -172,6 +178,7 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
       const crypto = yield* Crypto.Crypto;
       const serverConfig = yield* Effect.serviceOption(ServerConfig.ServerConfig);
       const publicOrigin = Option.getOrUndefined(serverConfig)?.publicOrigin;
+
       return ChannelRuntime.layerWith({
         ...(publicOrigin ? { publicOrigin } : {}),
         engine,
@@ -194,74 +201,120 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
 export const whatsAppWebhookRouteLayer = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const channelRuntime = yield* Effect.serviceOption(ChannelRuntime);
+
     const connectionHandler = Effect.gen(function* () {
       if (Option.isNone(channelRuntime))
         return HttpServerResponse.text("Not Found", { status: 404 });
+
       const params = yield* HttpRouter.schemaPathParams(
         Schema.Struct({ connectionId: ChannelConnectionId }),
       ).pipe(Effect.option);
+
       if (Option.isNone(params)) return HttpServerResponse.text("Not Found", { status: 404 });
       const request = yield* HttpServerRequest.HttpServerRequest;
       const webRequest = yield* HttpServerRequest.toWeb(request).pipe(Effect.option);
+
       if (Option.isNone(webRequest)) return HttpServerResponse.text("Bad Request", { status: 400 });
+
       const response = yield* channelRuntime.value.handleWhatsAppConnectionWebhook(
         params.value.connectionId,
         webRequest.value,
       );
+
       return HttpServerResponse.fromWeb(response);
     });
+
     const handler = Effect.gen(function* () {
       if (Option.isNone(channelRuntime))
         return HttpServerResponse.text("Not Found", { status: 404 });
+
       const params = yield* HttpRouter.schemaPathParams(Schema.Struct({ botId: BotId })).pipe(
         Effect.option,
       );
+
       if (Option.isNone(params)) return HttpServerResponse.text("Not Found", { status: 404 });
       const request = yield* HttpServerRequest.HttpServerRequest;
       const webRequest = yield* HttpServerRequest.toWeb(request).pipe(Effect.option);
+
       if (Option.isNone(webRequest)) return HttpServerResponse.text("Bad Request", { status: 400 });
+
       const response = yield* channelRuntime.value.handleWhatsAppWebhook(
         params.value.botId,
         webRequest.value,
       );
+
       return HttpServerResponse.fromWeb(response);
     });
+
     yield* router.add("GET", WHATSAPP_WEBHOOK_PATH, handler);
     yield* router.add("POST", WHATSAPP_WEBHOOK_PATH, handler);
     yield* router.add("GET", WHATSAPP_CONNECTION_WEBHOOK_PATH, connectionHandler);
     yield* router.add("POST", WHATSAPP_CONNECTION_WEBHOOK_PATH, connectionHandler);
   }),
 );
+
 export { ChannelPostRejectedError } from "./ChannelErrors.ts";
+
 export { ChannelRuntimeError } from "./ChannelErrors.ts";
+
 export { ChannelTransportError } from "./ChannelErrors.ts";
+
 export { isChannelPostRejected } from "./ChannelErrors.ts";
+
 export { isChannelTransportError } from "./ChannelErrors.ts";
+
 export { channelFailureCategory } from "./ChannelErrors.ts";
+
 export { channelFailureMessage } from "./ChannelErrors.ts";
+
 export type { ChannelFailurePresentation } from "./ChannelErrors.ts";
+
 export { channelFailurePresentation } from "./ChannelErrors.ts";
+
 export type { ChannelTransportRuntime } from "./ChannelRuntimeTypes.ts";
+
 export type { ChannelOperationError } from "./ChannelRuntimeTypes.ts";
+
 export type { InboundChannelMessage } from "./ChannelRuntimeTypes.ts";
+
 export type { ChannelTransportContext } from "./ChannelRuntimeTypes.ts";
+
 export type { ChannelRuntimeDependencies } from "./ChannelRuntimeTypes.ts";
+
 export type { ChannelReplyTarget } from "./ChannelRuntimeTypes.ts";
+
 export type { ChannelRestoreFailure } from "./ChannelRuntimeTypes.ts";
+
 export { makeKeyedLock } from "./ChannelOperations.ts";
+
 export { channelReplyTextWithFooter } from "./ChannelDelivery.ts";
+
 export { CHANNEL_SENT_MESSAGE_RECOVERY_LIMIT } from "./ChannelDelivery.ts";
+
 export { CHANNEL_MENTION_CONTEXT_LIMIT } from "./ChannelInbound.ts";
+
 export { CHANNEL_MENTION_CONTEXT_CHARACTER_LIMIT } from "./ChannelInbound.ts";
+
 export { CHANNEL_GATEWAY_RENEWAL_INTERVAL } from "./ChannelTransportFactory.ts";
+
 export { channelThreadId } from "./ChannelInbound.ts";
+
 export { WHATSAPP_WEBHOOK_PATH } from "./ChannelWebhooks.ts";
+
 export { WHATSAPP_CONNECTION_WEBHOOK_PATH } from "./ChannelWebhooks.ts";
+
 export { WHATSAPP_NOT_LIVE_MESSAGE } from "./ChannelDelivery.ts";
+
 export { whatsAppWebhookUrl } from "./ChannelWebhooks.ts";
+
 export { mentionWithContext } from "./ChannelInbound.ts";
+
 export { channelBindingsForRuntime } from "./ChannelInbound.ts";
+
 export { ignoredInbound } from "./ChannelTransportFactory.ts";
+
 export type { RenewingGateway } from "./ChannelTransportFactory.ts";
+
 export { startRenewingGateway } from "./ChannelTransportFactory.ts";
+
 export type { ChannelRuntimeShape } from "./ChannelRuntimeTypes.ts";

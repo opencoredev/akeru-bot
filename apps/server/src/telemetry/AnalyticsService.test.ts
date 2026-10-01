@@ -12,13 +12,16 @@ import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import * as ServerConfig from "../config.ts";
 import * as AnalyticsService from "./AnalyticsService.ts";
+
 it.layer(NodeServices.layer)("anonymous analytics", (it) => {
   it.effect("counts bots_total from each bot's latest lifecycle event", () =>
     Effect.gen(function* () {
       const captured: unknown[] = [];
+
       const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
         prefix: "akeru-analytics-bots-total-",
       });
+
       const configLayer = ConfigProvider.layer(
         ConfigProvider.fromUnknown({
           T3CODE_TELEMETRY_ENABLED: true,
@@ -26,11 +29,14 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
           T3CODE_POSTHOG_HOST: "http://localhost",
         }),
       );
+
       const analyticsLayer = makeLayers(serverConfigLayer).pipe(Layer.provide(configLayer));
+
       const batchServerLayer = HttpServer.serve(
         Effect.gen(function* () {
           const request = yield* HttpServerRequest.HttpServerRequest;
           captured.push(yield* request.json);
+
           return HttpServerResponse.jsonUnsafe({});
         }),
       );
@@ -41,12 +47,15 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
         const fs = yield* FileSystem.FileSystem;
         const sql = yield* SqlClient.SqlClient;
         const analytics = yield* AnalyticsService.AnalyticsService;
+
         const currentStart = AnalyticsService.bucketStartAt(
           DateTime.toEpochMillis(yield* DateTime.now),
         );
+
         const firstStart = DateTime.formatIso(
           DateTime.subtract(DateTime.makeUnsafe(currentStart), { hours: 6 }),
         );
+
         const eventAt = DateTime.formatIso(
           DateTime.add(DateTime.makeUnsafe(firstStart), { minutes: 1 }),
         );
@@ -95,6 +104,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
             readonly properties: { readonly bots_total: number; readonly bots_deleted: number };
           }>;
         }>;
+
         assert.equal(requests[0]?.batch.length, 1);
         assert.equal(requests[0]?.batch[0]?.properties.bots_total, 2);
         // Archiving and then deleting bot-a removes it once.
@@ -113,6 +123,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
         const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
           prefix: `akeru-analytics-${name}-`,
         });
+
         const analyticsLayer = makeLayers(serverConfigLayer).pipe(
           Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(environment))),
         );
@@ -133,6 +144,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
       const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
         prefix: "akeru-analytics-disabled-",
       });
+
       const analyticsLayer = makeLayers(serverConfigLayer).pipe(
         Layer.provide(
           ConfigProvider.layer(ConfigProvider.fromUnknown({ T3CODE_TELEMETRY_ENABLED: false })),
@@ -159,6 +171,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
       const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
         prefix: "akeru-analytics-no-key-",
       });
+
       const analyticsLayer = makeLayers(serverConfigLayer).pipe(
         Layer.provide(
           ConfigProvider.layer(ConfigProvider.fromUnknown({ T3CODE_TELEMETRY_ENABLED: true })),
@@ -185,9 +198,11 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
   it.effect("keeps provider account files outside the analytics identity path", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
+
       const source = yield* fs.readFileString(
         new URL("./AnalyticsService.ts", import.meta.url).pathname,
       );
+
       assert.notInclude(source, ".codex");
       assert.notInclude(source, ".claude");
       assert.notInclude(source, "auth.json");

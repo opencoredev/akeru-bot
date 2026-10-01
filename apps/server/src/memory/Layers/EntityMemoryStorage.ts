@@ -118,19 +118,23 @@ export const makeEntityMemoryStorage = () =>
       revision: AkeruMemoryRevision,
     ) {
       const partitions = yield* resolveAuthorizedMemoryPartitions(access);
+
       if (!partitions.some((partition) => samePartition(revision, partition))) {
         return yield* new AkeruMemoryAccessDenied({
           reason: "The memory partition is not available to this thread.",
         });
       }
+
       const authorBotId = access.respondingBotId ?? access.botId;
       const entity = expectedEntity(access, revision);
+
       const affectedBotIds =
         access.groupId === null
           ? authorBotId === null
             ? []
             : [authorBotId]
           : access.groupMemberBotIds;
+
       if (
         revision.approvalState !== "approved" ||
         revision.deletionState !== "active" ||
@@ -145,6 +149,7 @@ export const makeEntityMemoryStorage = () =>
           reason: "The memory revision is not valid for this authenticated turn.",
         });
       }
+
       return partitions;
     });
 
@@ -152,6 +157,7 @@ export const makeEntityMemoryStorage = () =>
       "EntityMemoryRepository.getCurrent",
     )(function* (input) {
       const partitions = yield* resolveAuthorizedMemoryPartitions(input.access);
+
       const rows = yield* Effect.forEach(
         partitions,
         (partition) =>
@@ -160,10 +166,13 @@ export const makeEntityMemoryStorage = () =>
           ),
         { concurrency: 1 },
       );
+
       const row = rows.find((candidate) => Predicate.isTagged(candidate, "Some"));
+
       if (row === undefined) {
         return yield* new EntityMemoryNotFoundError({ rootId: input.rootId });
       }
+
       return yield* decodeRow(row.value);
     });
 
@@ -185,6 +194,7 @@ export const makeEntityMemoryStorage = () =>
         SELECT thread_id FROM akeru_memory_derived_copies
         WHERE tenant_id = ${tenantId} AND root_id = ${rootId}
       `;
+
         // A failed clear must abort the enclosing transaction. Otherwise the
         // tombstone would commit while stale observations stay injectable.
         yield* Effect.tryPromise({
@@ -223,6 +233,7 @@ export const makeEntityMemoryStorage = () =>
             toPersistenceSqlError("EntityMemoryRepository.recordDerivedCopies:transaction"),
           ),
         );
+
     return {
       sql,
       writeLock,

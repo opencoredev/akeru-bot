@@ -13,6 +13,7 @@ import {
   DesktopTelemetryControlFailed,
   DesktopTelemetryControlStalled,
 } from "./DesktopTelemetryTypes.ts";
+
 export const decodeMessage = Schema.decodeUnknownEffect(DesktopHostTelemetryMessage);
 
 export const encodeControlMessage = Schema.encodeEffect(
@@ -36,12 +37,14 @@ export function normalizeReceiverError(error: unknown): DesktopTelemetryReceiver
   ) {
     return error;
   }
+
   return new DesktopTelemetryDecodeFailed({ cause: error });
 }
 
 export function messageVersion(value: unknown): number | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const version = Reflect.get(value, "version");
+
   return typeof version === "number" ? version : undefined;
 }
 
@@ -49,10 +52,12 @@ export const writeAllToFileDescriptor = Effect.fn(
   "resourceTelemetry.desktopTelemetryReceiver.writeAllToFileDescriptor",
 )(function* (fd: number, payload: Buffer) {
   let offset = 0;
+
   while (offset < payload.byteLength) {
     const written = yield* Effect.callback<number, DesktopTelemetryControlFailed>(
       (resume, signal) => {
         if (signal.aborted) return;
+
         try {
           NodeFS.write(
             fd,
@@ -71,8 +76,10 @@ export const writeAllToFileDescriptor = Effect.fn(
                     }),
                   ),
                 );
+
                 return;
               }
+
               resume(Effect.succeed(bytesWritten));
             },
           );
@@ -89,6 +96,7 @@ export const writeAllToFileDescriptor = Effect.fn(
         }
       },
     );
+
     yield* requireDesktopTelemetryWriteProgress(fd, payload.byteLength - offset, written);
     offset += written;
   }
@@ -109,6 +117,7 @@ export function openDesktopTelemetryReadable(fd: number) {
   if (NodeFS.fstatSync(fd).isSocket()) {
     return new NodeNet.Socket({ fd, readable: true, writable: false });
   }
+
   // Keep file, FIFO, and Windows non-socket descriptor handling unchanged.
   return NodeFS.createReadStream("", { fd, autoClose: true });
 }

@@ -35,6 +35,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("055_AkeruMemoryCandida
         SELECT status, memory_root_id AS memoryRootId
         FROM akeru_memory_decision_receipts
       `;
+
       assert.deepEqual(rows, [{ status: "approved", memoryRootId: "root-1" }]);
     }),
   );

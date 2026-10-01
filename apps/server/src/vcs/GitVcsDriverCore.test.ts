@@ -24,22 +24,27 @@ import * as GitVcsDriver from "./GitVcsDriver.ts";
 
 it.effect("uses stable diagnostics for every parsed non-repository command", () => {
   const commands: Array<{ readonly args: ReadonlyArray<string>; readonly lcAll?: string }> = [];
+
   const spawner = ChildProcessSpawner.make((command) =>
     Effect.sync(() => {
       if (!ChildProcess.isStandardCommand(command)) {
         return assert.fail("expected a standard Git command");
       }
+
       commands.push({
         args: command.args,
         ...(command.options.env?.LC_ALL ? { lcAll: command.options.env.LC_ALL } : {}),
       });
+
       return makeNonRepositoryHandle();
     }),
   );
+
   const nodeServicesLayer = Layer.merge(
     NodeServices.layer,
     Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
   );
+
   const layer = GitVcsDriver.layer.pipe(
     Layer.provide(ServerConfigLayer),
     Layer.provideMerge(nodeServicesLayer),
@@ -69,25 +74,33 @@ it.effect("coalesces concurrent ref pages into one repository snapshot", () =>
       const firstWorktreeScanStarted = yield* Deferred.make<void>();
       const remoteNamesScanCompleted = yield* Deferred.make<void>();
       const delayFirstWorktreeScan = yield* Ref.make(true);
+
       const countingSpawner = ChildProcessSpawner.make((command) =>
         Effect.gen(function* () {
           if (!ChildProcess.isStandardCommand(command)) {
             return yield* Effect.die("expected a standard Git command");
           }
+
           yield* Ref.update(spawnedArgs, (current) => [...current, command.args]);
+
           const isWorktreeScan =
             command.args.includes("worktree") && command.args.includes("--porcelain");
+
           const shouldDelay =
             isWorktreeScan && (yield* Ref.getAndSet(delayFirstWorktreeScan, false));
+
           if (shouldDelay) {
             yield* Deferred.succeed(firstWorktreeScanStarted, undefined);
             yield* Effect.sleep("8 seconds");
           }
+
           const handle = yield* delegate.spawn(command);
+
           const isRemoteNamesScan =
             command.args.length === 3 &&
             command.args[0] === "--git-dir" &&
             command.args[2] === "remote";
+
           return isRemoteNamesScan
             ? ChildProcessSpawner.makeHandle({
                 ...handle,
@@ -98,10 +111,13 @@ it.effect("coalesces concurrent ref pages into one repository snapshot", () =>
             : handle;
         }),
       );
+
       const driver = yield* makeGitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, countingSpawner),
       );
+
       const cwd = yield* makeTmpDir();
+
       const runGit = (args: ReadonlyArray<string>) =>
         driver.execute({
           operation: "GitVcsDriver.test.coalescedListRefs",
@@ -121,9 +137,11 @@ it.effect("coalesces concurrent ref pages into one repository snapshot", () =>
       const initialRequest = yield* driver
         .listRefs({ cwd, refresh: true, limit: 100 })
         .pipe(Effect.forkChild({ startImmediately: true }));
+
       yield* Deferred.await(firstWorktreeScanStarted);
       yield* Deferred.await(remoteNamesScanCompleted);
       yield* TestClock.adjust("6 seconds");
+
       const laterRequests = yield* Effect.all(
         Array.from({ length: 30 }, (_, index) =>
           driver.listRefs({
@@ -135,21 +153,25 @@ it.effect("coalesces concurrent ref pages into one repository snapshot", () =>
         ),
         { concurrency: "unbounded" },
       ).pipe(Effect.forkChild({ startImmediately: true }));
+
       yield* TestClock.adjust("2 seconds");
       yield* Fiber.join(initialRequest);
       yield* Fiber.join(laterRequests);
       yield* driver.listRefs({ cwd, cursor: 1, limit: 100 });
 
       const firstSnapshotCommands = yield* Ref.get(spawnedArgs);
+
       const snapshotRefScans = firstSnapshotCommands.filter(
         (args) =>
           args.includes("for-each-ref") &&
           args.includes("refs/heads") &&
           args.includes("refs/remotes"),
       );
+
       const worktreeScans = firstSnapshotCommands.filter(
         (args) => args.includes("worktree") && args.includes("--porcelain"),
       );
+
       assert.equal(snapshotRefScans.length, 1);
       assert.equal(worktreeScans.length, 1);
 
@@ -242,9 +264,11 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           cwd,
           detail: "Failed to spawn Git process.",
         });
+
         if (!(error.cause instanceof PlatformError.PlatformError)) {
           return assert.fail("expected the original platform error cause");
         }
+
         assert.equal(error.cause.reason._tag, "NotFound");
         assert.notInclude(error.detail, error.cause.message);
       }),
@@ -257,6 +281,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         yield* driver.initRepo({ cwd });
 
         const secret = "secret-token-value";
+
         const error = yield* driver
           .execute({
             operation: "GitVcsDriver.test.redactedFailure",
@@ -372,6 +397,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           refKind: "remote",
           limit: 1,
         });
+
         assert.equal(remoteOnly.refs.length, 1);
         assert.equal(remoteOnly.refs[0]?.name, `origin/${initialBranch}`);
         assert.equal(remoteOnly.refs[0]?.isRemote, true);
@@ -413,6 +439,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           oldBranch: "feature/original",
           newBranch: "feature/renamed",
         });
+
         assert.equal(renamed.branch, "feature/renamed");
         assert.equal(yield* git(cwd, ["branch", "--show-current"]), "feature/renamed");
 
@@ -431,6 +458,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         const driver = yield* GitVcsDriver.GitVcsDriver;
 
         const current = yield* git(cwd, ["branch", "--show-current"]);
+
         const result = yield* driver.renameBranch({
           cwd,
           oldBranch: current,

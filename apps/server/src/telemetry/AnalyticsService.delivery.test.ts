@@ -14,6 +14,7 @@ import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as AnalyticsService from "./AnalyticsService.ts";
+
 it.layer(NodeServices.layer)("anonymous analytics", (it) => {
   it.effect(
     "persists closed buckets, retries with one insert id, skips empty buckets, and opts out",
@@ -21,9 +22,11 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
       Effect.gen(function* () {
         const captured: unknown[] = [];
         let attempts = 0;
+
         const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
           prefix: "akeru-analytics-",
         });
+
         const configLayer = ConfigProvider.layer(
           ConfigProvider.fromUnknown({
             T3CODE_TELEMETRY_ENABLED: true,
@@ -31,12 +34,15 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
             T3CODE_POSTHOG_HOST: "http://localhost",
           }),
         );
+
         const analyticsLayer = makeLayers(serverConfigLayer).pipe(Layer.provide(configLayer));
+
         const batchServerLayer = HttpServer.serve(
           Effect.gen(function* () {
             const request = yield* HttpServerRequest.HttpServerRequest;
             captured.push(yield* request.json);
             attempts += 1;
+
             return attempts === 1
               ? HttpServerResponse.empty({ status: 503 })
               : HttpServerResponse.jsonUnsafe({});
@@ -50,18 +56,23 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
           const sql = yield* SqlClient.SqlClient;
           const settings = yield* ServerSettings.ServerSettingsService;
           const analytics = yield* AnalyticsService.AnalyticsService;
+
           const currentStart = AnalyticsService.bucketStartAt(
             DateTime.toEpochMillis(yield* DateTime.now),
           );
+
           const firstStart = DateTime.formatIso(
             DateTime.subtract(DateTime.makeUnsafe(currentStart), { hours: 6 }),
           );
+
           const eventAt = DateTime.formatIso(
             DateTime.add(DateTime.makeUnsafe(firstStart), { minutes: 1 }),
           );
+
           const secondEventAt = DateTime.formatIso(
             DateTime.add(DateTime.makeUnsafe(firstStart), { hours: 3, minutes: 1 }),
           );
+
           const installationId = "0f64da24-2c54-4d2a-9d68-f117c4e78e01";
 
           yield* fs.writeFileString(
@@ -225,6 +236,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
               };
             }>;
           }>;
+
           assert.deepEqual(Object.keys(requests[0] ?? {}).toSorted(), ["api_key", "batch"]);
           assert.equal(requests[0]?.api_key, "phc_test");
           assert.equal(requests[0]?.batch.length, 2);
@@ -288,6 +300,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
           assert.equal((captured[2] as { readonly batch: ReadonlyArray<unknown> }).batch.length, 6);
           assert.equal(quotaState.pending.length, 3);
           assert.equal(quotaState.deliveredToday, 8);
+
           const upgradedBatch = (
             captured[2] as {
               readonly batch: ReadonlyArray<{
@@ -298,6 +311,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
               }>;
             }
           ).batch;
+
           assert.equal(upgradedBatch[0]?.properties.sandbox_turns_tenki, 0);
           assert.equal(upgradedBatch[0]?.properties.$insert_id, pendingEvent.properties.$insert_id);
 
@@ -313,6 +327,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
       const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
         prefix: "akeru-analytics-full-",
       });
+
       const analyticsLayer = makeLayers(serverConfigLayer).pipe(
         Layer.provide(
           ConfigProvider.layer(
@@ -329,9 +344,11 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
         const fs = yield* FileSystem.FileSystem;
         const analytics = yield* AnalyticsService.AnalyticsService;
         const cursorBucketStart = "2026-08-30T00:00:00.000Z";
+
         const deliveryDay = AnalyticsService.bucketStartAt(
           DateTime.toEpochMillis(yield* DateTime.now),
         ).slice(0, 10);
+
         yield* fs.writeFileString(
           config.analyticsStatePath,
           encodeJson({
@@ -356,9 +373,11 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
   it.effect("delivers usage queued for Cursor before an upgrade", () =>
     Effect.gen(function* () {
       const captured: unknown[] = [];
+
       const serverConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
         prefix: "akeru-analytics-cursor-",
       });
+
       const analyticsLayer = makeLayers(serverConfigLayer).pipe(
         Layer.provide(
           ConfigProvider.layer(
@@ -370,10 +389,12 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
           ),
         ),
       );
+
       const batchServerLayer = HttpServer.serve(
         Effect.gen(function* () {
           const request = yield* HttpServerRequest.HttpServerRequest;
           captured.push(yield* request.json);
+
           return HttpServerResponse.jsonUnsafe({});
         }),
       );
@@ -383,9 +404,11 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
         const config = yield* ServerConfig.ServerConfig;
         const fs = yield* FileSystem.FileSystem;
         const analytics = yield* AnalyticsService.AnalyticsService;
+
         const currentStart = AnalyticsService.bucketStartAt(
           DateTime.toEpochMillis(yield* DateTime.now),
         );
+
         yield* fs.writeFileString(
           config.analyticsStatePath,
           encodeJson({
@@ -415,9 +438,11 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
           readState(yield* fs.readFileString(config.analyticsStatePath)).pending.length,
           0,
         );
+
         const request = captured[0] as {
           readonly batch: ReadonlyArray<{ readonly properties: Record<string, unknown> }>;
         };
+
         const properties = request.batch[0]?.properties;
         assert.equal(properties?.provider, "other");
         assert.equal(properties?.provider_turns_other, 3);

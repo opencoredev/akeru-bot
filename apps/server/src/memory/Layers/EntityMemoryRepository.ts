@@ -8,6 +8,7 @@ import { makeEntityMemoryStorage } from "./EntityMemoryStorage.ts";
 import { makeEntityMemoryQueries } from "./EntityMemoryQueries.ts";
 import { makeEntityMemoryImport } from "./EntityMemoryImport.ts";
 import { makeEntityMemoryWrites } from "./EntityMemoryWrites.ts";
+
 const makeEntityMemoryRepository = Effect.gen(function* () {
   const {
     sql,
@@ -21,8 +22,10 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     invalidateObservations,
     recordDerivedCopies,
   } = yield* makeEntityMemoryStorage();
+
   const { search, listCurrent, isRevisionAuthorized, listHistory, listByPartitions } =
     yield* makeEntityMemoryQueries({ sql, getCurrent });
+
   const { previewImport, applyImport } = yield* makeEntityMemoryImport({
     sql,
     writeLock,
@@ -31,6 +34,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     invalidateDerivedCopies,
     isRevisionAuthorized,
   });
+
   const { insert, revise, tombstone, deleteRoot, insertScopedFact, applyMutation } =
     yield* makeEntityMemoryWrites({
       sql,

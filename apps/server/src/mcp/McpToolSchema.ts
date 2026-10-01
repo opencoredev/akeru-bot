@@ -1,6 +1,7 @@
 import * as Data from "effect/Data";
 import { McpSchema } from "effect/unstable/ai";
 import { type ToolInputSchema } from "./PreviewToolRegistration.ts";
+
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -34,6 +35,7 @@ export const providerScalarAllOfKeys = new Set([
 export const normalizeProviderToolInputSchema = (schema: ToolInputSchema): ToolInputSchema => {
   const visit = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(visit);
+
     if (!isRecord(value)) return value;
 
     const normalized = Object.fromEntries(
@@ -41,18 +43,24 @@ export const normalizeProviderToolInputSchema = (schema: ToolInputSchema): ToolI
         .filter(([key]) => key !== "allOf")
         .map(([key, child]) => [key, visit(child)]),
     );
+
     const allOf = Array.isArray(value.allOf) ? value.allOf.map(visit) : undefined;
     const scalar = ["string", "number", "integer", "boolean"].includes(String(value.type));
     const occupiedKeys = new Set(Object.keys(normalized));
+
     const canFlatten =
       scalar &&
       allOf?.every((member) => {
         if (!isRecord(member)) return false;
+
         return Object.keys(member).every((key) => {
           if (!providerScalarAllOfKeys.has(key)) return false;
+
           if (key === "description") return true;
+
           if (occupiedKeys.has(key)) return false;
           occupiedKeys.add(key);
+
           return true;
         });
       });
@@ -60,13 +68,16 @@ export const normalizeProviderToolInputSchema = (schema: ToolInputSchema): ToolI
     if (canFlatten && allOf) {
       for (const member of allOf) {
         if (!isRecord(member)) continue;
+
         for (const [key, child] of Object.entries(member)) {
           if (key === "description" && "description" in normalized) continue;
           normalized[key] = child;
         }
       }
+
       return normalized;
     }
+
     return allOf ? { ...normalized, allOf } : normalized;
   };
 

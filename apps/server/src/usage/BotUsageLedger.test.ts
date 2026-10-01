@@ -10,14 +10,18 @@ import {
 } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import { BotUsageLedger } from "./BotUsageLedger.ts";
+
 it.layer(layer)("BotUsageLedger", (it) => {
   it.effect("claims a runtime turn before a late command binding", () =>
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
+
       const reservation = yield* ledger.reserve(
         reserveInput("runtime-first", { botId: BotId.make("bot-runtime-first") }),
       );
+
       const turnId = TurnId.make("turn-runtime-first");
+
       const claimed = yield* ledger.settleForTurn({
         botId: BotId.make("bot-runtime-first"),
         threadId: ThreadId.make("thread-1"),
@@ -28,16 +32,19 @@ it.layer(layer)("BotUsageLedger", (it) => {
         reasoningTokens: null,
         settledAt: "2026-08-30T20:01:00.000Z",
       });
+
       assert.equal(claimed[0]?.turnId, turnId);
 
       const late = yield* ledger.bindTurn({ reservationId: reservation.reservationId, turnId });
       assert.equal(late.turnId, turnId);
+
       const conflict = yield* ledger
         .bindTurn({
           reservationId: reservation.reservationId,
           turnId: TurnId.make("another-turn"),
         })
         .pipe(Effect.exit);
+
       assert.equal(conflict._tag, "Failure");
     }),
   );
@@ -81,9 +88,11 @@ it.layer(layer)("BotUsageLedger", (it) => {
       yield* ledger.reserve(
         reserveInput("cap-first", { botId, maximumTokens: 100, capLimit: 100 }),
       );
+
       const exit = yield* ledger
         .reserve(reserveInput("cap-second", { botId, maximumTokens: 100, capLimit: 100 }))
         .pipe(Effect.exit);
+
       assert.isTrue(Predicate.isTagged(exit, "Failure"));
       const summary = yield* ledger.summarize(botId);
       assert.equal(summary.reservedTokens, 100);
@@ -98,13 +107,17 @@ it.layer(layer)("BotUsageLedger", (it) => {
       yield* ledger.reserve(
         reserveInput("partial-first", { botId, maximumTokens: 60, capLimit: 100 }),
       );
+
       const reservation = yield* ledger.reserve(
         reserveInput("partial-second", { botId, maximumTokens: 50, capLimit: 100 }),
       );
+
       assert.equal(reservation.reservedTokens, 40);
+
       const failure = yield* ledger
         .reserve(reserveInput("partial-third", { botId, maximumTokens: 1, capLimit: 100 }))
         .pipe(Effect.flip);
+
       assert.equal(failure._tag, "BotUsageCapExceeded");
       const summary = yield* ledger.summarize(botId);
       assert.equal(summary.reservedTokens, 100);
@@ -116,9 +129,11 @@ it.layer(layer)("BotUsageLedger", (it) => {
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-unavailable");
+
       const reservation = yield* ledger.reserve(
         reserveInput("unavailable", { botId, maximumTokens: 500, capLimit: 500 }),
       );
+
       yield* ledger.settle({
         reservationId: reservation.reservationId,
         state: "unavailable",
@@ -241,9 +256,11 @@ it.layer(layer)("BotUsageLedger", (it) => {
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-reported-overage");
+
       const reservation = yield* ledger.reserve(
         reserveInput("reported-overage", { botId, maximumTokens: 100, capLimit: 100 }),
       );
+
       yield* ledger.settle({
         reservationId: reservation.reservationId,
         state: "reported",
@@ -264,6 +281,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-standalone-measurement");
+
       const input = {
         reservationId: AkeruUsageReservationId.make("standalone-measurement"),
         sourceKey: "tool:standalone-measurement",
@@ -278,6 +296,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
         model: "gpt-5.6-sol",
         createdAt: "2026-08-30T20:01:00.000Z",
       };
+
       yield* ledger.recordMeasurement(input);
       yield* ledger.recordMeasurement(input);
 
@@ -291,6 +310,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-unavailable-categories");
+
       for (const [category, reservationId] of [
         ["turn", "unavailable-turn"],
         ["observer", "unavailable-observer"],
@@ -305,6 +325,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
             capLimit: 1_000,
           }),
         );
+
         yield* ledger.settle({
           reservationId: reservation.reservationId,
           state: "unavailable",
@@ -326,6 +347,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
       const ledger = yield* BotUsageLedger;
       const childId = BotId.make("bot-research");
       const parentId = BotId.make("bot-chief");
+
       const reservation = yield* ledger.reserve(
         reserveInput("delegate-child", {
           botId: childId,
@@ -335,6 +357,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
           capLimit: 1_000,
         }),
       );
+
       yield* ledger.settle({
         reservationId: reservation.reservationId,
         state: "reported",
@@ -358,6 +381,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-late-cache-breakdown");
       const reservation = yield* ledger.reserve(reserveInput("late-cache", { botId }));
+
       const reported = {
         reservationId: reservation.reservationId,
         state: "reported" as const,
@@ -366,6 +390,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
         reasoningTokens: null,
         settledAt: "2026-08-30T20:01:00.000Z",
       };
+
       yield* ledger.settle(reported);
       yield* ledger.settle({
         ...reported,
@@ -397,6 +422,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-corrected-cache-breakdown");
       const reservation = yield* ledger.reserve(reserveInput("corrected-cache", { botId }));
+
       const reported = {
         reservationId: reservation.reservationId,
         state: "reported" as const,
@@ -404,6 +430,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
         outputTokens: 5,
         reasoningTokens: null,
       };
+
       yield* ledger.settle({
         ...reported,
         cachedInputTokens: 80,

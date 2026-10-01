@@ -17,7 +17,9 @@ const ProjectVcsConfig = Schema.Struct({
   ),
   vcsKind: Schema.optional(VcsDriverKind),
 });
+
 const ProjectVcsConfigJson = fromLenientJson(ProjectVcsConfig);
+
 const decodeProjectVcsConfigJson = Schema.decodeUnknownEffect(ProjectVcsConfigJson);
 
 type ProjectVcsConfigFile = typeof ProjectVcsConfig.Type;
@@ -70,8 +72,10 @@ export const make = Effect.gen(function* () {
 
   const findConfigPath = Effect.fn("VcsProjectConfig.findConfigPath")(function* (cwd: string) {
     let current = cwd;
+
     while (true) {
       const candidate = path.join(current, ".t3code", "vcs.json");
+
       const exists = yield* fileSystem.exists(candidate).pipe(
         Effect.mapError(
           (cause) =>
@@ -86,14 +90,17 @@ export const make = Effect.gen(function* () {
           VcsProjectConfigError: (error) => logVcsProjectConfigError(error).pipe(Effect.as(false)),
         }),
       );
+
       if (exists) {
         return Option.some(candidate);
       }
 
       const parent = path.dirname(current);
+
       if (parent === current) {
         return Option.none();
       }
+
       current = parent;
     }
   });
@@ -113,6 +120,7 @@ export const make = Effect.gen(function* () {
           }),
       ),
     );
+
     const parsed = yield* decodeProjectVcsConfigJson(raw).pipe(
       Effect.mapError(
         (cause) =>
@@ -124,6 +132,7 @@ export const make = Effect.gen(function* () {
           }),
       ),
     );
+
     return configuredKind(parsed);
   });
 

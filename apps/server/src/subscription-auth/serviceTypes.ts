@@ -16,6 +16,7 @@ import {
 } from "./providers/kimi.ts";
 import { refreshXAIToken, type XAIDeviceLoginPending } from "./providers/xai.ts";
 import type { OAuthCredential, OAuthCredentials } from "./types.ts";
+
 export const decodeBaseUrl = Schema.decodeUnknownSync(SubscriptionBaseUrl);
 
 /** Anthropic endpoints use an API root; a trailing /v1 is accepted for compatibility. */
@@ -182,6 +183,7 @@ export type ProviderHealthData = Record<string, ProviderHealthRecord | undefined
 
 export function oauthFailureKind(cause: unknown): "request" | "revoked" {
   const message = cause instanceof Error ? cause.message : String(cause);
+
   return /\b(?:invalid_grant|revoked|unauthori[sz]ed|401|403)\b/i.test(message)
     ? "revoked"
     : "request";
@@ -248,6 +250,7 @@ export function credentialAt(
   key: string,
 ): SubscriptionCredential | undefined {
   const value = (data as Record<string, unknown>)[key];
+
   return isSubscriptionCredential(value) ? value : undefined;
 }
 
@@ -270,6 +273,7 @@ function refreshedCredential(
 
 export /** A completed login that the client has not observed yet must not be re-runnable. */
 const PENDING_LOGIN_CAP = 16;
+
 export function runRefresh(
   provider: SubscriptionProviderId,
   credential: OAuthCredential,

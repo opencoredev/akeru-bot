@@ -23,4 +23,5 @@ const makeDesktopBootstrap = (
   tailscaleServePort: 443,
   ...overrides,
 });
+
 export { deriveExplicitServerPaths, encodeDesktopBootstrap, makeDesktopBootstrap };

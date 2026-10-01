@@ -90,6 +90,7 @@ describe("AttachmentUpload", () => {
       const issued = yield* issueAttachmentUploadUrl(uploadInput);
       const token = issued.relativeUrl.slice(`${ATTACHMENT_UPLOAD_ROUTE_PREFIX}/`.length);
       const claims = yield* validateAttachmentUploadToken(token);
+
       if (!claims) {
         throw new Error("Expected valid upload claims.");
       }

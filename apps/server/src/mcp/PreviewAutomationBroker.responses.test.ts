@@ -100,6 +100,7 @@ it.effect("keeps the original screenshot local while returning a masked provider
         operation: "snapshot",
         input: {},
       });
+
       const original = takePreviewSnapshot(localScope.threadId);
 
       expect(original).toEqual(Buffer.from(snapshotResult.screenshot.data, "base64"));
@@ -130,6 +131,7 @@ it.effect("rejects screenshot payloads from non-snapshot operations", () =>
       const statusError = yield* broker
         .invoke<void>({ scope, operation: "status", input: {} })
         .pipe(Effect.flip);
+
       const navigateError = yield* broker
         .invoke<void>({ scope, operation: "navigate", input: { url: "https://example.test" } })
         .pipe(Effect.flip);
@@ -151,10 +153,12 @@ it.effect("does not let an older response replace a newer explicit tab target", 
       const requests = requestsFrom(yield* broker.connect(makeHost()));
       yield* Stream.runForEach(requests, (request) => {
         routedRequests.push(request);
+
         const response = Effect.gen(function* () {
           if (request.tabId === olderTabId) {
             yield* Deferred.await(releaseOlderResponse);
           }
+
           yield* broker.respond({
             clientId: "client-1",
             connectionId: request.connectionId,
@@ -162,10 +166,12 @@ it.effect("does not let an older response replace a newer explicit tab target", 
             ok: true,
             result: snapshotResult,
           });
+
           if (request.tabId === newerTabId) {
             yield* Deferred.succeed(releaseOlderResponse, undefined);
           }
         });
+
         return response.pipe(Effect.forkScoped, Effect.asVoid);
       }).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
@@ -173,10 +179,13 @@ it.effect("does not let an older response replace a newer explicit tab target", 
       const older = yield* broker
         .invoke({ scope, operation: "snapshot", input: {}, tabId: olderTabId })
         .pipe(Effect.forkScoped);
+
       yield* Effect.yieldNow;
+
       const newer = yield* broker
         .invoke({ scope, operation: "snapshot", input: {}, tabId: newerTabId })
         .pipe(Effect.forkScoped);
+
       yield* Fiber.join(newer);
       yield* Fiber.join(older);
       yield* broker.invoke({ scope, operation: "snapshot", input: {} });
@@ -197,14 +206,17 @@ it.effect("does not let a no-tab response suppress an earlier tab decision", () 
       const requests = requestsFrom(yield* broker.connect(makeHost()));
       yield* Stream.runForEach(requests, (request) => {
         routedRequests.push(request);
+
         const marker =
           typeof request.input === "object" && request.input !== null && "marker" in request.input
             ? request.input.marker
             : undefined;
+
         const response = Effect.gen(function* () {
           if (marker === "older") {
             yield* Deferred.await(releaseOpenResponse);
           }
+
           yield* broker.respond({
             clientId: "client-1",
             connectionId: request.connectionId,
@@ -215,15 +227,18 @@ it.effect("does not let a no-tab response suppress an earlier tab decision", () 
                 ? { available: true, tabId: marker === "older" ? openedTabId : initialTabId }
                 : snapshotResult,
           });
+
           if (marker === "newer") {
             yield* Deferred.succeed(releaseOpenResponse, undefined);
           }
         });
+
         return response.pipe(Effect.forkScoped, Effect.asVoid);
       }).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
 
       yield* broker.invoke({ scope, operation: "open", input: {} });
+
       const older = yield* broker
         .invoke({
           scope,
@@ -231,10 +246,13 @@ it.effect("does not let a no-tab response suppress an earlier tab decision", () 
           input: { marker: "older", reuseExistingTab: false },
         })
         .pipe(Effect.forkScoped);
+
       yield* Effect.yieldNow;
+
       const newer = yield* broker
         .invoke({ scope, operation: "snapshot", input: { marker: "newer" } })
         .pipe(Effect.forkScoped);
+
       yield* Fiber.join(newer);
       yield* Fiber.join(older);
       yield* broker.invoke({ scope, operation: "snapshot", input: {} });
@@ -247,6 +265,7 @@ it.effect("does not let a no-tab response suppress an earlier tab decision", () 
 it.effect("preserves bounded request and remote selector diagnostics", () => {
   const locator = "role=button[name='request-secret']";
   const remoteMessage = "Unexpected token near remote-secret.";
+
   const remoteError = {
     _tag: "PreviewAutomationInvalidSelectorError",
     message: remoteMessage,

@@ -62,6 +62,7 @@ it.effect("reveals a file in File Explorer through PowerShell on Windows", () =>
     yield* fileSystem.writeFileString(powerShellPath, "");
 
     let spawned: ChildProcess.StandardCommand | undefined;
+
     const kind = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
       yield* launcher.launchEditor({
@@ -69,6 +70,7 @@ it.effect("reveals a file in File Explorer through PowerShell on Windows", () =>
         cwd: "C:\\workspace with spaces\\media\\author's clip.mp4",
         reveal: true,
       });
+
       return yield* launcher.resolveFileManagerRevealKind();
     }).pipe(
       Effect.provide(
@@ -116,6 +118,7 @@ it.skipIf(process.platform !== "win32")(
   { timeout: 60_000 },
   async () => {
     const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-reveal-smoke-"));
+
     try {
       const recorderPath = NodePath.join(tempDir, "recorder.cmd");
       const outputPath = NodePath.join(tempDir, "argv.txt");
@@ -144,10 +147,12 @@ it.skipIf(process.platform !== "win32")(
       const sleep = (millis: number) => new Promise((resolve) => setTimeout(resolve, millis));
       // @effect-diagnostics-next-line globalDate:off
       const deadline = Date.now() + 20_000;
+
       // @effect-diagnostics-next-line globalDate:off
       while (!NodeFS.existsSync(outputPath) && Date.now() < deadline) {
         await sleep(100);
       }
+
       await sleep(200);
       const recorded = NodeFS.readFileSync(outputPath, "utf8").trim();
       assert.equal(recorded, `/select,"${target}"`);
@@ -166,6 +171,7 @@ it.effect("does not advertise reveal on Windows when PowerShell is missing", () 
 
     const result = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return {
         kind: yield* launcher.resolveFileManagerRevealKind(),
         editors: yield* launcher.resolveAvailableEditors(),
@@ -195,6 +201,7 @@ it.effect("reveals a WSL file in Windows File Explorer through its UNC path", ()
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["explorer.exe", "powershell.exe", "xdg-open"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -202,6 +209,7 @@ it.effect("reveals a WSL file in Windows File Explorer through its UNC path", ()
     }
 
     let spawned: ChildProcess.StandardCommand | undefined;
+
     const result = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
       const kind = yield* launcher.resolveFileManagerRevealKind();
@@ -211,6 +219,7 @@ it.effect("reveals a WSL file in Windows File Explorer through its UNC path", ()
         cwd: "/home/t3/workspace/media/clip.mp4",
         reveal: true,
       });
+
       return { kind, editors };
     }).pipe(
       Effect.provide(
@@ -254,6 +263,7 @@ it.effect("does not advertise reveal from WSL when interop PowerShell is missing
 
     const result = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return {
         kind: yield* launcher.resolveFileManagerRevealKind(),
         editors: yield* launcher.resolveAvailableEditors(),
@@ -284,6 +294,7 @@ it.effect("reveals through the Linux file manager when WSL lacks interop PowerSh
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["explorer.exe", "xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -291,6 +302,7 @@ it.effect("reveals through the Linux file manager when WSL lacks interop PowerSh
     }
 
     const spawnedCommands: ChildProcess.StandardCommand[] = [];
+
     const kind = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
       const revealKind = yield* launcher.resolveFileManagerRevealKind();
@@ -299,6 +311,7 @@ it.effect("reveals through the Linux file manager when WSL lacks interop PowerSh
         cwd: "/home/t3/workspace/media/clip.mp4",
         reveal: true,
       });
+
       return revealKind;
     }).pipe(
       Effect.provide(
@@ -335,6 +348,7 @@ it.effect("falls back to the Linux file manager when WSL lacks the Explorer brid
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -342,6 +356,7 @@ it.effect("falls back to the Linux file manager when WSL lacks the Explorer brid
     }
 
     const spawnedCommands: ChildProcess.StandardCommand[] = [];
+
     const result = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
       const editors = yield* launcher.resolveAvailableEditors();
@@ -351,6 +366,7 @@ it.effect("falls back to the Linux file manager when WSL lacks the Explorer brid
         cwd: "/home/t3/workspace/media/clip.mp4",
         reveal: true,
       });
+
       return { editors, kind };
     }).pipe(
       Effect.provide(
@@ -386,6 +402,7 @@ it.effect(
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
       for (const name of ["explorer.exe", "powershell.exe"]) {
         const filePath = path.join(binDir, name);
         yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -429,6 +446,7 @@ it.effect("reveals by opening the containing directory on Linux", () =>
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -474,6 +492,7 @@ it.effect("does not advertise a Linux file manager without a graphical session",
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(Effect.provide(testLayer({ platform: "linux", env: { PATH: binDir } })));
 
@@ -486,6 +505,7 @@ it.effect("advertises a Linux file manager when a directory handler is installed
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -493,8 +513,10 @@ it.effect("advertises a Linux file manager when a directory handler is installed
     }
 
     let probe: ChildProcess.StandardCommand | undefined;
+
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(
       Effect.provide(
@@ -525,6 +547,7 @@ it.effect("does not advertise a Linux file manager without a directory handler",
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -533,6 +556,7 @@ it.effect("does not advertise a Linux file manager without a directory handler",
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(
       Effect.provide(
@@ -553,6 +577,7 @@ it.effect("does not advertise a Linux file manager when the handler query fails"
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -561,6 +586,7 @@ it.effect("does not advertise a Linux file manager when the handler query fails"
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(
       Effect.provide(
@@ -588,6 +614,7 @@ it.live("a stalled handler probe drops only the file manager", () =>
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime", "code"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -596,6 +623,7 @@ it.live("a stalled handler probe drops only the file manager", () =>
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(
       Effect.provide(
@@ -623,6 +651,7 @@ it.effect("does not advertise a Linux file manager when xdg-mime is missing", ()
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(Effect.provide(testLayer({ platform: "linux", env: { PATH: binDir, DISPLAY: ":0" } })));
 

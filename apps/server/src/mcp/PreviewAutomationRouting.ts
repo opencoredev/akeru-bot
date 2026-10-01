@@ -5,6 +5,7 @@ import {
   type PendingRequest,
   type BrokerState,
 } from "./PreviewAutomationState.ts";
+
 export const removeConnectionFromState = (
   current: BrokerState,
   clientId: string,
@@ -14,15 +15,19 @@ export const removeConnectionFromState = (
   const assignments = new Map(current.assignments);
   const pending = new Map(current.pending);
   const disconnected: PendingRequest[] = [];
+
   if (current.clients.get(clientId)?.queue === queue) clients.delete(clientId);
+
   for (const [assignmentKey, assignment] of assignments) {
     if (assignment.queue === queue) assignments.delete(assignmentKey);
   }
+
   for (const [requestId, entry] of pending) {
     if (entry.queue !== queue) continue;
     pending.delete(requestId);
     disconnected.push(entry);
   }
+
   return {
     state: { ...current, clients, assignments, pending },
     disconnected,

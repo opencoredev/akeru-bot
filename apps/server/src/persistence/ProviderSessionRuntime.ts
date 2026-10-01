@@ -50,12 +50,15 @@ export const ProviderSessionRuntime = Schema.Struct({
   resumeCursor: Schema.NullOr(Schema.Unknown),
   runtimePayload: Schema.NullOr(Schema.Unknown),
 });
+
 export type ProviderSessionRuntime = typeof ProviderSessionRuntime.Type;
 
 export const GetProviderSessionRuntimeInput = Schema.Struct({ threadId: ThreadId });
+
 export type GetProviderSessionRuntimeInput = typeof GetProviderSessionRuntimeInput.Type;
 
 export const DeleteProviderSessionRuntimeInput = Schema.Struct({ threadId: ThreadId });
+
 export type DeleteProviderSessionRuntimeInput = typeof DeleteProviderSessionRuntimeInput.Type;
 
 /**

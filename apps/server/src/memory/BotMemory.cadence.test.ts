@@ -10,6 +10,7 @@ import {
   AKERU_MEMORY_REVIEW_INPUT_MAX_CHARS,
   BotMemoryStore,
 } from "./BotMemory.ts";
+
 describe("BotMemoryStore", () => {
   it("persists the ten-prompt review cadence across store restarts", async () => {
     const store = await fixture();
@@ -61,13 +62,16 @@ describe("BotMemoryStore", () => {
     const firstStore = await fixture();
     const secondStore = new BotMemoryStore(NodePath.dirname(firstStore.memoryRoot));
     const botId = BotId.make("bot-two-store-cadence");
+
     for (let prompt = 1; prompt <= 10; prompt += 1) {
       await acceptPrompt(firstStore, botId, false);
     }
+
     const reservations = await Promise.all([
       firstStore.reserveReviewCadence(botId),
       secondStore.reserveReviewCadence(botId),
     ]);
+
     assert.equal(reservations.filter((entry) => entry.memoryReviewIncluded).length, 1);
   });
 
@@ -88,34 +92,41 @@ describe("BotMemoryStore", () => {
   it("keeps private and exact-group cadence and candidates independent", async () => {
     const store = await fixture();
     const botId = BotId.make("bot-cross-thread-review-inputs");
+
     for (let prompt = 1; prompt <= 10; prompt += 1) {
       const reservation = await store.reserveReviewCadence(botId, {
         threadId: `thread-${prompt % 2}`,
         groupId: null,
         text: prompt === 1 ? "I really like cats." : `Filler prompt ${prompt}`,
       });
+
       await store.settleReviewCadence(reservation, true);
     }
+
     const privateReview = await store.reserveReviewCadence(botId, {
       threadId: "thread-3",
       groupId: null,
       text: "Next private prompt",
     });
+
     const groupReview = await store.reserveReviewCadence(botId, {
       threadId: "group-thread",
       groupId: "group-a",
       text: "First group prompt",
     });
+
     assert.isTrue(privateReview.memoryReviewIncluded);
     assert.include(JSON.stringify(privateReview.reviewInputs), "I really like cats.");
     assert.isFalse(groupReview.memoryReviewIncluded);
     assert.notInclude(JSON.stringify(groupReview.reviewInputs), "cats");
     assert.equal((await store.readReviewCadence(botId, "group-a")).acceptedPromptCount, 0);
     await store.settleReviewCadence(privateReview, true);
+
     const persisted = await NodeFS.readFile(
       NodePath.join(store.memoryRoot, "bots", botId, ".memory-review.json"),
       "utf8",
     );
+
     assert.include(persisted, "Next private prompt");
     assert.notInclude(persisted, "I really like cats.");
   });
@@ -125,11 +136,13 @@ describe("BotMemoryStore", () => {
     directories.push(stateDir);
     const botId = BotId.make("bot-crashed-threshold-candidate");
     const crashed = new BotMemoryStore(stateDir);
+
     const abandoned = await crashed.reserveReviewCadence(botId, {
       threadId: "thread-before-crash",
       groupId: null,
       text: "My tenth prompt says I foster kittens.",
     });
+
     assert.isFalse(abandoned.memoryReviewIncluded);
 
     const restarted = new BotMemoryStore(stateDir);
@@ -173,12 +186,15 @@ describe("BotMemoryStore", () => {
     const firstStore = new BotMemoryStore(stateDir);
     const secondStore = new BotMemoryStore(stateDir);
     const botId = BotId.make("bot-live-long-reservation");
+
     for (let prompt = 1; prompt <= 10; prompt += 1) await acceptPrompt(firstStore, botId, false);
     const active = await firstStore.reserveReviewCadence(botId);
     const cadencePath = NodePath.join(firstStore.memoryRoot, "bots", botId, ".memory-review.json");
+
     const activeState = JSON.parse(await NodeFS.readFile(cadencePath, "utf8")) as {
       reviewClaim: { acquiredAtMs: number };
     };
+
     activeState.reviewClaim.acquiredAtMs = 0;
     await NodeFS.writeFile(cadencePath, `${JSON.stringify(activeState)}\n`, { mode: 0o600 });
     const second = await secondStore.reserveReviewCadence(botId);
@@ -189,20 +205,25 @@ describe("BotMemoryStore", () => {
   it("recovers a stale review claim after a maintenance crash", async () => {
     const store = await fixture();
     const botId = BotId.make("bot-stale-review-claim");
+
     for (let prompt = 1; prompt <= 10; prompt += 1) {
       const reservation = await store.reserveReviewCadence(botId, {
         threadId: `thread-${prompt}`,
         groupId: null,
         text: `Candidate ${prompt}`,
       });
+
       await store.recordSuccessfulPrompt(reservation);
     }
+
     const first = await store.reserveReviewCadence(botId);
     assert.isTrue(first.memoryReviewIncluded);
     const cadencePath = NodePath.join(store.memoryRoot, "bots", botId, ".memory-review.json");
+
     const state = JSON.parse(await NodeFS.readFile(cadencePath, "utf8")) as {
       reviewClaim: { acquiredAtMs: number; leaseExpiresAtMs: number };
     };
+
     state.reviewClaim.acquiredAtMs = 0;
     state.reviewClaim.leaseExpiresAtMs = 0;
     await NodeFS.writeFile(cadencePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
@@ -214,20 +235,26 @@ describe("BotMemoryStore", () => {
   it("bounds candidates and the persisted review batch after repeated failed reviews", async () => {
     const store = await fixture();
     const botId = BotId.make("bot-bounded-review");
+
     for (let prompt = 1; prompt <= 30; prompt += 1) {
       const reservation = await store.reserveReviewCadence(botId, {
         threadId: `thread-${prompt}`,
         groupId: null,
         text: `${prompt}:${"x".repeat(AKERU_MEMORY_REVIEW_INPUT_MAX_CHARS * 2)}`,
       });
+
       await store.recordSuccessfulPrompt(reservation);
+
       if (reservation.memoryReviewIncluded) await store.settleReviewClaim(reservation, false);
     }
+
     const cadencePath = NodePath.join(store.memoryRoot, "bots", botId, ".memory-review.json");
     const raw = await NodeFS.readFile(cadencePath, "utf8");
+
     const persisted = JSON.parse(raw) as {
       readonly reviewInputs: ReadonlyArray<{ readonly text: string }>;
     };
+
     assert.isAtMost(persisted.reviewInputs.length, 10);
     assert.isTrue(
       persisted.reviewInputs.every(

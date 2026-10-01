@@ -56,6 +56,7 @@ const makeTmpDir = (
 ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem | Scope.Scope> =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     return yield* fileSystem.makeTempDirectoryScoped({ prefix });
   });
 
@@ -79,6 +80,7 @@ const git = (
 ): Effect.Effect<string, GitCommandError, GitVcsDriver.GitVcsDriver> =>
   Effect.gen(function* () {
     const driver = yield* GitVcsDriver.GitVcsDriver;
+
     const result = yield* driver.execute({
       operation: "GitVcsDriver.test.git",
       cwd,
@@ -86,6 +88,7 @@ const git = (
       ...(env ? { env } : {}),
       timeoutMs: 10_000,
     });
+
     return result.stdout.trim();
   });
 
@@ -105,8 +108,10 @@ const initRepoWithCommit = (
     yield* git(cwd, ["add", "."]);
     yield* git(cwd, ["commit", "-m", "initial commit"]);
     const initialBranch = yield* git(cwd, ["branch", "--show-current"]);
+
     return { initialBranch };
   });
+
 export {
   ServerConfigLayer,
   TestLayer,

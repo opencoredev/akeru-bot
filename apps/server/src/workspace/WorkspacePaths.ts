@@ -86,6 +86,7 @@ export const WorkspacePathsError = Schema.Union([
   WorkspaceRootNotDirectoryError,
   WorkspacePathOutsideRootError,
 ]);
+
 export type WorkspacePathsError = typeof WorkspacePathsError.Type;
 
 /** Service tag for workspace path normalization and resolution. */
@@ -126,9 +127,11 @@ function expandHomePath(input: string, path: Path.Path): string {
   if (input === "~") {
     return NodeOS.homedir();
   }
+
   if (input.startsWith("~/") || input.startsWith("~\\")) {
     return path.join(NodeOS.homedir(), input.slice(2));
   }
+
   return input;
 }
 
@@ -163,11 +166,13 @@ export const make = Effect.gen(function* () {
     "WorkspacePaths.normalizeWorkspaceRoot",
   )(function* (workspaceRoot, options) {
     const normalizedWorkspaceRoot = path.resolve(expandHomePath(workspaceRoot.trim(), path));
+
     let workspaceStat = yield* statWorkspaceRoot(
       workspaceRoot,
       normalizedWorkspaceRoot,
       "validate-existing",
     );
+
     if (!workspaceStat && options?.createIfMissing) {
       yield* fileSystem.makeDirectory(normalizedWorkspaceRoot, { recursive: true }).pipe(
         Effect.mapError(
@@ -185,24 +190,28 @@ export const make = Effect.gen(function* () {
         "verify-created",
       );
     }
+
     if (!workspaceStat) {
       return yield* new WorkspaceRootNotExistsError({
         workspaceRoot,
         normalizedWorkspaceRoot,
       });
     }
+
     if (workspaceStat.type !== "Directory") {
       return yield* new WorkspaceRootNotDirectoryError({
         workspaceRoot,
         normalizedWorkspaceRoot,
       });
     }
+
     return normalizedWorkspaceRoot;
   });
 
   const resolveRelativePathWithinRoot: WorkspacePaths["Service"]["resolveRelativePathWithinRoot"] =
     Effect.fn("WorkspacePaths.resolveRelativePathWithinRoot")(function* (input) {
       const normalizedInputPath = input.relativePath.trim();
+
       if (path.isAbsolute(normalizedInputPath)) {
         return yield* new WorkspacePathOutsideRootError({
           workspaceRoot: input.workspaceRoot,
@@ -212,6 +221,7 @@ export const make = Effect.gen(function* () {
 
       const absolutePath = path.resolve(input.workspaceRoot, normalizedInputPath);
       const relativeToRoot = toPosixRelativePath(path.relative(input.workspaceRoot, absolutePath));
+
       if (
         relativeToRoot.length === 0 ||
         relativeToRoot === "." ||

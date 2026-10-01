@@ -24,6 +24,7 @@ import {
   type NativeTelemetryClientError,
   type NativeTelemetryClientHealth,
 } from "./NativeTelemetryProtocol.ts";
+
 export interface ClientState {
   readonly status: ResourceTelemetrySourceStatus;
   readonly handle: Option.Option<ChildProcessSpawner.ChildProcessHandle>;
@@ -81,6 +82,7 @@ export function resolveNativeSampleIntervalMs(
   if (snapshot.stale || snapshot.source === "unknown") {
     return liveSubscriberCount > 0 ? SAMPLE_INTERVAL_MS : UNKNOWN_BACKGROUND_SAMPLE_INTERVAL_MS;
   }
+
   if (
     snapshot.suspended ||
     snapshot.locked === "true" ||
@@ -89,7 +91,9 @@ export function resolveNativeSampleIntervalMs(
   ) {
     return CONSTRAINED_SAMPLE_INTERVAL_MS;
   }
+
   if (snapshot.onBattery === "true") return BATTERY_SAMPLE_INTERVAL_MS;
+
   return SAMPLE_INTERVAL_MS;
 }
 
@@ -102,11 +106,14 @@ export function commitCollectionControlUpdate<E, R>(
   return Effect.gen(function* () {
     const [previousDesired, next] = yield* Ref.modify(desiredState, (previous) => {
       const next = update(previous);
+
       return [[previous, next] as const, next];
     });
+
     const previousApplied = yield* Ref.get(appliedState);
     yield* apply(previousApplied, next);
     yield* Ref.set(appliedState, next);
+
     return [previousDesired, next] as const;
   });
 }
@@ -124,6 +131,7 @@ export function synchronizeCollectionControlOnStart<E1, R1, E2, R2>(
       yield* apply(control);
       yield* Ref.set(appliedState, control);
       yield* markReady;
+
       return control;
     }),
   );

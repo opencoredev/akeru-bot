@@ -10,6 +10,7 @@ import {
 import * as Effect from "effect/Effect";
 import { BotUsageLedger } from "./BotUsageLedger.ts";
 import { parseRateTable, priceUsage } from "./usagePricing.ts";
+
 it.layer(layer)("BotUsageLedger", (it) => {
   it.effect("reconciles progressive reports without counting reasoning twice", () =>
     Effect.gen(function* () {
@@ -69,6 +70,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-tool-routine");
+
       const tool = yield* ledger.reserve(
         reserveInput("tool-entry", {
           botId,
@@ -77,6 +79,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
           capLimit: 100,
         }),
       );
+
       yield* ledger.settle({
         reservationId: tool.reservationId,
         state: "reported",
@@ -102,6 +105,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
       const summary = yield* ledger.summarize(botId);
       assert.deepEqual(summary.entries.map((entry) => entry.category).sort(), ["routine", "tool"]);
       assert.equal(summary.consumedTokens, 60);
+
       const cost = priceUsage(
         parseRateTable({ "gpt-5.6-sol": { input_cost_per_token: 1, output_cost_per_token: 2 } }),
         "gpt-5.6-sol",
@@ -114,14 +118,19 @@ it.layer(layer)("BotUsageLedger", (it) => {
         },
         null,
       );
+
       assert.equal(cost.costUsd, 90);
+
       const remaining = yield* ledger.reserve(
         reserveInput("cap-after-tool", { botId, maximumTokens: 41, capLimit: 100 }),
       );
+
       assert.equal(remaining.reservedTokens, 40);
+
       const rejected = yield* ledger
         .reserve(reserveInput("cap-after-tool-2", { botId, maximumTokens: 1, capLimit: 100 }))
         .pipe(Effect.exit);
+
       assert.equal(rejected._tag, "Failure");
     }),
   );
@@ -132,6 +141,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
       const botId = BotId.make("bot-composite-om");
       const threadId = ThreadId.make("thread-composite-om");
       const turnId = TurnId.make("turn-composite-om");
+
       const observer = yield* ledger.reserve(
         reserveInput("observer-composite", {
           sourceKey: "observer:turn-composite-om",
@@ -143,6 +153,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
           capLimit: 32_000,
         }),
       );
+
       yield* ledger.settle({
         reservationId: observer.reservationId,
         state: "reported",
@@ -201,6 +212,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
             capLimit: 32_000,
           }),
         );
+
         yield* ledger.settle({
           reservationId: observer.reservationId,
           state: "reported",
@@ -246,6 +258,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-lifetime-cost");
+
       for (let index = 0; index < 201; index++) {
         yield* ledger.recordMeasurement({
           reservationId: AkeruUsageReservationId.make(`measurement-${index}`),
@@ -262,6 +275,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
           createdAt: "2026-08-30T20:00:00.000Z",
         });
       }
+
       yield* ledger.recordMeasurement({
         reservationId: AkeruUsageReservationId.make("zero-unpriced"),
         sourceKey: "zero-unpriced",

@@ -14,6 +14,7 @@ import {
   type ProjectCliDispatchCommand,
   projectCommandErrorFromLiveServerRequest,
 } from "./projectErrors.ts";
+
 export const PROJECT_CLI_LIVE_SERVER_TIMEOUT = Duration.seconds(1);
 
 export const withProjectCliSessionToken = <A, E, R>(
@@ -40,6 +41,7 @@ export const makeLiveServerClient = (origin: string) =>
 export const fetchLiveOrchestrationSnapshot = (origin: string, bearerToken: string) =>
   Effect.gen(function* () {
     const client = yield* makeLiveServerClient(origin);
+
     return yield* client.orchestration.snapshot({
       headers: { authorization: `Bearer ${bearerToken}` },
     });
@@ -70,6 +72,7 @@ export const tryResolveLiveProjectExecutionMode = Effect.fn("tryResolveLiveProje
     config: ServerConfig.ServerConfig["Service"],
   ) {
     const runtimeState = yield* readPersistedServerRuntimeState(config.serverRuntimeStatePath);
+
     if (Option.isNone(runtimeState)) {
       return Option.none<{ readonly origin: string }>();
     }
@@ -83,6 +86,7 @@ export const tryResolveLiveProjectExecutionMode = Effect.fn("tryResolveLiveProje
     );
 
     const attempted = yield* Effect.result(attempt);
+
     if (Predicate.isTagged(attempted, "Success")) {
       return Option.some(attempted.success);
     }
@@ -92,6 +96,7 @@ export const tryResolveLiveProjectExecutionMode = Effect.fn("tryResolveLiveProje
       cause: attempted.failure,
     });
     yield* clearPersistedServerRuntimeState(config.serverRuntimeStatePath);
+
     return Option.none<{ readonly origin: string }>();
   },
 );

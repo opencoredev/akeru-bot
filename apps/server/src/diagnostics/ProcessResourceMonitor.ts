@@ -30,6 +30,7 @@ function isLegacyBackendCategory(category: ResourceTelemetryProcessCategory): bo
 
 export const make = Effect.fn("makeProcessResourceMonitor")(function* () {
   const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
+
   const readHistory: ProcessResourceMonitor["Service"]["readHistory"] = (input) =>
     telemetry.readHistory(input).pipe(
       Effect.map((history) => {
@@ -52,6 +53,7 @@ export const make = Effect.fn("makeProcessResourceMonitor")(function* () {
             maxRssBytes: entry.peakRssBytes,
             sampleCount: entry.sampleCount,
           }));
+
         return {
           readAt: history.readAt,
           windowMs: history.windowMs,

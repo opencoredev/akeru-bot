@@ -7,6 +7,7 @@ import * as ExternalLauncher from "./externalLauncher.ts";
 it.effect("launches the default browser through the platform command", () => {
   let spawned: ChildProcess.StandardCommand | undefined;
   let didUnref = false;
+
   return Effect.gen(function* () {
     const launcher = yield* ExternalLauncher.ExternalLauncher;
 

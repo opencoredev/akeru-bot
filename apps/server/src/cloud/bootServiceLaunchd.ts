@@ -7,6 +7,7 @@ import {
   STOP_STEP_TIMEOUT,
   type BootServiceManager,
 } from "./bootServiceTypes.ts";
+
 /** Plist values are emitted as XML text nodes; only these three need escaping. */
 export function escapeXmlText(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -84,6 +85,7 @@ export function launchdManager(input: {
   const unitPath = input.path.join(input.homeDir, "Library", "LaunchAgents", `${label}.plist`);
   const domainTarget = `gui/${input.uid}`;
   const serviceTarget = `${domainTarget}/${label}`;
+
   // bootout/enable are optional: they fail on not-loaded states that are fine
   // to proceed from. The strict `bootstrap` runs last and is also the start:
   // loading a RunAtLoad/KeepAlive plist starts the job, so a separate

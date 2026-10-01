@@ -10,6 +10,7 @@ import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import { DEV_VARIANT_PLACEHOLDER_URL, AdminAlreadyPairedError } from "./pairTypes.ts";
 import { type DiscoveredPairTarget } from "./pairTarget.ts";
+
 export /**
  * Server config pointed at the discovered server's state directory, so the
  * minted token lands in the database the running server reads from. Built by
@@ -26,11 +27,13 @@ const makePairServerConfig = Effect.fn(function* (input: {
   // an explicit home and therefore lands in `userdata`. The recorded devUrl is
   // what actually marks a dev server.
   const devUrl = state.devUrl !== undefined ? new URL(state.devUrl) : undefined;
+
   const derivedPaths = yield* ServerConfig.deriveServerPaths(
     baseDir,
     variant === "dev" ? DEV_VARIANT_PLACEHOLDER_URL : undefined,
     {},
   );
+
   return ServerConfig.make({
     logLevel: input.logLevel,
     traceMinLevel: "Info",
@@ -75,9 +78,11 @@ export const issueAdminPairingLink = Effect.fn("pair.issueAdminPairingLink")(fun
   readonly label: Option.Option<string>;
 }) {
   const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
+
   if (hasPairedAdminClient(yield* environmentAuth.listSessions())) {
     return yield* new AdminAlreadyPairedError();
   }
+
   return yield* environmentAuth.createPairingLink({
     scopes: AuthAdministrativeScopes,
     subject: "one-time-token",
@@ -96,7 +101,9 @@ export const mintPairingLink = Effect.fn("pair.mintPairingLink")(function* (inpu
     if (input.admin) {
       return yield* issueAdminPairingLink({ ttl: input.ttl, label: input.label });
     }
+
     const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
+
     return yield* environmentAuth.createPairingLink({
       scopes: AuthStandardClientScopes,
       subject: "one-time-token",

@@ -23,6 +23,7 @@ const makeServerConfigLayer = (overrides?: Partial<ServerConfig.ServerConfig["Se
     ServerConfig.ServerConfig,
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
+
       return {
         ...config,
         ...overrides,
@@ -48,6 +49,7 @@ const makeInterleavingEnvironmentAuthLayer = () =>
     EnvironmentAuth.EnvironmentAuth,
     Effect.gen(function* () {
       const sessions = yield* SessionStore.SessionStore;
+
       return yield* EnvironmentAuth.make.pipe(
         Effect.provideService(SessionStore.SessionStore, {
           ...sessions,
@@ -101,10 +103,12 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       const cause = new PairingGrantStore.BootstrapCredentialConsumeError({
         cause: new Error("sqlite is unavailable"),
       });
+
       const error = EnvironmentAuth.toBootstrapExchangeError(cause);
 
       expect(error._tag).toBe("ServerAuthBootstrapCredentialValidationError");
       expect(error.message).toBe("Failed to validate bootstrap credential.");
+
       if (Predicate.isTagged(error, "ServerAuthBootstrapCredentialValidationError")) {
         expect(error.cause).toBe(cause);
       }
@@ -117,10 +121,12 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       const sessions = yield* SessionStore.SessionStore;
 
       const pairingCredential = yield* serverAuth.issuePairingCredential();
+
       const exchanged = yield* serverAuth.createBrowserSession(
         pairingCredential.credential,
         requestMetadata,
       );
+
       const verified = yield* serverAuth.authenticateHttpRequest(
         makeCookieRequest(sessions.cookieName, exchanged.sessionToken),
       );
@@ -136,6 +142,7 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
       const sessions = yield* SessionStore.SessionStore;
       const bearer = yield* serverAuth.issueSession();
+
       const verified = yield* serverAuth.authenticateHttpRequest({
         cookies: { [sessions.legacyCookieName ?? "t3_session"]: "stale" },
         headers: { authorization: `Bearer ${bearer.token}` },
@@ -165,6 +172,7 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
   it.effect("inherits a constrained pairing grant when token exchange omits scope", () =>
     Effect.gen(function* () {
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+
       const pairingCredential = yield* serverAuth.issuePairingCredential({
         scopes: ["orchestration:read"],
       });
@@ -182,9 +190,11 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
   it.effect("lets only one of two concurrent admin link redemptions become the first admin", () =>
     Effect.gen(function* () {
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+
       const browserLink = yield* serverAuth.issuePairingCredential({
         scopes: AuthAdministrativeScopes,
       });
+
       const tokenLink = yield* serverAuth.issuePairingCredential({
         scopes: AuthAdministrativeScopes,
       });
@@ -213,9 +223,11 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
   it.effect("keeps user-issued administrative pairing links manageable", () =>
     Effect.gen(function* () {
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+
       const pairingCredential = yield* serverAuth.issuePairingCredential({
         scopes: AuthAdministrativeScopes,
       });
+
       const listedPairingLinks = yield* serverAuth.listPairingLinks();
 
       expect(
@@ -240,6 +252,7 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       ).toBe(false);
 
       const exchanged = yield* serverAuth.createBrowserSession(token ?? "", requestMetadata);
+
       const verified = yield* serverAuth.authenticateHttpRequest(
         makeCookieRequest(sessions.cookieName, exchanged.sessionToken),
       );
@@ -265,13 +278,17 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
           "desktop-bootstrap-token",
           requestMetadata,
         );
+
         const administrativeSession = yield* serverAuth.authenticateHttpRequest(
           makeCookieRequest(sessions.cookieName, administrativeExchange.sessionToken),
         );
+
         const pairingCredential = yield* serverAuth.issuePairingCredential({
           label: "Julius iPhone",
         });
+
         const listedPairingLinks = yield* serverAuth.listPairingLinks();
+
         const clientExchange = yield* serverAuth.createBrowserSession(
           pairingCredential.credential,
           {
@@ -282,15 +299,19 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
             ipAddress: "192.168.1.88",
           },
         );
+
         const clientSession = yield* serverAuth.authenticateHttpRequest(
           makeCookieRequest(sessions.cookieName, clientExchange.sessionToken),
         );
+
         const clientsBeforeRevoke = yield* serverAuth.listClientSessions(
           administrativeSession.sessionId,
         );
+
         const revokedCount = yield* serverAuth.revokeOtherClientSessions(
           administrativeSession.sessionId,
         );
+
         const clientsAfterRevoke = yield* serverAuth.listClientSessions(
           administrativeSession.sessionId,
         );

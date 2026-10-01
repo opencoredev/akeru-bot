@@ -11,14 +11,17 @@ import { describe, expect, it } from "vite-plus/test";
 import { DEFAULT_SERVER_SETTINGS, type ImageGenerationSettings } from "@akeru/contracts";
 import { makeTestSubscriptionAuthService } from "../subscription-auth/testUtils/subscriptionAuthService.ts";
 import { imageProviderStatuses, normalizeImageGenerationPatch } from "./service.ts";
+
 describe("image provider rows", () => {
   it("requires a ChatGPT account instead of an OpenAI API key", async () => {
     const { authPath } = fixture();
     seedApiKey(authPath, "openai-codex");
     const service = await makeTestSubscriptionAuthService(authPath);
+
     const chatgpt = rows(service, { ...baseSettings, chatgptEnabled: true }).find(
       (row) => row.provider === "chatgpt",
     );
+
     expect(chatgpt?.connected).toBe(false);
     expect(chatgpt?.health).toBe("missing");
     expect(chatgpt?.repairAction).toBe("Connect ChatGPT subscription");
@@ -34,6 +37,7 @@ describe("imageGeneration settings patch normalization", () => {
       defaultProvider: "chatgpt",
       fallbackOrder: ["chatgpt", "grok"],
     };
+
     const out = normalizeImageGenerationPatch(current, { chatgptEnabled: false });
     expect(out.defaultProvider).toBeNull();
   });
@@ -45,10 +49,12 @@ describe("imageGeneration settings patch normalization", () => {
       defaultProvider: "grok",
       fallbackOrder: ["grok", "chatgpt"],
     };
+
     const out = normalizeImageGenerationPatch(current, {
       grokEnabled: false,
       fallbackOrder: ["grok", "chatgpt"],
     });
+
     expect(out.fallbackOrder).toEqual(["chatgpt"]);
     // The disabled default falls back to the first still-enabled provider.
     expect(out.defaultProvider).toBe("chatgpt");
@@ -61,6 +67,7 @@ describe("imageGeneration settings patch normalization", () => {
       defaultProvider: "grok",
       fallbackOrder: ["grok"],
     };
+
     // Disabling the only enabled provider leaves nothing selectable; the
     // merged settings are normalized to an empty order and a null default
     // rather than keeping a disabled provider in either slot.
@@ -76,10 +83,12 @@ describe("imageGeneration settings patch normalization", () => {
       defaultProvider: "grok",
       fallbackOrder: ["grok"],
     };
+
     const out = normalizeImageGenerationPatch(current, {
       grokEnabled: false,
       fallbackOrder: ["grok"],
     });
+
     expect(out.fallbackOrder).toEqual([]);
     expect(out.defaultProvider).toBeNull();
   });
@@ -91,6 +100,7 @@ describe("imageGeneration settings patch normalization", () => {
       defaultProvider: null,
       fallbackOrder: ["grok"],
     };
+
     const out = normalizeImageGenerationPatch(current, { grokEnabled: true });
     expect(out.defaultProvider).toBe("grok");
   });
@@ -102,6 +112,7 @@ describe("imageGeneration settings patch normalization", () => {
       defaultProvider: null,
       fallbackOrder: [],
     };
+
     const out = normalizeImageGenerationPatch(current, { grokEnabled: true });
     expect(out).toEqual({
       grokEnabled: true,
@@ -117,6 +128,7 @@ describe("imageGeneration settings patch normalization", () => {
       defaultProvider: "grok",
       fallbackOrder: ["grok", "chatgpt"],
     };
+
     const out = normalizeImageGenerationPatch(current, { defaultProvider: "chatgpt" });
     expect(out.defaultProvider).toBe("chatgpt");
     expect(out.fallbackOrder).toBeUndefined();
@@ -140,6 +152,7 @@ describe("imageGeneration settings schema", () => {
         fallbackOrder: ["grok", "chatgpt"],
       },
     });
+
     const decoded = decodeServerSettings(encoded);
     expect(decoded.imageGeneration.defaultProvider).toBe("grok");
     expect(decoded.imageGeneration.fallbackOrder).toEqual(["grok", "chatgpt"]);
@@ -161,6 +174,7 @@ describe("image provider health test", () => {
     const service = await makeTestSubscriptionAuthService(authPath);
     service.recordImageGenerationSuccess("grok", "2026-09-25T10:00:00.000Z");
     const reloaded = await makeTestSubscriptionAuthService(authPath);
+
     const grok = imageProviderStatuses({
       settings: { ...baseSettings, grokEnabled: true },
       subscriptionStatuses: reloaded.statuses(),
@@ -168,6 +182,7 @@ describe("image provider health test", () => {
       requestHealth: (provider) => reloaded.imageRequestHealth(provider),
       lastGenerationAt: (provider) => reloaded.imageLastGenerationAt(provider),
     }).find((row) => row.provider === "grok");
+
     expect(grok).toMatchObject({
       health: "healthy",
       lastGenerationAt: "2026-09-25T10:00:00.000Z",

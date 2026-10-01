@@ -45,6 +45,7 @@ describe("VcsDriverRegistry", () => {
 
   it.effect("caches repository detection for repeated resolves in the same cwd and kind", () => {
     const calls: VcsProcess.VcsProcessInput[] = [];
+
     const layer = Layer.effect(VcsDriverRegistry.VcsDriverRegistry, VcsDriverRegistry.make).pipe(
       Layer.provide(NodeServices.layer),
       Layer.provide(
@@ -57,18 +58,24 @@ describe("VcsDriverRegistry", () => {
           run: (input) =>
             Effect.sync(() => {
               calls.push(input);
+
               const normalizedArgs =
                 input.args[0] === "-C" && input.args.length >= 2 ? input.args.slice(2) : input.args;
+
               const command = normalizedArgs.join(" ");
+
               if (command === "rev-parse --is-inside-work-tree") {
                 return processOutput("true\n");
               }
+
               if (command === "rev-parse --show-toplevel") {
                 return processOutput("/repo\n");
               }
+
               if (command === "rev-parse --git-common-dir") {
                 return processOutput("/repo/.git\n");
               }
+
               return processOutput("");
             }),
         }),
@@ -95,6 +102,7 @@ describe("VcsDriverRegistry", () => {
 
   it.effect("detects a repository created after a negative lookup", () => {
     let insideWorkTreeChecks = 0;
+
     const layer = Layer.effect(VcsDriverRegistry.VcsDriverRegistry, VcsDriverRegistry.make).pipe(
       Layer.provide(NodeServices.layer),
       Layer.provide(
@@ -107,8 +115,10 @@ describe("VcsDriverRegistry", () => {
           run: (input) =>
             Effect.sync(() => {
               const command = normalizeGitArgs(input.args).join(" ");
+
               if (command === "rev-parse --is-inside-work-tree") {
                 insideWorkTreeChecks += 1;
+
                 return insideWorkTreeChecks === 1
                   ? {
                       ...processOutput(""),
@@ -117,12 +127,15 @@ describe("VcsDriverRegistry", () => {
                     }
                   : processOutput("true\n");
               }
+
               if (command === "rev-parse --show-toplevel") {
                 return processOutput("/repo\n");
               }
+
               if (command === "rev-parse --git-common-dir") {
                 return processOutput("/repo/.git\n");
               }
+
               return processOutput("");
             }),
         }),

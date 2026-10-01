@@ -25,11 +25,13 @@ export function scriptedHttpClient(
   reply: (request: RecordedRequest, index: number) => Response | Effect.Effect<Response>,
 ) {
   const requests: Array<RecordedRequest> = [];
+
   const client = HttpClient.make((request) =>
     Effect.suspend(() => {
       const body = Predicate.isTagged(request.body, "Uint8Array")
         ? new TextDecoder().decode(request.body.body)
         : "";
+
       const recorded: RecordedRequest = {
         method: request.method,
         url: request.url,
@@ -37,18 +39,22 @@ export function scriptedHttpClient(
         body,
         json: Option.getOrUndefined(decodeJson(body)),
       };
+
       requests.push(recorded);
       const response = reply(recorded, requests.length - 1);
+
       return (Effect.isEffect(response) ? response : Effect.succeed(response)).pipe(
         Effect.map((web) => HttpClientResponse.fromWeb(request, web)),
       );
     }),
   );
+
   return { client, requests };
 }
 
 /** Build an unsigned JWT whose payload is `claims`. */
 export function fakeJwt(claims: Record<string, unknown>): string {
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+
   return `${encode({ alg: "none" })}.${encode(claims)}.signature`;
 }

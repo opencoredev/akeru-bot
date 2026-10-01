@@ -50,6 +50,7 @@ import {
   writeAllToFileDescriptor,
   openDesktopTelemetryReadable,
 } from "./DesktopTelemetryTransport.ts";
+
 const STALE_CHECK_INTERVAL = Duration.seconds(30);
 
 export class DesktopTelemetryReceiver extends Context.Service<
@@ -85,22 +86,26 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
   const serverSettings = yield* ServerSettingsService;
   const latest = yield* Ref.make(Option.none<DesktopHostTelemetrySnapshot>());
   const receiverStartedAt = yield* DateTime.now;
+
   const lastContactAtMs = yield* Ref.make(
     initialDesktopTelemetryContactAt(
       config.desktopTelemetryFd,
       DateTime.toEpochMillis(receiverStartedAt),
     ),
   );
+
   const snapshotStaleAfterMs = yield* Ref.make(
     resolveDesktopTelemetrySnapshotStaleAfterMs(
       DEFAULT_HOST_POWER_ACTIVE_INTERVAL_MS,
       DEFAULT_HOST_POWER_IDLE_INTERVAL_MS,
     ),
   );
+
   const changes = yield* PubSub.sliding<DesktopHostTelemetrySnapshot>(8);
   const healthChanges = yield* PubSub.sliding<DesktopTelemetryReceiverHealth>(4);
   const controlMutex = yield* Semaphore.make(1);
   const snapshotMutex = yield* Semaphore.make(1);
+
   const health = yield* Ref.make<DesktopTelemetryReceiverHealth>({
     status: config.desktopTelemetryFd === undefined ? "unavailable" : "starting",
     lastSampleAt: Option.none(),
@@ -113,16 +118,19 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
           )
         : Option.none(),
   });
+
   const updateHealth = (
     update: (current: DesktopTelemetryReceiverHealth) => DesktopTelemetryReceiverHealth,
   ) =>
     Ref.modify(health, (current) => {
       const next = update(current);
+
       return [next, next];
     }).pipe(
       Effect.flatMap((next) => PubSub.publish(healthChanges, next)),
       Effect.asVoid,
     );
+
   const updateSampleHealth = (sampledAt: DateTime.Utc) =>
     recordDesktopTelemetrySampleHealth(health, healthChanges, sampledAt);
 
@@ -130,7 +138,9 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
     controlMutex.withPermits(1)(
       Effect.gen(function* () {
         const fd = config.desktopTelemetryControlFd;
+
         if (fd === undefined) return;
+
         const encoded = yield* encodeControlMessage(message).pipe(
           Effect.mapError(
             (cause) =>
@@ -141,6 +151,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
               }),
           ),
         );
+
         yield* writeAllToFileDescriptor(fd, Buffer.from(`${encoded}\n`)).pipe(
           Effect.tapError((error) =>
             updateHealth((current) => ({
@@ -152,6 +163,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
         );
       }),
     );
+
   const setDiagnosticsDemand: DesktopTelemetryReceiver["Service"]["setDiagnosticsDemand"] = (
     enabled,
   ) =>
@@ -165,14 +177,17 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
     settings: Parameters<typeof resolveServerBackgroundActivitySettings>[0],
   ) => {
     const resolved = resolveServerBackgroundActivitySettings(settings);
+
     const activeIntervalMs = Math.max(
       1,
       Math.round(Duration.toMillis(resolved.hostPowerMonitorActiveInterval)),
     );
+
     const idleIntervalMs = Math.max(
       1,
       Math.round(Duration.toMillis(resolved.hostPowerMonitorIdleInterval)),
     );
+
     return sendControlMessage({
       version: 1,
       type: "setHostPowerIntervals",
@@ -187,6 +202,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
       ),
     );
   };
+
   if (config.desktopTelemetryControlFd !== undefined) {
     const settingsChanges = yield* serverSettings.subscribeChanges;
     const settings = yield* serverSettings.getSettings;
@@ -213,6 +229,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
 
   if (config.desktopTelemetryFd !== undefined) {
     const fd = config.desktopTelemetryFd;
+
     const readable = yield* Effect.acquireRelease(
       Effect.try({
         try: () => openDesktopTelemetryReadable(fd),
@@ -239,6 +256,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
             DesktopTelemetryProtocolMismatch | DesktopTelemetryDecodeFailed
           > => {
             const version = messageVersion(value);
+
             if (version !== undefined && version !== 1) {
               return Effect.fail(
                 new DesktopTelemetryProtocolMismatch({
@@ -247,6 +265,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
                 }),
               );
             }
+
             return decodeMessage(value).pipe(
               Effect.mapError((cause) => new DesktopTelemetryDecodeFailed({ cause })),
             );
@@ -262,6 +281,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
             Ref.set(lastContactAtMs, Option.some(DateTime.toEpochMillis(now))),
           ),
         );
+
         if (message.type === "desktopTelemetryHello") {
           return recordContact.pipe(
             Effect.andThen(
@@ -277,6 +297,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
         }
 
         const sampledAt = DateTime.makeUnsafe(message.sampledAtUnixMs);
+
         return snapshotMutex.withPermits(1)(
           recordContact.pipe(
             Effect.andThen(Ref.set(latest, Option.some(message))),
@@ -315,6 +336,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
               const now = yield* DateTime.now;
               const nowMs = DateTime.toEpochMillis(now);
               const staleAfterMs = yield* Ref.get(snapshotStaleAfterMs);
+
               const staleSnapshot = yield* Ref.modify(latest, (current) => {
                 if (
                   Option.isNone(current) ||
@@ -323,19 +345,25 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
                 ) {
                   return [Option.none<DesktopHostTelemetrySnapshot>(), current] as const;
                 }
+
                 const stale: DesktopHostTelemetrySnapshot = {
                   ...current.value,
                   power: { ...current.value.power, stale: true },
                 };
+
                 return [Option.some(stale), Option.some(stale)] as const;
               });
+
               if (Option.isNone(staleSnapshot)) {
                 const lastContact = yield* Ref.get(lastContactAtMs);
+
                 if (!isDesktopTelemetryContactStale(lastContact, nowMs)) return;
+
                 const staleMessage = new DesktopTelemetryStale({
                   fd,
                   staleAfterMs: INITIAL_SAMPLE_DEADLINE_MS,
                 }).message;
+
                 const changed = yield* Ref.modify(health, (current) => {
                   if (
                     current.status === "stopped" ||
@@ -345,18 +373,23 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
                   ) {
                     return [Option.none<DesktopTelemetryReceiverHealth>(), current] as const;
                   }
+
                   const next: DesktopTelemetryReceiverHealth = {
                     ...current,
                     status: "degraded",
                     lastError: Option.some(staleMessage),
                   };
+
                   return [Option.some(next), next] as const;
                 });
+
                 if (Option.isSome(changed)) {
                   yield* PubSub.publish(healthChanges, changed.value);
                 }
+
                 return;
               }
+
               yield* updateHealth((currentHealth) => ({
                 ...currentHealth,
                 status: currentHealth.status === "stopped" ? "stopped" : "degraded",
@@ -380,6 +413,7 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
       Effect.gen(function* () {
         const initial = yield* Ref.get(latest);
         const subscription = yield* PubSub.subscribe(changes);
+
         return {
           latest: initial,
           changes: Stream.fromSubscription(subscription),
@@ -399,6 +433,7 @@ export const layerTest = (
 ): Layer.Layer<DesktopTelemetryReceiver> => {
   const latest = overrides.latest ?? Effect.succeedNone;
   const changes = overrides.changes ?? Stream.empty;
+
   const health =
     overrides.health ??
     Effect.succeed({
@@ -406,6 +441,7 @@ export const layerTest = (
       lastSampleAt: Option.none<DateTime.Utc>(),
       lastError: Option.some("Desktop telemetry test implementation is unavailable."),
     });
+
   return Layer.succeed(
     DesktopTelemetryReceiver,
     DesktopTelemetryReceiver.of({
@@ -433,21 +469,39 @@ export const layerTest = (
     }),
   );
 };
+
 export { DesktopTelemetryDescriptorUnavailable } from "./DesktopTelemetryTypes.ts";
+
 export { DesktopTelemetryProtocolMismatch } from "./DesktopTelemetryTypes.ts";
+
 export { DesktopTelemetryDecodeFailed } from "./DesktopTelemetryTypes.ts";
+
 export { DesktopTelemetryStreamFailed } from "./DesktopTelemetryTypes.ts";
+
 export { DesktopTelemetryStreamClosed } from "./DesktopTelemetryTypes.ts";
+
 export { DesktopTelemetryStale } from "./DesktopTelemetryTypes.ts";
+
 export type { DesktopTelemetryReceiverError } from "./DesktopTelemetryTypes.ts";
+
 export { DesktopTelemetryControlFailed } from "./DesktopTelemetryTypes.ts";
+
 export { DesktopTelemetryControlStalled } from "./DesktopTelemetryTypes.ts";
+
 export type { DesktopTelemetryControlError } from "./DesktopTelemetryTypes.ts";
+
 export type { DesktopTelemetryReceiverHealth } from "./DesktopTelemetryTypes.ts";
+
 export { isDesktopTelemetryContactStale } from "./DesktopTelemetryHealth.ts";
+
 export { resolveDesktopTelemetrySnapshotStaleAfterMs } from "./DesktopTelemetryHealth.ts";
+
 export { initialDesktopTelemetryContactAt } from "./DesktopTelemetryHealth.ts";
+
 export { recordDesktopTelemetrySampleHealth } from "./DesktopTelemetryHealth.ts";
+
 export { writeAllToFileDescriptor } from "./DesktopTelemetryTransport.ts";
+
 export { requireDesktopTelemetryWriteProgress } from "./DesktopTelemetryTransport.ts";
+
 export { openDesktopTelemetryReadable } from "./DesktopTelemetryTransport.ts";

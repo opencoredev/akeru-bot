@@ -9,6 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
 import { expect } from "vite-plus/test";
 import { sanitizeThreadTitle } from "./TextGenerationUtils.ts";
+
 it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
   it.effect("forwards Claude thinking settings for Haiku without passing effort", () =>
     withFakeClaudeEnv(
@@ -128,6 +129,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const claudeConfigDir = path.join(process.cwd(), ".claude-work-test");
+
       return yield* withFakeClaudeEnv(
         {
           // @effect-diagnostics-next-line preferSchemaOverJson:off
@@ -162,6 +164,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
         type: "result",
         structured_output: { title: '{"title": "Refresh ev-stg APP ASG instances"}' },
       };
+
       return withFakeClaudeEnv(
         { output: JSON.stringify(verbose ? [result] : result) },
         (textGeneration) =>

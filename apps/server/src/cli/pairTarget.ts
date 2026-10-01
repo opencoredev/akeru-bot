@@ -41,6 +41,7 @@ import {
   DevServerNotProxiableError,
   isDevServerNotProxiableError,
 } from "./pairTypes.ts";
+
 /**
  * The origin a user-managed tunnel or reverse proxy serves this server on. The web app lives at the
  * root of that origin, so anything beyond an http(s) origin is rejected rather than silently
@@ -48,19 +49,25 @@ import {
  */
 export const parsePublicPairingBaseUrl = (raw: string): string | InvalidPublicUrlError => {
   const invalid = (reason: string) => new InvalidPublicUrlError({ publicUrl: raw, reason });
+
   if (!URL.canParse(raw)) {
     return invalid("is not a URL");
   }
+
   const url = new URL(raw);
+
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     return invalid("must use http or https");
   }
+
   if (url.username.length > 0 || url.password.length > 0) {
     return invalid("must not contain credentials");
   }
+
   if (url.pathname !== "/" || url.search.length > 0 || url.hash.length > 0) {
     return invalid("must be an origin without a path, query, or fragment");
   }
+
   return url.origin;
 };
 
@@ -69,13 +76,17 @@ export const resolvePublicPairingBaseUrl = Effect.fn("pair.resolvePublicPairingB
     if (Option.isNone(input.publicUrl)) {
       return undefined;
     }
+
     if (input.tailscale) {
       return yield* new PublicUrlWithTailscaleError();
     }
+
     const parsed = parsePublicPairingBaseUrl(input.publicUrl.value);
+
     if (typeof parsed === "string") {
       return parsed;
     }
+
     return yield* parsed;
   },
 );
@@ -95,19 +106,24 @@ export const resolveTailscaleLocalTarget = (
 ): { readonly localPort: number; readonly localHost?: string } | DevServerNotProxiableError => {
   if (state.devUrl !== undefined) {
     const devUrl = new URL(state.devUrl);
+
     if (devUrl.protocol !== "http:") {
       return new DevServerNotProxiableError({ devUrl: state.devUrl });
     }
+
     const localPort = devUrl.port.length > 0 ? Number.parseInt(devUrl.port, 10) : 80;
+
     return isLoopbackHost(devUrl.hostname)
       ? { localPort }
       : { localPort, localHost: devUrl.hostname };
   }
+
   // A server bound to one specific interface does not answer on loopback, so
   // the proxy has to target that interface directly.
   if (state.host !== undefined && !isWildcardHost(state.host) && !isLoopbackHost(state.host)) {
     return { localPort: state.port, localHost: formatHostForUrl(state.host) };
   }
+
   return { localPort: state.port };
 };
 
@@ -127,11 +143,13 @@ export const probeEnvironmentDescriptor = (
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
     const request = HttpClientRequest.get(new URL(WELL_KNOWN_ENVIRONMENT_PATH, baseUrl).toString());
+
     const response = yield* client.execute(request).pipe(
       Effect.timeout(PAIR_PROBE_TIMEOUT),
       // Transport failure or timeout: nothing (reachable) is listening there.
       Effect.mapError(() => ({ _tag: "unreachable" }) as const),
     );
+
     // Bad-gateway family means a proxy (Tailscale Serve) answered for a
     // backend that is gone — a stale mapping, not a live occupant. Treating
     // it as unreachable lets `akeru pair --tailscale` repair its own mapping
@@ -139,12 +157,14 @@ export const probeEnvironmentDescriptor = (
     if (response.status === 502 || response.status === 503 || response.status === 504) {
       return { _tag: "unreachable" } as const;
     }
+
     // Anything else that answered HTTP but not with a valid descriptor is
     // some other service.
     const descriptor = yield* HttpClientResponse.filterStatusOk(response).pipe(
       Effect.flatMap(HttpClientResponse.schemaBodyJson(ExecutionEnvironmentDescriptor)),
       Effect.mapError(() => ({ _tag: "not-a-t3-server" }) as const),
     );
+
     return { _tag: "descriptor", descriptor } as const;
   }).pipe(Effect.catch((outcome) => Effect.succeed(outcome)));
 
@@ -153,6 +173,7 @@ export // signal 0 delivers nothing; it only reports whether the pid exists. EPE
 const isProcessAlive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
+
     return true;
   } catch (error) {
     return error instanceof Error && "code" in error && error.code === "EPERM";
@@ -170,6 +191,7 @@ export const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function*
   explicitBaseDir: string | undefined,
 ) {
   const bases: Array<string> = [];
+
   if (explicitBaseDir !== undefined && explicitBaseDir.trim().length > 0) {
     bases.push(yield* resolveBaseDir(explicitBaseDir));
   } else {
@@ -177,14 +199,17 @@ export const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function*
     // outranks the shared home, so `akeru pair` in a worktree pairs with the dev
     // server under test rather than the daily-driver install.
     const worktreeHome = yield* resolveWorktreeT3Home(process.cwd());
+
     if (worktreeHome !== undefined) {
       bases.push(worktreeHome);
     }
+
     const envHome = yield* aliasedEnv(Config.string, "HOME");
     bases.push(yield* resolveBaseDir(Option.getOrUndefined(envHome)));
   }
 
   const checkedStatePaths: Array<string> = [];
+
   for (const baseDir of new Set(bases)) {
     for (const variant of ["userdata", "dev"] as const) {
       const derivedPaths = yield* ServerConfig.deriveServerPaths(
@@ -192,22 +217,28 @@ export const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function*
         variant === "dev" ? DEV_VARIANT_PLACEHOLDER_URL : undefined,
         {},
       );
+
       const statePath = derivedPaths.serverRuntimeStatePath;
       checkedStatePaths.push(statePath);
       const state = yield* readPersistedServerRuntimeState(statePath);
+
       if (Option.isNone(state)) {
         continue;
       }
+
       // The pid check guards against a dead server's state file whose port
       // was since reused by a different server: pairing would then mint a
       // token in the old database while the QR code points at the new server.
       if (!isProcessAlive(state.value.pid)) {
         continue;
       }
+
       const probed = yield* probeEnvironmentDescriptor(state.value.origin);
+
       if (!Predicate.isTagged(probed, "descriptor")) {
         continue;
       }
+
       return {
         baseDir,
         variant,
@@ -216,30 +247,38 @@ export const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function*
       } satisfies DiscoveredPairTarget;
     }
   }
+
   return yield* new NoRunningServerError({ checkedStatePaths });
 });
 
 export const awaitEnvironmentDescriptor = Effect.fn(function* (baseUrl: string) {
   let last: EnvironmentProbeResult = { _tag: "unreachable" };
+
   for (let attempt = 0; attempt < TAILSCALE_PROBE_ATTEMPTS; attempt += 1) {
     last = yield* probeEnvironmentDescriptor(baseUrl);
+
     if (Predicate.isTagged(last, "descriptor")) {
       return last;
     }
+
     yield* Effect.sleep(TAILSCALE_PROBE_RETRY_DELAY);
   }
+
   return last;
 });
 
 export const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairingBase")(
   function* (input: { readonly target: DiscoveredPairTarget; readonly servePort: number }) {
     const notes: Array<string> = [];
+
     const status = yield* readTailscaleStatus.pipe(
       Effect.mapError((cause) => new TailscaleUnavailableError({ cause })),
     );
+
     if (status.magicDnsName === null) {
       return yield* new MagicDnsNameMissingError();
     }
+
     const baseUrl = buildTailscaleHttpsBaseUrl({
       magicDnsName: status.magicDnsName,
       servePort: input.servePort,
@@ -249,10 +288,12 @@ export const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairi
     // environment, is safe to (re)configure. Any other responder — T3 or not
     // — must not have its mapping silently replaced.
     const existing = yield* probeEnvironmentDescriptor(baseUrl);
+
     if (Predicate.isTagged(existing, "descriptor")) {
       if (existing.descriptor.environmentId !== input.target.descriptor.environmentId) {
         return yield* new ServesOtherEnvironmentError({ servePort: input.servePort });
       }
+
       // Matching environment id proves the mapping reaches this server, but
       // not through which port: for a dev server it may front the backend
       // (whose /.well-known also answers) while /pair only renders through
@@ -262,14 +303,17 @@ export const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairi
         return { baseUrl, notes };
       }
     }
+
     if (Predicate.isTagged(existing, "not-a-t3-server")) {
       return yield* new ServePortOccupiedError({ servePort: input.servePort });
     }
 
     const localTarget = resolveTailscaleLocalTarget(input.target.state);
+
     if (isDevServerNotProxiableError(localTarget)) {
       return yield* localTarget;
     }
+
     yield* ensureTailscaleServe({
       localPort: localTarget.localPort,
       servePort: input.servePort,
@@ -284,6 +328,7 @@ export const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairi
     );
 
     const probed = yield* awaitEnvironmentDescriptor(baseUrl);
+
     if (Predicate.isTagged(probed, "descriptor")) {
       if (probed.descriptor.environmentId !== input.target.descriptor.environmentId) {
         return yield* new ServesOtherEnvironmentError({ servePort: input.servePort });
@@ -293,6 +338,7 @@ export const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairi
         "The HTTPS endpoint has not answered yet. First use can take a moment while Tailscale provisions certificates.",
       );
     }
+
     return { baseUrl, notes };
   },
 );

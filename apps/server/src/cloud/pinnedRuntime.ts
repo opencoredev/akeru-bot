@@ -17,7 +17,9 @@ import * as ProcessRunner from "../processRunner.ts";
  */
 
 const PINNED_RUNTIME_DIR = "runtime";
+
 const PINNED_RUNTIME_INSTALL_TIMEOUT = Duration.minutes(10);
+
 // Boot-service setup and remote update can construct separate layers. Serialize
 // the complete install transaction across every caller in this process.
 const pinnedRuntimeInstallLock = Semaphore.makeUnsafe(1);
@@ -34,6 +36,7 @@ export function pinnedRuntimePaths(
   version: string,
 ): PinnedRuntimePaths {
   const versionDir = path.join(baseDir, PINNED_RUNTIME_DIR, "versions", version);
+
   return {
     versionDir,
     entryPath: path.join(versionDir, "node_modules", "akeru-bot", "dist", "bin.mjs"),
@@ -96,6 +99,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
 ) {
   const { fs, runner } = input;
   const paths = pinnedRuntimePaths(input.path, input.baseDir, input.version);
+
   const [versionDirExists, entryExists, sentinel] = yield* Effect.all([
     fs.exists(paths.versionDir),
     fs.exists(paths.entryPath),
@@ -105,6 +109,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
       (cause) => new PinnedRuntimeInstallError({ step: "checking the pinned runtime", cause }),
     ),
   );
+
   const alreadyPinned =
     entryExists &&
     Option.isSome(sentinel) &&
@@ -118,10 +123,13 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
               new PinnedRuntimeInstallError({ step: "checking archive provenance", cause }),
           ),
         )));
+
   if (alreadyPinned) {
     yield* input.validate(paths);
+
     return paths;
   }
+
   if (versionDirExists) {
     yield* fs.remove(paths.versionDir, { recursive: true, force: true }).pipe(
       Effect.mapError(
@@ -144,6 +152,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
         }),
     ),
   );
+
   const stagingDir = yield* fs
     .makeTempDirectory({
       directory: versionsDir,
@@ -158,6 +167,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
           }),
       ),
     );
+
   const stagingPaths: PinnedRuntimePaths = {
     versionDir: stagingDir,
     entryPath: input.path.join(stagingDir, "node_modules", "akeru-bot", "dist", "bin.mjs"),
@@ -166,6 +176,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
 
   return yield* Effect.gen(function* () {
     const installStep = "installing the pinned akeru-bot runtime (this can take a few minutes)";
+
     if (input.prepareArchive !== undefined) {
       yield* input.prepareArchive(stagingPaths);
     } else {
@@ -199,6 +210,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
     }
 
     yield* input.validate(stagingPaths);
+
     if (input.prepareArchive !== undefined) {
       yield* fs
         .writeFileString(input.path.join(stagingDir, ".archive-verified"), `${input.version}\n`)
@@ -209,6 +221,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
           ),
         );
     }
+
     yield* fs
       .writeFileString(stagingPaths.sentinelPath, `${input.version}\n`)
       .pipe(
@@ -217,6 +230,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
             new PinnedRuntimeInstallError({ step: "recording the completed install", cause }),
         ),
       );
+
     const published = yield* fs.rename(stagingDir, paths.versionDir).pipe(
       Effect.as(true),
       Effect.catch((cause) =>
@@ -250,7 +264,9 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
         ),
       ),
     );
+
     if (!published) yield* input.validate(paths);
+
     return paths;
   }).pipe(
     Effect.ensuring(fs.remove(stagingDir, { recursive: true, force: true }).pipe(Effect.ignore)),

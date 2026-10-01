@@ -8,6 +8,7 @@ import {
   makeTestSubscriptionAuthService,
   runWithNodeServices,
 } from "./testUtils/subscriptionAuthService.ts";
+
 describe("provider health checks", () => {
   const kimiDeviceId = "0123456789abcdef0123456789abcdef";
 
@@ -32,9 +33,11 @@ describe("provider health checks", () => {
       "fetch",
       vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         calls.push({ url: String(input), headers: new Headers(init?.headers) });
+
         return new Response("{}", { status });
       }),
     );
+
     return calls;
   }
 
@@ -100,12 +103,14 @@ describe("provider health checks", () => {
   it("checks OpenCode Go on the server right after the key is stored", async () => {
     const { authPath } = fixture();
     let release: (response: Response) => void = () => undefined;
+
     const request = vi.fn(
       (_input: string | URL | Request, _init?: RequestInit) =>
         new Promise<Response>((resolve) => {
           release = resolve;
         }),
     );
+
     vi.stubGlobal("fetch", request);
     const service = await makeTestSubscriptionAuthService(authPath, { checkHealthOnConnect: true });
     const login = await service.startLogin("opencode-go");

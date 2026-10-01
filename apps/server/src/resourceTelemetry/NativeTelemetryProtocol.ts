@@ -185,5 +185,6 @@ export const isCommandFailed = Schema.is(NativeTelemetryCommandFailed);
 export function eventVersion(value: unknown): number | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const version = Reflect.get(value, "version");
+
   return typeof version === "number" ? version : undefined;
 }

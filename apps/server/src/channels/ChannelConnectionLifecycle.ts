@@ -48,6 +48,7 @@ import {
   clearPersistedChannelStatuses,
 } from "./ChannelDelivery.ts";
 import { replaceBinding, withChannelOperation } from "./ChannelOperations.ts";
+
 export const startChannel = (
   ctx: ChannelRuntimeContext,
   input: ChannelConnectInput,
@@ -55,16 +56,21 @@ export const startChannel = (
 ) =>
   Effect.gen(function* () {
     const deps = ctx.deps;
+
     if (ctx.closed) return yield* failWith("Channels are shutting down.");
     const model = yield* deps.readModel;
     const bot = model.bots.find((candidate) => candidate.id === input.botId);
+
     if (!bot || bot.archivedAt !== null)
       return yield* failWith(`Bot '${input.botId}' is unavailable.`);
+
     const project = model.projects.find(
       (candidate) => candidate.id === input.targetProjectId && candidate.deletedAt === null,
     );
+
     if (!project) return yield* failWith("The selected channel project is unavailable.", "project");
     let runtime: ChannelRuntimeEntry | undefined;
+
     const dispatch = (message: InboundChannelMessage) =>
       withChannelOperation(
         ctx,
@@ -72,13 +78,17 @@ export const startChannel = (
       )(
         Effect.gen(function* () {
           const current = runtime;
+
           if (!current || ctx.runtimes.get(runtimeKey(bot.id, input.provider)) !== current) return;
           const currentModel = yield* deps.readModel;
+
           const binding = currentModel.bots
             .find((candidate) => candidate.id === bot.id)
             ?.channelBindings.find((candidate) => candidate.provider === input.provider);
+
           if (binding?.status !== "connected") return;
           let duplicate = false;
+
           if (message.externalMessageId) {
             for (const summary of currentModel.threads) {
               if (summary.botId !== bot.id || summary.projectId !== project.id) continue;
@@ -92,17 +102,20 @@ export const startChannel = (
                 ) ?? false;
             }
           }
+
           yield* dispatchInboundChannelMessage(ctx, {
             ...message,
             botId: bot.id,
             projectId: project.id,
             provider: input.provider,
           });
+
           if (!duplicate) {
             for (const { origin } of ctx.statuses.get(current)?.values() ?? []) {
               if (origin.externalThreadId === message.externalThreadId)
                 yield* updateChannelStatus(ctx, current, origin);
             }
+
             yield* updateChannelStatus(
               ctx,
               current,
@@ -112,8 +125,10 @@ export const startChannel = (
           }
         }),
       );
+
     // SDK callbacks are the only place work crosses into Effect; each runs in the runtime scope.
     const onInbound: InboundCallback = (message) => ctx.runSdkCallback(dispatch(message));
+
     const context: ChannelTransportContext = {
       botName: bot.name,
       subscribedThreadIds: yield* subscribedExternalThreadIds(
@@ -127,7 +142,9 @@ export const startChannel = (
       onSubscribedMessage: onInbound,
       ...(ctx.deps.httpClient ? { httpClient: ctx.deps.httpClient } : {}),
     };
+
     const startTransport = deps.startTransport;
+
     const started: StartedTransport = startTransport
       ? yield* fromPromise(() => startTransport(input, onInbound, context)).pipe(
           Effect.map((transport) => ({
@@ -138,13 +155,17 @@ export const startChannel = (
       : yield* startBuiltInTransport(bot.id, input, context, onInbound).pipe(
           Scope.provide(ctx.transportScope),
         );
+
     yield* clearPersistedChannelStatuses(ctx, started.runtime, bot.id, input.provider).pipe(
       Effect.onError(() => started.runtime.shutdown.pipe(Effect.ignoreCause)),
     );
+
     const clearTrackedStatuses = (threadId?: ThreadId) =>
       Effect.gen(function* () {
         const current = runtime;
+
         if (!current) return;
+
         for (const { origin, threadId: statusThreadId } of ctx.statuses.get(current)?.values() ??
           []) {
           if (
@@ -158,14 +179,17 @@ export const startChannel = (
           }
         }
       });
+
     const wrapped: ChannelRuntimeEntry = {
       ...started.runtime,
       clearThreadStatus: clearTrackedStatuses,
       shutdown: clearTrackedStatuses().pipe(Effect.andThen(started.runtime.shutdown)),
     };
+
     runtime = wrapped;
     // Meta only delivers WhatsApp webhooks to a public https URL; without one the bot never hears messages.
     const notLive = input.provider === "whatsapp" && !deps.publicOrigin?.startsWith("https://");
+
     return {
       runtime: wrapped,
       binding: {
@@ -192,42 +216,55 @@ export const commitStartedChannel = (
 ) =>
   Effect.gen(function* () {
     const deps = ctx.deps;
+
     if (ctx.closed) {
       yield* started.runtime.shutdown.pipe(Effect.ignoreCause);
+
       return yield* failWith("Channels are shutting down.");
     }
+
     const liveBot = (yield* deps.readModel.pipe(
       Effect.onError(() => started.runtime.shutdown.pipe(Effect.ignoreCause)),
     )).bots.some((bot) => bot.id === started.binding.botId && bot.archivedAt === null);
+
     if (!liveBot) {
       yield* started.runtime.shutdown.pipe(Effect.ignoreCause);
+
       return yield* failWith("Channel bot is unavailable.");
     }
+
     const key = runtimeKey(started.binding.botId, started.binding.provider);
     const previousRuntime = ctx.runtimes.get(key);
     const name = secretName(started.binding.botId, started.binding.provider);
     let previousSecret: Option.Option<Uint8Array> | undefined;
+
     const rollback = Effect.gen(function* () {
       if (previousRuntime) ctx.runtimes.set(key, previousRuntime);
       else ctx.runtimes.delete(key);
       yield* started.runtime.shutdown.pipe(Effect.ignoreCause);
       const prior = previousSecret;
+
       if (prior?._tag === "Some") {
         yield* deps.secretStore.set(name, prior.value).pipe(Effect.ignoreCause);
       } else if (prior?._tag === "None") {
         yield* deps.secretStore.remove(name).pipe(Effect.ignoreCause);
       }
     });
+
     return yield* Effect.gen(function* () {
       previousSecret = yield* deps.secretStore.get(name);
       ctx.runtimes.set(key, started.runtime);
+
       if (secret) {
         yield* deps.secretStore.set(name, yield* encodeStoredChannelSecret(secret));
       }
+
       const sequence = yield* replaceBinding(ctx, started.binding);
+
       if (previousRuntime && previousRuntime !== started.runtime) {
         yield* previousRuntime.shutdown.pipe(Effect.ignoreCause);
       }
+
       return sequence;
     }).pipe(Effect.onError(() => rollback));
   });
@@ -255,6 +292,7 @@ const revertConnectingBinding = (
     Effect.gen(function* () {
       const model = yield* ctx.deps.readModel;
       const bot = model.bots.find((candidate) => candidate.id === botId);
+
       if (bindingFor(model, botId, provider)?.status !== "connecting" || !bot) return;
       yield* ctx.deps.engine.dispatch({
         type: "bot.update",
@@ -293,9 +331,11 @@ const recordStartFailure = (
     const liveBot = (yield* ctx.deps.readModel).bots.some(
       (bot) => bot.id === input.botId && bot.archivedAt === null,
     );
+
     if (!liveBot || (!previous && !connectionId))
       return yield* revertConnectingBinding(ctx, input.botId, input.provider, previous);
     const running = ctx.runtimes.has(runtimeKey(input.botId, input.provider));
+
     const target: ChannelBinding =
       previous && (running || !connectionId || previous.connectionId === connectionId)
         ? previous
@@ -309,14 +349,17 @@ const recordStartFailure = (
             connectedAt: null,
             sentMessageIds: [],
           };
+
     const failure = channelFailurePresentation(error);
     const { failureCategory: _previousCategory, ...base } = target;
+
     const annotated: ChannelBinding = {
       ...base,
       lastAttemptAt: yield* ctx.deps.nowIso,
       lastError: failure.message,
       ...(failure.category ? { failureCategory: failure.category } : {}),
     };
+
     yield* replaceBinding(
       ctx,
       running
@@ -338,9 +381,11 @@ export /**
  */
 const watchTransportExit = (ctx: ChannelRuntimeContext, started: StartedChannel) => {
   const { settled } = started.runtime;
+
   if (!settled) return Effect.void;
   const { botId, provider } = started.binding;
   const key = runtimeKey(botId, provider);
+
   return settled.pipe(
     Effect.andThen(
       withChannelOperation(
@@ -350,6 +395,7 @@ const watchTransportExit = (ctx: ChannelRuntimeContext, started: StartedChannel)
         Effect.gen(function* () {
           if (ctx.closed || ctx.runtimes.get(key) !== started.runtime) return;
           const current = bindingFor(yield* ctx.deps.readModel, botId, provider);
+
           if (current?.status !== "connected" && current?.status !== "not-live") return;
           yield* replaceBinding(ctx, {
             ...current,
@@ -388,6 +434,7 @@ const startAndCommitChannel = (
     const previous = bindingFor(model, input.botId, input.provider);
     const liveBot = model.bots.some((bot) => bot.id === input.botId && bot.archivedAt === null);
     ctx.connecting.add(key);
+
     return yield* Effect.gen(function* () {
       if (liveBot && !ctx.closed) {
         const initial: ChannelBinding = {
@@ -400,11 +447,13 @@ const startAndCommitChannel = (
           connectedAt: null,
           sentMessageIds: [],
         };
+
         const {
           lastError: _lastError,
           failureCategory: _failureCategory,
           ...base
         } = previous ?? initial;
+
         yield* replaceBinding(ctx, {
           ...base,
           status: "connecting",
@@ -417,15 +466,20 @@ const startAndCommitChannel = (
             : {}),
         });
       }
+
       const started = yield* startChannel(ctx, input, options.connectionId);
+
       // A failed first gateway launch already failed the start with its own category. A listener
       // the provider accepted and then dropped before commit is a connection problem.
       if (started.runtime.isHealthy?.() === false) {
         yield* started.runtime.shutdown.pipe(Effect.ignoreCause);
+
         return yield* failWith(channelFailureMessage("network"), "network");
       }
+
       const sequence = yield* commitStartedChannel(ctx, started, options.secret);
       yield* watchTransportExit(ctx, started);
+
       return sequence;
     }).pipe(
       Effect.onError((cause) =>

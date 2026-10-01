@@ -8,6 +8,7 @@ import {
   loadSecret,
   loadConnectionSecret,
 } from "./ChannelSecrets.ts";
+
 export const encoder = new TextEncoder();
 
 export const decoder = new TextDecoder();
@@ -29,6 +30,7 @@ export const whatsAppWebhookUrl = (
 export const handleWhatsAppWebhook = (ctx: ChannelRuntimeContext, botId: BotId, request: Request) =>
   Effect.suspend(() => {
     const webhook = ctx.runtimes.get(runtimeKey(botId, "whatsapp"))?.webhook;
+
     return webhook ? webhook(request) : Effect.succeed(new Response("Not Found", { status: 404 }));
   }).pipe(
     Effect.catchCause(() =>
@@ -46,21 +48,29 @@ const readBoundedWebhookBody = async (
   request: Request,
 ): Promise<Buffer | typeof WEBHOOK_TOO_LARGE> => {
   const declared = Number(request.headers.get("content-length"));
+
   if (Number.isFinite(declared) && declared > MAX_WHATSAPP_WEBHOOK_BYTES) return WEBHOOK_TOO_LARGE;
   const reader = request.body?.getReader();
+
   if (!reader) return Buffer.alloc(0);
   const chunks: Uint8Array[] = [];
   let size = 0;
+
   for (;;) {
     const { done, value } = await reader.read();
+
     if (done) break;
     size += value.byteLength;
+
     if (size > MAX_WHATSAPP_WEBHOOK_BYTES) {
       void reader.cancel().catch(() => undefined);
+
       return WEBHOOK_TOO_LARGE;
     }
+
     chunks.push(value);
   }
+
   return Buffer.concat(chunks);
 };
 
@@ -81,18 +91,22 @@ const handlePhoneScopedWhatsAppWebhook = (
 ): Effect.Effect<Response> => {
   if (!secret || secret.provider !== "whatsapp")
     return Effect.succeed(new Response("Not Found", { status: 404 }));
+
   if (request.method !== "POST") return handleWhatsAppWebhook(ctx, botId, request);
+
   return Effect.promise(() => readBoundedWebhookBody(request)).pipe(
     Effect.flatMap((body) => {
       if (body === WEBHOOK_TOO_LARGE) {
         return Effect.succeed(new Response("Payload Too Large", { status: 413 }));
       }
+
       const scoped = scopeWhatsAppWebhookToPhone(
         body,
         request.headers,
         secret.appSecret,
         secret.phoneNumberId,
       );
+
       return scoped === null
         ? Effect.succeed(new Response("Not Found", { status: 404 }))
         : handleWhatsAppWebhook(
@@ -151,35 +165,47 @@ const scopeWhatsAppWebhookToPhone = (
 ): { readonly body: Buffer; readonly headers: Headers } | null => {
   const payload = record(parseWebhookJson(body));
   const entries = payload?.entry;
+
   if (!payload || !Array.isArray(entries)) return { body, headers };
+
   const otherPhone = (change: unknown) => {
     const phone = whatsAppChangePhone(change);
+
     return phone !== undefined && phone !== phoneNumberId;
   };
+
   const hasOtherPhone = entries.some((entry: unknown) => {
     const changes = record(entry)?.changes;
+
     return Array.isArray(changes) && changes.some(otherPhone);
   });
+
   if (!hasOtherPhone) return { body, headers };
   const presented = headers.get("x-hub-signature-256") ?? "";
   const expected = whatsAppSignature(body, appSecret);
+
   if (
     presented.length !== expected.length ||
     !NodeCrypto.timingSafeEqual(Buffer.from(presented), Buffer.from(expected))
   ) {
     return { body, headers };
   }
+
   const scopedEntries = entries.flatMap((entry: unknown) => {
     const current = record(entry);
     const changes = current?.changes;
+
     if (!current || !Array.isArray(changes)) return [entry];
     const kept = changes.filter((change: unknown) => !otherPhone(change));
+
     return kept.length > 0 ? [{ ...current, changes: kept }] : [];
   });
+
   if (scopedEntries.length === 0) return null;
   const scopedBody = Buffer.from(JSON.stringify({ ...payload, entry: scopedEntries }), "utf8");
   const scopedHeaders = new Headers(headers);
   scopedHeaders.set("x-hub-signature-256", whatsAppSignature(scopedBody, appSecret));
   scopedHeaders.delete("content-length");
+
   return { body: scopedBody, headers: scopedHeaders };
 };

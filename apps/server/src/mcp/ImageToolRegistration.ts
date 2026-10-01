@@ -6,6 +6,7 @@ import { ImageGenerationRequest, type ImageGenerationResult } from "@akeru/contr
 import { runImageGenerationTool } from "../image-generation/ImageGenerationRuntime.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import { normalizeProviderToolInputSchema, toolErrorResult } from "./McpToolSchema.ts";
+
 export const IMAGE_TOOL_DESCRIPTION =
   "Generate a new image, or edit images from this chat, with the image provider the user configured. " +
   'Use operation "generate" with a prompt, or operation "edit" with a prompt and optional inputImages ' +
@@ -17,8 +18,10 @@ export function imageToolText(result: ImageGenerationResult): string {
   switch (result.status) {
     case "completed": {
       const count = result.artifacts.length;
+
       return `Created ${count} image${count === 1 ? "" : "s"}. ${count === 1 ? "It is" : "They are"} shown in the chat.`;
     }
+
     case "needs-consent":
     case "failed":
       return result.message;
@@ -27,11 +30,13 @@ export function imageToolText(result: ImageGenerationResult): string {
 
 export const registerImageTool = Effect.fn("McpHttpServer.registerImageTool")(function* () {
   const server = yield* McpServer.McpServer;
+
   const imageTool = Tool.make("generate_image", {
     description: IMAGE_TOOL_DESCRIPTION,
     parameters: ImageGenerationRequest,
     success: Schema.Unknown,
   });
+
   yield* server.addTool({
     tool: new McpSchema.Tool({
       name: imageTool.name,
@@ -51,9 +56,11 @@ export const registerImageTool = Effect.fn("McpHttpServer.registerImageTool")(fu
           fiber.context,
           McpInvocationContext.McpInvocationContext,
         );
+
         if (!invocation.capabilities.has("image")) {
           return Effect.succeed(toolErrorResult("Image generation is turned off for this chat."));
         }
+
         return runImageGenerationTool(invocation.threadId, payload).pipe(
           Effect.map(
             (result) =>

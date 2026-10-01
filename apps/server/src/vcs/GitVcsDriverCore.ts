@@ -8,6 +8,7 @@ import { makeGitLocalStatus } from "./GitLocalStatus.ts";
 import { makeGitPull } from "./GitPull.ts";
 import { makeGitWorktrees } from "./GitWorktrees.ts";
 import { makeGitRefs } from "./GitRefs.ts";
+
 export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* () {
   const {
     fileSystem,
@@ -18,8 +19,10 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     runGit,
     runGitStdout,
   } = yield* makeGitExecution();
+
   const { branchExists, resolveAvailableBranchName, resolveCurrentUpstream, fetchRemoteForStatus } =
     yield* makeGitBranches({ path, executeGit, runGitStdout });
+
   const {
     repositoryPathsCache,
     repositoryPathsRefreshCache,
@@ -31,6 +34,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     executeGit,
     executeGitWithStableDiagnostics,
   });
+
   const {
     defaultBranchCache,
     originExistsCache,
@@ -56,6 +60,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     normalizeRepositoryPathsCacheKey,
     resolveRepositoryPaths,
   });
+
   const { statusDetailsLocal, statusDetails, statusDetailsRemote, status } =
     yield* makeGitLocalStatus({
       executeGitWithStableDiagnostics,
@@ -69,7 +74,9 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       computeAheadCountAgainstBase,
       readStatusDetailsRemote,
     });
+
   const { pullCurrentBranch } = yield* makeGitPull({ executeGit, runGitStdout, statusDetails });
+
   const {
     createWorktree,
     fetchRemote,
@@ -92,6 +99,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     remoteExists,
     listRemoteNames,
   });
+
   const { listRefs, withListRefsInvalidation, initRepoWithListRefsInvalidation } =
     yield* makeGitRefs({
       fileSystem,

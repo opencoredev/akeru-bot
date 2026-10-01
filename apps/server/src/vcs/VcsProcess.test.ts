@@ -18,6 +18,7 @@ import * as VcsProcess from "./VcsProcess.ts";
 const run = (input: VcsProcess.VcsProcessInput) =>
   Effect.gen(function* () {
     const process = yield* VcsProcess.VcsProcess;
+
     return yield* process.run(input);
   });
 
@@ -88,6 +89,7 @@ describe("VcsProcess.run", () => {
     Effect.gen(function* () {
       const secretArgument = "--token=super-secret-token";
       const secretStderr = "remote rejected super-secret-token";
+
       const error = yield* run({
         operation: "test.exit",
         command: "node",
@@ -119,6 +121,7 @@ describe("VcsProcess.run", () => {
   it.effect("classifies authentication failures without retaining stderr", () =>
     Effect.gen(function* () {
       const secretStderr = "authentication failed for token super-secret-token";
+
       const error = yield* run({
         operation: "test.authentication",
         command: "node",
@@ -145,6 +148,7 @@ describe("VcsProcess.run", () => {
     Effect.gen(function* () {
       const providerStderr =
         "GraphQL: API rate limit already exceeded for user ID 51714798 and token secret-value.";
+
       const error = yield* run({
         operation: "test.rate-limit",
         command: "node",
@@ -169,6 +173,7 @@ describe("VcsProcess.run", () => {
   it.effect("classifies HTTP 429 responses as rate limits", () =>
     Effect.gen(function* () {
       const providerStderr = "HTTP 429: Too Many Requests. request-id=secret-value";
+
       const error = yield* run({
         operation: "test.rate-limit",
         command: "node",
@@ -187,6 +192,7 @@ describe("VcsProcess.run", () => {
   it.effect("retains spawn causes without exposing process arguments in the error message", () =>
     Effect.gen(function* () {
       const secretArgument = "--token=super-secret-token";
+
       const error = yield* run({
         operation: "test.spawn",
         command: "definitely-not-a-t3code-executable",
@@ -208,6 +214,7 @@ describe("VcsProcess.run", () => {
   it.effect("preserves real boundary causes without manufacturing structural ones", () =>
     Effect.gen(function* () {
       const cause = new Error("secret stdin failure");
+
       const error = yield* captureProcessResult(
         Effect.fail(
           new ProcessRunner.ProcessStdinError({
@@ -326,6 +333,7 @@ describe("VcsProcess.run", () => {
         cwd: process.cwd(),
         timeoutMs: 50,
       }).pipe(Effect.flip, Effect.forkScoped);
+
       yield* Effect.yieldNow;
       yield* TestClock.adjust(Duration.millis(50));
       const error = yield* Fiber.join(errorFiber);

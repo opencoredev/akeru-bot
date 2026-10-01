@@ -3,6 +3,7 @@ export const failureInjection = {
   crashAfterScopedFactOnce: false,
   crashAfterRetractOnce: false,
 };
+
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY,
@@ -61,6 +62,7 @@ const engineLayer = Layer.succeed(OrchestrationEngineService, {
         command.activity.kind === AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY
       ) {
         failureInjection.failResolvedActivityOnce = false;
+
         return Effect.fail(
           new OrchestrationListenerCallbackError({
             listener: "read-model",
@@ -68,8 +70,10 @@ const engineLayer = Layer.succeed(OrchestrationEngineService, {
           }),
         );
       }
+
       return Effect.sync(() => {
         dispatched.push(command);
+
         return { sequence: dispatched.length };
       });
     }),
@@ -104,6 +108,7 @@ const crashInjectingRepositoryLayer = Layer.effect(
   EntityMemoryRepository,
   Effect.gen(function* () {
     const repository = yield* EntityMemoryRepository;
+
     return {
       ...repository,
       insertScopedFact: (input: Parameters<typeof repository.insertScopedFact>[0]) =>
@@ -149,6 +154,7 @@ const activityKinds = () =>
   dispatched.flatMap((command) =>
     command.type === "thread.activity.append" ? [command.activity.kind] : [],
   );
+
 export {
   botId,
   threadId,

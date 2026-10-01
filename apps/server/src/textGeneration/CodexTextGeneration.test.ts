@@ -12,6 +12,7 @@ import { createModelSelection } from "@akeru/shared/model";
 import { expect } from "vite-plus/test";
 import { ProviderInstanceId, TextGenerationError } from "@akeru/contracts";
 import * as ServerConfig from "../config.ts";
+
 it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
   it.effect(
     "forwards codex service tier and non-default reasoning effort into codex exec config",
@@ -318,6 +319,7 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
             .pipe(Effect.result);
 
           expect(Result.isFailure(result)).toBe(true);
+
           if (Result.isFailure(result)) {
             expect(result.failure).toBeInstanceOf(TextGenerationError);
             expect(result.failure.message).toContain("missing --image input");
@@ -346,6 +348,7 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
               .pipe(Effect.result);
 
             expect(Result.isFailure(result)).toBe(true);
+
             if (Result.isFailure(result)) {
               expect(result.failure).toBeInstanceOf(TextGenerationError);
               expect(result.failure.message).toContain("Codex returned invalid structured output");
@@ -372,6 +375,7 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
             .pipe(Effect.result);
 
           expect(Result.isFailure(result)).toBe(true);
+
           if (Result.isFailure(result)) {
             expect(result.failure).toBeInstanceOf(TextGenerationError);
             expect(result.failure.message).toContain(

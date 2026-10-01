@@ -14,6 +14,7 @@ import { subscriptionCredentialStore } from "./credentialStore.ts";
 const decodeJson = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
 );
+
 const encodeJson = Schema.encodeSync(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
 );
@@ -43,12 +44,14 @@ const authFile = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const directory = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-credential-store-" });
+
   return { directory, authPath: path.join(directory, "subscription-auth.json") };
 });
 
 const readJson = (filePath: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
+
     return decodeJson(yield* fs.readFileString(filePath));
   });
 
@@ -64,10 +67,12 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
   it.effect("shares concurrent creation and serializes credential updates", () =>
     Effect.gen(function* () {
       const { authPath } = yield* authFile;
+
       const [first, second] = yield* Effect.all(
         [subscriptionCredentialStore(authPath), subscriptionCredentialStore(authPath)],
         { concurrency: "unbounded" },
       );
+
       assert.strictEqual(first, second);
 
       yield* Effect.all(
@@ -90,6 +95,7 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
       const fs = yield* FileSystem.FileSystem;
       const entered = yield* Deferred.make<void>();
       const blocked = yield* Deferred.make<boolean>();
+
       const stalledFs = {
         ...fs,
         exists: (filePath: string) =>
@@ -97,15 +103,19 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
             ? Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(blocked)))
             : fs.exists(filePath),
       };
+
       const creator = yield* subscriptionCredentialStore(authPath).pipe(
         Effect.provideService(FileSystem.FileSystem, stalledFs),
         Effect.exit,
         Effect.forkChild({ startImmediately: true }),
       );
+
       yield* Deferred.await(entered);
+
       const waiter = yield* subscriptionCredentialStore(authPath).pipe(
         Effect.forkChild({ startImmediately: true }),
       );
+
       yield* Fiber.interrupt(creator);
       const retry = yield* Fiber.join(waiter);
       assert.deepStrictEqual(retry.current(), { data: {} });
@@ -133,6 +143,7 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const { authPath } = yield* authFile;
+
       for (const [index, text] of [
         "{not json",
         encodeJson({ anthropic: { type: "oauth", access: "missing refresh and expiry" } }),
@@ -220,6 +231,7 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
       const fs = yield* FileSystem.FileSystem;
       const { authPath } = yield* authFile;
       yield* fs.writeFileString(authPath, encodeJson({ xai: currentFormat.xai }));
+
       const failingFs = {
         ...fs,
         writeFileString: (...args: Parameters<typeof fs.writeFileString>) =>
@@ -229,15 +241,18 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
             args[2],
           ),
       };
+
       const store = yield* subscriptionCredentialStore(authPath).pipe(
         Effect.provideService(FileSystem.FileSystem, failingFs),
       );
+
       yield* fs.writeFileString(authPath, "{damaged credential file");
       assert.strictEqual(store.current().servingLastGood, true);
 
       const error = yield* Effect.flip(
         store.update((data) => ({ ...data, anthropic: currentFormat.anthropic })),
       );
+
       assert.strictEqual(error.reason, "write");
       assert.strictEqual(yield* fs.readFileString(authPath), "{damaged credential file");
       assert.isFalse(yield* fs.exists(`${authPath}.corrupt`));
@@ -251,6 +266,7 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
       const { authPath } = yield* authFile;
       yield* fs.writeFileString(authPath, encodeJson({ xai: currentFormat.xai }));
       const writing = yield* Deferred.make<void>();
+
       const stalledFs = {
         ...fs,
         writeFileString: (...args: Parameters<typeof fs.writeFileString>) =>
@@ -258,14 +274,17 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
             ? Deferred.succeed(writing, undefined).pipe(Effect.andThen(Effect.never))
             : fs.writeFileString(...args),
       };
+
       const store = yield* subscriptionCredentialStore(authPath).pipe(
         Effect.provideService(FileSystem.FileSystem, stalledFs),
       );
+
       yield* fs.writeFileString(authPath, "{damaged credential file");
 
       const update = yield* Effect.forkChild(
         store.update((data) => ({ ...data, anthropic: currentFormat.anthropic })),
       );
+
       yield* Deferred.await(writing);
       yield* Fiber.interrupt(update);
 
@@ -296,6 +315,7 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
       const error = yield* Effect.flip(
         store.update((data) => {
           NodeFS.mkdirSync(authPath);
+
           return { ...data, xai: currentFormat.xai };
         }),
       );
@@ -315,9 +335,11 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
       const store = yield* subscriptionCredentialStore(authPath);
       // A read-only directory lets the reread succeed but blocks the temp file.
       yield* fs.chmod(directory, 0o500);
+
       const error = yield* Effect.flip(
         store.update((data) => ({ ...data, xai: currentFormat.xai })),
       ).pipe(Effect.ensuring(fs.chmod(directory, 0o700).pipe(Effect.ignore)));
+
       assert.strictEqual(error.reason, "write");
       assert.deepStrictEqual(store.current(), { data: {} });
       assert.isFalse(yield* fs.exists(authPath));
@@ -336,6 +358,7 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
       const error = yield* Effect.flip(
         store.update((data) => ({ ...data, xai: currentFormat.xai })),
       );
+
       assert.strictEqual(error.reason, "unreadable");
       assert.isTrue((yield* fs.stat(authPath)).type === "Directory");
     }),
@@ -360,9 +383,11 @@ it.layer(NodeServices.layer)("subscription credential store", (it) => {
       const path = yield* Path.Path;
       const { directory, authPath } = yield* authFile;
       const first = yield* subscriptionCredentialStore(authPath);
+
       const second = yield* subscriptionCredentialStore(
         path.join(directory, ".", "subscription-auth.json"),
       );
+
       assert.strictEqual(first, second);
 
       yield* first.update((data) => ({ ...data, xai: currentFormat.xai }));

@@ -11,10 +11,12 @@ it.effect("returns bounded structural preview snapshot failures", () =>
     Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+
       const events = yield* broker.connect({
         clientId: "mcp-failure-client",
         environmentId,
       });
+
       yield* Stream.runForEach(events, (event) =>
         event.type === "connected"
           ? Effect.void

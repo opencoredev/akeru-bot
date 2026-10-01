@@ -17,6 +17,7 @@ import { compactTraceAttributes } from "@akeru/shared/observability";
 import { decodeJsonResult } from "@akeru/shared/schemaJson";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
 import { parseRemoteRefWithRemoteNames } from "../git/remoteRefs.ts";
+
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
 export // `git worktree add` checks out the full tree, so on large repositories it can
@@ -109,8 +110,10 @@ export function statusUpstreamRefreshFailureCooldown(
   consecutiveFailures: number,
 ): Duration.Duration {
   const exponent = Math.max(0, consecutiveFailures - 1);
+
   const cooldownMs =
     Duration.toMillis(STATUS_UPSTREAM_REFRESH_FAILURE_BASE_COOLDOWN) * Math.pow(2, exponent);
+
   return Duration.min(Duration.millis(cooldownMs), STATUS_UPSTREAM_REFRESH_FAILURE_MAX_COOLDOWN);
 }
 
@@ -149,7 +152,9 @@ export interface ExecuteGitOptions {
 
 export function parseBranchAb(value: string): { ahead: number; behind: number } {
   const match = value.match(/^\+(\d+)\s+-(\d+)$/);
+
   if (!match) return { ahead: 0, behind: 0 };
+
   return {
     ahead: Number(match[1] ?? "0"),
     behind: Number(match[2] ?? "0"),
@@ -160,29 +165,36 @@ export function parseNumstatEntries(
   stdout: string,
 ): Array<{ path: string; insertions: number; deletions: number }> {
   const entries: Array<{ path: string; insertions: number; deletions: number }> = [];
+
   for (const line of stdout.split(/\r?\n/g)) {
     if (line.trim().length === 0) continue;
     const [addedRaw, deletedRaw, ...pathParts] = line.split("\t");
+
     const rawPath =
       pathParts.length > 1 ? (pathParts.at(-1) ?? "").trim() : pathParts.join("\t").trim();
+
     if (rawPath.length === 0) continue;
     const added = Number.parseInt(addedRaw ?? "0", 10);
     const deleted = Number.parseInt(deletedRaw ?? "0", 10);
     const renameArrowIndex = rawPath.indexOf(" => ");
+
     const normalizedPath =
       renameArrowIndex >= 0 ? rawPath.slice(renameArrowIndex + " => ".length).trim() : rawPath;
+
     entries.push({
       path: normalizedPath.length > 0 ? normalizedPath : rawPath,
       insertions: Number.isFinite(added) ? added : 0,
       deletions: Number.isFinite(deleted) ? deleted : 0,
     });
   }
+
   return entries;
 }
 
 export function parsePorcelainPath(line: string): string | null {
   if (line.startsWith("? ") || line.startsWith("! ")) {
     const simple = line.slice(2).trim();
+
     return simple.length > 0 ? simple : null;
   }
 
@@ -191,14 +203,17 @@ export function parsePorcelainPath(line: string): string | null {
   }
 
   const tabIndex = line.indexOf("\t");
+
   if (tabIndex >= 0) {
     const fromTab = line.slice(tabIndex + 1);
     const [filePath] = fromTab.split("\t");
+
     return filePath?.trim().length ? filePath.trim() : null;
   }
 
   const parts = line.trim().split(/\s+/g);
   const filePath = parts.at(-1) ?? "";
+
   return filePath.length > 0 ? filePath : null;
 }
 
@@ -211,6 +226,7 @@ export function filterBranchesForListQuery(
   }
 
   const normalizedQuery = query.toLowerCase();
+
   return refs.filter((refName) => refName.name.toLowerCase().includes(normalizedQuery));
 }
 
@@ -246,6 +262,7 @@ export function parseWorktreeBranchPaths(stdout: string): ReadonlyMap<string, st
     if (currentPath !== null && currentBranch !== null && !currentPrunable) {
       worktreePaths.set(currentBranch, currentPath);
     }
+
     currentPath = null;
     currentBranch = null;
     currentPrunable = false;
@@ -262,6 +279,7 @@ export function parseWorktreeBranchPaths(stdout: string): ReadonlyMap<string, st
       currentPrunable = true;
     }
   }
+
   flush();
 
   return worktreePaths;
@@ -269,6 +287,7 @@ export function parseWorktreeBranchPaths(stdout: string): ReadonlyMap<string, st
 
 export function splitNullSeparatedPaths(input: string, truncated: boolean): string[] {
   const parts = input.split("\0");
+
   if (parts.length === 0) return [];
 
   if (truncated && parts[parts.length - 1]?.length) {
@@ -289,6 +308,7 @@ export function sanitizeRemoteName(value: string): string {
     .trim()
     .replace(/[^A-Za-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
   return sanitized.length > 0 ? sanitized : "fork";
 }
 
@@ -297,6 +317,7 @@ export function parseUpstreamRefWithRemoteNames(
   remoteNames: ReadonlyArray<string>,
 ): { upstreamRef: string; remoteName: string; branchName: string } | null {
   const parsed = parseRemoteRefWithRemoteNames(upstreamRef, remoteNames);
+
   if (!parsed) {
     return null;
   }
@@ -312,12 +333,14 @@ export function parseUpstreamRefByFirstSeparator(
   upstreamRef: string,
 ): { upstreamRef: string; remoteName: string; branchName: string } | null {
   const separatorIndex = upstreamRef.indexOf("/");
+
   if (separatorIndex <= 0 || separatorIndex === upstreamRef.length - 1) {
     return null;
   }
 
   const remoteName = upstreamRef.slice(0, separatorIndex).trim();
   const branchName = upstreamRef.slice(separatorIndex + 1).trim();
+
   if (remoteName.length === 0 || branchName.length === 0) {
     return null;
   }
@@ -335,15 +358,19 @@ export function parseTrackingBranchByUpstreamRef(
 ): string | null {
   for (const line of stdout.split("\n")) {
     const trimmedLine = line.trim();
+
     if (trimmedLine.length === 0) {
       continue;
     }
+
     const [branchNameRaw, upstreamBranchRaw = ""] = trimmedLine.split("\t");
     const branchName = branchNameRaw?.trim() ?? "";
     const candidateUpstreamRef = upstreamBranchRaw.trim();
+
     if (branchName.length === 0 || candidateUpstreamRef.length === 0) {
       continue;
     }
+
     if (candidateUpstreamRef === upstreamRef) {
       return branchName;
     }
@@ -354,10 +381,13 @@ export function parseTrackingBranchByUpstreamRef(
 
 export function deriveLocalBranchNameFromRemoteRef(branchName: string): string | null {
   const separatorIndex = branchName.indexOf("/");
+
   if (separatorIndex <= 0 || separatorIndex === branchName.length - 1) {
     return null;
   }
+
   const localBranch = branchName.slice(separatorIndex + 1).trim();
+
   return localBranch.length > 0 ? localBranch : null;
 }
 
@@ -378,10 +408,13 @@ export function parseDefaultBranchFromRemoteHeadRef(
 ): string | null {
   const trimmed = value.trim();
   const prefix = `refs/remotes/${remoteName}/`;
+
   if (!trimmed.startsWith(prefix)) {
     return null;
   }
+
   const refName = trimmed.slice(prefix.length).trim();
+
   return refName.length > 0 ? refName : null;
 }
 
@@ -391,6 +424,7 @@ export function isMissingGitCwdError(error: GitCommandError): boolean {
   }
 
   const reason = error.cause.reason;
+
   if (Predicate.isTagged(reason, "NotFound")) {
     return reason.pathOrDescriptor === error.cwd;
   }
@@ -411,6 +445,7 @@ export function isNonRepositoryGitStderr(stderr: string): boolean {
 
 export function isUnbornHeadStderr(stderr: string): boolean {
   const normalized = stderr.toLowerCase();
+
   return (
     normalized.includes("bad revision 'head'") ||
     (normalized.includes("unknown revision") && normalized.includes("path not in the working tree"))
@@ -422,6 +457,7 @@ export // Matches `git worktree remove` on a path git no longer tracks: "is not 
 // when older gits fail validation on a registered-but-deleted directory.
 function isMissingWorktreeStderr(stderr: string): boolean {
   const normalized = stderr.toLowerCase();
+
   return (
     normalized.includes("is not a working tree") ||
     normalized.includes("cannot remove working tree")
@@ -452,10 +488,13 @@ export const addCurrentSpanEvent = (name: string, attributes: Record<string, unk
 
 export function trace2ChildKey(record: Record<string, unknown>): string | null {
   const childId = record.child_id;
+
   if (typeof childId === "number" || typeof childId === "string") {
     return String(childId);
   }
+
   const hookName = record.hook_name;
+
   return typeof hookName === "string" && hookName.trim().length > 0 ? hookName.trim() : null;
 }
 
@@ -478,11 +517,14 @@ export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
 
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
   const traceFilePath = yield* fs.makeTempFileScoped({
     prefix: `t3code-git-trace2-${process.pid}-`,
     suffix: ".json",
   });
+
   const hookStartByChildKey = new Map<string, { hookName: string; startedAtMs: number }>();
+
   const traceTailState = yield* Ref.make<TraceTailState>({
     processedChars: 0,
     remainder: "",
@@ -490,16 +532,19 @@ export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
 
   const handleTraceLine = Effect.fn("handleTraceLine")(function* (line: string) {
     const trimmedLine = line.trim();
+
     if (trimmedLine.length === 0) {
       return;
     }
 
     const traceRecord = decodeJsonResult(Trace2Record)(trimmedLine);
+
     if (Result.isFailure(traceRecord)) {
       yield* Effect.logDebug(
         `GitVcsDriver.trace2: failed to parse trace line for ${input.operation} in ${input.cwd} (${input.args.length} arguments)`,
         traceRecord.failure,
       );
+
       return;
     }
 
@@ -509,13 +554,18 @@ export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
 
     const event = traceRecord.success.event;
     const childKey = trace2ChildKey(traceRecord.success);
+
     if (childKey === null) {
       return;
     }
+
     const started = hookStartByChildKey.get(childKey);
+
     const hookNameFromEvent =
       typeof traceRecord.success.hook_name === "string" ? traceRecord.success.hook_name.trim() : "";
+
     const hookName = hookNameFromEvent.length > 0 ? hookNameFromEvent : (started?.hookName ?? "");
+
     if (hookName.length === 0) {
       return;
     }
@@ -526,9 +576,11 @@ export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
       yield* addCurrentSpanEvent("git.hook.started", {
         hookName,
       });
+
       if (progress.onHookStarted) {
         yield* progress.onHookStarted(hookName);
       }
+
       return;
     }
 
@@ -537,14 +589,17 @@ export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
       const code = traceRecord.success.exitCode;
       const exitCode = typeof code === "number" && Number.isInteger(code) ? code : null;
       const now = yield* DateTime.now;
+
       const durationMs = started
         ? Math.max(0, DateTime.toEpochMillis(now) - started.startedAtMs)
         : null;
+
       yield* addCurrentSpanEvent("git.hook.finished", {
         hookName: started?.hookName ?? hookName,
         exitCode,
         durationMs,
       });
+
       if (progress.onHookFinished) {
         yield* progress.onHookFinished({
           hookName: started?.hookName ?? hookName,
@@ -556,6 +611,7 @@ export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
   });
 
   const deltaMutex = yield* Semaphore.make(1);
+
   const readTraceDelta = deltaMutex.withPermit(
     fs.readFileString(traceFilePath).pipe(
       Effect.flatMap((contents) =>
@@ -585,19 +641,24 @@ export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
       Effect.ignore({ log: true }),
     ),
   );
+
   const traceFileName = path.basename(traceFilePath);
   yield* Stream.runForEach(fs.watch(traceFilePath), (event) => {
     const eventPath = event.path;
+
     const isTargetTraceEvent =
       eventPath === traceFilePath ||
       eventPath === traceFileName ||
       path.basename(eventPath) === traceFileName;
+
     if (!isTargetTraceEvent) return Effect.void;
+
     return readTraceDelta;
   }).pipe(Effect.ignoreCause({ log: true }), Effect.forkScoped);
 
   const finalizeTrace2Monitor = Effect.fn("finalizeTrace2Monitor")(function* () {
     yield* readTraceDelta;
+
     const finalLine = yield* Ref.modify(traceTailState, ({ processedChars, remainder }) => [
       remainder.trim(),
       {
@@ -605,6 +666,7 @@ export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
         remainder: "",
       },
     ]);
+
     if (finalLine.length > 0) {
       yield* handleTraceLine(finalLine);
     }
@@ -635,18 +697,22 @@ export const collectOutput = Effect.fnUntraced(function* (
 
   const emitCompleteLines = Effect.fnUntraced(function* (flush: boolean) {
     let newlineIndex = lineBuffer.indexOf("\n");
+
     while (newlineIndex >= 0) {
       const line = lineBuffer.slice(0, newlineIndex).replace(/\r$/, "");
       lineBuffer = lineBuffer.slice(newlineIndex + 1);
+
       if (line.length > 0 && onLine) {
         yield* onLine(line);
       }
+
       newlineIndex = lineBuffer.indexOf("\n");
     }
 
     if (flush) {
       const trailing = lineBuffer.replace(/\r$/, "");
       lineBuffer = "";
+
       if (trailing.length > 0 && onLine) {
         yield* onLine(trailing);
       }
@@ -657,7 +723,9 @@ export const collectOutput = Effect.fnUntraced(function* (
     if (appendTruncationMarker && truncated) {
       return;
     }
+
     const nextBytes = bytes + chunk.byteLength;
+
     if (!appendTruncationMarker && nextBytes > maxOutputBytes) {
       return yield* new GitCommandError({
         ...gitCommandContext(input),
@@ -670,6 +738,7 @@ export const collectOutput = Effect.fnUntraced(function* (
       appendTruncationMarker && nextBytes > maxOutputBytes
         ? chunk.subarray(0, Math.max(0, maxOutputBytes - bytes))
         : chunk;
+
     bytes += chunkToDecode.byteLength;
     truncated = appendTruncationMarker && nextBytes > maxOutputBytes;
 
@@ -694,6 +763,7 @@ export const collectOutput = Effect.fnUntraced(function* (
   text += remainder;
   lineBuffer += remainder;
   yield* emitCompleteLines(true);
+
   return {
     text,
     truncated,

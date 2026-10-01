@@ -155,6 +155,7 @@ describe("TraceDiagnostics", () => {
     Effect.sync(() => {
       const longCause = `VcsProcessSpawnError: ${"missing executable ".repeat(80)}`.trim();
       const longMessage = `provider warning: ${"retrying command ".repeat(80)}`.trim();
+
       const diagnostics = TraceDiagnostics.aggregateTraceDiagnostics({
         traceFilePath: "/tmp/server.trace.ndjson",
         readAt: DateTime.makeUnsafe("2026-05-05T10:00:00.000Z"),
@@ -189,6 +190,7 @@ describe("TraceDiagnostics", () => {
   it.effect("keeps loaded trace data when one rotated trace file fails to read", () =>
     Effect.gen(function* () {
       const traceFilePath = "/tmp/server.trace.ndjson";
+
       const readFailure = PlatformError.systemError({
         _tag: "PermissionDenied",
         module: "FileSystem",
@@ -196,6 +198,7 @@ describe("TraceDiagnostics", () => {
         description: "permission denied",
         pathOrDescriptor: `${traceFilePath}.1`,
       });
+
       const fileSystemLayer = FileSystem.layerNoop({
         readFileString: (path) =>
           path === `${traceFilePath}.1`
@@ -210,7 +213,9 @@ describe("TraceDiagnostics", () => {
                 }),
               ),
       });
+
       const logAnnotations: Array<Record<string, unknown>> = [];
+
       const logger = Logger.make<unknown, void>((options) => {
         logAnnotations.push({ ...options.fiber.getRef(References.CurrentLogAnnotations) });
       });
@@ -242,6 +247,7 @@ describe("TraceDiagnostics", () => {
       const failureLog = logAnnotations.find(
         (annotations) => annotations.traceFilePath === `${traceFilePath}.1`,
       );
+
       assert.exists(failureLog);
       assert.deepStrictEqual(failureLog, {
         traceFilePath: `${traceFilePath}.1`,

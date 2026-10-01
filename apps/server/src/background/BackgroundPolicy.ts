@@ -56,7 +56,9 @@ export class BackgroundPolicy extends Context.Service<
 >()("akeru-bot/background/BackgroundPolicy") {}
 
 const DEFAULT_LEASE_TTL_MS = 45_000;
+
 const MAX_LEASE_TTL_MS = 120_000;
+
 export const MAX_CLIENT_ACTIVITY_LEASES_PER_RPC_CLIENT = 16;
 
 function scopeKey(scope: BackgroundScope): string {
@@ -88,6 +90,7 @@ export function upsertClientActivityLease(
   now: DateTime.Utc,
 ): Map<string, ClientActivityLease> {
   const next = new Map(leases);
+
   for (const [key, current] of next) {
     if (!isLeaseActive(current, now)) {
       next.delete(key);
@@ -95,24 +98,30 @@ export function upsertClientActivityLease(
   }
 
   const key = leaseKey(lease);
+
   if (!next.has(key)) {
     let connectionLeaseCount = 0;
+
     let oldestConnectionLease:
       | {
           readonly key: string;
           readonly updatedAtMs: number;
         }
       | undefined;
+
     for (const [currentKey, current] of next) {
       if (current.sessionId !== lease.sessionId || current.rpcClientId !== lease.rpcClientId) {
         continue;
       }
+
       connectionLeaseCount += 1;
       const updatedAtMs = DateTime.toEpochMillis(current.updatedAt);
+
       if (oldestConnectionLease === undefined || updatedAtMs < oldestConnectionLease.updatedAtMs) {
         oldestConnectionLease = { key: currentKey, updatedAtMs };
       }
     }
+
     if (
       connectionLeaseCount >= MAX_CLIENT_ACTIVITY_LEASES_PER_RPC_CLIENT &&
       oldestConnectionLease !== undefined
@@ -122,6 +131,7 @@ export function upsertClientActivityLease(
   }
 
   next.set(key, lease);
+
   return next;
 }
 
@@ -131,6 +141,7 @@ function isForegroundLease(lease: ClientActivityLease, now: DateTime.Utc): boole
 
 function leaseHasScope(lease: ClientActivityLease, scope: BackgroundScope): boolean {
   const key = scopeKey(scope);
+
   return lease.scopes.some((leaseScope) => scopeKey(leaseScope) === key);
 }
 
@@ -143,6 +154,7 @@ function isHostConstrained(
   settings: ResolvedBackgroundActivitySettings,
 ): boolean {
   if (hostPower.stale) return false;
+
   if (
     hostPower.suspended ||
     (settings.pauseWhenHostLocked && hostPower.locked === "true") ||
@@ -150,7 +162,9 @@ function isHostConstrained(
   ) {
     return true;
   }
+
   if (settings.pauseWhenHostLowPower && hostPower.lowPowerMode === "true") return true;
+
   return settings.pauseWhenOnBattery && hostPower.onBattery === "true";
 }
 
@@ -159,6 +173,7 @@ function isClientConstrained(
   settings: ResolvedBackgroundActivitySettings,
 ): boolean {
   if (settings.pauseWhenClientLowPower && lease.lowPowerMode === "true") return true;
+
   return settings.pauseWhenOnBattery && lease.batteryState === "unplugged";
 }
 
@@ -169,12 +184,15 @@ function leaseMayRunScopedWork(
   settings: ResolvedBackgroundActivitySettings,
 ): boolean {
   const activeWithScope = isLeaseActive(lease, now) && leaseHasScope(lease, scope);
+
   if (!activeWithScope || isClientConstrained(lease, settings)) {
     return false;
   }
+
   if (settings.profile === "performance") {
     return true;
   }
+
   return isForegroundLease(lease, now);
 }
 
@@ -188,8 +206,10 @@ function computeSnapshot(input: {
   const activeLeases = [...input.leases.values()].filter((lease) =>
     isLeaseActive(lease, input.now),
   );
+
   const foregroundLeases = activeLeases.filter((lease) => isForegroundLease(lease, input.now));
   const activeScopeKeys = new Set<string>();
+
   for (const lease of activeLeases) {
     for (const scope of lease.scopes) {
       activeScopeKeys.add(scopeKey(scope));
@@ -227,12 +247,14 @@ export const make = Effect.fn("background.policy.make")(function* () {
       DateTime.now,
       backgroundActivitySettings,
     ]);
+
     return computeSnapshot({ hostPower, leases, now, settings, updatedAt: now });
   });
 
   const publishSnapshotUnlocked = snapshot.pipe(
     Effect.flatMap((next) => PubSub.publish(changes, next)),
   );
+
   const publishSnapshot = publishMutex.withPermits(1)(publishSnapshotUnlocked);
 
   const reportClientActivity: BackgroundPolicy["Service"]["reportClientActivity"] = (
@@ -246,8 +268,10 @@ export const make = Effect.fn("background.policy.make")(function* () {
           Math.max(input.ttlMs ?? DEFAULT_LEASE_TTL_MS, 1_000),
           MAX_LEASE_TTL_MS,
         );
+
         const now = yield* DateTime.now;
         const expiresAt = DateTime.add(now, { milliseconds: ttlMs });
+
         const lease: ClientActivityLease = {
           sessionId,
           rpcClientId,
@@ -264,6 +288,7 @@ export const make = Effect.fn("background.policy.make")(function* () {
           updatedAt: now,
           expiresAt,
         };
+
         yield* Ref.update(leasesRef, (leases) => upsertClientActivityLease(leases, lease, now));
         yield* publishSnapshotUnlocked;
       }),
@@ -276,11 +301,13 @@ export const make = Effect.fn("background.policy.make")(function* () {
     publishMutex.withPermits(1)(
       Ref.update(leasesRef, (leases) => {
         const next = new Map(leases);
+
         for (const [key, lease] of next) {
           if (lease.sessionId === sessionId && lease.rpcClientId === rpcClientId) {
             next.delete(key);
           }
         }
+
         return next;
       }).pipe(Effect.andThen(publishSnapshotUnlocked), Effect.asVoid),
     );
@@ -291,9 +318,11 @@ export const make = Effect.fn("background.policy.make")(function* () {
   const shouldRunScopeWork: BackgroundPolicy["Service"]["shouldRunScopeWork"] = (scope) =>
     Effect.gen(function* () {
       const [current, settings] = yield* Effect.all([snapshot, backgroundActivitySettings]);
+
       if (isHostConstrained(current.hostPower, settings)) {
         return false;
       }
+
       return current.leases.some((lease) =>
         leaseMayRunScopedWork(lease, scope, current.updatedAt, settings),
       );
@@ -319,11 +348,13 @@ export const make = Effect.fn("background.policy.make")(function* () {
             const now = yield* DateTime.now;
             yield* Ref.update(leasesRef, (leases) => {
               const next = new Map(leases);
+
               for (const [key, lease] of next) {
                 if (!isLeaseActive(lease, now)) {
                   next.delete(key);
                 }
               }
+
               return next;
             });
             yield* publishSnapshotUnlocked;

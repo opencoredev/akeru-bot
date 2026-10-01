@@ -39,6 +39,7 @@ const adapters = vi.hoisted(() => ({
 
 vi.mock("@chat-adapter/slack", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@chat-adapter/slack")>();
+
   return {
     ...actual,
     createSlackAdapter: (options: Parameters<typeof actual.createSlackAdapter>[0] = {}) => {
@@ -50,12 +51,14 @@ vi.mock("@chat-adapter/slack", async (importOriginal) => {
             if (config.url !== "https://slack.com/api/chat.postMessage") {
               throw new Error(`Unexpected Slack API request: ${config.url}`);
             }
+
             const data = String(config.data);
             adapters.slackPosts.push(
               data.startsWith("{")
                 ? JSON.parse(data)
                 : Object.fromEntries(new URLSearchParams(data).entries()),
             );
+
             return {
               status: 200,
               data: { ok: true, ts: "1710000000.000002" },
@@ -67,14 +70,17 @@ vi.mock("@chat-adapter/slack", async (importOriginal) => {
           },
         },
       }) as ReturnType<typeof actual.createSlackAdapter> & Adapter;
+
       adapter.initialize = async (chat) => {
         Object.assign(adapter, { _botUserId: "U-AKERU" });
         adapters.slack = { adapter, chat };
       };
+
       adapter.addReaction = async () => undefined;
       adapter.removeReaction = async () => undefined;
       adapter.onThreadSubscribe = async () => undefined;
       adapter.disconnect = async () => undefined;
+
       return adapter;
     },
   };
@@ -82,6 +88,7 @@ vi.mock("@chat-adapter/slack", async (importOriginal) => {
 
 vi.mock("@chat-adapter/discord", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@chat-adapter/discord")>();
+
   return {
     ...actual,
     createDiscordAdapter: (options: Parameters<typeof actual.createDiscordAdapter>[0]) => {
@@ -89,11 +96,13 @@ vi.mock("@chat-adapter/discord", async (importOriginal) => {
         typeof actual.createDiscordAdapter
       > &
         Adapter;
+
       const initialize = adapter.initialize.bind(adapter);
       adapter.initialize = async (chat) => {
         await initialize(chat);
         adapters.discord = { adapter, chat };
       };
+
       adapter.getUser = async (userId) => ({
         userId,
         userName: "akeru",
@@ -112,15 +121,19 @@ vi.mock("@chat-adapter/discord", async (importOriginal) => {
             signal?.addEventListener("abort", () => resolve(), { once: true });
           }),
         );
+
         return new Response(null, { status: 200 });
       };
+
       // The real call hits Discord's REST API; record it and hand back a new thread.
       Object.assign(adapter, {
         createDiscordThread: async (_channelId: string, messageId: string) => {
           adapters.discordThreadsCreated.push(messageId);
+
           return { id: `T-${messageId}`, name: "Thread" };
         },
       });
+
       return adapter;
     },
   };
@@ -128,6 +141,7 @@ vi.mock("@chat-adapter/discord", async (importOriginal) => {
 
 vi.mock("@photon-ai/chat-adapter-imessage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@photon-ai/chat-adapter-imessage")>();
+
   return {
     ...actual,
     createiMessageAdapter: (options: Parameters<typeof actual.createiMessageAdapter>[0]) => {
@@ -135,9 +149,11 @@ vi.mock("@photon-ai/chat-adapter-imessage", async (importOriginal) => {
         typeof actual.createiMessageAdapter
       > &
         Adapter;
+
       adapter.initialize = async (chat) => {
         adapters.imessage = { adapter, chat };
       };
+
       adapter.startGatewayListener = async ({ waitUntil }, _durationMs, signal) => {
         waitUntil?.(
           new Promise<void>((resolve) => {
@@ -145,10 +161,13 @@ vi.mock("@photon-ai/chat-adapter-imessage", async (importOriginal) => {
             signal?.addEventListener("abort", () => resolve(), { once: true });
           }),
         );
+
         return new Response(null, { status: 200 });
       };
+
       adapter.onThreadSubscribe = async () => undefined;
       adapter.disconnect = async () => undefined;
+
       return adapter;
     },
   };
@@ -244,6 +263,7 @@ const slackProbeClient = (ok: boolean, requests: string[] = [], error = "invalid
   HttpClient.make((request) =>
     Effect.sync(() => {
       requests.push(request.url);
+
       return HttpClientResponse.fromWeb(
         request,
         Response.json(ok ? { ok, url: "wss://wss.slack.test/link" } : { ok, error }),
@@ -296,12 +316,16 @@ const makeHarness = (input: {
         },
       ],
     };
+
     let settings = input.settings ?? DEFAULT_SERVER_SETTINGS;
     let threads: OrchestrationThread[] = [];
     let sequence = 0;
+
     const turns =
       yield* Queue.unbounded<Extract<OrchestrationCommand, { type: "thread.turn.start" }>>();
+
     const values = new Map<string, Uint8Array>();
+
     const secretStore: ServerSecretStore["Service"] = {
       get: (name) => Effect.succeed(Option.fromUndefinedOr(values.get(name))),
       set: (name, value) => Effect.sync(() => void values.set(name, value)),
@@ -310,6 +334,7 @@ const makeHarness = (input: {
         Effect.sync(() => values.get(name) ?? new Uint8Array(bytes)),
       remove: (name) => Effect.sync(() => void values.delete(name)),
     };
+
     const engine = {
       readEvents: () => Stream.empty,
       readThreadEvents: () => Stream.empty,
@@ -317,14 +342,17 @@ const makeHarness = (input: {
       dispatch: (command: OrchestrationCommand) =>
         Effect.sync(() => {
           sequence += 1;
+
           if (command.type === "bot.update" && command.channelBindings !== undefined) {
             const channelBindings = command.channelBindings;
             model = { ...model, bots: model.bots.map((bot) => ({ ...bot, channelBindings })) };
           }
+
           if (command.type === "thread.create") {
             threads = [...threads, makeThread(command.threadId, [])];
             model = { ...model, threads };
           }
+
           if (command.type === "thread.turn.start") {
             threads = threads.map((thread) =>
               thread.id === command.threadId
@@ -345,12 +373,14 @@ const makeHarness = (input: {
             model = { ...model, threads };
             Queue.offerUnsafe(turns, command);
           }
+
           return { sequence };
         }),
       streamDomainEvents: Stream.empty,
       subscribeDomainEvents: Effect.succeed(Stream.empty),
       latestSequence: Effect.sync(() => sequence),
     } satisfies OrchestrationEngineShape;
+
     const dependencies: ChannelRuntimeDependencies = {
       engine,
       secretStore,
@@ -359,6 +389,7 @@ const makeHarness = (input: {
         updateSettings: (patch) =>
           Effect.sync(() => {
             settings = { ...settings, ...patch } as typeof settings;
+
             return settings;
           }),
       },
@@ -371,11 +402,14 @@ const makeHarness = (input: {
       httpClient: input.httpClient ?? slackProbeClient(true),
       ...(input.publicOrigin ? { publicOrigin: input.publicOrigin } : {}),
     };
+
     const scope = yield* Scope.Scope;
+
     const runtime = Context.get(
       yield* Layer.buildWithScope(ChannelRuntime.layerWith(dependencies), scope),
       ChannelRuntime,
     );
+
     return {
       runtime,
       turns,
@@ -431,6 +465,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
+
 export {
   adapters,
   NOW,

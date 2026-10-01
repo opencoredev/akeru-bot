@@ -30,6 +30,7 @@ it.effect("resolves stale incidents for routines deleted before restart", () => 
 
 it.effect("settles a dispatched run from durable terminal state after restart", () => {
   const value = routine();
+
   const test = harness(value, [
     {
       runId: RoutineRunId.make("run-1"),
@@ -43,6 +44,7 @@ it.effect("settles a dispatched run from durable terminal state after restart", 
       terminalAt: "2026-08-31T13:05:00.000Z",
     },
   ]);
+
   return Effect.gen(function* () {
     const runtime = yield* RoutineRuntime;
     yield* runtime.recover;
@@ -52,6 +54,7 @@ it.effect("settles a dispatched run from durable terminal state after restart", 
 
 it.effect("leaves an in-flight dispatched run attached after restart", () => {
   const value = routine();
+
   const test = harness(value, [
     {
       runId: RoutineRunId.make("run-in-flight"),
@@ -65,6 +68,7 @@ it.effect("leaves an in-flight dispatched run attached after restart", () => {
       terminalAt: null,
     },
   ]);
+
   return Effect.gen(function* () {
     const runtime = yield* RoutineRuntime;
     yield* runtime.recover;
@@ -74,6 +78,7 @@ it.effect("leaves an in-flight dispatched run attached after restart", () => {
 
 it.effect("blocks a stopped delegated session whose delegation is still running", () => {
   const value = routine({ delegateToBotId: BotId.make("bot-helper") });
+
   const test = harness(
     value,
     [
@@ -105,6 +110,7 @@ it.effect("blocks a stopped delegated session whose delegation is still running"
       }),
     },
   );
+
   return Effect.gen(function* () {
     const runtime = yield* RoutineRuntime;
     yield* runtime.recover;
@@ -114,6 +120,7 @@ it.effect("blocks a stopped delegated session whose delegation is still running"
 
 it.effect("does not restart a claim whose projected run is already blocked", () => {
   const value = routine({ enabled: false, lifecycle: "blocked", nextRunAt: null });
+
   const test = harness(
     value,
     [
@@ -134,6 +141,7 @@ it.effect("does not restart a claim whose projected run is already blocked", () 
     Stream.empty,
     "blocked",
   );
+
   return Effect.gen(function* () {
     const runtime = yield* RoutineRuntime;
     yield* runtime.recover;
@@ -252,6 +260,7 @@ it.effect("settles the claim of a run canceled while its bot work started", () =
     null,
     { dispatched: { canceled: true } },
   );
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;

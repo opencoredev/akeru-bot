@@ -34,6 +34,7 @@ import {
   dispatchLiveOrchestrationCommand,
   tryResolveLiveProjectExecutionMode,
 } from "./projectLiveClient.ts";
+
 const runProjectMutation = Effect.fn("runProjectMutation")(function* (
   flags: CliAuthLocationFlags,
   run: (input: {
@@ -64,12 +65,14 @@ const runProjectMutation = Effect.fn("runProjectMutation")(function* (
       return yield* withProjectCliSessionToken(environmentAuth, (token) =>
         Effect.gen(function* () {
           const snapshot = yield* fetchLiveOrchestrationSnapshot(liveMode.value.origin, token);
+
           const output = yield* run({
             snapshot,
             dispatch: (command) =>
               dispatchLiveOrchestrationCommand(liveMode.value.origin, token, command),
             mode: "live",
           });
+
           yield* Console.log(output);
         }),
       );
@@ -83,11 +86,13 @@ const runProjectMutation = Effect.fn("runProjectMutation")(function* (
     return yield* Effect.gen(function* () {
       const snapshot = yield* getOfflineSnapshot();
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+
       const output = yield* run({
         snapshot,
         dispatch: (command) => orchestrationEngine.dispatch(command),
         mode: "offline",
       });
+
       yield* Console.log(output);
     }).pipe(Effect.provide(offlineRuntimeLayer));
   }).pipe(
@@ -122,9 +127,11 @@ const projectAddCommand = Command.make("add", {
         ) => Effect.Effect<void, Error, FileSystem.FileSystem | HttpClient.HttpClient | Path.Path>;
       }) {
         const workspaceRoot = yield* normalizeWorkspaceRootForProjectCommand(flags.workspaceRoot);
+
         const existingProject = snapshot.projects.find(
           (project) => project.deletedAt === null && project.workspaceRoot === workspaceRoot,
         );
+
         if (existingProject) {
           return yield* new ProjectAlreadyExistsError({
             operation: "addProject",
@@ -144,6 +151,7 @@ const projectAddCommand = Command.make("add", {
           defaultModelSelection: ServerRuntimeStartup.getAutoBootstrapDefaultModelSelection(),
           createdAt: DateTime.formatIso(yield* DateTime.now),
         });
+
         return `Added project ${projectId} (${title}) at ${workspaceRoot}.`;
       }),
     ),
@@ -177,12 +185,14 @@ const projectRemoveCommand = Command.make("remove", {
           snapshot,
           identifier: flags.project,
         });
+
         yield* dispatch({
           type: "project.delete",
           commandId: CommandId.make(yield* projectCommandUuid),
           projectId: project.id,
           force: flags.force,
         });
+
         return `Removed project ${project.id} (${project.title}).`;
       }),
     ),
@@ -213,7 +223,9 @@ const projectRenameCommand = Command.make("rename", {
           snapshot,
           identifier: flags.project,
         });
+
         const nextTitle = yield* resolveProjectTitle(project.workspaceRoot, flags.title);
+
         if (nextTitle === project.title) {
           return `Project ${project.id} is already named ${nextTitle}.`;
         }
@@ -224,6 +236,7 @@ const projectRenameCommand = Command.make("rename", {
           projectId: project.id,
           title: nextTitle,
         });
+
         return `Renamed project ${project.id} to ${nextTitle}.`;
       }),
     ),
@@ -234,13 +247,23 @@ export const projectCommand = Command.make("project").pipe(
   Command.withDescription("Manage projects."),
   Command.withSubcommands([projectAddCommand, projectRemoveCommand, projectRenameCommand]),
 );
+
 export { ProjectCommandIdGenerationError } from "./projectErrors.ts";
+
 export { ProjectLiveServerDeclaredResponseError } from "./projectErrors.ts";
+
 export { ProjectLiveServerUndeclaredStatusError } from "./projectErrors.ts";
+
 export { ProjectLiveServerRequestError } from "./projectErrors.ts";
+
 export { ProjectTitleEmptyError } from "./projectErrors.ts";
+
 export { ProjectIdentifierEmptyError } from "./projectErrors.ts";
+
 export { ProjectNotFoundError } from "./projectErrors.ts";
+
 export { ProjectAlreadyExistsError } from "./projectErrors.ts";
+
 export { ProjectCommandError } from "./projectErrors.ts";
+
 export { projectCommandErrorFromLiveServerRequest } from "./projectErrors.ts";

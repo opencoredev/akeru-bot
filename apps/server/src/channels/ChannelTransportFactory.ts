@@ -33,8 +33,10 @@ import {
   type ChannelConnectInput,
 } from "./ChannelRuntimeTypes.ts";
 import { normalizedInboundMessage, mentionWithContext } from "./ChannelInbound.ts";
+
 export const fromTransportRuntime = (runtime: ChannelTransportRuntime): ChannelRuntimeEntry => {
   const { webhook, react, removeReaction, isHealthy, settled } = runtime;
+
   return {
     // Injected transports signal a definite provider rejection by throwing ChannelPostRejectedError.
     post: (externalThreadId, text) =>
@@ -95,20 +97,25 @@ export const ignoredInbound = (provider: ChannelProvider, message: Message) =>
 export const startTelegram = (botId: BotId, token: string, onDirectMessage: InboundCallback) =>
   Effect.gen(function* () {
     const provider = new TelegramProvider({ mode: "polling", commands: [] });
+
     const connected = yield* fromPromise(() =>
       provider.connect(botId, { botToken: token, commands: [] }),
     );
+
     if (connected.type !== "immediate")
       return yield* failWith("Telegram did not connect immediately.");
     const installation = yield* fromPromise(() => provider.getInstallation(botId));
     const adapter = provider.getAdapter(connected.installationId);
+
     if (!installation || !adapter)
       return yield* failWith("Telegram did not create an active adapter.");
+
     const chat = new Chat({
       userName: installation.username ?? "Akeru Bot",
       adapters: { telegram: adapter as Adapter },
       state: createMemoryState(),
     });
+
     chat.onDirectMessage(async (thread, message) => {
       if (ignoredInbound("telegram", message)) return;
       await onDirectMessage(normalizedInboundMessage(thread, message));
@@ -116,11 +123,14 @@ export const startTelegram = (botId: BotId, token: string, onDirectMessage: Inbo
     const disconnect = fromPromise(() => provider.disconnect(botId)).pipe(Effect.ignoreCause);
     yield* Effect.gen(function* () {
       yield* initializeChannelChat(chat);
+
       if (!adapter.botUserId) {
         yield* shutdownChat(chat);
+
         return yield* failWith("Telegram did not identify the connected bot.");
       }
     }).pipe(Effect.onError(() => disconnect));
+
     return {
       externalIdentity: installation.username ? `@${installation.username}` : botId,
       runtime: {
@@ -163,13 +173,16 @@ export const startRenewingGateway = (
     let activeTask: Promise<unknown> | undefined;
     const currentTask = () => activeTask;
     const settle = (task: Promise<unknown>) => Effect.promise(() => task);
+
     const launch = Effect.gen(function* () {
       // A listener still running at its deadline must stop before the next one starts.
       const previous = currentTask();
       abort.abort();
+
       if (previous) yield* settle(previous);
       abort = new AbortController();
       activeTask = undefined;
+
       const response = yield* fromPromise(() =>
         start(
           (task) => {
@@ -183,31 +196,43 @@ export const startRenewingGateway = (
           abort.signal,
         ),
       );
+
       // Server-side and rate-limit statuses are worth retrying; anything else is a rejection.
       if (!response.ok) {
         const category =
           response.status >= 500 || response.status === 429 ? "network" : "credentials";
+
         return yield* failWith(channelFailureMessage(category), category);
       }
+
       const task = currentTask();
+
       if (!task) return yield* failWith(`${label} did not start a listener.`);
+
       return task;
     });
+
     const watch = (task: Promise<unknown>) =>
       settle(task).pipe(
         Effect.andThen(failWith(`${label} stopped before its renewal deadline.`)),
         Effect.timeoutOption(CHANNEL_GATEWAY_RENEWAL_INTERVAL),
       );
+
     // The first listener launches before this returns, so callers see it running.
     const first = yield* Effect.exit(launch);
+
     if (Exit.isFailure(first)) {
       abort.abort();
       yield* Scope.close(scope, Exit.void);
       const task = currentTask();
+
       if (task) yield* settle(task);
+
       return yield* Effect.failCause(first.cause);
     }
+
     const renew = launch.pipe(Effect.flatMap(watch), Effect.repeat(Schedule.forever));
+
     const supervisor = yield* watch(first.value).pipe(
       Effect.andThen(renew),
       Effect.onError(() =>
@@ -218,6 +243,7 @@ export const startRenewingGateway = (
       Effect.ignoreCause,
       Effect.forkIn(scope),
     );
+
     return {
       isHealthy: () => healthy,
       settled: Fiber.await(supervisor).pipe(Effect.asVoid),
@@ -226,6 +252,7 @@ export const startRenewingGateway = (
         yield* Scope.close(scope, Exit.void);
         abort.abort();
         const task = currentTask();
+
         if (task) yield* settle(task);
       }),
     } satisfies RenewingGateway;
@@ -281,18 +308,22 @@ export const startIMessage = (
             ...(input.phone ? { phone: input.phone } : {}),
           },
     );
+
     const chat = new Chat({
       userName: context.botName,
       adapters: { imessage: adapter },
       state: createMemoryState(),
     });
+
     onDirectText(chat, "imessage", onDirectMessage);
     yield* initializeChannelChat(chat);
+
     const gateway = yield* startRenewingGateway(
       (waitUntil, durationMs, signal) =>
         adapter.startGatewayListener({ waitUntil }, durationMs, signal),
       "Photon gateway",
     ).pipe(Effect.onError(() => shutdownChat(chat).pipe(Effect.ignoreCause)));
+
     return {
       externalIdentity:
         input.mode === "self-hosted" && input.phone
@@ -322,13 +353,16 @@ export const startWhatsApp = (
       verifyToken: input.verifyToken,
       userName: context.botName,
     });
+
     const chat = new Chat({
       userName: context.botName,
       adapters: { whatsapp: adapter as Adapter },
       state: createMemoryState(),
     });
+
     onDirectText(chat, "whatsapp", onDirectMessage);
     yield* initializeChannelChat(chat);
+
     return {
       externalIdentity: input.phoneNumberId,
       runtime: {
@@ -337,12 +371,15 @@ export const startWhatsApp = (
         webhook: (request) =>
           Effect.gen(function* () {
             const tasks: Promise<unknown>[] = [];
+
             const response = yield* fromPromise(() =>
               adapter.handleWebhook(request, { waitUntil: (task) => void tasks.push(task) }),
             ).pipe(Effect.option);
+
             if (Option.isNone(response))
               return new Response("Invalid webhook payload", { status: 400 });
             const results = yield* Effect.promise(() => Promise.allSettled(tasks));
+
             return results.some((result) => result.status === "rejected")
               ? new Response("Webhook processing failed", { status: 500 })
               : response.value;
@@ -374,11 +411,13 @@ const validateSlackAppToken = (appToken: string, httpClient: HttpClient.HttpClie
   Effect.gen(function* () {
     if (!appToken.startsWith("xapp-"))
       return yield* failWith(SLACK_APP_TOKEN_INVALID, "credentials");
+
     const probe = HttpClient.execute(
       HttpClientRequest.post("https://slack.com/api/apps.connections.open").pipe(
         HttpClientRequest.bearerToken(appToken),
       ),
     ).pipe(Effect.flatMap((response) => response.json));
+
     const body = yield* (
       httpClient
         ? probe.pipe(Effect.provideService(HttpClient.HttpClient, httpClient))
@@ -388,7 +427,9 @@ const validateSlackAppToken = (appToken: string, httpClient: HttpClient.HttpClie
         () => new ChannelRuntimeError({ message: SLACK_UNREACHABLE, category: "network" }),
       ),
     );
+
     if (typeof body === "object" && body !== null && "ok" in body && body.ok === true) return;
+
     if (
       typeof body === "object" &&
       body !== null &&
@@ -396,6 +437,7 @@ const validateSlackAppToken = (appToken: string, httpClient: HttpClient.HttpClie
       SLACK_TOKEN_ERRORS.has(body.error)
     )
       return yield* failWith(SLACK_APP_TOKEN_INVALID, "credentials");
+
     return yield* failWith(SLACK_UNREACHABLE, "network");
   });
 
@@ -406,6 +448,7 @@ export const startSlack = (
 ) =>
   Effect.gen(function* () {
     yield* validateSlackAppToken(input.appToken, context.httpClient);
+
     const adapter = createSlackAdapter({
       mode: "socket",
       botToken: input.botToken,
@@ -413,24 +456,31 @@ export const startSlack = (
       // An internal retry could hide an accepted request behind a later rejection.
       webClientOptions: { retryConfig: { retries: 0 }, rejectRateLimitedCalls: true },
     });
+
     const state = createMemoryState();
     yield* fromPromise(() => state.connect());
     yield* fromPromise(() =>
       Promise.all(context.subscribedThreadIds.map((threadId) => state.subscribe(threadId))),
     );
+
     const chat = new Chat({
       userName: context.botName,
       adapters: { slack: adapter as Adapter },
       state,
     });
+
     onDirectText(chat, "slack", onDirectMessage);
     registerThreadedHandlers(chat, "slack", context);
     yield* initializeChannelChat(chat);
+
     if (!adapter.botUserId) {
       yield* shutdownChat(chat);
+
       return yield* failWith("Slack bot credentials are invalid.");
     }
+
     yield* subscribeThreads(chat, context);
+
     return {
       externalIdentity: adapter.botUserId,
       runtime: {
@@ -464,27 +514,35 @@ export const startDiscord = (
       // Info-level gateway logs include message content.
       logger: new ConsoleLogger("warn", "discord"),
     });
+
     const chat = new Chat({
       userName: context.botName,
       adapters: { discord: adapter as Adapter },
       state: createMemoryState(),
     });
+
     onDirectText(chat, "discord", onDirectMessage);
     registerThreadedHandlers(chat, "discord", context);
     yield* initializeChannelChat(chat);
+
     const identity = yield* fromPromise(() => adapter.getUser(input.applicationId)).pipe(
       Effect.onError(() => shutdownChat(chat).pipe(Effect.ignoreCause)),
     );
+
     if (!identity) {
       yield* shutdownChat(chat);
+
       return yield* failWith("Discord credentials are invalid.");
     }
+
     yield* subscribeThreads(chat, context);
+
     const gateway = yield* startRenewingGateway(
       (waitUntil, durationMs, signal) =>
         adapter.startGatewayListener({ waitUntil }, durationMs, signal),
       "Discord gateway",
     ).pipe(Effect.onError(() => shutdownChat(chat).pipe(Effect.ignoreCause)));
+
     return {
       externalIdentity: `${identity.userName} (${identity.userId})`,
       runtime: {

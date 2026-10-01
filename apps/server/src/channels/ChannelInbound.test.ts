@@ -37,6 +37,7 @@ import {
   mentionWithContext,
   type ChannelRuntimeDependencies,
 } from "./ChannelRuntime.ts";
+
 describe("channel runtime", () => {
   it("gives each external conversation a stable isolated thread", () => {
     const first = channelThreadId(BOT_ID, PROJECT_ID, "telegram", "telegram:123");
@@ -68,11 +69,13 @@ describe("channel runtime", () => {
   it.effect("starts a new thread when the legacy conversation belongs to another project", () =>
     Effect.gen(function* () {
       const externalThreadId = "telegram:legacy-other-project";
+
       const legacyThreadId = ThreadId.make(
         `channel-${NodeCrypto.createHash("sha256")
           .update(`${BOT_ID}\0telegram\0${externalThreadId}`)
           .digest("hex")}`,
       );
+
       const harness = makeHarness({ threads: [makeThread(legacyThreadId, BOT_ID, [])] });
 
       yield* dispatchInboundChannelMessage(harness.dependencies, {
@@ -98,11 +101,13 @@ describe("channel runtime", () => {
   it.effect("continues a channel thread created before project-aware thread IDs", () =>
     Effect.gen(function* () {
       const externalThreadId = "telegram:legacy-chat";
+
       const legacyThreadId = ThreadId.make(
         `channel-${NodeCrypto.createHash("sha256")
           .update(`${BOT_ID}\0telegram\0${externalThreadId}`)
           .digest("hex")}`,
       );
+
       const harness = makeHarness({ threads: [makeThread(legacyThreadId, BOT_ID, [])] });
 
       yield* dispatchInboundChannelMessage(harness.dependencies, {
@@ -126,6 +131,7 @@ describe("channel runtime", () => {
   it.effect("derives stable command and message identities from the provider message", () =>
     Effect.gen(function* () {
       const harness = makeHarness({});
+
       const input = {
         botId: BOT_ID,
         projectId: PROJECT_ID,
@@ -160,6 +166,7 @@ describe("channel runtime", () => {
 
       const turn = harness.commands.find((command) => command.type === "thread.turn.start");
       expect(turn?.type).toBe("thread.turn.start");
+
       if (turn?.type !== "thread.turn.start") throw new Error("Expected a turn command.");
       expect(turn.message.channelOrigin).toEqual({
         provider: "telegram",
@@ -173,6 +180,7 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const harness = makeHarness({ startTransport: null });
       yield* connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
+
       // @effect-diagnostics-next-line preferSchemaOverJson:off - the webhook signs raw JSON text.
       const payload = JSON.stringify({
         object: "whatsapp_business_account",
@@ -212,6 +220,7 @@ describe("channel runtime", () => {
           body: payload,
         }),
       );
+
       const invalidPayload = yield* handleWhatsAppWebhook(BOT_ID, signedWhatsAppRequest("{}"));
       const accepted = yield* handleWhatsAppWebhook(BOT_ID, signedWhatsAppRequest(payload));
 
@@ -220,6 +229,7 @@ describe("channel runtime", () => {
       expect(accepted.status).toBe(200);
       const turn = harness.commands.find((command) => command.type === "thread.turn.start");
       expect(turn?.type).toBe("thread.turn.start");
+
       if (turn?.type !== "thread.turn.start") throw new Error("Expected a turn command.");
       expect(turn.message.channelOrigin).toEqual({
         provider: "whatsapp",
@@ -235,15 +245,18 @@ describe("channel runtime", () => {
       let directMessage:
         | Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
         | undefined;
+
       const harness = makeHarness({
         startTransport: async (_input, onDirectMessage) => {
           directMessage = onDirectMessage;
+
           return {
             externalIdentity: "Photon hosted",
             runtime: { post: async () => undefined, shutdown: async () => undefined },
           };
         },
       });
+
       yield* connectChannel(harness.dependencies, imessageConnect(BOT_ID));
 
       yield* Effect.promise(async () =>
@@ -269,9 +282,11 @@ describe("channel runtime", () => {
   it.effect("bounds first-mention context and preserves sender attribution", () =>
     Effect.gen(function* () {
       const threadId = "slack:C123:1710000000.000001";
+
       const history = Array.from({ length: 12 }, (_, index) =>
         makeChatSdkMessage(threadId, `history-${index}`, `context ${index}`, `U${index}`),
       );
+
       const current = makeChatSdkMessage(
         threadId,
         "mention-current",
@@ -279,6 +294,7 @@ describe("channel runtime", () => {
         "U-current",
         true,
       );
+
       const thread = {
         id: threadId,
         recentMessages: [...history, current],
@@ -298,6 +314,7 @@ describe("channel runtime", () => {
   it.effect("limits large prior context without truncating the current mention", () =>
     Effect.gen(function* () {
       const threadId = "slack:C123:large-context";
+
       const current = makeChatSdkMessage(
         threadId,
         "current",
@@ -305,6 +322,7 @@ describe("channel runtime", () => {
         "U-current",
         true,
       );
+
       const thread = {
         id: threadId,
         recentMessages: [
@@ -327,6 +345,7 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const harness = makeHarness({ startTransport: null });
       yield* connectChannel(harness.dependencies, slackConnect(BOT_ID));
+
       if (!externalAdapters.slackChat || !externalAdapters.slackAdapter) {
         throw new Error("Expected the Slack Chat runtime.");
       }
@@ -374,6 +393,7 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const slackThreadId = ThreadId.make("thread-slack-restored");
       const discordThreadId = ThreadId.make("thread-discord-restored");
+
       const harness = makeHarness({
         startTransport: null,
         commandModelOmitsMessages: true,
@@ -407,19 +427,23 @@ describe("channel runtime", () => {
       let directMessage:
         | Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
         | undefined;
+
       let context:
         | Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[2]
         | undefined;
+
       const harness = makeHarness({
         startTransport: async (_input, onDirectMessage, transportContext) => {
           directMessage = onDirectMessage;
           context = transportContext;
+
           return {
             externalIdentity: "akeru-discord",
             runtime: { post: async () => undefined, shutdown: async () => undefined },
           };
         },
       });
+
       yield* connectChannel(harness.dependencies, discordConnect(BOT_ID));
 
       yield* Effect.promise(async () =>
@@ -481,18 +505,22 @@ describe("channel runtime", () => {
         const callbacks: Array<
           Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
         > = [];
+
         const shutdown = vi.fn(async () => {
           throw new Error("shutdown failed");
         });
+
         const harness = makeHarness({
           startTransport: async (_input, onInbound) => {
             callbacks.push(onInbound);
+
             return {
               externalIdentity: "@akeru",
               runtime: { post: async () => undefined, shutdown },
             };
           },
         });
+
         yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
         expect(callbacks).toHaveLength(1);
 
@@ -527,6 +555,7 @@ describe("channel runtime", () => {
       const externalThreadId = "whatsapp:phone-number-id:15551234567";
       const threadId = channelThreadId(BOT_ID, PROJECT_ID, "whatsapp", externalThreadId);
       const posts: Array<{ readonly externalThreadId: string; readonly text: string }> = [];
+
       const harness = makeHarness({
         threads: [
           makeThread(threadId, BOT_ID, [
@@ -540,6 +569,7 @@ describe("channel runtime", () => {
         ],
         post: async (target, text) => void posts.push({ externalThreadId: target, text }),
       });
+
       yield* connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
 
       yield* sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId });
@@ -560,6 +590,7 @@ describe("channel runtime", () => {
       const messageId = MessageId.make("assistant-auto-reply");
       const threadId = ThreadId.make("thread-auto-reply");
       let posts = 0;
+
       const thread: OrchestrationThread = {
         ...makeThread(threadId, BOT_ID, [
           makeMessage(requestMessageId, "user", "Hello", {
@@ -579,10 +610,12 @@ describe("channel runtime", () => {
           respondingBotId: BOT_ID,
         },
       };
+
       const harness = makeHarness({
         threads: [thread],
         post: async () => void (posts += 1),
       });
+
       yield* connectChannel(harness.dependencies, imessageConnect(BOT_ID));
 
       expect(
@@ -610,12 +643,15 @@ describe("channel runtime", () => {
     const unknown = makeChatSdkMessage("thread", "unknown", "Hello", "sender", false, {
       isBot: "unknown",
     });
+
     const person = makeChatSdkMessage("thread", "person", "Hello", "sender");
     // Telegram marks messages sent on behalf of a chat (anonymous admins, channel posts) "unknown".
     expect(ignoredInbound("telegram", unknown)).toBe(false);
+
     for (const provider of ["discord", "slack", "whatsapp", "imessage"] as const) {
       expect(ignoredInbound(provider, unknown)).toBe(true);
     }
+
     for (const provider of ["telegram", "discord", "slack", "whatsapp", "imessage"] as const) {
       expect(ignoredInbound(provider, person)).toBe(false);
     }
@@ -625,10 +661,13 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const harness = makeHarness({ startTransport: null });
       yield* connectChannel(harness.dependencies, slackConnect(BOT_ID));
+
       if (!externalAdapters.slackChat || !externalAdapters.slackAdapter) {
         throw new Error("Expected the Slack Chat runtime.");
       }
+
       const { slackChat, slackAdapter } = externalAdapters;
+
       const process = (threadId: string, message: ReturnType<typeof makeChatSdkMessage>) =>
         Effect.promise(() => slackChat.processMessage(slackAdapter, threadId, message));
 

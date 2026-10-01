@@ -37,6 +37,7 @@ import {
 } from "./bootServiceTypes.ts";
 import { isOwnedLegacyBootServiceUnit, systemdManager } from "./bootServiceSystemd.ts";
 import { launchdManager } from "./bootServiceLaunchd.ts";
+
 /** Undefined means this host cannot run the background service. */
 export function selectBootServiceManager(input: {
   readonly platform: NodeJS.Platform;
@@ -50,6 +51,7 @@ export function selectBootServiceManager(input: {
   if (input.homeDir === "") {
     return undefined;
   }
+
   if (input.platform === "linux") {
     return systemdManager({
       path: input.path,
@@ -57,6 +59,7 @@ export function selectBootServiceManager(input: {
       ...(input.legacy ? { unitFile: LEGACY_BOOT_SERVICE_UNIT_FILE } : {}),
     });
   }
+
   if (input.platform === "darwin" && input.uid !== undefined) {
     return launchdManager({
       path: input.path,
@@ -66,6 +69,7 @@ export function selectBootServiceManager(input: {
       ...(input.legacy ? { label: LEGACY_BOOT_SERVICE_LAUNCHD_LABEL } : {}),
     });
   }
+
   return undefined;
 }
 
@@ -156,14 +160,17 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
   const path = yield* Path.Path;
   const runner = yield* ProcessRunner.ProcessRunner;
   const host = input.host ?? { execPath: hostExecPath };
+
   const xmlSafeInstallerDirectories = installerPath.split(":").filter(
     (directory) =>
       directory.length > 0 &&
       Array.from(directory).every((character) => {
         const code = character.charCodeAt(0);
+
         return code >= 0x20 || code === 0x09 || code === 0x0a || code === 0x0d;
       }),
   );
+
   const environmentPath = Array.from(
     new Set([
       ...xmlSafeInstallerDirectories,
@@ -184,6 +191,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     path,
     environmentPath,
   });
+
   const legacyManager = selectBootServiceManager({
     platform,
     homeDir,
@@ -192,14 +200,17 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     environmentPath,
     legacy: true,
   });
+
   const unitPath = detectedManager?.unitPath ?? "";
   const logPath = path.join(input.logsDir, "boot-service.log");
   const launcherPath = path.join(input.baseDir, "runtime", SERVICE_LAUNCHER_FILE);
   const statePath = path.join(input.baseDir, "runtime", SERVICE_STATE_FILE);
   const runtimePaths = pinnedRuntimePaths(path, input.baseDir, input.cliVersion);
+
   const launcherSourcePath =
     host.launcherSourcePath ??
     path.join(path.dirname(runtimePaths.entryPath), SERVICE_LAUNCHER_FILE);
+
   const writeDurably = (filePath: string, contents: string) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -212,6 +223,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
         yield* (yield* fs.open(directory, { flag: "r" })).sync;
       }),
     ).pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause })));
+
   const plan: BootServicePlan = {
     nodePath: host.execPath,
     launcherPath,
@@ -267,6 +279,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
           entry.args,
           entry.timeout === undefined ? undefined : { timeout: entry.timeout },
         );
+
         // runStep's tapError already appends the failure to the log, so an
         // ignored optional step still leaves a trace.
         return entry.optional === true ? run.pipe(Effect.ignore) : run.pipe(Effect.asVoid);
@@ -279,6 +292,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
   const ownedLegacyManager = Effect.gen(function* () {
     if (legacyManager === undefined) return undefined;
     const contents = yield* fs.readFileString(legacyManager.unitPath).pipe(Effect.option);
+
     return Option.isSome(contents) && isOwnedLegacyBootServiceUnit(contents.value, launcherPath)
       ? legacyManager
       : undefined;
@@ -323,6 +337,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
             ),
             Effect.flatMap((result) => {
               const reportedVersion = /\bv(\S+)\s*$/.exec(result.stdout)?.[1];
+
               return result.code === 0 && reportedVersion === input.cliVersion
                 ? Effect.void
                 : Effect.fail(
@@ -348,6 +363,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
           : new BootServiceInstallError({ cause: error }),
       ),
     );
+
     const launcherSource = yield* fs
       .readFileString(launcherSourcePath)
       .pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause })));
@@ -355,10 +371,13 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     const installed = yield* fs
       .exists(unitPath)
       .pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause })));
+
     const legacy = yield* ownedLegacyManager;
+
     if (installed) {
       yield* runSteps(manager.stop);
     }
+
     // Both units would serve the same base dir and port, so the legacy one
     // stops before the renamed unit starts.
     if (legacy !== undefined) {
@@ -368,6 +387,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     yield* Effect.gen(function* () {
       if (installed || legacy !== undefined) {
         const previousStateText = yield* fs.readFileString(statePath).pipe(Effect.option);
+
         if (
           Option.isSome(previousStateText) &&
           serviceStateHasPendingUpdate(previousStateText.value)
@@ -375,6 +395,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
           return yield* new BootServiceUpdatePendingError();
         }
       }
+
       yield* fs
         .makeDirectory(path.dirname(unitPath), { recursive: true })
         .pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause })));
@@ -403,18 +424,22 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
             : Effect.void,
       ),
     );
+
     if (legacy !== undefined) {
       yield* retireLegacy(legacy);
     }
+
     return plan;
   }).pipe(Effect.withSpan("cloud.boot_service.install"));
 
   const uninstall: BootService["Service"]["uninstall"] = Effect.gen(function* () {
     const manager = yield* requireManager;
     const legacy = yield* ownedLegacyManager;
+
     if (legacy !== undefined) {
       yield* retireLegacy(legacy);
     }
+
     if (
       !(yield* fs
         .exists(unitPath)
@@ -426,6 +451,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       .remove(unitPath)
       .pipe(Effect.mapError((cause) => new BootServiceInstallError({ cause })));
     yield* runSteps(manager.finalize);
+
     return true;
   }).pipe(Effect.withSpan("cloud.boot_service.uninstall"));
 
@@ -433,14 +459,17 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     if (detectedManager === undefined) {
       return { supported: false, installed: false, current: false, unitPath, logPath };
     }
+
     if (!(yield* fs.exists(unitPath))) {
       // An upgraded install still running under the legacy name needs a repair,
       // which renames it.
       const legacy = yield* ownedLegacyManager;
+
       return legacy === undefined
         ? { supported: true, installed: false, current: false, unitPath, logPath }
         : { supported: true, installed: true, current: false, unitPath: legacy.unitPath, logPath };
     }
+
     const [unit, launcherExists, runtimeEntryExists, runtimeSentinel, stateText] =
       yield* Effect.all([
         fs.readFileString(unitPath),
@@ -449,11 +478,14 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
         fs.readFileString(runtimePaths.sentinelPath).pipe(Effect.option),
         fs.readFileString(statePath).pipe(Effect.option),
       ]);
+
     const state = Option.isSome(stateText) ? parseServiceState(stateText.value) : undefined;
+
     const normalizeUnit = (contents: string) =>
       detectedManager.kind === "launchd"
         ? contents.replace(/(<key>PATH<\/key>\n\s*<string>)[^<]*(<\/string>)/, "$1$2")
         : contents;
+
     return {
       supported: true,
       installed: true,
@@ -482,20 +514,37 @@ export const layer = (input: {
   readonly cliVersion: string;
   readonly host?: BootServiceHost;
 }) => Layer.effect(BootService, make(input));
+
 export { BOOT_SERVICE_UNIT_FILE } from "./bootServiceTypes.ts";
+
 export { BOOT_SERVICE_LAUNCHD_LABEL } from "./bootServiceTypes.ts";
+
 export { BOOT_SERVICE_PLIST_FILE } from "./bootServiceTypes.ts";
+
 export { BOOT_SERVICE_UNIT_ENV } from "./bootServiceTypes.ts";
+
 export { LEGACY_BOOT_SERVICE_UNIT_FILE } from "./bootServiceTypes.ts";
+
 export { LEGACY_BOOT_SERVICE_LAUNCHD_LABEL } from "./bootServiceTypes.ts";
+
 export { escapeSystemdSpecifiers } from "./bootServiceSystemd.ts";
+
 export { quoteSystemdValue } from "./bootServiceSystemd.ts";
+
 export type { BootServicePlan } from "./bootServiceTypes.ts";
+
 export { isOwnedLegacyBootServiceUnit } from "./bootServiceSystemd.ts";
+
 export { renderBootServiceUnit } from "./bootServiceSystemd.ts";
+
 export { escapeXmlText } from "./bootServiceLaunchd.ts";
+
 export { renderBootServicePlist } from "./bootServiceLaunchd.ts";
+
 export type { BootServiceStep } from "./bootServiceTypes.ts";
+
 export type { BootServiceManager } from "./bootServiceTypes.ts";
+
 export { systemdManager } from "./bootServiceSystemd.ts";
+
 export { launchdManager } from "./bootServiceLaunchd.ts";

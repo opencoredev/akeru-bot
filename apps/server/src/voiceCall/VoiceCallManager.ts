@@ -43,6 +43,7 @@ import {
   defaultSession,
   instructionsForBot,
 } from "./ChatGptRealtime.ts";
+
 const isVoiceCallError = Schema.is(VoiceCallError);
 
 const isTranscribeInput = Schema.is(TranscribeSchema);
@@ -124,10 +125,12 @@ const make = (options?: VoiceCallManagerOptions) =>
     let active: ActiveVoiceCall | null = null;
     const secrets = yield* Effect.serviceOption(ServerSecretStore);
     const adapters = options?.adapters ?? makeVoiceAdapters();
+
     const operations = new Map<
       string,
       { ownerId: string; controller: AbortController; provider?: VoiceApiProvider }
     >();
+
     const operationKey = (ownerId: string, id: string) => JSON.stringify([ownerId, id]);
     const secretName = (provider: VoiceApiProvider) => `voice-${provider}`;
     const rejectedSecretName = (provider: VoiceApiProvider) => `voice-${provider}-rejected`;
@@ -135,16 +138,22 @@ const make = (options?: VoiceCallManagerOptions) =>
     // an earlier connection cannot record its verdict against a later one, even
     // when that later connection restored the same key.
     const generations = new Map<VoiceApiProvider, number>();
+
     const bumpGeneration = (provider: VoiceApiProvider) =>
       generations.set(provider, (generations.get(provider) ?? 0) + 1);
+
     const getKey = Effect.fn("VoiceCallManager.getKey")(function* (provider: VoiceApiProvider) {
       if (Option.isNone(secrets)) return yield* voiceFailure("provider-unavailable");
+
       const value = yield* secrets.value
         .get(secretName(provider))
         .pipe(Effect.mapError(() => voiceFailure("provider-unavailable")));
+
       if (Option.isNone(value)) return yield* voiceFailure("provider-unavailable");
+
       return new TextDecoder().decode(value.value);
     });
+
     const selectedProviders = (settings: VoiceSettings): ReadonlyArray<VoiceApiProvider> =>
       settings.provider === "chatgpt"
         ? []
@@ -156,28 +165,36 @@ const make = (options?: VoiceCallManagerOptions) =>
                 settings.synthesisProvider ?? "openai",
               ]),
             ];
+
     const selectedVoice = (settings: VoiceSettings) => {
       const provider = settings.synthesisProvider ?? "openai";
+
       return settings.synthesisVoices?.[provider] ?? (provider === "openai" ? "alloy" : undefined);
     };
+
     const assertMutable = Effect.fn("VoiceCallManager.assertMutable")(function* (
       provider: VoiceApiProvider,
     ) {
       if (active && selectedProviders(active.settings).includes(provider))
         return yield* voiceFailure("provider-in-use");
+
       if (Option.isNone(secrets)) return yield* voiceFailure("provider-unavailable");
+
       return secrets.value;
     });
+
     const connect = (provider: VoiceApiProvider, apiKey: string) =>
       lock.withPermits(1)(
         Effect.gen(function* () {
           const store = yield* assertMutable(provider);
+
           if (!apiKey.trim() || apiKey.length > 4096 || /[\r\n]/.test(apiKey))
             return yield* voiceFailure("invalid-input");
           const key = new TextEncoder().encode(apiKey.trim());
           yield* Effect.gen(function* () {
             const saved = yield* store.get(secretName(provider));
             yield* store.set(secretName(provider), key);
+
             // A replaced key drops the old rejection, so restoring that key later
             // waits for a new Test instead of reviving the stale verdict.
             if (Option.isNone(saved) || keyDigest(saved.value) !== keyDigest(key)) {
@@ -185,33 +202,41 @@ const make = (options?: VoiceCallManagerOptions) =>
               yield* store.remove(rejectedSecretName(provider));
             }
           }).pipe(Effect.mapError(() => voiceFailure("provider-unavailable")));
+
           return { provider, connected: true };
         }),
       );
+
     const disconnect = (provider: VoiceApiProvider) =>
       lock.withPermits(1)(
         Effect.gen(function* () {
           const store = yield* assertMutable(provider);
           bumpGeneration(provider);
+
           for (const name of [secretName(provider), rejectedSecretName(provider)]) {
             yield* store
               .remove(name)
               .pipe(Effect.mapError(() => voiceFailure("provider-unavailable")));
           }
+
           // Work that already read the removed key must not finish after the disconnect.
           for (const operation of operations.values()) {
             if (operation.provider === provider) operation.controller.abort();
           }
+
           return { provider, connected: false };
         }),
       );
+
     // Digest of the saved key each provider rejected on its last Test. It lives
     // beside the key so every client, and a restarted server, sees the same
     // verdict, and a replaced key starts without one.
     const keyDigest = (key: Uint8Array | string) =>
       NodeCrypto.createHash("sha256").update(key).digest("hex");
+
     const providers = Effect.gen(function* () {
       const result = [];
+
       for (const provider of VOICE_API_PROVIDERS) {
         const read = (name: string) =>
           Option.isSome(secrets)
@@ -219,10 +244,13 @@ const make = (options?: VoiceCallManagerOptions) =>
                 .get(name)
                 .pipe(Effect.mapError(() => voiceFailure("provider-unavailable")))
             : Effect.succeed(Option.none<Uint8Array>());
+
         const key = yield* read(secretName(provider));
+
         const rejected = Option.isSome(key)
           ? yield* read(rejectedSecretName(provider))
           : Option.none<Uint8Array>();
+
         result.push({
           provider,
           connected: Option.isSome(key),
@@ -232,8 +260,10 @@ const make = (options?: VoiceCallManagerOptions) =>
             new TextDecoder().decode(rejected.value) === keyDigest(key.value),
         });
       }
+
       return { providers: result };
     });
+
     // Records a Test verdict only while the tested connection is still the saved
     // one, so a slow Test of a replaced key cannot overwrite the replacement's verdict.
     const recordVerdict = (
@@ -244,16 +274,19 @@ const make = (options?: VoiceCallManagerOptions) =>
       lock.withPermits(1)(
         Effect.gen(function* () {
           if (Option.isNone(secrets)) return;
+
           if ((generations.get(provider) ?? 0) !== tested.generation) return;
           const { key } = tested;
           const store = secrets.value;
           const current = yield* store.get(secretName(provider));
+
           if (Option.isNone(current) || keyDigest(current.value) !== keyDigest(key)) return;
           yield* rejected
             ? store.set(rejectedSecretName(provider), new TextEncoder().encode(keyDigest(key)))
             : store.remove(rejectedSecretName(provider));
         }).pipe(Effect.mapError(() => voiceFailure("provider-unavailable"))),
       );
+
     const test = Effect.fn("VoiceCallManager.test")(function* (provider: VoiceApiProvider) {
       const tested = yield* lock.withPermits(1)(
         Effect.map(getKey(provider), (key) => ({
@@ -261,6 +294,7 @@ const make = (options?: VoiceCallManagerOptions) =>
           generation: generations.get(provider) ?? 0,
         })),
       );
+
       yield* Effect.tryPromise({
         try: (signal) => adapters.test(provider, tested.key, signal),
         catch: (cause) => classifyVoiceFailure(cause),
@@ -272,24 +306,30 @@ const make = (options?: VoiceCallManagerOptions) =>
         ),
       );
       yield* recordVerdict(provider, tested, false);
+
       return { provider, connected: true, keyRejected: false };
     });
+
     const listVoices = Effect.fn("VoiceCallManager.listVoices")(function* (
       provider: VoiceApiProvider,
       cursor?: string,
     ) {
       const key = yield* getKey(provider);
+
       return yield* Effect.tryPromise({
         try: (signal) => adapters.listVoices(provider, key, signal, cursor),
         catch: (cause) => classifyVoiceFailure(cause),
       });
     });
+
     const cancel = (id: string, ownerId: string) =>
       Effect.sync(() => {
         const operation = operations.get(operationKey(ownerId, id));
         operation?.controller.abort();
+
         return { cancelled: operation !== undefined };
       });
+
     const audioOperation = <A>(
       input: { operationId: string; callId?: string },
       ownerId: string,
@@ -302,14 +342,18 @@ const make = (options?: VoiceCallManagerOptions) =>
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {
             controller.abort();
+
             if (operations.get(id)?.controller === controller) operations.delete(id);
           }),
         );
+
         const pinned = yield* lock.withPermits(1)(
           Effect.gen(function* () {
             if (operations.size >= 8 || operations.has(id)) return yield* voiceFailure("busy");
+
             if (input.callId === undefined && active && active.ownerId !== ownerId)
               return yield* voiceFailure("call-not-active");
+
             if (
               input.callId !== undefined &&
               (active?.callId !== input.callId ||
@@ -320,24 +364,33 @@ const make = (options?: VoiceCallManagerOptions) =>
               return yield* voiceFailure("call-not-active");
             operations.set(id, { ownerId, controller });
             const call = input.callId !== undefined ? active : null;
+
             const settings =
               call?.settings ??
               (yield* serverSettings.getSettings.pipe(
                 Effect.map((s) => s.voice),
                 Effect.mapError(() => voiceFailure()),
               ));
+
             if (!settings.enabled) return yield* voiceFailure("voice-disabled");
+
             const provider =
               capability === "transcription"
                 ? (settings.transcriptionProvider ?? "openai")
                 : (settings.synthesisProvider ?? "openai");
+
             const key = call ? call.credentials[provider] : yield* getKey(provider);
+
             if (!key) return yield* voiceFailure("provider-unavailable");
+
             if (!call) operations.set(id, { ownerId, controller, provider });
+
             if (controller.signal.aborted) return yield* voiceFailure("cancelled");
+
             return { settings, key, callSignal: call?.abortController.signal };
           }),
         );
+
         return yield* Effect.tryPromise({
           try: (signal) =>
             run(
@@ -353,21 +406,28 @@ const make = (options?: VoiceCallManagerOptions) =>
           catch: (cause) => (isVoiceCallError(cause) ? voiceFailure(cause.reason) : voiceFailure()),
         });
       }).pipe(Effect.scoped);
+
     const transcribe = (input: VoiceTranscribeInput, ownerId: string) =>
       Effect.gen(function* () {
         if (!isTranscribeInput(input)) return yield* voiceFailure("invalid-input");
+
         return yield* audioOperation(input, ownerId, "transcription", (settings, key, signal) =>
           adapters.transcribe(settings.transcriptionProvider ?? "openai", key, input, signal),
         );
       });
+
     const synthesize = (input: VoiceSynthesizeInput, ownerId: string) =>
       Effect.gen(function* () {
         if (!isSynthesizeInput(input)) return yield* voiceFailure("invalid-input");
+
         return yield* audioOperation(input, ownerId, "synthesis", async (settings, key, signal) => {
           const provider = settings.synthesisProvider ?? "openai";
           const voice = selectedVoice(settings);
+
           if (!voice) throw voiceFailure("invalid-voice");
+
           if (!input.callId) await adapters.validateVoice(provider, key, voice, signal);
+
           return adapters.synthesize(provider, key, voice, input.text, signal);
         });
       });
@@ -395,14 +455,17 @@ const make = (options?: VoiceCallManagerOptions) =>
             }),
         ),
       );
+
       if (!voiceSettings.enabled) {
         return yield* new VoiceCallError({
           reason: "voice-disabled",
           message: "Voice calls are disabled in Settings.",
         });
       }
+
       if (voiceSettings.provider !== "composed" && (!input.sdp || input.sdp.length > 65_536))
         return yield* voiceFailure("invalid-input");
+
       const claimed = yield* lock.withPermits(1)(
         Effect.gen(function* () {
           if (active !== null) {
@@ -411,6 +474,7 @@ const make = (options?: VoiceCallManagerOptions) =>
               message: `A call with ${active.botName} is already active. Hang up before starting another call.`,
             });
           }
+
           const bot = yield* bots.getById({ botId: input.botId }).pipe(
             Effect.mapError(
               () =>
@@ -420,22 +484,27 @@ const make = (options?: VoiceCallManagerOptions) =>
                 }),
             ),
           );
+
           if (Option.isNone(bot) || bot.value.archivedAt !== null) {
             return yield* new VoiceCallError({
               reason: "bot-not-found",
               message: "This bot is not available.",
             });
           }
+
           if (!bot.value.voiceEnabled) {
             return yield* new VoiceCallError({
               reason: "voice-disabled",
               message: `Voice calls are disabled for ${bot.value.name}.`,
             });
           }
+
           const credentials: Partial<Record<VoiceApiProvider, string>> = {};
+
           for (const provider of selectedProviders(voiceSettings))
             credentials[provider] = yield* getKey(provider);
           const startedAt = DateTime.formatIso(yield* DateTime.now);
+
           const call: ActiveVoiceCall = {
             callId: NodeCrypto.randomUUID(),
             ownerId,
@@ -447,7 +516,9 @@ const make = (options?: VoiceCallManagerOptions) =>
             credentials,
             status: "starting",
           };
+
           active = call;
+
           return { call, bot: bot.value };
         }),
       );
@@ -462,9 +533,12 @@ const make = (options?: VoiceCallManagerOptions) =>
                   claimed.call.abortController.signal,
                   AbortSignal.timeout(60_000),
                 ]);
+
                 if (voiceSettings.provider === "openai") {
                   const key = claimed.call.credentials.openai;
+
                   if (!key || !input.sdp) throw voiceFailure("invalid-input");
+
                   return adapters.negotiate(
                     key,
                     input.sdp,
@@ -473,16 +547,20 @@ const make = (options?: VoiceCallManagerOptions) =>
                     combined,
                   );
                 }
+
                 const provider = voiceSettings.synthesisProvider ?? "openai";
                 const key = claimed.call.credentials[provider];
                 const voice = selectedVoice(voiceSettings);
+
                 if (!key || !voice) throw voiceFailure("invalid-voice");
                 await adapters.validateVoice(provider, key, voice, combined);
+
                 return undefined;
               },
               catch: (cause) =>
                 isVoiceCallError(cause) ? voiceFailure(cause.reason) : voiceFailure(),
             });
+
             yield* lock.withPermits(1)(
               Effect.gen(function* () {
                 if (active?.callId !== claimed.call.callId)
@@ -490,6 +568,7 @@ const make = (options?: VoiceCallManagerOptions) =>
                 active.status = "live";
               }),
             );
+
             return {
               call: {
                 callId: claimed.call.callId,
@@ -526,8 +605,10 @@ const make = (options?: VoiceCallManagerOptions) =>
               message: "Connect a ChatGPT subscription before starting a call.",
             }),
         }).pipe(Effect.tapError(() => clear(claimed.call.callId)));
+
         if (credential === undefined) {
           yield* clear(claimed.call.callId);
+
           return yield* new VoiceCallError({
             reason: "subscription-unavailable",
             message: "Connect a ChatGPT subscription before starting a call.",
@@ -538,6 +619,7 @@ const make = (options?: VoiceCallManagerOptions) =>
           try: () => (options?.makeSession ?? defaultSession)(),
           catch: () => voiceFailure(),
         }).pipe(Effect.tapError(() => clear(claimed.call.callId)));
+
         const answerSdp = yield* Effect.tryPromise({
           try: (signal) =>
             session.negotiate({
@@ -564,9 +646,11 @@ const make = (options?: VoiceCallManagerOptions) =>
                 message: "This call is no longer active.",
               });
             }
+
             active.status = "live";
           }),
         );
+
         return {
           call: {
             callId: claimed.call.callId,
@@ -595,8 +679,10 @@ const make = (options?: VoiceCallManagerOptions) =>
               message: "This call is no longer active.",
             });
           }
+
           active.abortController.abort();
           active = null;
+
           return snapshot(active);
         }),
       );
@@ -606,6 +692,7 @@ const make = (options?: VoiceCallManagerOptions) =>
         Effect.sync(() => {
           for (const operation of operations.values())
             if (operation.ownerId === ownerId) operation.controller.abort();
+
           if (active?.ownerId !== ownerId) return;
           active.abortController.abort();
           active = null;
@@ -658,5 +745,7 @@ export const hangupDeletedBotCalls = <E, R>(
 
 export const layer = (options?: VoiceCallManagerOptions) =>
   Layer.effect(VoiceCallManager, make(options));
+
 export { parseCodexCliAuth } from "./ChatGptRealtime.ts";
+
 export { defaultSession } from "./ChatGptRealtime.ts";

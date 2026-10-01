@@ -23,6 +23,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
+
 describe("channel runtime", () => {
   it.effect("saves, attaches, reconnects, detaches, and deletes a reusable connection", () =>
     Effect.gen(function* () {
@@ -176,6 +177,7 @@ describe("channel runtime", () => {
   it.effect("rolls back a saved secret when profile persistence fails", () =>
     Effect.gen(function* () {
       const connectionId = ChannelConnectionId.make("failed-profile");
+
       const harness = makeHarness({
         settings: {
           getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
@@ -201,6 +203,7 @@ describe("channel runtime", () => {
   it.effect("restores saved WhatsApp credentials", () =>
     Effect.gen(function* () {
       let starts = 0;
+
       const harness = makeHarness({
         startTransport: async (input) => {
           starts += 1;
@@ -211,6 +214,7 @@ describe("channel runtime", () => {
             phoneNumberId: "phone-number-id",
             verifyToken: "verify-token",
           });
+
           return {
             externalIdentity: "phone-number-id",
             runtime: { post: async () => undefined, shutdown: async () => undefined },
@@ -244,6 +248,7 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const { store } = makeMemorySecretStore();
       let stops = 0;
+
       const harness = makeHarness({
         secretStore: { ...store, get: () => Effect.die(new Error("secret read failed")) },
         shutdown: async () => void (stops += 1),
@@ -264,6 +269,7 @@ describe("channel runtime", () => {
       const { store, values } = makeMemorySecretStore();
       let failRemove = false;
       let stops = 0;
+
       const harness = makeHarness({
         secretStore: {
           ...store,
@@ -272,6 +278,7 @@ describe("channel runtime", () => {
         },
         shutdown: async () => void (stops += 1),
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       failRemove = true;
 
@@ -291,10 +298,12 @@ describe("channel runtime", () => {
   it.effect("restores the direct credential when unassign persistence fails", () =>
     Effect.gen(function* () {
       let stops = 0;
+
       const harness = makeHarness({
         failBotUpdate: (index) => (index === 3 ? new Error("binding write failed") : undefined),
         shutdown: async () => void (stops += 1),
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       const credentials = [...harness.secrets.entries()];
 

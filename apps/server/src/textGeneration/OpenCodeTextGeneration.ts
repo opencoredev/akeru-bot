@@ -34,6 +34,7 @@ import {
   isOpenCodeTextPart,
   getOpenCodeTextResponse,
 } from "./OpenCodeTextGenerationProtocol.ts";
+
 const OPENCODE_TEXT_GENERATION_IDLE_TTL = "30 seconds";
 
 interface SharedOpenCodeTextGenerationServerState {
@@ -60,10 +61,13 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
   const path = yield* Path.Path;
   const openCodeRuntime = yield* OpenCodeRuntime.OpenCodeRuntime;
   const resolvedEnvironment = environment ?? process.env;
+
   const idleFiberScope = yield* Effect.acquireRelease(Scope.make(), (scope) =>
     Scope.close(scope, Exit.void),
   );
+
   const sharedServerMutex = yield* Semaphore.make(1);
+
   const sharedServerState: SharedOpenCodeTextGenerationServerState = {
     server: null,
     serverScope: null,
@@ -77,6 +81,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     sharedServerState.server = null;
     sharedServerState.serverScope = null;
     sharedServerState.binaryPath = null;
+
     if (scope !== null) {
       yield* Scope.close(scope, Exit.void).pipe(Effect.ignore);
     }
@@ -85,6 +90,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
   const cancelIdleCloseFiber = Effect.fn("cancelIdleCloseFiber")(function* () {
     const idleCloseFiber = sharedServerState.idleCloseFiber;
     sharedServerState.idleCloseFiber = null;
+
     if (idleCloseFiber !== null) {
       yield* Fiber.interrupt(idleCloseFiber).pipe(Effect.ignore);
     }
@@ -94,6 +100,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     server: OpenCodeRuntime.OpenCodeServerProcess,
   ) {
     yield* cancelIdleCloseFiber();
+
     const fiber = yield* Effect.sleep(OPENCODE_TEXT_GENERATION_IDLE_TTL).pipe(
       Effect.andThen(
         sharedServerMutex.withPermit(
@@ -101,6 +108,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
             if (sharedServerState.server !== server || sharedServerState.activeRequests > 0) {
               return;
             }
+
             sharedServerState.idleCloseFiber = null;
             yield* closeSharedServer();
           }),
@@ -108,6 +116,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       ),
       Effect.forkIn(idleFiberScope),
     );
+
     sharedServerState.idleCloseFiber = fiber;
   });
 
@@ -120,6 +129,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
         yield* cancelIdleCloseFiber();
 
         const existingServer = sharedServerState.server;
+
         if (existingServer !== null) {
           if (
             sharedServerState.binaryPath !== input.binaryPath &&
@@ -136,7 +146,9 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
                   "; reusing existing server because there are active requests",
               );
             }
+
             sharedServerState.activeRequests += 1;
+
             return existingServer;
           }
         }
@@ -156,6 +168,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
         return yield* Effect.uninterruptibleMask((restore) =>
           Effect.gen(function* () {
             const serverScope = yield* Scope.make();
+
             const startedExit = yield* Effect.exit(
               restore(
                 openCodeRuntime
@@ -184,8 +197,10 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
                   ),
               ),
             );
+
             if (Predicate.isTagged(startedExit, "Failure")) {
               yield* Scope.close(serverScope, Exit.void).pipe(Effect.ignore);
+
               return yield* Effect.failCause(startedExit.cause);
             }
 
@@ -194,6 +209,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
             sharedServerState.serverScope = serverScope;
             sharedServerState.binaryPath = input.binaryPath;
             sharedServerState.activeRequests = 1;
+
             return server;
           }),
         );
@@ -206,7 +222,9 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
         if (sharedServerState.server !== server) {
           return;
         }
+
         sharedServerState.activeRequests = Math.max(0, sharedServerState.activeRequests - 1);
+
         if (sharedServerState.activeRequests === 0) {
           yield* scheduleIdleClose(server);
         }
@@ -235,6 +253,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     readonly attachments?: ReadonlyArray<ChatAttachment> | undefined;
   }) {
     const parsedModel = OpenCodeRuntime.parseOpenCodeModelSlug(input.modelSelection.model);
+
     if (!parsedModel) {
       return yield* new TextGenerationError({
         operation: input.operation,
@@ -257,6 +276,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
             ? { serverPassword: openCodeSettings.serverPassword }
             : {}),
         });
+
         const session = yield* Effect.tryPromise({
           try: () =>
             client.session.create({
@@ -270,14 +290,17 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
               cause,
             }),
         });
+
         if (!session.data) {
           return yield* new OpenCodeTextGenerationSessionPayloadError({
             operation: input.operation,
             cwd: input.cwd,
           });
         }
+
         const selectedAgent = getModelSelectionStringOptionValue(input.modelSelection, "agent");
         const selectedVariant = getModelSelectionStringOptionValue(input.modelSelection, "variant");
+
         const promptContext = {
           operation: input.operation,
           cwd: input.cwd,
@@ -301,7 +324,9 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
               cause,
             }),
         });
+
         const promptFailure = getOpenCodePromptFailure(result.data?.info?.error);
+
         if (promptFailure) {
           return yield* new OpenCodeTextGenerationPromptResponseError({
             ...promptContext,
@@ -309,8 +334,10 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
             providerMessage: promptFailure.message,
           });
         }
+
         const responseParts = result.data?.parts ?? [];
         const rawText = getOpenCodeTextResponse(responseParts);
+
         if (rawText.length === 0) {
           return yield* new OpenCodeTextGenerationEmptyOutputError({
             ...promptContext,
@@ -318,6 +345,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
             textPartCount: responseParts.filter(isOpenCodeTextPart).length,
           });
         }
+
         return rawText;
       },
       Effect.catchTags({
@@ -377,6 +405,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
           );
 
     const decodeOutput = Schema.decodeEffect(Schema.fromJsonString(input.outputSchemaJson));
+
     return yield* decodeOutput(extractJsonObject(rawOutput)).pipe(
       Effect.catchTags({
         SchemaError: (cause) =>
@@ -397,6 +426,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
         message: input.message,
         attachments: input.attachments,
       });
+
       const generated = yield* runOpenCodeJson({
         operation: "generateBranchName",
         cwd: input.cwd,
@@ -418,6 +448,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
         previousTitle: input.previousTitle,
         attachments: input.attachments,
       });
+
       const generated = yield* runOpenCodeJson({
         operation: "generateThreadTitle",
         cwd: input.cwd,
@@ -437,8 +468,13 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     generateThreadTitle,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
+
 export { OpenCodeTextGenerationSessionRequestError } from "./OpenCodeTextGenerationProtocol.ts";
+
 export { OpenCodeTextGenerationSessionPayloadError } from "./OpenCodeTextGenerationProtocol.ts";
+
 export { OpenCodeTextGenerationPromptRequestError } from "./OpenCodeTextGenerationProtocol.ts";
+
 export { OpenCodeTextGenerationPromptResponseError } from "./OpenCodeTextGenerationProtocol.ts";
+
 export { OpenCodeTextGenerationEmptyOutputError } from "./OpenCodeTextGenerationProtocol.ts";

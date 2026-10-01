@@ -32,6 +32,7 @@ const makeRevision = (
   overrides: Partial<AkeruMemoryRevision> = {},
 ): AkeruMemoryRevision => {
   const authorBotId = BotId.make(partitionId.includes(":") ? partitionId.split(":")[0]! : "bot");
+
   return {
     id: AkeruMemoryId.make(id),
     rootId: AkeruMemoryRootId.make(id),
@@ -94,4 +95,5 @@ const sharedAccess = {
   respondingBotId: BotId.make("bot"),
   groupMemberBotIds: [BotId.make("bot")],
 } as const;
+
 export { repositoryLayer, makeRevision, privateAccess, insert, botAccess, sharedAccess };

@@ -54,6 +54,7 @@ import {
   insertId,
   hasActivity,
 } from "./AnalyticsAggregation.ts";
+
 const MAX_BUCKETS_PER_PASS = 8;
 
 const MAX_BATCH_BYTES = 64 * 1_024;
@@ -101,6 +102,7 @@ export const make = Effect.gen(function* () {
   const isDevelopment =
     serverConfig.devUrl !== undefined ||
     ["development", "test"].includes(Option.getOrElse(environment.nodeEnvironment, () => ""));
+
   const defaultEnabled = !isDevelopment && !Option.getOrElse(environment.ci, () => false);
   const environmentEnabled = Option.getOrElse(environment.enabled, () => defaultEnabled);
 
@@ -122,6 +124,7 @@ export const make = Effect.gen(function* () {
     Effect.gen(function* () {
       // Migration is deletion-only. Never read or transform the inherited identity.
       yield* fs.remove(serverConfig.anonymousIdPath, { force: true });
+
       if (!(yield* fs.exists(serverConfig.analyticsStatePath))) {
         const fresh: AnalyticsState = {
           version: 1,
@@ -132,10 +135,14 @@ export const make = Effect.gen(function* () {
           firstActiveInstallReported: false,
           pending: [],
         };
+
         yield* writeState(fresh);
+
         return fresh;
       }
+
       const encoded = yield* fs.readFileString(serverConfig.analyticsStatePath);
+
       return yield* Effect.sync(() => decodeState(migrateLegacyState(encoded)));
     });
 
@@ -246,12 +253,15 @@ export const make = Effect.gen(function* () {
           WHERE enabled = 1 AND mcp_server_id LIKE 'builtin-%'
         `,
       ]);
+
       const row = rows[0];
+
       if (!row) return null;
 
       const capabilityCounters = Object.fromEntries(
         USAGE_3H_COUNTER_KEYS.slice(USAGE_BASE_COUNTER_KEYS.length).map((key) => [key, 0]),
       );
+
       for (const usage of turnUsage) {
         const provider = normalizeProvider(usage.provider ?? "other");
         capabilityCounters[`provider_turns_${provider}`] = clampCounter(
@@ -262,11 +272,13 @@ export const make = Effect.gen(function* () {
           (capabilityCounters[`sandbox_turns_${sandbox}`] ?? 0) + usage.count,
         );
       }
+
       for (const usage of toolUsage) {
         if (usage.itemType && USAGE_TOOL_IDS.includes(usage.itemType as never)) {
           capabilityCounters[`tool_calls_${usage.itemType}`] = clampCounter(
             (capabilityCounters[`tool_calls_${usage.itemType}`] ?? 0) + usage.count,
           );
+
           if (usage.itemType === "web_search") {
             const provider = normalizeProvider(usage.provider ?? "other");
             capabilityCounters[`browser_searches_${provider}`] = clampCounter(
@@ -275,7 +287,9 @@ export const make = Effect.gen(function* () {
           }
         }
       }
+
       const enabledPluginIds = new Set(enabledPlugins.map((plugin) => plugin.pluginId));
+
       for (const pluginId of USAGE_PLUGIN_IDS) {
         capabilityCounters[`plugin_enabled_${pluginId}`] = Number(
           enabledPluginIds.has(pluginId.replaceAll("_", "-")),
@@ -314,6 +328,7 @@ export const make = Effect.gen(function* () {
         $ip: "0.0.0.0",
         $insert_id: "",
       } as Usage3hEventType["properties"];
+
       return {
         properties,
         changed: row.botsRestored > 0 || hasActivity(properties),
@@ -324,6 +339,7 @@ export const make = Effect.gen(function* () {
     Effect.gen(function* () {
       let next = state;
       const currentStart = bucketStartAt(now);
+
       for (
         let count = 0;
         count < MAX_BUCKETS_PER_PASS &&
@@ -335,6 +351,7 @@ export const make = Effect.gen(function* () {
         const end = bucketEnd(start);
         const aggregate = yield* readBucket(start, end);
         const changed = aggregate !== null && aggregate.changed;
+
         const pending = changed
           ? next.pending.concat(
               decodeUsage3hEvent({
@@ -349,6 +366,7 @@ export const make = Effect.gen(function* () {
               }),
             )
           : next.pending;
+
         next = Object.assign({}, next, {
           cursorBucketStart: end,
           firstActiveInstallReported: next.firstActiveInstallReported || changed,
@@ -356,21 +374,27 @@ export const make = Effect.gen(function* () {
         });
         yield* persistState(next);
       }
+
       return next;
     });
 
   const sendPending = (state: AnalyticsState, now: number) =>
     Effect.gen(function* () {
       const key = Option.getOrUndefined(environment.posthogKey);
+
       if (!key || state.pending.length === 0) return state;
       const deliveryDay = bucketStartAt(now).slice(0, 10);
       const deliveredToday = state.deliveryDay === deliveryDay ? state.deliveredToday : 0;
       const available = 8 - deliveredToday;
+
       if (available === 0) return state;
+
       const batch = state.pending
         .slice(0, Math.min(MAX_BUCKETS_PER_PASS, available))
         .map((event) => decodeUsage3hEvent(event));
+
       const body = { api_key: key, batch };
+
       if (encodeJson(body).length > MAX_BATCH_BYTES) return state;
 
       yield* HttpClientRequest.post(`${environment.posthogHost.replace(/\/$/, "")}/batch/`).pipe(
@@ -378,29 +402,38 @@ export const make = Effect.gen(function* () {
         Effect.flatMap(httpClient.execute),
         Effect.flatMap(HttpClientResponse.filterStatusOk),
       );
+
       const next = {
         ...state,
         deliveryDay,
         deliveredToday: deliveredToday + batch.length,
         pending: state.pending.slice(batch.length),
       };
+
       yield* persistState(next);
+
       return next;
     });
 
   const runOnce = lock.withPermits(1)(
     Effect.gen(function* () {
       const settings = yield* serverSettings.getSettings;
+
       if (!settings.analyticsEnabled) {
         yield* removeAnalyticsState;
+
         return;
       }
+
       if (!environmentEnabled) {
         if (Option.isSome(environment.enabled)) yield* removeAnalyticsState;
+
         return;
       }
+
       if (Option.isNone(environment.posthogKey)) {
         yield* removeAnalyticsState;
+
         return;
       }
 
@@ -428,5 +461,7 @@ export const make = Effect.gen(function* () {
 export const layer = Layer.effect(AnalyticsService, make);
 
 export const layerTest = AnalyticsService.layerTest;
+
 export { bucketStartAt } from "./AnalyticsAggregation.ts";
+
 export { normalizeProvider } from "./AnalyticsAggregation.ts";

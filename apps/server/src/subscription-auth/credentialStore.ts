@@ -75,9 +75,11 @@ export type SubscriptionAuthData = typeof SubscriptionAuthDataSchema.Type;
 const decodeAuthData = Schema.decodeUnknownEffect(
   Schema.fromJsonString(SubscriptionAuthDataSchema),
 );
+
 const decodeAuthDataResult = Schema.decodeUnknownResult(
   Schema.fromJsonString(SubscriptionAuthDataSchema),
 );
+
 const encodeAuthData = Schema.encodeEffect(Schema.fromJsonString(SubscriptionAuthDataSchema));
 
 /** The credential file could not be read, decoded, or written. */
@@ -131,6 +133,7 @@ export interface SubscriptionCredentialStore {
 }
 
 const stores = new Map<string, SubscriptionCredentialStore>();
+
 const initializing = new Map<string, Deferred.Deferred<SubscriptionCredentialStore | null>>();
 
 /** The process-wide store for `filePath`, created on first use and loaded from disk. */
@@ -139,32 +142,43 @@ export const subscriptionCredentialStore = Effect.fn("subscriptionCredentialStor
 ) {
   const path = yield* Path.Path;
   const resolved = path.resolve(filePath);
+
   for (;;) {
     const lookup = yield* Effect.sync(() => {
       const existing = stores.get(resolved);
+
       if (existing) return { type: "ready" as const, store: existing };
       const pending = initializing.get(resolved);
+
       if (pending) return { type: "pending" as const, pending };
       const started = Deferred.makeUnsafe<SubscriptionCredentialStore | null>();
       initializing.set(resolved, started);
+
       return { type: "create" as const, pending: started };
     });
+
     if (lookup.type === "ready") return lookup.store;
+
     if (lookup.type === "pending") {
       const shared = yield* Deferred.await(lookup.pending);
+
       if (shared) return shared;
       continue;
     }
+
     return yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
         const result = yield* Effect.exit(restore(makeSubscriptionCredentialStore(resolved)));
+
         if (Exit.isSuccess(result)) stores.set(resolved, result.value);
         initializing.delete(resolved);
+
         if (Exit.isFailure(result) && Cause.hasInterrupts(result.cause)) {
           yield* Deferred.succeed(lookup.pending, null);
         } else {
           yield* Deferred.done(lookup.pending, result);
         }
+
         return yield* result;
       }),
     );
@@ -176,6 +190,7 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
   const storeError = (
     reason: "corrupt" | "unreadable" | "write",
     cause: { readonly message: string },
@@ -185,6 +200,7 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
     function* () {
       if (!(yield* fs.exists(filePath))) return {};
       const text = yield* fs.readFileString(filePath);
+
       return yield* decodeAuthData(text).pipe(
         Effect.mapError(() =>
           storeError("corrupt", { message: "Invalid credential file format." }),
@@ -196,12 +212,14 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
   // The same read for `current()`, which cannot wait on the Effect file system.
   const readSync = (): Result.Result<SubscriptionAuthData, SubscriptionCredentialStoreError> => {
     let text: string;
+
     try {
       if (!NodeFS.existsSync(filePath)) return Result.succeed({});
       text = NodeFS.readFileSync(filePath, "utf-8");
     } catch (cause) {
       return Result.fail(storeError("unreadable", { message: String(cause) }));
     }
+
     return Result.mapError(decodeAuthDataResult(text), () =>
       storeError("corrupt", { message: "Invalid credential file format." }),
     );
@@ -215,8 +233,10 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
   ): CredentialStoreState => {
     if (Result.isSuccess(result)) return { data: result.success };
     const loadErrorAt = previous?.loadError ? (previous.loadErrorAt ?? at) : at;
+
     const hasLastGood =
       previous !== undefined && (previous.loadError === undefined || previous.servingLastGood);
+
     return hasLastGood
       ? { data: previous.data, loadError: result.failure, loadErrorAt, servingLastGood: true }
       : { data: {}, loadError: result.failure, loadErrorAt };
@@ -238,20 +258,26 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
     Effect.gen(function* () {
       const directory = path.dirname(filePath);
       yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
+
       const tempPath = path.join(
         directory,
         `${path.basename(filePath)}.${NodeCrypto.randomUUID()}.tmp`,
       );
+
       const text = yield* encodeAuthData(data);
+
       return yield* Effect.gen(function* () {
         yield* fs.writeFileString(tempPath, text, { mode: 0o600 });
         yield* fs.chmod(tempPath, 0o600);
+
         const stat = yield* Effect.tryPromise({
           try: () => NodeFS.promises.stat(tempPath, { bigint: true }),
           catch: (cause) => storeError("write", { message: String(cause) }),
         });
+
         const written = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}`;
         yield* fs.rename(tempPath, filePath);
+
         return written;
       }).pipe(Effect.ensuring(fs.remove(tempPath, { force: true }).pipe(Effect.ignore)));
     }).pipe(Effect.mapError((cause) => storeError("write", cause)));
@@ -260,10 +286,12 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
   // True while `reload` or `update` owns the file, so `current()` does not
   // reread a half-finished replacement.
   let busy = false;
+
   const exclusive = <A, E>(effect: Effect.Effect<A, E>) =>
     lock.withPermit(
       Effect.suspend(() => {
         busy = true;
+
         return effect;
       }).pipe(Effect.ensuring(Effect.sync(() => (busy = false)))),
     );
@@ -283,6 +311,7 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
       yield* logDamage(state, next);
       fingerprint = seen;
       state = next;
+
       return next;
     }),
   );
@@ -292,12 +321,14 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
     current: () => {
       if (busy) return state;
       const seen = fileFingerprint(filePath);
+
       if (seen === fingerprint) return state;
       const previous = state;
       const next = settle(previous, readSync(), runSync(now));
       runSync(logDamage(previous, next));
       fingerprint = seen;
       state = next;
+
       return state;
     },
     reload,
@@ -305,27 +336,35 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
       exclusive(
         Effect.gen(function* () {
           const loaded = settle(state, yield* Effect.result(read), yield* now);
+
           if (loaded.loadError?.reason === "unreadable") return yield* loaded.loadError;
           // Earlier backups stay: a later damaged file gets the next free name.
           let backupPath = `${filePath}.corrupt`;
+
           for (let index = 1; loaded.loadError?.reason === "corrupt"; index += 1) {
             const taken = yield* fs
               .exists(backupPath)
               .pipe(Effect.mapError((cause) => storeError("write", cause)));
+
             if (!taken) break;
             backupPath = `${filePath}.corrupt.${index}`;
           }
+
           if (loaded.loadError?.reason === "corrupt") {
             yield* fs
               .rename(filePath, backupPath)
               .pipe(Effect.mapError((cause) => storeError("write", cause)));
           }
+
           const next = f(loaded.data);
+
           if (next === loaded.data && !loaded.loadError) {
             state = loaded;
             fingerprint = fileFingerprint(filePath);
+
             return next;
           }
+
           fingerprint = yield* writeAtomically(next).pipe(
             // Also runs on interruption. Put the damaged file back only while nothing
             // replaced it, so an interrupted but finished write keeps its new file.
@@ -341,6 +380,7 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
             ),
           );
           state = { data: next };
+
           return next;
         }),
       ),
@@ -355,6 +395,7 @@ const makeSubscriptionCredentialStore = Effect.fn("makeSubscriptionCredentialSto
 function fileFingerprint(filePath: string): string {
   try {
     const stat = NodeFS.statSync(filePath, { bigint: true });
+
     return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}`;
   } catch (cause) {
     return (cause as NodeJS.ErrnoException).code === "ENOENT" ? "absent" : "unavailable";

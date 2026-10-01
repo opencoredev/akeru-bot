@@ -1,6 +1,7 @@
 import { BotId } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { MemoryApprovalError } from "./MemoryShareProposal.ts";
+
 export const AffectedBotIdsJson = Schema.fromJsonString(Schema.Array(BotId));
 
 export const encodeAffectedBotIds = Schema.encodeEffect(AffectedBotIdsJson);

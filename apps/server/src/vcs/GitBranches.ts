@@ -10,6 +10,7 @@ import {
   gitCommandContext,
 } from "./GitCoreHelpers.ts";
 import type { makeGitExecution } from "./GitExecution.ts";
+
 export const makeGitBranches = (dependencies: {
   path: Effect.Success<ReturnType<typeof makeGitExecution>>["path"];
   executeGit: Effect.Success<ReturnType<typeof makeGitExecution>>["executeGit"];
@@ -34,6 +35,7 @@ export const makeGitBranches = (dependencies: {
       desiredBranch: string,
     ) {
       const isDesiredTaken = yield* branchExists(cwd, desiredBranch);
+
       if (!isDesiredTaken) {
         return desiredBranch;
       }
@@ -41,6 +43,7 @@ export const makeGitBranches = (dependencies: {
       for (let suffix = 1; suffix <= 100; suffix += 1) {
         const candidate = `${desiredBranch}-${suffix}`;
         const isCandidateTaken = yield* branchExists(cwd, candidate);
+
         if (!isCandidateTaken) {
           return candidate;
         }
@@ -72,6 +75,7 @@ export const makeGitBranches = (dependencies: {
         Effect.map(parseRemoteNames),
         Effect.orElseSucceed((): ReadonlyArray<string> => []),
       );
+
       return (
         parseUpstreamRefWithRemoteNames(upstreamRef, remoteNames) ??
         parseUpstreamRefByFirstSeparator(upstreamRef)
@@ -84,6 +88,7 @@ export const makeGitBranches = (dependencies: {
     ): Effect.Effect<void, GitCommandError> => {
       const fetchCwd =
         path.basename(gitCommonDir) === ".git" ? path.dirname(gitCommonDir) : gitCommonDir;
+
       return executeGit(
         "GitVcsDriver.fetchRemoteForStatus",
         fetchCwd,
@@ -95,6 +100,7 @@ export const makeGitBranches = (dependencies: {
         },
       ).pipe(Effect.asVoid);
     };
+
     return {
       branchExists,
       resolveAvailableBranchName,

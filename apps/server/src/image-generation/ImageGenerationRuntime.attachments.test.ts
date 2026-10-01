@@ -31,15 +31,18 @@ import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
 import { type ImageAdapterRequest } from "./adapters.ts";
 import { ImageGenerationRuntime, makeImageGenerationRuntime } from "./ImageGenerationRuntime.ts";
 import { base64, pngBytes } from "./testImages.ts";
+
 describe("ImageGenerationRuntime", () => {
   it.effect("reports a partial result when some returned images are unusable", () => {
     const chatgpt = fakeAdapter("chatgpt");
     let call = 0;
+
     const adapters = {
       chatgpt: {
         ...chatgpt,
         run: (request: ImageAdapterRequest, signal: AbortSignal) => {
           call += 1;
+
           return call === 1
             ? chatgpt.run(request, signal)
             : Promise.resolve({
@@ -50,6 +53,7 @@ describe("ImageGenerationRuntime", () => {
       },
       grok: fakeAdapter("grok"),
     };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const botId = BotId.make("bot-partial");
@@ -73,6 +77,7 @@ describe("ImageGenerationRuntime", () => {
 
   it.effect("removes saved images when posting them fails", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const config = yield* ServerConfig;
       const engine = yield* OrchestrationEngineService;
@@ -82,6 +87,7 @@ describe("ImageGenerationRuntime", () => {
       yield* createBot(botId, "claudeAgent", null);
       yield* createBotThread(threadId, botId);
       yield* sendUserMessage(threadId, "post-fails");
+
       const runtime = yield* makeImageGenerationRuntime({
         adapters,
         subscriptionAuth: fakeSubscriptions(),
@@ -98,17 +104,20 @@ describe("ImageGenerationRuntime", () => {
       const result = yield* runtime.generate(threadId, { operation: "generate", prompt: PROMPT });
 
       assert.notEqual(result.status, "completed");
+
       const saved = NodeFS.existsSync(config.attachmentsDir)
         ? NodeFS.readdirSync(config.attachmentsDir, { recursive: true }).filter((entry) =>
             String(entry).includes("."),
           )
         : [];
+
       assert.deepEqual(saved, []);
     }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
   });
 
   it.effect("keeps saved images once the message references them", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const config = yield* ServerConfig;
       const engine = yield* OrchestrationEngineService;
@@ -118,6 +127,7 @@ describe("ImageGenerationRuntime", () => {
       yield* createBot(botId, "claudeAgent", null);
       yield* createBotThread(threadId, botId);
       yield* sendUserMessage(threadId, "complete-fails");
+
       const runtime = yield* makeImageGenerationRuntime({
         adapters,
         subscriptionAuth: fakeSubscriptions(),
@@ -134,17 +144,20 @@ describe("ImageGenerationRuntime", () => {
       const result = yield* runtime.generate(threadId, { operation: "generate", prompt: PROMPT });
 
       assert.notEqual(result.status, "completed");
+
       const saved = NodeFS.existsSync(config.attachmentsDir)
         ? NodeFS.readdirSync(config.attachmentsDir, { recursive: true }).filter((entry) =>
             String(entry).includes("."),
           )
         : [];
+
       assert.equal(saved.length, 1);
     }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
   });
 
   it.effect("rejects input images that are not from the chat", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const botId = BotId.make("bot-foreign");
@@ -158,6 +171,7 @@ describe("ImageGenerationRuntime", () => {
         prompt: PROMPT,
         inputImages: ["other-thread-image"],
       });
+
       const strict = yield* runtime.generate(threadId, {
         operation: "generate",
         prompt: PROMPT,
@@ -172,6 +186,7 @@ describe("ImageGenerationRuntime", () => {
 
   it.effect("cancels an in-flight request for the chat and posts nothing", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt", "hang"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const ledger = yield* BotUsageLedger;
@@ -184,6 +199,7 @@ describe("ImageGenerationRuntime", () => {
       const fiber = yield* runtime
         .generate(threadId, { operation: "generate", prompt: PROMPT })
         .pipe(Effect.forkChild);
+
       yield* Deferred.await(adapters.chatgpt.started);
       yield* runtime.cancelThread(threadId);
       const result = yield* Fiber.join(fiber);
@@ -198,6 +214,7 @@ describe("ImageGenerationRuntime", () => {
 
   it.effect("aborts in-flight requests when the runtime shuts down", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt", "hang"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const botId = BotId.make("bot-shutdown");
       const threadId = ThreadId.make("thread-shutdown");
@@ -206,13 +223,16 @@ describe("ImageGenerationRuntime", () => {
       yield* createBotThread(threadId, botId);
 
       const scope = yield* Scope.make();
+
       const runtime = yield* makeImageGenerationRuntime({
         adapters,
         subscriptionAuth: fakeSubscriptions(),
       }).pipe(Scope.provide(scope));
+
       const fiber = yield* runtime
         .generate(threadId, { operation: "generate", prompt: PROMPT })
         .pipe(Effect.forkChild);
+
       yield* Deferred.await(adapters.chatgpt.started);
       yield* Scope.close(scope, Exit.void);
       const result = yield* Fiber.join(fiber);
@@ -225,6 +245,7 @@ describe("ImageGenerationRuntime", () => {
 
   it.effect("charges the responding bot in a group chat and posts to the group", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const engine = yield* OrchestrationEngineService;
@@ -276,6 +297,7 @@ describe("ImageGenerationRuntime", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
     const baseDir = tempBaseDir();
     const threadId = ThreadId.make("thread-restart");
+
     return Effect.gen(function* () {
       const attachmentId = yield* Effect.gen(function* () {
         const runtime = yield* ImageGenerationRuntime;
@@ -283,10 +305,12 @@ describe("ImageGenerationRuntime", () => {
         yield* createProject;
         yield* createBot(botId, "claudeAgent", null);
         yield* createBotThread(threadId, botId);
+
         const result = yield* runtime.generate(threadId, {
           operation: "generate",
           prompt: PROMPT,
         });
+
         return result.status === "completed" ? result.artifacts[0]!.attachmentId : "";
       }).pipe(Effect.provide(testLayer({ baseDir, adapters })));
 
@@ -295,10 +319,12 @@ describe("ImageGenerationRuntime", () => {
         const [message] = yield* generatedMessages(threadId);
         const attachment = message?.attachments?.[0];
         assert.equal(attachment?.id, attachmentId);
+
         const path = resolveAttachmentPath({
           attachmentsDir: config.attachmentsDir,
           attachment: attachment!,
         })!;
+
         assert.equal(NodeFS.existsSync(path), true);
       }).pipe(Effect.provide(testLayer({ baseDir, adapters })));
     });
@@ -306,6 +332,7 @@ describe("ImageGenerationRuntime", () => {
 
   it.effect("keeps prompts and image bytes out of events and usage rows", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const sql = yield* SqlClient.SqlClient;
@@ -321,12 +348,15 @@ describe("ImageGenerationRuntime", () => {
       const events = yield* sql<{ readonly payload: string }>`
         SELECT payload_json AS "payload" FROM orchestration_events
       `;
+
       const usage = yield* sql<Record<string, unknown>>`SELECT * FROM akeru_bot_usage_entries`;
       assert.equal(events.length > 0 && usage.length === 1, true);
+
       const stored = [
         ...events.map((event) => event.payload),
         ...usage.flatMap((row) => Object.values(row).map(String)),
       ].join("\n");
+
       assert.equal(stored.includes(PROMPT), false);
       assert.equal(stored.includes(base64(pngBytes(1024, 1024))), false);
       assert.equal(Object.values(result).map(String).join("\n").includes(PROMPT), false);

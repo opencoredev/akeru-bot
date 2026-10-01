@@ -44,19 +44,26 @@ import type { UsageRecord } from "./usageTranscripts.ts";
 
 const LITELLM_RATES_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
+
 const RATES_TTL_MS = 24 * 60 * 60 * 1000;
+
 const RATES_FAILURE_BACKOFF_MS = 60_000;
+
 const RATES_MAX_FAILURE_BACKOFF_MS = 60 * 60 * 1000;
+
 const MAX_HOURLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 const DAILY_QUERY_SLACK_HOURS = 36;
 
 const RatesCacheFile = Schema.Struct({
   fetchedAtMs: Schema.Number,
   document: Schema.Unknown,
 });
+
 const decodeRatesCache = Schema.decodeUnknownEffect(
   Schema.fromJsonString(RatesCacheFile as unknown as Schema.Codec<typeof RatesCacheFile.Type>),
 );
+
 const encodeRatesCache = Schema.encodeEffect(
   Schema.fromJsonString(RatesCacheFile as unknown as Schema.Codec<typeof RatesCacheFile.Type>),
 );
@@ -97,12 +104,15 @@ export function usageRecordFromEntry(
 ): UsageRecord | null {
   if (entry.provider === null || entry.model === null) return null;
   const mapping = DRIVER_CONNECTIONS[entry.provider as keyof typeof DRIVER_CONNECTIONS];
+
   if (mapping === undefined || !connectedProviders.has(mapping.connection)) return null;
 
   const timestamp = DateTime.make(entry.createdAt);
+
   if (Option.isNone(timestamp)) return null;
 
   const outputTokens = entry.outputTokens ?? 0;
+
   return {
     provider: mapping.provider,
     timestampMs: DateTime.toEpochMillis(timestamp.value),
@@ -133,7 +143,9 @@ export const readUsageStoreVolumeId = Effect.fn("UsageService.readUsageStoreVolu
   const stats = yield* fileSystem
     .stat(databasePath)
     .pipe(Effect.catchCause(() => Effect.succeed(null)));
+
   if (stats === null || Option.isNone(stats.ino)) return "";
+
   return `${stats.dev}:${stats.ino.value}`;
 });
 
@@ -172,8 +184,10 @@ export const layerTest = layerTestWithRates(new Map());
 // The service scope owns shared work; disconnecting one caller only cancels its wait.
 const singleFlight = <A, E>(scope: Scope.Scope) => {
   const pending = new Map<string, Deferred.Deferred<A, E>>();
+
   const acquire = Effect.fnUntraced(function* (key: string, work: Effect.Effect<A, E>) {
     const existing = pending.get(key);
+
     if (existing) return existing;
     const shared = Deferred.makeUnsafe<A, E>();
     pending.set(key, shared);
@@ -187,8 +201,10 @@ const singleFlight = <A, E>(scope: Scope.Scope) => {
       ),
       shared,
     ).pipe(Effect.forkIn(scope));
+
     return shared;
   }, Effect.uninterruptible);
+
   return (key: string, work: Effect.Effect<A, E>) =>
     acquire(key, work).pipe(Effect.flatMap(Deferred.await));
 };
@@ -200,6 +216,7 @@ export const make = Effect.gen(function* () {
   const httpClient = yield* HttpClient.HttpClient;
   const providerUsageHistory = yield* ProviderUsageHistory;
   const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
+
   const readPlanLimits = yield* makePlanLimitsReader((provider) =>
     subscriptionAuth.getPlanAccess(provider),
   );
@@ -223,8 +240,10 @@ export const make = Effect.gen(function* () {
         Effect.flatMap(decodeRatesCache),
         Effect.catchCause(() => Effect.succeed(null)),
       );
+
       if (fromDisk === null) return;
       const parsed = parseRateTable(fromDisk.document);
+
       if (parsed.size > 0) {
         rates = parsed;
         ratesFetchedAtMs = fromDisk.fetchedAtMs;
@@ -236,16 +255,21 @@ export const make = Effect.gen(function* () {
   const refreshRates = yield* Effect.cachedWithTTL(
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
+
       if (now < ratesNextAttemptAtMs) return;
+
       if (ratesFetchedAtMs !== null && now - ratesFetchedAtMs < RATES_TTL_MS) return;
+
       const fetched = yield* httpClient.get(LITELLM_RATES_URL).pipe(
         Effect.flatMap(HttpClientResponse.filterStatusOk),
         Effect.flatMap((response) => response.json),
         Effect.timeout(10_000),
         Effect.catchCause(() => Effect.succeed(null)),
       );
+
       const parsed = parseRateTable(fetched);
       const completedAt = yield* Clock.currentTimeMillis;
+
       if (parsed.size === 0) {
         ratesStatus = rates.size > 0 ? "cached" : "unavailable";
         ratesNextAttemptAtMs =
@@ -255,8 +279,10 @@ export const make = Effect.gen(function* () {
             RATES_FAILURE_BACKOFF_MS * 2 ** Math.min(ratesFailures, 6),
           );
         ratesFailures += 1;
+
         return;
       }
+
       rates = parsed;
       ratesFetchedAtMs = completedAt;
       ratesStatus = "fresh";
@@ -275,9 +301,12 @@ export const make = Effect.gen(function* () {
     function* () {
       yield* loadRates;
       const now = yield* Clock.currentTimeMillis;
+
       if (ratesFetchedAtMs !== null && now - ratesFetchedAtMs < RATES_TTL_MS) return;
       ratesStatus = rates.size > 0 ? "cached" : "unavailable";
+
       if (now < ratesNextAttemptAtMs) return;
+
       if (rates.size === 0) {
         yield* refreshRates;
       } else if (!ratesRefreshRunning) {
@@ -299,6 +328,7 @@ export const make = Effect.gen(function* () {
     input: PriceStepUsageInput,
   ) {
     yield* ensureRates();
+
     return priceUsage(rates, input.model, input.totals, input.reportedCostUsd);
   });
 
@@ -311,31 +341,38 @@ export const make = Effect.gen(function* () {
     }
 
     let hourlyWindow: { readonly sinceTimeMs: number; readonly untilTimeMs: number } | null = null;
+
     if (input.resolution === "hour") {
       const sinceTime =
         input.sinceTime === undefined ? Option.none() : DateTime.make(input.sinceTime);
+
       const untilTime =
         input.untilTime === undefined ? Option.none() : DateTime.make(input.untilTime);
+
       if (Option.isNone(sinceTime) || Option.isNone(untilTime)) {
         return yield* new UsageReadError({
           reason: "invalidWindow",
           detail: "Hourly usage requires valid sinceTime and untilTime instants",
         });
       }
+
       const sinceTimeMs = DateTime.toEpochMillis(sinceTime.value);
       const untilTimeMs = DateTime.toEpochMillis(untilTime.value);
       const durationMs = untilTimeMs - sinceTimeMs;
+
       if (durationMs <= 0 || durationMs > MAX_HOURLY_WINDOW_MS) {
         return yield* new UsageReadError({
           reason: "invalidWindow",
           detail: "Hourly usage window must be greater than zero and at most 24 hours",
         });
       }
+
       hourlyWindow = { sinceTimeMs, untilTimeMs };
     }
 
     const sinceBoundary = DateTime.make(`${input.sinceDay}T00:00:00Z`);
     const untilBoundary = DateTime.make(`${input.untilDay}T00:00:00Z`);
+
     if (Option.isNone(sinceBoundary) || Option.isNone(untilBoundary)) {
       return yield* new UsageReadError({
         reason: "invalidWindow",
@@ -346,15 +383,18 @@ export const make = Effect.gen(function* () {
     const startedAtMs = yield* Clock.currentTimeMillis;
     yield* ensureRates();
     yield* subscriptionAuth.reload();
+
     const connectedProviders = subscriptionAuth
       .statuses()
       .filter((status) => status.connected)
       .map((status) => status.provider);
+
     const connectedSet = new Set<SubscriptionProviderId>(connectedProviders);
 
     const querySince = hourlyWindow
       ? DateTime.makeUnsafe(hourlyWindow.sinceTimeMs)
       : DateTime.subtract(sinceBoundary.value, { hours: DAILY_QUERY_SLACK_HOURS });
+
     const queryUntil = hourlyWindow
       ? DateTime.makeUnsafe(hourlyWindow.untilTimeMs)
       : DateTime.add(untilBoundary.value, { hours: 24 + DAILY_QUERY_SLACK_HOURS });
@@ -383,17 +423,22 @@ export const make = Effect.gen(function* () {
       ...hourlyWindow,
       rates,
     });
+
     const sessionsByProvider = new Map<UsageProviderKind, Set<string>>();
+
     for (const entry of entries) {
       const record = usageRecordFromEntry(entry, connectedSet);
+
       if (record === null || !aggregator.add(record)) continue;
       const sessions = sessionsByProvider.get(record.provider) ?? new Set<string>();
+
       if (record.sessionId.length > 0) sessions.add(record.sessionId);
       sessionsByProvider.set(record.provider, sessions);
     }
 
     const hostId = NodeOS.hostname();
     const volumeId = yield* readUsageStoreVolumeId(fileSystem, usageDatabasePath);
+
     const sources: UsageSource[] = [
       ...new Set(
         Object.values(DRIVER_CONNECTIONS)

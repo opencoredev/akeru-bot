@@ -36,12 +36,16 @@ export function buildProviderMemoryPacket(
     );
 
   type PacketFact = MemoryPacket["facts"][number];
+
   const facts: PacketFact[] = [];
   let rendered = "";
   let estimatedTokens = 0;
+
   for (const revision of candidates) {
     if (facts.length >= AKERU_MEMORY_PACKET_MAX_FACTS) break;
+
     if (scanMemoryContent(revision.fact).length > 0) continue;
+
     const fact = {
       memoryId: revision.rootId,
       expectedRevision: revision.revision,
@@ -52,9 +56,11 @@ export function buildProviderMemoryPacket(
       confidence: revision.confidence,
       updatedAt: revision.updatedAt,
     } satisfies MemoryPacket["facts"][number];
+
     const line = `- [${fact.scope}/${fact.kind}] ${fact.fact}`;
     const nextRendered = rendered.length === 0 ? line : `${rendered}\n${line}`;
     const nextTokens = Math.ceil(nextRendered.length / 4);
+
     if (
       nextRendered.length > AKERU_MEMORY_PACKET_MAX_CHARS ||
       nextTokens > AKERU_MEMORY_PACKET_MAX_ESTIMATED_TOKENS
@@ -62,6 +68,7 @@ export function buildProviderMemoryPacket(
       // A long fact must not hide smaller lower-ranked facts that still fit.
       continue;
     }
+
     facts.push(fact);
     rendered = nextRendered;
     estimatedTokens = nextTokens;

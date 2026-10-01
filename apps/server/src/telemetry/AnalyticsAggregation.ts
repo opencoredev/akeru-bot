@@ -76,8 +76,11 @@ export function collapse<T extends string>(
       .filter(Boolean)
       .map((value) => (allowed.has(value) ? normalize(value) : normalize("other"))),
   );
+
   if (values.size === 0) return none;
+
   if (values.size > 1) return mixed;
+
   return values.values().next().value ?? none;
 }
 
@@ -87,7 +90,9 @@ const providerValues = new Set(["codex", "claude", "claudeagent", "grok", "kimi"
 
 export function normalizeProvider(value: string): UsageAnalyticsProvider {
   if (value === "claudeagent") return "claude";
+
   if (value === "other") return "other";
+
   return providerValues.has(value) ? (value as UsageAnalyticsProvider) : "other";
 }
 
@@ -105,6 +110,7 @@ export const sandboxValues = new Set([
 
 export function normalizeSandbox(value: string): UsageSandboxProvider {
   if (value === "other") return "other";
+
   return sandboxValues.has(value) ? (value as UsageSandboxProvider) : "other";
 }
 
@@ -112,6 +118,7 @@ export const clientValues = new Set(["web", "desktop", "mobile"]);
 
 export function normalizeClient(value: string): UsageClientType {
   if (value === "other") return "none";
+
   return clientValues.has(value) ? (value as UsageClientType) : "none";
 }
 

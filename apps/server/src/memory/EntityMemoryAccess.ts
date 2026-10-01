@@ -46,7 +46,9 @@ const workspacePartitions = (input: AkeruMemoryThreadAccess) => {
     deriveAkeruWorkspaceId(input.projectId),
     "shared",
   );
+
   if (input.legacyWorkspaceOwnerProjectId !== input.projectId) return [canonical];
+
   return [
     canonical,
     partition(
@@ -63,6 +65,7 @@ export function resolveAuthorizedMemoryPartitions(
 ): Effect.Effect<ReadonlyArray<AuthorizedMemoryPartition>, AkeruMemoryAccessDenied> {
   if (input.groupId !== null) {
     const respondingBotId = input.respondingBotId ?? input.botId;
+
     if (
       respondingBotId === null ||
       !input.groupMemberBotIds.some((memberBotId) => memberBotId === respondingBotId)
@@ -73,6 +76,7 @@ export function resolveAuthorizedMemoryPartitions(
         }),
       );
     }
+
     return Effect.succeed([
       partition(input, "group", input.groupId, "shared"),
       partition(input, "project", input.projectId, "shared"),
@@ -117,6 +121,7 @@ export function resolveMemoryArchivePartitions(
                 : partitions.filter(
                     (candidate) => candidate.scope === "bot-user" || candidate.scope === "bot",
                   );
+
       return selected.length > 0
         ? Effect.succeed(selected)
         : Effect.fail(

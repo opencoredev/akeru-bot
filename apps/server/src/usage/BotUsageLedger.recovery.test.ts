@@ -16,12 +16,14 @@ it.effect("reconciles persisted reservations when the ledger restarts", () =>
   Effect.gen(function* () {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-usage-restart-"));
     const dbPath = NodePath.join(directory, "state.sqlite");
+
     const restartedLayer = () =>
       BotUsageLedgerLive.pipe(
         Layer.provideMerge(
           makeSqlitePersistenceLive(dbPath).pipe(Layer.provide(NodeServices.layer)),
         ),
       );
+
     const botId = BotId.make("bot-restart-usage");
     const threadId = ThreadId.make("thread-restart-usage");
     yield* Effect.gen(function* () {
@@ -52,6 +54,7 @@ it.effect("reconciles persisted reservations when the ledger restarts", () =>
           capLimit: 1_000,
         }),
       );
+
       const {
         maximumTokens: _maximumTokens,
         capLimit: _capLimit,
@@ -62,6 +65,7 @@ it.effect("reconciles persisted reservations when the ledger restarts", () =>
         turnId: TurnId.make("turn-interrupted"),
         category: "tool",
       });
+
       const tool = yield* ledger.recordStart(toolStart);
       assert.equal(tool.state, "reserved");
       assert.equal(tool.reservedTokens, 0);
@@ -96,6 +100,7 @@ it.effect("reconciles persisted reservations when the ledger restarts", () =>
         turnId: TurnId.make("turn-reported"),
         settledAt: "2026-08-30T20:03:00.000Z",
       });
+
       return { afterRestart, afterLateReport: yield* ledger.summarize(botId) };
     }).pipe(Effect.provide(restartedLayer()));
 
@@ -129,6 +134,7 @@ it.effect("reconciles persisted reservations when the ledger restarts", () =>
 it.effect("keeps pricing complete when a restart interrupts a tool call", () =>
   Effect.gen(function* () {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-usage-tool-"));
+
     const restartedLayer = () =>
       BotUsageLedgerLive.pipe(
         Layer.provideMerge(
@@ -137,6 +143,7 @@ it.effect("keeps pricing complete when a restart interrupts a tool call", () =>
           ),
         ),
       );
+
     const botId = BotId.make("bot-interrupted-tool");
     const threadId = ThreadId.make("thread-interrupted-tool");
     const turnId = TurnId.make("turn-interrupted-tool");
@@ -159,16 +166,19 @@ it.effect("keeps pricing complete when a restart interrupts a tool call", () =>
         turnId,
         settledAt: "2026-08-30T20:02:00.000Z",
       });
+
       const {
         maximumTokens: _maximumTokens,
         capLimit: _capLimit,
         ...toolStart
       } = reserveInput("interrupted-tool", { botId, threadId, turnId, category: "tool" });
+
       yield* ledger.recordStart(toolStart);
     }).pipe(Effect.provide(restartedLayer()));
 
     const { summary, pricing } = yield* Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
+
       return {
         summary: yield* ledger.summarize(botId),
         pricing: yield* ledger.pricingTotals(botId),

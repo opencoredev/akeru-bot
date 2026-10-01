@@ -168,6 +168,7 @@ function makeFakeCodexBinary(
       ].join("\n"),
     );
     yield* fs.chmod(codexPath, 0o755);
+
     return codexPath;
   });
 }
@@ -196,9 +197,11 @@ function withFakeCodexEnv<A, E, R>(
     const codexPath = yield* makeFakeCodexBinary(tempDir, input);
     const config = decodeCodexSettings({ binaryPath: codexPath, launchArgs: input.launchArgs });
     const textGeneration = yield* makeCodexTextGeneration(config, input.environment);
+
     return yield* effectFn(textGeneration);
   }).pipe(Effect.scoped);
 }
+
 export {
   decodeCodexSettings,
   DEFAULT_TEST_MODEL_SELECTION,

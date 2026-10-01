@@ -16,6 +16,7 @@ const TestLayer = VcsProjectConfig.layer.pipe(
 describe("VcsProjectConfig", () => {
   it("keeps operation context and the original cause on config errors", () => {
     const cause = new Error("permission denied");
+
     const error = new VcsProjectConfig.VcsProjectConfigError({
       operation: "read",
       cwd: "/repo/packages/app",
@@ -34,6 +35,7 @@ describe("VcsProjectConfig", () => {
     it.effect("returns the requested kind", () =>
       Effect.gen(function* () {
         const config = yield* VcsProjectConfig.VcsProjectConfig;
+
         const kind = yield* config.resolveKind({
           cwd: "/repo",
           requestedKind: "jj",
@@ -49,9 +51,11 @@ describe("VcsProjectConfig", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const root = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-vcs-config-test-",
         });
+
         const configDir = path.join(root, ".t3code");
         const nested = path.join(root, "packages", "app");
         yield* fileSystem.makeDirectory(configDir, { recursive: true });
@@ -73,6 +77,7 @@ describe("VcsProjectConfig", () => {
   it.layer(TestLayer)("continues to parent configs after a candidate inspect failure", (it) => {
     it.effect("logs the failed candidate and returns the parent config", () => {
       const messages: unknown[] = [];
+
       const logger = Logger.make<unknown, void>(({ message }) => {
         messages.push(message);
       });
@@ -80,9 +85,11 @@ describe("VcsProjectConfig", () => {
       return Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const root = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-vcs-config-test-",
         });
+
         const configDir = path.join(root, ".t3code");
         const cwd = path.join(root, "invalid\0child");
         yield* fileSystem.makeDirectory(configDir, { recursive: true });
@@ -117,9 +124,11 @@ describe("VcsProjectConfig", () => {
     it.effect("returns auto", () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
+
         const root = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-vcs-config-test-",
         });
+
         const config = yield* VcsProjectConfig.VcsProjectConfig;
         const kind = yield* config.resolveKind({ cwd: root });
 
@@ -131,6 +140,7 @@ describe("VcsProjectConfig", () => {
   it.layer(TestLayer)("falls back to auto when config JSON is malformed", (it) => {
     it.effect("returns auto and logs the failed operation and path", () => {
       const messages: unknown[] = [];
+
       const logger = Logger.make<unknown, void>(({ message }) => {
         messages.push(message);
       });
@@ -138,9 +148,11 @@ describe("VcsProjectConfig", () => {
       return Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const root = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-vcs-config-test-",
         });
+
         const configDir = path.join(root, ".t3code");
         yield* fileSystem.makeDirectory(configDir, { recursive: true });
         yield* fileSystem.writeFileString(path.join(configDir, "vcs.json"), "{not json");
@@ -169,6 +181,7 @@ describe("VcsProjectConfig", () => {
   it.layer(TestLayer)("falls back to auto when the config path cannot be read", (it) => {
     it.effect("retains the read failure context", () => {
       const messages: unknown[] = [];
+
       const logger = Logger.make<unknown, void>(({ message }) => {
         messages.push(message);
       });
@@ -176,9 +189,11 @@ describe("VcsProjectConfig", () => {
       return Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const root = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-vcs-config-test-",
         });
+
         const configPath = path.join(root, ".t3code", "vcs.json");
         yield* fileSystem.makeDirectory(configPath, { recursive: true });
 
@@ -205,9 +220,11 @@ describe("VcsProjectConfig", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const root = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-vcs-config-test-",
         });
+
         const configDir = path.join(root, ".t3code");
         yield* fileSystem.makeDirectory(configDir, { recursive: true });
         yield* fileSystem.writeFileString(

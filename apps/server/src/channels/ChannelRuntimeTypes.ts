@@ -32,6 +32,7 @@ import {
   ChannelTransportError,
 } from "./ChannelErrors.ts";
 import { type InboundDispatchInput } from "./ChannelInbound.ts";
+
 /** Promise-shaped transport handle. Injected transports return this; the runtime adapts it. */
 export interface ChannelTransportRuntime {
   readonly post: (externalThreadId: string, text: string) => Promise<void>;

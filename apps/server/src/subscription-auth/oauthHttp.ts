@@ -58,6 +58,7 @@ export const sendOAuthRequest = Effect.fn("sendOAuthRequest")(function* (
   request: HttpClientRequest.HttpClientRequest,
 ) {
   const client = yield* HttpClient.HttpClient;
+
   return yield* client
     .execute(request)
     .pipe(

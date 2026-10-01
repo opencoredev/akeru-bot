@@ -5,6 +5,7 @@ import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import { type DesktopTelemetryReceiverHealth } from "./DesktopTelemetryTypes.ts";
+
 export const INITIAL_SAMPLE_DEADLINE_MS = 90_000;
 
 export const MIN_SNAPSHOT_STALE_AFTER_MS = 90_000;
@@ -54,6 +55,7 @@ export const recordDesktopTelemetrySampleHealth = Effect.fn(
     lastSampleAt: Option.some(sampledAt),
     lastError: Option.none(),
   };
+
   yield* Ref.set(health, next);
   yield* PubSub.publish(healthChanges, next);
 });

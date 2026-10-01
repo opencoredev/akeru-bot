@@ -24,9 +24,11 @@ import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
 import { ImageAdapterFailure, type ImageAdapterRequest } from "./adapters.ts";
 import { ImageGenerationRuntime } from "./ImageGenerationRuntime.ts";
 import { pngBytes } from "./testImages.ts";
+
 describe("ImageGenerationRuntime", () => {
   it.effect("saves the image, posts it to the chat, and records usage for the bot", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const config = yield* ServerConfig;
@@ -41,6 +43,7 @@ describe("ImageGenerationRuntime", () => {
       const result = yield* runtime.generate(threadId, { operation: "generate", prompt: PROMPT });
 
       assert.equal(result.status, "completed");
+
       if (result.status !== "completed") return;
       assert.deepEqual(result.artifacts, [
         {
@@ -58,10 +61,12 @@ describe("ImageGenerationRuntime", () => {
       assert.equal(message?.text, "");
       const attachment = message?.attachments?.[0];
       assert.equal(attachment?.id, result.artifacts[0]!.attachmentId);
+
       const path = resolveAttachmentPath({
         attachmentsDir: config.attachmentsDir,
         attachment: attachment!,
       })!;
+
       assert.deepEqual(new Uint8Array(NodeFS.readFileSync(path)), pngBytes(1024, 1024));
 
       const usage = yield* ledger.summarize(botId);
@@ -80,11 +85,13 @@ describe("ImageGenerationRuntime", () => {
     const chatgpt = fakeAdapter("chatgpt");
     const run = chatgpt.run;
     let calls = 0;
+
     const adapters = {
       chatgpt: {
         ...chatgpt,
         run: (request: ImageAdapterRequest, signal: AbortSignal) => {
           calls += 1;
+
           return calls === 2
             ? Promise.reject(new ImageAdapterFailure("provider-failed", "Second failed."))
             : run(request, signal);
@@ -92,6 +99,7 @@ describe("ImageGenerationRuntime", () => {
       },
       grok: fakeAdapter("grok"),
     };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const ledger = yield* BotUsageLedger;
@@ -125,11 +133,13 @@ describe("ImageGenerationRuntime", () => {
     const chatgpt = fakeAdapter("chatgpt");
     const run = chatgpt.run;
     let calls = 0;
+
     const adapters = {
       chatgpt: {
         ...chatgpt,
         run: (request: ImageAdapterRequest, signal: AbortSignal) => {
           calls += 1;
+
           return calls === 2
             ? Promise.reject(new ImageAdapterFailure("provider-failed", "Second failed."))
             : run(request, signal);
@@ -137,6 +147,7 @@ describe("ImageGenerationRuntime", () => {
       },
       grok: fakeAdapter("grok"),
     };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const ledger = yield* BotUsageLedger;
@@ -153,6 +164,7 @@ describe("ImageGenerationRuntime", () => {
       });
 
       assert.equal(result.status, "completed");
+
       if (result.status !== "completed") return;
       assert.deepEqual(
         result.artifacts.map((artifact) => artifact.provider),
@@ -174,6 +186,7 @@ describe("ImageGenerationRuntime", () => {
 
   it.effect("routes a Claude bot to ChatGPT and a Codex bot to Grok by override", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const claudeBot = BotId.make("bot-claude-chatgpt");
@@ -190,6 +203,7 @@ describe("ImageGenerationRuntime", () => {
         operation: "generate",
         prompt: PROMPT,
       });
+
       const codex = yield* runtime.generate(codexThread, { operation: "generate", prompt: PROMPT });
 
       assert.equal(claude.status === "completed" && claude.provider, "chatgpt");
@@ -210,6 +224,7 @@ describe("ImageGenerationRuntime", () => {
 
   it.effect("uses the global default without an override and honors an explicit provider", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const botId = BotId.make("bot-default");
@@ -222,6 +237,7 @@ describe("ImageGenerationRuntime", () => {
         operation: "generate",
         prompt: PROMPT,
       });
+
       const explicit = yield* runtime.generate(threadId, {
         operation: "generate",
         prompt: PROMPT,
@@ -238,7 +254,9 @@ describe("ImageGenerationRuntime", () => {
       chatgpt: fakeAdapter("chatgpt", new ImageAdapterFailure("provider-failed", "Down.")),
       grok: fakeAdapter("grok"),
     };
+
     const subscriptions = fakeSubscriptions();
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const botId = BotId.make("bot-fallback");
@@ -260,6 +278,7 @@ describe("ImageGenerationRuntime", () => {
 
   it.effect("skips a revoked provider without calling it", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const botId = BotId.make("bot-revoked");
@@ -288,6 +307,7 @@ describe("ImageGenerationRuntime", () => {
       chatgpt: fakeAdapter("chatgpt", new ImageAdapterFailure("timeout", "Slow.")),
       grok: fakeAdapter("grok"),
     };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const botId = BotId.make("bot-edit");
@@ -309,6 +329,7 @@ describe("ImageGenerationRuntime", () => {
         prompt: PROMPT,
         allowProvider: "grok",
       });
+
       assert.equal(agreed.status === "completed" && agreed.provider, "grok");
       assert.deepEqual(adapters.grok.calls[0]!.inputImages, [
         { mimeType: "image/png", bytes: upload.bytes },
@@ -318,6 +339,7 @@ describe("ImageGenerationRuntime", () => {
 
   it.effect("does not edit an older image after a text-only message", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
     return Effect.gen(function* () {
       const runtime = yield* ImageGenerationRuntime;
       const botId = BotId.make("bot-stale-edit");

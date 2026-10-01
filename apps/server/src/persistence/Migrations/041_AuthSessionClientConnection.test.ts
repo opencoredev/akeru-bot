@@ -19,6 +19,7 @@ layer("041_AuthSessionClientConnection", (it) => {
       const columns = yield* sql<{ readonly name: string; readonly notnull: number }>`
         PRAGMA table_info(auth_sessions)
       `;
+
       const surface = columns.find((column) => column.name === "client_surface");
       const appVersion = columns.find((column) => column.name === "client_app_version");
 

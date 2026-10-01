@@ -30,12 +30,19 @@ import { generatePKCE } from "../pkce.ts";
 import type { OAuthCredentials } from "../types.ts";
 
 const decode = (s: string) => atob(s);
+
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
+
 const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
+
 const TOKEN_URL = "https://console.anthropic.com/v1/oauth/token";
+
 const REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback";
+
 const SCOPES = "org:create_api_key user:profile user:inference";
+
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
+
 const REQUEST_TIMEOUT = "15 seconds";
 
 const TokenResponse = Schema.Struct({
@@ -81,7 +88,9 @@ const requestTokens = Effect.fn("anthropic.requestTokens")(function* (
     Effect.flatMap(responseJson),
     Effect.flatMap(decodeOAuthBody(TokenResponse, `${label}: response missing fields`)),
   );
+
   const now = yield* Clock.currentTimeMillis;
+
   return {
     refresh: tokens.refresh_token,
     access: tokens.access_token,
@@ -99,12 +108,15 @@ const completeLogin = Effect.fn("anthropic.completeLogin")(function* (
   verifier: string,
 ) {
   const { code, state } = parseAuthorizationInput(input);
+
   if (!code) {
     return yield* new SubscriptionAuthInputError({ message: "Missing authorization code" });
   }
+
   if (!state || state !== verifier) {
     return yield* new SubscriptionAuthInputError({ message: "Invalid authorization state" });
   }
+
   return yield* requestTokens("Token exchange failed", {
     grant_type: "authorization_code",
     client_id: CLIENT_ID,

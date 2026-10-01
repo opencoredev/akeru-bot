@@ -9,6 +9,7 @@ import { findBlockingDependencyIncident } from "./RuntimeAdapterLive.ts";
 
 it.effect("resolves a routine incident when the routine is deleted", () => {
   const value = routine();
+
   const deleted = {
     sequence: 1,
     eventId: EventId.make("event-routine-deleted"),
@@ -30,6 +31,7 @@ it.effect("resolves a routine incident when the routine is deleted", () => {
       },
     },
   } satisfies Extract<OrchestrationEvent, { type: "routine.deleted" }>;
+
   const test = harness(value, [], null, false, Stream.make(deleted));
 
   return Effect.scoped(
@@ -78,6 +80,7 @@ it("finds open connector and browser incidents for the routine bot", () => {
 
 it.effect("coalesces missed slots and claims each slot once", () => {
   const test = harness(routine());
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;
@@ -94,6 +97,7 @@ it.effect("coalesces missed slots and claims each slot once", () => {
 
 it.effect("defers a due run while its target chat is busy", () => {
   const test = harness(routine(), [], null, true);
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;
@@ -104,6 +108,7 @@ it.effect("defers a due run while its target chat is busy", () => {
 
 it.effect("blocks a dispatched run whose session stopped before a turn", () => {
   const value = routine();
+
   const test = harness(value, [
     {
       runId: RoutineRunId.make("run-stopped"),
@@ -119,6 +124,7 @@ it.effect("blocks a dispatched run whose session stopped before a turn", () => {
       sessionUpdatedAt: "2026-08-31T13:01:00.000Z",
     },
   ]);
+
   return Effect.gen(function* () {
     const runtime = yield* RoutineRuntime;
     yield* runtime.recover;
@@ -128,6 +134,7 @@ it.effect("blocks a dispatched run whose session stopped before a turn", () => {
 
 it.effect("validates dry runs without dispatching a provider turn", () => {
   const test = harness(routine());
+
   return Effect.gen(function* () {
     const runtime = yield* RoutineRuntime;
     yield* runtime.runNow(RoutineId.make("routine-1"), RoutineRunId.make("manual-1"), "manual");
@@ -147,6 +154,7 @@ it.effect("validates dry runs without dispatching a provider turn", () => {
 
 it.effect("blocks an unapproved routine and opens one incident", () => {
   const test = harness(routine({ approvalVersion: 1 }));
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;
@@ -168,6 +176,7 @@ it.effect("blocks a broken connector without retrying the same slot", () => {
     reason: "Required connector 'gmail' is unavailable.",
     nextAction: "Reconnect the connector, then resume the routine.",
   });
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;
@@ -201,6 +210,7 @@ it.effect("blocks a run whose bot work could not start", () => {
       },
     },
   );
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;

@@ -17,6 +17,7 @@ import {
   type ChannelRuntimeContext,
 } from "./ChannelRuntimeTypes.ts";
 import { encoder, decoder } from "./ChannelWebhooks.ts";
+
 export const StoredChannelSecret = Schema.Union([
   Schema.Struct({ provider: Schema.Literal("telegram"), token: Schema.String }),
   Schema.Struct({
@@ -99,6 +100,7 @@ export const storedSecretFromInput = (
   input: ChannelConnectInput | ChannelConnectionSaveInput,
 ): StoredChannelSecret => {
   if (input.provider === "telegram") return { provider: "telegram", token: input.token };
+
   if (input.provider === "whatsapp") {
     return {
       provider: "whatsapp",
@@ -108,9 +110,11 @@ export const storedSecretFromInput = (
       verifyToken: input.verifyToken,
     };
   }
+
   if (input.provider === "slack") {
     return { provider: "slack", botToken: input.botToken, appToken: input.appToken };
   }
+
   if (input.provider === "discord") {
     return {
       provider: "discord",
@@ -119,6 +123,7 @@ export const storedSecretFromInput = (
       publicKey: input.publicKey,
     };
   }
+
   return input.mode === "hosted"
     ? {
         provider: "imessage",
@@ -151,6 +156,7 @@ export const connectInputFromSecret = (
       token: secret.token,
     });
   }
+
   if (secret.provider === "whatsapp") {
     return Effect.succeed({
       type: "channel.connect",
@@ -164,6 +170,7 @@ export const connectInputFromSecret = (
       verifyToken: secret.verifyToken,
     });
   }
+
   if (secret.provider === "slack") {
     return Effect.succeed({
       type: "channel.connect",
@@ -175,6 +182,7 @@ export const connectInputFromSecret = (
       appToken: secret.appToken,
     });
   }
+
   if (secret.provider === "discord") {
     return Effect.succeed({
       type: "channel.connect",
@@ -187,6 +195,7 @@ export const connectInputFromSecret = (
       publicKey: secret.publicKey,
     });
   }
+
   if (secret.mode === "hosted" && secret.projectId && secret.projectSecret) {
     return Effect.succeed({
       type: "channel.connect",
@@ -199,6 +208,7 @@ export const connectInputFromSecret = (
       projectSecret: secret.projectSecret,
     });
   }
+
   if (secret.mode === "self-hosted" && secret.serverUrl && secret.apiKey) {
     return Effect.succeed({
       type: "channel.connect",
@@ -212,14 +222,19 @@ export const connectInputFromSecret = (
       ...(secret.phone ? { phone: secret.phone } : {}),
     });
   }
+
   return failWith("Saved channel credentials are incomplete.");
 };
 
 export const channelSecretIdentity = (secret: StoredChannelSecret): string => {
   if (secret.provider === "telegram") return `telegram:${secret.token}`;
+
   if (secret.provider === "whatsapp") return `whatsapp:${secret.phoneNumberId}`;
+
   if (secret.provider === "slack") return `slack:${secret.botToken}`;
+
   if (secret.provider === "discord") return `discord:${secret.applicationId}`;
+
   return secret.mode === "hosted"
     ? `imessage:hosted:${secret.projectId ?? ""}`
     : `imessage:self-hosted:${secret.serverUrl ?? ""}:${secret.phone ?? ""}`;
@@ -232,8 +247,10 @@ export const assertChannelIdentityAvailable = (
 ) =>
   Effect.gen(function* () {
     const model = yield* ctx.deps.readModel;
+
     for (const bot of model.bots) {
       if (bot.id === botId || bot.archivedAt !== null) continue;
+
       for (const binding of bot.channelBindings ?? []) {
         if (
           binding.provider !== candidateSecret.provider ||
@@ -241,11 +258,13 @@ export const assertChannelIdentityAvailable = (
         ) {
           continue;
         }
+
         const secret = yield* (
           binding.connectionId
             ? loadConnectionSecret(ctx, binding.connectionId)
             : loadSecret(ctx, bot.id, binding.provider)
         ).pipe(Effect.orElseSucceed(() => null));
+
         if (secret && channelSecretIdentity(secret) === channelSecretIdentity(candidateSecret)) {
           return yield* failWith("This channel connection is already connected to another bot.");
         }

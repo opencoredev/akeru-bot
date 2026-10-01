@@ -9,6 +9,7 @@ import {
 import * as Effect from "effect/Effect";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
+
 describe("channel runtime", () => {
   it.effect("verifies WhatsApp webhook challenges", () =>
     Effect.gen(function* () {
@@ -21,6 +22,7 @@ describe("channel runtime", () => {
           `https://akeru.example/api/channels/whatsapp/${BOT_ID}/webhook?hub.mode=subscribe&hub.verify_token=verify-token&hub.challenge=challenge-123`,
         ),
       );
+
       const rejected = yield* handleWhatsAppWebhook(
         BOT_ID,
         new Request(
@@ -38,6 +40,7 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const harness = makeHarness({ startTransport: null });
       yield* connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
+
       const change = (phoneNumberId: string, messageId: string) => ({
         field: "messages",
         value: {
@@ -58,6 +61,7 @@ describe("channel runtime", () => {
           ],
         },
       });
+
       const batch = (...changes: ReadonlyArray<ReturnType<typeof change>>) =>
         JSON.stringify({
           object: "whatsapp_business_account",
@@ -68,6 +72,7 @@ describe("channel runtime", () => {
         BOT_ID,
         signedWhatsAppRequest(batch(change("other-phone-number-id", "wamid.other-line"))),
       );
+
       const oversized = yield* handleWhatsAppWebhook(
         BOT_ID,
         signedWhatsAppRequest(" ".repeat(1024 * 1024 + 1)),
@@ -87,6 +92,7 @@ describe("channel runtime", () => {
           ),
         ),
       );
+
       expect(mixed.status).toBe(200);
       const turns = harness.commands.filter((command) => command.type === "thread.turn.start");
       expect(

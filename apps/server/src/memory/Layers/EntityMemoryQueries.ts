@@ -13,6 +13,7 @@ import {
 } from "../Services/EntityMemoryRepository.ts";
 import { EntityMemoryDbRow, selectColumns, decodeRow } from "./EntityMemoryRows.ts";
 import type { makeEntityMemoryStorage } from "./EntityMemoryStorage.ts";
+
 export const makeEntityMemoryQueries = (dependencies: {
   sql: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["sql"];
   getCurrent: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["getCurrent"];
@@ -22,6 +23,7 @@ export const makeEntityMemoryQueries = (dependencies: {
 
     const searchOne = (partition: AuthorizedMemoryPartition, query: string, limit: number) => {
       const ftsQuery = toFtsQuery(query);
+
       const params = [
         partition.tenantId,
         partition.scope,
@@ -30,12 +32,15 @@ export const makeEntityMemoryQueries = (dependencies: {
         ...(ftsQuery === null ? [] : [ftsQuery]),
         limit,
       ];
+
       const from =
         ftsQuery === null
           ? "FROM akeru_memory_revisions memory"
           : "FROM akeru_memory_revisions memory JOIN akeru_memory_fts fts ON fts.memory_id = memory.memory_id";
+
       const match = ftsQuery === null ? "" : "AND akeru_memory_fts MATCH ?";
       const relevance = ftsQuery === null ? "0" : "bm25(akeru_memory_fts)";
+
       return sql.unsafe<EntityMemoryDbRow & { readonly relevance: number }>(
         `SELECT ${selectColumns.replaceAll(/\b([a-z_]+) AS/g, "memory.$1 AS")}, ${relevance} AS relevance
        ${from}
@@ -55,7 +60,9 @@ export const makeEntityMemoryQueries = (dependencies: {
 
     const search: EntityMemoryRepositoryShape["search"] = (input: SearchEntityMemoryInput) => {
       const limit = Math.max(0, Math.min(input.limit, 100));
+
       if (limit === 0 || toFtsQuery(input.query) === null) return Effect.succeed([]);
+
       return resolveAuthorizedMemoryPartitions(input.access).pipe(
         Effect.flatMap((partitions) =>
           Effect.forEach(
@@ -141,6 +148,7 @@ export const makeEntityMemoryQueries = (dependencies: {
       Effect.gen(function* () {
         yield* getCurrent(input);
         const partitions = yield* resolveAuthorizedMemoryPartitions(input.access);
+
         const rows = yield* sql
           .unsafe<EntityMemoryDbRow>(
             `SELECT ${selectColumns} FROM akeru_memory_revisions
@@ -148,7 +156,9 @@ export const makeEntityMemoryQueries = (dependencies: {
             [input.access.tenantId, input.rootId],
           )
           .pipe(Effect.mapError(toPersistenceSqlError("EntityMemoryRepository.listHistory:query")));
+
         const decoded = yield* Effect.forEach(rows, decodeRow);
+
         return decoded.filter(isRevisionAuthorized(partitions));
       });
 
@@ -159,6 +169,7 @@ export const makeEntityMemoryQueries = (dependencies: {
             reason: "Every export partition must belong to the requested tenant.",
           });
         }
+
         const groups = yield* Effect.forEach(
           input.partitions,
           (candidate) =>
@@ -201,10 +212,14 @@ export const makeEntityMemoryQueries = (dependencies: {
               ),
           { concurrency: 1 },
         );
+
         const revisions = groups.flat();
+
         if (!input.complete) return revisions;
         const authorized = yield* resolveAuthorizedMemoryPartitions(input.access);
+
         return revisions.filter(isRevisionAuthorized(authorized));
       });
+
     return { search, listCurrent, isRevisionAuthorized, listHistory, listByPartitions };
   });

@@ -13,6 +13,7 @@ import * as Stream from "effect/Stream";
 it.effect("rejects calls when no connected host exists", () =>
   Effect.gen(function* () {
     const broker = yield* makeBroker;
+
     const error = yield* broker
       .invoke<void>({ scope, operation: "status", input: {} })
       .pipe(Effect.flip);
@@ -41,6 +42,7 @@ it.effect("does not create host state from focus updates without a live stream",
     const error = yield* broker
       .invoke<void>({ scope, operation: "status", input: {} })
       .pipe(Effect.flip);
+
     expect(error).toBeInstanceOf(PreviewAutomationNoAvailableHostError);
   }),
 );
@@ -50,9 +52,11 @@ it.effect("removes host availability when the authoritative request stream disco
     Effect.gen(function* () {
       const broker = yield* makeBroker;
       const requests = requestsFrom(yield* broker.connect(makeHost()));
+
       const beforeAcquisition = yield* broker
         .invoke<void>({ scope, operation: "status", input: {} })
         .pipe(Effect.flip);
+
       expect(beforeAcquisition).toBeInstanceOf(PreviewAutomationNoAvailableHostError);
 
       const consumer = yield* Stream.runDrain(requests).pipe(Effect.forkScoped);
@@ -62,6 +66,7 @@ it.effect("removes host availability when the authoritative request stream disco
       const error = yield* broker
         .invoke<void>({ scope, operation: "status", input: {} })
         .pipe(Effect.flip);
+
       expect(error).toBeInstanceOf(PreviewAutomationNoAvailableHostError);
     }),
   ),
@@ -76,6 +81,7 @@ it.effect("routes requests for background threads through an environment-level h
       let routedThreadId: string | undefined;
       yield* Stream.runForEach(requests, (request) => {
         routedThreadId = request.threadId;
+
         return broker.respond({
           clientId: "client-1",
           connectionId: request.connectionId,
@@ -106,9 +112,11 @@ it.effect("never routes a provider session to a host from another environment", 
   Effect.scoped(
     Effect.gen(function* () {
       const broker = yield* makeBroker;
+
       const matchingRequests = requestsFrom(
         yield* broker.connect(makeHost({ clientId: "client-matching" })),
       );
+
       const foreignRequests = requestsFrom(
         yield* broker.connect(
           makeHost({
@@ -117,6 +125,7 @@ it.effect("never routes a provider session to a host from another environment", 
           }),
         ),
       );
+
       yield* Stream.runForEach(matchingRequests, (request) =>
         broker.respond({
           clientId: "client-matching",
@@ -150,18 +159,21 @@ it.effect("pins a provider session to its initial host despite later focus chang
       const broker = yield* makeBroker;
       let firstConnectionId = "";
       let secondConnectionId = "";
+
       const firstRequests = requestsFrom(
         yield* broker.connect(makeHost({ clientId: "client-first" })),
         (connectionId) => {
           firstConnectionId = connectionId;
         },
       );
+
       const secondRequests = requestsFrom(
         yield* broker.connect(makeHost({ clientId: "client-second" })),
         (connectionId) => {
           secondConnectionId = connectionId;
         },
       );
+
       yield* Stream.runForEach(firstRequests, (request) =>
         broker.respond({
           clientId: "client-first",
@@ -202,6 +214,7 @@ it.effect("pins a provider session to its initial host despite later focus chang
         ...scope,
         providerSessionId: "provider-session-first-pinned",
       };
+
       expect(
         yield* broker.invoke<string>({ scope: firstPinnedScope, operation: "status", input: {} }),
       ).toBe("first");
@@ -249,14 +262,17 @@ it.effect("routes resize to a capable host instead of a newer legacy connection"
   Effect.scoped(
     Effect.gen(function* () {
       const broker = yield* makeBroker;
+
       const capableRequests = requestsFrom(
         yield* broker.connect(
           makeHost({ clientId: "client-capable", supportedOperations: ["resize"] }),
         ),
       );
+
       const legacyRequests = requestsFrom(
         yield* broker.connect(makeHost({ clientId: "client-legacy" })),
       );
+
       yield* Stream.runForEach(capableRequests, (request) =>
         broker.respond({
           clientId: "client-capable",
@@ -288,9 +304,11 @@ it.effect("does not move a live legacy assignment to another runtime for resize"
   Effect.scoped(
     Effect.gen(function* () {
       const broker = yield* makeBroker;
+
       const legacyRequests = requestsFrom(
         yield* broker.connect(makeHost({ clientId: "client-legacy" })),
       );
+
       yield* Stream.runForEach(legacyRequests, (request) =>
         broker.respond({
           clientId: "client-legacy",
@@ -311,6 +329,7 @@ it.effect("does not move a live legacy assignment to another runtime for resize"
           makeHost({ clientId: "client-capable", supportedOperations: ["resize"] }),
         ),
       );
+
       yield* Stream.runForEach(capableRequests, (request) =>
         broker.respond({
           clientId: "client-capable",
@@ -325,6 +344,7 @@ it.effect("does not move a live legacy assignment to another runtime for resize"
       const error = yield* broker
         .invoke<void>({ scope, operation: "resize", input: { mode: "fill" } })
         .pipe(Effect.flip);
+
       expect(error).toBeInstanceOf(PreviewAutomationNoAvailableHostError);
       expect(yield* broker.invoke<string>({ scope, operation: "status", input: {} })).toBe(
         "legacy",
@@ -338,15 +358,18 @@ it.effect("ignores stale focus updates for a different environment", () =>
     Effect.gen(function* () {
       const broker = yield* makeBroker;
       let firstConnectionId = "";
+
       const firstRequests = requestsFrom(
         yield* broker.connect(makeHost({ clientId: "client-first" })),
         (connectionId) => {
           firstConnectionId = connectionId;
         },
       );
+
       const secondRequests = requestsFrom(
         yield* broker.connect(makeHost({ clientId: "client-second" })),
       );
+
       yield* Stream.runForEach(firstRequests, (request) =>
         broker.respond({
           clientId: "client-first",
@@ -388,15 +411,18 @@ it.effect("fails over a pinned provider session only after its host disconnects"
       const firstTabId = PreviewTabId.make("tab-on-first-host");
       let firstConnectionId = "";
       let secondRoutedTabId: PreviewTabId | undefined;
+
       const firstRequests = requestsFrom(
         yield* broker.connect(makeHost({ clientId: "client-first" })),
         (connectionId) => {
           firstConnectionId = connectionId;
         },
       );
+
       const secondRequests = requestsFrom(
         yield* broker.connect(makeHost({ clientId: "client-second" })),
       );
+
       const firstConsumer = yield* Stream.runForEach(firstRequests, (request) =>
         broker.respond({
           clientId: "client-first",
@@ -406,8 +432,10 @@ it.effect("fails over a pinned provider session only after its host disconnects"
           result: request.operation === "open" ? { host: "first", tabId: firstTabId } : "first",
         }),
       ).pipe(Effect.forkScoped);
+
       yield* Stream.runForEach(secondRequests, (request) => {
         secondRoutedTabId = request.tabId;
+
         return broker.respond({
           clientId: "client-second",
           connectionId: request.connectionId,
@@ -448,6 +476,7 @@ it.effect("lets the browser host resolve an active tab locally", () =>
       let routedTabId: string | undefined;
       yield* Stream.runForEach(requests, (request) => {
         routedTabId = request.tabId;
+
         return broker.respond({
           clientId: "client-1",
           connectionId: request.connectionId,

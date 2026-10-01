@@ -25,8 +25,10 @@ import {
   resolveWslFileManagerPath,
   resolveFileManagerRevealLaunch,
 } from "./fileManagerLauncher.ts";
+
 export function parseTargetPathAndPosition(target: string): Option.Option<TargetPathAndPosition> {
   const match = TARGET_WITH_POSITION_PATTERN.exec(target);
+
   if (!match?.[1] || !match[2]) {
     return Option.none();
   }
@@ -70,6 +72,7 @@ export function resolveEditorArgs(
   target: string,
 ): ReadonlyArray<string> {
   const baseArgs = "baseArgs" in editor ? editor.baseArgs : [];
+
   return [...baseArgs, ...resolveCommandEditorArgs(editor, target)];
 }
 
@@ -88,10 +91,12 @@ export const buildAvailableEditors = Effect.fn("externalLauncher.buildAvailableE
       if ((yield* resolveUsableFileManagerCommand(platform, env)) !== undefined) {
         available.push(editor.id);
       }
+
       continue;
     }
 
     const command = yield* resolveAvailableCommand(editor.commands, env);
+
     if (Option.isSome(command)) {
       available.push(editor.id);
     }
@@ -104,6 +109,7 @@ export const resolveAvailableEditors = Effect.fn("externalLauncher.resolveAvaila
   function* () {
     const platform = yield* HostProcessPlatform;
     const env = { ...(yield* readBrowserLaunchEnv), ...(yield* readCommandLookupEnv) };
+
     return yield* buildAvailableEditors(platform, env);
   },
 );
@@ -127,6 +133,7 @@ const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
     "externalLauncher.platform": platform,
   });
   const editorDef = EDITORS.find((editor) => editor.id === input.editor);
+
   if (!editorDef) {
     return yield* new ExternalLauncherUnknownEditorError({ editor: input.editor });
   }
@@ -136,6 +143,7 @@ const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
       yield* resolveAvailableCommand(editorDef.commands, env),
       () => editorDef.commands[0],
     );
+
     return {
       editor: editorDef.id,
       target: input.cwd,
@@ -149,6 +157,7 @@ const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
   }
 
   const command = yield* resolveUsableFileManagerCommand(platform, env);
+
   if (command === undefined) {
     return yield* new ExternalLauncherUnsupportedEditorError({ editor: input.editor });
   }

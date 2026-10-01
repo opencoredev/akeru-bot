@@ -23,11 +23,13 @@ it("normalizes empty successful notification responses to accepted", () => {
   const notificationResponse = McpHttpServer.normalizeMcpHttpResponse(
     HttpServerResponse.text("", { status: 200, contentType: "application/json" }),
   );
+
   expect(notificationResponse.status).toBe(202);
 
   const resultResponse = McpHttpServer.normalizeMcpHttpResponse(
     HttpServerResponse.jsonUnsafe({ jsonrpc: "2.0", id: 1, result: {} }),
   );
+
   expect(resultResponse.status).toBe(200);
 });
 
@@ -87,6 +89,7 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
         path: "/mcp",
         protocols: [McpProtocol.v2025_06_18],
       });
+
       yield* HttpRouter.serve(serverLayer, {
         disableListenLog: true,
         disableLogger: true,
@@ -100,6 +103,7 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
           "application/json",
         ),
       });
+
       const sessionId = initializeResponse.headers["mcp-session-id"];
       expect(initializeResponse.status).toBe(200);
       expect(sessionId).not.toBeNull();
@@ -110,11 +114,13 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
       const unknownSessionResponse = yield* httpClient.del("/mcp", {
         headers: { "mcp-session-id": "unknown-session" },
       });
+
       expect(unknownSessionResponse.status).toBe(404);
 
       const terminateResponse = yield* httpClient.del("/mcp", {
         headers: { "mcp-session-id": sessionId! },
       });
+
       expect(terminateResponse.status).toBe(204);
 
       const reusedSessionResponse = yield* httpClient.post("/mcp", {
@@ -127,6 +133,7 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
           "application/json",
         ),
       });
+
       expect(reusedSessionResponse.status).toBe(404);
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
@@ -137,17 +144,21 @@ it.effect("registers annotated tools and preserves authenticated request context
     Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+
       const routedRequests: Array<{
         readonly operation: string;
         readonly tabId?: string | undefined;
       }> = [];
+
       const events = yield* broker.connect({
         clientId: "mcp-test-client",
         environmentId,
       });
+
       yield* Stream.runForEach(events, (event) => {
         if (event.type === "connected") return Effect.void;
         routedRequests.push(event.request);
+
         if (event.request.operation === "navigate") {
           return broker.respond({
             clientId: "mcp-test-client",
@@ -161,6 +172,7 @@ it.effect("registers annotated tools and preserves authenticated request context
             },
           });
         }
+
         return broker.respond({
           clientId: "mcp-test-client",
           connectionId: event.connectionId,
@@ -241,15 +253,20 @@ it.effect("registers annotated tools and preserves authenticated request context
       const advertisedString = (toolName: string, field: string) => {
         const registered = server.tools.find(({ tool }) => tool.name === toolName)?.tool;
         expect(registered, `${toolName} must be advertised`).toBeDefined();
+
         const inputSchema = registered?.inputSchema as {
           readonly properties?: Readonly<Record<string, unknown>>;
         };
+
         const fieldSchema = inputSchema.properties?.[field] as Record<string, unknown>;
+
         const variants = Array.isArray(fieldSchema.anyOf)
           ? (fieldSchema.anyOf as Array<Record<string, unknown>>)
           : [fieldSchema];
+
         return variants.find((variant) => variant.type === "string");
       };
+
       for (const [toolName, field] of [
         ["preview_navigate", "url"],
         ["preview_press", "key"],
@@ -266,6 +283,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(status.isError).toBe(false);
       expect(status.structuredContent).toMatchObject({
         available: true,
@@ -279,6 +297,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpSchema.McpServerClient, client),
           Effect.flip,
         );
+
       expect(malformed._tag).toBe("InvalidParams");
 
       for (const request of [
@@ -292,6 +311,7 @@ it.effect("registers annotated tools and preserves authenticated request context
             Effect.provideService(McpSchema.McpServerClient, client),
             Effect.flip,
           );
+
         expect(invalid._tag).toBe("InvalidParams");
       }
 
@@ -301,6 +321,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(snapshot.isError).toBe(false);
       expect(snapshot.content.some((content) => content.type === "image")).toBe(true);
       expect(snapshot.structuredContent).toMatchObject({
@@ -308,6 +329,7 @@ it.effect("registers annotated tools and preserves authenticated request context
         screenshot: { mimeType: "image/png", width: 10, height: 5, redacted: true },
       });
       const image = snapshot.content.find((content) => content.type === "image");
+
       if (!image || image.type !== "image") throw new Error("Expected a redacted snapshot image.");
       const png = PNG.sync.read(Buffer.from(image.data));
       expect([...png.data.subarray(0, 4)]).toEqual([0, 0, 0, 255]);
@@ -324,6 +346,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(textOnly.isError).toBe(false);
       expect(textOnly.content.some((content) => content.type === "image")).toBe(false);
       expect(textOnly.structuredContent).toMatchObject({
@@ -336,6 +359,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(evaluation.structuredContent).toEqual({
         redactionStatus: "omitted-unverified-preview-evaluation",
       });
@@ -352,6 +376,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(recording.structuredContent).toMatchObject({ path: "[REDACTED]" });
       expect(recording.content).toEqual([
         {
@@ -366,6 +391,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(navigation.isError).toBe(true);
       expect(navigation.content).toEqual([
         {
@@ -381,6 +407,7 @@ it.effect("registers annotated tools and preserves authenticated request context
         { name: "preview_scroll", arguments: { deltaY: 100 } },
         { name: "preview_wait_for", arguments: { text: "Example" } },
       ];
+
       for (const request of actionRequests) {
         const result = yield* server
           .callTool(request)
@@ -388,6 +415,7 @@ it.effect("registers annotated tools and preserves authenticated request context
             Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
             Effect.provideService(McpSchema.McpServerClient, client),
           );
+
         expect(result.isError).toBe(false);
         expect(result.structuredContent).toEqual({});
         expect(result.content).toEqual([{ type: "text", text: "{}" }]);

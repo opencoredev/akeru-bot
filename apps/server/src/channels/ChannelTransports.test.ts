@@ -25,6 +25,7 @@ import * as Queue from "effect/Queue";
 import { it } from "@effect/vitest";
 import { describe, expect, vi } from "vite-plus/test";
 import { channelFailureCategory, WHATSAPP_NOT_LIVE_MESSAGE } from "./ChannelRuntime.ts";
+
 describe("channel transports", () => {
   describe("slack", () => {
     it.effect("never connects with an app-level token Slack rejects", () =>
@@ -83,6 +84,7 @@ describe("channel transports", () => {
         yield* harness.runtime.connect(slackConnect());
         expect(harness.binding()?.status).toBe("connected");
         const slack = adapters.slack;
+
         if (!slack) throw new Error("Expected the Slack Chat runtime.");
 
         const externalThreadId = "slack:C123:1710000000.000001";
@@ -140,6 +142,7 @@ describe("channel transports", () => {
         const harness = yield* makeHarness({});
         yield* harness.runtime.connect(discordConnect());
         const discord = adapters.discord;
+
         if (!discord) throw new Error("Expected the Discord Chat runtime.");
 
         for (const [id, data] of [
@@ -149,8 +152,10 @@ describe("channel transports", () => {
           const response = yield* Effect.promise(() =>
             discord.adapter.handleWebhook(gatewayEvent(id, data)),
           );
+
           expect(response.status).toBe(200);
         }
+
         expect(adapters.discordThreadsCreated).toEqual([]);
 
         // A direct mention still starts a thread and a turn, so the ignores above are real.
@@ -184,21 +189,26 @@ describe("channel transports", () => {
               : {}),
           },
         });
+
         let polled = false;
         vi.stubGlobal(
           "fetch",
           vi.fn<(...args: Parameters<typeof globalThis.fetch>) => Promise<Response>>(
             async (url, init) => {
               const method = String(url).split("/").at(-1);
+
               if (method === "getMe")
                 return Response.json({
                   ok: true,
                   result: { id: 1, is_bot: true, first_name: "Akeru", username: "akeru" },
                 });
+
               if (method === "deleteWebhook" || method === "deleteMyCommands")
                 return Response.json({ ok: true, result: true });
+
               if (method === "getUpdates" && !polled) {
                 polled = true;
+
                 return Response.json({
                   ok: true,
                   result: [
@@ -208,9 +218,11 @@ describe("channel transports", () => {
                   ],
                 });
               }
+
               if (method === "getUpdates")
                 return new Promise<Response>((_resolve, reject) => {
                   const abort = () => reject(new DOMException("Aborted", "AbortError"));
+
                   if (init?.signal?.aborted) abort();
                   else init?.signal?.addEventListener("abort", abort, { once: true });
                 });
@@ -244,9 +256,11 @@ describe("channel transports", () => {
           projectSecret: "photon-secret",
         });
         const imessage = adapters.imessage;
+
         if (!imessage) throw new Error("Expected the Photon Chat runtime.");
 
         const group = "imessage:iMessage;+;chat123";
+
         for (const [id, isMention] of [
           ["g-1", false],
           ["g-2", true],
@@ -259,6 +273,7 @@ describe("channel transports", () => {
             ),
           );
         }
+
         const direct = "imessage:iMessage;-;+15551234567";
         yield* Effect.promise(() =>
           imessage.chat.processMessage(
@@ -311,12 +326,15 @@ describe("channel transports", () => {
             `${webhookUrl}?hub.mode=subscribe&hub.verify_token=verify-token&hub.challenge=abc`,
           ),
         );
+
         expect(verify.status).toBe(200);
         expect(yield* Effect.promise(() => verify.text())).toBe("abc");
+
         const unknown = yield* harness.runtime.handleWhatsAppConnectionWebhook(
           ChannelConnectionId.make("connection-missing"),
           new Request(webhookUrl ?? ""),
         );
+
         expect(unknown.status).toBe(404);
       }),
     );
@@ -327,6 +345,7 @@ describe("channel transports", () => {
         yield* harness.runtime.saveConnection(whatsappSave(connectionId));
         yield* harness.runtime.attach(BOT_ID, connectionId, PROJECT_ID, "whatsapp");
         const url = harness.settings().channelConnections[0]?.webhookUrl ?? "";
+
         const signedRequest = (phoneNumberId: string) => {
           const body = JSON.stringify({
             object: "whatsapp_business_account",
@@ -355,6 +374,7 @@ describe("channel transports", () => {
               },
             ],
           });
+
           return new Request(url, {
             method: "POST",
             headers: {
@@ -369,6 +389,7 @@ describe("channel transports", () => {
           connectionId,
           signedRequest("another-phone-number"),
         );
+
         expect(wrong.status).toBe(404);
         expect(yield* Queue.size(harness.turns)).toBe(0);
 
@@ -376,6 +397,7 @@ describe("channel transports", () => {
           connectionId,
           signedRequest("phone-number-id"),
         );
+
         expect(right.status).toBe(200);
         expect((yield* Queue.take(harness.turns)).type).toBe("thread.turn.start");
       }),
@@ -391,10 +413,12 @@ describe("channel transports", () => {
           externalIdentity: "phone-number-id",
           webhookUrl: "https://old.example/api/channels/whatsapp/connections/x/webhook",
         };
+
         const moved = yield* makeHarness({
           publicOrigin: "https://new.example",
           settings: { ...DEFAULT_SERVER_SETTINGS, channelConnections: [stale] },
         });
+
         yield* moved.runtime.restoreConnectedChannels;
         expect(moved.settings().channelConnections[0]?.webhookUrl).toBe(
           "https://new.example/api/channels/whatsapp/connections/connection-whatsapp/webhook",
@@ -403,6 +427,7 @@ describe("channel transports", () => {
         const removed = yield* makeHarness({
           settings: { ...DEFAULT_SERVER_SETTINGS, channelConnections: [stale] },
         });
+
         yield* removed.runtime.restoreConnectedChannels;
         expect(removed.settings().channelConnections[0]).not.toHaveProperty("webhookUrl");
       }),

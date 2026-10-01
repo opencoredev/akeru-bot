@@ -15,6 +15,7 @@ import {
 import * as Effect from "effect/Effect";
 import { it } from "@effect/vitest";
 import { describe, expect, vi } from "vite-plus/test";
+
 describe("channel runtime", () => {
   it.effect.each([
     { status: 200, data: { ok: false, error: "missing_scope", detail: "secret-token" } },
@@ -58,10 +59,12 @@ describe("channel runtime", () => {
     ({ status, code }) =>
       Effect.gen(function* () {
         const { harness, input } = makeAdapterDeliveryHarness("discord", "discord:123:456");
+
         const fetch = vi
           .fn<typeof globalThis.fetch>()
           .mockResolvedValueOnce(Response.json({ code, message: "secret-token" }, { status }))
           .mockResolvedValueOnce(Response.json({ id: "discord-sent" }));
+
         vi.stubGlobal("fetch", fetch);
         yield* connectChannel(harness.dependencies, discordConnect(BOT_ID));
         expect(yield* failureOf(sendChannelMessage(harness.dependencies, input))).toMatchObject({
@@ -87,6 +90,7 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const { harness, input } = makeAdapterDeliveryHarness("discord", "discord:123:456");
       const fetch = vi.fn<typeof globalThis.fetch>();
+
       if (failure instanceof Error) fetch.mockRejectedValue(failure);
       else fetch.mockResolvedValue(Response.json(failure.body, { status: failure.status }));
       vi.stubGlobal("fetch", fetch);
@@ -109,6 +113,7 @@ describe("channel runtime", () => {
     (status) =>
       Effect.gen(function* () {
         const { harness, input } = makeAdapterDeliveryHarness("telegram", "telegram:123");
+
         const sends = mockTelegramDelivery([
           Response.json({ ok: false, error_code: status, description: "secret-token" }, { status }),
           Response.json({
@@ -122,6 +127,7 @@ describe("channel runtime", () => {
             },
           }),
         ]);
+
         yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
         expect(yield* failureOf(sendChannelMessage(harness.dependencies, input))).toMatchObject({
           _tag: "ChannelPostRejectedError",
@@ -163,12 +169,14 @@ describe("channel runtime", () => {
         "whatsapp:phone-number-id:15551234567",
         "x".repeat(5000),
       );
+
       const fetch = vi
         .fn<typeof globalThis.fetch>()
         .mockResolvedValueOnce(Response.json({ messages: [{ id: "first-chunk" }] }))
         .mockResolvedValueOnce(
           Response.json({ error: { code: 190, message: "secret-token" } }, { status: 401 }),
         );
+
       vi.stubGlobal("fetch", fetch);
       yield* connectChannel(harness.dependencies, whatsappConnect(BOT_ID));
       yield* expectFailureMessage(

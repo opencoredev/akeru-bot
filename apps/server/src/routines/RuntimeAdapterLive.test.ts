@@ -34,6 +34,7 @@ import { RoutineRuntimeAdapterLive } from "./RuntimeAdapterLive.ts";
 import { RoutineRuntimeAdapter, type Routine, type RoutineRun } from "./types.ts";
 
 const NOW = "2026-08-31T20:00:00.000Z";
+
 const helperThreadId = ThreadId.make("thread-helper");
 
 const routine = (overrides: Partial<Routine> = {}): Routine => ({
@@ -107,6 +108,7 @@ const makeLayer = (options: {
         Layer.succeed(OrchestrationEngineService, {
           dispatch: (command: OrchestrationCommand) => {
             options.commands.push(command);
+
             if (command.type === "routine.run.start" && options.startFailure) {
               return Effect.fail(
                 new OrchestrationListenerCallbackError({
@@ -115,6 +117,7 @@ const makeLayer = (options: {
                 }),
               );
             }
+
             return command.type === "routine.run.start" && options.runEnded
               ? Effect.fail(
                   new OrchestrationCommandInvariantError({
@@ -163,6 +166,7 @@ const makeLayer = (options: {
 
 it.effect("cancels bot work by its id when the run was canceled while the work started", () => {
   const commands: Array<OrchestrationCommand> = [];
+
   return Effect.gen(function* () {
     const adapter = yield* RoutineRuntimeAdapter;
     const result = yield* adapter.dispatchTurn(routine(), run);
@@ -191,6 +195,7 @@ it.effect("cancels bot work by its id when the run was canceled while the work s
 
 it.effect("blocks the run and cancels its bot work when the run cannot start", () => {
   const commands: Array<OrchestrationCommand> = [];
+
   return Effect.gen(function* () {
     const adapter = yield* RoutineRuntimeAdapter;
     const result = yield* adapter.dispatchTurn(routine(), run);
@@ -214,6 +219,7 @@ it.effect("blocks the run and cancels its bot work when the run cannot start", (
 
 it.effect("starts the run on the helper chat when the run is still open", () => {
   const commands: Array<OrchestrationCommand> = [];
+
   return Effect.gen(function* () {
     const adapter = yield* RoutineRuntimeAdapter;
     const result = yield* adapter.dispatchTurn(routine(), run);
@@ -235,6 +241,7 @@ it.effect("starts the run on the helper chat when the run is still open", () => 
 
 it.effect("starts a routine when its zero-token usage record fails", () => {
   const commands: Array<OrchestrationCommand> = [];
+
   return Effect.gen(function* () {
     const adapter = yield* RoutineRuntimeAdapter;
     const result = yield* adapter.dispatchTurn(routine({ delegateToBotId: null }), run);
@@ -278,6 +285,7 @@ it.effect("blocks a routine whose helper bot cannot take bot work", () =>
 it.effect("blocks a routine that hands its work to its own bot", () =>
   Effect.gen(function* () {
     const adapter = yield* RoutineRuntimeAdapter;
+
     const failure = yield* adapter.checkDependencies(
       routine({ delegateToBotId: BotId.make("bot-owner") }),
     );

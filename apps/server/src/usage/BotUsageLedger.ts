@@ -26,6 +26,7 @@ import {
   decodeEntry,
   validateTokens,
 } from "./BotUsageRows.ts";
+
 export class BotUsageLedger extends Context.Service<BotUsageLedger, BotUsageLedgerShape>()(
   "akeru-bot/usage/BotUsageLedger",
 ) {}
@@ -47,6 +48,7 @@ const make = Effect.gen(function* () {
         input.outputTokens,
         ...(input.reasoningTokens === null ? [] : [input.reasoningTokens]),
       ]);
+
       if ((input.cachedInputTokens ?? 0) + (input.cacheCreationTokens ?? 0) > input.inputTokens) {
         return yield* new PersistenceSqlError({
           operation: "BotUsageLedger.settle",
@@ -54,22 +56,26 @@ const make = Effect.gen(function* () {
         });
       }
     }
+
     if (current.state === "released" || current.state === "unavailable") {
       return yield* decodeEntry(current);
     }
 
     const priorReported =
       current.state === "reported" ? (current.inputTokens ?? 0) + (current.outputTokens ?? 0) : 0;
+
     const nextReported =
       input.state === "reported"
         ? input.inputTokens + input.outputTokens
         : input.state === "unavailable"
           ? current.reservedTokens
           : 0;
+
     if (current.state === "reported") {
       if (input.state !== "reported" || nextReported < priorReported) {
         return yield* decodeEntry(current);
       }
+
       if (nextReported === priorReported) {
         if (
           input.inputTokens === current.inputTokens &&
@@ -77,12 +83,15 @@ const make = Effect.gen(function* () {
         ) {
           const completeBreakdown =
             input.cachedInputTokens !== undefined && input.cacheCreationTokens !== undefined;
+
           const cachedInputTokens = completeBreakdown
             ? input.cachedInputTokens!
             : Math.max(current.cachedInputTokens, input.cachedInputTokens ?? 0);
+
           const cacheCreationTokens = completeBreakdown
             ? input.cacheCreationTokens!
             : Math.max(current.cacheCreationTokens, input.cacheCreationTokens ?? 0);
+
           if (
             (!current.settledAt || input.settledAt > current.settledAt) &&
             cachedInputTokens + cacheCreationTokens <= input.inputTokens &&
@@ -97,18 +106,22 @@ const make = Effect.gen(function* () {
               WHERE reservation_id = ${current.reservationId}
             `;
             const updated = yield* selectEntryByReservation(sql, current.reservationId);
+
             return yield* decodeEntry(updated[0]!);
           }
         }
+
         return yield* decodeEntry(current);
       }
     }
 
     const priorHeld = current.heldTokens;
+
     const nextHeld =
       input.state === "reported" && !finalizeReported
         ? Math.max(0, priorHeld - (nextReported - priorReported))
         : 0;
+
     const releasedReservation = priorHeld - nextHeld;
     const priorCharged = priorReported;
     const nextCharged = nextReported;
@@ -134,6 +147,7 @@ const make = Effect.gen(function* () {
       WHERE reservation_id = ${current.reservationId}
     `;
     const settled = yield* selectEntryByReservation(sql, current.reservationId);
+
     return yield* decodeEntry(settled[0]!);
   });
 
@@ -144,6 +158,7 @@ const make = Effect.gen(function* () {
           Effect.gen(function* () {
             yield* validateTokens("BotUsageLedger.reserve", [input.maximumTokens, input.capLimit]);
             const prior = yield* selectEntryBySource(sql, input.botId, input.sourceKey);
+
             if (prior[0]) return yield* decodeEntry(prior[0]);
 
             yield* sql`
@@ -151,6 +166,7 @@ const make = Effect.gen(function* () {
             VALUES (${input.botId}, 0, 0, ${input.createdAt})
             ON CONFLICT (bot_id) DO NOTHING
           `;
+
             const balance = yield* sql<{
               readonly consumedTokens: number;
               readonly reservedTokens: number;
@@ -158,8 +174,10 @@ const make = Effect.gen(function* () {
             SELECT consumed_tokens AS "consumedTokens", reserved_tokens AS "reservedTokens"
             FROM akeru_bot_usage_balances WHERE bot_id = ${input.botId}
           `;
+
             const current = balance[0]!;
             const available = input.capLimit - current.consumedTokens - current.reservedTokens;
+
             if (input.maximumTokens <= 0 || available <= 0) {
               return yield* new BotUsageCapExceeded({
                 botId: input.botId,
@@ -169,6 +187,7 @@ const make = Effect.gen(function* () {
                 requestedTokens: input.maximumTokens,
               });
             }
+
             const reservedTokens = Math.min(input.maximumTokens, available);
             yield* sql`
             UPDATE akeru_bot_usage_balances
@@ -187,6 +206,7 @@ const make = Effect.gen(function* () {
             )
           `;
             const rows = yield* selectEntryByReservation(sql, input.reservationId);
+
             return yield* decodeEntry(rows[0]!);
           }),
         )
@@ -208,11 +228,13 @@ const make = Effect.gen(function* () {
           Effect.gen(function* () {
             const rows = yield* selectEntryByReservation(sql, input.reservationId);
             const current = rows[0];
+
             if (!current) {
               return yield* toPersistenceSqlError("BotUsageLedger.settle:not-found")(
                 input.reservationId,
               );
             }
+
             return yield* settleCurrent(current, input);
           }),
         )
@@ -233,25 +255,30 @@ const make = Effect.gen(function* () {
           Effect.gen(function* () {
             const rows = yield* selectEntryByReservation(sql, input.reservationId);
             const current = rows[0];
+
             if (!current) {
               return yield* new PersistenceSqlError({
                 operation: "BotUsageLedger.bindTurn",
                 detail: "Usage reservation was not found.",
               });
             }
+
             if (current.turnId !== null && current.turnId !== input.turnId) {
               return yield* new PersistenceSqlError({
                 operation: "BotUsageLedger.bindTurn",
                 detail: "Usage reservation is already bound to another turn.",
               });
             }
+
             if (current.turnId === null) {
               yield* sql`
               UPDATE akeru_bot_usage_entries SET turn_id = ${input.turnId}
               WHERE reservation_id = ${input.reservationId} AND turn_id IS NULL
             `;
             }
+
             const bound = yield* selectEntryByReservation(sql, input.reservationId);
+
             return yield* decodeEntry(bound[0]!);
           }),
         )
@@ -272,13 +299,16 @@ const make = Effect.gen(function* () {
           Effect.gen(function* () {
             const rows = yield* selectEntryForTurn(sql, input.botId, input.threadId, input.turnId);
             const current = rows[0];
+
             if (!current) return [];
+
             if (current.turnId === null) {
               yield* sql`
               UPDATE akeru_bot_usage_entries SET turn_id = ${input.turnId}
               WHERE reservation_id = ${current.reservationId} AND turn_id IS NULL
             `;
             }
+
             return [yield* settleCurrent({ ...current, turnId: input.turnId }, input, false)];
           }),
         )
@@ -299,13 +329,16 @@ const make = Effect.gen(function* () {
           Effect.gen(function* () {
             const rows = yield* selectEntryForTurn(sql, input.botId, input.threadId, input.turnId);
             const current = rows[0];
+
             if (!current) return [];
+
             if (current.turnId === null) {
               yield* sql`
                 UPDATE akeru_bot_usage_entries SET turn_id = ${input.turnId}
                 WHERE reservation_id = ${current.reservationId} AND turn_id IS NULL
               `;
             }
+
             if (input.cancelled) {
               if (current.heldTokens > 0) {
                 yield* sql`
@@ -315,6 +348,7 @@ const make = Effect.gen(function* () {
                   WHERE bot_id = ${current.botId}
                 `;
               }
+
               if (current.state === "reported") {
                 yield* sql`
                   UPDATE akeru_bot_usage_entries
@@ -331,9 +365,12 @@ const make = Effect.gen(function* () {
                   WHERE reservation_id = ${current.reservationId}
                 `;
               }
+
               const released = yield* selectEntryByReservation(sql, current.reservationId);
+
               return [yield* decodeEntry(released[0]!)];
             }
+
             if (current.state === "reserved") {
               return [
                 yield* settleCurrent(current, {
@@ -343,8 +380,10 @@ const make = Effect.gen(function* () {
                 }),
               ];
             }
+
             if (current.state !== "reported") return [yield* decodeEntry(current)];
             const held = current.heldTokens;
+
             if (held > 0) {
               yield* sql`
               UPDATE akeru_bot_usage_balances
@@ -352,12 +391,14 @@ const make = Effect.gen(function* () {
               WHERE bot_id = ${current.botId}
             `;
             }
+
             yield* sql`
             UPDATE akeru_bot_usage_entries
             SET held_tokens = 0, settled_at = ${input.settledAt}
             WHERE reservation_id = ${current.reservationId}
           `;
             const finalized = yield* selectEntryByReservation(sql, current.reservationId);
+
             return [yield* decodeEntry(finalized[0]!)];
           }),
         )
@@ -383,6 +424,7 @@ const make = Effect.gen(function* () {
               input.outputTokens,
               ...(input.reasoningTokens === null ? [] : [input.reasoningTokens]),
             ]);
+
             if (
               (input.cachedInputTokens ?? 0) + (input.cacheCreationTokens ?? 0) >
               input.inputTokens
@@ -392,9 +434,12 @@ const make = Effect.gen(function* () {
                 detail: "Cache tokens cannot exceed total input tokens.",
               });
             }
+
             const prior = yield* selectEntryBySource(sql, input.botId, input.sourceKey);
+
             if (prior[0]) return yield* decodeEntry(prior[0]);
             const measuredTokens = input.inputTokens + input.outputTokens;
+
             if (!input.includedInReservation) {
               yield* sql`
             INSERT INTO akeru_bot_usage_balances (
@@ -405,6 +450,7 @@ const make = Effect.gen(function* () {
               updated_at = ${input.createdAt}
           `;
             }
+
             yield* sql`
           INSERT INTO akeru_bot_usage_entries (
             reservation_id, source_key, bot_id, thread_id, turn_id, category, state,
@@ -420,6 +466,7 @@ const make = Effect.gen(function* () {
           )
         `;
             const rows = yield* selectEntryByReservation(sql, input.reservationId);
+
             return yield* decodeEntry(rows[0]!);
           }),
         )
@@ -439,6 +486,7 @@ const make = Effect.gen(function* () {
         .withTransaction(
           Effect.gen(function* () {
             const prior = yield* selectEntryBySource(sql, input.botId, input.sourceKey);
+
             if (prior[0]) return yield* decodeEntry(prior[0]);
             yield* sql`
           INSERT INTO akeru_bot_usage_entries (
@@ -452,6 +500,7 @@ const make = Effect.gen(function* () {
           )
         `;
             const rows = yield* selectEntryByReservation(sql, input.reservationId);
+
             return yield* decodeEntry(rows[0]!);
           }),
         )
@@ -473,11 +522,13 @@ const make = Effect.gen(function* () {
         SELECT consumed_tokens AS "consumedTokens", reserved_tokens AS "reservedTokens"
         FROM akeru_bot_usage_balances WHERE bot_id = ${botId}
       `;
+
       const rows = yield* sql<UsageRow>`
         SELECT ${entryColumns(sql)}
         FROM akeru_bot_usage_entries WHERE bot_id = ${botId}
         ORDER BY created_at DESC LIMIT 200
       `;
+
       const measurements = yield* sql<{
         readonly inputTokens: number;
         readonly cachedInputTokens: number;
@@ -511,8 +562,10 @@ const make = Effect.gen(function* () {
             AND category = 'reflector' THEN 1 ELSE 0 END), 0) AS "unavailableReflectorEntries"
         FROM akeru_bot_usage_entries WHERE bot_id = ${botId}
       `;
+
       const entries = yield* Effect.forEach(rows, decodeEntry);
       const totals = measurements[0]!;
+
       return yield* Schema.decodeUnknownEffect(AkeruBotUsageSummary)({
         botId,
         consumedTokens: balances[0]?.consumedTokens ?? 0,
@@ -565,6 +618,7 @@ const make = Effect.gen(function* () {
         FROM akeru_bot_usage_entries WHERE bot_id = ${botId}
         GROUP BY model
       `;
+
       return {
         complete: rows.every(
           (row) =>
@@ -593,11 +647,13 @@ const make = Effect.gen(function* () {
       .withTransaction(
         Effect.gen(function* () {
           const reconciledAt = DateTime.formatIso(yield* DateTime.now);
+
           const rows = yield* sql<UsageRow>`
         SELECT ${entryColumns(sql)}
         FROM akeru_bot_usage_entries
         WHERE held_tokens > 0 OR state = 'reserved'
       `;
+
           for (const row of rows) {
             if (row.state === "reported") {
               yield* sql`
@@ -612,6 +668,7 @@ const make = Effect.gen(function* () {
           `;
               continue;
             }
+
             yield* settleCurrent(
               row,
               row.turnId === null
@@ -646,10 +703,17 @@ const make = Effect.gen(function* () {
 });
 
 export const BotUsageLedgerLive = Layer.effect(BotUsageLedger, make);
+
 export { BotUsageCapExceeded } from "./BotUsageLedgerTypes.ts";
+
 export { AKERU_TURN_USAGE_RESERVATION_TOKENS } from "./BotUsageLedgerTypes.ts";
+
 export type { ReserveBotUsageInput } from "./BotUsageLedgerTypes.ts";
+
 export type { SettleBotUsageInput } from "./BotUsageLedgerTypes.ts";
+
 export type { SettleBotUsageForTurnInput } from "./BotUsageLedgerTypes.ts";
+
 export type { BotUsageLedgerError } from "./BotUsageLedgerTypes.ts";
+
 export type { BotUsageLedgerShape } from "./BotUsageLedgerTypes.ts";

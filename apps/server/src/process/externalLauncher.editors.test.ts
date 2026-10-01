@@ -60,6 +60,7 @@ it.effect("discovers editors through the service API", () =>
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(
       Effect.provide(
@@ -78,6 +79,7 @@ it.effect("discovers editors through the service API", () =>
 it.effect("memoizes editor discovery and refreshes after the cache window", () => {
   let statCalls = 0;
   const fileInfo = { type: "File" } as FileSystem.File.Info;
+
   const launcherLayer = ExternalLauncher.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -85,6 +87,7 @@ it.effect("memoizes editor discovery and refreshes after the cache window", () =
           stat: () =>
             Effect.sync(() => {
               statCalls += 1;
+
               return fileInfo;
             }),
         }),
@@ -143,6 +146,7 @@ it.effect("rescans after an interrupted discovery instead of caching the interru
   const fileInfo = { type: "File" } as FileSystem.File.Info;
   let blockFirstScan = true;
   let scans = 0;
+
   const launcherLayer = ExternalLauncher.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -153,9 +157,11 @@ it.effect("rescans after an interrupted discovery instead of caching the interru
           stat: () =>
             Effect.gen(function* () {
               scans += 1;
+
               if (blockFirstScan) {
                 return yield* Effect.never;
               }
+
               return fileInfo;
             }),
         }),
@@ -202,9 +208,11 @@ it.effect("rescans after an interrupted discovery instead of caching the interru
 it.effect("rejects unknown editors through the service API", () =>
   Effect.gen(function* () {
     const launcher = yield* ExternalLauncher.ExternalLauncher;
+
     const error = yield* launcher
       .launchEditor({ editor: "missing-editor" as never, cwd: "/tmp/workspace" })
       .pipe(Effect.flip);
+
     assert.instanceOf(error, ExternalLauncher.ExternalLauncherUnknownEditorError);
     assert.equal(error.editor, "missing-editor");
     assert.equal(error.message, "Unknown editor: missing-editor");

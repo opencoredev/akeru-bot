@@ -15,12 +15,15 @@ import {
   PreviewStandardToolkit,
 } from "./toolkits/preview/tools.ts";
 import { normalizeProviderToolInputSchema, toolErrorResult } from "./McpToolSchema.ts";
+
 export const previewSnapshotFailure = <E>(cause: Cause.Cause<E>) => {
   if (Cause.hasInterrupts(cause) || cause.reasons.some(Cause.isDieReason)) {
     return Effect.failCause(cause).pipe(Effect.orDie);
   }
+
   const failures = cause.reasons.filter(Cause.isFailReason);
   const firstFailure = failures[0]?.error;
+
   const errorTag =
     typeof firstFailure === "object" &&
     firstFailure !== null &&
@@ -28,6 +31,7 @@ export const previewSnapshotFailure = <E>(cause: Cause.Cause<E>) => {
     typeof firstFailure._tag === "string"
       ? firstFailure._tag
       : "PreviewSnapshotError";
+
   const result = new McpSchema.CallToolResult({
     isError: true,
     structuredContent: {
@@ -39,6 +43,7 @@ export const previewSnapshotFailure = <E>(cause: Cause.Cause<E>) => {
     },
     content: [{ type: "text", text: "Preview snapshot failed." }],
   });
+
   return Effect.logWarning("preview snapshot failed", {
     operation: "snapshot",
     errorTag,
@@ -81,6 +86,7 @@ export const registerPreviewStandardTools = Effect.fn("McpHttpServer.registerPre
               fiber.context,
               McpInvocationContext.McpInvocationContext,
             );
+
             return built.handle(tool.name, payload).pipe(
               Stream.unwrap,
               Stream.run(Sink.last()),
@@ -100,10 +106,12 @@ export const registerPreviewStandardTools = Effect.fn("McpHttpServer.registerPre
               Effect.catch((error) => {
                 if (AiError.isAiError(error)) {
                   const reason = error.reason;
+
                   return Predicate.isTagged(reason, "ToolParameterValidationError")
                     ? Effect.fail(new McpSchema.InvalidParams({ message: reason.message }))
                     : Effect.succeed(toolErrorResult("Tool execution failed."));
                 }
+
                 if (isDeclaredFailure(error)) {
                   return Effect.succeed(
                     toolErrorResult(
@@ -111,6 +119,7 @@ export const registerPreviewStandardTools = Effect.fn("McpHttpServer.registerPre
                     ),
                   );
                 }
+
                 return Effect.succeed(toolErrorResult("Tool execution failed."));
               }),
               Effect.catchDefect(() => Effect.succeed(toolErrorResult("Tool execution failed."))),
@@ -150,6 +159,7 @@ export const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewS
             fiber.context,
             McpInvocationContext.McpInvocationContext,
           );
+
           return built.handle("preview_snapshot", payload).pipe(
             Stream.unwrap,
             Stream.run(Sink.last()),
@@ -168,7 +178,9 @@ export const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewS
                   };
                   readonly [key: string]: unknown;
                 };
+
                 const { screenshot, ...page } = snapshot;
+
                 const metadata = {
                   ...page,
                   screenshot: {
@@ -178,6 +190,7 @@ export const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewS
                     redacted: true,
                   },
                 };
+
                 return Effect.succeed(
                   new McpSchema.CallToolResult({
                     isError: false,

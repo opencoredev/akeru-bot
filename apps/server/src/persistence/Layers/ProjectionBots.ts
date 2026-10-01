@@ -118,16 +118,19 @@ const makeProjectionBotRepository = Effect.gen(function* () {
     upsertBotRow(row).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionBotRepository.upsert:query")),
     );
+
   const getById: ProjectionBotRepositoryShape["getById"] = (input) =>
     getBotRow(input).pipe(
       Effect.map(Option.map(toProjectionBot)),
       Effect.mapError(toPersistenceSqlError("ProjectionBotRepository.getById:query")),
     );
+
   const listAll: ProjectionBotRepositoryShape["listAll"] = () =>
     listBotRows(undefined).pipe(
       Effect.map((rows) => rows.map(toProjectionBot)),
       Effect.mapError(toPersistenceSqlError("ProjectionBotRepository.listAll:query")),
     );
+
   const deleteById: ProjectionBotRepositoryShape["deleteById"] = (input) =>
     deleteBotRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionBotRepository.deleteById:query")),

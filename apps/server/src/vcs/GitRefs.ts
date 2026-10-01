@@ -23,6 +23,7 @@ import type { makeGitExecution } from "./GitExecution.ts";
 import type { makeGitRepositoryPaths } from "./GitRepositoryPaths.ts";
 import type { makeGitRemoteStatus } from "./GitRemoteStatus.ts";
 import type { makeGitWorktrees } from "./GitWorktrees.ts";
+
 export const makeGitRefs = (dependencies: {
   fileSystem: Effect.Success<ReturnType<typeof makeGitExecution>>["fileSystem"];
   path: Effect.Success<ReturnType<typeof makeGitExecution>>["path"];
@@ -64,7 +65,9 @@ export const makeGitRefs = (dependencies: {
     const readGitRefsSnapshot = Effect.fn("readGitRefsSnapshot")(function* (gitCommonDir: string) {
       const fetchCwd =
         path.basename(gitCommonDir) === ".git" ? path.dirname(gitCommonDir) : gitCommonDir;
+
       const gitDirArgs = ["--git-dir", gitCommonDir] as const;
+
       const [refsResult, defaultRefResult, worktreeListResult, remoteNamesResult] =
         yield* Effect.all(
           [
@@ -113,15 +116,18 @@ export const makeGitRefs = (dependencies: {
 
       const remoteNames =
         remoteNamesResult.exitCode === 0 ? parseRemoteNames(remoteNamesResult.stdout) : [];
+
       if (remoteNamesResult.exitCode !== 0 && remoteNamesResult.stderr.trim().length > 0) {
         yield* Effect.logWarning(
           `GitVcsDriver.listRefs: remote name lookup returned code ${remoteNamesResult.exitCode} for ${gitCommonDir}: ${remoteNamesResult.stderr.trim()}. Falling back to an empty remote name list.`,
         );
       }
+
       const defaultBranch =
         defaultRefResult.exitCode === 0
           ? defaultRefResult.stdout.trim().replace(/^refs\/remotes\/origin\//, "")
           : null;
+
       const parsedWorktreeEntries =
         worktreeListResult.exitCode === 0
           ? [...parseWorktreeBranchPaths(worktreeListResult.stdout)].map(
@@ -129,6 +135,7 @@ export const makeGitRefs = (dependencies: {
                 [branchName, path.normalize(path.resolve(worktreePath))] as const,
             )
           : [];
+
       const existingWorktreeEntries = yield* Effect.filter(
         parsedWorktreeEntries,
         ([, worktreePath]) =>
@@ -138,6 +145,7 @@ export const makeGitRefs = (dependencies: {
           ),
         { concurrency: 16 },
       );
+
       const worktreeMap = new Map(existingWorktreeEntries);
       const localBranches: Array<{ readonly ref: VcsRef; readonly lastCommit: number }> = [];
       const remoteBranches: Array<{ readonly ref: VcsRef; readonly lastCommit: number }> = [];
@@ -145,6 +153,7 @@ export const makeGitRefs = (dependencies: {
       for (const line of refsResult.stdout.split("\n")) {
         if (line.length === 0) continue;
         const [fullRefName, lastCommitRaw, symbolicTarget] = line.split("\t");
+
         if (!fullRefName || symbolicTarget) continue;
         const parsedLastCommit = Number.parseInt(lastCommitRaw ?? "0", 10);
         const lastCommit = Number.isFinite(parsedLastCommit) ? parsedLastCommit : 0;
@@ -163,10 +172,12 @@ export const makeGitRefs = (dependencies: {
           });
           continue;
         }
+
         if (!fullRefName.startsWith("refs/remotes/")) continue;
 
         const name = fullRefName.slice("refs/remotes/".length);
         const parsedRemoteRef = parseRemoteRefWithRemoteNames(name, remoteNames);
+
         const remoteBranch: VcsRef = {
           name,
           current: false,
@@ -178,6 +189,7 @@ export const makeGitRefs = (dependencies: {
           worktreePath: null,
           ...(parsedRemoteRef ? { remoteName: parsedRemoteRef.remoteName } : {}),
         };
+
         remoteBranches.push({ ref: remoteBranch, lastCommit });
       }
 
@@ -204,12 +216,15 @@ export const makeGitRefs = (dependencies: {
       const nextEpoch = ++listRefsEpochSequence;
       listRefsEpochByCommonDir.delete(gitCommonDir);
       listRefsEpochByCommonDir.set(gitCommonDir, nextEpoch);
+
       if (listRefsEpochByCommonDir.size > LIST_REFS_SNAPSHOT_CACHE_CAPACITY) {
         const oldestKey = listRefsEpochByCommonDir.keys().next().value;
+
         if (oldestKey !== undefined) {
           listRefsEpochByCommonDir.delete(oldestKey);
         }
       }
+
       return nextEpoch;
     };
 
@@ -220,17 +235,21 @@ export const makeGitRefs = (dependencies: {
     const setListRefsGeneration = (gitCommonDir: string, generation: number): number => {
       listRefsGenerationByCommonDir.delete(gitCommonDir);
       listRefsGenerationByCommonDir.set(gitCommonDir, generation);
+
       if (listRefsGenerationByCommonDir.size > LIST_REFS_SNAPSHOT_CACHE_CAPACITY) {
         const oldestKey = listRefsGenerationByCommonDir.keys().next().value;
+
         if (oldestKey !== undefined) {
           listRefsGenerationByCommonDir.delete(oldestKey);
         }
       }
+
       return generation;
     };
 
     const currentListRefsGeneration = (gitCommonDir: string): number => {
       const current = listRefsGenerationByCommonDir.get(gitCommonDir);
+
       return current === undefined
         ? setListRefsGeneration(gitCommonDir, ++listRefsGenerationSequence)
         : setListRefsGeneration(gitCommonDir, current);
@@ -251,6 +270,7 @@ export const makeGitRefs = (dependencies: {
       (cacheKey: GitRefsRefreshCacheKey) =>
         Effect.suspend(() => {
           const epoch = bumpListRefsEpoch(cacheKey.gitCommonDir);
+
           return Cache.get(
             listRefsSnapshotCache,
             new GitRefsSnapshotCacheKey({ gitCommonDir: cacheKey.gitCommonDir, epoch }),
@@ -272,6 +292,7 @@ export const makeGitRefs = (dependencies: {
       while (true) {
         const generation = currentListRefsGeneration(gitCommonDir);
         const currentEpoch = listRefsEpochByCommonDir.get(gitCommonDir);
+
         const snapshot =
           refresh || currentEpoch === undefined
             ? // The refresh cache owns the complete snapshot read, rather than only the
@@ -286,6 +307,7 @@ export const makeGitRefs = (dependencies: {
                 listRefsSnapshotCache,
                 new GitRefsSnapshotCacheKey({ gitCommonDir, epoch: currentEpoch }),
               );
+
         if (currentListRefsGeneration(gitCommonDir) === generation) {
           return snapshot;
         }
@@ -297,6 +319,7 @@ export const makeGitRefs = (dependencies: {
     ) {
       const repositoryPathsCacheKey = normalizeRepositoryPathsCacheKey(cwd);
       const repositoryPaths = yield* Cache.get(repositoryPathsCache, repositoryPathsCacheKey);
+
       if (repositoryPaths === null) return;
       const previousGeneration = currentListRefsGeneration(repositoryPaths.gitCommonDir);
       bumpListRefsGeneration(repositoryPaths.gitCommonDir);
@@ -323,6 +346,7 @@ export const makeGitRefs = (dependencies: {
               isMissingGitCwdError(error) ? Effect.succeed(null) : Effect.fail(error),
           }),
         );
+
         if (repositoryPaths === null) {
           return {
             refs: [],
@@ -337,31 +361,38 @@ export const makeGitRefs = (dependencies: {
           repositoryPaths.gitCommonDir,
           input.refresh === true,
         );
+
         const hasCurrentWorktreeBranch =
           repositoryPaths.worktreeRoot !== null &&
           snapshot.localBranches.some((ref) => ref.worktreePath === repositoryPaths.worktreeRoot);
+
         const localBranches = snapshot.localBranches.map((ref) => ({
           ...ref,
           current: hasCurrentWorktreeBranch
             ? ref.worktreePath === repositoryPaths.worktreeRoot
             : ref.name === repositoryPaths.currentBranch,
         }));
+
         const combinedBranches = input.includeMatchingRemoteRefs
           ? [...localBranches, ...snapshot.remoteBranches]
           : dedupeRemoteBranchesWithLocalMatches([...localBranches, ...snapshot.remoteBranches]);
+
         // Keep current/default refs on the first page even when the default
         // only exists as origin/<default> (remote refs sort after all locals).
         const allBranches = combinedBranches.toSorted((left, right) => {
           const leftPriority = left.current ? 0 : left.isDefault ? 1 : 2;
           const rightPriority = right.current ? 0 : right.isDefault ? 1 : 2;
+
           return leftPriority - rightPriority;
         });
+
         const branchesForKind =
           input.refKind === "local"
             ? allBranches.filter((ref) => !ref.isRemote)
             : input.refKind === "remote"
               ? allBranches.filter((ref) => ref.isRemote)
               : allBranches;
+
         const refs = paginateBranches({
           refs: filterBranchesForListQuery(branchesForKind, input.query),
           cursor: input.cursor,
@@ -404,5 +435,6 @@ export const makeGitRefs = (dependencies: {
           }),
         ),
       );
+
     return { listRefs, withListRefsInvalidation, initRepoWithListRefsInvalidation };
   });

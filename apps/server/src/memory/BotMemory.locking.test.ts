@@ -26,16 +26,20 @@ import {
   BotMemoryStore,
   acquireBotMemoryFileLock,
 } from "./BotMemory.ts";
+
 describe("BotMemoryStore", () => {
   it("claims a due review once without blocking concurrent foreground turns", async () => {
     const store = await fixture();
     const botId = BotId.make("bot-concurrent");
+
     for (let prompt = 1; prompt <= 10; prompt += 1) await acceptPrompt(store, botId, false);
+
     const reservations = await Promise.all([
       store.reserveReviewCadence(botId),
       store.reserveReviewCadence(botId),
       store.reserveReviewCadence(botId),
     ]);
+
     assert.equal(reservations.filter((entry) => entry.memoryReviewIncluded).length, 1);
   });
 
@@ -47,6 +51,7 @@ describe("BotMemoryStore", () => {
     const owner = new BotMemoryStore(stateDir, options);
     const contender = new BotMemoryStore(stateDir, options);
     const botId = BotId.make("bot-renewed-claim");
+
     for (let prompt = 1; prompt <= 10; prompt += 1) await acceptPrompt(owner, botId, false);
     const claimed = await owner.reserveReviewCadence(botId);
     assert.isTrue(claimed.memoryReviewIncluded);
@@ -63,10 +68,12 @@ describe("BotMemoryStore", () => {
     const botId = BotId.make("bot-cadence-symlink");
     const botDirectory = NodePath.join(store.memoryRoot, "bots", botId);
     await NodeFS.mkdir(botDirectory, { recursive: true });
+
     const outside = NodePath.join(
       NodeOS.tmpdir(),
       `akeru-cadence-outside-${NodeCrypto.randomUUID()}.json`,
     );
+
     await NodeFS.writeFile(outside, "outside", { mode: 0o600 });
     directories.push(outside);
     await NodeFS.symlink(outside, NodePath.join(botDirectory, ".memory-review.json"));
@@ -91,6 +98,7 @@ describe("BotMemoryStore", () => {
     const entries = (await store.readDocument(access, "memory")).content.split(
       BOT_MEMORY_ENTRY_DELIMITER,
     );
+
     assert.equal(entries.length, 12);
     assert.equal(new Set(entries).size, 12);
   });
@@ -152,6 +160,7 @@ describe("BotMemoryStore", () => {
       const store = yield* Effect.promise(() => fixture());
       const filePath = NodePath.join(store.memoryRoot, "bots", "bot-1", "MEMORY.md");
       const acquired = yield* Deferred.make<void>();
+
       const fiber = yield* Effect.forkChild(
         Effect.scoped(
           Effect.gen(function* () {
@@ -160,10 +169,12 @@ describe("BotMemoryStore", () => {
             );
             yield* acquireBotMemoryFileLock(store.memoryRoot, filePath);
             yield* Deferred.succeed(acquired, undefined);
+
             return yield* Effect.never;
           }),
         ),
       );
+
       yield* Deferred.await(acquired);
       yield* Fiber.interrupt(fiber);
       yield* Effect.promise(() =>
@@ -201,9 +212,12 @@ describe("BotMemoryStore", () => {
     let stealOnRead = Number.POSITIVE_INFINITY;
     vi.mocked(NodeFS.readFile).mockImplementation(async (...args) => {
       const contents = await actual.readFile(...args);
+
       if (args[0] === lockPath && ++lockReads === stealOnRead) await takeLockFromOwner(lockPath);
+
       return contents;
     });
+
     try {
       await store.replaceDocument(privateAccess(), "memory", "Kept note.");
       // The last ownership check passes, then another writer takes the lock.
@@ -214,6 +228,7 @@ describe("BotMemoryStore", () => {
     } finally {
       vi.mocked(NodeFS.readFile).mockImplementation(actual.readFile);
     }
+
     assert.include(await NodeFS.readFile(lockPath, "utf8"), "other-owner");
     await NodeFS.unlink(lockPath);
     assert.equal((await store.readDocument(privateAccess(), "memory")).content, "Kept note.");
@@ -229,8 +244,10 @@ describe("BotMemoryStore", () => {
     let lockReads = 0;
     vi.mocked(NodeFS.readFile).mockImplementation(async (...args) => {
       if (args[0] === lockPath && ++lockReads === 2) inspectedTwice.resolve();
+
       return actual.readFile(...args);
     });
+
     try {
       const write = store.replaceDocument(privateAccess(), "memory", "Written after release.");
       await inspectedTwice.promise;
@@ -241,6 +258,7 @@ describe("BotMemoryStore", () => {
     } finally {
       vi.mocked(NodeFS.readFile).mockImplementation(actual.readFile);
     }
+
     assert.equal(
       (await store.readDocument(privateAccess(), "memory")).content,
       "Written after release.",
@@ -258,6 +276,7 @@ describe("BotMemoryStore", () => {
         vi.spyOn(acquired, method).mockRejectedValueOnce(
           new Error("Simulated lock initialization failure"),
         );
+
         return acquired;
       });
       await expect(
@@ -329,6 +348,7 @@ describe("BotMemoryStore", () => {
       handle.writeFile = async () => {
         throw new Error("disk full");
       };
+
       return handle;
     });
 
@@ -363,6 +383,7 @@ describe("BotMemoryStore", () => {
   it("does not mark a migration complete after its lock is lost mid-migration", async () => {
     const store = await fixture();
     const botId = BotId.make("bot-migration-lost-lock");
+
     const markerPath = NodePath.join(
       store.memoryRoot,
       "bots",

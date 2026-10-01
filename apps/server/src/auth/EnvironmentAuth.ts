@@ -61,6 +61,7 @@ import {
   ServerAuthInvalidRequestError,
   ServerAuthForbiddenOperationError,
 } from "./EnvironmentAuthErrors.ts";
+
 export class EnvironmentAuth extends Context.Service<
   EnvironmentAuth,
   {
@@ -157,12 +158,15 @@ const WEBSOCKET_TICKET_QUERY_PARAM = "wsTicket";
 const bySessionPriority = (left: AuthClientSession, right: AuthClientSession) => {
   const leftCanManage = left.scopes.includes(AuthAccessWriteScope);
   const rightCanManage = right.scopes.includes(AuthAccessWriteScope);
+
   if (leftCanManage !== rightCanManage) {
     return leftCanManage ? -1 : 1;
   }
+
   if (left.connected !== right.connected) {
     return left.connected ? -1 : 1;
   }
+
   return right.issuedAt.epochMilliseconds - left.issuedAt.epochMilliseconds;
 };
 
@@ -191,10 +195,13 @@ const mapSessionVerificationErrors = <A, R>(
 
 function parseBearerToken(request: HttpServerRequest.HttpServerRequest): string | null {
   const header = request.headers["authorization"];
+
   if (typeof header !== "string" || !header.startsWith(AUTHORIZATION_PREFIX)) {
     return null;
   }
+
   const token = header.slice(AUTHORIZATION_PREFIX.length).trim();
+
   return token.length > 0 ? token : null;
 }
 
@@ -204,16 +211,19 @@ export function selectRequestCredential(
   legacyCookieName: string | undefined,
 ) {
   const cookieToken = request.cookies[cookieName];
+
   if (cookieToken !== undefined) {
     return { token: cookieToken, source: "cookie" } as const;
   }
 
   const bearerToken = parseBearerToken(request);
+
   if (bearerToken !== null) {
     return { token: bearerToken, source: "bearer" } as const;
   }
 
   const legacyToken = legacyCookieName ? request.cookies[legacyCookieName] : undefined;
+
   if (legacyToken !== undefined) {
     return { token: legacyToken, source: "legacy-cookie" } as const;
   }
@@ -264,9 +274,11 @@ export const make = Effect.gen(function* () {
       sessions.cookieName,
       sessions.legacyCookieName,
     );
+
     if (!credential?.token) {
       return Effect.fail(new ServerAuthMissingCredentialError({}));
     }
+
     return authenticateToken(credential.token);
   };
 
@@ -304,7 +316,9 @@ export const make = Effect.gen(function* () {
       const firstAdmin =
         hasPairedAdminClient([{ scopes, client }]) &&
         !hasPairedAdminClient(yield* sessions.listActive());
+
       const session = yield* issue;
+
       if (firstAdmin) {
         const links = yield* bootstrapCredentials.listActive();
         yield* Effect.forEach(
@@ -313,6 +327,7 @@ export const make = Effect.gen(function* () {
           { discard: true },
         );
       }
+
       return session;
     });
 
@@ -360,9 +375,11 @@ export const make = Effect.gen(function* () {
         Effect.flatMap((grant) =>
           Effect.gen(function* () {
             const grantedScopes = requestedScopes ?? grant.scopes;
+
             if (!grantedScopes.every((scope) => grant.scopes.includes(scope))) {
               return yield* new ServerAuthScopeNotGrantedError({});
             }
+
             return yield* issueGrantSession(
               grantedScopes,
               requestMetadata,
@@ -433,6 +450,7 @@ export const make = Effect.gen(function* () {
   )(
     function* (input) {
       const createdAt = yield* DateTime.now;
+
       const issued = yield* bootstrapCredentials.issueOneTimeToken({
         scopes: input?.scopes ?? AuthStandardClientScopes,
         subject: input?.subject ?? "one-time-token",
@@ -440,6 +458,7 @@ export const make = Effect.gen(function* () {
         ...(input?.label ? { label: input.label } : {}),
         ...(input?.purpose ? { purpose: input.purpose } : {}),
       });
+
       return {
         id: issued.id,
         credential: issued.credential,
@@ -459,6 +478,7 @@ export const make = Effect.gen(function* () {
         const excludedSubjects = input?.excludeSubjects ?? [
           INTERNAL_ADMINISTRATIVE_BOOTSTRAP_SUBJECT,
         ];
+
         return pairingLinks
           .filter((pairingLink) => !excludedSubjects.includes(pairingLink.subject))
           .toSorted(
@@ -559,6 +579,7 @@ export const make = Effect.gen(function* () {
     if (currentSessionId === targetSessionId) {
       return yield* new ServerAuthForbiddenOperationError({});
     }
+
     return yield* revokeSession(targetSessionId);
   });
 
@@ -576,6 +597,7 @@ export const make = Effect.gen(function* () {
         url.pathname = "/pair";
         url.searchParams.delete("token");
         url.hash = new URLSearchParams([["token", issued.credential]]).toString();
+
         return url.toString();
       }),
       Effect.withSpan("EnvironmentAuth.issueStartupPairingUrl"),
@@ -602,8 +624,10 @@ export const make = Effect.gen(function* () {
   const authenticateWebSocketUpgrade: EnvironmentAuth["Service"]["authenticateWebSocketUpgrade"] =
     Effect.fn("EnvironmentAuth.authenticateWebSocketUpgrade")(function* (request) {
       const requestUrl = HttpServerRequest.toURL(request);
+
       if (Option.isSome(requestUrl)) {
         const websocketTicket = requestUrl.value.searchParams.get(WEBSOCKET_TICKET_QUERY_PARAM);
+
         if (websocketTicket && websocketTicket.trim().length > 0) {
           return yield* sessions.verifyWebSocketToken(websocketTicket).pipe(
             Effect.map((session) => ({
@@ -658,34 +682,65 @@ export const runtimeLayer = layer.pipe(
   Layer.provideMerge(storageLayer),
   Layer.provideMerge(ServerEnvironment.identityLayer),
 );
+
 export { DEFAULT_SESSION_SUBJECT } from "./EnvironmentAuthTypes.ts";
+
 export { INTERNAL_ADMINISTRATIVE_BOOTSTRAP_SUBJECT } from "./EnvironmentAuthTypes.ts";
+
 export { isEnvironmentHostSessionSubject } from "./EnvironmentAuthTypes.ts";
+
 export type { IssuedPairingLink } from "./EnvironmentAuthTypes.ts";
+
 export type { IssuedBearerSession } from "./EnvironmentAuthTypes.ts";
+
 export type { AuthenticatedSession } from "./EnvironmentAuthTypes.ts";
+
 export { ServerAuthBootstrapCredentialValidationError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthSessionCredentialValidationError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthAuthenticatedSessionIssueError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthAuthenticatedAccessTokenIssueError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthPairingLinkCreationError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthPairingLinksListError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthPairingLinkRevocationError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthSessionTokenIssueError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthSessionsListError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthSessionRevocationError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthOtherSessionsRevocationError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthWebSocketTokenIssueError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthInternalError } from "./EnvironmentAuthErrors.ts";
+
 export { isServerAuthInternalError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthMissingCredentialError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthInvalidCredentialError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthCredentialError } from "./EnvironmentAuthErrors.ts";
+
 export { isServerAuthCredentialError } from "./EnvironmentAuthErrors.ts";
+
 export { serverAuthCredentialReason } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthInvalidScopeError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthScopeNotGrantedError } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthInvalidRequestError } from "./EnvironmentAuthErrors.ts";
+
 export { isServerAuthInvalidRequestError } from "./EnvironmentAuthErrors.ts";
+
 export { serverAuthInvalidRequestReason } from "./EnvironmentAuthErrors.ts";
+
 export { ServerAuthForbiddenOperationError } from "./EnvironmentAuthErrors.ts";

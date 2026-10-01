@@ -13,6 +13,7 @@ import {
   runRefresh,
 } from "./serviceTypes.ts";
 import { SubscriptionHealthService } from "./healthService.ts";
+
 export class SubscriptionCredentialAccess {
   private readonly store: SubscriptionCredentialStore;
   private readonly healthService: SubscriptionHealthService;
@@ -43,6 +44,7 @@ export class SubscriptionCredentialAccess {
   ): Promise<string | undefined> {
     const key = credentialKey(provider, instanceId);
     const credential = credentialAt(this.data, key);
+
     if (!credential) return undefined;
 
     if (credential.type === "api-key") return credential.access;
@@ -52,12 +54,15 @@ export class SubscriptionCredentialAccess {
     }
 
     const inFlight = this.refreshInFlight.get(key);
+
     if (inFlight) return inFlight;
 
     const refresh = this.refreshCredential(provider, credential, instanceId).finally(() => {
       this.refreshInFlight.delete(key);
     });
+
     this.refreshInFlight.set(key, refresh);
+
     return refresh;
   }
 
@@ -66,7 +71,9 @@ export class SubscriptionCredentialAccess {
     instanceId?: string,
   ): Promise<string | undefined> {
     const apiKey = this.getApiKeyCredential(provider, instanceId);
+
     if (apiKey && (provider !== "opencode-go" || apiKey.baseUrl)) return undefined;
+
     return this.getAccessToken(provider, instanceId);
   }
 
@@ -80,29 +87,38 @@ export class SubscriptionCredentialAccess {
     const key = credentialKey(provider);
     await this.reloadAsync();
     const credential = credentialAt(this.data, key);
+
     if (
       !credential ||
       (credential.type === "api-key" && (provider !== "opencode-go" || credential.baseUrl))
     )
       return undefined;
+
     if (typeof credential.connectionId !== "string" || !credential.connectionId) {
       await this.updateCredentials((data) => {
         const current = credentialAt(data, key);
+
         if (!current || (typeof current.connectionId === "string" && current.connectionId))
           return data;
+
         return { ...data, [key]: { ...current, connectionId: NodeCrypto.randomUUID() } };
       });
     }
+
     const accessToken = await this.getPlanAccessToken(provider).catch(() => undefined);
     await this.reloadAsync();
     const current = credentialAt(this.data, key);
+
     if (!current) return undefined;
+
     const accountId =
       current.type === "oauth" && typeof current.accountId === "string" && current.accountId
         ? current.accountId
         : current.connectionId;
+
     if (typeof accountId !== "string" || !accountId)
       throw new Error("Plan account identity is unavailable.");
+
     return { accessToken: accessToken ? current.access : null, accountId };
   }
 
@@ -111,6 +127,7 @@ export class SubscriptionCredentialAccess {
     instanceId?: string,
   ): ApiKeyCredential | undefined {
     const credential = credentialAt(this.data, credentialKey(provider, instanceId));
+
     return credential?.type === "api-key" ? credential : undefined;
   }
 
@@ -119,6 +136,7 @@ export class SubscriptionCredentialAccess {
     instanceId?: string,
   ): OAuthCredential | undefined {
     const credential = credentialAt(this.data, credentialKey(provider, instanceId));
+
     return credential?.type === "oauth" ? credential : undefined;
   }
 
@@ -129,6 +147,7 @@ export class SubscriptionCredentialAccess {
     const accessToken = await this.getAccessToken("openai-codex", instanceId);
     const credential = credentialAt(this.data, credentialKey("openai-codex", instanceId));
     const accountId = credential?.type === "oauth" ? credential.accountId : undefined;
+
     return accessToken && typeof accountId === "string" && accountId.length > 0
       ? { accessToken, accountId }
       : undefined;
@@ -143,10 +162,13 @@ export class SubscriptionCredentialAccess {
     await this.reloadAsync();
     const accessToken = await this.getAccessToken("kimi-for-coding", instanceId);
     const credential = credentialAt(this.data, credentialKey("kimi-for-coding", instanceId));
+
     if (credential?.type === "api-key" && accessToken) {
       return { accessToken, ...(credential.baseUrl ? { baseUrl: credential.baseUrl } : {}) };
     }
+
     const deviceId = credential?.type === "oauth" ? credential.deviceId : undefined;
+
     return accessToken && isKimiCodingDeviceId(deviceId) ? { accessToken, deviceId } : undefined;
   }
 
@@ -156,6 +178,7 @@ export class SubscriptionCredentialAccess {
     instanceId?: string,
   ): Promise<string | undefined> {
     const key = credentialKey(provider, instanceId);
+
     try {
       const refreshed = await this.runRefresh(provider, credential);
       await this.reloadAsync();
@@ -163,6 +186,7 @@ export class SubscriptionCredentialAccess {
       // that do not rotate refresh tokens leave `refresh` unchanged, so only the
       // access token shows whether the stored credential is still the one refreshed.
       const current = credentialAt(this.data, key);
+
       if (
         current?.type !== "oauth" ||
         current.access !== credential.access ||
@@ -170,14 +194,17 @@ export class SubscriptionCredentialAccess {
       ) {
         return current?.access;
       }
+
       const saved = await this.updateCredentials((data) => {
         const latest = credentialAt(data, key);
+
         return latest?.type === "oauth" &&
           latest.access === credential.access &&
           latest.refresh === credential.refresh
           ? { ...data, [key]: refreshedCredential(latest, refreshed) }
           : data;
       });
+
       return credentialAt(saved, key)?.access;
     } catch (cause) {
       // Refresh failed — the user must re-connect. Keep the stored credential
@@ -188,6 +215,7 @@ export class SubscriptionCredentialAccess {
         oauthFailureKind(cause),
         instanceId,
       );
+
       return undefined;
     }
   }

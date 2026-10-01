@@ -32,12 +32,15 @@ export function subscriptionDependentBots(
 ) {
   return bots.flatMap((bot) => {
     if (!bot.engine) return [];
+
     const driver =
       providers.find((provider) => provider.instanceId === bot.engine?.provider)?.driver ??
       bot.engine.provider;
+
     const subscriptionProvider = Object.entries(SUBSCRIPTION_DRIVER).find(
       ([, candidate]) => candidate === driver,
     )?.[0] as SubscriptionProviderId | undefined;
+
     return subscriptionProvider
       ? [{ id: bot.id, name: bot.name, provider: subscriptionProvider }]
       : [];
@@ -82,9 +85,13 @@ function providerAccessHealth(
   actualRequestHealth: ActualRequestHealth,
 ) {
   if (!provider || !provider.installed) return "missing" as const;
+
   if (provider.availability === "unavailable") return "unsupported" as const;
+
   if (actualRequestHealth) return actualRequestHealth;
+
   if (provider.status === "error") return "failed-first-request" as const;
+
   return "detected" as const;
 }
 
@@ -98,8 +105,10 @@ export function buildProviderAccessCapabilities(
   mcpRequestHealth: (serverId: string) => RequestHealthStatus | undefined = () => undefined,
 ): ReadonlyArray<ProviderAccessStatus> {
   const subscriptionById = new Map(subscriptions.map((status) => [status.provider, status]));
+
   const subscriptionRows = SUBSCRIPTION_ACCESS.map((entry) => {
     const status = subscriptionById.get(entry.provider);
+
     return {
       id: entry.id,
       label: entry.label,
@@ -126,9 +135,11 @@ export function buildProviderAccessCapabilities(
   });
 
   const apiKeyProviders = providers.filter((provider) => provider.auth.type === "apiKey");
+
   const apiKeyRows = apiKeyProviders.map((provider) => {
     const requestHealth = providerRequestHealth(provider.instanceId);
     const health = providerAccessHealth(provider, requestHealthState(requestHealth));
+
     return {
       id: `api-key-${provider.instanceId}`,
       label: `${provider.displayName ?? provider.driver} API key`,
@@ -149,6 +160,7 @@ export function buildProviderAccessCapabilities(
     const provider = providers.find((candidate) => candidate.driver === entry.driver);
     const requestHealth = provider ? providerRequestHealth(provider.instanceId) : undefined;
     const health = providerAccessHealth(provider, requestHealthState(requestHealth));
+
     return {
       id: entry.id,
       label: entry.label,
@@ -169,9 +181,11 @@ export function buildProviderAccessCapabilities(
 
   const mcpRows = mcpServers.map((server) => {
     const requestHealth = mcpRequestHealth(server.id);
+
     const health: ProviderAccessStatus["health"] = server.enabled
       ? (requestHealth?.health ?? "detected")
       : "disabled";
+
     return {
       id: `mcp-${server.id}`,
       label: server.name,

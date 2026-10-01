@@ -29,6 +29,7 @@ it.effect("keeps a definite reply rejection's category instead of delivery-unkno
       send,
       Cause.fail(new ChannelPostRejectedError({ message: "Rejected." })),
     );
+
     assert.deepStrictEqual(rejected, {
       message: "The channel rejected this reply. Correct the channel problem, then retry.",
       category: "credentials",
@@ -38,6 +39,7 @@ it.effect("keeps a definite reply rejection's category instead of delivery-unkno
       send,
       Cause.fail(new ChannelPostRejectedError({ message: "Rejected.", category: "network" })),
     );
+
     assert.strictEqual(categorized.category, "network");
   }),
 );
@@ -50,6 +52,7 @@ it.effect("reports an ambiguous reply transport failure as delivery-unknown", ()
         new ChannelTransportError({ message: "Channel provider request failed.", cause: {} }),
       ),
     );
+
     assert.deepStrictEqual(failure, {
       message: channelFailureMessage("delivery-unknown"),
       category: "delivery-unknown",
@@ -60,10 +63,12 @@ it.effect("reports an ambiguous reply transport failure as delivery-unknown", ()
 it.effect("keeps a reply failure that happened before posting out of delivery-unknown", () =>
   Effect.gen(function* () {
     const message = "Reconnect this channel before sending a reply.";
+
     const failure = yield* channelCommandFailure(
       send,
       Cause.fail(new ChannelRuntimeError({ message })),
     );
+
     assert.strictEqual(failure.message, message);
     assert.notStrictEqual(failure.category, "delivery-unknown");
 
@@ -71,6 +76,7 @@ it.effect("keeps a reply failure that happened before posting out of delivery-un
       send,
       Cause.fail(new ChannelRuntimeError({ message: channelFailureMessage("delivery-unknown") })),
     );
+
     assert.strictEqual(unknown.category, "delivery-unknown");
   }),
 );
@@ -80,6 +86,7 @@ it("sends the failure category to clients with the fixed message", () => {
     message: channelFailureMessage("credentials"),
     category: "credentials",
   });
+
   assert.strictEqual(credentials.channelFailureCategory, "credentials");
   assert.strictEqual(credentials.message, channelFailureMessage("credentials"));
 

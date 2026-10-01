@@ -34,6 +34,7 @@ const makeHost = (overrides: Partial<PreviewAutomationHost> = {}): PreviewAutoma
 const snapshotResult = (() => {
   const png = new PNG({ width: 1, height: 1 });
   png.data.fill(255);
+
   return {
     url: "http://localhost:3200",
     title: "Example",
@@ -74,11 +75,14 @@ const requestsFrom = (
     Stream.filterMap((event) => {
       if (event.type === "connected") {
         onConnected(event.connectionId);
+
         return Result.failVoid;
       }
+
       return Result.succeed({ ...event.request, connectionId: event.connectionId });
     }),
   );
+
 export {
   makeBroker,
   scope,

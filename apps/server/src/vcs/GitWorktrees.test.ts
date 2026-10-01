@@ -24,25 +24,33 @@ it.effect("marks the current branch when worktree metadata is unavailable", () =
   Effect.scoped(
     Effect.gen(function* () {
       const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+
       const incompleteMetadataSpawner = ChildProcessSpawner.make((command) =>
         Effect.gen(function* () {
           if (!ChildProcess.isStandardCommand(command)) {
             return yield* Effect.die("expected a standard Git command");
           }
+
           const isWorktreeRoot =
             command.args.includes("rev-parse") && command.args.includes("--show-toplevel");
+
           const isWorktreeList =
             command.args.includes("worktree") && command.args.includes("--porcelain");
+
           if (isWorktreeRoot || isWorktreeList) {
             return makeNonRepositoryHandle();
           }
+
           return yield* delegate.spawn(command);
         }),
       );
+
       const driver = yield* makeGitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, incompleteMetadataSpawner),
       );
+
       const cwd = yield* makeTmpDir();
+
       const { initialBranch } = yield* initRepoWithCommit(cwd).pipe(
         Effect.provideService(GitVcsDriver.GitVcsDriver, driver),
       );
@@ -60,24 +68,30 @@ it.effect("ignores worktree metadata for directories that no longer exist", () =
     Effect.gen(function* () {
       const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
       const missingWorktreePath = "/missing/deleted-worktree";
+
       const staleWorktreeSpawner = ChildProcessSpawner.make((command) =>
         Effect.gen(function* () {
           if (!ChildProcess.isStandardCommand(command)) {
             return yield* Effect.die("expected a standard Git command");
           }
+
           const isWorktreeList =
             command.args.includes("worktree") && command.args.includes("--porcelain");
+
           if (isWorktreeList) {
             return makeSuccessfulHandle(
               `worktree ${missingWorktreePath}\0HEAD deadbeef\0branch refs/heads/stale-worktree\0\0`,
             );
           }
+
           return yield* delegate.spawn(command);
         }),
       );
+
       const driver = yield* makeGitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, staleWorktreeSpawner),
       );
+
       const cwd = yield* makeTmpDir();
       yield* initRepoWithCommit(cwd).pipe(Effect.provideService(GitVcsDriver.GitVcsDriver, driver));
       yield* git(cwd, ["branch", "stale-worktree"]).pipe(
@@ -96,27 +110,34 @@ it.effect("backs off failed upstream refreshes across linked worktrees", () =>
     Effect.gen(function* () {
       const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
       const fetchAttempts = yield* Ref.make(0);
+
       const failingFetchSpawner = ChildProcessSpawner.make((command) =>
         Effect.gen(function* () {
           if (!ChildProcess.isStandardCommand(command)) {
             return yield* Effect.die("expected a standard Git command");
           }
+
           if (command.args.includes("fetch") && command.args.includes("--quiet")) {
             yield* Ref.update(fetchAttempts, (count) => count + 1);
+
             return makeNonRepositoryHandle();
           }
+
           return yield* delegate.spawn(command);
         }),
       );
+
       const driver = yield* makeGitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, failingFetchSpawner),
       );
+
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* makeTmpDir();
       const remote = yield* makeTmpDir("git-vcs-driver-remote-");
       const worktreesRoot = yield* makeTmpDir("git-vcs-driver-worktrees-");
       const pathService = yield* Path.Path;
       const worktreePath = pathService.join(worktreesRoot, "linked");
+
       const runGit = (workingDirectory: string, args: ReadonlyArray<string>) =>
         driver.execute({
           operation: "GitVcsDriver.test.upstreamRefreshBackoff",
@@ -143,10 +164,12 @@ it.effect("backs off failed upstream refreshes across linked worktrees", () =>
         "feature/linked",
       ]);
       const rootCommonDir = (yield* runGit(cwd, ["rev-parse", "--git-common-dir"])).stdout.trim();
+
       const linkedCommonDir = (yield* runGit(worktreePath, [
         "rev-parse",
         "--git-common-dir",
       ])).stdout.trim();
+
       assert.equal(
         yield* fileSystem.realPath(pathService.resolve(cwd, rootCommonDir)),
         yield* fileSystem.realPath(pathService.resolve(worktreePath, linkedCommonDir)),
@@ -191,6 +214,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         yield* git(cwd, ["worktree", "add", "-b", "feature/newline-path", worktreePath]);
 
         const refs = yield* driver.listRefs({ cwd, refresh: true });
+
         const listedPath = refs.refs.find(
           (ref) => ref.name === "feature/newline-path",
         )?.worktreePath;
@@ -198,6 +222,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         if (typeof listedPath !== "string") {
           return assert.fail("expected the linked branch to include its worktree path");
         }
+
         assert.equal(
           yield* fileSystem.realPath(listedPath),
           yield* fileSystem.realPath(worktreePath),
@@ -242,6 +267,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           yield* makeTmpDir("git-worktrees-"),
           "submodule-worktree",
         );
+
         const driver = yield* GitVcsDriver.GitVcsDriver;
         yield* driver.createWorktree({
           cwd,
@@ -278,7 +304,9 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           yield* makeTmpDir("git-worktrees-"),
           "broken-submodule-worktree",
         );
+
         const driver = yield* GitVcsDriver.GitVcsDriver;
+
         const created = yield* driver.createWorktree({
           cwd,
           path: worktreePath,
@@ -296,10 +324,12 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         const cwd = yield* makeTmpDir();
         const { initialBranch } = yield* initRepoWithCommit(cwd);
         const pathService = yield* Path.Path;
+
         const worktreePath = pathService.join(
           yield* makeTmpDir("git-worktrees-"),
           "feature-worktree",
         );
+
         const driver = yield* GitVcsDriver.GitVcsDriver;
 
         const created = yield* driver.createWorktree({

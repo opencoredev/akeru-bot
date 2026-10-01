@@ -42,9 +42,11 @@ export const ProjectionBot = Schema.Struct({
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
+
 export type ProjectionBot = typeof ProjectionBot.Type;
 
 export const GetProjectionBotInput = Schema.Struct({ botId: BotId });
+
 export type GetProjectionBotInput = typeof GetProjectionBotInput.Type;
 
 export interface ProjectionBotRepositoryShape {

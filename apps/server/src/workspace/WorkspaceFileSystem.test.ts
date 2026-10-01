@@ -32,6 +32,7 @@ const TestLayer = Layer.empty.pipe(
 
 const makeTempDir = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
+
   return yield* fileSystem.makeTempDirectoryScoped({
     prefix: "t3code-workspace-files-",
   });
@@ -104,6 +105,7 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
         const error = yield* workspaceFileSystem
           .readFile({ cwd, relativePath: "linked-secret.txt" })
           .pipe(Effect.flip);
+
         const resolvedWorkspaceRoot = yield* fileSystem.realPath(cwd);
         const resolvedPath = yield* fileSystem.realPath(path.join(outsideDir, "secret.txt"));
 
@@ -129,6 +131,7 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
         const error = yield* workspaceFileSystem
           .readFile({ cwd, relativePath: "src" })
           .pipe(Effect.flip);
+
         const resolvedPath = yield* fileSystem.realPath(path.join(cwd, "src"));
 
         expect(error).toBeInstanceOf(WorkspaceFileSystem.WorkspacePathNotFileError);
@@ -153,6 +156,7 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
         const error = yield* workspaceFileSystem
           .readFile({ cwd, relativePath: "asset.bin" })
           .pipe(Effect.flip);
+
         const resolvedPath = yield* fileSystem.realPath(absolutePath);
 
         expect(error).toBeInstanceOf(WorkspaceFileSystem.WorkspaceBinaryFileError);
@@ -198,11 +202,13 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
         const cwd = yield* makeTempDir;
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const result = yield* workspaceFileSystem.writeFile({
           cwd,
           relativePath: "plans/effect-rpc.md",
           contents: "# Plan\n",
         });
+
         const saved = yield* fileSystem
           .readFileString(path.join(cwd, "plans/effect-rpc.md"))
           .pipe(Effect.orDie);
@@ -258,9 +264,11 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
         );
 
         const escapedPath = path.resolve(cwd, "..", "escape.md");
+
         const escapedStat = yield* fileSystem
           .stat(escapedPath)
           .pipe(Effect.orElseSucceed(() => null));
+
         expect(escapedStat).toBeNull();
       }),
     );

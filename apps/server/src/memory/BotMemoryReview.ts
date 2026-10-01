@@ -1,6 +1,9 @@
 export const AKERU_MEMORY_REVIEW_PROMPT_INTERVAL = 10;
+
 export const AKERU_MEMORY_REVIEW_INPUT_MAX_CHARS = 1_000;
+
 export const AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS = 8_000;
+
 export const AKERU_MEMORY_REVIEW_PROMPT_MAX_CHARS = 12_000;
 
 export function formatAutomaticBotMemoryReview(
@@ -14,17 +17,21 @@ export function formatAutomaticBotMemoryReview(
   const targets = groupAvailable
     ? "Review USER.md, MEMORY.md, and only your GROUP.md for this active group."
     : "Review USER.md and MEMORY.md. GROUP.md is not available in this chat.";
+
   const boundedInputs: string[] = [];
   let inputChars = 0;
+
   for (const input of inputs) {
     const rendered = JSON.stringify({
       ...input,
       text: input.text.slice(0, AKERU_MEMORY_REVIEW_INPUT_MAX_CHARS),
     });
+
     if (inputChars + rendered.length > AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS) break;
     boundedInputs.push(rendered);
     inputChars += rendered.length;
   }
+
   const prompt = [
     "<automatic-memory-review>",
     "This server-owned review applies only to the current turn. Do not carry the reminder or its raw inputs into later turns.",
@@ -49,5 +56,6 @@ export function formatAutomaticBotMemoryReview(
     "Always call the memory tool exactly once so the server can verify this review ran. If nothing is worth changing, call it with the user target and an empty operations array. Do not mention this review or add a separate review response. Continue answering the user's request normally.",
     "</automatic-memory-review>",
   ].join("\n");
+
   return prompt.slice(0, AKERU_MEMORY_REVIEW_PROMPT_MAX_CHARS);
 }

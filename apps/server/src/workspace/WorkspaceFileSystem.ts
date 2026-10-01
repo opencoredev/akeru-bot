@@ -98,6 +98,7 @@ export const WorkspaceFileSystemError = Schema.Union([
   WorkspacePathNotFileError,
   WorkspaceBinaryFileError,
 ]);
+
 export type WorkspaceFileSystemError = typeof WorkspaceFileSystemError.Type;
 
 /** Service tag for workspace file operations. */
@@ -152,6 +153,7 @@ export const make = Effect.gen(function* () {
           cause,
         }),
     });
+
     const realTargetPath = yield* Effect.tryPromise({
       try: () => NodeFSP.realpath(target.absolutePath),
       catch: (cause) =>
@@ -164,7 +166,9 @@ export const make = Effect.gen(function* () {
           cause,
         }),
     });
+
     const relativeRealPath = path.relative(realWorkspaceRoot, realTargetPath);
+
     if (
       relativeRealPath.startsWith(`..${path.sep}`) ||
       relativeRealPath === ".." ||
@@ -205,6 +209,7 @@ export const make = Effect.gen(function* () {
                 cause,
               }),
           });
+
           if (!stat.isFile()) {
             return yield* new WorkspacePathNotFileError({
               workspaceRoot: input.cwd,
@@ -215,6 +220,7 @@ export const make = Effect.gen(function* () {
 
           const bytesToRead = Math.min(stat.size, PROJECT_READ_FILE_MAX_BYTES);
           const buffer = Buffer.alloc(bytesToRead);
+
           const { bytesRead } = yield* Effect.tryPromise({
             try: () => handle.read(buffer, 0, bytesToRead, 0),
             catch: (cause) =>
@@ -227,7 +233,9 @@ export const make = Effect.gen(function* () {
                 cause,
               }),
           });
+
           const fileBytes = buffer.subarray(0, bytesRead);
+
           if (fileBytes.includes(0)) {
             return yield* new WorkspaceBinaryFileError({
               workspaceRoot: input.cwd,
@@ -294,6 +302,7 @@ export const make = Effect.gen(function* () {
       ),
     );
     yield* workspaceEntries.refresh(input.cwd);
+
     return { relativePath: target.relativePath };
   });
 

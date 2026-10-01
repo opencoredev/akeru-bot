@@ -16,6 +16,7 @@ import {
   makeKeyedLock,
   type ChannelRuntimeDependencies,
 } from "./ChannelRuntime.ts";
+
 describe("channel runtime", () => {
   it.effect("serializes work per key in FIFO order while different keys overlap", () =>
     Effect.gen(function* () {
@@ -23,6 +24,7 @@ describe("channel runtime", () => {
       const events: string[] = [];
       const releaseFirst = yield* Deferred.make<void>();
       const firstStarted = yield* Deferred.make<void>();
+
       const first = yield* withLock("same")(
         Effect.gen(function* () {
           events.push("same:start");
@@ -31,13 +33,17 @@ describe("channel runtime", () => {
           events.push("same:end");
         }),
       ).pipe(Effect.forkChild);
+
       yield* Deferred.await(firstStarted);
+
       const second = yield* withLock("same")(
         Effect.sync(() => void events.push("same:second")),
       ).pipe(Effect.forkChild);
+
       const third = yield* withLock("same")(Effect.sync(() => void events.push("same:third"))).pipe(
         Effect.forkChild,
       );
+
       yield* withLock("other")(Effect.sync(() => void events.push("other")));
       expect(events).toEqual(["same:start", "other"]);
       yield* Deferred.succeed(releaseFirst, undefined);
@@ -54,19 +60,24 @@ describe("channel runtime", () => {
       const events: string[] = [];
       const releaseFirst = yield* Deferred.make<void>();
       const firstStarted = yield* Deferred.make<void>();
+
       const first = yield* withLock("same")(
         Deferred.succeed(firstStarted, undefined).pipe(
           Effect.andThen(Deferred.await(releaseFirst)),
           Effect.andThen(Effect.sync(() => void events.push("first"))),
         ),
       ).pipe(Effect.forkChild);
+
       yield* Deferred.await(firstStarted);
+
       const abandoned = yield* withLock("same")(
         Effect.sync(() => void events.push("abandoned")),
       ).pipe(Effect.forkChild);
+
       const last = yield* withLock("same")(Effect.sync(() => void events.push("last"))).pipe(
         Effect.forkChild,
       );
+
       yield* Effect.yieldNow;
       expect(abandoned.pollUnsafe()).toBeUndefined();
       // Interrupting must not wait for the key the first caller still holds.
@@ -88,6 +99,7 @@ describe("channel runtime", () => {
       connectedAt: null,
       sentMessageIds: [],
     };
+
     expect(channelBindingsWith([binding], () => false)[0]?.status).toBe("needs-reconnect");
     expect(channelBindingsWith([binding], () => true)[0]?.status).toBe("not-live");
   });
@@ -120,10 +132,12 @@ describe("channel runtime", () => {
       const second = makeHarness({ shutdown: secondShutdown });
       const firstScope = yield* Scope.make();
       const secondScope = yield* Scope.make();
+
       const build = (dependencies: ChannelRuntimeDependencies, scope: Scope.Scope) =>
         Layer.buildWithScope(ChannelRuntime.layerWith(dependencies), scope).pipe(
           Effect.map((context) => Context.get(context, ChannelRuntime)),
         );
+
       const firstRuntime = yield* build(first.dependencies, firstScope);
       const secondRuntime = yield* build(second.dependencies, secondScope);
       yield* firstRuntime.connect(telegramConnect(BOT_ID));

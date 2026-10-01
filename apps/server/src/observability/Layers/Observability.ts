@@ -41,6 +41,7 @@ export const ObservabilityLive = Layer.unwrap(
               durationMs: stats.durationMs,
             }),
         });
+
         const delegate =
           config.otlpTracesUrl === undefined
             ? undefined

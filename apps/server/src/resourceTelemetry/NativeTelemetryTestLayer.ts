@@ -9,6 +9,7 @@ import {
   NativeTelemetryUnavailable,
 } from "./NativeTelemetryProtocol.ts";
 import { NativeTelemetryClient } from "./NativeTelemetryTypes.ts";
+
 export const layerTest = (
   overrides: Partial<NativeTelemetryClient["Service"]> = {},
 ): Layer.Layer<NativeTelemetryClient> => {
@@ -22,6 +23,7 @@ export const layerTest = (
       restartCount: 0,
       sampleIntervalMs: UNKNOWN_BACKGROUND_SAMPLE_INTERVAL_MS,
     });
+
   return Layer.succeed(
     NativeTelemetryClient,
     NativeTelemetryClient.of({

@@ -2,6 +2,7 @@ import { AkeruMemoryId, AkeruMemoryRevision, AkeruMemoryRootId } from "@akeru/co
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { toPersistenceDecodeError } from "../../persistence/Errors.ts";
+
 export const EntityMemoryDbRow = Schema.Struct({
   id: AkeruMemoryId,
   rootId: AkeruMemoryRootId,
@@ -78,6 +79,7 @@ export const decodeRow = Effect.fn("EntityMemoryRepository.decodeRow")(
   function* (row: EntityMemoryDbRow) {
     const value = yield* decodeJsonValue(row.value);
     const affectedBotIds = yield* decodeJsonBotIds(row.affectedBotIds);
+
     return yield* Schema.decodeUnknownEffect(AkeruMemoryRevision)({
       ...row,
       value,
@@ -100,6 +102,7 @@ export const toFtsQuery = (query: string): string | null => {
       .toLocaleLowerCase()
       .match(/[\p{L}\p{N}_]+/gu)
       ?.slice(0, 16) ?? [];
+
   return tokens.length === 0
     ? null
     : tokens.map((token) => `"${token.replaceAll('"', '""')}"`).join(" AND ");

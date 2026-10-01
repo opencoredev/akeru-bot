@@ -20,6 +20,7 @@ import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { MemoryApprovals, memoryApprovalIncidentKey } from "./MemoryApprovals.ts";
 import { EntityMemoryRepository } from "./Services/EntityMemoryRepository.ts";
+
 it.layer(testLayer)("MemoryApprovals", (it) => {
   it.effect("holds a shared fact for approval and saves it once approved", () =>
     Effect.gen(function* () {
@@ -34,11 +35,14 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
 
       const requested = dispatched[0];
       assert.equal(requested?.type, "thread.activity.append");
+
       if (requested?.type !== "thread.activity.append") return;
       assert.equal(requested.threadId, threadId);
       assert.equal(requested.activity.kind, AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY);
@@ -55,9 +59,11 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
       });
 
       const botInbox = yield* inbox;
+
       const openItem = botInbox
         .list()
         .find((item) => item.incidentKey === memoryApprovalIncidentKey(proposed.candidateId));
+
       assert.equal(openItem?.kind, "approval-request");
       assert.equal(openItem?.status, "open");
       assert.equal(openItem?.botName, "Ada");
@@ -77,6 +83,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
           scope: "project",
         },
       });
+
       assert.equal(receipt.status, "approved");
       assert.equal(receipt.fact, "The release branch is cut on Thursday mornings.");
       assert.isNotNull(receipt.memoryRootId);
@@ -104,6 +111,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         access,
         decision: { candidateId: proposed.candidateId, decision: "reject" },
       });
+
       assert.deepEqual(repeated, receipt);
       assert.equal((yield* repository.listCurrent({ access })).length, 1);
     }),
@@ -123,7 +131,9 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: true,
         mode: "auto",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
 
       const foreign = yield* approvals
@@ -132,12 +142,14 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
           decision: { candidateId: proposed.candidateId, decision: "approve" },
         })
         .pipe(Effect.flip);
+
       assert.equal(foreign._tag, "MemoryApprovalError");
 
       const receipt = yield* approvals.decide({
         access,
         decision: { candidateId: proposed.candidateId, decision: "reject" },
       });
+
       assert.equal(receipt.status, "rejected");
       assert.isNull(receipt.memoryRootId);
       assert.equal((yield* repository.listCurrent({ access })).length, before);
@@ -148,6 +160,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
           decision: { candidateId: AkeruMemoryCandidateId.make("missing"), decision: "approve" },
         })
         .pipe(Effect.flip);
+
       assert.equal(unknown._tag, "MemoryApprovalError");
     }),
   );
@@ -155,6 +168,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
   it.effect("rejects a client scope that differs from the candidate", () =>
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
+
       const proposed = yield* approvals.propose({
         access,
         fact: "The release bot owns the project checklist.",
@@ -162,8 +176,11 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
+
       const error = yield* approvals
         .decide({
           access,
@@ -174,6 +191,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
           },
         })
         .pipe(Effect.flip);
+
       assert.equal(error._tag, "MemoryApprovalError");
       assert.match(error.message, /scope must match/);
     }),
@@ -184,12 +202,14 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
       const approvals = yield* MemoryApprovals;
       const repository = yield* EntityMemoryRepository;
       const otherBotId = BotId.make("bot-bob");
+
       const groupAccess = {
         ...access,
         groupId: GroupId.make("group-release"),
         respondingBotId: botId,
         groupMemberBotIds: [botId, otherBotId],
       };
+
       const proposed = yield* approvals.propose({
         access: groupAccess,
         fact: "Ada owns the release checklist.",
@@ -197,18 +217,25 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
+
       const decided = yield* approvals.decide({
         access: { ...groupAccess, respondingBotId: otherBotId },
         decision: { candidateId: proposed.candidateId, decision: "approve" },
       });
+
       assert.equal(decided.status, "approved");
+
       if (decided.memoryRootId === null) return assert.fail("expected a saved memory");
+
       const saved = yield* repository.getCurrent({
         access: groupAccess,
         rootId: decided.memoryRootId,
       });
+
       assert.equal(saved.authorBotId, botId);
     }),
   );
@@ -217,17 +244,20 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
       const otherBotId = BotId.make("bot-bob");
+
       const groupAccess = {
         ...access,
         groupId: GroupId.make("group-release"),
         respondingBotId: botId,
         groupMemberBotIds: [botId, otherBotId],
       };
+
       const departedAccess = {
         ...groupAccess,
         respondingBotId: otherBotId,
         groupMemberBotIds: [otherBotId],
       };
+
       for (const decision of ["approve", "reject"] as const) {
         const proposed = yield* approvals.propose({
           access: groupAccess,
@@ -236,11 +266,14 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
           sensitive: false,
           mode: "ask",
         });
+
         if (proposed.status !== "pending") return assert.fail("expected a pending request");
+
         const decided = yield* approvals.decide({
           access: departedAccess,
           decision: { candidateId: proposed.candidateId, decision },
         });
+
         assert.equal(decided.status, decision === "approve" ? "approved" : "rejected");
       }
     }),
@@ -250,6 +283,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
       const sql = yield* SqlClient.SqlClient;
+
       const error = yield* approvals
         .propose({
           access,
@@ -259,11 +293,14 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
           mode: "ask",
         })
         .pipe(Effect.flip);
+
       assert.equal(error._tag, "MemoryApprovalError");
+
       const rows = yield* sql`
         SELECT candidate_id FROM akeru_memory_candidates
         WHERE fact_text = 'The group ships on Mondays.'
       `;
+
       assert.equal(rows.length, 0);
     }),
   );
@@ -271,6 +308,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
   it.effect("rejects an edited fact that fails the memory content guard", () =>
     Effect.gen(function* () {
       const approvals = yield* MemoryApprovals;
+
       const proposed = yield* approvals.propose({
         access,
         fact: "The docs live in the handbook.",
@@ -278,8 +316,11 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "ask",
       });
+
       assert.equal(proposed.status, "pending");
+
       if (proposed.status !== "pending") return;
+
       const error = yield* approvals
         .decide({
           access,
@@ -290,6 +331,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
           },
         })
         .pipe(Effect.flip);
+
       assert.equal(error._tag, "MemoryApprovalError");
       assert.match(error.message, /Memory content was rejected/);
     }),
@@ -308,6 +350,7 @@ it.layer(testLayer)("MemoryApprovals", (it) => {
         sensitive: false,
         mode: "auto",
       });
+
       assert.equal(saved.status, "saved");
       assert.deepEqual(activityKinds(), []);
       const current = yield* repository.listCurrent({ access });

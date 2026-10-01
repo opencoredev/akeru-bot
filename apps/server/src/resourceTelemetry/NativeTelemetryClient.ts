@@ -69,6 +69,7 @@ import {
   canCommandNativeTelemetrySidecar,
 } from "./NativeTelemetryPolicy.ts";
 import { NativeTelemetryClient } from "./NativeTelemetryTypes.ts";
+
 export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(function* () {
   const binary = yield* ResourceMonitorBinary.ResourceMonitorBinary;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -76,6 +77,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
   const config = yield* ServerConfig;
   const initializedAt = yield* DateTime.now;
   const state = yield* Ref.make(initialState);
+
   const collectionControl = yield* Ref.make<CollectionControl>({
     hostPower: {
       source: "unknown",
@@ -92,26 +94,32 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
     liveSubscriberCount: 0,
     sampleIntervalMs: UNKNOWN_BACKGROUND_SAMPLE_INTERVAL_MS,
   });
+
   const appliedCollectionControl = yield* Ref.make(yield* Ref.get(collectionControl));
   const externalProcesses = yield* Ref.make<ReadonlyArray<ResourceMonitorExternalProcess>>([]);
+
   const pendingSamples = yield* Ref.make(
     new Map<string, Deferred.Deferred<NativeTelemetrySnapshot, NativeTelemetryClientError>>(),
   );
+
   const pendingProcessTables = yield* Ref.make(
     new Map<
       string,
       Deferred.Deferred<ReadonlyArray<ResourceMonitorProcessTableEntry>, NativeTelemetryClientError>
     >(),
   );
+
   const pendingHistories = yield* Ref.make(new Map<string, PendingHistoryRequest>());
   const snapshots = yield* PubSub.sliding<NativeTelemetrySnapshot>(8);
   const healthChanges = yield* PubSub.sliding<NativeTelemetryClientHealth>(4);
   const retryQueue = yield* Queue.sliding<void>(1);
   const commandMutex = yield* Semaphore.make(1);
   const controlMutex = yield* Semaphore.make(1);
+
   const currentHealth = Effect.all([Ref.get(state), Ref.get(collectionControl)]).pipe(
     Effect.map(([current, control]) => toHealth(current, control.sampleIntervalMs)),
   );
+
   const publishHealth = currentHealth.pipe(
     Effect.flatMap((health) => PubSub.publish(healthChanges, health)),
     Effect.asVoid,
@@ -191,13 +199,16 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
           }));
           yield* publishHealth;
           yield* PubSub.publish(snapshots, nativeSnapshot);
+
           if (event.requestId) {
             const deferred = yield* Ref.modify(pendingSamples, (pending) => {
               const next = new Map(pending);
               const current = next.get(event.requestId!);
               next.delete(event.requestId!);
+
               return [Option.fromUndefinedOr(current), next];
             });
+
             if (Option.isSome(deferred)) {
               yield* Deferred.succeed(deferred.value, nativeSnapshot);
             }
@@ -208,6 +219,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
           const next = new Map(pending);
           const deferred = next.get(event.requestId);
           next.delete(event.requestId);
+
           return [Option.fromUndefinedOr(deferred), next] as const;
         }).pipe(
           Effect.flatMap(
@@ -230,18 +242,25 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
             lastError: Option.none(),
           }));
           yield* publishHealth;
+
           const completed = yield* Ref.modify(pendingHistories, (pending) => {
             const request = pending.get(event.requestId);
+
             if (!request) return [Option.none(), pending] as const;
             const snapshots = [...request.snapshots, ...event.snapshots];
             const next = new Map(pending);
+
             if (event.done) {
               next.delete(event.requestId);
+
               return [Option.some({ deferred: request.deferred, snapshots }), next] as const;
             }
+
             next.set(event.requestId, { deferred: request.deferred, snapshots });
+
             return [Option.none(), next] as const;
           });
+
           if (Option.isSome(completed)) {
             yield* Deferred.succeed(completed.value.deferred, completed.value.snapshots);
           }
@@ -270,6 +289,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
   const runAttempt: Effect.Effect<void, NativeTelemetryClientError> = Effect.scoped(
     Effect.gen(function* () {
       const executablePath = yield* binary.resolve;
+
       const command = ChildProcess.make(executablePath, [], {
         cwd: config.cwd,
         stdin: {
@@ -281,6 +301,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
         killSignal: "SIGTERM",
         forceKillAfter: Duration.seconds(2),
       });
+
       const handle = yield* Effect.acquireRelease(
         spawner
           .spawn(command)
@@ -291,6 +312,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
           ),
         (child) => child.kill().pipe(Effect.ignore),
       );
+
       yield* Ref.update(state, (current) => ({
         ...current,
         status: "starting" as const,
@@ -301,6 +323,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
       const generation = (yield* Ref.get(state)).restartCount;
 
       const helloDeferred = yield* Deferred.make<ResourceMonitorHelloEvent>();
+
       const eventFiber = yield* handle.stdout.pipe(
         Stream.pipeThroughChannel(Ndjson.decode({ ignoreEmptyLines: true })),
         Stream.mapEffect(
@@ -311,6 +334,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
             NativeTelemetryProtocolMismatch | NativeTelemetryDecodeFailed
           > => {
             const version = eventVersion(value);
+
             if (version !== undefined && version !== RESOURCE_MONITOR_PROTOCOL_VERSION) {
               return Effect.fail(
                 new NativeTelemetryProtocolMismatch({
@@ -319,6 +343,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
                 }),
               );
             }
+
             return decodeMonitorEvent(value).pipe(
               Effect.mapError((cause) => new NativeTelemetryDecodeFailed({ cause })),
             );
@@ -332,6 +357,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
         ),
         Effect.forkScoped,
       );
+
       yield* handle.stderr.pipe(Stream.runDrain, Effect.ignore, Effect.forkScoped);
 
       const hello = yield* Deferred.await(helloDeferred).pipe(
@@ -348,6 +374,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
           }),
         ),
       );
+
       yield* synchronizeCollectionControlOnStart(
         controlMutex,
         collectionControl,
@@ -361,6 +388,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
               sampleIntervalMs: control.sampleIntervalMs,
               externalProcesses: [...(yield* Ref.get(externalProcesses))],
             });
+
             if (control.liveSubscriberCount > 0) {
               yield* writeCommand(handle, {
                 version: RESOURCE_MONITOR_PROTOCOL_VERSION,
@@ -394,9 +422,11 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
           Effect.fail(new NativeTelemetryExited({ exitCode: Number(exitCode) })),
         ),
       );
+
       const decoderEffect = Fiber.join(eventFiber).pipe(
         Effect.andThen(Effect.fail(new NativeTelemetryStreamClosed())),
       );
+
       return yield* Effect.raceFirst(exitEffect, decoderEffect);
     }),
   ).pipe(
@@ -414,6 +444,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
 
     while (true) {
       const result = yield* Effect.result(runAttempt);
+
       if (Result.isSuccess(result)) {
         return;
       }
@@ -421,9 +452,11 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
       const error = result.failure;
       const now = DateTime.toEpochMillis(yield* DateTime.now);
       const recentFailures = retainRecentNativeTelemetryFailures(failures, now);
+
       if (recentFailures.length === 0) {
         restartAttempt = 0;
       }
+
       failures = [...recentFailures, now];
       const exhausted = failures.length >= MAX_FAILURES_PER_WINDOW;
       yield* Ref.update(state, (current) => ({
@@ -454,6 +487,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
         Effect.sleep(restartDelay(restartAttempt)).pipe(Effect.as(false)),
         Queue.take(retryQueue).pipe(Effect.as(true)),
       );
+
       restartAttempt = manuallyRetried ? 0 : restartAttempt + 1;
     }
   }).pipe(
@@ -481,8 +515,10 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
     "resourceTelemetry.nativeTelemetryClient.applyCollectionControl",
   )(function* (previous: CollectionControl, next: CollectionControl) {
     const current = yield* Ref.get(state);
+
     if (canCommandNativeTelemetrySidecar(current.status, Option.isSome(current.handle))) {
       const handle = Option.getOrThrow(current.handle);
+
       if (previous.sampleIntervalMs !== next.sampleIntervalMs) {
         yield* writeCommand(handle, {
           version: RESOURCE_MONITOR_PROTOCOL_VERSION,
@@ -490,8 +526,10 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
           sampleIntervalMs: next.sampleIntervalMs,
         });
       }
+
       const wasStreaming = previous.liveSubscriberCount > 0;
       const isStreaming = next.liveSubscriberCount > 0;
+
       if (wasStreaming !== isStreaming) {
         yield* writeCommand(handle, {
           version: RESOURCE_MONITOR_PROTOCOL_VERSION,
@@ -524,6 +562,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
   )(function* (delta: 1 | -1) {
     yield* updateCollectionControl((current) => {
       const liveSubscriberCount = Math.max(0, current.liveSubscriberCount + delta);
+
       return {
         ...current,
         liveSubscriberCount,
@@ -538,6 +577,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
       yield* Effect.acquireRelease(changeLiveSubscriberCount(1), () =>
         changeLiveSubscriberCount(-1).pipe(Effect.ignore),
       );
+
       return Stream.fromSubscription(subscription);
     }),
   );
@@ -548,6 +588,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
     Effect.gen(function* () {
       yield* Ref.set(externalProcesses, [...processes]);
       const current = yield* Ref.get(state);
+
       if (!canCommandNativeTelemetrySidecar(current.status, Option.isSome(current.handle))) return;
       yield* writeCommand(Option.getOrThrow(current.handle), {
         version: RESOURCE_MONITOR_PROTOCOL_VERSION,
@@ -559,11 +600,13 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
   const readHistory: NativeTelemetryClient["Service"]["readHistory"] = (windowMs) =>
     Effect.gen(function* () {
       const current = yield* Ref.get(state);
+
       if (!canCommandNativeTelemetrySidecar(current.status, Option.isSome(current.handle))) {
         return yield* new NativeTelemetryUnavailable({
           reason: Option.getOrElse(current.lastError, () => "sidecar is not running"),
         });
       }
+
       const requestId = yield* crypto.randomUUIDv4.pipe(
         Effect.mapError(
           (cause) =>
@@ -573,15 +616,19 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
             }),
         ),
       );
+
       const deferred = yield* Deferred.make<
         ReadonlyArray<ResourceMonitorSnapshotEvent>,
         NativeTelemetryClientError
       >();
+
       yield* Ref.update(pendingHistories, (pending) => {
         const next = new Map(pending);
         next.set(requestId, { deferred, snapshots: [] });
+
         return next;
       });
+
       return yield* writeCommand(Option.getOrThrow(current.handle), {
         version: RESOURCE_MONITOR_PROTOCOL_VERSION,
         type: "readHistory",
@@ -609,6 +656,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
           Ref.update(pendingHistories, (pending) => {
             const next = new Map(pending);
             next.delete(requestId);
+
             return next;
           }),
         ),
@@ -617,6 +665,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
 
   const sampleNow: NativeTelemetryClient["Service"]["sampleNow"] = Effect.gen(function* () {
     const current = yield* Ref.get(state);
+
     if (!canCommandNativeTelemetrySidecar(current.status, Option.isSome(current.handle))) {
       return yield* new NativeTelemetryUnavailable({
         reason: Option.getOrElse(current.lastError, () => "sidecar is not running"),
@@ -632,12 +681,15 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
           }),
       ),
     );
+
     const deferred = yield* Deferred.make<NativeTelemetrySnapshot, NativeTelemetryClientError>();
     yield* Ref.update(pendingSamples, (pending) => {
       const next = new Map(pending);
       next.set(requestId, deferred);
+
       return next;
     });
+
     return yield* writeCommand(Option.getOrThrow(current.handle), {
       version: RESOURCE_MONITOR_PROTOCOL_VERSION,
       type: "sampleNow",
@@ -664,6 +716,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
         Ref.update(pendingSamples, (pending) => {
           const next = new Map(pending);
           next.delete(requestId);
+
           return next;
         }),
       ),
@@ -672,6 +725,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
 
   const processTable: NativeTelemetryClient["Service"]["processTable"] = Effect.gen(function* () {
     const current = yield* Ref.get(state);
+
     if (!canCommandNativeTelemetrySidecar(current.status, Option.isSome(current.handle))) {
       return yield* new NativeTelemetryUnavailable({
         reason: Option.getOrElse(current.lastError, () => "sidecar is not running"),
@@ -683,15 +737,19 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
         (cause) => new NativeTelemetryCommandFailed({ operation: "createRequestId", cause }),
       ),
     );
+
     const deferred = yield* Deferred.make<
       ReadonlyArray<ResourceMonitorProcessTableEntry>,
       NativeTelemetryClientError
     >();
+
     yield* Ref.update(pendingProcessTables, (pending) => {
       const next = new Map(pending);
       next.set(requestId, deferred);
+
       return next;
     });
+
     return yield* writeCommand(Option.getOrThrow(current.handle), {
       version: RESOURCE_MONITOR_PROTOCOL_VERSION,
       type: "processTable",
@@ -718,6 +776,7 @@ export const make = Effect.fn("resourceTelemetry.nativeTelemetryClient.make")(fu
         Ref.update(pendingProcessTables, (pending) => {
           const next = new Map(pending);
           next.delete(requestId);
+
           return next;
         }),
       ),
@@ -799,5 +858,7 @@ export { nativeTelemetrySupervisorFailureMessage } from "./NativeTelemetryPolicy
 export { canRequestNativeTelemetryRetry } from "./NativeTelemetryPolicy.ts";
 
 export { canCommandNativeTelemetrySidecar } from "./NativeTelemetryPolicy.ts";
+
 export { NativeTelemetryClient } from "./NativeTelemetryTypes.ts";
+
 export { layerTest } from "./NativeTelemetryTestLayer.ts";

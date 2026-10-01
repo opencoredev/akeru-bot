@@ -36,10 +36,12 @@ function fixture(
 ) {
   const credentials: Partial<Record<SubscriptionProviderId, ApiKeyCredential>> = {};
   const stopped: string[] = [];
+
   const sessions = [
     ...["claudeAgent", "grok", "opencode", "codex"].map((driver) => session(driver)),
     ...extraSessions,
   ];
+
   const reset = makeApiKeySessionReset(
     { getApiKeyCredential: (provider) => credentials[provider] },
     {
@@ -51,6 +53,7 @@ function fixture(
     },
     Effect.succeed(instances),
   );
+
   return { credentials, stopped, reset };
 }
 
@@ -61,10 +64,12 @@ describe("API-key session reset", () => {
         NodeOS.tmpdir(),
         `akeru-session-reset-${NodeCrypto.randomUUID()}`,
       );
+
       NodeFS.mkdirSync(directory, { recursive: true });
       const authPath = NodePath.join(directory, "subscription-auth.json");
       const auth = yield* Effect.promise(() => makeTestSubscriptionAuthService(authPath));
       const stopped: string[] = [];
+
       const reset = makeApiKeySessionReset(
         auth,
         {
@@ -73,6 +78,7 @@ describe("API-key session reset", () => {
         },
         Effect.succeed({}),
       );
+
       yield* reset(
         Effect.sync(() =>
           NodeFS.writeFileSync(
@@ -89,12 +95,15 @@ describe("API-key session reset", () => {
     Effect.gen(function* () {
       const { credentials, stopped, reset } = fixture();
       credentials.anthropic = { type: "api-key", access: "old-key" };
+
       const result = yield* reset(
         Effect.sync(() => {
           credentials.anthropic = { type: "api-key", access: "new-key" };
+
           return "connected";
         }),
       );
+
       expect(result).toBe("connected");
       expect(stopped).toEqual(["thread-claudeAgent"]);
     }),
@@ -168,6 +177,7 @@ describe("API-key session reset", () => {
           },
         },
       );
+
       credentials.anthropic = { type: "api-key", access: "old" };
       credentials.xai = { type: "api-key", access: "old" };
       yield* reset(

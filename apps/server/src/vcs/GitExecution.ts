@@ -30,6 +30,7 @@ export const makeGitExecution = () =>
           ...input,
           args: [...input.args],
         } as const;
+
         const timeoutMs = input.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : input.timeoutMs;
         const maxOutputBytes = input.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
         const appendTruncationMarker = input.appendTruncationMarker ?? false;
@@ -47,6 +48,7 @@ export const makeGitExecution = () =>
                 }),
             ),
           );
+
           const child = yield* commandSpawner
             .spawn(
               ChildProcess.make("git", commandInput.args, {
@@ -110,6 +112,7 @@ export const makeGitExecution = () =>
             ],
             { concurrency: "unbounded" },
           ).pipe(Effect.map(([stdout, stderr, exitCode]) => [stdout, stderr, exitCode] as const));
+
           yield* trace2Monitor.flush;
 
           if (!input.allowNonZeroExit && exitCode !== 0) {
@@ -132,6 +135,7 @@ export const makeGitExecution = () =>
         });
 
         const execution = runGitCommand().pipe(Effect.scoped);
+
         if (timeoutMs === null) {
           return yield* execution;
         }
@@ -197,6 +201,7 @@ export const makeGitExecution = () =>
           if (options.allowNonZeroExit || result.exitCode === 0) {
             return Effect.succeed(result);
           }
+
           return Effect.fail(
             new GitCommandError({
               ...gitCommandContext({ operation, cwd, args }),
@@ -240,6 +245,7 @@ export const makeGitExecution = () =>
       executeGit(operation, cwd, args, { allowNonZeroExit }).pipe(
         Effect.map((result) => result.stdout),
       );
+
     return {
       fileSystem,
       path,

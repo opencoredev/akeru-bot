@@ -33,10 +33,13 @@ export type ServiceReconcileResult =
 export const reconcileService = Effect.fn("cli.service.reconcile")(function* () {
   const service = yield* BootService.BootService;
   const status = yield* service.status;
+
   if (status.installed && status.current) {
     return { changed: false, status } satisfies ServiceReconcileResult;
   }
+
   const plan = yield* service.install;
+
   return {
     changed: true,
     previouslyInstalled: status.installed,
@@ -51,9 +54,11 @@ export function formatServiceStatus(
   if (!status.supported) {
     return "Akeru Bot service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd";
   }
+
   if (!status.installed) {
     return "Akeru Bot service\n  Status: not installed\n  Next: Run `akeru service install`.";
   }
+
   return [
     "Akeru Bot service",
     `  Status: ${status.current ? `installed · akeru-bot@${cliVersion}` : "needs an update or repair"}`,
@@ -69,6 +74,7 @@ const runServiceCommand = Effect.fn("cli.service.run")(function* <A, E>(
 ) {
   const logLevel = yield* GlobalFlag.LogLevel;
   const config = yield* resolveCliAuthConfig(flags, logLevel);
+
   return yield* run.pipe(Effect.provide(bootServiceLayer(config)));
 });
 
@@ -79,12 +85,15 @@ const serviceInstallCommand = Command.make("install", projectLocationFlags).pipe
       flags,
       Effect.gen(function* () {
         const result = yield* reconcileService();
+
         if (!result.changed) {
           yield* Console.log(
             `Akeru Bot service is already installed with akeru-bot@${packageJson.version}.`,
           );
+
           return;
         }
+
         yield* Console.log(
           `${result.previouslyInstalled ? "Updated" : "Installed"} Akeru Bot service with akeru-bot@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
         );
@@ -102,12 +111,15 @@ const serviceUpdateCommand = Command.make("update", projectLocationFlags).pipe(
       flags,
       Effect.gen(function* () {
         const result = yield* reconcileService();
+
         if (!result.changed) {
           yield* Console.log(
             `Akeru Bot service is already using akeru-bot@${packageJson.version}.`,
           );
+
           return;
         }
+
         yield* Console.log(
           `${result.previouslyInstalled ? "Updated" : "Installed"} Akeru Bot service with akeru-bot@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
         );
@@ -148,16 +160,21 @@ const serviceStatusCommand = Command.make("status", projectLocationFlags).pipe(
 export const offerServiceDuringOnboarding = Effect.gen(function* () {
   const service = yield* BootService.BootService;
   const { supported, installed, current } = yield* service.status;
+
   if (!supported) {
     return false;
   }
+
   if (installed && current) {
     yield* Console.log("Akeru Bot is already set up to run in the background on this machine.");
+
     return true;
   }
+
   // A LaunchAgent starts at login and dies at logout; there is no
   // enable-linger equivalent on macOS. Do not promise more than that.
   const platform = yield* HostProcessPlatform;
+
   const wanted = yield* Prompt.run(
     Prompt.confirm({
       message: installed
@@ -168,15 +185,19 @@ export const offerServiceDuringOnboarding = Effect.gen(function* () {
       initial: true,
     }),
   );
+
   if (!wanted) {
     return false;
   }
+
   const result = yield* reconcileService();
+
   if (result.changed) {
     yield* Console.log(
       `Background service ${result.previouslyInstalled ? "updated" : "installed"}. Logs: ${result.plan.logPath}`,
     );
   }
+
   return true;
 });
 

@@ -61,8 +61,10 @@ export function boundReviewInputs(
   inputs: ReadonlyArray<BotMemoryReviewInput>,
 ): ReadonlyArray<BotMemoryReviewInput> {
   const kept: BotMemoryReviewInput[] = [];
+
   for (const input of inputs.toReversed()) {
     const bounded = { ...input, text: input.text.slice(0, AKERU_MEMORY_REVIEW_INPUT_MAX_CHARS) };
+
     if (
       kept.length >= AKERU_MEMORY_REVIEW_PROMPT_INTERVAL ||
       JSON.stringify([bounded, ...kept]).length > AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS
@@ -70,11 +72,13 @@ export function boundReviewInputs(
       continue;
     kept.unshift(bounded);
   }
+
   return kept;
 }
 
 export function parseReviewInput(value: unknown): BotMemoryReviewInput {
   const entry = value as Record<string, unknown>;
+
   if (
     typeof value !== "object" ||
     value === null ||
@@ -85,6 +89,7 @@ export function parseReviewInput(value: unknown): BotMemoryReviewInput {
   ) {
     throw new InvalidReviewCadenceError("A review input is invalid.");
   }
+
   return {
     ...(entry.id ? { id: entry.id } : {}),
     threadId: entry.threadId,
@@ -95,7 +100,9 @@ export function parseReviewInput(value: unknown): BotMemoryReviewInput {
 
 export function parseReviewInputs(value: unknown): ReadonlyArray<BotMemoryReviewInput> {
   if (value === undefined) return [];
+
   if (!Array.isArray(value)) throw new InvalidReviewCadenceError("Review inputs are invalid.");
+
   return value.map(parseReviewInput);
 }
 
@@ -104,6 +111,7 @@ export class InvalidReviewCadenceError extends Error {}
 export function parseReviewCadence(raw: string): BotMemoryReviewCadenceState {
   try {
     const value = JSON.parse(raw) as Partial<BotMemoryReviewCadenceState>;
+
     if (
       Number.isSafeInteger(value.acceptedPromptCount) &&
       Number.isSafeInteger(value.reviewedThroughPromptCount) &&
@@ -145,5 +153,6 @@ export function parseReviewCadence(raw: string): BotMemoryReviewCadenceState {
   } catch {
     // The error below includes the stable public failure shape.
   }
+
   throw new InvalidReviewCadenceError("The bot memory review cadence file is invalid.");
 }

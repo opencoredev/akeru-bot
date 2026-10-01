@@ -40,6 +40,7 @@ import {
 } from "./ChannelOperations.ts";
 import { startAndCommitChannel } from "./ChannelConnectionLifecycle.ts";
 import { setChannelDelivery } from "./ChannelDelivery.ts";
+
 export const connectChannel = (ctx: ChannelRuntimeContext, input: ChannelConnectInput) =>
   withChannelOperation(
     ctx,
@@ -47,6 +48,7 @@ export const connectChannel = (ctx: ChannelRuntimeContext, input: ChannelConnect
   )(
     Effect.gen(function* () {
       yield* assertChannelIdentityAvailable(ctx, input.botId, storedSecretFromInput(input));
+
       return yield* startAndCommitChannel(ctx, input, { secret: storedSecretFromInput(input) });
     }),
   );
@@ -56,6 +58,7 @@ export const optionalWebhookUrl = (
   connectionId: ChannelConnectionId,
 ) => {
   const webhookUrl = whatsAppWebhookUrl(publicOrigin, connectionId);
+
   return webhookUrl ? { webhookUrl } : {};
 };
 
@@ -65,14 +68,18 @@ const syncWhatsAppWebhookUrls = (ctx: ChannelRuntimeContext) =>
     Effect.gen(function* () {
       const settings = yield* ctx.deps.settings.getSettings;
       let changed = false;
+
       const channelConnections = settings.channelConnections.map((connection) => {
         if (connection.provider !== "whatsapp") return connection;
         const webhookUrl = whatsAppWebhookUrl(ctx.deps.publicOrigin, connection.id);
+
         if (connection.webhookUrl === webhookUrl) return connection;
         changed = true;
         const { webhookUrl: _stale, ...rest } = connection;
+
         return webhookUrl ? { ...rest, webhookUrl } : rest;
       });
+
       if (changed) yield* ctx.deps.settings.updateSettings({ channelConnections });
     }),
   );
@@ -89,15 +96,18 @@ export const saveChannelConnection = (
       Effect.gen(function* () {
         const deps = ctx.deps;
         const model = yield* deps.readModel;
+
         const attached = model.bots.some((bot) =>
           (bot.channelBindings ?? []).some(
             (binding) => binding.connectionId === input.connectionId,
           ),
         );
+
         if (attached) return yield* failWith("Unassign this channel before editing it.");
         const secretKey = connectionSecretName(input.connectionId);
         const previousSecret = yield* deps.secretStore.get(secretKey);
         const settings = yield* deps.settings.getSettings;
+
         const profile: ChannelConnectionProfile = {
           id: input.connectionId,
           name: input.name,
@@ -127,6 +137,7 @@ export const saveChannelConnection = (
                     }
                   : {}),
         };
+
         yield* deps.secretStore.set(
           secretKey,
           yield* encodeStoredChannelSecret(storedSecretFromInput(input)),
@@ -148,6 +159,7 @@ export const saveChannelConnection = (
               ).pipe(Effect.ignoreCause),
             ),
           );
+
         return 0;
       }),
     ),
@@ -165,6 +177,7 @@ export const deleteChannelConnection = (
       Effect.gen(function* () {
         const deps = ctx.deps;
         const model = yield* deps.readModel;
+
         if (
           model.bots.some((bot) =>
             (bot.channelBindings ?? []).some((binding) => binding.connectionId === connectionId),
@@ -172,6 +185,7 @@ export const deleteChannelConnection = (
         ) {
           return yield* failWith("Unassign this channel before deleting it.");
         }
+
         const secretKey = connectionSecretName(connectionId);
         const previousSecret = yield* deps.secretStore.get(secretKey);
         const settings = yield* deps.settings.getSettings;
@@ -189,6 +203,7 @@ export const deleteChannelConnection = (
                 : Effect.void,
             ),
           );
+
         return 0;
       }),
     ),
@@ -211,31 +226,39 @@ export const attachChannelConnection = (
     )(
       Effect.gen(function* () {
         const model = yield* ctx.deps.readModel;
+
         const bot = model.bots.find(
           (candidate) => candidate.id === botId && candidate.archivedAt === null,
         );
+
         if (!bot) return yield* failWith(`Bot '${botId}' is unavailable.`);
+
         const project = model.projects.find(
           (candidate) => candidate.id === projectId && candidate.deletedAt === null,
         );
+
         if (!project)
           return yield* failWith(
             "The selected project is unavailable. Choose another project.",
             "project",
           );
+
         const inUse = model.bots.some(
           (bot) =>
             bot.id !== botId &&
             bot.archivedAt === null &&
             (bot.channelBindings ?? []).some((binding) => binding.connectionId === connectionId),
         );
+
         if (inUse) return yield* failWith("This channel connection is attached to another bot.");
         const secret = yield* loadConnectionSecret(ctx, connectionId);
+
         if (!secret || secret.provider !== provider)
           return yield* failWith("Saved channel connection is unavailable.");
         yield* assertChannelIdentityAvailable(ctx, botId, secret);
         const commandId = CommandId.make(yield* randomId(ctx, "channel-attach"));
         const input = yield* connectInputFromSecret(botId, projectId, commandId, secret);
+
         return yield* startAndCommitChannel(ctx, input, { connectionId });
       }),
     ),
@@ -248,10 +271,13 @@ export const currentBindingFor = (
 ) =>
   Effect.gen(function* () {
     const model = yield* ctx.deps.readModel;
+
     const binding = model.bots
       .find((bot) => bot.id === botId)
       ?.channelBindings?.find((candidate) => candidate.provider === provider);
+
     if (!binding) return yield* failWith(`No ${provider} channel is assigned to this bot.`);
+
     return binding;
   });
 
@@ -266,13 +292,16 @@ export const disconnectChannel = (
   )(
     Effect.gen(function* () {
       const currentBinding = yield* currentBindingFor(ctx, botId, provider);
+
       const sequence = yield* replaceBinding(ctx, {
         ...currentBinding,
         status: "disconnected",
         connectedAt: null,
         lastAttemptAt: yield* ctx.deps.nowIso,
       });
+
       yield* stopRuntime(ctx, botId, provider);
+
       return sequence;
     }),
   );
@@ -290,12 +319,15 @@ export const detachChannelConnection = (
       const deps = ctx.deps;
       const currentBinding = yield* currentBindingFor(ctx, botId, provider);
       const name = secretName(botId, provider);
+
       const previousSecret = currentBinding.connectionId
         ? undefined
         : yield* deps.secretStore.get(name);
+
       if (!currentBinding.connectionId) {
         yield* deps.secretStore.remove(name);
       }
+
       const sequence = yield* replaceBinding(ctx, {
         botId,
         provider,
@@ -310,7 +342,9 @@ export const detachChannelConnection = (
             : Effect.void,
         ),
       );
+
       yield* stopRuntime(ctx, botId, provider);
+
       return sequence;
     }),
   );
@@ -334,20 +368,26 @@ const changeChannelProject = (
   )(
     Effect.gen(function* () {
       const model = yield* ctx.deps.readModel;
+
       const bot = model.bots.find(
         (candidate) => candidate.id === botId && candidate.archivedAt === null,
       );
+
       if (!bot) return yield* failWith(`Bot '${botId}' is unavailable.`);
+
       const project = model.projects.find(
         (candidate) => candidate.id === projectId && candidate.deletedAt === null,
       );
+
       if (!project)
         return yield* failWith(
           "The selected project is unavailable. Choose another project.",
           "project",
         );
       const binding = bot.channelBindings?.find((candidate) => candidate.provider === provider);
+
       if (!binding) return yield* failWith(`No ${provider} channel is assigned to this bot.`);
+
       // A running channel already in the target project has nowhere to move.
       if (
         binding.status === "connected" &&
@@ -356,27 +396,33 @@ const changeChannelProject = (
       ) {
         return model.snapshotSequence;
       }
+
       // The user turned this channel off. Moving it keeps it off until they reconnect.
       if (binding.status === "disconnected") {
         return yield* replaceBinding(ctx, { ...binding, projectId });
       }
+
       const secret = binding.connectionId
         ? yield* loadConnectionSecret(ctx, binding.connectionId)
         : yield* loadSecret(ctx, botId, provider);
+
       if (!secret || secret.provider !== provider)
         return yield* failWith(`No saved ${provider} credentials.`);
       yield* assertChannelIdentityAvailable(ctx, botId, secret);
       // A transport that fails to stop stays registered, and no competing one starts.
       yield* stopRuntime(ctx, botId, provider, { keepOnFailure: true });
+
       const startOn = (target: ProjectId) =>
         Effect.gen(function* () {
           const commandId = CommandId.make(yield* randomId(ctx, "channel-change-project"));
           const input = yield* connectInputFromSecret(botId, target, commandId, secret);
+
           return yield* startAndCommitChannel(ctx, input, {
             connectionId: binding.connectionId,
             recordFailure: false,
           });
         });
+
       return yield* startOn(projectId).pipe(
         Effect.catch((cause) => {
           const restore =
@@ -386,6 +432,7 @@ const changeChannelProject = (
                   Effect.catch(() => Effect.succeed(false)),
                 )
               : Effect.succeed(false);
+
           return restore.pipe(
             Effect.flatMap((restored) =>
               restored
@@ -400,6 +447,7 @@ const changeChannelProject = (
                       lastError: "Could not start the channel in the selected project. Try again.",
                       ...(category ? { failureCategory: category } : {}),
                     }).pipe(Effect.ignoreCause);
+
                     return yield* Effect.fail(cause);
                   }),
             ),
@@ -420,16 +468,20 @@ export const reconnectChannel = (
   )(
     Effect.gen(function* () {
       const binding = yield* currentBindingFor(ctx, botId, provider);
+
       const secret = binding.connectionId
         ? yield* loadConnectionSecret(ctx, binding.connectionId)
         : yield* loadSecret(ctx, botId, provider);
+
       if (!secret || secret.provider !== provider)
         return yield* failWith(`No saved ${provider} credentials.`);
+
       if (!binding.projectId)
         return yield* failWith("Select a project before reconnecting this channel.", "project");
       yield* assertChannelIdentityAvailable(ctx, botId, secret);
       const commandId = CommandId.make(yield* randomId(ctx, "channel-reconnect"));
       const input = yield* connectInputFromSecret(botId, binding.projectId, commandId, secret);
+
       return yield* startAndCommitChannel(ctx, input, { connectionId: binding.connectionId });
     }),
   );
@@ -443,6 +495,7 @@ export const restoreConnectedChannels = (
       Effect.catchCause(() => Effect.logWarning("Could not refresh WhatsApp webhook URLs.")),
     );
     const model = yield* deps.readModel;
+
     const candidates = model.bots.flatMap((bot) =>
       bot.archivedAt === null
         ? (bot.channelBindings ?? []).flatMap((binding) =>
@@ -455,6 +508,7 @@ export const restoreConnectedChannels = (
           )
         : [],
     );
+
     // Deliveries still "requested" after a restart are ambiguous: the send
     // that created them was interrupted, so the post may or may not have
     // landed. Reconcile the projected "pending" state to "unknown" so clients
@@ -464,16 +518,21 @@ export const restoreConnectedChannels = (
     // and never keeps a channel from reconnecting.
     yield* Effect.gen(function* () {
       const staleClaims = yield* deps.deliveryStore.listRequestedClaims();
+
       for (const claim of staleClaims) {
         const thread = yield* deps.readThread(claim.threadId);
+
         const delivery = thread?.messages.find(
           (message) => message.id === claim.messageId,
         )?.channelDelivery;
+
         if (delivery !== "pending" && delivery !== undefined) continue;
+
         const sent = model.bots
           .find((bot) => bot.id === claim.botId)
           ?.channelBindings?.find((binding) => binding.provider === claim.provider)
           ?.sentMessageIds.includes(claim.messageId);
+
         yield* setChannelDelivery(ctx, claim.threadId, claim.messageId, sent ? "sent" : "unknown");
       }
     }).pipe(
@@ -481,6 +540,7 @@ export const restoreConnectedChannels = (
         Effect.logWarning("Could not reconcile interrupted channel deliveries.", cause),
       ),
     );
+
     const results = yield* Effect.forEach(
       candidates,
       (candidate) =>
@@ -488,14 +548,17 @@ export const restoreConnectedChannels = (
           Effect.catchCause(() =>
             Effect.gen(function* () {
               const latest = yield* deps.readModel;
+
               const binding = latest.bots
                 .find((bot) => bot.id === candidate.botId)
                 ?.channelBindings?.find((entry) => entry.provider === candidate.provider);
+
               if (binding) {
                 // A deleted project needs a new project, not new credentials.
                 const projectMissing = !latest.projects.some(
                   (project) => project.id === binding.projectId && project.deletedAt === null,
                 );
+
                 yield* Effect.gen(function* () {
                   yield* replaceBinding(ctx, {
                     ...binding,
@@ -509,6 +572,7 @@ export const restoreConnectedChannels = (
                   });
                 }).pipe(Effect.ignoreCause);
               }
+
               return yield* failWith("Channel restore failed.");
             }),
           ),
@@ -516,6 +580,7 @@ export const restoreConnectedChannels = (
         ),
       { concurrency: "unbounded" },
     );
+
     return results.flatMap((exit, index) =>
       Exit.isFailure(exit) ? [{ ...candidates[index]!, category: "restore" as const }] : [],
     );

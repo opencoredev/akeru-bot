@@ -7,6 +7,7 @@ export default Effect.gen(function* () {
   const pairingLinkColumns = yield* sql<{ readonly name: string }>`
     PRAGMA table_info(auth_pairing_links)
   `;
+
   if (!pairingLinkColumns.some((column) => column.name === "proof_key_thumbprint")) {
     yield* sql`
       ALTER TABLE auth_pairing_links

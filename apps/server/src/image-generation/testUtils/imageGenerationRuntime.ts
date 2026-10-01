@@ -65,6 +65,7 @@ function fakeAdapter(provider: ImageProviderId, behavior: Behavior = "ok"): Fake
   const calls: ImageAdapterRequest[] = [];
   const signals: AbortSignal[] = [];
   const started = Deferred.makeUnsafe<void>();
+
   return {
     provider,
     capabilities: provider === "chatgpt" ? CHATGPT_IMAGE_CAPABILITIES : GROK_IMAGE_CAPABILITIES,
@@ -75,8 +76,11 @@ function fakeAdapter(provider: ImageProviderId, behavior: Behavior = "ok"): Fake
       calls.push(request);
       signals.push(signal);
       Deferred.doneUnsafe(started, Effect.void);
+
       if (behavior === "hang") return new Promise(() => {});
+
       if (behavior !== "ok") return Promise.reject(behavior);
+
       return Promise.resolve({
         images: Array.from({ length: request.count }, () =>
           provider === "chatgpt" ? pngBytes(1024, 1024) : jpegBytes(1280, 720),
@@ -98,8 +102,10 @@ function fakeSubscriptions(
 ): FakeSubscriptions {
   const successes: ImageProviderId[] = [];
   const failures: Array<[ImageProviderId, string]> = [];
+
   const status = (provider: "openai-codex" | "xai") => {
     const value = state[provider] ?? "connected";
+
     return {
       provider,
       connected: value !== "missing",
@@ -110,6 +116,7 @@ function fakeSubscriptions(
       dependentRoutines: [],
     };
   };
+
   return {
     successes,
     failures,
@@ -141,6 +148,7 @@ function testLayer(input: {
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
   );
+
   return layerWith({
     adapters: input.adapters,
     subscriptionAuth: input.subscriptions ?? fakeSubscriptions(),
@@ -182,6 +190,7 @@ const createBot = (
       groupId: null,
       createdAt,
     });
+
     if (imageProvider) {
       yield* engine.dispatch({
         type: "bot.update",
@@ -255,6 +264,7 @@ const saveUserImage = (threadId: ThreadId) =>
   Effect.gen(function* () {
     const config = yield* ServerConfig;
     const bytes = pngBytes(64, 64);
+
     const attachment: ChatImageAttachment = {
       type: "image",
       id: createAttachmentId(threadId)!,
@@ -262,9 +272,11 @@ const saveUserImage = (threadId: ThreadId) =>
       mimeType: "image/png",
       sizeBytes: bytes.byteLength,
     };
+
     const path = resolveAttachmentPath({ attachmentsDir: config.attachmentsDir, attachment })!;
     NodeFS.mkdirSync(NodePath.dirname(path), { recursive: true });
     NodeFS.writeFileSync(path, bytes);
+
     return { attachment, bytes };
   });
 
@@ -272,8 +284,10 @@ const generatedMessages = (threadId: ThreadId) =>
   Effect.gen(function* () {
     const messages = yield* ProjectionThreadMessageRepository;
     const rows = yield* messages.listByThreadId({ threadId });
+
     return rows.filter((row) => row.messageId.startsWith("image-generation-"));
   });
+
 export {
   createdAt,
   projectId,

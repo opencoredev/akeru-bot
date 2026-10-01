@@ -9,6 +9,7 @@ import { voiceFailure } from "./VoiceAdapters.ts";
 
 it.effect("pins composed settings and keys, rejects key changes, and enforces ownership", () => {
   const used: string[] = [];
+
   return Effect.gen(function* () {
     const manager = yield* VoiceCallManager;
     const settings = yield* ServerSettingsService;
@@ -17,12 +18,15 @@ it.effect("pins composed settings and keys, rejects key changes, and enforces ow
     assert.equal(started.transport, "composed");
     assert.isUndefined(started.answerSdp);
     assert.equal((yield* Effect.result(manager.start({ botId }, "other")))._tag, "Failure");
+
     for (const action of [manager.connect("openai", "replacement"), manager.disconnect("openai")]) {
       const result = yield* Effect.result(action);
       assert.equal(result._tag, "Failure");
+
       if (Predicate.isTagged(result, "Failure"))
         assert.equal(result.failure.reason, "provider-in-use");
     }
+
     yield* manager.connect("fish", "unused-provider-key");
     yield* settings.updateSettings({
       voice: {
@@ -31,19 +35,25 @@ it.effect("pins composed settings and keys, rejects key changes, and enforces ow
         synthesisVoices: { openai: "cedar", fish: "fish-voice" },
       },
     });
+
     const stolen = yield* Effect.result(
       manager.synthesize(
         { operationId: "stolen", callId: started.call.callId, text: "Hello" },
         "other",
       ),
     );
+
     assert.equal(stolen._tag, "Failure");
+
     if (Predicate.isTagged(stolen, "Failure"))
       assert.equal(stolen.failure.reason, "call-not-active");
+
     const standalone = yield* Effect.result(
       manager.synthesize({ operationId: "standalone", text: "Hello" }, "other"),
     );
+
     assert.equal(standalone._tag, "Failure");
+
     if (Predicate.isTagged(standalone, "Failure"))
       assert.equal(standalone.failure.reason, "call-not-active");
     yield* manager.synthesize(
@@ -70,6 +80,7 @@ it.effect("pins composed settings and keys, rejects key changes, and enforces ow
       makeTest({
         synthesize: async (provider, key, voice) => {
           used.push(`${provider}:${key}:${voice}`);
+
           return { audioBase64: "bXAz", mimeType: "audio/mpeg" };
         },
       }),
@@ -79,6 +90,7 @@ it.effect("pins composed settings and keys, rejects key changes, and enforces ow
 
 it.effect("replaces an idle key and reports auth and quota failures without fallback", () => {
   const used: string[] = [];
+
   return Effect.gen(function* () {
     const manager = yield* VoiceCallManager;
     yield* manager.connect("openai", "openai-key");
@@ -86,27 +98,36 @@ it.effect("replaces an idle key and reports auth and quota failures without fall
     yield* manager.connect("elevenlabs", "rejected-key");
     const test = yield* Effect.result(manager.test("elevenlabs"));
     assert.equal(test._tag, "Failure");
+
     if (Predicate.isTagged(test, "Failure")) assert.equal(test.failure.reason, "provider-auth");
+
     const elevenlabs = Effect.map(manager.providers, ({ providers }) =>
       providers.find((status) => status.provider === "elevenlabs"),
     );
+
     // Every client reads the rejection from the server until the key changes.
     assert.isTrue((yield* elevenlabs)?.keyRejected);
     const listed = yield* Effect.result(manager.listVoices("elevenlabs"));
     assert.equal(listed._tag, "Failure");
+
     if (Predicate.isTagged(listed, "Failure"))
       assert.equal(listed.failure.reason, "provider-quota");
     const start = yield* Effect.result(manager.start({ botId }, "owner"));
     assert.equal(start._tag, "Failure");
+
     if (Predicate.isTagged(start, "Failure")) {
       assert.equal(start.failure.reason, "provider-auth");
       assert.notInclude(start.failure.message, "rejected-key");
     }
+
     assert.deepEqual(yield* manager.get, { status: "idle" });
+
     const standalone = yield* Effect.result(
       manager.synthesize({ operationId: "speak", text: "Hello" }, "owner"),
     );
+
     assert.equal(standalone._tag, "Failure");
+
     if (Predicate.isTagged(standalone, "Failure"))
       assert.equal(standalone.failure.reason, "provider-auth");
     assert.deepEqual(used, [
@@ -136,6 +157,7 @@ it.effect("replaces an idle key and reports auth and quota failures without fall
           },
           synthesize: async (provider, key) => {
             used.push(`synthesize:${provider}:${key}`);
+
             return { audioBase64: "bXAz", mimeType: "audio/mpeg" };
           },
         },
@@ -147,17 +169,21 @@ it.effect("replaces an idle key and reports auth and quota failures without fall
 
 it.effect("keeps a rejected key's verdict across a server restart", () => {
   const values = new Map<string, Uint8Array>();
+
   const rejected = (layer: ReturnType<typeof makeTest>) =>
     Effect.gen(function* () {
       const manager = yield* VoiceCallManager;
+
       return (yield* manager.providers).providers.find((p) => p.provider === "elevenlabs")
         ?.keyRejected;
     }).pipe(Effect.provide(layer));
+
   const failing = {
     test: async () => {
       throw voiceFailure("provider-auth");
     },
   };
+
   return Effect.gen(function* () {
     yield* Effect.gen(function* () {
       const manager = yield* VoiceCallManager;
@@ -177,9 +203,11 @@ it.effect("keeps a rejected key's verdict across a server restart", () => {
 it.effect("forgets a rejection once its key is replaced", () =>
   Effect.gen(function* () {
     const manager = yield* VoiceCallManager;
+
     const elevenlabs = Effect.map(manager.providers, ({ providers }) =>
       providers.find((status) => status.provider === "elevenlabs"),
     );
+
     yield* manager.connect("elevenlabs", "rejected-key");
     yield* Effect.result(manager.test("elevenlabs"));
     // Saving the same key again keeps its verdict.
@@ -202,11 +230,14 @@ it.effect("forgets a rejection once its key is replaced", () =>
 it.effect("ignores a Test verdict for a key that was replaced mid-Test", () => {
   const pending = Promise.withResolvers<void>();
   const began = Promise.withResolvers<void>();
+
   return Effect.gen(function* () {
     const manager = yield* VoiceCallManager;
+
     const elevenlabs = Effect.map(manager.providers, ({ providers }) =>
       providers.find((status) => status.provider === "elevenlabs"),
     );
+
     yield* manager.connect("elevenlabs", "slow-valid-key");
     const slow = yield* Effect.forkChild(manager.test("elevenlabs"));
     yield* Effect.promise(() => began.promise);
@@ -233,11 +264,14 @@ it.effect("ignores a Test verdict from before the same key was reconnected", () 
   const pending = Promise.withResolvers<void>();
   const began = Promise.withResolvers<void>();
   let calls = 0;
+
   return Effect.gen(function* () {
     const manager = yield* VoiceCallManager;
+
     const elevenlabs = Effect.map(manager.providers, ({ providers }) =>
       providers.find((status) => status.provider === "elevenlabs"),
     );
+
     yield* manager.connect("elevenlabs", "first-key");
     const slow = yield* Effect.forkChild(Effect.result(manager.test("elevenlabs")));
     yield* Effect.promise(() => began.promise);
@@ -253,6 +287,7 @@ it.effect("ignores a Test verdict from before the same key was reconnected", () 
       makeTest({
         test: async () => {
           calls += 1;
+
           if (calls > 1) return;
           began.resolve();
           await pending.promise;

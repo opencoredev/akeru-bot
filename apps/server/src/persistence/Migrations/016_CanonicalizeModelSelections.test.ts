@@ -217,6 +217,7 @@ layer("016_CanonicalizeModelSelections", (it) => {
         FROM projection_projects
         ORDER BY project_id
       `;
+
           assert.deepStrictEqual(projectRows, [
             {
               projectId: "project-claude",
@@ -239,6 +240,7 @@ layer("016_CanonicalizeModelSelections", (it) => {
         FROM projection_threads
         ORDER BY thread_id
       `;
+
           assert.deepStrictEqual(threadRows, [
             {
               threadId: "thread-claude",
@@ -265,6 +267,7 @@ layer("016_CanonicalizeModelSelections", (it) => {
         FROM orchestration_events
         ORDER BY rowid ASC
       `;
+
           // @effect-diagnostics-next-line preferSchemaOverJson:off
           assert.deepStrictEqual(JSON.parse(eventRows[0]!.payloadJson), {
             projectId: "project-1",

@@ -27,6 +27,7 @@ function makeMockDetachedHandle(input: MockSpawnResult & { readonly onUnref?: ()
     kill: () => Effect.void,
     unref: Effect.sync(() => {
       input.onUnref?.();
+
       return Effect.void;
     }),
     stdin: Sink.drain,
@@ -54,10 +55,13 @@ const testLayer = (input: {
     ChildProcessSpawner.make((command) =>
       Effect.sync(() => {
         assert.equal(ChildProcess.isStandardCommand(command), true);
+
         if (!ChildProcess.isStandardCommand(command)) {
           throw new Error("Expected a standard command");
         }
+
         input.onSpawn?.(command);
+
         return makeMockDetachedHandle({
           ...(input.onUnref === undefined ? {} : { onUnref: input.onUnref }),
           ...input.spawnResult?.(command),
@@ -76,4 +80,5 @@ const testLayer = (input: {
     ConfigProvider.layer(ConfigProvider.fromEnv({ env: input.env ?? {} })),
   );
 };
+
 export { type MockSpawnResult, makeMockDetachedHandle, testLayer };

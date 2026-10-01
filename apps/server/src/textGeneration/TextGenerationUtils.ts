@@ -3,6 +3,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 const isTextGenerationError = Schema.is(TextGenerationError);
+
 const decodeJsonThreadTitle = Schema.decodeOption(
   Schema.fromJsonString(Schema.Struct({ title: Schema.String })),
 );
@@ -10,9 +11,11 @@ const decodeJsonThreadTitle = Schema.decodeOption(
 /** Convert an Effect Schema to a flat JSON Schema object, inlining `$defs` when present. */
 export function toJsonSchemaObject(schema: Schema.Top): unknown {
   const document = Schema.toJsonSchemaDocument(schema);
+
   if (document.definitions && Object.keys(document.definitions).length > 0) {
     return { ...document.schema, $defs: document.definitions };
   }
+
   return document.schema;
 }
 
@@ -20,6 +23,7 @@ export function toJsonSchemaObject(schema: Schema.Top): unknown {
 export function limitSection(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value;
   const truncated = value.slice(0, maxChars);
+
   return `${truncated}\n\n[truncated]`;
 }
 
@@ -28,6 +32,7 @@ export function sanitizeThreadTitle(raw: string): string {
   // Unwrap a JSON-formatted title before truncation can cut off the closing brace.
   const decoded = decodeJsonThreadTitle(raw);
   const title = Option.isSome(decoded) ? decoded.value.title : raw;
+
   const normalized = title
     .trim()
     .split(/\r?\n/g)[0]
@@ -50,6 +55,7 @@ export function sanitizeThreadTitle(raw: string): string {
 /** CLI name to human-readable label, e.g. "codex" → "Codex CLI (`codex`)" */
 function cliLabel(cliName: string): string {
   const capitalized = cliName.charAt(0).toUpperCase() + cliName.slice(1);
+
   return `${capitalized} CLI (\`${cliName}\`)`;
 }
 
@@ -70,6 +76,7 @@ export function normalizeCliError(
 
   if (error instanceof Error) {
     const lower = error.message.toLowerCase();
+
     if (
       error.message.includes(`Command not found: ${cliName}`) ||
       lower.includes(`spawn ${cliName}`) ||
@@ -81,6 +88,7 @@ export function normalizeCliError(
         cause: error,
       });
     }
+
     return new TextGenerationError({
       operation,
       detail: fallback,

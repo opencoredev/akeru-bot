@@ -18,6 +18,7 @@ import * as NetService from "@akeru/shared/Net";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { deriveServerPaths } from "../config.ts";
 import { resolveServerConfig } from "./config.ts";
+
 it.layer(NodeServices.layer)("cli config resolution", (it) => {
   const defaultObservabilityConfig = {
     traceMinLevel: "Info",
@@ -37,6 +38,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     const filePath = yield* fs.makeTempFileScoped({ prefix: "t3-bootstrap-", suffix: ".ndjson" });
     const encoded = yield* encodeDesktopBootstrap(payload);
     yield* fs.writeFileString(filePath, `${encoded}\n`);
+
     return yield* Effect.acquireRelease(
       Effect.sync(() => NodeFS.openSync(filePath, "r")),
       (fd) => Effect.sync(() => NodeFS.closeSync(fd)),
@@ -47,6 +49,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     Effect.gen(function* () {
       const { join } = yield* Path.Path;
       const baseDir = join(NodeOS.tmpdir(), "t3-cli-config-false-flags");
+
       const fd = yield* openBootstrapFd(
         makeDesktopBootstrap({
           noBrowser: true,
@@ -54,6 +57,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
           tailscaleServePort: 443,
         }),
       );
+
       const derivedPaths = yield* deriveExplicitServerPaths(
         baseDir,
         new URL("http://127.0.0.1:4173"),
@@ -120,6 +124,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     Effect.gen(function* () {
       const { join } = yield* Path.Path;
       const baseDir = "/tmp/t3-bootstrap-home";
+
       const fd = yield* openBootstrapFd(
         makeDesktopBootstrap({
           port: 4888,
@@ -135,6 +140,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
           otlpMetricsUrl: "http://localhost:4318/v1/metrics",
         }),
       );
+
       const derivedPaths = yield* deriveServerPaths(baseDir, undefined);
 
       const resolved = yield* resolveServerConfig(
@@ -203,6 +209,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     Effect.gen(function* () {
       const { join } = yield* Path.Path;
       const baseDir = join(NodeOS.tmpdir(), "t3-cli-config-env-wins");
+
       const fd = yield* openBootstrapFd(
         makeDesktopBootstrap({
           port: 4888,
@@ -214,6 +221,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
           tailscaleServePort: 443,
         }),
       );
+
       const derivedPaths = yield* deriveExplicitServerPaths(
         baseDir,
         new URL("http://127.0.0.1:4173"),

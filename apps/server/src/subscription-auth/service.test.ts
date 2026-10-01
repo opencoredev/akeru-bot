@@ -5,6 +5,7 @@ import * as NodeFS from "node:fs";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { ProviderInstanceId } from "@akeru/contracts";
 import { makeTestSubscriptionAuthService } from "./testUtils/subscriptionAuthService.ts";
+
 describe("subscription auth storage", () => {
   it("uses the provider account ID and distinguishes a failed refresh from disconnect", async () => {
     const { directory, authPath } = fixture();
@@ -32,6 +33,7 @@ describe("subscription auth storage", () => {
       "fetch",
       vi.fn(async () => new Response("unavailable", { status: 503 })),
     );
+
     try {
       expect(await service.getPlanAccess("openai-codex")).toEqual({
         accessToken: null,
@@ -125,10 +127,12 @@ describe("subscription auth storage", () => {
     );
     const service = await makeTestSubscriptionAuthService(authPath);
     const runtime = await makeTestSubscriptionAuthService(authPath);
+
     const login = await service.startLogin("openai-codex", {
       instanceId: ProviderInstanceId.make("codex_work"),
       authMode: "api-key",
     });
+
     expect(await service.completeLogin(login.loginId, "work-key")).toEqual({ status: "connected" });
     expect(await runtime.getAccessToken("openai-codex", "codex_work")).toBe("work-key");
 
@@ -162,11 +166,13 @@ describe("subscription auth storage", () => {
   it("removes credentials for deleted custom instances while preserving the default account", async () => {
     const { authPath } = fixture();
     const service = await makeTestSubscriptionAuthService(authPath);
+
     for (const instanceId of ["codex", "codex_work", "codex_other"]) {
       const login = await service.startLogin("openai-codex", {
         instanceId: ProviderInstanceId.make(instanceId),
         authMode: "api-key",
       });
+
       expect(await service.completeLogin(login.loginId, `${instanceId}-key`)).toEqual({
         status: "connected",
       });
@@ -202,9 +208,11 @@ describe("subscription auth storage", () => {
         },
       }),
     );
+
     const status = (await makeTestSubscriptionAuthService(authPath))
       .statuses()
       .find((entry) => entry.provider === "openai-codex");
+
     expect(status?.accountLabel).toBe("account-123");
     expect(JSON.stringify(status)).not.toContain("private-");
   });
@@ -218,10 +226,12 @@ describe("subscription auth storage", () => {
     const go = await service.startLogin("opencode-go");
     await service.completeLogin(go.loginId, "go-key");
     expect(await service.getPlanAccessToken("opencode-go")).toBe("go-key");
+
     const custom = await service.startLogin("opencode-go", {
       authMode: "api-key",
       baseUrl: "https://proxy.example/v1",
     });
+
     await service.completeLogin(custom.loginId, "custom-key");
     expect(await service.getPlanAccessToken("opencode-go")).toBeUndefined();
   });
@@ -249,10 +259,12 @@ describe("subscription auth storage", () => {
           }),
       ),
     );
+
     const tokenResponse = (access: string) =>
       new Response(JSON.stringify({ access_token: access, expires_in: 3600 }), {
         headers: { "content-type": "application/json" },
       });
+
     try {
       const firstRefresh = first.getAccessToken("xai");
       await firstRequested.requested;
@@ -285,10 +297,12 @@ describe("subscription auth storage", () => {
     async (provider) => {
       const { authPath } = fixture();
       const service = await makeTestSubscriptionAuthService(authPath);
+
       const options = {
         authMode: "api-key" as const,
         ...(provider === "xai" ? {} : { baseUrl: "https://proxy.example/v1/" }),
       };
+
       const started = await service.startLogin(provider, options);
       expect(started.completion).toBe("paste");
       expect(NodeFS.readFileSync(`${authPath}.pending`, "utf-8")).not.toContain("test-secret");

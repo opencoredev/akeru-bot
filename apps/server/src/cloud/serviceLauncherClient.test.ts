@@ -24,6 +24,7 @@ class FakeLauncherProcess {
   send = (message: ServiceLauncherChildMessage, callback?: (error: Error | null) => void) => {
     this.sent.push(message);
     callback?.(null);
+
     return true;
   };
 
@@ -57,11 +58,13 @@ it.effect("waits for the launcher to durably commit the trial update ID", () =>
       dbPath: "/tmp/state.sqlite",
       status: "pending" as const,
     };
+
     const host = new FakeLauncherProcess({
       protocol: SERVICE_LAUNCHER_PROTOCOL,
       childVersion: "1.1.0",
       update: pending,
     });
+
     const client = yield* makeClient(host, "1.1.0");
     const prepared = yield* Effect.forkChild(client.prepareTrial, { startImmediately: true });
     yield* Effect.yieldNow;
@@ -73,6 +76,7 @@ it.effect("waits for the launcher to durably commit the trial update ID", () =>
       targetVersion: pending.targetVersion,
       status: "committed" as const,
     };
+
     host.emit({ type: "committed", updateId: committed.id });
     expect(yield* Fiber.join(prepared)).toEqual(committed);
   }),
@@ -84,11 +88,14 @@ it.effect("returns the launcher-generated ID only after update acceptance", () =
       protocol: SERVICE_LAUNCHER_PROTOCOL,
       childVersion: "1.0.0",
     });
+
     const client = yield* makeClient(host, "1.0.0");
+
     const requested = yield* Effect.forkChild(
       client.requestUpdate({ targetVersion: "1.1.0", dbPath: "/tmp/state.sqlite" }),
       { startImmediately: true },
     );
+
     yield* Effect.yieldNow;
     host.emit({
       type: "update-accepted",
@@ -104,11 +111,14 @@ it.effect("preserves a launcher rejection as a distinct error", () =>
       protocol: SERVICE_LAUNCHER_PROTOCOL,
       childVersion: "1.0.0",
     });
+
     const client = yield* makeClient(host, "1.0.0");
+
     const requested = yield* Effect.forkChild(
       client.requestUpdate({ targetVersion: "1.1.0", dbPath: "/tmp/state.sqlite" }),
       { startImmediately: true },
     );
+
     yield* Effect.yieldNow;
     host.emit({ type: "update-rejected", reason: "requires local update" });
     expect(yield* Fiber.join(requested).pipe(Effect.flip)).toMatchObject({
@@ -132,6 +142,7 @@ it.effect("rejects contradictory trial context instead of leaving activation clo
         status: "pending",
       },
     });
+
     const error = yield* makeClient(host, "1.1.0").pipe(Effect.flip);
     expect(error.message).toBe("The service launcher supplied invalid startup context.");
   }),

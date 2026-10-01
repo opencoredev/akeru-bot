@@ -28,6 +28,7 @@ export const WorkspaceEntriesError = Schema.Union([
   WorkspaceSearchIndex.WorkspaceSearchIndexScanTimedOut,
   WorkspaceSearchIndex.WorkspaceSearchIndexSearchFailed,
 ]);
+
 export type WorkspaceEntriesError = typeof WorkspaceEntriesError.Type;
 
 export class WorkspaceEntries extends Context.Service<
@@ -58,9 +59,12 @@ export const makeWorkspaceRefreshWorker = (scan: (normalizedCwd: string) => Effe
     yield* Effect.addFinalizer((exit) => Scope.close(scope, exit));
 
     const scanPermits = yield* Semaphore.make(2);
+
     const run = Effect.fn("WorkspaceEntries.refreshWorker.run")(function* (normalizedCwd: string) {
       const state = states.get(normalizedCwd);
+
       if (!state) return;
+
       while (true) {
         const generation = yield* scanPermits.withPermits(1)(
           Effect.gen(function* () {
@@ -75,18 +79,23 @@ export const makeWorkspaceRefreshWorker = (scan: (normalizedCwd: string) => Effe
                     }),
               ),
             );
+
             return generation;
           }),
         );
+
         state.completedGeneration = generation;
+
         for (const [waiterGeneration, waiter] of state.waiters) {
           if (waiterGeneration <= generation) {
             state.waiters.delete(waiterGeneration);
             yield* Deferred.succeed(waiter, undefined);
           }
         }
+
         if (state.requestedGeneration === generation) {
           states.delete(normalizedCwd);
+
           return;
         }
       }
@@ -97,6 +106,7 @@ export const makeWorkspaceRefreshWorker = (scan: (normalizedCwd: string) => Effe
     ) {
       const waiter = yield* Deferred.make<void>();
       let state = states.get(normalizedCwd);
+
       if (!state) {
         state = {
           requestedGeneration: 0,
@@ -106,8 +116,10 @@ export const makeWorkspaceRefreshWorker = (scan: (normalizedCwd: string) => Effe
         };
         states.set(normalizedCwd, state);
       }
+
       const generation = ++state.requestedGeneration;
       state.waiters.set(generation, waiter);
+
       if (!state.running) {
         state.running = true;
         yield* Effect.forkIn(run(normalizedCwd), scope);
@@ -119,8 +131,10 @@ export const makeWorkspaceRefreshWorker = (scan: (normalizedCwd: string) => Effe
     ) {
       while (true) {
         const state = states.get(normalizedCwd);
+
         if (!state || state.completedGeneration >= state.requestedGeneration) return;
         const waiter = state.waiters.get(state.requestedGeneration);
+
         if (waiter) yield* Deferred.await(waiter);
       }
     });
@@ -129,6 +143,7 @@ export const makeWorkspaceRefreshWorker = (scan: (normalizedCwd: string) => Effe
       const pending = Array.from(states.values()).flatMap((state) =>
         Array.from(state.waiters.values()),
       );
+
       return pending.length === 0
         ? Effect.void
         : Effect.all(pending.map(Deferred.await), { concurrency: "unbounded" }).pipe(
@@ -153,6 +168,7 @@ export const make = Effect.gen(function* () {
     if (!(yield* RcMap.has(workspaceSearchIndexes.rcMap, normalizedCwd))) {
       return;
     }
+
     const recoverRefreshFailure = (
       cause:
         | WorkspaceSearchIndex.WorkspaceSearchIndexCreateFailed
@@ -166,6 +182,7 @@ export const make = Effect.gen(function* () {
         });
         yield* workspaceSearchIndexes.invalidate(normalizedCwd);
       });
+
     yield* Effect.gen(function* () {
       const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
       yield* searchIndex.refresh();
@@ -180,11 +197,13 @@ export const make = Effect.gen(function* () {
   });
 
   const refreshWorker = yield* makeWorkspaceRefreshWorker(scan);
+
   const refresh: WorkspaceEntries["Service"]["refresh"] = Effect.fn("WorkspaceEntries.refresh")(
     function* (cwd) {
       const normalizedCwd = yield* normalizeWorkspaceRoot(cwd).pipe(
         Effect.orElseSucceed(() => cwd),
       );
+
       yield* refreshWorker.request(normalizedCwd);
     },
   );
@@ -193,11 +212,14 @@ export const make = Effect.gen(function* () {
     function* (input) {
       const normalizedCwd = yield* normalizeWorkspaceRoot(input.cwd);
       yield* refreshWorker.awaitCurrent(normalizedCwd);
+
       const normalizedQuery = normalizeSearchQuery(input.query, {
         trimLeadingPattern: /^[@./]+/,
       });
+
       return yield* Effect.gen(function* () {
         const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
+
         return yield* searchIndex.search(normalizedQuery, input.limit, input.kind, input.imageOnly);
       }).pipe(Effect.provide(workspaceSearchIndexes.get(normalizedCwd)));
     },
@@ -207,8 +229,10 @@ export const make = Effect.gen(function* () {
     function* (input) {
       const normalizedCwd = yield* normalizeWorkspaceRoot(input.cwd);
       yield* refreshWorker.awaitCurrent(normalizedCwd);
+
       return yield* Effect.gen(function* () {
         const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
+
         return yield* searchIndex.list();
       }).pipe(Effect.provide(workspaceSearchIndexes.get(normalizedCwd)));
     },

@@ -22,6 +22,7 @@ import {
   refreshedCredential,
   runRefresh,
 } from "./serviceTypes.ts";
+
 export class SubscriptionHealthService {
   private readonly store: SubscriptionCredentialStore;
   constructor(store: SubscriptionCredentialStore, checkHealthOnConnect: boolean) {
@@ -52,8 +53,10 @@ export class SubscriptionHealthService {
   public reloadHealth(): void {
     if (!NodeFS.existsSync(this.healthPath)) {
       this.health = {};
+
       return;
     }
+
     try {
       this.health = JSON.parse(NodeFS.readFileSync(this.healthPath, "utf-8")) as ProviderHealthData;
     } catch {
@@ -63,9 +66,11 @@ export class SubscriptionHealthService {
 
   public writeSecureJson(filePath: string, value: unknown): void {
     const dir = NodePath.dirname(filePath);
+
     if (!NodeFS.existsSync(dir)) {
       NodeFS.mkdirSync(dir, { recursive: true, mode: 0o700 });
     }
+
     const tempPath = `${filePath}.${NodeCrypto.randomUUID()}.tmp`;
     NodeFS.writeFileSync(tempPath, JSON.stringify(value, null, 2), {
       encoding: "utf-8",
@@ -98,11 +103,13 @@ export class SubscriptionHealthService {
   public recordHealthSuccess(key: string, at: string): void {
     this.reloadHealth();
     const previous = this.health[key];
+
     const {
       nextRetryAt: _nextRetryAt,
       lastCredentialProbeFailure: _probeFailure,
       ...rest
     } = previous ?? {};
+
     this.health[key] = {
       ...rest,
       lastSuccessfulRequestAt: at,
@@ -213,7 +220,9 @@ export class SubscriptionHealthService {
     const key = `image:${provider}`;
     const requestHealth = this.requestHealth(key);
     const record = this.health[key];
+
     if (!record) return requestHealth;
+
     return {
       ...(requestHealth ?? { health: "detected" }),
       ...(record.lastCredentialProbeAt
@@ -228,9 +237,12 @@ export class SubscriptionHealthService {
 
   public redactHealthMessage(message: string): string {
     this.reloadHealth();
+
     for (const credentialId of Object.keys(this.data)) {
       const credential = credentialAt(this.data, credentialId);
+
       if (!credential) continue;
+
       for (const secret of [
         credential.access,
         credential.type === "oauth" ? credential.refresh : undefined,
@@ -238,6 +250,7 @@ export class SubscriptionHealthService {
         if (secret) message = message.replaceAll(secret, "[redacted]");
       }
     }
+
     return message;
   }
 
@@ -275,7 +288,9 @@ export class SubscriptionHealthService {
 
   public requestHealth(key: string): RequestHealthStatus | undefined {
     const health = this.health[key];
+
     if (!health) return undefined;
+
     if (
       health.lastFailedRequest &&
       (!health.lastSuccessfulRequestAt ||
@@ -292,6 +307,7 @@ export class SubscriptionHealthService {
         ...(health.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
       };
     }
+
     if (
       health.lastSuccessfulRequestAt &&
       health.lastFailedRequest &&
@@ -306,6 +322,7 @@ export class SubscriptionHealthService {
         ...(health.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
       };
     }
+
     return health.lastSuccessfulRequestAt
       ? {
           health: "healthy",
@@ -323,9 +340,12 @@ export class SubscriptionHealthService {
   ): Promise<boolean> {
     if (this.healthProbeVersions.get(key) !== version) return false;
     await this.reloadAsync();
+
     if (this.healthProbeVersions.get(key) !== version) return false;
     const current = credentialAt(this.data, key);
+
     if (current?.type !== credential.type || current.access !== credential.access) return false;
+
     return credential.type === "api-key"
       ? current.type === "api-key" && current.baseUrl === credential.baseUrl
       : current.type === "oauth" && current.refresh === credential.refresh;
@@ -337,6 +357,7 @@ export class SubscriptionHealthService {
     const version = (this.healthProbeVersions.get(key) ?? 0) + 1;
     this.healthProbeVersions.set(key, version);
     const credential = credentialAt(this.data, key);
+
     if (!credential) {
       this.recordOAuthFailure(
         provider,
@@ -344,8 +365,10 @@ export class SubscriptionHealthService {
         "request",
         instanceId,
       );
+
       return;
     }
+
     if (credential.type === "api-key") {
       const defaultBaseUrls: Partial<Record<SubscriptionProviderId, string>> = {
         anthropic: "https://api.anthropic.com/v1",
@@ -354,12 +377,14 @@ export class SubscriptionHealthService {
         "kimi-for-coding": "https://api.kimi.com/coding/v1",
         "opencode-go": "https://opencode.ai/zen/go/v1",
       };
+
       const url =
         provider === "opencode-go" && !credential.baseUrl
           ? OPENCODE_GO_USAGE_URL
           : provider === "anthropic"
             ? `${anthropicApiBaseUrl(credential.baseUrl)}/v1/models`
             : `${credential.baseUrl ?? defaultBaseUrls[provider]}/models`;
+
       try {
         const response = await fetch(url, {
           redirect: "error",
@@ -372,7 +397,9 @@ export class SubscriptionHealthService {
             ...(provider === "opencode-go" ? { "x-opencode-client": "akeru-bot" } : {}),
           },
         });
+
         if (!(await this.isCurrentHealthCredential(key, credential, version))) return;
+
         if (!response.ok) {
           this.recordHealthFailure(
             key,
@@ -392,39 +419,53 @@ export class SubscriptionHealthService {
           "request",
         );
       }
+
       return;
     }
+
     let testedCredential = credential;
+
     try {
       const refreshed =
         credential.expires > Date.now() ? credential : await runRefresh(provider, credential);
+
       if (!(await this.isCurrentHealthCredential(key, credential, version))) return;
+
       if (refreshed !== credential) {
         // Save under the store lock only while the tested credential is still stored,
         // so a logout or replacement that lands meanwhile is never undone.
         const saved = await this.updateCredentials((data) => {
           const latest = credentialAt(data, key);
+
           return latest?.type === "oauth" &&
             latest.access === credential.access &&
             latest.refresh === credential.refresh
             ? { ...data, [key]: refreshedCredential(latest, refreshed) }
             : data;
         });
+
         const stored = credentialAt(saved, key);
+
         if (stored?.type !== "oauth" || stored.access !== refreshed.access) return;
       }
+
       testedCredential = { type: "oauth", ...refreshed };
       const request = oauthHealthRequest(provider, refreshed);
+
       if (!request) throw new Error("This subscription does not expose a health endpoint.");
+
       const response = await fetch(request.url, {
         redirect: "error",
         headers: request.headers,
         signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
       });
+
       if (!(await this.isCurrentHealthCredential(key, testedCredential, version))) return;
+
       if (!response.ok) {
         throw new Error(`The provider rejected the health request (${response.status}).`);
       }
+
       this.recordHealthSuccess(key, new Date().toISOString());
       const checkedAt = new Date().toISOString();
       this.reloadHealth();
@@ -457,11 +498,13 @@ export class SubscriptionHealthService {
       healthCheckStartedAt: new Date().toISOString(),
     };
     this.saveHealth();
+
     const check = this.testHealth(provider, instanceId)
       .finally(() => {
         if (this.healthChecks.get(key) !== check) return;
         this.reloadHealth();
         const current = this.health[key];
+
         if (current?.healthCheckStartedAt === undefined) return;
         const { healthCheckStartedAt: _startedAt, ...rest } = current;
         this.health[key] = rest;
@@ -471,7 +514,9 @@ export class SubscriptionHealthService {
       .finally(() => {
         if (this.healthChecks.get(key) === check) this.healthChecks.delete(key);
       });
+
     this.healthChecks.set(key, check);
+
     return { status: "connected", health: "checking" };
   }
 
@@ -501,7 +546,9 @@ export class SubscriptionHealthService {
 
   public clearImageHealth(provider: SubscriptionProviderId, instanceId?: string): void {
     if (instanceId !== undefined) return;
+
     if (provider === "openai-codex") delete this.health["image:chatgpt"];
+
     if (provider === "xai") delete this.health["image:grok"];
   }
 }

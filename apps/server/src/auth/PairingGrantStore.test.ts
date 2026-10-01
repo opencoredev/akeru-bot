@@ -19,6 +19,7 @@ const makeServerConfigLayer = (
     ServerConfig.ServerConfig,
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
+
       return {
         ...config,
         ...overrides,
@@ -87,6 +88,7 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
     Effect.gen(function* () {
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const token = yield* bootstrapCredentials.issueOneTimeToken();
+
       const results = yield* Effect.all(
         Array.from({ length: 8 }, () =>
           Effect.result(bootstrapCredentials.consume(token.credential)),
@@ -101,6 +103,7 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
 
       expect(successes).toHaveLength(1);
       expect(failures).toHaveLength(7);
+
       for (const failure of failures) {
         expect(failure.failure._tag).toBe("UnknownBootstrapCredentialError");
         expect(failure.failure.message).toContain("Unknown bootstrap credential");
@@ -165,6 +168,7 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
     Effect.gen(function* () {
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const first = yield* bootstrapCredentials.issueOneTimeToken();
+
       const second = yield* bootstrapCredentials.issueOneTimeToken({
         scopes: ["orchestration:read", "access:write"],
       });
@@ -199,6 +203,7 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
       if (!Predicate.isTagged(error, "BootstrapCredentialConsumeAvailableError")) {
         return yield* Effect.die(error);
       }
+
       expect(error.cause).toBe(repositoryFailure);
     }).pipe(
       Effect.provide(

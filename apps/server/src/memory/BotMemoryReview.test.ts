@@ -56,6 +56,7 @@ describe("automatic bot memory review", () => {
       { threadId: "thread-private", groupId: null, text: "I really like cats." },
       { threadId: "thread-group", groupId: "group-one", text: "Use short replies here." },
     ]);
+
     expect(prompt).toContain("only your GROUP.md for this active group");
     expect(prompt).toContain("Never read or change another bot's group memory");
     expect(prompt).toContain("stable personal facts, preferences, desires, identity details");
@@ -73,6 +74,7 @@ describe("automatic bot memory review", () => {
         text: "x".repeat(5_000),
       })),
     );
+
     expect(prompt.length).toBeLessThanOrEqual(AKERU_MEMORY_REVIEW_PROMPT_MAX_CHARS);
     expect(prompt).toContain("</automatic-memory-review>");
   });

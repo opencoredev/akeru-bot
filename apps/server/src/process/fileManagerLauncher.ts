@@ -20,6 +20,7 @@ import {
   WSL_POWERSHELL_COMMAND,
   shouldUseWindowsHostFromWsl,
 } from "./browserLauncher.ts";
+
 export function hasGraphicalLinuxSession(env: NodeJS.ProcessEnv): boolean {
   return [env.DISPLAY, env.WAYLAND_DISPLAY].some(
     (value) => value !== undefined && value.trim().length > 0,
@@ -39,6 +40,7 @@ export function fileManagerCommandForPlatform(
       if (shouldUseWindowsHostFromWsl(platform, env)) {
         return env.WSL_DISTRO_NAME?.trim() ? "explorer.exe" : undefined;
       }
+
       return hasGraphicalLinuxSession(env) ? "xdg-open" : undefined;
   }
 }
@@ -69,6 +71,7 @@ export const hasUsableLinuxDirectoryHandler = Effect.fn(
   }
 
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
   return yield* spawner
     .spawn(
       ChildProcess.make("xdg-mime", ["query", "default", "inode/directory"], {
@@ -101,6 +104,7 @@ export const isUsableFileManagerCommand = Effect.fn("externalLauncher.isUsableFi
     if (!(yield* isCommandAvailable(command, { env }))) {
       return false;
     }
+
     return command !== "xdg-open" || (yield* hasUsableLinuxDirectoryHandler(env));
   },
 );
@@ -121,9 +125,11 @@ const resolveUsableFileManagerCommand = Effect.fn(
   FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
 > {
   const command = fileManagerCommandForPlatform(platform, env);
+
   if (command !== undefined && (yield* isUsableFileManagerCommand(command, env))) {
     return command;
   }
+
   if (
     shouldUseWindowsHostFromWsl(platform, env) &&
     hasGraphicalLinuxSession(env) &&
@@ -131,6 +137,7 @@ const resolveUsableFileManagerCommand = Effect.fn(
   ) {
     return "xdg-open";
   }
+
   return undefined;
 });
 
@@ -152,11 +159,13 @@ const fileManagerRevealKindForPlatform = Effect.fn(
   FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
 > {
   if (platform === "darwin") return "finder";
+
   if (platform === "win32") {
     return (yield* isCommandAvailable(resolvePowerShellPath(env), { env }))
       ? "file-explorer"
       : undefined;
   }
+
   if (shouldUseWindowsHostFromWsl(platform, env)) {
     if (
       env.WSL_DISTRO_NAME?.trim() &&
@@ -165,15 +174,18 @@ const fileManagerRevealKindForPlatform = Effect.fn(
     ) {
       return "file-explorer";
     }
+
     return hasGraphicalLinuxSession(env) && (yield* isUsableFileManagerCommand("xdg-open", env))
       ? "files"
       : undefined;
   }
+
   return hasGraphicalLinuxSession(env) ? "files" : undefined;
 });
 
 export function resolveWslFileManagerPath(target: string, distroName: string): string {
   const relativePath = target.replace(/^\/+/, "").replaceAll("/", "\\");
+
   return `\\\\wsl.localhost\\${distroName}${relativePath.length > 0 ? `\\${relativePath}` : ""}`;
 }
 
@@ -182,6 +194,7 @@ export const resolveFileManagerRevealKind = Effect.fn(
 )(function* () {
   const platform = yield* HostProcessPlatform;
   const env = { ...(yield* readBrowserLaunchEnv), ...(yield* readCommandLookupEnv) };
+
   return yield* fileManagerRevealKindForPlatform(platform, env);
 });
 
@@ -246,6 +259,7 @@ export const resolveFileManagerRevealLaunch = Effect.fn("resolveFileManagerRevea
       env.WSL_DISTRO_NAME !== undefined
     ) {
       const explorerTarget = resolveWslFileManagerPath(target, env.WSL_DISTRO_NAME);
+
       if (yield* isCommandAvailable(WSL_POWERSHELL_COMMAND, { env })) {
         // Explorer's raw switch cannot express a double quote, and unlike
         // Windows paths a WSL path may legally contain one: open the containing
@@ -253,6 +267,7 @@ export const resolveFileManagerRevealLaunch = Effect.fn("resolveFileManagerRevea
         // "file-explorer" kind.
         if (explorerTarget.includes('"')) {
           const path = yield* Path.Path;
+
           return {
             editor: "file-manager",
             target,
@@ -260,13 +275,16 @@ export const resolveFileManagerRevealLaunch = Effect.fn("resolveFileManagerRevea
             args: [resolveWslFileManagerPath(path.dirname(target), env.WSL_DISTRO_NAME)],
           };
         }
+
         return fileExplorerRevealLaunch(target, explorerTarget, WSL_POWERSHELL_COMMAND);
       }
+
       // Without interop PowerShell the capability advertised the Linux "files"
       // kind when it advertised anything at all, so the reveal must open the
       // Linux file manager the label promised, not File Explorer.
       if (hasGraphicalLinuxSession(env) && (yield* isUsableFileManagerCommand("xdg-open", env))) {
         const path = yield* Path.Path;
+
         return {
           editor: "file-manager",
           target,
@@ -274,9 +292,11 @@ export const resolveFileManagerRevealLaunch = Effect.fn("resolveFileManagerRevea
           args: [path.dirname(target)],
         };
       }
+
       // Nothing was advertised here; open the parent in File Explorer as the
       // best remaining effort for a stale client.
       const path = yield* Path.Path;
+
       return {
         editor: "file-manager",
         target,
@@ -288,6 +308,7 @@ export const resolveFileManagerRevealLaunch = Effect.fn("resolveFileManagerRevea
     // Linux file managers have no portable "select this file" flag, so open
     // the containing directory instead.
     const path = yield* Path.Path;
+
     return { editor: "file-manager", target, command, args: [path.dirname(target)] };
   },
 );

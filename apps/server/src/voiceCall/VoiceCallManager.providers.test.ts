@@ -8,11 +8,13 @@ import { voiceFailure } from "./VoiceAdapters.ts";
 
 it.effect("uses explicit transcription selection without provider fallback", () => {
   const used: string[] = [];
+
   return Effect.gen(function* () {
     const manager = yield* VoiceCallManager;
     yield* manager.connect("openai", "openai-key");
     const missing = yield* Effect.result(manager.start({ botId }, "owner"));
     assert.equal(missing._tag, "Failure");
+
     if (Predicate.isTagged(missing, "Failure"))
       assert.equal(missing.failure.reason, "provider-unavailable");
     assert.deepEqual(yield* manager.get, { status: "idle" });
@@ -34,6 +36,7 @@ it.effect("uses explicit transcription selection without provider fallback", () 
         {
           transcribe: async (provider, key) => {
             used.push(`${provider}:${key}`);
+
             return { text: "hello" };
           },
         },
@@ -45,6 +48,7 @@ it.effect("uses explicit transcription selection without provider fallback", () 
 
 it.effect("starts OpenAI realtime with its own key and selected voice", () => {
   const used: string[] = [];
+
   return Effect.gen(function* () {
     const manager = yield* VoiceCallManager;
     yield* manager.connect("openai", "api-key");
@@ -53,6 +57,7 @@ it.effect("starts OpenAI realtime with its own key and selected voice", () => {
     assert.equal(call.transport, "webrtc");
     assert.equal(call.answerSdp, "answer");
     assert.deepEqual(used, ["api-key:offer:marin"]);
+
     const invalid = yield* Effect.result(
       manager.transcribe(
         {
@@ -64,6 +69,7 @@ it.effect("starts OpenAI realtime with its own key and selected voice", () => {
         "owner",
       ),
     );
+
     assert.equal(invalid._tag, "Failure");
   }).pipe(
     Effect.provide(
@@ -71,6 +77,7 @@ it.effect("starts OpenAI realtime with its own key and selected voice", () => {
         {
           negotiate: async (key, sdp, _instructions, voice) => {
             used.push(`${key}:${sdp}:${voice}`);
+
             return "answer";
           },
         },
@@ -86,6 +93,7 @@ it.effect("releases the lock after invalid voice validation and sanitizes adapte
     yield* manager.connect("openai", "key");
     const result = yield* Effect.result(manager.start({ botId }, "owner"));
     assert.equal(result._tag, "Failure");
+
     if (Predicate.isTagged(result, "Failure")) assert.notInclude(result.failure.message, "private");
     assert.deepEqual(yield* manager.get, { status: "idle" });
     yield* manager.disconnect("openai");
@@ -103,6 +111,7 @@ it.effect("releases the lock after invalid voice validation and sanitizes adapte
 it.effect("releases a pending realtime call and key lock on request interruption", () => {
   const began = Promise.withResolvers<void>();
   let aborted = false;
+
   return Effect.gen(function* () {
     const manager = yield* VoiceCallManager;
     yield* manager.connect("openai", "key");
@@ -145,34 +154,44 @@ for (const cancellation of [
   it.effect(`aborts in-flight audio on ${cancellation}`, () => {
     const began = Promise.withResolvers<void>();
     let aborted = false;
+
     return Effect.gen(function* () {
       const manager = yield* VoiceCallManager;
       yield* manager.connect("openai", "key");
       const call = cancellation === "hangup" ? yield* manager.start({ botId }, "owner") : undefined;
+
       const fiber = yield* manager
         .synthesize(
           { operationId: "audio", ...(call ? { callId: call.call.callId } : {}), text: "Hello" },
           "owner",
         )
         .pipe(Effect.result, Effect.forkChild);
+
       yield* Effect.promise(() => began.promise);
+
       const duplicate = yield* Effect.result(
         manager.synthesize({ operationId: "audio", text: "Duplicate" }, "owner"),
       );
+
       assert.equal(duplicate._tag, "Failure");
+
       if (Predicate.isTagged(duplicate, "Failure")) assert.equal(duplicate.failure.reason, "busy");
       assert.deepEqual(yield* manager.cancel("audio", "other"), { cancelled: false });
+
       if (cancellation === "hangup" && call) yield* manager.hangup(call.call.callId, "owner");
       else if (cancellation === "cancel")
         assert.deepEqual(yield* manager.cancel("audio", "owner"), { cancelled: true });
       else if (cancellation === "disconnect") yield* manager.hangupOwner("owner");
       else if (cancellation === "provider-disconnect") yield* manager.disconnect("openai");
       else yield* Fiber.interrupt(fiber);
+
       if (cancellation !== "interrupt") {
         const result = yield* Fiber.join(fiber);
         assert.equal(result._tag, "Failure");
+
         if (Predicate.isTagged(result, "Failure")) assert.equal(result.failure.reason, "cancelled");
       }
+
       assert.isTrue(aborted);
       assert.deepEqual(yield* manager.cancel("audio", "owner"), { cancelled: false });
     }).pipe(

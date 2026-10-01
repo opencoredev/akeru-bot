@@ -27,6 +27,7 @@ export const requireMcpCapability = Effect.fn("mcp.requireCapability")(function*
   capability: "preview",
 ) {
   const invocation = yield* McpInvocationContext;
+
   if (!invocation.capabilities.has(capability)) {
     return yield* new PreviewAutomationUnavailableError({
       capability,
@@ -36,5 +37,6 @@ export const requireMcpCapability = Effect.fn("mcp.requireCapability")(function*
       providerInstanceId: invocation.providerInstanceId,
     });
   }
+
   return invocation;
 });

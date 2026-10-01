@@ -49,6 +49,7 @@ describe("resolveNativeSampleIntervalMs", () => {
       source: "unknown",
       stale: true,
     };
+
     expect(resolveNativeSampleIntervalMs(unknown, 0)).toBe(5_000);
     expect(resolveNativeSampleIntervalMs(unknown, 1)).toBe(1_000);
     expect(
@@ -86,6 +87,7 @@ describe("NativeTelemetryRequestTimedOut", () => {
       operation: "readHistory",
       timeoutMs: 15_000,
     });
+
     const sampleTimeout = new NativeTelemetryRequestTimedOut({
       operation: "sampleNow",
       timeoutMs: 5_000,
@@ -133,6 +135,7 @@ describe("commitCollectionControlUpdate", () => {
         liveSubscriberCount: 0,
         sampleIntervalMs: 5_000,
       };
+
       const desired = yield* Ref.make(initial);
       const applied = yield* Ref.make(initial);
       const failure = new Error("sidecar write failed");
@@ -148,6 +151,7 @@ describe("commitCollectionControlUpdate", () => {
         }),
         (previous, next) => {
           receivedStates.push([previous.sampleIntervalMs, next.sampleIntervalMs]);
+
           return Effect.fail(failure);
         },
       ).pipe(Effect.flip);
@@ -166,6 +170,7 @@ describe("commitCollectionControlUpdate", () => {
         (current) => current,
         (previous, next) => {
           receivedStates.push([previous.sampleIntervalMs, next.sampleIntervalMs]);
+
           return Effect.void;
         },
       );
@@ -184,6 +189,7 @@ describe("commitCollectionControlUpdate", () => {
         liveSubscriberCount: 0,
         sampleIntervalMs: 5_000,
       };
+
       const desired = yield* Ref.make(initial);
       const applied = yield* Ref.make(initial);
       const ready = yield* Ref.make(false);
@@ -206,6 +212,7 @@ describe("commitCollectionControlUpdate", () => {
           ),
         Ref.set(ready, true),
       ).pipe(Effect.forkChild);
+
       yield* Deferred.await(startupApplying);
 
       const updateFiber = yield* mutex
@@ -226,6 +233,7 @@ describe("commitCollectionControlUpdate", () => {
           ),
         )
         .pipe(Effect.forkChild);
+
       yield* Effect.yieldNow;
       expect(yield* Ref.get(desired)).toEqual(initial);
 

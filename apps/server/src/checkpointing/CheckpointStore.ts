@@ -106,6 +106,7 @@ export const make = Effect.gen(function* () {
     cwd: string,
   ) {
     const handle = yield* vcsRegistry.resolve({ cwd });
+
     if (!handle.driver.checkpoints) {
       return yield* new VcsUnsupportedOperationError({
         operation,
@@ -113,6 +114,7 @@ export const make = Effect.gen(function* () {
         detail: `${handle.kind} driver does not implement checkpoint operations.`,
       });
     }
+
     return handle.driver.checkpoints satisfies VcsCheckpointOps;
   });
 
@@ -125,6 +127,7 @@ export const make = Effect.gen(function* () {
     "captureCheckpoint",
   )(function* (input) {
     const checkpoints = yield* resolveCheckpoints("CheckpointStore.captureCheckpoint", input.cwd);
+
     return yield* checkpoints.captureCheckpoint(input);
   });
 
@@ -132,6 +135,7 @@ export const make = Effect.gen(function* () {
     "hasCheckpointRef",
   )(function* (input) {
     const checkpoints = yield* resolveCheckpoints("CheckpointStore.hasCheckpointRef", input.cwd);
+
     return yield* checkpoints.hasCheckpointRef(input);
   });
 
@@ -139,6 +143,7 @@ export const make = Effect.gen(function* () {
     "restoreCheckpoint",
   )(function* (input) {
     const checkpoints = yield* resolveCheckpoints("CheckpointStore.restoreCheckpoint", input.cwd);
+
     return yield* checkpoints.restoreCheckpoint(input);
   });
 
@@ -146,6 +151,7 @@ export const make = Effect.gen(function* () {
     "diffCheckpoints",
   )(function* (input) {
     const checkpoints = yield* resolveCheckpoints("CheckpointStore.diffCheckpoints", input.cwd);
+
     return yield* checkpoints.diffCheckpoints(input);
   });
 
@@ -156,6 +162,7 @@ export const make = Effect.gen(function* () {
       "CheckpointStore.deleteCheckpointRefs",
       input.cwd,
     );
+
     return yield* checkpoints.deleteCheckpointRefs(input);
   });
 

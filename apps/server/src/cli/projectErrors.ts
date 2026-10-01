@@ -146,6 +146,7 @@ export function projectCommandErrorFromLiveServerRequest(cause: unknown): Projec
       cause,
     });
   }
+
   if (HttpClientError.isHttpClientError(cause) && cause.response !== undefined) {
     return new ProjectLiveServerUndeclaredStatusError({
       operation: "callLiveServer",

@@ -23,9 +23,11 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("073_RoutineCanceledCla
           run_id, routine_id, trigger, status, claimed_at, updated_at
         ) VALUES ('canceled', 'routine-2', 'manual', 'canceled', '2026-08-31', '2026-08-31')
       `;
+
       const claims = yield* sql<{ readonly runId: string; readonly status: string }>`
         SELECT run_id AS "runId", status FROM routine_run_claims ORDER BY run_id
       `;
+
       assert.deepEqual(claims, [
         { runId: "canceled", status: "canceled" },
         { runId: "existing", status: "completed" },

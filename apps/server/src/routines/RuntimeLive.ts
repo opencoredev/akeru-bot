@@ -45,9 +45,11 @@ const makeRun = (routine: Routine, claim: RoutineClaim): RoutineRun => {
     createdAt: claim.claimedAt,
     updatedAt: claim.claimedAt,
   };
+
   if (claim.scheduledFor === null) {
     return { ...base, trigger: claim.trigger, scheduledFor: null };
   }
+
   return { ...base, trigger: claim.trigger, scheduledFor: claim.scheduledFor };
 };
 
@@ -81,8 +83,10 @@ const make = Effect.gen(function* () {
       claim.trigger !== "dry-run" && routine.approvalVersion !== routine.procedureVersion
         ? approvalFailure
         : yield* adapter.checkDependencies(routine);
+
     if (failure !== null) {
       yield* block(routine, run, failure);
+
       return run;
     }
 
@@ -90,20 +94,27 @@ const make = Effect.gen(function* () {
       const completedAt = DateTime.formatIso(yield* DateTime.now);
       yield* adapter.recordCompleted(run, routine.nextRunAt, "Dry run passed.", completedAt);
       yield* repository.markSettled(run.id, "completed", completedAt);
+
       return { ...run, status: "completed" as const, completedAt, summary: "Dry run passed." };
     }
 
     const dispatched = yield* adapter.dispatchTurn(routine, run);
+
     if ("failure" in dispatched) {
       yield* block(routine, run, dispatched.failure);
+
       return run;
     }
+
     if ("canceled" in dispatched) {
       const completedAt = DateTime.formatIso(yield* DateTime.now);
       yield* repository.markSettled(run.id, "canceled", completedAt);
+
       return { ...run, status: "canceled" as const, completedAt };
     }
+
     yield* repository.markDispatched(run.id, dispatched.threadRef);
+
     return { ...run, status: "running" as const, ...dispatched };
   });
 
@@ -114,6 +125,7 @@ const make = Effect.gen(function* () {
     claimedAt: string,
   ) {
     if (yield* adapter.isTargetBusy(routine)) return null;
+
     const claim = {
       runId: makeRunId(routine.id, scheduledFor),
       routineId: routine.id,
@@ -121,7 +133,9 @@ const make = Effect.gen(function* () {
       scheduledFor,
       claimedAt,
     } satisfies RoutineClaim;
+
     if (!(yield* repository.claim(claim))) return null;
+
     return yield* execute(routine, claim);
   });
 
@@ -129,6 +143,7 @@ const make = Effect.gen(function* () {
     const nowEpochMillis = yield* Clock.currentTimeMillis;
     const now = DateTime.formatIso(yield* DateTime.now);
     const routines = yield* repository.listEnabled;
+
     for (const routine of routines) {
       if (routine.nextRunAt === null || Date.parse(routine.nextRunAt) > nowEpochMillis) continue;
       const scheduledFor = latestScheduledFor(routine.schedule, routine.timezone, nowEpochMillis);
@@ -142,6 +157,7 @@ const make = Effect.gen(function* () {
   const canRunNow: RoutineRuntimeShape["canRunNow"] = (routineId) =>
     Effect.gen(function* () {
       const routine = yield* repository.getById(routineId);
+
       return (
         routine !== null &&
         routine.lifecycle !== "deleted" &&
@@ -152,8 +168,10 @@ const make = Effect.gen(function* () {
   const runNow: RoutineRuntimeShape["runNow"] = (routineId, runId, trigger) =>
     Effect.gen(function* () {
       const routine = yield* repository.getById(routineId);
+
       if (routine === null || routine.lifecycle === "deleted") return null;
       const now = DateTime.formatIso(yield* DateTime.now);
+
       const claim = {
         runId,
         routineId,
@@ -161,7 +179,9 @@ const make = Effect.gen(function* () {
         scheduledFor: null,
         claimedAt: now,
       } satisfies RoutineClaim;
+
       if (!(yield* repository.claim(claim))) return null;
+
       return yield* execute(routine, claim);
     });
 
@@ -170,6 +190,7 @@ const make = Effect.gen(function* () {
     delegation: AkeruDelegationRecord,
   ) {
     const phase = delegation.phase;
+
     if (
       delegation.trigger !== "scheduled" ||
       (!Predicate.isTagged(phase, "Completed") &&
@@ -178,6 +199,7 @@ const make = Effect.gen(function* () {
       phase.childThreadId === null
     )
       return false;
+
     const run = (yield* repository.listAllRuns).find(
       (candidate) =>
         candidate.threadRef === phase.childThreadId &&
@@ -185,31 +207,41 @@ const make = Effect.gen(function* () {
           candidate.status === "running" ||
           candidate.status === "waiting-for-approval"),
     );
+
     if (run === undefined) return false;
     const routine = yield* repository.getById(run.routineId);
+
     if (routine === null || routine.lifecycle === "deleted") return false;
     const completedAt = phase.completedAt;
+
     if (Predicate.isTagged(phase, "Completed")) {
       const nextRunAt = routine.enabled
         ? nextScheduledFor(routine.schedule, routine.timezone, Date.parse(completedAt))
         : null;
+
       yield* adapter.recordCompleted(run, nextRunAt, phase.result.summary, completedAt);
       yield* repository.markSettled(run.id, "completed", completedAt);
+
       return true;
     }
+
     if (Predicate.isTagged(phase, "Canceled")) {
       yield* adapter.recordCanceled(run, completedAt);
       yield* repository.markSettled(run.id, "canceled", completedAt);
+
       return true;
     }
+
     const failure = {
       kind: "execution",
       reason: phase.failure.message,
       nextAction: "Review the bot work in the routine chat, then resume the routine.",
     } satisfies RoutineDependencyFailure;
+
     yield* adapter.recordFailed(run, failure, completedAt);
     yield* adapter.openFailureIncident(routine, failure);
     yield* repository.markBlocked(run.id, failure.reason, completedAt);
+
     return true;
   });
 
@@ -218,20 +250,27 @@ const make = Effect.gen(function* () {
   ) {
     if (event.type === "routine.deleted") {
       yield* adapter.resolveFailureIncident(event.payload.routine.id);
+
       return;
     }
+
     if (event.type === "delegation.updated") {
       yield* settleDelegatedRun(event.payload.delegation);
+
       return;
     }
+
     // Canceling a run also cancels the bot work it started. Pausing does not.
     if (event.type === "routine.run-canceled") {
       const run = event.payload.run;
       yield* repository.markSettled(run.id, "canceled", run.completedAt ?? event.occurredAt);
       yield* adapter.cancelDelegatedRun(run);
+
       return;
     }
+
     if (event.type !== "thread.turn-diff-completed" && event.type !== "thread.session-set") return;
+
     if (
       event.type === "thread.session-set" &&
       event.payload.session.status !== "ready" &&
@@ -241,17 +280,22 @@ const make = Effect.gen(function* () {
     )
       return;
     const threadRef = event.payload.threadId;
+
     const run = yield* repository.getActiveRunByThreadRef(
       threadRef,
       event.type === "thread.turn-diff-completed" ? event.payload.turnId : null,
     );
+
     if (run === null) return;
     const routine = yield* repository.getById(run.routineId);
+
     if (routine === null || routine.lifecycle === "deleted") return;
+
     const completedAt =
       event.type === "thread.turn-diff-completed"
         ? event.payload.completedAt
         : event.payload.session.updatedAt;
+
     if (
       (event.type === "thread.turn-diff-completed" && event.payload.status === "ready") ||
       (event.type === "thread.session-set" && event.payload.session.status === "ready")
@@ -259,10 +303,13 @@ const make = Effect.gen(function* () {
       const nextRunAt = routine.enabled
         ? nextScheduledFor(routine.schedule, routine.timezone, Date.parse(completedAt))
         : null;
+
       yield* adapter.recordCompleted(run, nextRunAt, "Routine completed.", completedAt);
       yield* repository.markSettled(run.id, "completed", completedAt);
+
       return;
     }
+
     const failure = {
       kind: "execution",
       reason:
@@ -272,6 +319,7 @@ const make = Effect.gen(function* () {
             `Routine session ended with status '${event.payload.session.status}'.`),
       nextAction: "Review the routine chat, then resume the routine.",
     } satisfies RoutineDependencyFailure;
+
     yield* adapter.recordFailed(run, failure, completedAt);
     yield* adapter.openFailureIncident(routine, failure);
     yield* repository.markBlocked(run.id, failure.reason, completedAt);
@@ -281,8 +329,10 @@ const make = Effect.gen(function* () {
     for (const routine of yield* repository.listAll) {
       if (routine.lifecycle === "deleted") yield* adapter.resolveFailureIncident(routine.id);
     }
+
     for (const claim of yield* repository.listRecoverable) {
       const routine = yield* repository.getById(claim.routineId);
+
       if (routine === null || routine.lifecycle === "deleted") {
         yield* repository.markBlocked(
           claim.runId,
@@ -291,9 +341,11 @@ const make = Effect.gen(function* () {
         );
         continue;
       }
+
       const projectedRun = (yield* repository.listRuns(claim.routineId)).find(
         (candidate) => candidate.id === claim.runId,
       );
+
       if (projectedRun?.status === "completed") {
         yield* repository.markSettled(
           claim.runId,
@@ -302,6 +354,7 @@ const make = Effect.gen(function* () {
         );
         continue;
       }
+
       if (projectedRun?.status === "blocked") {
         yield* repository.markBlocked(
           claim.runId,
@@ -310,6 +363,7 @@ const make = Effect.gen(function* () {
         );
         continue;
       }
+
       if (projectedRun?.status === "failed" || projectedRun?.status === "canceled") {
         yield* repository.markSettled(
           claim.runId,
@@ -318,13 +372,16 @@ const make = Effect.gen(function* () {
         );
         continue;
       }
+
       // Scheduled bot work settles from its delegation. A delegation that
       // ended while nothing watched it, such as one startup reconciliation
       // failed after a restart, still settles its run here.
       if (claim.status === "dispatched" && claim.threadRef != null) {
         const delegation = yield* adapter.findDelegatedRunDelegation(claim.threadRef);
+
         if (delegation !== null && (yield* settleDelegatedRun(delegation))) continue;
       }
+
       if (
         claim.status === "dispatched" &&
         claim.terminalState !== null &&
@@ -333,12 +390,15 @@ const make = Effect.gen(function* () {
         const run = (yield* repository.listRuns(claim.routineId)).find(
           (candidate) => candidate.id === claim.runId,
         );
+
         if (run !== undefined) {
           const completedAt = claim.terminalAt ?? DateTime.formatIso(yield* DateTime.now);
+
           if (claim.terminalState === "completed") {
             const nextRunAt = routine.enabled
               ? nextScheduledFor(routine.schedule, routine.timezone, Date.parse(completedAt))
               : null;
+
             yield* adapter.recordCompleted(run, nextRunAt, "Routine completed.", completedAt);
             yield* repository.markSettled(run.id, "completed", completedAt);
           } else {
@@ -347,13 +407,16 @@ const make = Effect.gen(function* () {
               reason: `Routine chat ended with state '${claim.terminalState}'.`,
               nextAction: "Review the routine chat, then resume the routine.",
             } satisfies RoutineDependencyFailure;
+
             yield* adapter.recordFailed(run, failure, completedAt);
             yield* adapter.openFailureIncident(routine, failure);
             yield* repository.markBlocked(run.id, failure.reason, completedAt);
           }
+
           continue;
         }
       }
+
       if (
         claim.status === "dispatched" &&
         claim.sessionState !== undefined &&
@@ -363,21 +426,26 @@ const make = Effect.gen(function* () {
         claim.sessionState !== "running"
       ) {
         const completedAt = claim.sessionUpdatedAt ?? DateTime.formatIso(yield* DateTime.now);
+
         const run = (yield* repository.listRuns(claim.routineId)).find(
           (candidate) => candidate.id === claim.runId,
         );
+
         if (run !== undefined) {
           const failure = {
             kind: "execution",
             reason: `Routine session ended with state '${claim.sessionState}'.`,
             nextAction: "Review the routine chat, then resume the routine.",
           } satisfies RoutineDependencyFailure;
+
           yield* adapter.recordFailed(run, failure, completedAt);
           yield* adapter.openFailureIncident(routine, failure);
           yield* repository.markBlocked(run.id, failure.reason, completedAt);
         }
+
         continue;
       }
+
       if (claim.status === "dispatched") continue;
       yield* execute(routine, claim);
     }
@@ -399,6 +467,7 @@ const make = Effect.gen(function* () {
         ),
       );
     }
+
     yield* recover;
     yield* runDue;
     yield* Effect.forkScoped(

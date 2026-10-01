@@ -73,6 +73,7 @@ const makeTest = (
       }),
     getOrCreateRandom: () => Effect.succeed(new Uint8Array()),
   });
+
   return layer({ adapters: { ...defaults, ...adapters } }).pipe(
     Layer.provide(Layer.succeed(ProjectionBotRepository, repository)),
     Layer.provide(Layer.succeed(ServerSecretStore, secrets)),
@@ -87,4 +88,5 @@ const makeTest = (
     ),
   );
 };
+
 export { botId, repository, defaults, makeTest };

@@ -118,6 +118,7 @@ const openServer = (
     server.listen(port, "127.0.0.1", () => {
       resume(Effect.succeed(server));
     });
+
     return Effect.sync(() => {
       server.close();
     });
@@ -134,8 +135,10 @@ const openCommonDevServer = Effect.fn("PortScannerTest.openCommonDevServer")(fun
 ) {
   for (const port of ports) {
     const server = yield* openServer(port, onConnection);
+
     if (server !== null) return { port, server };
   }
+
   return yield* Effect.die(
     new Error("No common development port was available for the preview scanner test"),
   );
@@ -183,6 +186,7 @@ const commonNonHttpServer = Effect.acquireRelease(
       ),
     ),
 );
+
 export {
   processProbeFailure,
   TestProcessRunner,

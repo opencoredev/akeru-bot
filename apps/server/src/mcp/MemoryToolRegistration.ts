@@ -14,15 +14,18 @@ import {
   toolErrorResult,
   MemoryMcpExecutionError,
 } from "./McpToolSchema.ts";
+
 export const decodeMemoryToolInput = Schema.decodeUnknownEffect(AkeruMemoryToolInputSchema);
 
 export const registerMemoryTool = Effect.fn("McpHttpServer.registerMemoryTool")(function* () {
   const server = yield* McpServer.McpServer;
+
   const memoryTool = Tool.make("memory", {
     description: AKERU_MEMORY_TOOL_DESCRIPTION,
     parameters: AkeruMemoryToolInputSchema,
     success: Schema.Unknown,
   });
+
   yield* server.addTool({
     tool: new McpSchema.Tool({
       name: memoryTool.name,
@@ -42,13 +45,17 @@ export const registerMemoryTool = Effect.fn("McpHttpServer.registerMemoryTool")(
           fiber.context,
           McpInvocationContext.McpInvocationContext,
         );
+
         if (!invocation.capabilities.has("memory")) {
           return Effect.succeed(toolErrorResult("This session cannot update bot memory."));
         }
+
         const handler = McpMemoryToolSession.readMcpMemoryToolSession(invocation.threadId);
+
         if (!handler) {
           return Effect.succeed(toolErrorResult("Bot memory is unavailable for this chat."));
         }
+
         return decodeMemoryToolInput(payload).pipe(
           Effect.flatMap((input) =>
             Effect.tryPromise({

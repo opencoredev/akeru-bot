@@ -11,6 +11,7 @@ import { BotMemoryStore } from "../BotMemory.ts";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
+
   return { ...actual, open: vi.fn(actual.open), readFile: vi.fn(actual.readFile) };
 });
 
@@ -39,6 +40,7 @@ async function loseNextLock() {
   vi.mocked(NodeFS.open).mockImplementationOnce(async (...args) => {
     const handle = await actual.open(...args);
     await takeLockFromOwner(String(args[0]));
+
     return handle;
   });
 }
@@ -46,6 +48,7 @@ async function loseNextLock() {
 async function fixture() {
   const directory = await NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-bot-memory-"));
   directories.push(directory);
+
   return new BotMemoryStore(NodePath.join(directory, "userdata"));
 }
 
@@ -63,7 +66,9 @@ const groupAccess = (bot = "bot-1", group = "group-1") => ({
 
 async function acceptPrompt(store: BotMemoryStore, botId: BotId, reviewed?: boolean) {
   const reservation = await store.reserveReviewCadence(botId);
+
   if (reviewed !== undefined) assert.equal(reservation.memoryReviewIncluded, reviewed);
+
   return store.settleReviewCadence(reservation, true);
 }
 
@@ -72,6 +77,7 @@ afterEach(async () => {
     directories.splice(0).map((directory) => NodeFS.rm(directory, { recursive: true })),
   );
 });
+
 export {
   NodeFS,
   directories,

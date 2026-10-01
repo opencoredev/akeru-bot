@@ -51,7 +51,9 @@ export class VcsProcess extends Context.Service<
 >()("akeru-bot/vcs/VcsProcess") {}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+
 const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
+
 const OUTPUT_TRUNCATED_MARKER = "\n\n[truncated]";
 
 const classifyNonZeroExit = (command: string, stderr: string): VcsProcessExitFailureKind => {

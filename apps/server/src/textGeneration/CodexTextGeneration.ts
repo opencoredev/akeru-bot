@@ -31,7 +31,9 @@ import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
 import { getCodexServiceTierOptionValue } from "../codexModelOptions.ts";
 
 const CODEX_TIMEOUT_MS = 180_000;
+
 const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+
 /**
  * Build a Codex text-generation closure bound to a specific `CodexSettings`
  * payload. See `makeCodexAdapter` for the overall per-instance rationale.
@@ -113,6 +115,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     }
 
     const imagePaths: string[] = [];
+
     for (const attachment of attachments) {
       if (attachment.type !== "image") {
         continue;
@@ -122,15 +125,20 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         attachmentsDir: serverConfig.attachmentsDir,
         attachment,
       });
+
       if (!resolvedPath || !path.isAbsolute(resolvedPath)) {
         continue;
       }
+
       const fileInfo = yield* fileSystem.stat(resolvedPath).pipe(Effect.orElseSucceed(() => null));
+
       if (!fileInfo || fileInfo.type !== "File") {
         continue;
       }
+
       imagePaths.push(resolvedPath);
     }
+
     return { imagePaths };
   });
 
@@ -155,15 +163,19 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       operation,
       toJsonSchemaObject(outputSchemaJson),
     );
+
     const schemaPath = yield* writeTempFile(operation, "codex-schema", schemaJson);
     const outputPath = yield* writeTempFile(operation, "codex-output", "");
 
     const runCodexCommand = Effect.fn("runCodexJson.runCodexCommand")(function* () {
       const launchArgs = resolveCodexLaunchArgs(codexConfig.launchArgs, resolvedEnvironment);
+
       const reasoningEffort =
         getModelSelectionStringOptionValue(modelSelection, "reasoningEffort") ??
         DEFAULT_TEXT_GENERATION_REASONING_EFFORT;
+
       const serviceTier = getCodexServiceTierOptionValue(modelSelection);
+
       const spawnCommand = yield* resolveSpawnCommand(
         codexConfig.binaryPath || "codex",
         [
@@ -187,6 +199,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         ],
         { env: resolvedEnvironment },
       );
+
       const command = ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         env: {
           ...resolvedEnvironment,
@@ -224,6 +237,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         const stderrDetail = stderr.trim();
         const stdoutDetail = stdout.trim();
         const detail = stderrDetail.length > 0 ? stderrDetail : stdoutDetail;
+
         return yield* new TextGenerationError({
           operation,
           detail:
@@ -288,6 +302,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         "generateBranchName",
         input.attachments,
       );
+
       const { prompt, outputSchema } = buildBranchNamePrompt({
         message: input.message,
         attachments: input.attachments,
@@ -313,6 +328,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         "generateThreadTitle",
         input.attachments,
       );
+
       const { prompt, outputSchema } = buildThreadTitlePrompt({
         message: input.message,
         previousTitle: input.previousTitle,

@@ -37,6 +37,7 @@ export function parseCodexCliAuth(
 ): { readonly accessToken: string; readonly accountId: string } | undefined {
   try {
     const decoded = decodeCodexCliAuth(JSON.parse(encoded));
+
     return { accessToken: decoded.tokens.access_token, accountId: decoded.tokens.account_id };
   } catch {
     return undefined;
@@ -51,6 +52,7 @@ export async function getCodexCliCredential(): Promise<
       NodePath.join(NodeOS.homedir(), ".codex", "auth.json"),
       "utf8",
     );
+
     return parseCodexCliAuth(encoded);
   } catch {
     return undefined;
@@ -106,6 +108,7 @@ export function defaultSession(): ChatGptRealtimeSession {
         }),
         signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
       });
+
       if (!response.ok) {
         const detail = (await response.text()).trim().slice(0, 500);
         throw new Error(
@@ -114,10 +117,13 @@ export function defaultSession(): ChatGptRealtimeSession {
             : `ChatGPT realtime call failed with status ${response.status}.`,
         );
       }
+
       const answerSdp = new TextDecoder().decode(await readVoiceResponse(response, 65_536));
+
       if (answerSdp.trim().length === 0) {
         throw new Error("ChatGPT realtime call returned an empty SDP answer.");
       }
+
       return answerSdp;
     },
   };

@@ -84,6 +84,7 @@ export const ServiceLauncherHostProcess = Context.Reference<ServiceLauncherProce
       connected: process.connected && process.send !== undefined,
       send: (message, callback) => {
         if (process.send === undefined) return false;
+
         return callback === undefined ? process.send(message) : process.send(message, callback);
       },
       on: (event, listener) => {
@@ -122,11 +123,13 @@ const resolveStartup = Effect.fn("cloud.service_launcher_client.resolve_startup"
     if (rawContext !== undefined && context === undefined) {
       return yield* new ServiceLauncherClientError({ operation: "decode-context" });
     }
+
     if (context !== undefined && context.childVersion !== currentVersion) {
       return yield* new ServiceLauncherClientError({ operation: "version-mismatch" });
     }
 
     const managed = context !== undefined && host.connected;
+
     if (context !== undefined && !managed) {
       return yield* new ServiceLauncherClientError({ operation: "ipc-unavailable" });
     }
@@ -138,6 +141,7 @@ const resolveStartup = Effect.fn("cloud.service_launcher_client.resolve_startup"
 export const resolveServiceLauncherMode = Effect.fn("cloud.service_launcher_client.resolve_mode")(
   function* () {
     const { managed } = yield* resolveStartup();
+
     return { managed };
   },
 );
@@ -154,14 +158,17 @@ export const make = Effect.fn("cloud.service_launcher_client.make")(function* (o
     Effect.callback<ServiceLauncherParentMessage, ServiceLauncherClientError>((resume) => {
       if (!managed) {
         resume(Effect.fail(new ServiceLauncherClientError({ operation: "unmanaged" })));
+
         return;
       }
 
       let settled = false;
+
       const cleanup = () => {
         host.off("message", onMessage);
         host.off("disconnect", onDisconnect);
       };
+
       const settle = (
         effect: Effect.Effect<ServiceLauncherParentMessage, ServiceLauncherClientError>,
       ) => {
@@ -170,15 +177,19 @@ export const make = Effect.fn("cloud.service_launcher_client.make")(function* (o
         cleanup();
         resume(effect);
       };
+
       const onMessage = (...args: ReadonlyArray<unknown>) => {
         const reply = decodeServiceLauncherParentMessage(args[0]);
+
         if (reply !== undefined && accept(reply)) settle(Effect.succeed(reply));
       };
+
       const onDisconnect = () =>
         settle(Effect.fail(new ServiceLauncherClientError({ operation: "disconnect" })));
 
       host.on("message", onMessage);
       host.on("disconnect", onDisconnect);
+
       try {
         host.send(message, (error) => {
           if (error !== null) {
@@ -219,10 +230,12 @@ export const make = Effect.fn("cloud.service_launcher_client.make")(function* (o
     );
 
   const pending = context?.update?.status === "pending" ? context.update : undefined;
+
   const outcome =
     context?.update === undefined || context.update.status === "pending"
       ? undefined
       : context.update;
+
   const prepareTrial =
     pending !== undefined
       ? exchange(
@@ -233,6 +246,7 @@ export const make = Effect.fn("cloud.service_launcher_client.make")(function* (o
             if (reply.type !== "committed") {
               return Effect.die("service launcher returned an impossible prepared response");
             }
+
             return Effect.succeed({
               id: pending.id,
               fromVersion: pending.fromVersion,

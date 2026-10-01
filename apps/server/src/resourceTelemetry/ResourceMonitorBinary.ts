@@ -77,6 +77,7 @@ function detectResourceMonitorLinuxLibc(): ResourceMonitorLinuxLibc {
           };
         }
       | undefined;
+
     return typeof report?.header?.glibcVersionRuntime === "string" ? "gnu" : "musl";
   } catch {
     return "musl";
@@ -100,6 +101,7 @@ export function resourceMonitorPlatformKey(
   ) {
     return undefined;
   }
+
   return `${platform}-${architecture}`;
 }
 
@@ -115,16 +117,19 @@ export function resourceMonitorRustTarget(
         ? "x86_64-apple-darwin"
         : undefined;
   }
+
   if (platform === "linux") {
     if (linuxLibc !== "gnu") {
       return undefined;
     }
+
     return architecture === "arm64"
       ? "aarch64-unknown-linux-gnu"
       : architecture === "x64"
         ? "x86_64-unknown-linux-gnu"
         : undefined;
   }
+
   if (platform === "win32") {
     return architecture === "arm64"
       ? "aarch64-pc-windows-msvc"
@@ -132,6 +137,7 @@ export function resourceMonitorRustTarget(
         ? "x86_64-pc-windows-msvc"
         : undefined;
   }
+
   return undefined;
 }
 
@@ -146,10 +152,12 @@ export const make = Effect.fn("resourceTelemetry.resourceMonitorBinary.make")(fu
   const executableName = binaryName(platform);
   const platformKey = resourceMonitorPlatformKey(platform, architecture);
   const rustTarget = resourceMonitorRustTarget(platform, architecture, linuxLibc);
+
   const overrideCandidates = [
     environment.T3CODE_RESOURCE_MONITOR_PATH,
     config.resourceMonitorPath,
   ].filter((candidate): candidate is string => Boolean(candidate));
+
   const bundledCandidates =
     platformKey === undefined || rustTarget === undefined
       ? []
@@ -182,6 +190,7 @@ export const make = Effect.fn("resourceTelemetry.resourceMonitorBinary.make")(fu
             executableName,
           ),
         ];
+
   if (overrideCandidates.length === 0 && bundledCandidates.length === 0) {
     return ResourceMonitorBinary.of({
       resolve: Effect.fail(
@@ -198,10 +207,12 @@ export const make = Effect.fn("resourceTelemetry.resourceMonitorBinary.make")(fu
   const resolve: ResourceMonitorBinary["Service"]["resolve"] = Effect.gen(function* () {
     for (const candidate of candidates) {
       const exists = yield* fileSystem.exists(candidate).pipe(Effect.orElseSucceed(() => false));
+
       if (!exists) continue;
 
       if (platform !== "win32") {
         const stat = yield* fileSystem.stat(candidate).pipe(Effect.option);
+
         if (Option.isSome(stat) && (stat.value.mode & 0o111) === 0) {
           return yield* new ResourceMonitorBinaryNotExecutable({
             path: candidate,

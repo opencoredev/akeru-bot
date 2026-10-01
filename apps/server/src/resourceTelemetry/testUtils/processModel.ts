@@ -68,6 +68,7 @@ function desktopSnapshot(
   electronProcesses: ReadonlyArray<DesktopElectronProcessMetric>,
 ): DesktopHostTelemetrySnapshot {
   const sampledAt = DateTime.makeUnsafe(sampledAtUnixMs);
+
   return {
     version: 1,
     type: "desktopTelemetry",
@@ -108,6 +109,7 @@ function merge(input: {
     updatePrevious: true,
   });
 }
+
 export {
   SERVER_PID,
   BASE_TIME_MS,

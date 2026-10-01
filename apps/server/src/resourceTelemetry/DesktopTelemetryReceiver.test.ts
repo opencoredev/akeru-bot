@@ -32,14 +32,18 @@ describe("DesktopTelemetryReceiver", () => {
     NodeFS.writeFileSync(path, payload);
     const fd = NodeFS.openSync(path, "r");
     const readable = openDesktopTelemetryReadable(fd);
+
     try {
       expect(readable).toBeInstanceOf(NodeFS.ReadStream);
+
       const closed = new Promise<void>((resolve, reject) => {
         readable.once("close", resolve);
         readable.once("error", reject);
       });
+
       let received = "";
       readable.setEncoding("utf8");
+
       for await (const chunk of readable) received += chunk;
       await closed;
       expect(received).toBe(payload);
@@ -54,6 +58,7 @@ describe("DesktopTelemetryReceiver", () => {
     "closes an inherited socket and exits with its writer still open without filesystem reads",
     async ({ onTestFinished }) => {
       const sourceUrl = new URL("./DesktopTelemetryReceiver.ts", import.meta.url).href;
+
       const child = NodeChildProcess.spawn(
         process.execPath,
         [
@@ -104,24 +109,29 @@ describe("DesktopTelemetryReceiver", () => {
           stdio: ["ignore", "ignore", "pipe", "pipe", "ipc"],
         },
       );
+
       const writer = child.stdio[3];
       assert.instanceOf(writer, NodeStream.Duplex);
+
       if (!(writer instanceof NodeStream.Duplex)) throw new Error("Missing telemetry writer");
       writer.allowHalfOpen = true;
       onTestFinished(() => {
         writer.destroy();
+
         if (child.exitCode === null && child.signalCode === null) child.kill();
       });
       let stderr = "";
       child.stderr?.setEncoding("utf8").on("data", (chunk: string) => {
         stderr += chunk;
       });
+
       const exited = new Promise<readonly [number | null, NodeJS.Signals | null]>(
         (resolve, reject) => {
           child.once("exit", (code, signal) => resolve([code, signal]));
           child.once("error", reject);
         },
       );
+
       const nextMessage = () =>
         Promise.race([
           new Promise<unknown>((resolve) => child.once("message", resolve)),
@@ -129,6 +139,7 @@ describe("DesktopTelemetryReceiver", () => {
             throw new Error(`Telemetry fixture exited early (${code}, ${signal}): ${stderr}`);
           }),
         ]);
+
       const read = nextMessage();
       writer.write("telemetry\n");
       expect(await read).toBe("read");
@@ -163,11 +174,13 @@ describe("DesktopTelemetryReceiver", () => {
       Effect.gen(function* () {
         const initialSample = DateTime.makeUnsafe(1_000);
         const nextSample = DateTime.makeUnsafe(2_000);
+
         const health = yield* Ref.make<DesktopTelemetryReceiverHealth>({
           status: "healthy",
           lastSampleAt: Option.some(initialSample),
           lastError: Option.none<string>(),
         });
+
         const healthChanges = yield* PubSub.sliding<DesktopTelemetryReceiverHealth>(4);
         const subscription = yield* PubSub.subscribe(healthChanges);
 
@@ -185,7 +198,9 @@ describe("DesktopTelemetryReceiver", () => {
         const directory = NodeFS.mkdtempSync(
           NodePath.join(NodeOS.tmpdir(), "t3-desktop-telemetry-control-test-"),
         );
+
         const path = NodePath.join(directory, "control.ndjson");
+
         return {
           directory,
           path,

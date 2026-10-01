@@ -189,8 +189,11 @@ export class GitVcsDriver extends Context.Service<
 >()("akeru-bot/vcs/GitVcsDriver") {}
 
 const WORKSPACE_FILES_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
+
 const GIT_CHECK_IGNORE_MAX_STDIN_BYTES = 256 * 1024;
+
 const CHECKPOINT_DIFF_MAX_OUTPUT_BYTES = 10_000_000;
+
 const WORKSPACE_GIT_HARDENED_CONFIG_ARGS = [
   "-c",
   "core.fsmonitor=false",
@@ -200,6 +203,7 @@ const WORKSPACE_GIT_HARDENED_CONFIG_ARGS = [
 
 const nowFreshness = Effect.fn("GitVcsDriver.nowFreshness")(function* () {
   const now = yield* DateTime.now;
+
   return {
     source: "live-local" as const,
     observedAt: now,
@@ -209,6 +213,7 @@ const nowFreshness = Effect.fn("GitVcsDriver.nowFreshness")(function* () {
 
 function splitNullSeparatedPaths(input: string, truncated: boolean): string[] {
   const parts = input.split("\0");
+
   if (parts.length === 0) return [];
 
   if (truncated && parts[parts.length - 1]?.length) {
@@ -225,6 +230,7 @@ function chunkPathsForGitCheckIgnore(relativePaths: ReadonlyArray<string>): stri
 
   for (const relativePath of relativePaths) {
     const relativePathBytes = Buffer.byteLength(relativePath) + 1;
+
     if (chunk.length > 0 && chunkBytes + relativePathBytes > GIT_CHECK_IGNORE_MAX_STDIN_BYTES) {
       chunks.push(chunk);
       chunk = [];
@@ -286,6 +292,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const vcsProcess = yield* VcsProcess.VcsProcess;
+
   const capabilities = {
     kind: "git" as const,
     supportsWorktrees: true,
@@ -332,6 +339,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       "rev-parse",
       "--show-toplevel",
     ]);
+
     const gitCommonDir = yield* gitCommand(
       vcsProcess,
       "GitVcsDriver.detectRepository.commonDir",
@@ -371,6 +379,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         result.exitCode === 0
           ? Effect.gen(function* () {
               const freshness = yield* nowFreshness();
+
               return {
                 paths: splitNullSeparatedPaths(result.stdout, result.stdoutTruncated),
                 truncated: result.stdoutTruncated,
@@ -414,10 +423,12 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       }
 
       const parsed = parseGitRemoteVerboseOutput(result.stdout);
+
       const remotes = Array.from(parsed.entries()).flatMap(([name, remote]) => {
         if (!remote.url) {
           return [];
         }
+
         return [
           {
             name,
@@ -499,7 +510,9 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         if (result.exitCode !== 0) {
           return null;
         }
+
         const commit = result.stdout.trim();
+
         return commit.length > 0 ? commit : null;
       }),
     );
@@ -523,7 +536,9 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         if (result.exitCode !== 0) {
           return null;
         }
+
         const commit = result.stdout.trim();
+
         return commit.length > 0 ? commit : null;
       }),
     );
@@ -535,7 +550,9 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         cwd,
         args: ["rev-parse", "--git-common-dir"],
       });
+
       const gitCommonDir = result.stdout.trim();
+
       return path.isAbsolute(gitCommonDir) ? gitCommonDir : path.resolve(cwd, gitCommonDir);
     });
 
@@ -543,10 +560,12 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     captureCheckpoint: Effect.fn("GitVcsDriver.checkpoints.captureCheckpoint")(function* (input) {
       const operation = "GitVcsDriver.checkpoints.captureCheckpoint";
       const gitCommonDir = yield* resolveGitCommonDir(input.cwd);
+
       const tempIndexPath = path.join(
         gitCommonDir,
         `t3-checkpoint-index-${NodeCrypto.randomUUID()}`,
       );
+
       const commitEnv: NodeJS.ProcessEnv = {
         ...process.env,
         GIT_INDEX_FILE: tempIndexPath,
@@ -562,6 +581,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
 
       yield* Effect.gen(function* () {
         const headExists = yield* hasHeadCommit(input.cwd);
+
         if (headExists) {
           yield* execute({
             operation,
@@ -584,7 +604,9 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           args: ["write-tree"],
           env: commitEnv,
         });
+
         const treeOid = writeTreeResult.stdout.trim();
+
         if (treeOid.length === 0) {
           return yield* new VcsProcessExitError({
             operation,
@@ -596,13 +618,16 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         }
 
         const message = `t3 checkpoint ref=${input.checkpointRef}`;
+
         const commitTreeResult = yield* execute({
           operation,
           cwd: input.cwd,
           args: ["commit-tree", treeOid, "-m", message],
           env: commitEnv,
         });
+
         const commitOid = commitTreeResult.stdout.trim();
+
         if (commitOid.length === 0) {
           return yield* new VcsProcessExitError({
             operation,
@@ -651,6 +676,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       });
 
       const headExists = yield* hasHeadCommit(input.cwd);
+
       if (headExists) {
         yield* execute({
           operation,
@@ -674,15 +700,18 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       });
 
       let fromRevision: string = input.fromCheckpointRef;
+
       if (input.fallbackFromToHead === true) {
         const resolvedFromCommit = yield* resolveCheckpointCommit(
           input.cwd,
           input.fromCheckpointRef,
         );
+
         if (resolvedFromCommit) {
           fromRevision = resolvedFromCommit;
         } else {
           const headCommit = yield* resolveHeadCommit(input.cwd);
+
           if (!headCommit) {
             return yield* new VcsProcessExitError({
               operation,
@@ -692,6 +721,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
               detail: "Checkpoint ref is unavailable for diff operation.",
             });
           }
+
           fromRevision = headCommit;
         }
       }
@@ -764,13 +794,16 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
 
 export const makeVcsDriver = Effect.gen(function* () {
   const driver = yield* makeVcsDriverShape();
+
   return VcsDriver.VcsDriver.of(driver);
 });
 
 export const make = Effect.gen(function* () {
   const git = yield* makeGitVcsDriverCore();
+
   return GitVcsDriver.of(git);
 });
 
 export const vcsLayer = Layer.effect(VcsDriver.VcsDriver, makeVcsDriver);
+
 export const layer = Layer.effect(GitVcsDriver, make);

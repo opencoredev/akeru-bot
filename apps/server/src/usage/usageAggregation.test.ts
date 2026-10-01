@@ -48,6 +48,7 @@ function aggregate(
           untilTimeMs: Date.parse("2026-08-07T04:37:00.000Z"),
         }
       : {};
+
   const aggregator = new UsageAggregator({
     timeZone,
     sinceDay: "2026-08-01",
@@ -56,7 +57,9 @@ function aggregate(
     ...hourlyBounds,
     rates,
   });
+
   for (const item of records) aggregator.add(item);
+
   return aggregator.finish();
 }
 

@@ -10,6 +10,7 @@ import {
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
 import { emptyTelemetryCounters, mergeProcesses } from "./Model.ts";
+
 describe("resource telemetry process model", () => {
   it("builds complete descendant depths and isolates monitor overhead", () => {
     const result = merge({
@@ -41,6 +42,7 @@ describe("resource telemetry process model", () => {
 
   it("deduplicates Electron metrics and classifies Electron descendants", () => {
     const electronStart = 10_000;
+
     const result = merge({
       native: nativeSnapshot(BASE_TIME_MS, [
         processSample({ pid: SERVER_PID, ppid: 1, startTimeMs: 1_000 }),
@@ -102,12 +104,14 @@ describe("resource telemetry process model", () => {
       type: "Browser",
       cpuPercent: 50,
     });
+
     const first = merge({
       native: nativeSnapshot(BASE_TIME_MS, [
         processSample({ pid: SERVER_PID, ppid: 1, startTimeMs: 1_000 }),
       ]),
       desktop: desktopSnapshot(BASE_TIME_MS, [metric]),
     });
+
     const second = merge({
       previous: first,
       native: nativeSnapshot(
@@ -147,6 +151,7 @@ describe("resource telemetry process model", () => {
       counters: emptyTelemetryCounters(),
       updatePrevious: true,
     });
+
     const reused = mergeProcesses({
       serverPid: SERVER_PID,
       sidecarPid: Option.none(),
@@ -187,6 +192,7 @@ describe("resource telemetry process model", () => {
         }),
       ]),
     });
+
     const second = merge({
       previous: first,
       native: nativeSnapshot(
@@ -204,6 +210,7 @@ describe("resource telemetry process model", () => {
         2,
       ),
     });
+
     const desktopOnly = mergeProcesses({
       serverPid: SERVER_PID,
       sidecarPid: Option.none(),

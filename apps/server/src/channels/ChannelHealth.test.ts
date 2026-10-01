@@ -43,12 +43,14 @@ import * as FiberSet from "effect/FiberSet";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
 import { channelFailureMessage } from "./ChannelRuntime.ts";
+
 describe("channel runtime", () => {
   describe("health", () => {
     it.effect("never marks a binding connected when its listener stopped before commit", () =>
       Effect.gen(function* () {
         let stops = 0;
         const statuses: string[] = [];
+
         const harness = makeHarness({
           onBindings: (bindings) => statuses.push(bindings[0]?.status ?? "none"),
           startTransport: async () => ({
@@ -120,10 +122,12 @@ describe("channel runtime", () => {
       Effect.gen(function* () {
         const started = yield* Deferred.make<void>();
         const release = Promise.withResolvers<void>();
+
         const harness = makeHarness({
           startTransport: async () => {
             Deferred.doneUnsafe(started, Exit.void);
             await release.promise;
+
             return {
               externalIdentity: "@akeru",
               runtime: { post: async () => undefined, shutdown: async () => undefined },
@@ -135,6 +139,7 @@ describe("channel runtime", () => {
           harness.dependencies,
           telegramConnect(BOT_ID),
         ).pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Deferred.await(started);
         const pending = harness.readModel().bots[0]!.channelBindings;
         expect(pending[0]).toMatchObject({ status: "connecting", lastAttemptAt: NOW });
@@ -188,6 +193,7 @@ describe("channel runtime", () => {
         const messageId = MessageId.make("message-bad-token");
         let stops = 0;
         let posts = 0;
+
         const harness = makeHarness({
           threads: [
             makeThread(threadId, BOT_ID, [
@@ -202,6 +208,7 @@ describe("channel runtime", () => {
             if (input.provider === "telegram" && input.token === "invalid-token") {
               throw new Error("401 Unauthorized: invalid-token");
             }
+
             return {
               externalIdentity: "@akeru",
               runtime: {
@@ -211,6 +218,7 @@ describe("channel runtime", () => {
             };
           },
         });
+
         yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
         yield* expectProviderFailure(
@@ -250,15 +258,18 @@ describe("channel runtime", () => {
       Effect.gen(function* () {
         let stops = 0;
         let archiveDuringStart = (): void => undefined;
+
         const harness = makeHarness({
           startTransport: async () => {
             archiveDuringStart();
+
             return {
               externalIdentity: "@akeru",
               runtime: { post: async () => undefined, shutdown: async () => void (stops += 1) },
             };
           },
         });
+
         archiveDuringStart = () => harness.archive(BOT_ID);
 
         // A first connect that succeeds after the archive is refused and removed.
@@ -280,7 +291,9 @@ describe("channel runtime", () => {
           connectedAt: null,
           sentMessageIds: [],
         };
+
         let archiveRestarted = (): void => undefined;
+
         const restarted = makeHarness({
           bots: [makeBot(BOT_ID, { channelBindings: [earlier] })],
           startTransport: async () => {
@@ -288,6 +301,7 @@ describe("channel runtime", () => {
             throw new Error("Unauthorized telegram-token");
           },
         });
+
         archiveRestarted = () => restarted.archive(BOT_ID);
         yield* failureOf(connectChannel(restarted.dependencies, telegramConnect(BOT_ID)));
         expect(restarted.readModel().bots[0]?.channelBindings).toEqual([
@@ -308,6 +322,7 @@ describe("channel runtime", () => {
           connectedAt: null,
           sentMessageIds: [],
         };
+
         const harness = makeHarness({ bots: [makeBot(BOT_ID, { channelBindings: [binding] })] });
         yield* runWith(harness.dependencies, () => Effect.void);
 
@@ -318,13 +333,17 @@ describe("channel runtime", () => {
     it.effect("pushes needs-reconnect when a live gateway exits", () =>
       Effect.gen(function* () {
         const failed = Promise.withResolvers<void>();
+
         const gateway = yield* startTestGateway(async (waitUntil) => {
           waitUntil(failed.promise);
+
           return new Response(null, { status: 200 });
         }, "Test gateway");
+
         const runInTest = yield* FiberSet.makeRuntimePromise();
         const stopped = yield* Deferred.make<ChannelBinding>();
         let starts = 0;
+
         const harness = makeHarness({
           onBindings: (bindings) => {
             if (bindings[0]?.status === "needs-reconnect") {
@@ -334,6 +353,7 @@ describe("channel runtime", () => {
           // The first start runs the gateway; the reconnect gets a fresh, healthy transport.
           startTransport: async () => {
             starts += 1;
+
             return {
               externalIdentity: "test",
               runtime:
@@ -348,6 +368,7 @@ describe("channel runtime", () => {
             };
           },
         });
+
         yield* connectChannel(harness.dependencies, discordConnect(BOT_ID));
 
         failed.reject(new Error("Gateway disconnected with token discord-token"));
@@ -372,6 +393,7 @@ describe("channel runtime", () => {
     it.effect("rolls back the credential when connect cannot persist the binding", () =>
       Effect.gen(function* () {
         let stops = 0;
+
         const harness = makeHarness({
           failBotUpdate: (index) => (index === 2 ? new Error("binding write failed") : undefined),
           shutdown: async () => void (stops += 1),
@@ -392,10 +414,12 @@ describe("channel runtime", () => {
       Effect.gen(function* () {
         const connectionId = ChannelConnectionId.make("telegram-rollback");
         let stops = 0;
+
         const harness = makeHarness({
           failBotUpdate: (index) => (index === 2 ? new Error("binding write failed") : undefined),
           shutdown: async () => void (stops += 1),
         });
+
         yield* saveChannelConnection(harness.dependencies, {
           type: "channel.connection.save",
           commandId: CommandId.make("save-rollback"),
@@ -439,6 +463,7 @@ describe("channel runtime", () => {
         botToken: "discord-token",
       },
     ] as const;
+
     for (const credentials of rejectedAttachSaves) {
       it.effect(
         `keeps the chosen bot on a ${credentials.provider} connection it could not attach`,
@@ -446,15 +471,18 @@ describe("channel runtime", () => {
           Effect.gen(function* () {
             const connectionId = ChannelConnectionId.make(`${credentials.provider}-rejected`);
             let rejected = true;
+
             const harness = makeHarness({
               startTransport: async () => {
                 if (rejected) throw new Error("401 Unauthorized");
+
                 return {
                   externalIdentity: "@akeru",
                   runtime: { post: async () => undefined, shutdown: async () => undefined },
                 };
               },
             });
+
             yield* saveChannelConnection(harness.dependencies, {
               type: "channel.connection.save",
               commandId: CommandId.make(`save-${credentials.provider}-rejected`),
@@ -502,6 +530,7 @@ describe("channel runtime", () => {
       Effect.gen(function* () {
         const secondId = BotId.make("bot-2");
         const stops: string[] = [];
+
         const harness = makeHarness({
           bots: [makeBot(BOT_ID), makeBot(secondId)],
           startTransport: async (input) => ({
@@ -512,6 +541,7 @@ describe("channel runtime", () => {
             },
           }),
         });
+
         yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
         yield* expectFailureMessage(
@@ -539,6 +569,7 @@ describe("channel runtime", () => {
           connectedAt: NOW,
           sentMessageIds: [],
         };
+
         const harness = makeHarness({
           bots: [makeBot(BOT_ID, { channelBindings: [binding] })],
           startTransport: async () => {

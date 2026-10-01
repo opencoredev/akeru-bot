@@ -27,6 +27,7 @@ const sqliteInput = (value: unknown): NodeSqlite.SQLInputValue => {
     typeof value === "bigint"
   )
     return value;
+
   if (ArrayBuffer.isView(value))
     return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
   throw new TypeError("Unsupported SQLite parameter.");
@@ -36,12 +37,14 @@ const sqliteInputs = (
   params: ReadonlyArray<unknown>,
 ): [Record<string, NodeSqlite.SQLInputValue>, ...NodeSqlite.SQLInputValue[]] => {
   const first = params[0];
+
   if (first !== null && typeof first === "object" && !ArrayBuffer.isView(first)) {
     return [
       Object.fromEntries(Object.entries(first).map(([key, value]) => [key, sqliteInput(value)])),
       ...params.slice(1).map(sqliteInput),
     ];
   }
+
   return [{}, ...params.map(sqliteInput)];
 };
 
@@ -107,6 +110,7 @@ const checkNodeSqliteCompat = () => {
       }),
     );
   }
+
   return Effect.void;
 };
 
@@ -117,12 +121,14 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
   yield* checkNodeSqliteCompat();
 
   const compiler = Statement.makeCompilerSqlite(options.transformQueryNames);
+
   const transformRows = options.transformResultNames
     ? Statement.defaultTransforms(options.transformResultNames).array
     : undefined;
 
   const makeConnection = Effect.gen(function* () {
     const scope = yield* Effect.scope;
+
     const db = yield* Effect.try({
       try: openDatabase,
       catch: (cause) =>
@@ -133,6 +139,7 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
           }),
         }),
     });
+
     yield* Scope.addFinalizer(
       scope,
       Effect.try({
@@ -148,13 +155,17 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
     );
 
     const statementReaderCache = new WeakMap<NodeSqlite.StatementSync, boolean>();
+
     const hasRows = (statement: NodeSqlite.StatementSync): boolean => {
       const cached = statementReaderCache.get(statement);
+
       if (cached !== undefined) {
         return cached;
       }
+
       const value = statement.columns().length > 0;
       statementReaderCache.set(statement, value);
+
       return value;
     };
 
@@ -189,10 +200,13 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
         try {
           const inputs = sqliteInputs(params);
           statement.setReadBigInts(Boolean(Context.get(fiber.context, Client.SafeIntegers)));
+
           if (hasRows(statement)) {
             return Effect.succeed(statement.all(...inputs));
           }
+
           const result = statement.run(...inputs);
+
           return Effect.succeed(raw ? result : []);
         } catch (cause) {
           return Effect.fail(
@@ -223,13 +237,17 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
               try: () => {
                 statement.setReadBigInts(Boolean(Context.get(fiber.context, Client.SafeIntegers)));
                 const inputs = sqliteInputs(params);
+
                 if (hasRows(statement)) {
                   statement.setReturnArrays(true);
                   const rows: unknown = statement.all(...inputs);
+
                   // SAFETY: setReturnArrays(true) makes Node SQLite return positional arrays.
                   return rows as ReadonlyArray<ReadonlyArray<unknown>>;
                 }
+
                 statement.run(...inputs);
+
                 return [];
               },
               catch: (cause) =>
@@ -285,6 +303,7 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
           Effect.flatMap((statement) => runStatement(statement, params ?? [], false)),
           Effect.map((result) => (Array.isArray(result) ? result : [])),
         );
+
         return rowTransform ? Effect.map(effect, rowTransform) : effect;
       },
       executeStream(_sql, _params) {
@@ -297,9 +316,11 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
   const connection = yield* makeConnection;
 
   const acquirer = semaphore.withPermits(1)(Effect.succeed(connection));
+
   const transactionAcquirer = Effect.uninterruptibleMask((restore) => {
     const fiber = Fiber.getCurrent()!;
     const scope = Context.getUnsafe(fiber.context, Scope.Scope);
+
     return Effect.as(
       Effect.tap(restore(semaphore.take(1)), () => Scope.addFinalizer(scope, semaphore.release(1))),
       connection,
@@ -343,6 +364,7 @@ const makeMemory = (
       const database = new NodeSqlite.DatabaseSync(":memory:", {
         allowExtension: config.allowExtension ?? false,
       });
+
       return database;
     },
   );

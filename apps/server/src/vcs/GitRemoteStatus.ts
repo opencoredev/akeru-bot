@@ -27,6 +27,7 @@ import {
 import type { makeGitExecution } from "./GitExecution.ts";
 import type { makeGitBranches } from "./GitBranches.ts";
 import type { makeGitRepositoryPaths } from "./GitRepositoryPaths.ts";
+
 export const makeGitRemoteStatus = (dependencies: {
   path: Effect.Success<ReturnType<typeof makeGitExecution>>["path"];
   executeGit: Effect.Success<ReturnType<typeof makeGitExecution>>["executeGit"];
@@ -64,8 +65,10 @@ export const makeGitRemoteStatus = (dependencies: {
       (gitCommonDir: string) =>
         Effect.gen(function* () {
           const path = yield* Path.Path;
+
           const fetchCwd =
             path.basename(gitCommonDir) === ".git" ? path.dirname(gitCommonDir) : gitCommonDir;
+
           return yield* executeGit(
             "GitVcsDriver.statusDetails.defaultBranch",
             fetchCwd,
@@ -74,6 +77,7 @@ export const makeGitRemoteStatus = (dependencies: {
           ).pipe(
             Effect.map((result) => {
               if (result.exitCode !== 0) return null;
+
               return parseDefaultBranchFromRemoteHeadRef(result.stdout, "origin");
             }),
           );
@@ -91,8 +95,10 @@ export const makeGitRemoteStatus = (dependencies: {
       (gitCommonDir: string) =>
         Effect.gen(function* () {
           const path = yield* Path.Path;
+
           const fetchCwd =
             path.basename(gitCommonDir) === ".git" ? path.dirname(gitCommonDir) : gitCommonDir;
+
           return yield* executeGit(
             "GitVcsDriver.statusDetails.originExists",
             fetchCwd,
@@ -114,6 +120,7 @@ export const makeGitRemoteStatus = (dependencies: {
         const repositoryPaths = yield* resolveRepositoryPaths(cwd).pipe(
           Effect.catchTags({ GitCommandError: () => Effect.succeed(null) }),
         );
+
         const cacheKey = repositoryPaths?.gitCommonDir ?? normalizeRepositoryPathsCacheKey(cwd);
         yield* Cache.invalidate(defaultBranchCache, cacheKey);
         yield* Cache.invalidate(originExistsCache, cacheKey);
@@ -121,9 +128,11 @@ export const makeGitRemoteStatus = (dependencies: {
 
     const resolveGitCommonDir = Effect.fn("resolveGitCommonDir")(function* (cwd: string) {
       const repositoryPaths = yield* resolveRepositoryPaths(cwd);
+
       if (repositoryPaths !== null) {
         return repositoryPaths.gitCommonDir;
       }
+
       return yield* new GitCommandError({
         ...gitCommandContext({
           operation: "GitVcsDriver.resolveGitCommonDir",
@@ -144,8 +153,10 @@ export const makeGitRemoteStatus = (dependencies: {
       const nextCount = (statusRemoteRefreshFailureCounts.get(key) ?? 0) + 1;
       statusRemoteRefreshFailureCounts.delete(key);
       statusRemoteRefreshFailureCounts.set(key, nextCount);
+
       if (statusRemoteRefreshFailureCounts.size > STATUS_UPSTREAM_REFRESH_CACHE_CAPACITY) {
         const oldestKey = statusRemoteRefreshFailureCounts.keys().next().value;
+
         if (oldestKey !== undefined) {
           statusRemoteRefreshFailureCounts.delete(oldestKey);
         }
@@ -184,6 +195,7 @@ export const makeGitRemoteStatus = (dependencies: {
       cwd: string,
     ) {
       const upstream = yield* resolveCurrentUpstream(cwd);
+
       if (!upstream) return;
       const gitCommonDir = yield* resolveGitCommonDir(cwd);
       yield* Cache.get(
@@ -209,6 +221,7 @@ export const makeGitRemoteStatus = (dependencies: {
           if (result.exitCode !== 0) {
             return null;
           }
+
           return parseDefaultBranchFromRemoteHeadRef(result.stdout, remoteName);
         }),
       );
@@ -244,11 +257,14 @@ export const makeGitRemoteStatus = (dependencies: {
       if (yield* originRemoteExists(cwd)) {
         return "origin";
       }
+
       const remotes = yield* listRemoteNames(cwd);
       const [firstRemote] = remotes;
+
       if (firstRemote) {
         return firstRemote;
       }
+
       return yield* new GitCommandError({
         ...gitCommandContext({
           operation: "GitVcsDriver.resolvePrimaryRemoteName",
@@ -264,6 +280,7 @@ export const makeGitRemoteStatus = (dependencies: {
     )(function* (input) {
       const preferredName = sanitizeRemoteName(input.preferredName);
       const normalizedTargetUrl = normalizeGitRemoteUrl(input.url);
+
       const remoteFetchUrls = yield* runGitStdout(
         "GitVcsDriver.ensureRemote.listRemoteUrls",
         input.cwd,
@@ -287,6 +304,7 @@ export const makeGitRemoteStatus = (dependencies: {
 
       let remoteName = preferredName;
       let suffix = 1;
+
       while (remoteFetchUrls.has(remoteName)) {
         remoteName = `${preferredName}-${suffix}`;
         suffix += 1;
@@ -298,6 +316,7 @@ export const makeGitRemoteStatus = (dependencies: {
         remoteName,
         input.url,
       ]);
+
       return remoteName;
     });
 
@@ -315,8 +334,10 @@ export const makeGitRemoteStatus = (dependencies: {
       const primaryRemoteName = yield* resolvePrimaryRemoteName(cwd).pipe(
         Effect.orElseSucceed(() => null),
       );
+
       const defaultBranch =
         primaryRemoteName === null ? null : yield* resolveDefaultBranchName(cwd, primaryRemoteName);
+
       const candidates = [
         configuredBaseBranch.length > 0 ? configuredBaseBranch : null,
         defaultBranch,
@@ -330,11 +351,13 @@ export const makeGitRemoteStatus = (dependencies: {
 
         const remotePrefix =
           primaryRemoteName && primaryRemoteName !== "origin" ? `${primaryRemoteName}/` : null;
+
         const normalizedCandidate = candidate.startsWith("origin/")
           ? candidate.slice("origin/".length)
           : remotePrefix && candidate.startsWith(remotePrefix)
             ? candidate.slice(remotePrefix.length)
             : candidate;
+
         if (normalizedCandidate.length === 0 || normalizedCandidate === refName) {
           continue;
         }
@@ -359,6 +382,7 @@ export const makeGitRemoteStatus = (dependencies: {
       refName: string,
     ) {
       const baseRef = yield* resolveBaseBranchForNoUpstream(cwd, refName);
+
       if (!baseRef) {
         return 0;
       }
@@ -369,11 +393,13 @@ export const makeGitRemoteStatus = (dependencies: {
         ["rev-list", "--count", `${baseRef}..HEAD`],
         { allowNonZeroExit: true },
       );
+
       if (result.exitCode !== 0) {
         return 0;
       }
 
       const parsed = Number.parseInt(result.stdout.trim(), 10);
+
       return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
     });
 
@@ -393,11 +419,14 @@ export const makeGitRemoteStatus = (dependencies: {
       if (branchResult === null) {
         return NON_REPOSITORY_REMOTE_STATUS_DETAILS;
       }
+
       let branch: string | null;
+
       if (branchResult.exitCode !== 0) {
         if (isNonRepositoryGitStderr(branchResult.stderr)) {
           return NON_REPOSITORY_REMOTE_STATUS_DETAILS;
         }
+
         if (!isUnbornHeadStderr(branchResult.stderr)) {
           return yield* new GitCommandError({
             ...gitCommandContext({
@@ -417,11 +446,13 @@ export const makeGitRemoteStatus = (dependencies: {
           cwd,
           ["symbolic-ref", "--quiet", "--short", "HEAD"],
         );
+
         branch = branchValue.trim() || null;
       } else {
         const branchValue = branchResult.stdout.trim();
         branch = branchValue.length > 0 && branchValue !== "HEAD" ? branchValue : null;
       }
+
       const upstream = yield* resolveCurrentUpstream(cwd);
       const upstreamRef = upstream?.upstreamRef ?? null;
       let aheadCount = 0;
@@ -434,6 +465,7 @@ export const makeGitRemoteStatus = (dependencies: {
           ["rev-list", "--left-right", "--count", `HEAD...${upstreamRef}`],
           { allowNonZeroExit: true },
         );
+
         if (divergence.exitCode === 0) {
           const [aheadRaw, behindRaw] = divergence.stdout.trim().split(/\s+/);
           const parsedAhead = Number.parseInt(aheadRaw ?? "0", 10);
@@ -448,10 +480,12 @@ export const makeGitRemoteStatus = (dependencies: {
       }
 
       const defaultBranch = yield* resolveDefaultBranchName(cwd, "origin");
+
       const isDefaultBranch =
         branch !== null &&
         (branch === defaultBranch ||
           (defaultBranch === null && (branch === "main" || branch === "master")));
+
       const aheadOfDefaultCount =
         branch && !isDefaultBranch
           ? upstreamRef === null
@@ -471,6 +505,7 @@ export const makeGitRemoteStatus = (dependencies: {
         aheadOfDefaultCount,
       };
     });
+
     return {
       defaultBranchCache,
       originExistsCache,

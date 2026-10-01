@@ -17,6 +17,7 @@ import {
 } from "./pairTarget.ts";
 import { PairStdoutIsTerminal, formatPairOutput } from "./pairOutput.ts";
 import { makePairServerConfig, mintPairingLink } from "./pairIssuer.ts";
+
 const ttlFlag = Flag.string("ttl").pipe(
   Flag.withSchema(DurationFromString),
   Flag.withDescription(
@@ -93,6 +94,7 @@ export const pairCommand = Command.make("pair", {
 
       const notes: Array<string> = [];
       let pairingBaseUrl: string;
+
       if (publicUrl !== undefined) {
         // The tunnel is the user's; the server cannot probe it from here without assuming it
         // loops back, so the URL is used as given.
@@ -102,15 +104,18 @@ export const pairCommand = Command.make("pair", {
           target,
           servePort: flags.tailscaleServePort,
         });
+
         pairingBaseUrl = resolved.baseUrl;
         notes.push(...resolved.notes);
       } else {
         pairingBaseUrl = resolveDirectPairingBaseUrl(target.state);
+
         if (isLoopbackHost(new URL(pairingBaseUrl).hostname)) {
           notes.push(
             "This URL is only reachable from this machine. Re-run with --tailscale, or restart the server with a reachable --host.",
           );
         }
+
         if (target.variant === "dev" && target.state.devUrl === undefined) {
           notes.push(
             "This dev server did not record its web URL; restart it so pairing can go through the web origin.",
@@ -119,17 +124,20 @@ export const pairCommand = Command.make("pair", {
       }
 
       const config = yield* makePairServerConfig({ target, logLevel });
+
       const issued = yield* mintPairingLink({
         config,
         ttl: flags.ttl,
         label: flags.label,
         admin: flags.admin,
       });
+
       if (flags.admin) {
         notes.unshift(
           "This link grants admin scope: that device can pair and revoke other clients and change Connections. It works once.",
         );
       }
+
       const pairingUrl = buildPairingUrl(pairingBaseUrl, issued.credential);
 
       yield* Console.log(
@@ -149,20 +157,37 @@ export const pairCommand = Command.make("pair", {
     ),
   ),
 );
+
 export type { PairStateVariant } from "./pairTypes.ts";
+
 export { NoRunningServerError } from "./pairTypes.ts";
+
 export { TailscaleUnavailableError } from "./pairTypes.ts";
+
 export { MagicDnsNameMissingError } from "./pairTypes.ts";
+
 export { ServesOtherEnvironmentError } from "./pairTypes.ts";
+
 export { TailscaleServeFailedError } from "./pairTypes.ts";
+
 export { ServePortOccupiedError } from "./pairTypes.ts";
+
 export { AdminAlreadyPairedError } from "./pairTypes.ts";
+
 export { InvalidPublicUrlError } from "./pairTypes.ts";
+
 export { PublicUrlWithTailscaleError } from "./pairTypes.ts";
+
 export { parsePublicPairingBaseUrl } from "./pairTarget.ts";
+
 export { resolveDirectPairingBaseUrl } from "./pairTarget.ts";
+
 export { DevServerNotProxiableError } from "./pairTypes.ts";
+
 export { resolveTailscaleLocalTarget } from "./pairTarget.ts";
+
 export { PairStdoutIsTerminal } from "./pairOutput.ts";
+
 export { formatPairOutput } from "./pairOutput.ts";
+
 export { issueAdminPairingLink } from "./pairIssuer.ts";

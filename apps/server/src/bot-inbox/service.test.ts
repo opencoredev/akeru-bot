@@ -21,6 +21,7 @@ function makeService(times: readonly string[]) {
   directories.push(directory);
   const remaining = [...times];
   const filePath = NodePath.join(directory, `${NodeCrypto.randomUUID()}.json`);
+
   return {
     filePath,
     service: new BotInboxService(filePath, () => remaining.shift() ?? times.at(-1)!),
@@ -47,6 +48,7 @@ describe("bot inbox incidents", () => {
       "silence-watchdog-failure",
       "approval-request",
     ]);
+
     for (const kind of BOT_INBOX_KINDS) {
       const { service } = makeService(["2026-08-30T20:00:00.000Z"]);
       expect(service.upsert({ ...incident, incidentKey: `kind:${kind}`, kind }).kind).toBe(kind);
@@ -80,11 +82,13 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:02:00.000Z",
       "2026-08-30T20:04:00.000Z",
     ]);
+
     const silence = {
       ...incident,
       incidentKey: "silence:thread-1:turn-1",
       kind: "silence-watchdog-failure" as const,
     };
+
     const first = service.ensureOpen(silence);
     service.resolve(silence.incidentKey);
     const second = service.ensureOpen(silence);
@@ -101,6 +105,7 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:02:00.000Z",
       "2026-08-30T20:03:00.000Z",
     ]);
+
     const first = service.upsert(incident);
     expect(service.resolve(incident.incidentKey)).toBe(true);
     const next = service.upsert(incident);
@@ -117,10 +122,12 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:01:00.000Z",
       "2026-08-30T20:02:00.000Z",
     ]);
+
     const failing = {
       ...incident,
       lastFailedRequestAt: "2026-08-30T20:00:00.000Z",
     };
+
     service.ensureOpen(failing);
     const item = service.list()[0]!;
 
@@ -137,6 +144,7 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:02:00.000Z",
       "2026-08-30T20:03:00.000Z",
     ]);
+
     service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:00:00.000Z" });
     const item = service.list()[0]!;
     service.resolveById(item.id);
@@ -161,6 +169,7 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:02:00.000Z",
       "2026-08-30T20:03:00.000Z",
     ]);
+
     service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:00:00.000Z" });
     // Same message, newer provider failure while the item is still open.
     service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:01:00.000Z" });
@@ -178,6 +187,7 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:01:00.000Z",
       "2026-08-30T20:02:00.000Z",
     ]);
+
     service.ensureOpen(incident);
     const item = service.list()[0]!;
 
@@ -193,6 +203,7 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:01:00.000Z",
       "2026-08-30T20:02:00.000Z",
     ]);
+
     service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:00:00.000Z" });
     const item = service.list()[0]!;
     service.resolveById(item.id);
@@ -212,6 +223,7 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:01:00.000Z",
       "2026-08-30T20:02:00.000Z",
     ]);
+
     service.ensureOpen({ ...incident, lastFailedRequestAt: "2026-08-30T20:00:00.000Z" });
     const item = service.list()[0]!;
     // Local resolution clock runs ahead of the provider's failure timestamps.
@@ -234,6 +246,7 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:02:00.000Z",
       "2026-08-30T20:03:00.000Z",
     ]);
+
     service.ensureOpen(incident);
     const item = service.list()[0]!;
     service.resolveById(item.id);
@@ -242,6 +255,7 @@ describe("bot inbox incidents", () => {
     const legacy = service
       .list()
       .map(({ lastFailedRequestAt: _f, resolvedFailureAt: _r, ...rest }) => rest);
+
     NodeFS.writeFileSync(filePath, JSON.stringify(legacy));
 
     // The first timestamped report is the failure it was resolved against:
@@ -250,6 +264,7 @@ describe("bot inbox incidents", () => {
       ...incident,
       lastFailedRequestAt: "2026-08-30T20:00:00.000Z",
     });
+
     expect(baselined.status).toBe("resolved");
     expect(baselined.resolvedFailureAt).toBe("2026-08-30T20:00:00.000Z");
 
@@ -258,6 +273,7 @@ describe("bot inbox incidents", () => {
       ...incident,
       lastFailedRequestAt: "2026-08-30T20:02:00.000Z",
     });
+
     expect(reopened.id).toBe(item.id);
     expect(reopened.status).toBe("open");
     expect(reopened.occurrenceCount).toBe(2);
@@ -269,12 +285,14 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:01:00.000Z",
       "2026-08-30T20:02:00.000Z",
     ]);
+
     const dead = {
       ...incident,
       incidentKey: "browser:bot-akeru",
       kind: "browser-dead" as const,
       lastFailure: "The managed browser exited.",
     };
+
     service.ensureOpen(dead);
     const item = service.list()[0]!;
     service.resolveById(item.id);
@@ -304,6 +322,7 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:00:00.000Z",
       "2026-08-30T20:01:00.000Z",
     ]);
+
     const item = service.upsert(incident);
     NodeFS.writeFileSync(filePath, JSON.stringify([item, { ...item, id: "replacement-incident" }]));
 
@@ -319,6 +338,7 @@ describe("bot inbox incidents", () => {
       "2026-08-30T20:00:00.000Z",
       "2026-08-30T20:01:00.000Z",
     ]);
+
     const connectorWriter = new BotInboxService(filePath, () => "2026-08-30T20:02:00.000Z");
 
     approvalWriter.upsert({

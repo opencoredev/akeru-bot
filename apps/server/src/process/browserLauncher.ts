@@ -11,6 +11,7 @@ import {
   DETACHED_IGNORE_STDIO_OPTIONS,
   readBrowserLaunchEnv,
 } from "./externalLauncherTypes.ts";
+
 export const resolveAvailableCommand = Effect.fn("externalLauncher.resolveAvailableCommand")(
   function* (
     commands: ReadonlyArray<string>,
@@ -21,17 +22,20 @@ export const resolveAvailableCommand = Effect.fn("externalLauncher.resolveAvaila
         return Option.some(command);
       }
     }
+
     return Option.none();
   },
 );
 
 export function encodeUtf16LeBase64(input: string): string {
   const bytes = new Uint8Array(input.length * 2);
+
   for (let index = 0; index < input.length; index += 1) {
     const code = input.charCodeAt(index);
     bytes[index * 2] = code & 0xff;
     bytes[index * 2 + 1] = code >>> 8;
   }
+
   return Encoding.encodeBase64(bytes);
 }
 
@@ -70,6 +74,7 @@ export function resolveWindowsBrowserLaunch(target: string, command: string): Pr
   const encodedCommand = encodeUtf16LeBase64(
     `$ProgressPreference = 'SilentlyContinue'; Start ${escapePowerShellStringLiteral(target)}`,
   );
+
   return {
     command,
     args: [...POWERSHELL_ARGUMENTS_PREFIX, encodedCommand],
@@ -116,5 +121,6 @@ export const resolveBrowserLaunch = Effect.fn("externalLauncher.resolveBrowserLa
 ) {
   const platform = yield* HostProcessPlatform;
   const env = yield* readBrowserLaunchEnv;
+
   return buildBrowserLaunch(target, platform, env);
 });

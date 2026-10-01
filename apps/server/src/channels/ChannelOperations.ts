@@ -19,6 +19,7 @@ import {
 } from "./ChannelRuntimeTypes.ts";
 import { runtimeKey, randomId } from "./ChannelSecrets.ts";
 import { boundedSentMessageIds } from "./ChannelDelivery.ts";
+
 /**
  * FIFO mutual exclusion per key. A queued caller keeps its place until it runs, so
  * operations on one key happen in the order they were requested. An interrupted caller
@@ -26,31 +27,41 @@ import { boundedSentMessageIds } from "./ChannelDelivery.ts";
  */
 export const makeKeyedLock = (): KeyedLock => {
   const queues = new Map<string, Array<() => void>>();
+
   const releaseKey = (key: string) => {
     const next = queues.get(key)?.shift();
+
     if (next) next();
     else queues.delete(key);
   };
+
   const acquire = (key: string) =>
     Effect.callback<void>((resume) => {
       const waiters = queues.get(key);
+
       if (!waiters) {
         queues.set(key, []);
         resume(Effect.void);
+
         return;
       }
+
       let granted = false;
+
       const waiter = () => {
         granted = true;
         resume(Effect.void);
       };
+
       waiters.push(waiter);
+
       // An interrupted waiter leaves the queue, or passes the key on if it was just granted.
       return Effect.sync(() => {
         if (granted) releaseKey(key);
         else waiters.splice(waiters.indexOf(waiter), 1);
       });
     });
+
   return (key) => (effect) =>
     Effect.uninterruptibleMask((restore) =>
       restore(acquire(key)).pipe(
@@ -64,10 +75,13 @@ export const replaceBinding = (ctx: ChannelRuntimeContext, binding: ChannelBindi
     Effect.gen(function* () {
       const model = yield* ctx.deps.readModel;
       const bot = model.bots.find((candidate) => candidate.id === binding.botId);
+
       if (!bot) return yield* failWith(`Bot '${binding.botId}' does not exist.`);
+
       const previousBinding = (bot.channelBindings ?? []).find(
         (candidate) => candidate.provider === binding.provider,
       );
+
       const { failureCategory, ...merged } = {
         ...binding,
         ...(binding.projectId &&
@@ -83,8 +97,10 @@ export const replaceBinding = (ctx: ChannelRuntimeContext, binding: ChannelBindi
               : (previousBinding?.sentMessageIds ?? []),
         ),
       };
+
       const previousSent = new Set(previousBinding?.sentMessageIds ?? []);
       const delivered = merged.sentMessageIds.some((id) => !previousSent.has(id));
+
       // The category follows the error: dropped with it, and fixed for an unresolved delivery.
       const category =
         merged.lastError === channelDeliveryUnknownError
@@ -92,11 +108,13 @@ export const replaceBinding = (ctx: ChannelRuntimeContext, binding: ChannelBindi
           : merged.lastError
             ? failureCategory
             : undefined;
+
       const nextBinding: ChannelBinding = {
         ...merged,
         ...(category ? { failureCategory: category } : {}),
         ...(delivered ? { lastSucceededAt: yield* ctx.deps.nowIso } : {}),
       };
+
       const receipt = yield* ctx.deps.engine.dispatch({
         type: "bot.update",
         commandId: CommandId.make(yield* randomId(ctx, "channel-binding")),
@@ -108,6 +126,7 @@ export const replaceBinding = (ctx: ChannelRuntimeContext, binding: ChannelBindi
           nextBinding,
         ],
       });
+
       return receipt.sequence;
     }),
   );
@@ -137,9 +156,12 @@ const stopRuntime = (
   Effect.suspend(() => {
     const key = runtimeKey(botId, provider);
     const runtime = ctx.runtimes.get(key);
+
     if (!runtime) return Effect.void;
     ctx.runtimes.delete(key);
+
     if (!options?.keepOnFailure) return runtime.shutdown;
+
     return runtime.shutdown.pipe(
       Effect.onError(() =>
         Effect.sync(() => {
@@ -165,6 +187,7 @@ const forEachRuntime = (
         const provider = CHANNEL_PROVIDERS.find(
           (value) => value === key.slice(key.lastIndexOf(":") + 1),
         );
+
         return provider
           ? withChannelOperation(ctx, provider)(operation(key, runtime)).pipe(Effect.ignoreCause)
           : Effect.void;
@@ -196,6 +219,7 @@ export const shutdownAllChannels = (ctx: ChannelRuntimeContext) =>
     Effect.suspend(() => {
       if (ctx.runtimes.get(key) !== runtime) return Effect.void;
       ctx.runtimes.delete(key);
+
       return runtime.shutdown;
     }),
   );

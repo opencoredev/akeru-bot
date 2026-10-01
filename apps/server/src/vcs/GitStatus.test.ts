@@ -196,9 +196,11 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         yield* git(updater, ["push", "origin", initialBranch]);
 
         const driver = yield* GitVcsDriver.GitVcsDriver;
+
         const cachedStatus = yield* driver.statusDetailsRemote(cwd, {
           refreshUpstream: false,
         });
+
         const refreshedStatus = yield* driver.statusDetailsRemote(cwd);
 
         assert.equal(cachedStatus.behindCount, 0);
@@ -248,6 +250,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         const pathService = yield* Path.Path;
         const sshLogPath = pathService.join(tempDir, "ssh-env.txt");
         const sshWrapperPath = pathService.join(tempDir, "ssh-wrapper.sh");
+
         const envKeys = [
           "GCM_INTERACTIVE",
           "GIT_ASKPASS",
@@ -257,6 +260,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           "SSH_ASKPASS_REQUIRE",
           "T3_TEST_SSH_ASKPASS_LOG",
         ] as const;
+
         const previousEnv = new Map(envKeys.map((key) => [key, process.env[key]]));
 
         yield* fileSystem.writeFileString(
@@ -300,6 +304,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
             Effect.sync(() => {
               for (const key of envKeys) {
                 const previous = previousEnv.get(key);
+
                 if (previous === undefined) {
                   delete process.env[key];
                 } else {
@@ -373,6 +378,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         assert.equal(status.isRepo, true);
         assert.equal(status.workingTree.files.length, 1);
         const file = status.workingTree.files[0];
+
         if (file) {
           assert.equal(file.path, "initial.ts");
           assert.equal(file.insertions, 1);
@@ -395,6 +401,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           preferredName: "pingdotgg",
           url: "git@github.com:pingdotgg/t3code.git",
         });
+
         assert.equal(reusedForSsh, "origin");
 
         const reusedForSshScheme = yield* driver.ensureRemote({
@@ -402,6 +409,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           preferredName: "pingdotgg",
           url: "ssh://git@github.com/pingdotgg/t3code",
         });
+
         assert.equal(reusedForSshScheme, "origin");
 
         const reusedForBareSshScheme = yield* driver.ensureRemote({
@@ -409,6 +417,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           preferredName: "pingdotgg",
           url: "ssh://github.com/pingdotgg/t3code",
         });
+
         assert.equal(reusedForBareSshScheme, "origin");
 
         const reusedForSshPort = yield* driver.ensureRemote({
@@ -416,6 +425,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           preferredName: "pingdotgg",
           url: "ssh://git@github.com:22/pingdotgg/t3code",
         });
+
         assert.equal(reusedForSshPort, "origin");
 
         const reusedForSshWithPort = yield* driver.ensureRemote({
@@ -423,6 +433,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           preferredName: "pingdotgg",
           url: "ssh://git@github.com:22/pingdotgg/t3code.git",
         });
+
         assert.equal(reusedForSshWithPort, "origin");
 
         const addedForFork = yield* driver.ensureRemote({
@@ -430,6 +441,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           preferredName: "octocat",
           url: "git@github.com:octocat/t3code.git",
         });
+
         assert.equal(addedForFork, "octocat");
         assert.equal(yield* git(cwd, ["remote"]), "octocat\norigin");
       }),
@@ -467,6 +479,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           refName: initialBranch,
           fallbackRemoteName: "origin",
         });
+
         const explicitlyResolvedBase = yield* driver.resolveRemoteTrackingCommit({
           cwd,
           refName: `origin/${initialBranch}`,
@@ -481,10 +494,12 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         assert.equal(yield* git(cwd, ["rev-parse", initialBranch]), beforeFetch);
 
         const pathService = yield* Path.Path;
+
         const worktreePath = pathService.join(
           yield* makeTmpDir("git-fetched-worktrees-"),
           "fetched-origin",
         );
+
         yield* driver.createWorktree({
           cwd,
           path: worktreePath,

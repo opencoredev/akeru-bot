@@ -9,6 +9,7 @@ import { readImageFile } from "./ImageFile.ts";
 
 it("loads multiple input images and rejects empty, missing, and oversized files", async () => {
   const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-image-input-"));
+
   try {
     const first = NodePath.join(directory, "first.png");
     const second = NodePath.join(directory, "second.png");
@@ -25,6 +26,7 @@ it("loads multiple input images and rejects empty, missing, and oversized files"
       new Uint8Array([1, 2, 3]),
       new Uint8Array([4, 5]),
     ]);
+
     for (const path of [empty, oversized, NodePath.join(directory, "missing.png")])
       expect(await readImageFile(path)).toBeNull();
   } finally {

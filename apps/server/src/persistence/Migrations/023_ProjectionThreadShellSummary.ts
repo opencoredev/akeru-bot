@@ -3,9 +3,11 @@ import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+
   const columns = yield* sql<{
     name: string;
   }>`SELECT name FROM pragma_table_info('projection_threads')`;
+
   const names = new Set(columns.map((column) => column.name));
 
   if (!names.has("latest_user_message_at"))

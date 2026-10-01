@@ -21,16 +21,19 @@ import * as Effect from "effect/Effect";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
 import { type ChannelRuntimeDependencies } from "./ChannelRuntime.ts";
+
 describe("channel runtime", () => {
   it.effect("attaches to the project the client names", () =>
     Effect.gen(function* () {
       const connectionId = ChannelConnectionId.make("channel-default-project");
+
       const harness = makeHarness({
         startTransport: async () => ({
           externalIdentity: "@bot",
           runtime: { post: async () => {}, shutdown: async () => {} },
         }),
       });
+
       yield* saveChannelConnection(harness.dependencies, {
         type: "channel.connection.save",
         commandId: CommandId.make("save-default-project"),
@@ -67,6 +70,7 @@ describe("channel runtime", () => {
         connectedAt: NOW,
         sentMessageIds: [],
       };
+
       const harness = makeHarness({ bots: [makeBot(BOT_ID, { channelBindings: [binding] })] });
 
       yield* expectFailureMessage(
@@ -89,6 +93,7 @@ describe("channel runtime", () => {
 
   describe("changeChannelProject", () => {
     const changeProjectConnectionId = ChannelConnectionId.make("telegram-change-project");
+
     const saveConnection = (harness: ReturnType<typeof makeHarness>) =>
       saveChannelConnection(harness.dependencies, {
         type: "channel.connection.save",
@@ -98,12 +103,14 @@ describe("channel runtime", () => {
         provider: "telegram",
         token: "telegram-token",
       });
+
     // Legacy per-bot credentials let a test seed a binding before any connection exists.
     const seedLegacySecret = (harness: ReturnType<typeof makeHarness>) =>
       harness.secrets.set(
         `channel-telegram-${NodeCrypto.createHash("sha256").update(BOT_ID).digest("hex")}`,
         new TextEncoder().encode(JSON.stringify({ provider: "telegram", token: "telegram-token" })),
       );
+
     const legacyBindingOn = (
       projectId: ProjectId,
       status: ChannelBinding["status"],
@@ -120,6 +127,7 @@ describe("channel runtime", () => {
     it.effect("moves a blocked binding to a live project and reconnects it", () =>
       Effect.gen(function* () {
         const starts: Array<ProjectId> = [];
+
         const harness = makeHarness({
           bots: [
             makeBot(BOT_ID, {
@@ -133,12 +141,14 @@ describe("channel runtime", () => {
           ],
           startTransport: async (input) => {
             starts.push(input.targetProjectId);
+
             return {
               externalIdentity: "@akeru",
               runtime: { post: async () => undefined, shutdown: async () => undefined },
             };
           },
         });
+
         seedLegacySecret(harness);
 
         yield* changeChannelProject(harness.dependencies, BOT_ID, "telegram", SECOND_PROJECT_ID);
@@ -156,18 +166,21 @@ describe("channel runtime", () => {
     it.effect("moves a disconnected binding without reconnecting it", () =>
       Effect.gen(function* () {
         const starts: Array<ProjectId> = [];
+
         const harness = makeHarness({
           bots: [
             makeBot(BOT_ID, { channelBindings: [legacyBindingOn(PROJECT_ID, "disconnected")] }),
           ],
           startTransport: async (input) => {
             starts.push(input.targetProjectId);
+
             return {
               externalIdentity: "@akeru",
               runtime: { post: async () => undefined, shutdown: async () => undefined },
             };
           },
         });
+
         seedLegacySecret(harness);
 
         yield* changeChannelProject(harness.dependencies, BOT_ID, "telegram", SECOND_PROJECT_ID);
@@ -258,13 +271,16 @@ describe("channel runtime", () => {
     it.effect("keeps the previous project when the new runtime fails after the old one stops", () =>
       Effect.gen(function* () {
         const events: Array<string> = [];
+
         const harness = makeHarness({
           startTransport: async (input) => {
             if (input.targetProjectId === SECOND_PROJECT_ID) {
               events.push(`fail:${input.targetProjectId}`);
               throw new Error("transport refused");
             }
+
             events.push(`start:${input.targetProjectId}`);
+
             return {
               externalIdentity: "@akeru",
               runtime: {
@@ -274,6 +290,7 @@ describe("channel runtime", () => {
             };
           },
         });
+
         yield* saveConnection(harness);
         yield* attachChannelConnection(
           harness.dependencies,
@@ -305,26 +322,32 @@ describe("channel runtime", () => {
     it.effect("keeps the old listener reachable when shutdown prevents a project move", () =>
       Effect.gen(function* () {
         const events: Array<string> = [];
+
         const callbacks: Array<
           Parameters<NonNullable<ChannelRuntimeDependencies["startTransport"]>>[1]
         > = [];
+
         let shutdownFails = true;
+
         const harness = makeHarness({
           startTransport: async (input, onDirectMessage) => {
             events.push(`start:${input.targetProjectId}`);
             callbacks.push(onDirectMessage);
+
             return {
               externalIdentity: "@akeru",
               runtime: {
                 post: async () => undefined,
                 shutdown: async () => {
                   events.push(`stop:${input.targetProjectId}`);
+
                   if (shutdownFails) throw new Error("shutdown failed");
                 },
               },
             };
           },
         });
+
         yield* saveConnection(harness);
         yield* attachChannelConnection(
           harness.dependencies,
@@ -344,11 +367,13 @@ describe("channel runtime", () => {
         expect(events).toEqual([`start:${PROJECT_ID}`, `stop:${PROJECT_ID}`]);
         expect(harness.readModel().bots[0]?.channelBindings[0]).toEqual(before);
         expect(harness.readModel().snapshotSequence).toBe(sequenceBefore);
+
         const message = {
           externalThreadId: "telegram:failed-project-move",
           externalMessageId: "still-reachable",
           text: "Use the original project",
         };
+
         yield* Effect.promise(async () => callbacks[0]?.(message));
         expect(
           harness.commands.filter((command) => command.type === "thread.turn.start"),
@@ -381,6 +406,7 @@ describe("channel runtime", () => {
             throw new Error("transport refused");
           },
         });
+
         seedLegacySecret(harness);
 
         yield* expectProviderFailure(

@@ -23,7 +23,9 @@ const BrowserbaseSession = Schema.Struct({
     }),
   ),
 });
+
 const decodeSession = Schema.decodeUnknownEffect(BrowserbaseSession);
+
 export const decodeBrowserbaseSession = (value: unknown) =>
   decodeSession(value).pipe(
     Effect.mapError(
@@ -37,6 +39,7 @@ export const decodeBrowserbaseSession = (value: unknown) =>
 export const requireBrowserbaseApiKey = (settingsService: ServerSettingsService["Service"]) =>
   Effect.gen(function* () {
     const settings = yield* settingsService.getSettings;
+
     if (!settings.browserProvider.enabled) {
       return yield* Effect.fail(
         new BrowserConfigurationError({
@@ -44,11 +47,14 @@ export const requireBrowserbaseApiKey = (settingsService: ServerSettingsService[
         }),
       );
     }
+
     const apiKey = settings.browserProvider.browserbaseApiKey || process.env.BROWSERBASE_API_KEY;
+
     if (!apiKey)
       return yield* Effect.fail(
         new BrowserConfigurationError({ message: "Browserbase is not configured." }),
       );
+
     return apiKey;
   });
 
@@ -85,6 +91,7 @@ export const makeBrowserbaseContexts = (
             ),
             Effect.flatMap((browser) => {
               const context = browser.contexts()[0];
+
               return context
                 ? Effect.succeed({ browser, context })
                 : Effect.tryPromise(() => browser.close()).pipe(

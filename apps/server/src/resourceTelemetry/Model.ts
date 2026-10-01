@@ -27,15 +27,18 @@ import {
   orderProcessTree,
 } from "./ProcessIdentity.ts";
 import { categoryGroup, delta, applyLifecycleCounters, aggregate } from "./ProcessCounters.ts";
+
 export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult {
   const nativeProcesses = Option.match(input.nativeSnapshot, {
     onNone: () => [] as ReadonlyArray<ResourceMonitorProcessSample>,
     onSome: (snapshot) => snapshot.processes,
   });
+
   const electronMetrics = Option.match(input.desktopSnapshot, {
     onNone: () => [] as ReadonlyArray<DesktopElectronProcessMetric>,
     onSome: (snapshot) => snapshot.electronProcesses,
   });
+
   const sampledAtMs = Option.match(input.nativeSnapshot, {
     onNone: () =>
       Option.match(input.desktopSnapshot, {
@@ -48,19 +51,24 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
         onSome: (desktop) => Math.max(native.sampledAtUnixMs, desktop.sampledAtUnixMs),
       }),
   });
+
   const nativeSampledAtMs = Option.map(
     input.nativeSnapshot,
     (snapshot) => snapshot.sampledAtUnixMs,
   );
+
   const desktopSampledAtMs = Option.map(
     input.desktopSnapshot,
     (snapshot) => snapshot.sampledAtUnixMs,
   );
+
   const nativeProcessPids = new Set(nativeProcesses.map((process) => process.pid));
   const nativeByPid = new Map(nativeProcesses.map((process) => [process.pid, process]));
   const metricsByPid = new Map<number, DesktopElectronProcessMetric>();
+
   for (const metric of electronMetrics) {
     const nativeProcess = nativeByPid.get(metric.pid);
+
     if (!nativeProcess) {
       nativeByPid.set(
         metric.pid,
@@ -73,24 +81,31 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
       metricsByPid.set(metric.pid, metric);
       continue;
     }
+
     if (
       Math.abs(metric.creationTimeMs - nativeProcess.startTimeMs) <= ELECTRON_IDENTITY_TOLERANCE_MS
     ) {
       metricsByPid.set(metric.pid, metric);
     }
   }
+
   const processes = [...nativeByPid.values()];
   const processesByPid = new Map(processes.map((process) => [process.pid, process]));
   const requestedElectronRootPids = input.electronRootPids ?? new Set<number>();
+
   const explicitElectronRootPids = new Set(
     [...requestedElectronRootPids].filter((pid) => {
       const process = processesByPid.get(pid);
+
       if (!process) return false;
       const expectedStartTime = input.electronRootStartTimes?.get(pid);
+
       if (expectedStartTime !== undefined) {
         return Math.abs(process.startTimeMs - expectedStartTime) <= ELECTRON_IDENTITY_TOLERANCE_MS;
       }
+
       if (metricsByPid.has(pid)) return true;
+
       return [...input.previous.values()].some(
         (previous) =>
           previous.process.category === "electron-main" &&
@@ -99,23 +114,28 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
       );
     }),
   );
+
   const electronPids = new Set([...metricsByPid.keys(), ...explicitElectronRootPids]);
+
   const electronRootPids = [
     ...explicitElectronRootPids,
     ...[...electronPids]
       .filter((pid) => {
         if (explicitElectronRootPids.has(pid)) return false;
         const process = processesByPid.get(pid);
+
         return process === undefined
           ? true
           : !hasElectronAncestor(process, processesByPid, electronPids);
       })
       .toSorted((left, right) => left - right),
   ].filter((pid, index, values) => values.indexOf(pid) === index);
+
   const rootPids = [input.serverPid, ...electronRootPids];
   const roots = new Set(rootPids);
   const depths = processDepths(processes, roots);
   const childrenByParent = new Map<number, number[]>();
+
   for (const process of processes) {
     const children = childrenByParent.get(process.ppid) ?? [];
     children.push(process.pid);
@@ -124,13 +144,17 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
 
   const nextPrevious = new Map<string, ProcessState>();
   const processDeltas: ProcessDelta[] = [];
+
   const normalized = processes.map((process): ResourceTelemetryProcess => {
     const identityKey = processIdentityKey(process.pid, process.startTimeMs);
     const previous = input.previous.get(identityKey);
+
     const counterSampledAtMs = nativeProcessPids.has(process.pid)
       ? Option.getOrElse(nativeSampledAtMs, () => sampledAtMs)
       : Option.getOrElse(desktopSampledAtMs, () => sampledAtMs);
+
     const elapsedMs = previous ? counterSampledAtMs - previous.sampledAtMs : 0;
+
     const cpuTimeDelta = previous
       ? delta({
           current: process.cpuTimeMs,
@@ -138,6 +162,7 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
           elapsedMs,
         })
       : 0;
+
     const ioReadDelta = previous
       ? delta({
           current: process.ioReadBytes,
@@ -145,6 +170,7 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
           elapsedMs,
         })
       : 0;
+
     const ioWriteDelta = previous
       ? delta({
           current: process.ioWriteBytes,
@@ -152,7 +178,9 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
           elapsedMs,
         })
       : 0;
+
     const electronMetric = matchElectronMetric(process, metricsByPid);
+
     const category: ResourceTelemetryProcessCategory =
       process.pid === input.serverPid
         ? "server"
@@ -165,13 +193,16 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
               : isElectronDescendant(process.pid, processesByPid, electronPids)
                 ? inferredElectronCategory(process)
                 : "server-child";
+
     const firstSeenAt = previous?.process.firstSeenAt ?? DateTime.makeUnsafe(sampledAtMs);
     const preservePreviousRates = !input.updatePrevious && previous !== undefined;
+
     const cpuPercent = preservePreviousRates
       ? previous.process.cpuPercent
       : previous && elapsedMs > 0 && elapsedMs <= MAX_DELTA_INTERVAL_MS
         ? (cpuTimeDelta / elapsedMs) * 100
         : finiteNonNegative(process.cpuPercent);
+
     const normalizedProcess: ResourceTelemetryProcess = {
       identity: {
         pid: process.pid,
@@ -215,6 +246,7 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
       firstSeenAt,
       lastSeenAt: DateTime.makeUnsafe(sampledAtMs),
     };
+
     nextPrevious.set(identityKey, {
       process: normalizedProcess,
       sampledAtMs: counterSampledAtMs,
@@ -226,8 +258,10 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
       ioReadBytes: ioReadDelta,
       ioWriteBytes: ioWriteDelta,
     });
+
     return normalizedProcess;
   });
+
   const ordered = orderProcessTree(normalized, rootPids);
 
   const counters = input.updatePrevious
@@ -238,12 +272,15 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
         previous: input.previous,
       })
     : input.counters;
+
   const backendProcesses = ordered.filter(
     (process) => categoryGroup(process.category) === "backend",
   );
+
   const electronProcesses = ordered.filter(
     (process) => categoryGroup(process.category) === "electron",
   );
+
   const monitorProcesses = ordered.filter(
     (process) => categoryGroup(process.category) === "monitor",
   );
@@ -262,12 +299,21 @@ export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult
     deltas: processDeltas,
   };
 }
+
 export type { ProcessState } from "./ProcessModelTypes.ts";
+
 export type { GroupCounters } from "./ProcessModelTypes.ts";
+
 export type { TelemetryCounters } from "./ProcessModelTypes.ts";
+
 export type { ProcessDelta } from "./ProcessModelTypes.ts";
+
 export type { MergeProcessesInput } from "./ProcessModelTypes.ts";
+
 export type { MergeProcessesResult } from "./ProcessModelTypes.ts";
+
 export { emptyGroupCounters } from "./ProcessCounters.ts";
+
 export { emptyTelemetryCounters } from "./ProcessCounters.ts";
+
 export { processIdentityKey } from "./ProcessIdentity.ts";

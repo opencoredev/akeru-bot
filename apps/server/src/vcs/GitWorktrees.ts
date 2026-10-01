@@ -14,6 +14,7 @@ import {
 import type { makeGitExecution } from "./GitExecution.ts";
 import type { makeGitBranches } from "./GitBranches.ts";
 import type { makeGitRemoteStatus } from "./GitRemoteStatus.ts";
+
 export const makeGitWorktrees = (dependencies: {
   fileSystem: Effect.Success<ReturnType<typeof makeGitExecution>>["fileSystem"];
   path: Effect.Success<ReturnType<typeof makeGitExecution>>["path"];
@@ -31,6 +32,7 @@ export const makeGitWorktrees = (dependencies: {
 }) =>
   Effect.gen(function* () {
     const { worktreesDir } = yield* ServerConfig;
+
     const {
       fileSystem,
       path,
@@ -49,6 +51,7 @@ export const makeGitWorktrees = (dependencies: {
       const sanitizedBranch = targetBranch.replace(/\//g, "-");
       const repoName = path.basename(input.cwd);
       const worktreePath = input.path ?? path.join(worktreesDir, repoName, sanitizedBranch);
+
       const args = input.newRefName
         ? ["worktree", "add", "-b", input.newRefName, worktreePath, input.refName]
         : ["worktree", "add", worktreePath, input.refName];
@@ -66,6 +69,7 @@ export const makeGitWorktrees = (dependencies: {
       const hasSubmodules = yield* fileSystem
         .exists(path.join(worktreePath, ".gitmodules"))
         .pipe(Effect.orElseSucceed(() => false));
+
       if (hasSubmodules) {
         yield* runGit("GitVcsDriver.createWorktree.updateSubmodules", worktreePath, [
           "submodule",
@@ -84,10 +88,12 @@ export const makeGitWorktrees = (dependencies: {
 
       if (input.newRefName && input.baseRefName) {
         const remoteNames = yield* listRemoteNames(input.cwd).pipe(Effect.orElseSucceed(() => []));
+
         const parsedBaseRef = parseRemoteRefWithRemoteNames(
           input.baseRefName,
           remoteNames.toSorted((left, right) => right.length - left.length),
         );
+
         const baseBranch = parsedBaseRef?.branchName ?? input.baseRefName;
         yield* runGit("GitVcsDriver.createWorktree.configureBaseRef", input.cwd, [
           "config",
@@ -121,12 +127,15 @@ export const makeGitWorktrees = (dependencies: {
     const resolveRemoteTrackingCommit: GitVcsDriver.GitVcsDriver["Service"]["resolveRemoteTrackingCommit"] =
       Effect.fn("resolveRemoteTrackingCommit")(function* (input) {
         const remoteNames = yield* listRemoteNames(input.cwd);
+
         const parsedRemoteRef = parseRemoteRefWithRemoteNames(
           input.refName,
           remoteNames.toSorted((left, right) => right.length - left.length),
         );
+
         const remoteRefName =
           parsedRemoteRef?.remoteRef ?? `${input.fallbackRemoteName}/${input.refName}`;
+
         const commitSha = yield* runGitStdout(
           "GitVcsDriver.resolveRemoteTrackingCommit",
           input.cwd,
@@ -151,19 +160,24 @@ export const makeGitWorktrees = (dependencies: {
       "removeWorktree",
     )(function* (input) {
       const args = ["worktree", "remove"];
+
       if (input.force) {
         args.push("--force");
       }
+
       args.push(input.path);
+
       const result = yield* executeGitWithStableDiagnostics(
         "GitVcsDriver.removeWorktree",
         input.cwd,
         args,
         { timeoutMs: 15_000, allowNonZeroExit: true },
       );
+
       if (result.exitCode === 0) {
         return;
       }
+
       // Threads can share a worktree path, and worktrees get removed or pruned
       // outside the app, so a worktree that is already gone is a no-op rather
       // than an error. Prune so no stale registration lingers to block a later
@@ -171,16 +185,20 @@ export const makeGitWorktrees = (dependencies: {
       const alreadyGone =
         isMissingWorktreeStderr(result.stderr) &&
         !(yield* fileSystem.exists(input.path).pipe(Effect.orElseSucceed(() => false)));
+
       if (alreadyGone) {
         yield* pruneWorktrees({ cwd: input.cwd });
+
         return;
       }
+
       // Raw stderr stays out of both the wire error and the log (it can carry
       // secrets); log bounded diagnostics so a genuine failure is visible
       // server-side.
       yield* Effect.logWarning(
         `GitVcsDriver.removeWorktree: git worktree remove exited with code ${result.exitCode} for ${input.path} (stderr length ${result.stderr.length}).`,
       );
+
       return yield* new GitCommandError({
         ...gitCommandContext({ operation: "GitVcsDriver.removeWorktree", cwd: input.cwd, args }),
         detail: "git worktree remove failed",
@@ -205,6 +223,7 @@ export const makeGitWorktrees = (dependencies: {
       if (input.oldBranch === input.newBranch) {
         return { branch: input.newBranch };
       }
+
       const targetBranch = yield* resolveAvailableBranchName(input.cwd, input.newBranch);
 
       yield* executeGit(
@@ -265,6 +284,7 @@ export const makeGitWorktrees = (dependencies: {
           : null;
 
         const localTrackedBranchCandidate = deriveLocalBranchNameFromRemoteRef(input.refName);
+
         const localTrackedBranchTargetExists =
           remoteExists && localTrackedBranchCandidate
             ? yield* executeGit(
@@ -308,6 +328,7 @@ export const makeGitWorktrees = (dependencies: {
           timeoutMs: 10_000,
           fallbackErrorDetail: "git branch create failed",
         });
+
         if (input.switchRef) {
           yield* switchRef({ cwd: input.cwd, refName: input.refName });
         }
@@ -321,6 +342,7 @@ export const makeGitWorktrees = (dependencies: {
         timeoutMs: 10_000,
         fallbackErrorDetail: "git init failed",
       }).pipe(Effect.asVoid);
+
     return {
       createWorktree,
       fetchRemote,

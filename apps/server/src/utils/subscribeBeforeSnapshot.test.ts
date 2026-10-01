@@ -22,6 +22,7 @@ describe("subscribeBeforeSnapshot", () => {
         const mutex = yield* Semaphore.make(1);
         const snapshotStarted = yield* Deferred.make<void>();
         const finishSnapshot = yield* Deferred.make<void>();
+
         const subscriptionFiber = yield* subscribeBeforeSnapshot(
           changes,
           Deferred.succeed(snapshotStarted, undefined).pipe(
@@ -32,13 +33,16 @@ describe("subscribeBeforeSnapshot", () => {
         ).pipe(Effect.forkChild);
 
         yield* Deferred.await(snapshotStarted);
+
         const publishFiber = yield* mutex
           .withPermits(1)(Ref.set(latest, 2).pipe(Effect.andThen(PubSub.publish(changes, 2))))
           .pipe(Effect.forkChild);
+
         yield* Deferred.succeed(finishSnapshot, undefined);
 
         const subscription = yield* Fiber.join(subscriptionFiber);
         yield* Fiber.join(publishFiber);
+
         const firstChange = yield* subscription.changes.pipe(
           Stream.runHead,
           Effect.timeout("1 second"),
@@ -57,6 +61,7 @@ describe("subscribeBeforeSnapshot", () => {
         const latest = yield* Ref.make(1);
         const snapshotStarted = yield* Deferred.make<void>();
         const finishSnapshot = yield* Deferred.make<void>();
+
         const subscriptionFiber = yield* subscribeBeforeSnapshotWithoutMutex(
           changes,
           Deferred.succeed(snapshotStarted, undefined).pipe(
@@ -71,6 +76,7 @@ describe("subscribeBeforeSnapshot", () => {
         yield* Deferred.succeed(finishSnapshot, undefined);
 
         const subscription = yield* Fiber.join(subscriptionFiber);
+
         const firstChange = yield* subscription.changes.pipe(
           Stream.runHead,
           Effect.timeout("1 second"),

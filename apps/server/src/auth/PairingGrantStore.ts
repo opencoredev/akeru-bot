@@ -43,6 +43,7 @@ import {
   PAIRING_TOKEN_LENGTH,
   PAIRING_TOKEN_REJECTION_LIMIT,
 } from "./PairingGrantTokens.ts";
+
 export class PairingGrantStore extends Context.Service<
   PairingGrantStore,
   {
@@ -75,8 +76,10 @@ export const make = Effect.gen(function* () {
   const pairingLinks = yield* AuthPairingLinks.AuthPairingLinkRepository;
   const seededGrantsRef = yield* Ref.make(new Map<string, StoredBootstrapGrant>());
   const changesPubSub = yield* PubSub.unbounded<BootstrapCredentialChange>();
+
   const generatePairingToken = Effect.gen(function* () {
     let credential = "";
+
     while (credential.length < PAIRING_TOKEN_LENGTH) {
       const bytes = yield* crypto
         .randomBytes(PAIRING_TOKEN_LENGTH)
@@ -86,16 +89,20 @@ export const make = Effect.gen(function* () {
               new PairingCredentialRandomGenerationError({ operation: "generate-token", cause }),
           ),
         );
+
       for (const byte of bytes) {
         if (byte >= PAIRING_TOKEN_REJECTION_LIMIT) {
           continue;
         }
+
         credential += PAIRING_TOKEN_ALPHABET[byte % PAIRING_TOKEN_ALPHABET.length]!;
+
         if (credential.length === PAIRING_TOKEN_LENGTH) {
           return credential;
         }
       }
     }
+
     return credential;
   });
 
@@ -103,6 +110,7 @@ export const make = Effect.gen(function* () {
     Ref.update(seededGrantsRef, (current) => {
       const next = new Map(current);
       next.set(credential, grant);
+
       return next;
     });
 
@@ -170,15 +178,18 @@ export const make = Effect.gen(function* () {
   const revoke: PairingGrantStore["Service"]["revoke"] = Effect.fn("PairingGrantStore.revoke")(
     function* (id) {
       const revokedAt = yield* DateTime.now;
+
       const revoked = yield* pairingLinks
         .revoke({
           id,
           revokedAt,
         })
         .pipe(Effect.mapError((cause) => new PairingLinkRevokeError({ pairingLinkId: id, cause })));
+
       if (revoked) {
         yield* emitRemoved(id);
       }
+
       return revoked;
     },
   );
@@ -191,19 +202,24 @@ export const make = Effect.gen(function* () {
         (cause) => new PairingCredentialRandomGenerationError({ operation: "generate-id", cause }),
       ),
     );
+
     const credential = yield* generatePairingToken;
     const isDevStartupToken = config.devUrl !== undefined && input?.purpose === "startup";
+
     const ttl =
       input?.ttl ??
       (isDevStartupToken ? DEV_STARTUP_TTL_HOURS : DEFAULT_ONE_TIME_TOKEN_TTL_MINUTES);
+
     const now = yield* DateTime.now;
     const expiresAt = DateTime.add(now, { milliseconds: Duration.toMillis(ttl) });
+
     const issued: IssuedBootstrapCredential = {
       id,
       credential,
       ...(input?.label ? { label: input.label } : {}),
       expiresAt,
     };
+
     const subject = input?.subject ?? "one-time-token";
     yield* pairingLinks
       .create({
@@ -236,16 +252,19 @@ export const make = Effect.gen(function* () {
       createdAt: now,
       expiresAt,
     });
+
     return issued;
   });
 
   const consume: PairingGrantStore["Service"]["consume"] = Effect.fn("PairingGrantStore.consume")(
     function* (credential) {
       const now = yield* DateTime.now;
+
       const seededResult: ConsumeResult = yield* Ref.modify(
         seededGrantsRef,
         (current): readonly [ConsumeResult, Map<string, StoredBootstrapGrant>] => {
           const grant = current.get(credential);
+
           if (!grant) {
             return [
               {
@@ -258,8 +277,10 @@ export const make = Effect.gen(function* () {
           }
 
           const next = new Map(current);
+
           if (DateTime.isGreaterThanOrEqualTo(now, grant.expiresAt)) {
             next.delete(credential);
+
             return [
               {
                 _tag: "error",
@@ -271,6 +292,7 @@ export const make = Effect.gen(function* () {
           }
 
           const remainingUses = grant.remainingUses;
+
           if (typeof remainingUses === "number") {
             if (remainingUses <= 1) {
               next.delete(credential);
@@ -301,6 +323,7 @@ export const make = Effect.gen(function* () {
       if (Predicate.isTagged(seededResult, "success")) {
         return seededResult.grant;
       }
+
       if (seededResult.reason !== "not-found") {
         return yield* seededResult.error;
       }
@@ -315,6 +338,7 @@ export const make = Effect.gen(function* () {
 
       if (Option.isSome(consumed)) {
         yield* emitRemoved(consumed.value.id);
+
         return {
           method: consumed.value.method,
           scopes: consumed.value.scopes,
@@ -327,6 +351,7 @@ export const make = Effect.gen(function* () {
       const matching = yield* pairingLinks
         .getByCredential({ credential })
         .pipe(Effect.mapError((cause) => new BootstrapCredentialLookupError({ cause })));
+
       if (Option.isNone(matching)) {
         return yield* new UnknownBootstrapCredentialError({});
       }
@@ -361,22 +386,41 @@ export const make = Effect.gen(function* () {
 export const layer = Layer.effect(PairingGrantStore, make).pipe(
   Layer.provideMerge(AuthPairingLinks.layer),
 );
+
 export type { BootstrapGrant } from "./PairingGrantErrors.ts";
+
 export { UnknownBootstrapCredentialError } from "./PairingGrantErrors.ts";
+
 export { ExpiredBootstrapCredentialError } from "./PairingGrantErrors.ts";
+
 export { UnavailableBootstrapCredentialError } from "./PairingGrantErrors.ts";
+
 export { BootstrapCredentialInvalidError } from "./PairingGrantErrors.ts";
+
 export { isBootstrapCredentialInvalidError } from "./PairingGrantErrors.ts";
+
 export { ActivePairingLinksLoadError } from "./PairingGrantErrors.ts";
+
 export { PairingLinkRevokeError } from "./PairingGrantErrors.ts";
+
 export { PairingCredentialIssueError } from "./PairingGrantErrors.ts";
+
 export { PairingCredentialRandomGenerationError } from "./PairingGrantErrors.ts";
+
 export { BootstrapCredentialConsumeError } from "./PairingGrantErrors.ts";
+
 export { BootstrapCredentialConsumeAvailableError } from "./PairingGrantErrors.ts";
+
 export { BootstrapCredentialLookupError } from "./PairingGrantErrors.ts";
+
 export { BootstrapCredentialInternalError } from "./PairingGrantErrors.ts";
+
 export { isBootstrapCredentialInternalError } from "./PairingGrantErrors.ts";
+
 export { BootstrapCredentialError } from "./PairingGrantErrors.ts";
+
 export { isBootstrapCredentialError } from "./PairingGrantErrors.ts";
+
 export type { IssuedBootstrapCredential } from "./PairingGrantErrors.ts";
+
 export type { BootstrapCredentialChange } from "./PairingGrantErrors.ts";

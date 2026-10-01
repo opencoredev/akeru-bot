@@ -37,12 +37,14 @@ import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
 import { makeMemoryChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
 import { type ChannelRuntimeDependencies } from "./ChannelRuntime.ts";
+
 describe("channel runtime", () => {
   it.effect("rejects a reply after its channel moves to another project", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("old-project-reply");
       const messageId = MessageId.make("old-project-assistant");
       let posts = 0;
+
       const harness = makeHarness({
         threads: [
           makeThread(threadId, BOT_ID, [
@@ -55,6 +57,7 @@ describe("channel runtime", () => {
         ],
         post: async () => void (posts += 1),
       });
+
       yield* connectChannel(harness.dependencies, {
         ...telegramConnect(BOT_ID),
         targetProjectId: SECOND_PROJECT_ID,
@@ -76,6 +79,7 @@ describe("channel runtime", () => {
       const assistantMessageId = MessageId.make("local-assistant");
       const threadId = ThreadId.make("thread-local-after-channel");
       let posts = 0;
+
       const thread: OrchestrationThread = {
         ...makeThread(threadId, BOT_ID, [
           makeMessage(inboundMessageId, "user", "Channel question", {
@@ -96,10 +100,12 @@ describe("channel runtime", () => {
           respondingBotId: BOT_ID,
         },
       };
+
       const harness = makeHarness({
         threads: [thread],
         post: async () => void (posts += 1),
       });
+
       yield* connectChannel(harness.dependencies, imessageConnect(BOT_ID));
 
       expect(yield* sendCompletedChannelReply(harness.dependencies, threadId, turnId)).toBeNull();
@@ -146,6 +152,7 @@ describe("channel runtime", () => {
       const messageId = MessageId.make("message-concurrent");
       const threadId = ThreadId.make("thread-concurrent");
       let posts = 0;
+
       const harness = makeHarness({
         threads: [
           makeThread(threadId, BOT_ID, [
@@ -158,6 +165,7 @@ describe("channel runtime", () => {
         ],
         post: async () => void (posts += 1),
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       const input = { botId: BOT_ID, threadId, messageId };
       yield* Effect.all(
@@ -174,6 +182,7 @@ describe("channel runtime", () => {
       const messageId = MessageId.make("message-retry");
       const threadId = ThreadId.make("thread-retry");
       let posts = 0;
+
       const harness = makeHarness({
         threads: [
           makeThread(threadId, BOT_ID, [
@@ -189,6 +198,7 @@ describe("channel runtime", () => {
           throw new Error("timeout after remote acceptance");
         },
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
       yield* expectProviderFailure(
@@ -224,17 +234,20 @@ describe("channel runtime", () => {
       let status: "requested" | "sent" | undefined;
       let posts = 0;
       let marks = 0;
+
       const deliveryStore: ChannelRuntimeDependencies["deliveryStore"] = {
         claim: () =>
           Effect.sync(() => {
             if (status) return status;
             status = "requested";
+
             return "claimed";
           }),
         listRequestedClaims: () => Effect.succeed([]),
         releaseRequested: () => Effect.die(new Error("release failed")),
         markSent: () => Effect.sync(() => void (marks += 1)),
       };
+
       const harness = makeHarness({
         deliveryStore,
         threads: [
@@ -251,6 +264,7 @@ describe("channel runtime", () => {
           throw new Error("post failed");
         },
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
       yield* expectProviderFailure(
@@ -274,11 +288,13 @@ describe("channel runtime", () => {
       let deliveryStatus: "requested" | "sent" | undefined;
       let markAttempts = 0;
       let posts = 0;
+
       const deliveryStore: ChannelRuntimeDependencies["deliveryStore"] = {
         claim: () =>
           Effect.sync(() => {
             if (deliveryStatus) return deliveryStatus;
             deliveryStatus = "requested";
+
             return "claimed";
           }),
         listRequestedClaims: () => Effect.succeed([]),
@@ -286,10 +302,12 @@ describe("channel runtime", () => {
         markSent: () =>
           Effect.sync(() => {
             markAttempts += 1;
+
             if (markAttempts === 1) throw new Error("database unavailable");
             deliveryStatus = "sent";
           }),
       };
+
       const harness = makeHarness({
         deliveryStore,
         threads: [
@@ -303,6 +321,7 @@ describe("channel runtime", () => {
         ],
         post: async () => void (posts += 1),
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
       yield* expectFailureMessage(
@@ -321,12 +340,14 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const messageId = MessageId.make("message-mark-sent-delivery");
       const threadId = ThreadId.make("thread-mark-sent-delivery");
+
       const deliveryStore: ChannelRuntimeDependencies["deliveryStore"] = {
         claim: () => Effect.succeed("claimed" as const),
         listRequestedClaims: () => Effect.succeed([]),
         releaseRequested: () => Effect.void,
         markSent: () => Effect.die(new Error("database unavailable")),
       };
+
       const harness = makeHarness({
         deliveryStore,
         threads: [
@@ -339,6 +360,7 @@ describe("channel runtime", () => {
           ]),
         ],
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
       yield* expectFailureMessage(
@@ -349,6 +371,7 @@ describe("channel runtime", () => {
       const deliveries = harness.commands
         .filter((command) => command.type === "thread.channel-delivery.set")
         .map((command) => (command.type === "thread.channel-delivery.set" ? command.delivery : ""));
+
       expect(deliveries).toEqual(["pending", "sent"]);
     }),
   );
@@ -366,10 +389,12 @@ describe("channel runtime", () => {
         externalThreadId: "chat-restore-unknown",
         requestedAt: NOW,
       });
+
       const assistantMessage = {
         ...makeMessage(messageId, "assistant", "Interrupted reply"),
         channelDelivery: "pending" as const,
       };
+
       const binding: ChannelBinding = {
         botId: BOT_ID,
         projectId: PROJECT_ID,
@@ -379,6 +404,7 @@ describe("channel runtime", () => {
         connectedAt: NOW,
         sentMessageIds: [],
       };
+
       const harness = makeHarness({
         deliveryStore,
         bots: [makeBot(BOT_ID, { channelBindings: [binding] })],
@@ -398,6 +424,7 @@ describe("channel runtime", () => {
       const deliveries = harness.commands
         .filter((command) => command.type === "thread.channel-delivery.set")
         .map((command) => (command.type === "thread.channel-delivery.set" ? command.delivery : ""));
+
       expect(deliveries).toEqual(["unknown"]);
     }),
   );
@@ -415,6 +442,7 @@ describe("channel runtime", () => {
         externalThreadId: "chat-restore-sent",
         requestedAt: NOW,
       });
+
       const harness = makeHarness({
         deliveryStore,
         bots: [
@@ -448,6 +476,7 @@ describe("channel runtime", () => {
       const deliveries = harness.commands
         .filter((command) => command.type === "thread.channel-delivery.set")
         .map((command) => (command.type === "thread.channel-delivery.set" ? command.delivery : ""));
+
       expect(deliveries).toEqual(["sent"]);
     }),
   );
@@ -460,6 +489,7 @@ describe("channel runtime", () => {
           listRequestedClaims: () => Effect.die(new Error("database unavailable")),
         },
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
       expect(yield* restoreConnectedChannels(harness.dependencies)).toEqual([]);
@@ -471,6 +501,7 @@ describe("channel runtime", () => {
       const messageId = MessageId.make("message-sent-evidence");
       const threadId = ThreadId.make("thread-sent-evidence");
       let posts = 0;
+
       const harness = makeHarness({
         threads: [
           makeThread(threadId, BOT_ID, [
@@ -483,6 +514,7 @@ describe("channel runtime", () => {
         ],
         post: async () => void (posts += 1),
       });
+
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       yield* sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId });
       const deliveryStore = makeMemoryChannelDeliveryStore();
@@ -511,6 +543,7 @@ describe("channel runtime", () => {
     }): OrchestrationThread => {
       const requestMessageId = MessageId.make(`${input.threadId}-request`);
       const assistantMessageId = MessageId.make(`${input.threadId}-reply`);
+
       return {
         ...makeThread(input.threadId, BOT_ID, [
           makeMessage(requestMessageId, "user", "Please delegate", {
@@ -543,6 +576,7 @@ describe("channel runtime", () => {
         const childTurn = TurnId.make("turn-child");
         const subagentTurn = TurnId.make("turn-subagent");
         let posts = 0;
+
         const harness = makeHarness({
           bots: [makeBot(BOT_ID), makeBot(helperId)],
           threads: [
@@ -566,12 +600,14 @@ describe("channel runtime", () => {
           ],
           post: async () => void (posts += 1),
         });
+
         yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
         const resolve = (threadId: ThreadId, turnId: TurnId) =>
           runWith(harness.dependencies, (runtime) =>
             runtime.resolveCompletedChannelReply(threadId, turnId),
           );
+
         expect(yield* resolve(childThreadId, childTurn)).toBeNull();
         expect(yield* resolve(subagentThreadId, subagentTurn)).toBeNull();
         expect(yield* resolve(ownerThreadId, ownerTurn)).toEqual({
@@ -592,12 +628,14 @@ describe("channel runtime", () => {
       Effect.gen(function* () {
         const threadId = ThreadId.make("thread-other-responder");
         const turnId = TurnId.make("turn-other-responder");
+
         const harness = makeHarness({
           bots: [makeBot(BOT_ID), makeBot(BotId.make("bot-other"))],
           threads: [
             delegatedThread({ threadId, turnId, respondingBotId: BotId.make("bot-other") }),
           ],
         });
+
         yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
 
         expect(

@@ -96,6 +96,7 @@ const withMetricsImpl = <A, E, R>(
     const endedAt = yield* Clock.currentTimeNanos;
     const elapsedNanos = endedAt > startedAt ? endedAt - startedAt : 0n;
     const duration = Duration.nanos(elapsedNanos);
+
     const baseAttributes =
       typeof options.attributes === "function" ? options.attributes() : (options.attributes ?? {});
 
@@ -124,6 +125,7 @@ const withMetricsImpl = <A, E, R>(
     if (Exit.isSuccess(exit)) {
       return exit.value;
     }
+
     return yield* Effect.failCause(exit.cause);
   });
 
@@ -149,6 +151,7 @@ export const providerTurnMetricAttributes = (input: {
   readonly extra?: Readonly<Record<string, unknown>>;
 }) => {
   const modelFamily = normalizeModelMetricLabel(input.model);
+
   return compactMetricAttributes({
     provider: input.provider,
     ...(modelFamily ? { modelFamily } : {}),

@@ -70,6 +70,7 @@ export const make = Effect.gen(function* () {
           }),
       ),
     );
+
     if (handle.kind !== "git") {
       return yield* new GitManagerError({
         operation,
@@ -95,6 +96,7 @@ export const make = Effect.gen(function* () {
           }),
       ),
     );
+
     if (handle.kind !== "git") {
       return yield* new GitCommandError({
         operation,

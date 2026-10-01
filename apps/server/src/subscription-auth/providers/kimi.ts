@@ -32,14 +32,20 @@ import {
 import type { OAuthCredentials } from "../types.ts";
 
 const CLIENT_ID = "17e5f671-d194-4dfb-9706-5516cb48c098";
+
 const OAUTH_HOST = "https://auth.kimi.com";
+
 const DEFAULT_EXPIRES_IN_SECONDS = 15 * 60;
+
 const DEFAULT_POLL_INTERVAL_SECONDS = 5;
+
 const REQUEST_TIMEOUT = "30 seconds";
+
 const REFRESH_MAX_RETRIES = 3;
 
 function asciiHeaderValue(value: string): string {
   const sanitized = value.replace(/[^\x20-\x7E]/g, "").trim();
+
   return sanitized || "unknown";
 }
 
@@ -49,6 +55,7 @@ export function isKimiCodingDeviceId(value: unknown): value is string {
 
 export function getKimiCodingDeviceHeaders(deviceId: string): Record<string, string> {
   if (!isKimiCodingDeviceId(deviceId)) throw new Error("Invalid Kimi For Coding device id");
+
   return {
     "X-Msh-Platform": "akeru",
     "X-Msh-Version": "0.0.34",
@@ -94,7 +101,9 @@ const TokenErrorBody = Schema.Struct({
 });
 
 const isPositiveFinite = Schema.is(PositiveFinite);
+
 const isTokenErrorBody = Schema.is(TokenErrorBody);
+
 const hasAccessToken = Schema.is(Schema.Struct({ access_token: Schema.String }));
 
 const positiveOr = (value: unknown, fallback: number) =>
@@ -119,7 +128,9 @@ const credentialsFromTokenResponse = Effect.fn("kimi.credentialsFromTokenRespons
     TokenResponse,
     `Kimi For Coding token ${operation} response missing fields`,
   )(body);
+
   const now = yield* Clock.currentTimeMillis;
+
   return {
     access: tokens.access_token,
     refresh: tokens.refresh_token,
@@ -145,6 +156,7 @@ export type KimiDevicePollResult =
 const startDeviceLogin = Effect.fn("kimi.startDeviceLogin")(function* () {
   const deviceId = NodeCrypto.randomUUID().replaceAll("-", "");
   const label = "Kimi For Coding device authorization failed";
+
   const data = yield* sendOAuthRequest(
     label,
     HttpClientRequest.post(`${OAUTH_HOST}/api/oauth/device_authorization`).pipe(
@@ -163,6 +175,7 @@ const startDeviceLogin = Effect.fn("kimi.startDeviceLogin")(function* () {
     ),
     withOAuthTimeout("Kimi For Coding device authorization", REQUEST_TIMEOUT),
   );
+
   return {
     deviceId,
     deviceCode: data.device_code,
@@ -189,8 +202,10 @@ const pollTokenOnce = Effect.fn("kimi.pollTokenOnce")(
       device_code: pending.deviceCode,
       grant_type: "urn:ietf:params:oauth:grant-type:device_code",
     });
+
     const body = yield* responseJson(response);
     const ok = response.status >= 200 && response.status < 300;
+
     if (ok && hasAccessToken(body)) {
       return yield* credentialsFromTokenResponse(body, "poll", pending.deviceId).pipe(
         Effect.map(
@@ -210,24 +225,30 @@ const pollTokenOnce = Effect.fn("kimi.pollTokenOnce")(
 
     const data = isTokenErrorBody(body) ? body : {};
     const error = data.error;
+
     if (error === "authorization_pending") return { status: "pending" };
+
     if (error === "slow_down") {
       return {
         status: "slow_down",
         intervalSeconds: isPositiveFinite(data.interval) ? data.interval : undefined,
       };
     }
+
     if (error === "expired_token") {
       return {
         status: "failed",
         error: "Kimi For Coding authorization expired. Restart the login.",
       };
     }
+
     if (error === "access_denied") {
       return { status: "failed", error: "Kimi For Coding login was denied." };
     }
+
     const description =
       typeof data.error_description === "string" ? `: ${data.error_description}` : "";
+
     return {
       status: "failed",
       error: `Kimi For Coding token request failed: ${response.status}${
@@ -247,7 +268,9 @@ const pollDeviceLogin = Effect.fn("kimi.pollDeviceLogin")(function* (
       error: "Kimi For Coding login is missing its device identity. Restart the login.",
     } satisfies KimiDevicePollResult;
   }
+
   const step = yield* stepDeviceCodePoll(pending.state, pollTokenOnce(pending));
+
   switch (step.status) {
     case "complete":
       return { status: "complete", credentials: step.result } satisfies KimiDevicePollResult;
@@ -281,7 +304,9 @@ const refreshToken = Effect.fn("kimi.refreshToken")(function* (
       message: "Kimi For Coding credentials have no valid device id. Reconnect the account.",
     });
   }
+
   const label = "Kimi For Coding token refresh failed";
+
   const attempt = postToken(label, deviceId, {
     grant_type: "refresh_token",
     refresh_token: refresh,
@@ -291,6 +316,7 @@ const refreshToken = Effect.fn("kimi.refreshToken")(function* (
         ? responseJson(response)
         : Effect.flatMap(responseJson(response), (body) => {
             const error = isTokenErrorBody(body) ? body.error : undefined;
+
             return Effect.fail(
               new SubscriptionAuthRequestError({
                 message: `${label}: ${response.status}${typeof error === "string" ? ` ${error}` : ""}`,
@@ -301,7 +327,9 @@ const refreshToken = Effect.fn("kimi.refreshToken")(function* (
     ),
     withOAuthTimeout("Kimi For Coding token refresh", REQUEST_TIMEOUT),
   );
+
   const body = yield* Effect.retry(attempt, refreshRetrySchedule);
+
   return yield* credentialsFromTokenResponse(body, "refresh", deviceId);
 });
 

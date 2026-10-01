@@ -6,6 +6,7 @@ import {
 import { Chat } from "chat";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 /**
  * Transport adapters must confirm that no part of the reply was accepted before using this error.
  * The category picks the repair clients offer; a rejection without one counts as credentials.
@@ -64,13 +65,18 @@ export const networkErrorCodes = new Set([
 export const isNetworkFailure = (cause: unknown, depth = 0): boolean => {
   if (depth > 4 || typeof cause !== "object" || cause === null) return false;
   const record = cause as Record<string, unknown>;
+
   if (typeof record.code === "string" && networkErrorCodes.has(record.code)) {
     // Discord wraps API rejections in NETWORK_ERROR; an HTTP status means the request arrived.
     const original = record.originalError as Record<string, unknown> | undefined;
+
     return typeof original?.status !== "number";
   }
+
   if (cause instanceof TypeError && cause.message === "fetch failed") return true;
+
   if (cause instanceof DOMException && cause.name === "TimeoutError") return true;
+
   return isNetworkFailure(record.cause, depth + 1);
 };
 
@@ -85,8 +91,10 @@ export const isChannelTransportError = Schema.is(ChannelTransportError);
 export const channelFailureCategory = (error: unknown): ChannelFailureCategory => {
   if (isChannelRuntimeError(error) || isChannelPostRejected(error))
     return error.category ?? "credentials";
+
   if (isChannelTransportError(error))
     return isNetworkFailure(error.cause) ? "network" : "credentials";
+
   return "credentials";
 };
 
@@ -119,12 +127,16 @@ export const channelCommandFailedMessage = "Channel command failed. Try again.";
 export const channelFailurePresentation = (error: unknown): ChannelFailurePresentation => {
   if (isChannelRuntimeError(error))
     return { message: error.message, category: channelFailureCategory(error) };
+
   if (isChannelTransportError(error)) {
     const category = channelFailureCategory(error);
+
     return { message: channelFailureMessage(category), category };
   }
+
   if (isChannelPostRejected(error))
     return { message: channelDeliveryRejectedError, category: channelFailureCategory(error) };
+
   return { message: channelCommandFailedMessage };
 };
 

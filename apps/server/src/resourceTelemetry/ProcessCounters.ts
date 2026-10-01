@@ -10,6 +10,7 @@ import {
   type TelemetryCounters,
   type ProcessDelta,
 } from "./ProcessModelTypes.ts";
+
 export const emptyGroupCounters = (): GroupCounters => ({
   cpuTimeMs: 0,
   ioReadBytes: 0,
@@ -29,7 +30,9 @@ export function categoryGroup(
   category: ResourceTelemetryProcessCategory,
 ): "backend" | "electron" | "monitor" {
   if (category === "resource-monitor") return "monitor";
+
   if (category.startsWith("electron-")) return "electron";
+
   return "backend";
 }
 
@@ -45,6 +48,7 @@ export function delta(input: {
   ) {
     return 0;
   }
+
   return input.current - input.previous;
 }
 
@@ -71,8 +75,10 @@ export function applyLifecycleCounters(input: {
   let electron = input.counters.electron;
   let monitor = input.counters.monitor;
   let allT3 = input.counters.allT3;
+
   for (const processDelta of input.deltas) {
     const group = categoryGroup(processDelta.category);
+
     switch (group) {
       case "backend":
         backend = incrementCounters(backend, processDelta);
@@ -84,12 +90,14 @@ export function applyLifecycleCounters(input: {
         monitor = incrementCounters(monitor, processDelta);
         break;
     }
+
     allT3 = incrementCounters(allT3, processDelta);
   }
 
   for (const [identityKey, current] of input.current) {
     if (input.previous.has(identityKey)) continue;
     const group = categoryGroup(current.process.category);
+
     switch (group) {
       case "backend":
         backend = incrementCounters(backend, { processStarts: 1 });
@@ -101,12 +109,14 @@ export function applyLifecycleCounters(input: {
         monitor = incrementCounters(monitor, { processStarts: 1 });
         break;
     }
+
     allT3 = incrementCounters(allT3, { processStarts: 1 });
   }
 
   for (const [identityKey, previous] of input.previous) {
     if (input.current.has(identityKey)) continue;
     const group = categoryGroup(previous.process.category);
+
     switch (group) {
       case "backend":
         backend = incrementCounters(backend, { processExits: 1 });
@@ -118,6 +128,7 @@ export function applyLifecycleCounters(input: {
         monitor = incrementCounters(monitor, { processExits: 1 });
         break;
     }
+
     allT3 = incrementCounters(allT3, { processExits: 1 });
   }
 

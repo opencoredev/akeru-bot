@@ -29,6 +29,7 @@ it.effect("targets multiple tabs explicitly while retaining a default tab", () =
       const requests = requestsFrom(yield* broker.connect(makeHost()));
       yield* Stream.runForEach(requests, (request) => {
         routedRequests.push(request);
+
         return broker.respond({
           clientId: "client-1",
           connectionId: request.connectionId,
@@ -70,6 +71,7 @@ it.effect("tracks the tab returned by a targeted recording stop", () =>
       const requests = requestsFrom(yield* broker.connect(makeHost()));
       yield* Stream.runForEach(requests, (request) => {
         routedRequests.push(request);
+
         return broker.respond({
           clientId: "client-1",
           connectionId: request.connectionId,
@@ -100,10 +102,12 @@ it.effect("announces a live replacement stream before delivering requests", () =
       const broker = yield* makeBroker;
       const events = yield* broker.connect(makeHost());
       const receivedTypes: PreviewAutomationStreamEvent["type"][] = [];
+
       const consumer = yield* events.pipe(
         Stream.take(2),
         Stream.runForEach((event) => {
           receivedTypes.push(event.type);
+
           return event.type === "connected"
             ? Effect.void
             : broker.respond({
@@ -116,6 +120,7 @@ it.effect("announces a live replacement stream before delivering requests", () =
         }),
         Effect.forkScoped,
       );
+
       yield* Effect.yieldNow;
 
       const result = yield* broker.invoke<string>({ scope, operation: "status", input: {} });
@@ -133,9 +138,11 @@ it.effect("keeps a replacement stream authoritative when the old stream finalize
       const broker = yield* makeBroker;
       let firstConnectionId = "";
       let replacementConnectionId = "";
+
       const firstRequests = requestsFrom(yield* broker.connect(makeHost()), (connectionId) => {
         firstConnectionId = connectionId;
       });
+
       yield* Stream.runDrain(firstRequests).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
 
@@ -145,6 +152,7 @@ it.effect("keeps a replacement stream authoritative when the old stream finalize
           replacementConnectionId = connectionId;
         },
       );
+
       yield* Stream.runForEach(replacementRequests, (request) =>
         broker.respond({
           clientId: "client-1",
@@ -192,6 +200,7 @@ it.effect("does not carry a tab id across a replacement automation stream", () =
       const replacementRequests = requestsFrom(yield* broker.connect(makeHost()));
       yield* Stream.runForEach(replacementRequests, (request) => {
         routedRequests.push(request);
+
         return broker.respond({
           clientId: "client-1",
           connectionId: request.connectionId,
@@ -216,9 +225,11 @@ it.effect("fails requests assigned to the stream that is replaced", () =>
       const broker = yield* makeBroker;
       const requests = requestsFrom(yield* broker.connect(makeHost()));
       yield* Stream.runDrain(requests).pipe(Effect.forkScoped);
+
       const pending = yield* broker
         .invoke<void>({ scope, operation: "status", input: {} })
         .pipe(Effect.flip, Effect.forkScoped);
+
       yield* Effect.yieldNow;
 
       const replacementRequests = requestsFrom(yield* broker.connect(makeHost()));

@@ -67,6 +67,7 @@ function nativeSnapshot(input: {
       cpuTimeMs: input.sequence * 5,
     }),
   ];
+
   return {
     version: 3,
     type: "snapshot",
@@ -92,6 +93,7 @@ function nativeGeneration(
 
 function desktopSnapshot(sampledAtUnixMs: number): DesktopHostTelemetrySnapshot {
   const sampledAt = DateTime.makeUnsafe(sampledAtUnixMs);
+
   return {
     version: 1,
     type: "desktopTelemetry",
@@ -126,4 +128,5 @@ function desktopSnapshot(sampledAtUnixMs: number): DesktopHostTelemetrySnapshot 
     ],
   };
 }
+
 export { processSample, nativeSnapshot, nativeGeneration, desktopSnapshot };

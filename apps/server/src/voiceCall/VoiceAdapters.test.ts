@@ -4,6 +4,7 @@ import { VOICE_AUDIO_MAX_BYTES } from "@akeru/contracts";
 import { makeVoiceAdapters, readVoiceResponse, type VoiceFetch } from "./VoiceAdapters.ts";
 
 const signal = () => new AbortController().signal;
+
 const audio = { operationId: "operation", audioBase64: "YXVkaW8=", mimeType: "audio/wav" as const };
 
 describe("voice capability adapters", () => {
@@ -20,14 +21,17 @@ describe("voice capability adapters", () => {
         expect(headers.get(provider === "elevenlabs" ? "xi-api-key" : "Authorization")).toBe(
           provider === "elevenlabs" ? "secret" : "Bearer secret",
         );
+
         if (provider === "cartesia") expect(headers.get("Cartesia-Version")).toBe("2026-08-14");
         expect(headers.get("Content-Type")).toBeNull();
         expect(init?.body).toBeInstanceOf(FormData);
         const form = init?.body as FormData;
         expect(form.get(modelField)).toBe(model);
         expect(await (form.get("file") as Blob).text()).toBe("audio");
+
         return Response.json({ text: "transcript", ignored: "private metadata" });
       });
+
       expect(
         await makeVoiceAdapters(fetcher).transcribe(provider, "secret", audio, signal()),
       ).toEqual({ text: "transcript" });
@@ -41,6 +45,7 @@ describe("voice capability adapters", () => {
         const body = JSON.parse(String(init?.body));
         expect(init?.redirect).toBe("error");
         expect(new Headers(init?.headers).get("Content-Type")).toBe("application/json");
+
         if (provider === "openai") {
           expect(String(url)).toBe("https://api.openai.com/v1/audio/speech");
           expect(body).toEqual({
@@ -68,8 +73,10 @@ describe("voice capability adapters", () => {
           expect(new Headers(init?.headers).get("model")).toBe("s2.1-pro");
           expect(body).toEqual({ text: "Hello", reference_id: "alloy", format: "mp3" });
         }
+
         return new Response("mp3");
       });
+
       expect(
         await makeVoiceAdapters(fetcher).synthesize(provider, "secret", "alloy", "Hello", signal()),
       ).toEqual({ audioBase64: "bXAz", mimeType: "audio/mpeg" });
@@ -86,8 +93,10 @@ describe("voice capability adapters", () => {
       expect(session.audio.output.voice).toBe("marin");
       expect(session.tools[0].name).toBe("send_to_chat");
       expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer secret");
+
       return new Response("answer\r\n");
     });
+
     expect(
       await makeVoiceAdapters(fetcher).negotiate(
         "secret",
@@ -130,8 +139,10 @@ describe("voice capability adapters", () => {
   ] as const)("returns redacted paginated %s voice choices", async (provider, response) => {
     const fetcher = vi.fn<VoiceFetch>(async (_url, init) => {
       expect(new Headers(init?.headers).get("model")).toBeNull();
+
       return Response.json(response);
     });
+
     const result = await makeVoiceAdapters(fetcher).listVoices(provider, "secret", signal());
     expect(result).toEqual({
       voices: [{ id: "one", name: "One" }],
@@ -142,8 +153,10 @@ describe("voice capability adapters", () => {
   it("validates dynamic voices by ID rather than a truncated catalog", async () => {
     const fetcher = vi.fn<VoiceFetch>(async (url) => {
       expect(String(url)).toBe("https://api.fish.audio/model/chosen");
+
       return Response.json({ _id: "chosen", title: "Chosen", type: "tts", state: "trained" });
     });
+
     await makeVoiceAdapters(fetcher).validateVoice("fish", "secret", "chosen", signal());
     await expect(
       makeVoiceAdapters(fetcher).validateVoice("openai", "secret", "unknown", signal()),
@@ -176,6 +189,7 @@ describe("voice capability adapters", () => {
 
   it("cancels response bodies at their size limit", async () => {
     const cancelled = vi.fn();
+
     const response = new Response(
       new ReadableStream({
         start(controller) {
@@ -184,6 +198,7 @@ describe("voice capability adapters", () => {
         cancel: cancelled,
       }),
     );
+
     await expect(readVoiceResponse(response, 5)).rejects.toMatchObject({
       reason: "upstream-failed",
     });
@@ -210,6 +225,7 @@ describe("voice capability adapters", () => {
     const deadline = new AbortController();
     const began = Promise.withResolvers<void>();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
+
     const fetcher = vi.fn<VoiceFetch>(
       async (_url, init) =>
         new Promise((_resolve, reject) => {
@@ -221,6 +237,7 @@ describe("voice capability adapters", () => {
           began.resolve();
         }),
     );
+
     try {
       const pending = makeVoiceAdapters(fetcher).synthesize(
         "openai",
@@ -229,6 +246,7 @@ describe("voice capability adapters", () => {
         "Hello",
         signal(),
       );
+
       await began.promise;
       expect(timeout).toHaveBeenCalledWith(60_000);
       deadline.abort();
@@ -251,11 +269,14 @@ describe("voice capability adapters", () => {
         [429, "provider-quota"],
         [503, "upstream-failed"],
       ] as const;
+
       for (const [status, reason] of cases) {
         const fetcher = vi.fn<VoiceFetch>(
           async () => new Response(`private key sk-secret ${status}`, { status }),
         );
+
         const adapters = makeVoiceAdapters(fetcher);
+
         const failures = [
           adapters.synthesize(provider, "secret", "alloy", "Hello", signal()),
           adapters.test(provider, "secret", signal()),
@@ -263,18 +284,22 @@ describe("voice capability adapters", () => {
             ? []
             : [adapters.transcribe(provider, "secret", audio, signal())]),
         ];
+
         for (const failure of failures) {
           const error = await failure.then(
             () => expect.unreachable(),
             (cause: unknown) => cause,
           );
+
           expect(error).toMatchObject({ reason });
           expect(JSON.stringify(error)).not.toContain("sk-secret");
         }
       }
+
       const offline = makeVoiceAdapters(async () => {
         throw new TypeError("fetch failed: private DNS detail");
       });
+
       await expect(
         offline.synthesize(provider, "secret", "alloy", "Hello", signal()),
       ).rejects.toMatchObject({ reason: "network" });

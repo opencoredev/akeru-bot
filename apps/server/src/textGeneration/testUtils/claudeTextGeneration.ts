@@ -258,9 +258,11 @@ function withFakeClaudeEnv<A, E, R>(
 
     const config = decodeClaudeSettings(input.claudeConfig ?? {});
     const textGeneration = yield* makeClaudeTextGeneration(config);
+
     return yield* effectFn(textGeneration);
   }).pipe(Effect.scoped);
 }
+
 export {
   decodeClaudeSettings,
   ClaudeTextGenerationTestLayer,
