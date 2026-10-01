@@ -109,7 +109,7 @@ export function renderFeedEntry(
         accessibilityState={{ expanded: entry.expanded }}
         onPress={() => props.onToggleTurnFold(entry.turnId)}
         hitSlop={4}
-        className="mb-3 min-h-11 flex-row items-center gap-2 border-b border-neutral-200/80 px-2 dark:border-white/[0.08]"
+        className="mb-3 min-h-11 flex-row items-center gap-2 border-b border-border-subtle px-2"
       >
         <Text className="font-t3-medium text-sm tabular-nums text-foreground-muted">
           {entry.label}
@@ -190,7 +190,7 @@ export function renderFeedEntry(
             }}
           >
             {message.channelOrigin ? (
-              <NativeText className="font-t3-medium text-[11px] text-neutral-600 dark:text-neutral-300">
+              <NativeText className="font-t3-medium text-[11px] text-user-bubble-foreground-muted">
                 {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
               </NativeText>
             ) : null}
