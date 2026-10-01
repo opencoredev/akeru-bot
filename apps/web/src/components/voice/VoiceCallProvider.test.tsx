@@ -125,9 +125,9 @@ import { VoiceCallProvider, useVoiceCall } from "./VoiceCall";
 
 type VoiceControls = ReturnType<typeof useVoiceCall>;
 
-let latestPeer: TestPeer | null = null;
-
 class TestPeer {
+  /** Every peer the call constructed, newest last, so tests can drive connection events. */
+  static readonly instances: TestPeer[] = [];
   iceGatheringState: RTCIceGatheringState = "complete";
   connectionState: RTCPeerConnectionState = "connected";
   localDescription: RTCSessionDescription | null = null;
@@ -141,8 +141,7 @@ class TestPeer {
     send: vi.fn(),
   };
   constructor() {
-    // oxlint-disable-next-line typescript/no-this-alias -- the peer test double registers its instance so tests can drive connection events.
-    latestPeer = this;
+    TestPeer.instances.push(this);
   }
   addTrack() {}
   addEventListener() {}
@@ -199,7 +198,7 @@ describe("voice call provider", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    latestPeer = null;
+    TestPeer.instances.length = 0;
     mocks.voiceProvider = "chatgpt";
     mocks.captureSignals = [];
     vi.stubGlobal("RTCPeerConnection", TestPeer);
@@ -287,19 +286,19 @@ describe("voice call provider", () => {
       },
       video: false,
     });
-    latestPeer?.events.onmessage?.(
+    TestPeer.instances.at(-1)?.events.onmessage?.(
       new MessageEvent("message", {
         data: JSON.stringify({ type: "output_audio_buffer.started" }),
       }),
     );
     expect(track.enabled).toBe(false);
-    latestPeer?.events.onmessage?.(
+    TestPeer.instances.at(-1)?.events.onmessage?.(
       new MessageEvent("message", {
         data: JSON.stringify({ type: "response.done", response: { status: "completed" } }),
       }),
     );
     expect(track.enabled).toBe(false);
-    latestPeer?.events.onmessage?.(
+    TestPeer.instances.at(-1)?.events.onmessage?.(
       new MessageEvent("message", {
         data: JSON.stringify({ type: "output_audio_buffer.stopped" }),
       }),
@@ -325,12 +324,12 @@ describe("voice call provider", () => {
       }),
     });
 
-    latestPeer?.events.onmessage?.(event);
-    latestPeer?.events.onmessage?.(event);
+    TestPeer.instances.at(-1)?.events.onmessage?.(event);
+    TestPeer.instances.at(-1)?.events.onmessage?.(event);
     await Promise.resolve();
     expect(mocks.send).toHaveBeenCalledOnce();
     controls.hangup();
-    latestPeer?.events.onmessage?.(event);
+    TestPeer.instances.at(-1)?.events.onmessage?.(event);
     expect(mocks.send).toHaveBeenCalledOnce();
   });
 
@@ -350,8 +349,8 @@ describe("voice call provider", () => {
       }),
     });
 
-    latestPeer?.events.onmessage?.(replayed);
-    latestPeer?.events.onmessage?.(replayed);
+    TestPeer.instances.at(-1)?.events.onmessage?.(replayed);
+    TestPeer.instances.at(-1)?.events.onmessage?.(replayed);
     expect(mocks.appendTranscript).toHaveBeenCalledOnce();
   });
 
@@ -382,7 +381,7 @@ describe("voice call provider", () => {
       environmentId: "env-1",
       input: { botId: mocks.bot.id },
     });
-    expect(latestPeer).toBeNull();
+    expect(TestPeer.instances).toHaveLength(0);
     expect(mocks.captureSignals).toHaveLength(1);
 
     controls.hangup();

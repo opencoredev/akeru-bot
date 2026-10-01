@@ -103,13 +103,20 @@ const MAX_SAMPLES = 512;
 
 const ECHO_WINDOW_MS = 250;
 
+const ESC = String.fromCharCode(0x1b);
+
+const BEL = String.fromCharCode(0x07);
+
 // CSI, OSC, and two-byte escape sequences change terminal state without painting glyphs.
-// eslint-disable-next-line no-control-regex
-const ESCAPE_SEQUENCE = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-_])/g;
+const ESCAPE_SEQUENCE = new RegExp(
+  String.raw`${ESC}(?:\[[0-?]*[ -/]*[@-~]|\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\)|[@-_])`,
+  "g",
+);
 
 // An escape sequence cut off by the end of a write continues in the next write.
-// eslint-disable-next-line no-control-regex
-const UNFINISHED_ESCAPE = /\x1b(?:\[[0-?]*[ -/]*|\][^\x07\x1b]*\x1b?)?$/;
+const UNFINISHED_ESCAPE = new RegExp(
+  String.raw`${ESC}(?:\[[0-?]*[ -/]*|\][^${BEL}${ESC}]*${ESC}?)?$`,
+);
 
 const MAX_ESCAPE_CARRY = 1024;
 
