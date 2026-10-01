@@ -195,7 +195,7 @@ describe("bot prompt composer", () => {
       <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
     );
 
-    expect(markup).toContain("px-[max(1rem,calc((100%-48rem)/2))]");
+    expect(markup).toContain("px-gutter-48rem");
   });
 
   it("attaches a pending question above the custom answer field", () => {

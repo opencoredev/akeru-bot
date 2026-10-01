@@ -242,7 +242,7 @@ describe("sidebar footer", () => {
 
     expect(source).not.toContain("botEnvironment.groups.assignMember");
     expect(source).toContain("roster-pinned-header");
-    expect(source).toContain("[overflow-anchor:none]");
+    expect(source).toContain("overflow-anchor-none");
     expect(source).toContain("restrictRosterAxis");
     expect(source).not.toContain("KeyboardSensor");
     expect(source).toContain("Move up");

@@ -41,7 +41,7 @@ describe("thread sidebar width", () => {
       "utf8",
     );
 
-    expect(sidebarSource).toContain("grid-cols-[1fr_auto_1fr]");
+    expect(sidebarSource).toContain("grid-cols-grow-auto-grow");
     expect(sidebarSource).toContain("min-w-0 flex-1");
     expect(sidebarSource).toContain("group-data-[collapsible=icon]:hidden");
     expect(THREAD_SIDEBAR_MIN_WIDTH).toBe(13 * 16);
