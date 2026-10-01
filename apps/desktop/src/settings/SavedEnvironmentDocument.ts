@@ -75,6 +75,7 @@ export function toPersistedSavedEnvironmentRecord(
     createdAt: record.createdAt,
     lastConnectedAt: record.lastConnectedAt,
   };
+
   return {
     ...nextRecord,
     ...(record.desktopSsh ? { desktopSsh: record.desktopSsh } : {}),
@@ -93,9 +94,9 @@ export function toSavedEnvironmentStorageRecord(
     createdAt: record.createdAt,
     lastConnectedAt: record.lastConnectedAt,
   };
-  const metadata = {
-    ...(record.desktopSsh ? { desktopSsh: record.desktopSsh } : {}),
-  };
+
+  const metadata = record.desktopSsh ? { desktopSsh: record.desktopSsh } : {};
+
   return Option.match(encryptedBearerToken, {
     onNone: () => ({ ...nextRecord, ...metadata }),
     onSome: (value) => ({ ...nextRecord, ...metadata, encryptedBearerToken: value }),
@@ -127,6 +128,7 @@ export function preserveExistingSecrets(
     version: currentDocument.version,
     records: records.map((record) => {
       const encryptedBearerToken = encryptedBearerTokenById.get(record.environmentId);
+
       return toSavedEnvironmentStorageRecord(record, Option.fromNullishOr(encryptedBearerToken));
     }),
   };
