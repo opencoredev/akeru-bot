@@ -1,35 +1,27 @@
 "use client";
 
-import { RegistryContext, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import {
   FILL_PREVIEW_VIEWPORT,
   PREVIEW_AUTOMATION_OPERATIONS,
   type EnvironmentId,
+  type PreviewAutomationHost as PreviewAutomationHostState,
   type PreviewAutomationNavigateInput,
   type PreviewAutomationOpenInput,
+  type PreviewAutomationRequest,
   type PreviewAutomationResizeInput,
   type PreviewAutomationResizeResult,
   type PreviewAutomationSetColorSchemeInput,
   type PreviewAutomationSetColorSchemeResult,
-  type PreviewAutomationHost as PreviewAutomationHostState,
-  type PreviewAutomationRequest,
   type PreviewAutomationStatus,
   type PreviewRenderedViewportSize,
-  type PreviewViewportSetting,
   type ScopedThreadRef,
 } from "@akeru/contracts";
 import { resolvePreviewViewport } from "@akeru/shared/previewViewport";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { RegistryContext, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/unstable/reactivity";
-
-import {
-  applyPreviewServerSnapshot,
-  readThreadPreviewState,
-  reconcilePreviewServerSessions,
-  updatePreviewServerSnapshot,
-} from "~/previewStateStore";
-import { resolveBrowserNavigationTarget } from "~/browser/browserTargetResolver";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { browserDefaultOpenViewport, resolveBrowserDefaults } from "~/browser/browserDefaults";
 import {
   readActiveBrowserRecordingTargets,
   startBrowserRecording,
@@ -40,163 +32,48 @@ import {
   acquireBrowserSurfaceActivity,
   useBrowserSurfaceStore,
 } from "~/browser/browserSurfaceStore";
-import { browserDefaultOpenViewport, resolveBrowserDefaults } from "~/browser/browserDefaults";
+import { resolveBrowserNavigationTarget } from "~/browser/browserTargetResolver";
 import { runBrowserViewportMutation } from "~/browser/browserViewportActions";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { isElectron } from "~/env";
+import {
+  applyPreviewServerSnapshot,
+  readThreadPreviewState,
+  reconcilePreviewServerSessions,
+  updatePreviewServerSnapshot,
+} from "~/previewStateStore";
 import { useEnvironments } from "~/state/environments";
 import { previewEnvironment } from "~/state/preview";
-import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 import { useAtomCommand } from "~/state/use-atom-command";
-
-import { previewBridge } from "./previewBridge";
+import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
+import { createPreviewAutomationClientId } from "./previewAutomationClientId";
 import {
   PreviewAutomationOperationError,
-  PreviewAutomationOverlayTimeoutError,
   PreviewAutomationRecordingNotActiveError,
   PreviewAutomationTargetUnavailableError,
-  PreviewAutomationViewportTimeoutError,
 } from "./previewAutomationErrors";
 import {
   previewAutomationDefaultViewport,
   previewAutomationOpenNeedsOverlay,
 } from "./previewAutomationOpenReadiness";
-import {
-  assertPreviewRuntimeCurrent,
-  waitForNavigationReadiness,
-} from "./previewNavigationReadiness";
 import { createPreviewAutomationRequestConsumerAtom } from "./previewAutomationRequestConsumer";
-import { createPreviewAutomationClientId } from "./previewAutomationClientId";
 import {
   needsPreviewAutomationSessionSync,
   resolvePreviewAutomationOpenTab,
   resolvePreviewAutomationTarget,
 } from "./previewAutomationTarget";
-import { isPreviewViewportReady } from "./previewViewportReadiness";
+import {
+  isPreviewWebviewRendering,
+  readRenderedViewport,
+  waitForDesktopOverlay,
+  waitForRenderedViewport,
+} from "./previewAutomationViewport";
+import { previewBridge } from "./previewBridge";
+import {
+  assertPreviewRuntimeCurrent,
+  waitForNavigationReadiness,
+} from "./previewNavigationReadiness";
 import { shouldRollbackPreviewViewport } from "./previewViewportRollback";
-
-const waitForDesktopOverlay = async (
-  threadRef: ScopedThreadRef,
-  requestId: string,
-  tabId: string,
-  runtimeTabId: string,
-  operation: PreviewAutomationRequest["operation"],
-  timeoutMs: number,
-): Promise<void> => {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() <= deadline) {
-    const state = assertPreviewRuntimeCurrent(threadRef, tabId, runtimeTabId, {
-      operation,
-      requestId,
-    });
-    if (state.desktopByTabId[tabId] && previewBridge && isPreviewWebviewRendering(runtimeTabId)) {
-      const status = await previewBridge.automation.status(runtimeTabId);
-      if (status.available) return;
-    }
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
-  }
-  throw new PreviewAutomationOverlayTimeoutError({
-    requestId,
-    environmentId: threadRef.environmentId,
-    threadId: threadRef.threadId,
-    timeoutMs,
-  });
-};
-
-interface ExecutablePreviewWebview extends Element {
-  readonly executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>;
-}
-
-const findPreviewWebview = (tabId: string): ExecutablePreviewWebview | null =>
-  Array.from(document.querySelectorAll<ExecutablePreviewWebview>("webview[data-preview-tab]")).find(
-    (candidate) => candidate.getAttribute("data-preview-tab") === tabId,
-  ) ?? null;
-
-const isPreviewWebviewRendering = (runtimeTabId: string): boolean => {
-  const wrapper = findPreviewWebview(runtimeTabId)?.closest<HTMLElement>("[data-preview-viewport]");
-  return wrapper?.getAttribute("data-preview-rendering") === "active";
-};
-
-const readWebviewViewport = async (
-  webview: ExecutablePreviewWebview,
-): Promise<PreviewRenderedViewportSize | null> => {
-  const value = await webview.executeJavaScript(
-    "({ width: window.innerWidth, height: window.innerHeight })",
-  );
-  if (typeof value !== "object" || value === null) return null;
-  const { width, height } = value as { readonly width?: unknown; readonly height?: unknown };
-  return typeof width === "number" &&
-    Number.isInteger(width) &&
-    width > 0 &&
-    typeof height === "number" &&
-    Number.isInteger(height) &&
-    height > 0
-    ? { width, height }
-    : null;
-};
-
-const readRenderedViewport = async (
-  runtimeTabId: string,
-): Promise<PreviewRenderedViewportSize | null> => {
-  const webview = findPreviewWebview(runtimeTabId);
-  if (!webview) return null;
-  return await readWebviewViewport(webview);
-};
-
-const readDeclaredViewport = (
-  webview: ExecutablePreviewWebview | null,
-): PreviewRenderedViewportSize | null => {
-  const width = Number(webview?.getAttribute("data-preview-css-width"));
-  const height = Number(webview?.getAttribute("data-preview-css-height"));
-  return Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0
-    ? { width, height }
-    : null;
-};
-
-const waitForRenderedViewport = async (
-  threadRef: ScopedThreadRef,
-  tabId: string,
-  runtimeTabId: string,
-  setting: PreviewViewportSetting,
-  timeoutMs: number,
-  context: {
-    readonly requestId: PreviewAutomationRequest["requestId"];
-    readonly operation: PreviewAutomationRequest["operation"];
-    readonly environmentId: EnvironmentId;
-    readonly threadId: PreviewAutomationRequest["threadId"];
-  },
-): Promise<PreviewRenderedViewportSize> => {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() <= deadline) {
-    assertPreviewRuntimeCurrent(threadRef, tabId, runtimeTabId, context);
-    try {
-      const webview = findPreviewWebview(runtimeTabId);
-      const appliedSettingKey = webview?.getAttribute("data-preview-viewport-key") ?? null;
-      const declaredViewport = readDeclaredViewport(webview);
-      const renderedViewport = webview ? await readWebviewViewport(webview) : null;
-      if (
-        renderedViewport &&
-        isPreviewViewportReady({
-          setting,
-          appliedSettingKey,
-          declaredViewport,
-          renderedViewport,
-        })
-      ) {
-        return renderedViewport;
-      }
-    } catch {
-      // Registration and navigation can transiently replace the guest while
-      // React applies the server snapshot. Retry until the operation deadline.
-    }
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
-  }
-  throw new PreviewAutomationViewportTimeoutError({
-    ...context,
-    tabId,
-    timeoutMs,
-  });
-};
 
 const currentStatus = async (
   threadRef: ScopedThreadRef,

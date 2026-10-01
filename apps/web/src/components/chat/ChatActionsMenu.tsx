@@ -1,11 +1,11 @@
-import { useAtomValue } from "@effect/atom-react";
-import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import { scopedThreadKey } from "@akeru/client-runtime/environment";
 import {
   resolveSnoozePresets,
   type SnoozePresetId,
 } from "@akeru/client-runtime/state/thread-settled";
 import type { ScopedThreadRef } from "@akeru/contracts";
+import { useAtomValue } from "@effect/atom-react";
+import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import {
   AlarmClockIcon,
   ArchiveIcon,
@@ -21,9 +21,8 @@ import {
   UndoIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-import { registerChatPaletteActions, type ChatPaletteAction } from "../../chatActionsRegistry";
-import { type ChatActions, useChatActions } from "../../hooks/useChatActions";
+import { registerChatPaletteActions } from "../../chatActionsRegistry";
+import { useChatActions } from "../../hooks/useChatActions";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useI18n } from "../../i18n";
 import { resolveShortcutCommand } from "../../keybindings";
@@ -59,201 +58,13 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { resolveChatMenuState, type ChatMenuState, watchChatVisits } from "./chatActions.logic";
+import { resolveChatMenuState } from "./chatActions.logic";
+import { buildChatPaletteActions, snoozePresetLabel } from "./chatPaletteActions";
 
 /** Starts a fresh chat with the open bot. Groups keep a single chat, so they pass none. */
 export interface NewChatControl {
   readonly canStart: boolean;
   readonly start: () => Promise<boolean>;
-}
-
-/**
- * Marks the open chat as seen while the page is visible and focused. It runs
- * when the chat opens, when a turn finishes, and when the page comes back into
- * view, not after Mark unread, so the chat stays unread until the user leaves
- * the chat or the window and comes back.
- */
-export function useMarkChatVisited(threadRef: ScopedThreadRef | null): void {
-  const shell = useThreadShell(threadRef);
-  const completedAt = shell?.latestTurn?.completedAt ?? null;
-  const markThreadVisited = useUiStateStore((state) => state.markThreadVisited);
-  const threadKey = threadRef ? scopedThreadKey(threadRef) : null;
-  useEffect(() => {
-    if (!threadKey) return;
-    return watchChatVisits({
-      page: document,
-      window,
-      completedAt,
-      now: () => new Date(),
-      markVisited: (visitedAt) => markThreadVisited(threadKey, visitedAt),
-    });
-  }, [completedAt, markThreadVisited, threadKey]);
-}
-
-function snoozePresetLabel(id: SnoozePresetId, t: ReturnType<typeof useI18n>["t"]) {
-  switch (id) {
-    case "hour":
-      return t("In 1 hour");
-    case "three-hours":
-      return t("In 3 hours");
-    case "evening":
-      return t("This evening");
-    case "tomorrow":
-      return t("Tomorrow");
-    case "next-week":
-      return t("Next week");
-  }
-}
-
-/**
- * The open chat's palette rows, in the order its header menu lists them. Snooze
- * presets are resolved against `now`; running one re-resolves it at run time.
- */
-export function buildChatPaletteActions({
-  threadRef,
-  state,
-  newChat,
-  actions,
-  t,
-  now,
-  openRename,
-}: {
-  readonly threadRef: ScopedThreadRef | null;
-  readonly state: ChatMenuState | null;
-  readonly newChat: NewChatControl | null;
-  readonly actions: ChatActions;
-  readonly t: ReturnType<typeof useI18n>["t"];
-  readonly now: Date;
-  readonly openRename: () => void;
-}): ChatPaletteAction[] {
-  const list: ChatPaletteAction[] = [];
-  if (newChat?.canStart) {
-    list.push({
-      id: "new",
-      title: t("New chat"),
-      searchTerms: ["new chat", "fresh", "start over"],
-      shortcutCommand: "chat.new",
-      run: async () => {
-        await newChat.start();
-      },
-    });
-  }
-  if (!threadRef || !state) return list;
-  list.push({
-    id: "rename",
-    title: t("Rename chat"),
-    searchTerms: ["rename", "title"],
-    run: openRename,
-  });
-  if (state.supports.titleRegeneration && !state.isRegeneratingTitle) {
-    list.push({
-      id: "regenerate-title",
-      title: t("Regenerate title"),
-      searchTerms: ["regenerate", "title"],
-      run: async () => {
-        await actions.regenerateTitle(threadRef);
-      },
-    });
-  }
-  if (state.supports.pinning) {
-    list.push(
-      state.isPinned
-        ? {
-            id: "unpin",
-            title: t("Unpin chat"),
-            searchTerms: ["unpin"],
-            run: async () => {
-              await actions.unpin(threadRef);
-            },
-          }
-        : {
-            id: "pin",
-            title: t("Pin chat"),
-            searchTerms: ["pin"],
-            run: async () => {
-              await actions.pin(threadRef);
-            },
-          },
-    );
-  }
-  if (state.canMarkUnread) {
-    list.push({
-      id: "mark-unread",
-      title: t("Mark unread"),
-      searchTerms: ["unread"],
-      run: () => actions.markUnread(threadRef),
-    });
-  }
-  if (state.supports.settlement) {
-    if (state.isSettled) {
-      list.push({
-        id: "unsettle",
-        title: t("Un-settle chat"),
-        searchTerms: ["unsettle", "reopen"],
-        run: async () => {
-          await actions.unsettle(threadRef);
-        },
-      });
-    } else if (state.canSettle) {
-      list.push({
-        id: "settle",
-        title: t("Settle chat"),
-        searchTerms: ["settle", "done"],
-        shortcutCommand: "thread.settle",
-        run: async () => {
-          await actions.settle(threadRef);
-        },
-      });
-    }
-  }
-  if (state.supports.snooze) {
-    if (state.isSnoozed) {
-      list.push({
-        id: "unsnooze",
-        title: t("Wake chat"),
-        searchTerms: ["wake", "unsnooze"],
-        run: async () => {
-          await actions.unsnooze(threadRef);
-        },
-      });
-    } else if (state.canSnooze) {
-      for (const preset of resolveSnoozePresets(now)) {
-        const when = snoozePresetLabel(preset.id, t);
-        list.push({
-          id: `snooze:${preset.id}`,
-          title: t("Snooze chat: {when}", { when }),
-          description: preset.whenLabel,
-          searchTerms: ["snooze", "later", "remind", preset.label],
-          run: async () => {
-            // Re-resolve so a palette left open still snoozes relative to now.
-            const current = resolveSnoozePresets(new Date()).find(
-              (candidate) => candidate.id === preset.id,
-            );
-            if (current) await actions.snooze(threadRef, current.snoozedUntil);
-          },
-        });
-      }
-    }
-  }
-  if (state.canArchive) {
-    list.push({
-      id: "archive",
-      title: t("Archive chat"),
-      searchTerms: ["archive"],
-      run: async () => {
-        await actions.archive(threadRef);
-      },
-    });
-  }
-  list.push({
-    id: "delete",
-    title: t("Delete chat"),
-    searchTerms: ["delete", "remove"],
-    run: async () => {
-      await actions.delete(threadRef);
-    },
-  });
-  return list;
 }
 
 /**
@@ -560,3 +371,5 @@ export function ChatActionsMenu({
     </>
   );
 }
+export { buildChatPaletteActions } from "./chatPaletteActions";
+export { useMarkChatVisited } from "./useMarkChatVisited";

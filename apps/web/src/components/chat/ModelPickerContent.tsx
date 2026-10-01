@@ -1,15 +1,35 @@
 import {
-  type ProviderInstanceId,
   type ProviderDriverKind,
+  type ProviderInstanceId,
   type ResolvedKeybindingsConfig,
 } from "@akeru/contracts";
 import { resolveSelectableModel } from "@akeru/shared/model";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
-import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { LegendList } from "@legendapp/list/react";
 import { ChevronRightIcon, SearchIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { useI18n } from "~/i18n";
+import { cn } from "~/lib/utils";
+import {
+  modelPickerJumpCommandForIndex,
+  modelPickerJumpIndexFromCommand,
+  resolveShortcutCommand,
+  shortcutLabelForCommand,
+} from "../../keybindings";
+import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
+import {
+  isProviderInstancePickerSelectable,
+  isProviderInstancePickerVisible,
+  providerInstancePickerBlockReason,
+  providerInstanceUnavailableReason,
+  type ProviderInstanceEntry,
+} from "../../providerInstances";
+import { Combobox, ComboboxInput, ComboboxItem, ComboboxListVirtualized } from "../ui/combobox";
+import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
+import { TooltipProvider } from "../ui/tooltip";
 import { ModelListRow } from "./ModelListRow";
 import { ModelPickerSidebar } from "./ModelPickerSidebar";
+import { modelPickerEmptyMessage } from "./modelPickerEmptyState";
 import {
   modelPickerLegacySectionKey,
   modelPickerModelKey,
@@ -18,27 +38,8 @@ import {
 } from "./modelPickerKeys";
 import { isModelPickerNewModel } from "./modelPickerModelHighlights";
 import { buildModelPickerSearchText, scoreModelPickerSearch } from "./modelPickerSearch";
-import { Combobox, ComboboxInput, ComboboxItem, ComboboxListVirtualized } from "../ui/combobox";
 import { ModelEsque } from "./providerIconUtils";
-import {
-  modelPickerJumpCommandForIndex,
-  modelPickerJumpIndexFromCommand,
-  resolveShortcutCommand,
-  shortcutLabelForCommand,
-} from "../../keybindings";
-import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
-import { cn } from "~/lib/utils";
-import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
-import { TooltipProvider } from "../ui/tooltip";
-import {
-  isProviderInstancePickerSelectable,
-  isProviderInstancePickerVisible,
-  providerInstancePickerBlockReason,
-  providerInstanceUnavailableReason,
-  type ProviderInstanceEntry,
-} from "../../providerInstances";
-import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
-import { modelPickerEmptyMessage } from "./modelPickerEmptyState";
+import { useModelPickerViewport } from "./useModelPickerViewport";
 
 type ModelPickerItem = {
   slug: string;
@@ -99,10 +100,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   } = props;
   const { t, plural } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
-  const [showTopScrollFade, setShowTopScrollFade] = useState(false);
-  const [showBottomScrollFade, setShowBottomScrollFade] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const modelListRef = useRef<LegendListRef | null>(null);
   const highlightedModelKeyRef = useRef<string | null>(null);
   const favorites = useClientSettings((s) => s.favorites ?? []);
   const [selectedInstanceId, setSelectedInstanceId] = useState<ProviderInstanceId | "favorites">(
@@ -531,15 +529,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       ),
     [visibleModels],
   );
-  const updateModelListScrollFades = useCallback(() => {
-    const scrollElement = modelListRef.current?.getScrollableNode();
-    if (!(scrollElement instanceof HTMLElement)) {
-      return;
-    }
-    const maxScrollOffset = Math.max(0, scrollElement.scrollHeight - scrollElement.clientHeight);
-    setShowTopScrollFade(scrollElement.scrollTop > 1);
-    setShowBottomScrollFade(maxScrollOffset - scrollElement.scrollTop > 1);
-  }, []);
+  const { modelListRef, showTopScrollFade, showBottomScrollFade, updateModelListScrollFades } =
+    useModelPickerViewport(filteredItemKeys);
   const modelJumpShortcutContext = useMemo(() => ({ modelPickerOpen: true }) as const, []);
   const modelJumpLabelByKey = useMemo((): ReadonlyMap<string, string> => {
     if (modelJumpCommandByKey.size === 0) {
@@ -597,20 +588,6 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       window.removeEventListener("keydown", onWindowKeyDown, true);
     };
   }, [handleModelSelect, keybindings, modelJumpModelKeys, modelJumpShortcutContext]);
-
-  useLayoutEffect(() => {
-    setShowTopScrollFade(false);
-    setShowBottomScrollFade(filteredItemKeys.length > 5);
-    let nestedFrame = 0;
-    const frame = window.requestAnimationFrame(() => {
-      updateModelListScrollFades();
-      nestedFrame = window.requestAnimationFrame(updateModelListScrollFades);
-    });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.cancelAnimationFrame(nestedFrame);
-    };
-  }, [filteredItemKeys, updateModelListScrollFades]);
 
   return (
     <TooltipProvider delay={0}>
