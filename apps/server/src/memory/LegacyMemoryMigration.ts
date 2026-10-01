@@ -5,13 +5,7 @@ import type {
 } from "@akeru/contracts";
 
 import * as Effect from "effect/Effect";
-
-import {
-  toBotMemoryError,
-  makeBotMemoryError,
-  type BotMemoryAccess,
-  type BotMemoryStore,
-} from "./BotMemory.ts";
+import { toBotMemoryError, type BotMemoryAccess, type BotMemoryStore } from "./BotMemory.ts";
 
 export interface LegacyMemoryMigrationReport {
   readonly migrated: number;

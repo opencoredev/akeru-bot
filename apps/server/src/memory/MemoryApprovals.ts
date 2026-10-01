@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
-import * as NodeCrypto from "node:crypto";
+import * as Predicate from "effect/Predicate";
 
+import * as NodeCrypto from "node:crypto";
 import {
   AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
   AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY,
@@ -13,10 +14,8 @@ import {
   EventId,
   ThreadId,
   type AkeruMemoryApprovalRequest,
-  type AkeruMemoryCandidateDecision,
   type AkeruMemoryDecisionReceipt,
   type AkeruMemoryRevision,
-  type AkeruMemoryShareScope,
   type AkeruMemoryTargetScope,
   type AkeruMemoryThreadAccess,
 } from "@akeru/contracts";
@@ -25,10 +24,8 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-
 import { BotInboxService } from "../bot-inbox/service.ts";
 import { ServerConfig } from "../config.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
@@ -36,93 +33,23 @@ import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSna
 import { assertSafeContent } from "./BotMemory.ts";
 import { resolveAuthorizedMemoryPartitions } from "./EntityMemoryAccess.ts";
 import { EntityMemoryRepository } from "./Services/EntityMemoryRepository.ts";
-
-export class MemoryApprovalError extends Schema.TaggedErrorClass<MemoryApprovalError>()(
-  "MemoryApprovalError",
-  { message: Schema.String },
-) {}
-
-export interface MemoryShareProposal {
-  readonly access: AkeruMemoryThreadAccess;
-  readonly fact: string;
-  readonly scope: AkeruMemoryShareScope;
-  readonly sensitive: boolean;
-  // "auto" saves non-sensitive shared facts without asking.
-  readonly mode: "ask" | "auto";
-}
-
-export type MemoryShareResult =
-  | { readonly status: "saved"; readonly memoryId: AkeruMemoryRootId }
-  | { readonly status: "pending"; readonly candidateId: AkeruMemoryCandidateId };
-
-export interface MemoryApprovalsShape {
-  // Called by the memory tool when a bot wants to save a shared fact.
-  readonly propose: (
-    input: MemoryShareProposal,
-  ) => Effect.Effect<MemoryShareResult, MemoryApprovalError>;
-  // Called when a person approves or rejects a pending candidate from the
-  // chat card or the bot inbox. Deciding twice returns the first receipt.
-  readonly decide: (input: {
-    readonly access: AkeruMemoryThreadAccess;
-    readonly decision: AkeruMemoryCandidateDecision;
-  }) => Effect.Effect<AkeruMemoryDecisionReceipt, MemoryApprovalError>;
-}
-
+import {
+  MemoryApprovalError,
+  type MemoryApprovalsShape,
+  memoryApprovalIncidentKey,
+  SCOPE_LABELS,
+  boundedSummary,
+} from "./MemoryShareProposal.ts";
+import {
+  encodeAffectedBotIds,
+  CandidateRow,
+  decodeCandidateRow,
+  decodeReceiptRow,
+  failWith,
+} from "./MemoryApprovalRows.ts";
 export class MemoryApprovals extends Context.Service<MemoryApprovals, MemoryApprovalsShape>()(
   "akeru-bot/memory/MemoryApprovals",
 ) {}
-
-export const memoryApprovalIncidentKey = (candidateId: string) => `memory-approval:${candidateId}`;
-
-const SCOPE_LABELS: Record<AkeruMemoryTargetScope, string> = {
-  private: "private",
-  bot: "this bot's",
-  project: "project",
-  group: "group",
-  workspace: "workspace",
-};
-const INBOX_SUMMARY_MAX_CHARS = 240;
-const boundedSummary = (value: string) =>
-  value.length <= INBOX_SUMMARY_MAX_CHARS
-    ? value
-    : `${value.slice(0, INBOX_SUMMARY_MAX_CHARS - 1)}…`;
-
-const AffectedBotIdsJson = Schema.fromJsonString(Schema.Array(BotId));
-const encodeAffectedBotIds = Schema.encodeEffect(AffectedBotIdsJson);
-
-const CandidateRow = Schema.Struct({
-  candidateId: Schema.String,
-  tenantId: Schema.String,
-  sourceThreadId: Schema.String,
-  sourceMessageId: Schema.NullOr(Schema.String),
-  authorBotId: Schema.NullOr(Schema.String),
-  fact: Schema.String,
-  scope: Schema.String,
-  sensitive: Schema.Number,
-  confidence: Schema.Number,
-  affectedBotIds: AffectedBotIdsJson,
-  status: Schema.String,
-});
-
-const ReceiptRow = Schema.Struct({
-  status: Schema.String,
-  fact: Schema.String,
-  scope: Schema.String,
-  affectedBotIds: AffectedBotIdsJson,
-  memoryRootId: Schema.NullOr(Schema.String),
-  createdAt: Schema.String,
-});
-
-const decodeCandidateRow = Schema.decodeUnknownEffect(CandidateRow);
-const decodeReceiptRow = Schema.decodeUnknownEffect(ReceiptRow);
-
-const failWith = (message: string) => (cause: unknown) =>
-  new MemoryApprovalError({
-    message:
-      typeof cause === "object" && cause !== null && "message" in cause
-        ? `${message}: ${String(cause.message)}`
-        : message,
-  });
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -448,7 +375,7 @@ const make = Effect.gen(function* () {
                     ),
                 ),
                 Effect.mapError((cause) =>
-                  cause._tag === "MemoryApprovalError"
+                  Predicate.isTagged(cause, "MemoryApprovalError")
                     ? cause
                     : failWith("Could not save the memory")(cause),
                 ),
@@ -522,7 +449,7 @@ const make = Effect.gen(function* () {
       )
       .pipe(
         Effect.mapError((cause) =>
-          cause._tag === "MemoryApprovalError"
+          Predicate.isTagged(cause, "MemoryApprovalError")
             ? cause
             : failWith("Could not record the memory decision")(cause),
         ),
@@ -532,3 +459,8 @@ const make = Effect.gen(function* () {
 });
 
 export const MemoryApprovalsLive = Layer.effect(MemoryApprovals, make);
+export { MemoryApprovalError } from "./MemoryShareProposal.ts";
+export type { MemoryShareProposal } from "./MemoryShareProposal.ts";
+export type { MemoryShareResult } from "./MemoryShareProposal.ts";
+export type { MemoryApprovalsShape } from "./MemoryShareProposal.ts";
+export { memoryApprovalIncidentKey } from "./MemoryShareProposal.ts";
