@@ -92,25 +92,16 @@ export function ResourceHistoryChart({
                 render={
                   <div className="grid h-full min-w-1 flex-1 grid-cols-3 items-end gap-px">
                     <span
-                      className="block rounded-t-sm bg-foreground/65"
-                      style={
-                        // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
-                        { height: `${cpuHeight}%` }
-                      }
+                      className="block h-(--bar-height) rounded-t-sm bg-foreground/65"
+                      style={{ "--bar-height": `${cpuHeight}%` }}
                     />
                     <span
-                      className={cn("block rounded-t-sm", IO_READ_COLOR)}
-                      style={
-                        // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
-                        { height: `${readHeight}%` }
-                      }
+                      className={cn("block h-(--bar-height) rounded-t-sm", IO_READ_COLOR)}
+                      style={{ "--bar-height": `${readHeight}%` }}
                     />
                     <span
-                      className={cn("block rounded-t-sm", IO_WRITE_COLOR)}
-                      style={
-                        // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
-                        { height: `${writeHeight}%` }
-                      }
+                      className={cn("block h-(--bar-height) rounded-t-sm", IO_WRITE_COLOR)}
+                      style={{ "--bar-height": `${writeHeight}%` }}
                     />
                   </div>
                 }
