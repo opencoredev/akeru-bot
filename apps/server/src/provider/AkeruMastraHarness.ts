@@ -212,7 +212,16 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     agent,
     storage: observationalMemory.storage,
     memory: observationalMemory.memory,
-    modes: [{ id: "build", name: "Build", defaultModelId: DEFAULT_MODEL_ID }],
+    modes: [
+      { id: "build", name: "Build", defaultModelId: DEFAULT_MODEL_ID },
+      // Keep legacy controller requests valid until their mode is normalized to build.
+      {
+        id: "plan",
+        name: "Plan",
+        defaultModelId: DEFAULT_MODEL_ID,
+        instructions: "Inspect and explain. Do not change files or run mutating commands.",
+      },
+    ],
     defaultModeId: "build",
     disableBuiltinTools: [
       "submit_plan",
