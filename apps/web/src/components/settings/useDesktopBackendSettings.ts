@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -106,7 +107,9 @@ export function useDesktopBackendSettings() {
   const savedEnvironments = useMemo(
     () =>
       environments
-        .filter((environment) => environment.entry.target._tag !== "PrimaryConnectionTarget")
+        .filter(
+          (environment) => !Predicate.isTagged(environment.entry.target, "PrimaryConnectionTarget"),
+        )
         .toSorted((left, right) => left.label.localeCompare(right.label)),
     [environments],
   );
@@ -118,9 +121,9 @@ export function useDesktopBackendSettings() {
           const profile = environment.entry.profile;
 
           if (
-            environment.entry.target._tag === "SshConnectionTarget" &&
+            Predicate.isTagged(environment.entry.target, "SshConnectionTarget") &&
             Option.isSome(profile) &&
-            profile.value._tag === "SshConnectionProfile"
+            Predicate.isTagged(profile.value, "SshConnectionProfile")
           ) {
             accumulator[profile.value.target.alias] = environment;
           }
@@ -139,9 +142,9 @@ export function useDesktopBackendSettings() {
       const profile = environment.entry.profile;
 
       if (
-        environment.entry.target._tag !== "SshConnectionTarget" ||
+        !Predicate.isTagged(environment.entry.target, "SshConnectionTarget") ||
         Option.isNone(profile) ||
-        profile.value._tag !== "SshConnectionProfile"
+        !Predicate.isTagged(profile.value, "SshConnectionProfile")
       ) {
         continue;
       }
@@ -566,7 +569,7 @@ export function useDesktopBackendSettings() {
 
       const result = await connectSshEnvironment({ target, label: "" });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         if (!isAtomCommandInterrupted(result)) {
           setSavedBackendError(formatDesktopSshConnectionError(squashAtomCommandFailure(result)));
         }
@@ -618,7 +621,7 @@ export function useDesktopBackendSettings() {
 
     const result = await connectPairing(remotePairingInput);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         const message = error instanceof Error ? error.message : "Failed to add backend.";
@@ -665,7 +668,7 @@ export function useDesktopBackendSettings() {
       setSavedBackendError(null);
       const result = await retryEnvironment(environmentId);
 
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         const message = error instanceof Error ? error.message : "Failed to connect backend.";
         setSavedBackendError(message);
@@ -688,7 +691,7 @@ export function useDesktopBackendSettings() {
       const result = await removeEnvironment(environmentId);
       setRemovingSavedEnvironmentId(null);
 
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         const message = error instanceof Error ? error.message : "Failed to remove backend.";
         setSavedBackendError(message);
@@ -721,7 +724,7 @@ export function useDesktopBackendSettings() {
 
       setConnectingSshHostAlias(null);
 
-      if (result._tag === "Success") {
+      if (Predicate.isTagged(result, "Success")) {
         setSavedBackendSshHost("");
         setSavedBackendSshUsername("");
         setSavedBackendSshPort("");

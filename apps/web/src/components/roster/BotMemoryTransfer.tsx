@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   DURABLE_MEMORY_EXPORT_SCOPES,
   type DurableMemoryExportScope,
@@ -175,7 +176,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                 input: { threadId: threadRef.threadId, target: "thread", complete: true },
               });
 
-              if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+              if (Predicate.isTagged(result, "Failure")) throw squashAtomCommandFailure(result);
               download(result.value, `akeru-memory-${threadRef.threadId}.json`);
             })
           }
@@ -208,7 +209,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                   input: { threadId: threadRef.threadId, target: exportScope, complete: true },
                 });
 
-                if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+                if (Predicate.isTagged(result, "Failure")) throw squashAtomCommandFailure(result);
                 download(
                   result.value,
                   durableMemoryExportFileName(exportScope, threadRef.threadId),
@@ -263,7 +264,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                 input: { threadId: threadRef.threadId, target: archive.target, archive },
               });
 
-              if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+              if (Predicate.isTagged(result, "Failure")) throw squashAtomCommandFailure(result);
               startReview({ kind: "durable", archive, preview: result.value });
 
               return;
@@ -276,7 +277,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
               input: { threadId: threadRef.threadId, archive },
             });
 
-            if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+            if (Predicate.isTagged(result, "Failure")) throw squashAtomCommandFailure(result);
             startReview({ kind: "notes", archive, preview: result.value });
           });
         }}
@@ -316,7 +317,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                     },
                   });
 
-                  if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+                  if (Predicate.isTagged(result, "Failure")) throw squashAtomCommandFailure(result);
                   startReview(null);
                 })
               }
@@ -354,7 +355,7 @@ export function BotMemoryTransfer({ threadRef }: { readonly threadRef: ScopedThr
                 },
               });
 
-              if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+              if (Predicate.isTagged(result, "Failure")) throw squashAtomCommandFailure(result);
               startReview(null);
               setNotice(
                 t("Imported {imported}, changed {changed}, skipped {skipped}.", {

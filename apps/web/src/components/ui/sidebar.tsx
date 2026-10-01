@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { PanelLeftCloseIcon, PanelLeftIcon } from "lucide-react";
 import * as React from "react";
 import { cn } from "~/lib/utils";
@@ -63,7 +64,7 @@ function Sidebar({
       return null;
     }
 
-    const options = typeof resizable === "boolean" ? {} : resizable;
+    const options = Predicate.isBoolean(resizable) ? {} : resizable;
 
     return {
       maxWidth: options.maxWidth ?? Number.POSITIVE_INFINITY,

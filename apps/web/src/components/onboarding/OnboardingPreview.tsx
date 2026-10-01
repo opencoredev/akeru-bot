@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 
@@ -38,7 +39,7 @@ function ProviderChip({
   const provider = SUBSCRIPTION_PROVIDERS.find((candidate) => candidate.id === providerId);
 
   if (!provider) return null;
-  const ProviderIcon = typeof provider.icon === "string" ? null : provider.icon;
+  const ProviderIcon = Predicate.isString(provider.icon) ? null : provider.icon;
 
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 py-1 pe-2.5 ps-2 text-xs text-muted-foreground">

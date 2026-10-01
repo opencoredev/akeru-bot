@@ -377,10 +377,7 @@ const SEARCH_ITEMS_BY_ID = Object.fromEntries(
 export function searchableSetting(
   id: SettingsSearchItemId,
   translate: (message: string) => string = (message) => message,
-): {
-  readonly id: string;
-  readonly title: string;
-} {
+) {
   const { id: anchorId, title } = SEARCH_ITEMS_BY_ID[id];
 
   return { id: anchorId, title: translate(title) };

@@ -1,7 +1,8 @@
+import { Predicate } from "effect";
 import { isValidElement, type ReactNode } from "react";
 
 export function nodeToPlainText(node: ReactNode): string {
-  if (typeof node === "string" || typeof node === "number") {
+  if (Predicate.isString(node) || Predicate.isNumber(node)) {
     return String(node);
   }
 

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -157,7 +158,7 @@ export function SidebarMenuButton({
     return buttonElement;
   }
 
-  if (typeof tooltip === "string") {
+  if (Predicate.isString(tooltip)) {
     tooltip = {
       children: tooltip,
     };

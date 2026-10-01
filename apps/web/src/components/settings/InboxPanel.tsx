@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { BookmarkIcon, CircleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -75,7 +76,7 @@ export function InboxSection() {
                         input: { id: item.id },
                       });
 
-                      return result._tag === "Failure"
+                      return Predicate.isTagged(result, "Failure")
                         ? formatEnvironmentQueryError(result.cause)
                         : null;
                     }
@@ -92,7 +93,7 @@ export function InboxSection() {
                         },
                       });
 
-                      if (result._tag === "Failure") {
+                      if (Predicate.isTagged(result, "Failure")) {
                         return t(
                           describeDurableFactFailure(squashAtomCommandFailure(result)).message,
                         );

@@ -1,3 +1,5 @@
+import { recordLookup } from "../recordLookup";
+import { Predicate } from "effect";
 import { createTranslator } from "@akeru/client-runtime/i18n";
 import type { BotAvatar, BotBlobShape } from "./types";
 
@@ -60,7 +62,7 @@ const DARK_EYES = "#161616";
 const LIGHT_EYES = "#FFFFFF";
 
 /** The muted presets bots were saved with before the palette went vivid. */
-const LEGACY_BLOB_COLORS: Record<string, string> = {
+const LEGACY_BLOB_COLORS = {
   "#E0645C": "#FF4A5A",
   "#E8883A": "#FF7A1F",
   "#D9A833": "#FFA826",
@@ -70,14 +72,14 @@ const LEGACY_BLOB_COLORS: Record<string, string> = {
   "#8B6FC9": "#9A68FF",
   "#C96FA8": "#FF4FA8",
   "#7A8699": "#8E8E93",
-};
+} satisfies Record<string, string>;
 
 /** Normalizes a stored body color, moving retired presets onto the current palette. */
 export function resolveBlobColor(value: unknown) {
   if (!isBotAvatarColor(value)) return DEFAULT_BLOB_COLOR;
   const color = value.toUpperCase();
 
-  return LEGACY_BLOB_COLORS[color] ?? color;
+  return recordLookup(LEGACY_BLOB_COLORS, color) ?? color;
 }
 
 function relativeLuminance(hexColor: string) {
@@ -120,7 +122,7 @@ export function resolveBlobOutline(color: string) {
 }
 
 export function isBotAvatarColor(value: unknown): value is string {
-  return typeof value === "string" && /^#[\da-f]{6}$/i.test(value);
+  return Predicate.isString(value) && /^#[\da-f]{6}$/i.test(value);
 }
 
 export function isBotBlobShape(value: string): value is BotBlobShape {
@@ -134,10 +136,7 @@ export function isBotBlobShape(value: string): value is BotBlobShape {
  * distinct look. Image avatars and unknown blob shapes from persisted or
  * server data fall back to the default circle.
  */
-export function resolveBlobRendering(avatar: BotAvatar | null | undefined): {
-  shape: BotBlobShape;
-  color: string;
-} {
+export function resolveBlobRendering(avatar: BotAvatar | null | undefined) {
   if (avatar?.kind === "dither") {
     const hash = Math.abs(hashSeed(avatar.seed));
 

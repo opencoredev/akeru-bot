@@ -1,3 +1,5 @@
+import { recordLookup } from "../recordLookup";
+import { Predicate } from "effect";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -17,7 +19,7 @@ import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 
-const CHECK_TITLES: Record<string, string> = {
+const CHECK_TITLES = {
   service: "Background service",
   "boot-persistence": "Starts at boot",
   disk: "Storage",
@@ -35,7 +37,7 @@ const CHECK_TITLES: Record<string, string> = {
   "image-lifecycle": "Container image",
   logs: "Logs",
   providers: "Providers",
-};
+} satisfies Record<string, string>;
 
 const STATUS_LABELS: Record<RemoteDiagnosticStatus, string> = {
   pass: "OK",
@@ -88,7 +90,7 @@ export function RemoteHealthSection({ environmentId }: { readonly environmentId:
     const result = await repair({ environmentId, input: { checkIds: [check.id] } });
     setRepairingCheckId(null);
 
-    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+    if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
       toastManager.add({
         type: "error",
@@ -122,7 +124,7 @@ export function RemoteHealthSection({ environmentId }: { readonly environmentId:
       {report?.checks.map((check) => (
         <SettingsRow
           key={check.id}
-          title={CHECK_TITLES[check.id] ?? check.id}
+          title={recordLookup(CHECK_TITLES, check.id) ?? check.id}
           description={check.message}
           status={<CheckStatus status={check.status} />}
           control={

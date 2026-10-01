@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -569,7 +570,7 @@ function FontFamilySettingsRow({
       <Select
         value={String(size.value)}
         onValueChange={(next) => {
-          if (typeof next !== "string") return;
+          if (!Predicate.isString(next)) return;
           const parsed = Number(next);
 
           if (Number.isInteger(parsed) && parsed >= size.min && parsed <= size.max) {

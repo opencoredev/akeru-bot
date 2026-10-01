@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   FILL_PREVIEW_VIEWPORT,
   type PreviewAutomationOpenInput,
@@ -21,7 +22,7 @@ export function previewAutomationOpenNeedsOverlay(
   input: PreviewAutomationOpenInput,
   snapshot: PreviewSessionSnapshot,
 ): boolean {
-  return input.url !== undefined || snapshot.navStatus._tag !== "Idle";
+  return input.url !== undefined || !Predicate.isTagged(snapshot.navStatus, "Idle");
 }
 
 /**
@@ -37,7 +38,7 @@ export function previewAutomationDefaultViewport(
 ): PreviewViewportSetting | null {
   const viewport = snapshot.viewport ?? FILL_PREVIEW_VIEWPORT;
 
-  return !reusedExistingTab && viewport._tag === "fill"
+  return !reusedExistingTab && Predicate.isTagged(viewport, "fill")
     ? DEFAULT_PREVIEW_AUTOMATION_VIEWPORT
     : null;
 }

@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { Predicate } from "effect";
 import type { AreaVariant } from "./chart-context";
 import { rgb, type Seed } from "./palette";
 
@@ -168,7 +169,7 @@ export type BloomStyle = {
 /** Style for the bloom *layer* canvas (a blurred, additive copy). null when off. */
 export function bloomLayerStyle(input: BloomInput, active: boolean): BloomStyle | null {
   if (!active || input === "off") return null;
-  const cfg = typeof input === "string" ? PRESET[input] : input;
+  const cfg = Predicate.isString(input) ? PRESET[input] : input;
 
   return {
     filter: `blur(${cfg.blur}px) brightness(${cfg.brightness}) saturate(${cfg.saturate ?? 1})`,

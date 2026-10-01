@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { AtomCommandResult } from "@akeru/client-runtime/state/runtime";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import {
@@ -41,7 +42,7 @@ export interface ComposedVoiceCallDependencies {
 }
 
 function commandValue<A>(result: AtomCommandResult<A, unknown>, fallback: string): A {
-  if (result._tag === "Success") return result.value;
+  if (Predicate.isTagged(result, "Success")) return result.value;
   const error = squashAtomCommandFailure(result);
   throw error instanceof Error ? error : new Error(fallback);
 }

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -67,7 +68,7 @@ function findElement(
 }
 
 function call(handler: unknown, ...args: ReadonlyArray<unknown>) {
-  if (typeof handler !== "function") throw new Error("Expected an event handler.");
+  if (!Predicate.isFunction(handler)) throw new Error("Expected an event handler.");
   handler(...args);
 }
 
@@ -105,7 +106,7 @@ describe("BotSandboxBrowserSharingSettings", () => {
     findElement(
       tree,
       (props) =>
-        typeof props.children === "string" &&
+        Predicate.isString(props.children) &&
         props.children.includes("会为每个机器人创建独立的工作区和浏览器"),
     );
     findElement(tree, (props) => props.children === "取消");

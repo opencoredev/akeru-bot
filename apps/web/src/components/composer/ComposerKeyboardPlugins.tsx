@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { type ServerProviderSkill } from "@akeru/contracts";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
@@ -244,7 +245,7 @@ export function ComposerHomeEndKeyPlugin() {
           return false;
         }
 
-        if (selection.rangeCount === 0 || typeof selection.modify !== "function") {
+        if (selection.rangeCount === 0 || !Predicate.isFunction(selection.modify)) {
           return false;
         }
 
@@ -662,7 +663,7 @@ export function ComposerSurroundSelectionPlugin(props: {
         return;
       }
 
-      if (typeof event.data !== "string") {
+      if (!Predicate.isString(event.data)) {
         pendingSurroundSelectionRef.current = null;
 
         return;

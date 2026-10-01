@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { SubscriptionProviderId } from "@akeru/contracts";
 
 import type { BotAvatar, BotBlobShape } from "../roster/types";
@@ -52,13 +53,13 @@ export function readDesktopOnboardingHandoff(
     const handoff: unknown = JSON.parse(value);
 
     if (
-      typeof handoff === "object" &&
+      Predicate.isObjectOrArray(handoff) &&
       handoff !== null &&
       "environmentId" in handoff &&
-      typeof handoff.environmentId === "string" &&
+      Predicate.isString(handoff.environmentId) &&
       handoff.environmentId.trim() &&
       "botId" in handoff &&
-      typeof handoff.botId === "string" &&
+      Predicate.isString(handoff.botId) &&
       handoff.botId.trim()
     ) {
       return { environmentId: handoff.environmentId, botId: handoff.botId };
@@ -139,7 +140,7 @@ export const DEFAULT_DESKTOP_ONBOARDING_DRAFT: DesktopOnboardingDraft = {
 };
 
 function isBlobShape(value: unknown): value is BotBlobShape {
-  return typeof value === "string" && (BLOB_SHAPES as readonly string[]).includes(value);
+  return Predicate.isString(value) && (BLOB_SHAPES as readonly string[]).includes(value);
 }
 
 function isBlobColor(value: unknown): value is string {
@@ -173,7 +174,7 @@ const legacyUseCaseGoals: Readonly<Record<string, string>> = {
 };
 
 function isProviderId(value: unknown): value is SubscriptionProviderId {
-  return typeof value === "string" && (providerIds as readonly string[]).includes(value);
+  return Predicate.isString(value) && (providerIds as readonly string[]).includes(value);
 }
 
 function isStep(value: unknown): value is DesktopOnboardingStep {
@@ -186,9 +187,9 @@ function isStep(value: unknown): value is DesktopOnboardingStep {
  * left behind by a choice they moved away from.
  */
 function storedGoal(parsed: Record<string, unknown>): string {
-  if (typeof parsed.goal === "string" && parsed.goal.trim().length > 0) return parsed.goal;
-  const custom = typeof parsed.customUseCase === "string" ? parsed.customUseCase : "";
-  const useCaseId = typeof parsed.useCaseId === "string" ? parsed.useCaseId : null;
+  if (Predicate.isString(parsed.goal) && parsed.goal.trim().length > 0) return parsed.goal;
+  const custom = Predicate.isString(parsed.customUseCase) ? parsed.customUseCase : "";
+  const useCaseId = Predicate.isString(parsed.useCaseId) ? parsed.useCaseId : null;
 
   if (useCaseId !== null && useCaseId !== "custom") return legacyUseCaseGoals[useCaseId] ?? custom;
 
@@ -209,13 +210,13 @@ export function parseDesktopOnboardingDraft(value: string | null): DesktopOnboar
       !isStep(step) ||
       !isProviderId(parsed.providerId) ||
       goal.length > DESKTOP_ONBOARDING_GOAL_MAX_LENGTH ||
-      typeof parsed.name !== "string" ||
+      !Predicate.isString(parsed.name) ||
       parsed.name.length > 80 ||
       !avatar ||
       avatar.kind !== "blob" ||
       !isBlobShape(avatar.shape) ||
       !isBlobColor(avatar.color) ||
-      !(parsed.botId === null || typeof parsed.botId === "string")
+      !(parsed.botId === null || Predicate.isString(parsed.botId))
     ) {
       return null;
     }

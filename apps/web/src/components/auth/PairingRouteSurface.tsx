@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { AuthSessionState } from "@akeru/contracts";
 import type { MessageKey } from "@akeru/client-runtime/i18n";
 import type { HostedPairingRequest } from "@akeru/shared/remote";
@@ -50,16 +51,16 @@ const REJECTED_TOKEN_MESSAGE = new PrimaryEnvironmentPairingCredentialRejectedEr
 }).message;
 
 /** Sorts a pairing failure into the state the page shows for it. */
-export function pairingErrorFromUnknown(error: unknown): PairingError {
-  if (isPrimaryEnvironmentPairingCredentialRejectedError(error)) {
+export function pairingErrorFromUnknown(cause: unknown): PairingError {
+  if (isPrimaryEnvironmentPairingCredentialRejectedError(cause)) {
     return { kind: "rejected" };
   }
 
-  if (isPrimaryEnvironmentPairingCredentialRequiredError(error)) {
-    return { kind: "missing-token", message: error.message };
+  if (isPrimaryEnvironmentPairingCredentialRequiredError(cause)) {
+    return { kind: "missing-token", message: cause.message };
   }
 
-  return pairingErrorFromMessage(errorMessageFromUnknown(error));
+  return pairingErrorFromMessage(errorMessageFromUnknown(cause));
 }
 
 /** Bootstrap hands the route only a message, so match the rejection by its text. */
@@ -222,7 +223,7 @@ export function HostedPairingRouteSurface() {
       next = await runHostedPairing(requestRef.current, async (input) => {
         const result = await connect(input);
 
-        if (result._tag === "Success") return { ok: true };
+        if (Predicate.isTagged(result, "Success")) return { ok: true };
 
         return {
           ok: false,
@@ -393,13 +394,13 @@ function usePrimaryEnvironmentSummary(): PairingEnvironmentSummary {
   return { name, address: typeof window === "undefined" ? null : window.location.host || null };
 }
 
-function errorMessageFromUnknown(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
+function errorMessageFromUnknown(cause: unknown): string {
+  if (cause instanceof Error && cause.message.trim().length > 0) {
+    return cause.message;
   }
 
-  if (typeof error === "string" && error.trim().length > 0) {
-    return error;
+  if (Predicate.isString(cause) && cause.trim().length > 0) {
+    return cause;
   }
 
   return "Authentication failed.";

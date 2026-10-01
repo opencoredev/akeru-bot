@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -285,7 +286,7 @@ function findByLabel(node: unknown, label: string): ReactElement<Record<string, 
       return true;
     }
 
-    if (typeof element.type === "function" && element.type.name.startsWith("Delegation")) {
+    if (Predicate.isFunction(element.type) && element.type.name.startsWith("Delegation")) {
       found = findByLabel((element.type as (props: unknown) => unknown)(element.props), label);
     }
 
@@ -348,7 +349,8 @@ describe("DelegationCard", () => {
 
     const completed = delegation("completed");
 
-    if (completed.phase._tag !== "Completed") throw new Error("Expected a completed delegation");
+    if (!Predicate.isTagged(completed.phase, "Completed"))
+      throw new Error("Expected a completed delegation");
     expect(
       renderToStaticMarkup(
         <DelegationCard
@@ -368,7 +370,10 @@ describe("DelegationCard", () => {
     const completed = delegation("completed");
     const failed = delegation("failed");
 
-    if (completed.phase._tag !== "Completed" || failed.phase._tag !== "Failed") {
+    if (
+      !Predicate.isTagged(completed.phase, "Completed") ||
+      !Predicate.isTagged(failed.phase, "Failed")
+    ) {
       throw new Error("Expected completed and failed delegations");
     }
 
@@ -397,7 +402,8 @@ describe("DelegationCard", () => {
   it("shows a start failure as the bot-named readable line", () => {
     const failed = delegation("failed");
 
-    if (failed.phase._tag !== "Failed") throw new Error("Expected a failed delegation");
+    if (!Predicate.isTagged(failed.phase, "Failed"))
+      throw new Error("Expected a failed delegation");
 
     const message =
       "Ren could not start: Provider instance 'codex' is disabled in Akeru Bot settings.";

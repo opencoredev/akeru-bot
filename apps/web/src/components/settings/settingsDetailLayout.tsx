@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   Link,
   type LinkComponentProps,
@@ -50,7 +51,7 @@ export function SettingsEntityIcon({
   readonly icon: Icon | string;
   readonly className?: string;
 }) {
-  if (typeof icon === "string") {
+  if (Predicate.isString(icon)) {
     return (
       <img
         src={icon}

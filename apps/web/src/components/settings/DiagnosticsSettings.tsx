@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -197,7 +198,7 @@ export function DiagnosticsSettingsPanel() {
 
       setIsOpeningLogsDirectory(false);
 
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         setOpenLogsDirectoryError(
           error instanceof Error ? error.message : "Unable to open logs folder.",
@@ -268,7 +269,7 @@ export function DiagnosticsSettingsPanel() {
           input: { pid, startTimeMs: process.startTimeMs, signal },
         });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           if (!isAtomCommandInterrupted(result)) {
             const error = squashAtomCommandFailure(result);
             toastManager.add({

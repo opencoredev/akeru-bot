@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   DURABLE_MEMORY_INSPECT_SCOPES,
   type DurableFactIntent,
@@ -151,7 +152,7 @@ function DurableFactsSection({
         input: { threadId: threadRef.threadId, mutation: durableFactMutation(fact, intent) },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         const described = describeDurableFactFailure(squashAtomCommandFailure(result));
         setFailure(described);
 

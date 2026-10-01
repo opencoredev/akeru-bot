@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -187,7 +188,7 @@ export function ComposioSection({
     title: string,
     result: Awaited<ReturnType<typeof configure>> | Awaited<ReturnType<typeof authorize>>,
   ): boolean => {
-    if (result._tag !== "Failure") return false;
+    if (!Predicate.isTagged(result, "Failure")) return false;
 
     if (isAtomCommandInterrupted(result)) return true;
     const error = squashAtomCommandFailure(result);
@@ -234,7 +235,7 @@ export function ComposioSection({
     const result = await authorize({ environmentId, input: { toolkitSlug: toolkit.slug } });
     setPendingId(null);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       reportFailure(t("Could not connect {name}", { name: toolkit.name }), result);
 
       return;

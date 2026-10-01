@@ -1,6 +1,8 @@
 // @ts-nocheck
 "use client";
 
+import { Predicate } from "effect";
+
 import { Children, type ComponentType, isValidElement, type ReactNode } from "react";
 import type { ChartConfig, Margins } from "./chart-context";
 import { CommonChartContext } from "./common-context";
@@ -23,7 +25,7 @@ const DEFAULT_POLAR_MARGINS: Margins = {
 };
 
 function layerOf(node: ReactNode): "back" | "dom" | "svg" {
-  if (!isValidElement(node) || typeof node.type === "string") return "svg";
+  if (!isValidElement(node) || Predicate.isString(node.type)) return "svg";
 
   return (node.type as { chartLayer?: "back" | "dom" }).chartLayer ?? "svg";
 }

@@ -1,3 +1,4 @@
+import { isTagged } from "../tagged";
 import type { PreviewRenderedViewportSize, PreviewViewportSetting } from "@akeru/contracts";
 
 import { browserViewportSettingKey } from "~/browser/browserViewportLayout";
@@ -18,11 +19,12 @@ export function isPreviewViewportReady(input: {
     return false;
   }
 
-  const expectedViewport =
-    setting._tag === "fill" ? declaredViewport : { width: setting.width, height: setting.height };
+  const expectedViewport = isTagged(setting, "fill")
+    ? declaredViewport
+    : { width: setting.width, height: setting.height };
 
   if (
-    setting._tag !== "fill" &&
+    !isTagged(setting, "fill") &&
     (declaredViewport.width !== expectedViewport.width ||
       declaredViewport.height !== expectedViewport.height)
   ) {

@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { Predicate } from "effect";
 import { Children, type ComponentType, isValidElement, type ReactNode } from "react";
 import {
   type ChartConfig,
@@ -55,7 +56,7 @@ export type CartesianChartProps<TData extends Row> = {
 
 /** Which render layer a composed part targets — defaults to the front SVG. */
 function layerOf(node: ReactNode): "back" | "dom" | "svg" {
-  if (!isValidElement(node) || typeof node.type === "string") return "svg";
+  if (!isValidElement(node) || Predicate.isString(node.type)) return "svg";
 
   return (node.type as { chartLayer?: "back" | "dom" }).chartLayer ?? "svg";
 }

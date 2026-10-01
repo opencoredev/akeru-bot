@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   canSaveDurableFactEdit,
   describeDurableFactFailure,
@@ -70,7 +71,7 @@ export function MemoryApprovalPrompt({
         input: { threadId: threadRef.threadId, mutation: memoryApprovalMutation(approval, intent) },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         setFailure({
           candidateId: approval.candidateId,
           message: t(describeDurableFactFailure(squashAtomCommandFailure(result)).message),

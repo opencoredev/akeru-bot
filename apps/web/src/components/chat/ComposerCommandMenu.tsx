@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   formatProviderSkillDisplayName,
   resolveProviderSkillSourceKind,
@@ -79,7 +80,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
       mode="none"
       onItemHighlighted={(highlightedValue) => {
         props.onHighlightedItemChange(
-          typeof highlightedValue === "string" ? highlightedValue : null,
+          Predicate.isString(highlightedValue) ? highlightedValue : null,
         );
       }}
     >

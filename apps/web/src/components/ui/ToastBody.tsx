@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { Toast } from "@base-ui/react/toast";
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import {
@@ -32,7 +33,7 @@ const TOAST_ICONS = {
 const ERROR_DESCRIPTION_CLAMP_MIN_CHARS = 180;
 
 function errorDescriptionClampClass(type: unknown, description: unknown): string | undefined {
-  if (type !== "error" || typeof description !== "string") {
+  if (type !== "error" || !Predicate.isString(description)) {
     return undefined;
   }
 
@@ -240,7 +241,7 @@ export function deriveToastBodyDescriptor(toast: {
     toast.data?.secondaryActionVariant ?? "outline";
 
   const copyErrorText =
-    toast.type === "error" && typeof toast.description === "string" && !toast.data?.hideCopyButton
+    toast.type === "error" && Predicate.isString(toast.description) && !toast.data?.hideCopyButton
       ? toast.description
       : null;
 

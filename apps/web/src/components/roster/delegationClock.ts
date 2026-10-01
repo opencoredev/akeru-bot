@@ -52,10 +52,7 @@ export function useDelegationClock(live: boolean): number {
 }
 
 /** Test inspection: live subscribers and whether the shared interval is running. */
-export function delegationClockState(): {
-  readonly subscribers: number;
-  readonly ticking: boolean;
-} {
+export function delegationClockState() {
   return { subscribers: listeners.size, ticking: timer !== null };
 }
 

@@ -72,11 +72,11 @@ export function captureVoiceUtterance(
       void context.close().catch(() => undefined);
     };
 
-    const fail = (error: unknown) => {
+    const fail = (cause: unknown) => {
       if (settled) return;
       settled = true;
       cleanup();
-      reject(error);
+      reject(cause);
     };
 
     const abort = () => fail(signal.reason);
@@ -177,7 +177,7 @@ export function playVoiceAudio(
   return new Promise((resolve, reject) => {
     let settled = false;
 
-    const finish = (error?: unknown) => {
+    const finish = (cause?: unknown) => {
       if (settled) return;
       settled = true;
       speaker.removeEventListener("ended", ended);
@@ -187,7 +187,7 @@ export function playVoiceAudio(
       speaker.removeAttribute("src");
       URL.revokeObjectURL(url);
 
-      if (error !== undefined) reject(error);
+      if (cause !== undefined) reject(cause);
       else resolve();
     };
 

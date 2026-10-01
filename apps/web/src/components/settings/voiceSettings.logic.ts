@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   VOICE_API_PROVIDERS,
   VOICE_PROVIDER_CAPABILITIES,
@@ -61,12 +62,12 @@ export function voiceCapabilityLabel(provider: VoiceApiProvider): string {
 }
 
 /** True when a voice command failed because the provider refused the saved key. */
-export function voiceKeyWasRejected(error: unknown): boolean {
+export function voiceKeyWasRejected(cause: unknown): boolean {
   return (
-    typeof error === "object" &&
-    error !== null &&
-    "reason" in error &&
-    error.reason === "provider-auth"
+    Predicate.isObjectOrArray(cause) &&
+    cause !== null &&
+    "reason" in cause &&
+    cause.reason === "provider-auth"
   );
 }
 
@@ -75,10 +76,10 @@ export function voiceKeyWasRejected(error: unknown): boolean {
  * `failure` is null on success. Any success clears the verdict, including saving a
  * replacement key; only a key rejection sets it, so a network error keeps the last verdict.
  */
-export function nextVoiceKeyRejected(previous: boolean, failure: unknown): boolean {
-  if (failure === null) return false;
+export function nextVoiceKeyRejected(previous: boolean, cause: unknown): boolean {
+  if (cause === null) return false;
 
-  return voiceKeyWasRejected(failure) || previous;
+  return voiceKeyWasRejected(cause) || previous;
 }
 
 /** Explains why a call cannot start with these settings, or null when it can. */

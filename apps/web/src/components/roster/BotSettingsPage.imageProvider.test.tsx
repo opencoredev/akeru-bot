@@ -1,4 +1,5 @@
-import type { ReactElement } from "react";
+import { Predicate } from "effect";
+import { isValidElement, type ReactElement } from "react";
 import {
   DEFAULT_UNIFIED_SETTINGS,
   EnvironmentId,
@@ -167,7 +168,7 @@ function renderForm(): Tree {
 
   const formElement = visitElements(
     page,
-    (element) => typeof element.props.onSave === "function" && "bot" in element.props,
+    (element) => Predicate.isFunction(element.props.onSave) && "bot" in element.props,
   );
 
   expect(formElement).not.toBeNull();
@@ -180,7 +181,7 @@ function imageSelect(tree: Tree) {
   const select = visitElements(
     tree,
     (element) =>
-      typeof element.props.onValueChange === "function" &&
+      Predicate.isFunction(element.props.onValueChange) &&
       visitElements(
         element.props.children,
         (child) => child.props["aria-label"] === "Image provider",
@@ -197,11 +198,11 @@ function imageSelect(tree: Tree) {
 }
 
 function textOf(node: unknown): string {
-  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Predicate.isString(node) || Predicate.isNumber(node)) return String(node);
 
   if (Array.isArray(node)) return node.map(textOf).join("");
 
-  if (node && typeof node === "object" && "props" in node) {
+  if (isValidElement<Tree["props"]>(node)) {
     return textOf((node as Tree).props.children);
   }
 
@@ -232,7 +233,7 @@ function modelPicker(tree: Tree) {
   const picker = visitElements(
     tree,
     (element) =>
-      typeof element.props.onChange === "function" && "activeInstanceId" in element.props,
+      Predicate.isFunction(element.props.onChange) && "activeInstanceId" in element.props,
   );
 
   expect(picker).not.toBeNull();
@@ -297,7 +298,7 @@ describe("bot settings image provider", () => {
     const select = visitElements(
       tree,
       (element) =>
-        typeof element.props.onValueChange === "function" &&
+        Predicate.isFunction(element.props.onValueChange) &&
         visitElements(
           element.props.children,
           (child) => child.props["aria-label"] === "Sandbox provider",
@@ -332,7 +333,7 @@ describe("bot settings image provider", () => {
     const select = visitElements(
       tree,
       (element) =>
-        typeof element.props.onValueChange === "function" &&
+        Predicate.isFunction(element.props.onValueChange) &&
         visitElements(
           element.props.children,
           (child) => child.props["aria-label"] === "Sandbox provider",
@@ -353,7 +354,7 @@ describe("bot settings image provider", () => {
     expect(modelPicker(tree).activeInstanceId).toBe(missingId);
 
     const notice = visitElements(tree, (element) =>
-      Boolean(element.props.presentation && typeof element.props.presentation === "object"),
+      Boolean(element.props.presentation && Predicate.isObjectOrArray(element.props.presentation)),
     );
 
     expect(notice?.props.presentation).toMatchObject({ reason: "missing-provider" });

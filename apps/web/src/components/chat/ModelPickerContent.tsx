@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   type ProviderDriverKind,
   type ProviderInstanceId,
@@ -669,7 +670,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           virtualized
           value={modelPickerModelKey(props.activeInstanceId, props.model)}
           onItemHighlighted={(modelKey, eventDetails) => {
-            highlightedModelKeyRef.current = typeof modelKey === "string" ? modelKey : null;
+            highlightedModelKeyRef.current = Predicate.isString(modelKey) ? modelKey : null;
 
             if (eventDetails.reason === "keyboard" && eventDetails.index >= 0) {
               void modelListRef.current?.scrollIndexIntoView?.({
@@ -679,7 +680,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
             }
           }}
           onValueChange={(modelKey) => {
-            if (typeof modelKey !== "string") {
+            if (!Predicate.isString(modelKey)) {
               return;
             }
 

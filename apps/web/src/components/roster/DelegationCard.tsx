@@ -1,3 +1,4 @@
+import { isTagged } from "../tagged";
 import type {
   AkeruDelegationRecord,
   AkeruDelegationState,
@@ -41,7 +42,7 @@ export function delegationUsageTokens(
   delegation: AkeruDelegationRecord,
   childActivities: ReadonlyArray<OrchestrationThreadActivity>,
 ): number | null {
-  const childTurnId = delegation.phase._tag === "Queued" ? null : delegation.phase.childTurnId;
+  const childTurnId = isTagged(delegation.phase, "Queued") ? null : delegation.phase.childTurnId;
 
   if (!childTurnId) return null;
   const activities = childActivities.filter((activity) => activity.turnId === childTurnId);
@@ -112,7 +113,7 @@ function DelegationActions({
 
     return request
       .then((result) => {
-        if (result._tag !== "Failure") return;
+        if (!isTagged(result, "Failure")) return;
         const description = commandFailureMessage(result);
         toastManager.add({
           type: "error",

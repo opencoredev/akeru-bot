@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { create } from "zustand";
 
 import {
@@ -48,11 +49,11 @@ function isRosterItemList(value: unknown): value is RosterItemRef[] {
     Array.isArray(value) &&
     value.every(
       (item) =>
-        typeof item === "object" &&
+        Predicate.isObjectOrArray(item) &&
         item !== null &&
         ((item as { kind?: unknown }).kind === "bot" ||
           (item as { kind?: unknown }).kind === "group") &&
-        typeof (item as { id?: unknown }).id === "string",
+        Predicate.isString((item as { id?: unknown }).id),
     )
   );
 }
@@ -71,7 +72,7 @@ function readPersistedRoster(environmentId: string | null = null): PersistedRost
     if (raw === null) return null;
     const parsed: unknown = JSON.parse(raw);
 
-    if (typeof parsed !== "object" || parsed === null) return null;
+    if (!Predicate.isObjectOrArray(parsed) || parsed === null) return null;
 
     const { selectedBotId, chatPathByBotId, botLayout, sections, pinnedItems, unassignedItems } =
       parsed as {
@@ -84,37 +85,37 @@ function readPersistedRoster(environmentId: string | null = null): PersistedRost
       };
 
     return {
-      ...(typeof selectedBotId === "string" ? { selectedBotId } : {}),
-      ...(typeof chatPathByBotId === "object" && chatPathByBotId !== null
+      ...(Predicate.isString(selectedBotId) ? { selectedBotId } : {}),
+      ...(Predicate.isObjectOrArray(chatPathByBotId) && chatPathByBotId !== null
         ? { chatPathByBotId: chatPathByBotId as Record<string, string> }
         : {}),
       ...(Array.isArray(botLayout) &&
       botLayout.every(
         (entry) =>
-          typeof entry === "object" &&
+          Predicate.isObjectOrArray(entry) &&
           entry !== null &&
-          typeof (entry as { id?: unknown }).id === "string" &&
-          typeof (entry as { pinned?: unknown }).pinned === "boolean",
+          Predicate.isString((entry as { id?: unknown }).id) &&
+          Predicate.isBoolean((entry as { pinned?: unknown }).pinned),
       )
         ? { botLayout: botLayout as Array<{ id: string; pinned: boolean }> }
         : {}),
       ...(Array.isArray(sections) &&
       sections.every(
         (section) =>
-          typeof section === "object" &&
+          Predicate.isObjectOrArray(section) &&
           section !== null &&
-          typeof (section as { id?: unknown }).id === "string" &&
-          typeof (section as { name?: unknown }).name === "string" &&
+          Predicate.isString((section as { id?: unknown }).id) &&
+          Predicate.isString((section as { name?: unknown }).name) &&
           Array.isArray((section as { botIds?: unknown }).botIds) &&
-          (section as { botIds: unknown[] }).botIds.every((id) => typeof id === "string") &&
+          (section as { botIds: unknown[] }).botIds.every((id) => Predicate.isString(id)) &&
           ((section as { groupIds?: unknown }).groupIds === undefined ||
             (Array.isArray((section as { groupIds?: unknown }).groupIds) &&
-              (section as { groupIds: unknown[] }).groupIds.every(
-                (id) => typeof id === "string",
+              (section as { groupIds: unknown[] }).groupIds.every((id) =>
+                Predicate.isString(id),
               ))) &&
           ((section as { items?: unknown }).items === undefined ||
             isRosterItemList((section as { items?: unknown }).items)) &&
-          typeof (section as { collapsed?: unknown }).collapsed === "boolean",
+          Predicate.isBoolean((section as { collapsed?: unknown }).collapsed),
       )
         ? {
             sections: (

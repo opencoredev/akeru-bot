@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@akeru/contracts";
 import * as Option from "effect/Option";
@@ -79,7 +80,7 @@ export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promis
           input: { botId: serverBot.id, avatar },
         });
 
-        return result._tag === "Success";
+        return Predicate.isTagged(result, "Success");
       }
 
       useRosterStore.getState().setBotAvatar(botId, avatar);
@@ -115,7 +116,7 @@ export function useEnableBotAutoReview(): (botId: string) => Promise<boolean> {
         input: { botId: serverBot.id, runtimeMode: "auto" },
       });
 
-      return result._tag === "Success";
+      return Predicate.isTagged(result, "Success");
     },
     [bots, environmentId, updateBot],
   );

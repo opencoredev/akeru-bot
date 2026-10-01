@@ -105,9 +105,9 @@ export function AvatarPickerDialog({
       (rendering) => {
         if (sequence === uploadSequence.current) setUpload(rendering);
       },
-      (error: unknown) => {
+      (cause: unknown) => {
         if (sequence !== uploadSequence.current) return;
-        console.error("Could not read avatar image.", error);
+        console.error("Could not read avatar image.", cause);
         setFailure("upload");
       },
     );

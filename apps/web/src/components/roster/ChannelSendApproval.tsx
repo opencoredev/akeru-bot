@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   BotId,
   ChannelMessageOrigin,
@@ -98,7 +99,7 @@ export function ChannelSendApproval({
             }).then((result) => {
               setBusy(false);
 
-              if (result._tag === "Failure") {
+              if (Predicate.isTagged(result, "Failure")) {
                 toastManager.add({
                   type: "error",
                   title: t("Could not send to {channel}", { channel: label }),

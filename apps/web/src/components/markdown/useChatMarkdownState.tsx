@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { isAppDeepLink } from "@akeru/client-runtime/settings-deep-link";
 import type { EnvironmentId, ScopedThreadRef, ServerProviderSkill } from "@akeru/contracts";
 import { useAtomValue } from "@effect/atom-react";
@@ -233,7 +234,7 @@ export function useChatMarkdownState({
       }
 
       return openUrlInPreview({ threadRef, url, openPreview }).then((result) => {
-        if (result._tag === "Success") recordVisitForThread(threadRef, url);
+        if (Predicate.isTagged(result, "Success")) recordVisitForThread(threadRef, url);
 
         return result;
       });
@@ -243,7 +244,7 @@ export function useChatMarkdownState({
 
   const openMarkdownFileInPreview = useCallback(
     (path: string) => {
-      if (!threadRef || preparedConnection._tag === "None") {
+      if (!threadRef || Predicate.isTagged(preparedConnection, "None")) {
         return Promise.resolve(
           AsyncResult.failure<void, BrowserPreviewUnavailableError>(
             Cause.fail(
@@ -282,7 +283,7 @@ export function useChatMarkdownState({
         },
       });
 
-      return result._tag === "Success"
+      return Predicate.isTagged(result, "Success")
         ? pickWorkspaceBasenameMatch(workspaceRelativePath, result.value.entries)
         : null;
     },
@@ -333,7 +334,7 @@ export function useChatMarkdownState({
 
       const labelParts = [fileLinkMeta.basename];
 
-      if (typeof parentSuffix === "string" && parentSuffix.length > 0) {
+      if (Predicate.isString(parentSuffix) && parentSuffix.length > 0) {
         labelParts.push(parentSuffix);
       }
 

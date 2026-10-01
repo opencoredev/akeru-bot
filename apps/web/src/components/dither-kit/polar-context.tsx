@@ -1,6 +1,8 @@
 // @ts-nocheck
 "use client";
 
+import { Predicate } from "effect";
+
 import { createContext, use, useCallback, useMemo, useState } from "react";
 import {
   type AreaVariant,
@@ -18,10 +20,10 @@ import type { Dimensions } from "./use-chart-dimensions";
 
 type Row = Record<string, unknown>;
 
-const ROOT_OF: Record<string, string> = {
+const ROOT_OF = {
   pie: "<PieChart />",
   radar: "<RadarChart />",
-};
+} satisfies Record<string, string>;
 
 export type PolarChartContextValue = {
   chartType: ChartType;
@@ -291,7 +293,7 @@ export function usePolarController({
           return {
             name,
             label: config[name]?.label ?? name,
-            value: typeof raw === "number" ? raw : 0,
+            value: Predicate.isNumber(raw) ? raw : 0,
             seed: seedOf(name),
             dimmed: emphasis !== null && emphasis !== name,
           };

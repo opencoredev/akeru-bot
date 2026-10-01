@@ -1,3 +1,4 @@
+import { isTagged } from "../tagged";
 import type {
   BackgroundActivityProfile,
   BackgroundActivitySettings,
@@ -142,11 +143,11 @@ export function isSamePreviewViewport(
 ): boolean {
   if (left._tag !== right._tag) return false;
 
-  if (left._tag === "fill" || right._tag === "fill") return true;
+  if (isTagged(left, "fill") || isTagged(right, "fill")) return true;
 
   if (left.width !== right.width || left.height !== right.height) return false;
 
-  return left._tag === "preset" && right._tag === "preset"
+  return isTagged(left, "preset") && isTagged(right, "preset")
     ? left.presetId === right.presetId
     : true;
 }

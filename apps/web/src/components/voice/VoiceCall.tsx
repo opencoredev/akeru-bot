@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   createRealtimeVoiceSession,
@@ -436,7 +437,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
               input: { botId: BotId.make(bot.id) },
             });
 
-            if (result._tag === "Failure") {
+            if (Predicate.isTagged(result, "Failure")) {
               const cause = Cause.squash(result.cause);
               throw new Error(
                 cause instanceof Error ? cause.message : "Could not start the voice call.",
@@ -488,12 +489,12 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
                   return () => turnListenersRef.current.delete(changed);
                 },
               }),
-            ).catch((error: unknown) => {
+            ).catch((cause: unknown) => {
               if (scope.signal.aborted) return;
               endBrowserCall(browserCall, {
                 type: "error",
                 title: "Voice call ended",
-                description: voiceStartErrorDescription(error),
+                description: voiceStartErrorDescription(cause),
               });
             });
 
@@ -577,7 +578,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             input: { botId: BotId.make(bot.id), sdp },
           });
 
-          if (result._tag === "Failure") {
+          if (Predicate.isTagged(result, "Failure")) {
             const cause = Cause.squash(result.cause);
             throw new Error(
               cause instanceof Error ? cause.message : "Could not start the voice call.",

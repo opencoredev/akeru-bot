@@ -1,4 +1,5 @@
-import type { ReactElement } from "react";
+import { Predicate } from "effect";
+import { isValidElement, type ReactElement } from "react";
 import {
   DEFAULT_UNIFIED_SETTINGS,
   EnvironmentId,
@@ -159,7 +160,7 @@ function renderForm(): Tree {
 
   const formElement = visitElements(
     page,
-    (element) => typeof element.props.onSave === "function" && "bot" in element.props,
+    (element) => Predicate.isFunction(element.props.onSave) && "bot" in element.props,
   );
 
   expect(formElement).not.toBeNull();
@@ -169,11 +170,11 @@ function renderForm(): Tree {
 }
 
 function textOf(node: unknown): string {
-  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Predicate.isString(node) || Predicate.isNumber(node)) return String(node);
 
   if (Array.isArray(node)) return node.map(textOf).join("");
 
-  if (node && typeof node === "object" && "props" in node) {
+  if (isValidElement<Tree["props"]>(node)) {
     return textOf((node as Tree).props.children);
   }
 
@@ -196,7 +197,7 @@ describe("bot settings in Simplified Chinese", () => {
 
     const titles: unknown[] = [];
     visitElements(form, (element) => {
-      if ("id" in element.props && typeof element.props.title === "string") {
+      if ("id" in element.props && Predicate.isString(element.props.title)) {
         titles.push(element.props.title);
       }
 

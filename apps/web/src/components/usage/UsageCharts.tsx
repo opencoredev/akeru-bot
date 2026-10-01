@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   SubscriptionProviderId,
   UsagePlanWindow,
@@ -65,7 +66,7 @@ function remainingPercent(window: UsagePlanWindow): number {
 }
 
 function ProviderMark({ icon }: { readonly icon: Icon | string }) {
-  if (typeof icon !== "string") {
+  if (!Predicate.isString(icon)) {
     const Mark = icon;
 
     return <Mark className="size-4 shrink-0" />;
@@ -161,11 +162,16 @@ export function UsageActivityChart(props: {
 
   const data = days.map((day) => {
     const totals = byDay.get(day);
-    const row: Record<string, string | number> = { label: formatDayShort(day) };
 
-    for (const provider of PROVIDER_ORDER) {
-      row[provider] = totals?.byProvider.get(provider)?.totalTokens ?? 0;
-    }
+    const row = {
+      label: formatDayShort(day),
+      ...Object.fromEntries(
+        PROVIDER_ORDER.map((provider) => [
+          provider,
+          totals?.byProvider.get(provider)?.totalTokens ?? 0,
+        ]),
+      ),
+    };
 
     return row;
   });

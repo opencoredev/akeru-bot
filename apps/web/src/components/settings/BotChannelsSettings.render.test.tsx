@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { AuthAccessWriteScope, type ChannelBinding } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { cloneElement, type ReactElement, type ReactNode } from "react";
@@ -92,7 +93,7 @@ vi.mock("../ui/button", async (importOriginal) => {
   return {
     ...actual,
     Button: (props: Parameters<typeof actual.Button>[0]) => {
-      if (typeof props.children === "string" && props.onClick) {
+      if (Predicate.isString(props.children) && props.onClick) {
         const onClick = props.onClick;
         fixtures.buttons.set(props.children, () => onClick({} as never));
       }

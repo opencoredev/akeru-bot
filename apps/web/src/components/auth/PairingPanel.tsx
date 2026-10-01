@@ -68,33 +68,33 @@ function describeStatus(
   environmentName: string | null,
   readyDescription: string,
   t: Translate,
-): { icon: typeof Link02Icon; tone: Tone; title: string; description: string } {
+) {
   switch (status.kind) {
     case "checking":
       return {
         icon: Link02Icon,
-        tone: "neutral",
+        tone: "neutral" as const,
         title: t("Pairing this browser"),
         description: t("Checking your pairing link."),
       };
     case "ready":
       return {
         icon: Link02Icon,
-        tone: "neutral",
+        tone: "neutral" as const,
         title: t("Pair this browser"),
         description: readyDescription,
       };
     case "submitting":
       return {
         icon: Link02Icon,
-        tone: "neutral",
+        tone: "neutral" as const,
         title: t("Pairing this browser"),
         description: t("Connecting to the environment."),
       };
     case "rejected":
       return {
         icon: Unlink02Icon,
-        tone: "danger",
+        tone: "danger" as const,
         title: t("This link no longer works"),
         description: t(
           "Pairing links work once and expire after a while. Get a new link and open it on this device.",
@@ -103,7 +103,7 @@ function describeStatus(
     case "incomplete":
       return {
         icon: Unlink02Icon,
-        tone: "danger",
+        tone: "danger" as const,
         title: t("This link is incomplete"),
         description: t(
           "It is missing the server address or the token. Copy the whole link and open it again.",
@@ -112,14 +112,14 @@ function describeStatus(
     case "failed":
       return {
         icon: Alert02Icon,
-        tone: "danger",
+        tone: "danger" as const,
         title: t("Pairing failed"),
         description: status.message,
       };
     case "paired":
       return {
         icon: Tick02Icon,
-        tone: "success",
+        tone: "success" as const,
         title: t("Paired"),
         description: environmentName
           ? t("This browser can now use {name}.", { name: environmentName })

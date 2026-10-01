@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { BotId, GroupId, isGroupBotMember, type EnvironmentId } from "@akeru/contracts";
 import { BotIcon, LogOutIcon, Trash2Icon } from "lucide-react";
@@ -84,7 +85,7 @@ export function GroupEditor({
     const result = await action();
     setBusy(false);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({ type: "error", title: failure });
 
       return false;

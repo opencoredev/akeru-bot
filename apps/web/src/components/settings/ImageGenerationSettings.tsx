@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   EnvironmentId,
   ImageGenerationSettings,
@@ -50,7 +51,7 @@ const IMAGE_PROVIDER_ICONS: Readonly<Record<ImageProviderId, string>> = {
 };
 
 function commandError(result: AtomCommandResult<unknown, unknown>): string {
-  if (result._tag !== "Failure") return "The request failed.";
+  if (!Predicate.isTagged(result, "Failure")) return "The request failed.";
   const error = squashAtomCommandFailure(result);
 
   return error instanceof Error ? error.message : "The request failed.";
@@ -120,7 +121,7 @@ export function ImageGenerationSettingsContent({
     const result = await testProvider({ environmentId, input: { provider } });
     setBusy(null);
 
-    if (result._tag === "Failure") setError(commandError(result));
+    if (Predicate.isTagged(result, "Failure")) setError(commandError(result));
     providersQuery.refresh();
   };
 
@@ -142,7 +143,7 @@ export function ImageGenerationSettingsContent({
 
     setBusy(null);
 
-    if (result._tag === "Failure") setError(commandError(result));
+    if (Predicate.isTagged(result, "Failure")) setError(commandError(result));
     providersQuery.refresh();
   };
 

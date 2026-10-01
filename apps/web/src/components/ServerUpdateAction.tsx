@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { EnvironmentId, ServerSelfUpdateCapability } from "@akeru/contracts";
 import type { ServerUpdateStage, ServerUpdateState } from "@akeru/client-runtime/state/server";
 import {
@@ -28,8 +29,8 @@ export function serverUpdateStageLabel(stage: ServerUpdateStage): string {
   return UPDATE_STAGE_LABELS[stage];
 }
 
-function updateFailureMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Server update failed.";
+function updateFailureMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : "Server update failed.";
 }
 
 /**
@@ -121,7 +122,7 @@ export function ServerUpdateAction({
         input: { targetVersion },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         if (isAtomCommandInterrupted(result)) {
           return;
         }

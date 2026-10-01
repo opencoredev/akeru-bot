@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { AtomCommandResult } from "@akeru/client-runtime/state/runtime";
 import type {
   EnvironmentId,
@@ -32,7 +33,7 @@ export async function closePreviewSession<E>(
     input: { threadId: input.threadRef.threadId, tabId: input.tabId },
   });
 
-  if (result._tag === "Failure") {
+  if (Predicate.isTagged(result, "Failure")) {
     cancelPreviewSessionClose(input.threadRef, input.snapshot, input.tabId);
   }
 

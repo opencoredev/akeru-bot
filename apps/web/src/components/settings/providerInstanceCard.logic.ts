@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { type ServerProviderModel } from "@akeru/contracts";
@@ -9,12 +10,12 @@ import { type ServerProviderModel } from "@akeru/contracts";
  * `Schema.Unknown`.
  */
 export function readConfigStringArray(config: unknown, key: string): ReadonlyArray<string> {
-  if (config === null || typeof config !== "object") return [];
+  if (config === null || !Predicate.isObjectOrArray(config)) return [];
   const value = (config as Record<string, unknown>)[key];
 
   if (!Array.isArray(value)) return [];
 
-  return value.filter((entry): entry is string => typeof entry === "string");
+  return value.filter((entry): entry is string => Predicate.isString(entry));
 }
 
 /**
@@ -31,7 +32,9 @@ export function nextConfigBlobWithValue(
   value: unknown,
 ): Record<string, unknown> {
   const base: Record<string, unknown> =
-    config !== null && typeof config === "object" ? { ...(config as Record<string, unknown>) } : {};
+    config !== null && Predicate.isObjectOrArray(config)
+      ? { ...(config as Record<string, unknown>) }
+      : {};
 
   base[key] = value;
 

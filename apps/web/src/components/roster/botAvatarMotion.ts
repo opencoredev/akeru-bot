@@ -151,7 +151,7 @@ export class BotMotion {
     this.squintAt = Math.max(this.squintAt, this.beatUntil + 1);
   }
 
-  tick(dtSeconds: number, input: MotionInput): { frame: MotionFrame; active: boolean } {
+  tick(dtSeconds: number, input: MotionInput) {
     if (input.reducedMotion) return { frame: this.rest(), active: false };
     const dt = Math.min(dtSeconds, 1 / 20);
     this.clock += dt;

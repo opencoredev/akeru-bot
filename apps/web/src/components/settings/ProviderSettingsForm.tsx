@@ -1,5 +1,7 @@
 "use client";
 
+import { Predicate } from "effect";
+
 import { useMemo, type ReactNode } from "react";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -46,7 +48,7 @@ function readFieldAnnotationString(
   const annotations = readFieldAnnotations(fieldSchema);
   const value = annotations?.[key];
 
-  return typeof value === "string" ? value : undefined;
+  return Predicate.isString(value) ? value : undefined;
 }
 
 function readProviderSettingsFormAnnotation(
@@ -69,7 +71,7 @@ function readFieldBooleanDefault(
   const decodeDefault = Schema.decodeUnknownOption(fieldSchema as Schema.Decoder<unknown>);
   const decoded = decodeDefault(undefined);
 
-  return Option.isSome(decoded) && typeof decoded.value === "boolean" ? decoded.value : undefined;
+  return Option.isSome(decoded) && Predicate.isBoolean(decoded.value) ? decoded.value : undefined;
 }
 
 export function deriveProviderSettingsFields(
@@ -119,10 +121,10 @@ export function deriveProviderSettingsFields(
 }
 
 export function readProviderConfigString(config: unknown, key: string): string {
-  if (config === null || typeof config !== "object") return "";
+  if (config === null || !Predicate.isObjectOrArray(config)) return "";
   const value = (config as Record<string, unknown>)[key];
 
-  return typeof value === "string" ? value : "";
+  return Predicate.isString(value) ? value : "";
 }
 
 export function readProviderConfigBoolean(
@@ -130,10 +132,10 @@ export function readProviderConfigBoolean(
   key: string,
   defaultValue = false,
 ): boolean {
-  if (config === null || typeof config !== "object") return defaultValue;
+  if (config === null || !Predicate.isObjectOrArray(config)) return defaultValue;
   const value = (config as Record<string, unknown>)[key];
 
-  return typeof value === "boolean" ? value : defaultValue;
+  return Predicate.isBoolean(value) ? value : defaultValue;
 }
 
 export function nextProviderConfigWithFieldValue(
@@ -142,9 +144,11 @@ export function nextProviderConfigWithFieldValue(
   value: string | boolean,
 ): Record<string, unknown> | undefined {
   const base: Record<string, unknown> =
-    config !== null && typeof config === "object" ? { ...(config as Record<string, unknown>) } : {};
+    config !== null && Predicate.isObjectOrArray(config)
+      ? { ...(config as Record<string, unknown>) }
+      : {};
 
-  if (typeof value === "boolean") {
+  if (Predicate.isBoolean(value)) {
     const emptyBooleanValue = field.defaultBooleanValue ?? false;
 
     if (field.clearWhenEmpty === "omit" && value === emptyBooleanValue) {

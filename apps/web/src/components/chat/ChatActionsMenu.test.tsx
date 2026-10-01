@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { EnvironmentId, type OrchestrationThreadShell, ThreadId } from "@akeru/contracts";
 import { Children, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -29,7 +30,7 @@ const mocks = vi.hoisted(() => ({
 function textOf(node: ReactNode): string {
   return Children.toArray(node)
     .map((child) =>
-      typeof child === "string"
+      Predicate.isString(child)
         ? child
         : isValidElement<{ children?: ReactNode }>(child)
           ? textOf(child.props.children)

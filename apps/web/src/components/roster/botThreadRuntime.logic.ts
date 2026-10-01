@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { StartThreadTurnInput } from "@akeru/client-runtime/state/threads";
 import { PLACEHOLDER_THREAD_TITLE } from "@akeru/contracts";
 import type {
@@ -351,10 +352,10 @@ export function findUnhandledMcpAuthorization(
       continue;
     }
 
-    if (!activity.payload || typeof activity.payload !== "object") continue;
+    if (!activity.payload || !Predicate.isObjectOrArray(activity.payload)) continue;
     const authorizationUrl = (activity.payload as Record<string, unknown>).authorizationUrl;
 
-    if (typeof authorizationUrl !== "string") continue;
+    if (!Predicate.isString(authorizationUrl)) continue;
 
     try {
       const url = new URL(authorizationUrl);

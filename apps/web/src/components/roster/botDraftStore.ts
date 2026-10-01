@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 const DRAFTS_KEY = "akeru:bot-drafts:v1";
 
 const MAX_DRAFT_CHARS = 20_000;
@@ -21,11 +23,11 @@ function readAll(): Record<string, string> {
     if (raw === null) return {};
     const parsed: unknown = JSON.parse(raw);
 
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+    if (!Predicate.isObjectOrArray(parsed) || parsed === null || Array.isArray(parsed)) return {};
 
     return Object.fromEntries(
-      Object.entries(parsed).filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string",
+      Object.entries(parsed).filter((entry): entry is [string, string] =>
+        Predicate.isString(entry[1]),
       ),
     );
   } catch {

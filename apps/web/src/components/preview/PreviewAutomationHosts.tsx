@@ -1,5 +1,7 @@
 "use client";
 
+import { isTagged } from "../tagged";
+
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import {
   FILL_PREVIEW_VIEWPORT,
@@ -112,9 +114,9 @@ const currentStatus = async (
     available: Boolean(previewBridge?.automation),
     visible,
     tabId,
-    url: navStatus && navStatus._tag !== "Idle" ? navStatus.url : null,
-    title: navStatus && navStatus._tag !== "Idle" ? navStatus.title : null,
-    loading: navStatus?._tag === "Loading",
+    url: navStatus && !isTagged(navStatus, "Idle") ? navStatus.url : null,
+    title: navStatus && !isTagged(navStatus, "Idle") ? navStatus.title : null,
+    loading: isTagged(navStatus ?? {}, "Loading"),
     ...viewportStatus,
   };
 };
@@ -218,7 +220,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
           registry.refresh(previewEnvironment.list(listTarget));
           const result = await listPreviews(listTarget);
 
-          if (result._tag === "Failure") {
+          if (isTagged(result, "Failure")) {
             return raiseAtomCommandFailure(result);
           }
 
@@ -302,7 +304,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                 },
               });
 
-              if (result._tag === "Failure") {
+              if (isTagged(result, "Failure")) {
                 return raiseAtomCommandFailure(result);
               }
 
@@ -347,7 +349,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                   },
                 );
 
-                if (resizeResult._tag === "Failure") {
+                if (isTagged(resizeResult, "Failure")) {
                   return raiseAtomCommandFailure(resizeResult);
                 }
 
@@ -428,7 +430,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                 },
               });
 
-              if (result._tag === "Failure") {
+              if (isTagged(result, "Failure")) {
                 return raiseAtomCommandFailure(result);
               }
 
@@ -481,7 +483,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                     },
                   });
 
-                  if (rollback._tag !== "Failure") {
+                  if (!isTagged(rollback, "Failure")) {
                     updatePreviewServerSnapshot(threadRef, rollback.value);
                   }
                 }

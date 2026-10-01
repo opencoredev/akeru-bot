@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useBotConversationMessageProjection } from "./botConversationMessageProjection";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
@@ -257,7 +258,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
 
     setResuming(false);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setError(commandFailure(result));
 
       return false;
@@ -291,7 +292,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
         },
       });
 
-      if (result._tag === "Failure") return null;
+      if (Predicate.isTagged(result, "Failure")) return null;
       const threadRef = scopeThreadRef(activeProject.environmentId, threadId);
 
       // The user opened another chat while this one was being created; stay there.
@@ -463,7 +464,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               input: { threadId: currentThreadRef.threadId, runtimeMode },
             });
 
-            if (modeResult._tag === "Failure") {
+            if (Predicate.isTagged(modeResult, "Failure")) {
               setError(commandFailure(modeResult));
 
               return false;
@@ -491,7 +492,7 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
             }),
           });
 
-          if (startResult._tag === "Failure") {
+          if (Predicate.isTagged(startResult, "Failure")) {
             setError(commandFailure(startResult));
 
             return false;
@@ -522,7 +523,10 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
               environmentId: currentThreadRef.environmentId,
               input: { threadId: titledChatId, title },
             }).then((result) => {
-              if (result._tag === "Failure" && titledChatIdRef.current === titledChatId) {
+              if (
+                Predicate.isTagged(result, "Failure") &&
+                titledChatIdRef.current === titledChatId
+              ) {
                 titledChatIdRef.current = null;
               }
             });

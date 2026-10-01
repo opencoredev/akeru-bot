@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { Predicate } from "effect";
 import type { ScaleLinear } from "d3-scale";
 import { createContext, use, useCallback, useMemo, useState } from "react";
 import type { CommonChart } from "./common-context";
@@ -391,7 +392,7 @@ export function useChartController({
           return {
             name,
             label: config[name]?.label ?? name,
-            value: typeof raw === "number" ? raw : 0,
+            value: Predicate.isNumber(raw) ? raw : 0,
             seed: seedOf(name),
             dimmed: (() => {
               const emphasis = selectedDataKey ?? focusDataKey;

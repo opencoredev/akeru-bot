@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { Options as ReactMarkdownOptions } from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
@@ -24,7 +25,7 @@ function rehypeNormalizeWindowsImageSrc() {
       if (
         node.type === "element" &&
         node.tagName === "img" &&
-        typeof src === "string" &&
+        Predicate.isString(src) &&
         WINDOWS_DRIVE_PATH_REGEX.test(src)
       ) {
         node.properties = {
@@ -98,7 +99,7 @@ type MarkdownAstNode = {
 function remarkTagMathNodes() {
   return (tree: MarkdownAstNode) => {
     const visit = (node: MarkdownAstNode) => {
-      if (node.type === "inlineMath" && typeof node.value === "string") {
+      if (node.type === "inlineMath" && Predicate.isString(node.value)) {
         node.type = "inlineCode";
         node.data = {
           ...node.data,
@@ -107,7 +108,7 @@ function remarkTagMathNodes() {
             dataMathExpression: node.value,
           },
         };
-      } else if (node.type === "math" && typeof node.value === "string") {
+      } else if (node.type === "math" && Predicate.isString(node.value)) {
         node.type = "code";
         node.lang = "math";
       }
@@ -122,7 +123,7 @@ function remarkTagMathNodes() {
 function remarkPreserveCodeMeta() {
   return (tree: MarkdownAstNode) => {
     const visit = (node: MarkdownAstNode) => {
-      if (node.type === "code" && typeof node.meta === "string" && node.meta.trim().length > 0) {
+      if (node.type === "code" && Predicate.isString(node.meta) && node.meta.trim().length > 0) {
         node.data = {
           ...node.data,
           hProperties: {
@@ -149,7 +150,7 @@ function remarkNormalizeLinksAndTagInlineCode() {
     const visit = (node: MarkdownAstNode, insideLink: boolean) => {
       if (
         (node.type === "link" || node.type === "definition") &&
-        typeof node.url === "string" &&
+        Predicate.isString(node.url) &&
         WINDOWS_DRIVE_PATH_REGEX.test(node.url)
       ) {
         node.url = `file:///${node.url.replaceAll("\\", "/")}`;

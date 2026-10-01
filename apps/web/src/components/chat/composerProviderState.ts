@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   type ProviderDriverKind,
   type ProviderOptionSelection,
@@ -46,7 +47,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
   );
 
   const primaryValue = getProviderOptionCurrentValue(primarySelectDescriptor ?? null);
-  const promptEffort = typeof primaryValue === "string" ? primaryValue : null;
+  const promptEffort = Predicate.isString(primaryValue) ? primaryValue : null;
 
   const ultrathinkActive =
     (primarySelectDescriptor?.promptInjectedValues?.length ?? 0) > 0 &&

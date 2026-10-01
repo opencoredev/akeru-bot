@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { MessageKey } from "@akeru/client-runtime/i18n";
 import {
   isAtomCommandInterrupted,
@@ -130,7 +131,7 @@ export function KeybindingsSettingsPanel() {
     void (async () => {
       const result = await openInPreferredEditor(keybindingsConfigPath);
 
-      if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
+      if (Predicate.isTagged(result, "Success") || isAtomCommandInterrupted(result)) {
         return;
       }
 
@@ -164,7 +165,7 @@ export function KeybindingsSettingsPanel() {
 
         setSavingCommand(null);
 
-        if (result._tag === "Success") {
+        if (Predicate.isTagged(result, "Success")) {
           setIsAddingBinding(false);
 
           return;
@@ -196,7 +197,7 @@ export function KeybindingsSettingsPanel() {
 
         setSavingCommand(null);
 
-        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
           const error = squashAtomCommandFailure(result);
           toastManager.add({
             title: t("Unable to remove keybinding"),

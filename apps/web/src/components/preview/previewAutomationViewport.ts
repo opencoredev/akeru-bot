@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   type EnvironmentId,
   type PreviewAutomationRequest,
@@ -68,13 +69,13 @@ const readWebviewViewport = async (
     "({ width: window.innerWidth, height: window.innerHeight })",
   );
 
-  if (typeof value !== "object" || value === null) return null;
+  if (!Predicate.isObjectOrArray(value) || value === null) return null;
   const { width, height } = value as { readonly width?: unknown; readonly height?: unknown };
 
-  return typeof width === "number" &&
+  return Predicate.isNumber(width) &&
     Number.isInteger(width) &&
     width > 0 &&
-    typeof height === "number" &&
+    Predicate.isNumber(height) &&
     Number.isInteger(height) &&
     height > 0
     ? { width, height }

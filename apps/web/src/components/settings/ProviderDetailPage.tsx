@@ -35,11 +35,7 @@ export function defaultServerProvider(
 export function useProviderConnectionStates(
   environmentId: EnvironmentId,
   entries: ReadonlyArray<ProviderCatalogEntry>,
-): {
-  readonly states: ReadonlyMap<string, ProviderConnectionState>;
-  readonly plans: ReadonlyMap<string, string>;
-  readonly error: string | null;
-} {
+) {
   const { t, translate } = useI18n();
   const { statusQuery, statusByProvider } = useSubscriptionStatuses(environmentId);
 

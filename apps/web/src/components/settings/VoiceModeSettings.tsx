@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   CHATGPT_REALTIME_VOICES,
   DEFAULT_SERVER_SETTINGS,
@@ -288,9 +289,9 @@ function SynthesisVoicePicker({
 
     setLoading(false);
 
-    if (result._tag === "Failure") return setError(commandError(result));
+    if (Predicate.isTagged(result, "Failure")) return setError(commandError(result));
 
-    if (result._tag !== "Success") return;
+    if (!Predicate.isTagged(result, "Success")) return;
     setVoices((current) => (cursor === undefined ? [] : current).concat(result.value.voices));
     setNextCursor(result.value.nextCursor);
   };
@@ -320,7 +321,7 @@ function SynthesisVoicePicker({
         <Select
           value={value ?? ""}
           onValueChange={(next) => {
-            if (typeof next === "string" && next.length > 0) onChange(next);
+            if (Predicate.isString(next) && next.length > 0) onChange(next);
           }}
           disabled={disabled || options.length === 0}
         >

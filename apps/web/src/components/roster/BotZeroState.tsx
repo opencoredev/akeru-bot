@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { BotId } from "@akeru/contracts";
 import { BotIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
@@ -58,7 +59,7 @@ export function BotZeroState() {
 
     setCreating(false);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({ type: "error", title: t("Could not create bot") });
 
       return;

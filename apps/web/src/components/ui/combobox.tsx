@@ -1,5 +1,7 @@
 "use client";
 
+import { Predicate } from "effect";
+
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 import { ChevronsUpDownIcon, XIcon } from "lucide-react";
 import * as React from "react";
@@ -46,9 +48,9 @@ function ComboboxChipsInput({
         sizeValue === "sm" ? "ps-1.5" : "ps-2",
         className,
       )}
-      data-size={typeof sizeValue === "string" ? sizeValue : undefined}
+      data-size={Predicate.isString(sizeValue) ? sizeValue : undefined}
       data-slot="combobox-chips-input"
-      size={typeof sizeValue === "number" ? sizeValue : undefined}
+      size={Predicate.isNumber(sizeValue) ? sizeValue : undefined}
       {...props}
     />
   );

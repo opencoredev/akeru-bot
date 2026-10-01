@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { DndContext } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
 import { useAtomValue } from "@effect/atom-react";
@@ -334,7 +335,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
       input: { botId: BotId.make(bot.id) },
     });
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       // The row stayed, so focus goes back to it rather than to its replacement.
       archivedFocusTarget.current = undefined;
       focusRosterRow(botKey);
@@ -410,7 +411,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
           },
         });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           toastManager.add({ type: "error", title: t("Could not create bot") });
 
           return;
@@ -445,7 +446,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
       },
     });
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({ type: "error", title: t("Could not create group") });
 
       return;

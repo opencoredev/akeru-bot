@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   PortabilityApplyImportResult,
   PortabilityProjectFolderMap,
@@ -72,7 +73,7 @@ export function PortabilitySettings() {
     const result = await exportArchive({ environmentId, input: {} });
     setPending(null);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       reportFailure(t("Could not export archive"), result, t);
 
       return;
@@ -109,7 +110,7 @@ export function PortabilitySettings() {
       if (requestId !== previewRequestIdRef.current) return;
       setPending(null);
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         reportFailure(t("Could not preview archive"), result, t);
 
         return;
@@ -153,7 +154,7 @@ export function PortabilitySettings() {
     if (requestId !== previewRequestIdRef.current) return;
     setPending(null);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       projectFoldersRef.current = reviewedProjectFolders;
       setImportState((current) =>
         current?.contents === contents
@@ -232,7 +233,7 @@ export function PortabilitySettings() {
 
     setPending(null);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       reportFailure(t("Could not import archive"), result, t);
 
       return;

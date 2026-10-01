@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -124,7 +125,7 @@ export function SubscriptionStep({
 
       if (cancelled || isAtomCommandInterrupted(result)) return;
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         setActiveLogin((current) =>
           current ? { ...current, error: commandError(result, t) } : current,
         );
@@ -169,10 +170,10 @@ export function SubscriptionStep({
       input: apiKeyStartInput(draft.providerId, baseUrl),
     });
 
-    if (started._tag !== "Success") {
+    if (!Predicate.isTagged(started, "Success")) {
       setBusy(false);
 
-      if (started._tag === "Failure") setError(commandError(started, t));
+      if (Predicate.isTagged(started, "Failure")) setError(commandError(started, t));
 
       return;
     }
@@ -182,7 +183,7 @@ export function SubscriptionStep({
       input: { loginId: started.value.loginId, code: code.trim() },
     });
 
-    if (result._tag === "Success" && result.value.status === "connected") {
+    if (Predicate.isTagged(result, "Success") && result.value.status === "connected") {
       setCode("");
       setBaseUrl("");
       setKeyMode(false);
@@ -193,8 +194,8 @@ export function SubscriptionStep({
       return;
     }
 
-    if (result._tag === "Failure") setError(commandError(result, t));
-    else if (result._tag === "Success") {
+    if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
+    else if (Predicate.isTagged(result, "Success")) {
       setError(
         result.value.status === "failed"
           ? result.value.error
@@ -234,7 +235,7 @@ export function SubscriptionStep({
       return;
     }
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setError(commandError(result, t));
       setBusy(false);
 
@@ -261,7 +262,7 @@ export function SubscriptionStep({
       return;
     }
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setActiveLogin((current) =>
         current ? { ...current, error: commandError(result, t) } : current,
       );
@@ -375,7 +376,7 @@ export function SubscriptionStep({
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t("Provider")}>
         {SUBSCRIPTION_PROVIDERS.map((definition) => {
           const active = definition.id === draft.providerId;
-          const ProviderIcon = typeof definition.icon === "string" ? null : definition.icon;
+          const ProviderIcon = Predicate.isString(definition.icon) ? null : definition.icon;
 
           const providerConnected = captureMode
             ? active

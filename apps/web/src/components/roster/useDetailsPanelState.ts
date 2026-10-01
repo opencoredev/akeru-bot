@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useEffect, useState, type TransitionEvent } from "react";
 
 // Longest width transition (duration-slow) plus slack. A hidden aside never
@@ -9,7 +10,7 @@ export type DetailsPanelState = "opening" | "open" | "closing" | "closed";
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
+    Predicate.isFunction(window.matchMedia) &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
 }

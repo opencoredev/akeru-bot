@@ -1,3 +1,4 @@
+import { recordLookup } from "../recordLookup";
 import {
   isProviderSendTurnSupportedFileMimeType,
   isProviderSendTurnSupportedImageMimeType,
@@ -7,7 +8,7 @@ import {
   type UploadChatImageAttachment,
 } from "@akeru/contracts";
 
-const FILE_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
+const FILE_MIME_BY_EXTENSION = {
   csv: "text/csv",
   json: "application/json",
   markdown: "text/markdown",
@@ -18,7 +19,7 @@ const FILE_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   xml: "application/xml",
   yaml: "application/x-yaml",
   yml: "application/x-yaml",
-};
+} satisfies Readonly<Record<string, string>>;
 
 export type BotFileAttachmentKind =
   | Pick<UploadChatFileAttachment, "mimeType" | "type">
@@ -39,7 +40,7 @@ export function resolveBotFileAttachment(
 
   const mimeType = isProviderSendTurnSupportedFileMimeType(declaredMimeType)
     ? declaredMimeType
-    : FILE_MIME_BY_EXTENSION[extension];
+    : recordLookup(FILE_MIME_BY_EXTENSION, extension);
 
   return mimeType && file.size > 0 && file.size <= PROVIDER_SEND_TURN_MAX_FILE_BYTES
     ? { type: "file", mimeType: mimeType as UploadChatFileAttachment["mimeType"] }

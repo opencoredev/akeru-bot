@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { EnvironmentId, type SubscriptionProviderId } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -96,7 +97,7 @@ vi.mock("../settings/ProvidersPanel", () => ({
 vi.mock("../ui/button", () => ({
   Button: (props: { children?: unknown; onClick?: () => void; disabled?: boolean }) => {
     const label = (Array.isArray(props.children) ? props.children : [props.children])
-      .filter((child) => typeof child === "string")
+      .filter((child) => Predicate.isString(child))
       .join("");
 
     mocks.buttons.set(label, props);

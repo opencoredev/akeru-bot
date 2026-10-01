@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useBotConversationMessageProjection } from "./botConversationMessageProjection";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
@@ -191,7 +192,7 @@ export function useGroupThreadRuntime(groupId: string) {
 
     setResuming(false);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setError(commandFailure(result));
 
       return false;
@@ -307,7 +308,7 @@ export function useGroupThreadRuntime(groupId: string) {
               input: { threadId, runtimeMode },
             });
 
-            if (modeResult._tag === "Failure") {
+            if (Predicate.isTagged(modeResult, "Failure")) {
               setError(commandFailure(modeResult));
 
               return false;
@@ -336,7 +337,7 @@ export function useGroupThreadRuntime(groupId: string) {
             }),
           });
 
-          if (result._tag === "Failure") {
+          if (Predicate.isTagged(result, "Failure")) {
             setError(commandFailure(result));
 
             return false;

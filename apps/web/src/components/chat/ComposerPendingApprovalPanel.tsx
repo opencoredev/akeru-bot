@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { ClockIcon } from "lucide-react";
 import { memo } from "react";
 import { createTranslator } from "@akeru/client-runtime/i18n";
@@ -44,12 +45,12 @@ interface RoutineProposalDetails {
 function stringField(record: Record<string, unknown>, key: string): string | null {
   const value = record[key];
 
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  return Predicate.isString(value) && value.trim() ? value.trim() : null;
 }
 
 function stringList(value: unknown): ReadonlyArray<string> {
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && item.trim() !== "")
+    ? value.filter((item): item is string => Predicate.isString(item) && item.trim() !== "")
     : [];
 }
 
@@ -60,7 +61,7 @@ function capitalize(value: string) {
 function routineInstructions(instructions: string | null, schedule: unknown): string | null {
   if (!instructions) return null;
 
-  if (!schedule || typeof schedule !== "object") return instructions;
+  if (!schedule || !Predicate.isObjectOrArray(schedule)) return instructions;
   const kind = (schedule as Record<string, unknown>).kind;
   const comma = instructions.indexOf(",");
 
@@ -123,7 +124,7 @@ function commandSignalLabel(signal: string, t: Translate): string {
 // Describes only what the draft states. An unknown or missing schedule yields
 // null rather than a guessed default.
 function routineScheduleText(schedule: unknown, t: Translate, locale: string): string | null {
-  if (!schedule || typeof schedule !== "object") return null;
+  if (!schedule || !Predicate.isObjectOrArray(schedule)) return null;
   const record = schedule as Record<string, unknown>;
   const time = stringField(record, "time");
 
@@ -150,7 +151,7 @@ export function routineProposalDetails(
   t: Translate = englishTranslator.translate,
   locale: string = englishTranslator.locale,
 ): RoutineProposalDetails | null {
-  if (!args || typeof args !== "object") return null;
+  if (!args || !Predicate.isObjectOrArray(args)) return null;
   const record = args as Record<string, unknown>;
 
   const details = {
@@ -280,9 +281,9 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
   const argsCommand =
     approval.requestKind === "command" &&
     approval.args &&
-    typeof approval.args === "object" &&
+    Predicate.isObjectOrArray(approval.args) &&
     "command" in approval.args &&
-    typeof approval.args.command === "string"
+    Predicate.isString(approval.args.command)
       ? approval.args.command
       : null;
 

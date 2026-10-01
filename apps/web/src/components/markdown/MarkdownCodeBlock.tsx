@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import katex from "katex";
 import { CheckIcon, CopyIcon, WrapTextIcon } from "lucide-react";
 import {
@@ -80,7 +81,7 @@ export function extractPreCodeMeta(node: unknown): string | undefined {
   const codeNode = children?.find((child) => child?.type === "element" && child.tagName === "code");
   const meta = codeNode?.properties?.dataCodeMeta ?? codeNode?.data?.meta;
 
-  return typeof meta === "string" && meta.trim().length > 0 ? meta.trim() : undefined;
+  return Predicate.isString(meta) && meta.trim().length > 0 ? meta.trim() : undefined;
 }
 
 export function extractCodeBlock(

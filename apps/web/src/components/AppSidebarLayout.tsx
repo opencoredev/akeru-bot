@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import {
@@ -185,7 +186,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(() => {
     const getWindowFullscreenState = window.desktopBridge?.getWindowFullscreenState;
 
-    return isMacosDesktop && typeof getWindowFullscreenState === "function"
+    return isMacosDesktop && Predicate.isFunction(getWindowFullscreenState)
       ? getWindowFullscreenState()
       : false;
   });
@@ -215,8 +216,8 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     const { getWindowFullscreenState, onWindowFullscreenStateChange } = bridge;
 
     if (
-      typeof getWindowFullscreenState !== "function" ||
-      typeof onWindowFullscreenStateChange !== "function"
+      !Predicate.isFunction(getWindowFullscreenState) ||
+      !Predicate.isFunction(onWindowFullscreenStateChange)
     ) {
       return;
     }
@@ -230,7 +231,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onMenuAction = window.desktopBridge?.onMenuAction;
 
-    if (typeof onMenuAction !== "function") {
+    if (!Predicate.isFunction(onMenuAction)) {
       return;
     }
 

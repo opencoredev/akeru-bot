@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   BotId,
@@ -149,7 +150,7 @@ export function BotSettingsForm({
 
       setDeleting(false);
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         const error = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",

@@ -1,5 +1,7 @@
 "use client";
 
+import { Predicate } from "effect";
+
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { ChevronRightIcon } from "lucide-react";
 import type * as React from "react";
@@ -37,7 +39,7 @@ function MenuPopup({
   anchor?: MenuPrimitive.Positioner.Props["anchor"];
 }) {
   const hasExplicitWidthClass =
-    typeof className === "string" &&
+    Predicate.isString(className) &&
     className.split(/\s+/).some((classToken) => {
       const utility = classToken.split(":").at(-1) ?? classToken;
 

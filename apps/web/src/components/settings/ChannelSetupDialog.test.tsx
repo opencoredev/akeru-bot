@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { BotId, ChannelConnectionId, OrchestrationDispatchCommandError } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { act, type ReactNode } from "react";
@@ -85,7 +86,7 @@ vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
 
 vi.mock("../ui/button", () => ({
   Button: (props: { children: ReactNode; onClick?: () => void; disabled?: boolean }) => {
-    if (typeof props.children === "string") mocks.buttons.set(props.children, props);
+    if (Predicate.isString(props.children)) mocks.buttons.set(props.children, props);
 
     return null;
   },

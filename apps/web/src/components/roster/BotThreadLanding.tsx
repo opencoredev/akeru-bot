@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { pendingMemoryApprovals } from "@akeru/client-runtime/durable-memory";
 import { useAtomValue } from "@effect/atom-react";
 import { presentThreadError } from "@akeru/client-runtime/errors";
@@ -388,12 +389,12 @@ export function BotThreadLanding({
             ) : (
               timelineItems.map((item, timelineIndex) => (
                 <Fragment key={item.key}>
-                  {item._tag === "Receipt" ? (
+                  {Predicate.isTagged(item, "Receipt") ? (
                     <RoutineReceiptRow
                       receipt={item.receipt}
                       {...(onOpenRoutines ? { onOpenRoutines } : {})}
                     />
-                  ) : item._tag === "Delegation" ? (
+                  ) : Predicate.isTagged(item, "Delegation") ? (
                     <DelegationCard
                       delegation={item.delegation}
                       delegations={delegations}
@@ -404,8 +405,10 @@ export function BotThreadLanding({
                     (() => {
                       const { message, separator, startsGroup } = item.message.entry;
 
-                      const startsAfterReceipt =
-                        timelineItems[timelineIndex - 1]?._tag === "Receipt";
+                      const startsAfterReceipt = Predicate.isTagged(
+                        timelineItems[timelineIndex - 1] ?? {},
+                        "Receipt",
+                      );
 
                       const messageIndex = item.index;
 

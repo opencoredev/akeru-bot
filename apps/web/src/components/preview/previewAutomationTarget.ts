@@ -19,7 +19,7 @@ export function needsPreviewAutomationSessionSync(
 export function resolvePreviewAutomationTarget(
   state: PreviewAutomationSessionIndex,
   requestedTabId: string | null,
-): { readonly tabId: string | null; readonly snapshot: PreviewSessionSnapshot | null } {
+) {
   const snapshot = requestedTabId ? (state.sessions[requestedTabId] ?? null) : state.snapshot;
 
   return { tabId: snapshot?.tabId ?? null, snapshot };

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -40,11 +41,11 @@ function render(code = "ABCD-1234"): ReactElement<Record<string, unknown>> {
 }
 
 function text(node: unknown): string {
-  if (typeof node === "string") return node;
+  if (Predicate.isString(node)) return node;
 
   if (Array.isArray(node)) return node.map(text).join("");
 
-  if (node && typeof node === "object" && "props" in node) {
+  if (node && Predicate.isObjectOrArray(node) && "props" in node) {
     return text((node as { props: { children?: unknown } }).props.children);
   }
 
@@ -52,7 +53,7 @@ function text(node: unknown): string {
 }
 
 async function pressCopy(tree: ReactElement<Record<string, unknown>>) {
-  const button = visitElements(tree, (element) => typeof element.props.onClick === "function");
+  const button = visitElements(tree, (element) => Predicate.isFunction(element.props.onClick));
   (button?.props.onClick as () => void)();
   // The copy result lands after the clipboard promise settles.
   await clipboard.writeTextToClipboard.mock.results[0]?.value.catch(() => undefined);

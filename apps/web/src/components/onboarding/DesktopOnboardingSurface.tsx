@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { isAtomCommandInterrupted } from "@akeru/client-runtime/state/runtime";
 import { BotId, type EnvironmentId } from "@akeru/contracts";
@@ -266,7 +267,7 @@ export function OnboardingSurface({
 
     if (isAtomCommandInterrupted(result)) return;
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setCreateError(t("Could not create your bot."));
 
       return;

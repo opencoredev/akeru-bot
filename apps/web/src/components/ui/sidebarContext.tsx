@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import * as React from "react";
 import { cn } from "~/lib/utils";
 import { useIsMobile } from "~/hooks/useMediaQuery";
@@ -103,7 +104,7 @@ export function SidebarProvider({
 
   const setOpen = React.useCallback(
     async (value: boolean | ((value: boolean) => boolean)) => {
-      const openState = typeof value === "function" ? value(open) : value;
+      const openState = Predicate.isFunction(value) ? value(open) : value;
 
       if (setOpenProp) {
         setOpenProp(openState);

@@ -1,3 +1,4 @@
+import { recordLookup } from "../recordLookup";
 import {
   type KeybindingCommand,
   type KeybindingShortcut,
@@ -460,7 +461,7 @@ function modifierLabel(modifier: string, isMac: boolean): string {
   }
 }
 
-const KEY_LABELS: Readonly<Record<string, string>> = {
+const KEY_LABELS = {
   space: "Space",
   esc: "Esc",
   escape: "Esc",
@@ -476,7 +477,7 @@ const KEY_LABELS: Readonly<Record<string, string>> = {
   arrowdown: "↓",
   arrowleft: "←",
   arrowright: "→",
-};
+} satisfies Readonly<Record<string, string>>;
 
 /**
  * Splits a keybinding string such as `mod+shift+k` into the labels shown on
@@ -504,7 +505,9 @@ export function keybindingDisplayParts(value: string, platform: string): Readonl
   return [
     ...new Set([
       ...modifiers.map((modifier) => modifierLabel(modifier, isMac)),
-      ...keys.map((key) => KEY_LABELS[key] ?? (key.length === 1 ? key.toUpperCase() : key)),
+      ...keys.map(
+        (key) => recordLookup(KEY_LABELS, key) ?? (key.length === 1 ? key.toUpperCase() : key),
+      ),
     ]),
   ];
 }

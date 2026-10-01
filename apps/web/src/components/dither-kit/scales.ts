@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { Predicate } from "effect";
 import { scaleBand, scaleLinear, scalePoint } from "d3-scale";
 import { stack as d3Stack, stackOffsetExpand } from "d3-shape";
 
@@ -6,7 +7,7 @@ export type StackType = "default" | "stacked" | "percent";
 
 type Row = Record<string, unknown>;
 
-const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+const num = (v: unknown) => (Predicate.isNumber(v) && Number.isFinite(v) ? v : 0);
 
 /**
  * Per-series [y0, y1] bands for every row. For `default` every series sits on
@@ -17,11 +18,7 @@ const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0
  * canvas overlay read from. `max`/`min` bound the value range so the y-scale
  * can span a diverging (below-zero) domain.
  */
-export function computeBands(
-  data: Row[],
-  keys: string[],
-  stackType: StackType,
-): { bands: Record<string, [number, number][]>; max: number; min: number } {
+export function computeBands(data: Row[], keys: string[], stackType: StackType) {
   if (stackType === "default") {
     const bands: Record<string, [number, number][]> = {};
     let max = 0;

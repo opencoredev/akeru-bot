@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -18,7 +19,7 @@ vi.mock("../ui/button", async () => {
   return {
     Button: ({ children, onClick, ...props }: React.ComponentProps<"button">) => {
       const label = React.Children.toArray(children)
-        .filter((child): child is string => typeof child === "string")
+        .filter((child): child is string => Predicate.isString(child))
         .join("")
         .trim();
 

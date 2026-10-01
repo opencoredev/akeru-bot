@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ScopedThreadRef } from "@akeru/contracts";
 import { TriangleAlertIcon } from "lucide-react";
 import { memo, useState } from "react";
@@ -44,11 +45,14 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
 
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
 
-  if (assetUrl._tag === "Failure" || (assetUrl._tag === "Success" && failedUrl === assetUrl.url)) {
+  if (
+    Predicate.isTagged(assetUrl, "Failure") ||
+    (Predicate.isTagged(assetUrl, "Success") && failedUrl === assetUrl.url)
+  ) {
     return <ChatMarkdownImageFallback alt={props.alt} />;
   }
 
-  if (assetUrl._tag !== "Success") {
+  if (!Predicate.isTagged(assetUrl, "Success")) {
     return (
       <span
         role="status"

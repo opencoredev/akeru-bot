@@ -91,7 +91,7 @@ export interface BotPromptMentionBot {
 export function botPromptMention(
   bot: BotPromptMentionBot,
   bots: ReadonlyArray<BotPromptMentionBot>,
-): { readonly source: string; readonly detail: string | null } {
+) {
   const detail = composerBotMentionDetail(bot, bots);
 
   // A bot named `browser` would read as the browser mention, so it keeps its id token.
@@ -187,7 +187,7 @@ export function applyBotPromptMention(
   draft: string,
   trigger: BotPromptMentionTrigger,
   item: BotPromptMentionItem,
-): { readonly text: string; readonly caret: number } {
+) {
   const source = mentionSource(item);
 
   if (source === null) return { text: draft, caret: trigger.rangeEnd };

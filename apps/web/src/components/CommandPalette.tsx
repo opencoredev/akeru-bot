@@ -1,5 +1,7 @@
 "use client";
 
+import { Predicate } from "effect";
+
 import {
   ArchiveIcon,
   BotIcon,
@@ -278,12 +280,12 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
   function executeItem(item: CommandPaletteActionItem): void {
     if (item.disabled) return;
     setOpen(false);
-    void item.run().catch((error: unknown) => {
+    void item.run().catch((cause: unknown) => {
       toastManager.add(
         stackedThreadToast({
           type: "error",
           title: t("Unable to run command"),
-          description: error instanceof Error ? error.message : t("An unexpected error occurred."),
+          description: cause instanceof Error ? cause.message : t("An unexpected error occurred."),
         }),
       );
     });
@@ -297,7 +299,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
       inputProps={{ placeholder: t("Search commands and chats...") }}
       mode="none"
       onItemHighlighted={(value) => {
-        setHighlightedItemValue(typeof value === "string" ? value : null);
+        setHighlightedItemValue(Predicate.isString(value) ? value : null);
       }}
       onValueChange={(nextQuery: string) => {
         setHighlightedItemValue(null);
@@ -323,10 +325,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
  * in the bot's view; a group opens its chat. Chats outside the environment this
  * client shows are listed but cannot be opened here.
  */
-function useChatSearchItems(query: string): {
-  readonly items: CommandPaletteActionItem[];
-  readonly isPending: boolean;
-} {
+function useChatSearchItems(query: string) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { environments } = useEnvironments();

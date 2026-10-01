@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 import { closestCenter, type CollisionDetection } from "@dnd-kit/core";
 import {
@@ -52,7 +53,7 @@ function layout(items: readonly RosterListItem[], active: string, over: string, 
         : item.marker === "pinned-header" || item.marker === "pinned-divider"
           ? 0
           : item.marker === "unassigned-placeholder" ||
-              (typeof item.marker === "object" && item.marker.kind === "section-placeholder")
+              (Predicate.isObjectOrArray(item.marker) && item.marker.kind === "section-placeholder")
             ? 0
             : 32;
 

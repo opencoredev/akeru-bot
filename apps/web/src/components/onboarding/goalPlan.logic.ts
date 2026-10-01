@@ -76,10 +76,7 @@ export function normalizeDesktopOnboardingGoal(goal: string): string {
  * Legacy drafts are normalized when read, so this receives exactly the goal
  * the user saw and preserves all new instructions they entered.
  */
-export function desktopOnboardingBotBrief(goal: string): {
-  readonly description: string;
-  readonly prompt: string;
-} {
+export function desktopOnboardingBotBrief(goal: string) {
   const description = condense(goal);
   const plan = desktopOnboardingGoalPlan(description);
   const steps = plan.steps.map((step) => `- ${step}`).join("\n");

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   BotId,
@@ -147,7 +148,7 @@ export function BotChannelsSheet({
     const result = await command();
     setBusyId(null);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({
         type: "error",
         title: t("Could not update channel"),
@@ -207,7 +208,7 @@ export function BotChannelsSheet({
 
     setBusyId(null);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({ type: "error", title: t("Could not unassign channel") });
     }
   };

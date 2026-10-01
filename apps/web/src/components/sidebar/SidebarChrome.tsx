@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   Analytics01Icon,
@@ -190,7 +191,7 @@ export function formatEnabledPluginBadge(enabledCount: number): string | null {
 export function summarizeEnabledPlugins(
   servers: readonly McpServer[],
   catalog: readonly PluginDefinition[] = PLUGIN_CATALOG,
-): { readonly enabledPlugins: readonly PluginDefinition[]; readonly enabledCount: number } {
+) {
   const enabledIds = new Set<string>(
     servers.flatMap((server) => (server.enabled ? [server.id] : [])),
   );
@@ -336,7 +337,7 @@ function ComputerUseControlForEnvironment({
         input: { threadId: control.threadId },
       });
 
-      if (stopped._tag === "Success") {
+      if (Predicate.isTagged(stopped, "Success")) {
         await disableServer({
           environmentId,
           input: { mcpServerId: COMPUTER_USE_SERVER_ID as McpServer["id"] },

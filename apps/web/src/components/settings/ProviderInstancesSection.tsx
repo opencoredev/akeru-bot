@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
 import {
@@ -191,7 +192,7 @@ export function ProviderInstancesSection({
       refreshingRef.current = false;
       setIsRefreshing(false);
 
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
         console.warn("Failed to refresh providers", {
           operation: "refresh-providers",
           environmentId,
@@ -213,7 +214,7 @@ export function ProviderInstancesSection({
         input: { provider: candidate.driver, instanceId: candidate.instanceId },
       });
 
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         toastManager.add(
           stackedThreadToast({

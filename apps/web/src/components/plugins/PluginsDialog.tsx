@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   isAtomCommandInterrupted,
@@ -96,11 +97,7 @@ type Translate = typeof englishTranslator.translate;
 export function resolvePluginDialogServers(
   servers: readonly McpServer[],
   catalog: readonly PluginDirectoryDefinition[] = FULL_PLUGIN_CATALOG,
-): {
-  readonly installedPlugins: readonly PluginDirectoryDefinition[];
-  readonly customServers: readonly McpServer[];
-  readonly removedBuiltinServers: readonly McpServer[];
-} {
+) {
   const catalogServerIds = new Set(catalog.map(pluginMcpServerId));
 
   return {
@@ -211,7 +208,7 @@ function PluginsDialogForEnvironment({
     title: string,
     result: Awaited<ReturnType<typeof createServer>>,
   ): boolean => {
-    if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return false;
+    if (!Predicate.isTagged(result, "Failure") || isAtomCommandInterrupted(result)) return false;
     const error = squashAtomCommandFailure(result);
     toastManager.add({
       type: "error",
@@ -270,7 +267,7 @@ function PluginsDialogForEnvironment({
     setPendingServerId(plan.mcpServerId);
 
     const commandSucceeded = (title: string, result: Awaited<ReturnType<typeof createServer>>) => {
-      if (result._tag === "Success") return true;
+      if (Predicate.isTagged(result, "Success")) return true;
       reportFailure(title, result);
 
       return false;
@@ -311,7 +308,7 @@ function PluginsDialogForEnvironment({
                   onAuthorizationUrl,
                 });
 
-                if (result._tag === "Success") {
+                if (Predicate.isTagged(result, "Success")) {
                   const notice = pluginRecoveryNotice(
                     plugin.title,
                     result.value.recoveryFailures,
