@@ -138,12 +138,10 @@ export const decideBots = Effect.fn("decideBots")(function* ({
         .find((member) => member.botId === bot.id);
 
       if (sourceGroup && (sourceMembership?.role === "boss" || sourceGroup.bossBotId === bot.id)) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${bot.id}' is the boss of group '${sourceGroup.id}'. Replace it with 'group.boss.set' before changing its group.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot '${bot.id}' is the boss of group '${sourceGroup.id}'. Replace it with 'group.boss.set' before changing its group.`,
+        });
       }
 
       if (sourceGroup && sourceMembership) {
@@ -151,12 +149,10 @@ export const decideBots = Effect.fn("decideBots")(function* ({
         remainingBotIds.delete(bot.id);
 
         if (remainingBotIds.size < 2) {
-          return yield* Effect.fail(
-            new OrchestrationCommandInvariantError({
-              commandType: command.type,
-              detail: `Group '${sourceGroup.id}' requires at least two active bots.`,
-            }),
-          );
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Group '${sourceGroup.id}' requires at least two active bots.`,
+          });
         }
       }
 
@@ -241,12 +237,10 @@ export const decideBots = Effect.fn("decideBots")(function* ({
       const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
 
       if (bossGroup) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${command.botId}' is the boss of group '${bossGroup.id}'. Set a new boss before archiving it.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot '${command.botId}' is the boss of group '${bossGroup.id}'. Set a new boss before archiving it.`,
+        });
       }
 
       const undersizedGroup = readModel.groups.find((group) => {
@@ -265,12 +259,10 @@ export const decideBots = Effect.fn("decideBots")(function* ({
       });
 
       if (undersizedGroup) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Group '${undersizedGroup.id}' requires at least two active bots.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Group '${undersizedGroup.id}' requires at least two active bots.`,
+        });
       }
 
       const occurredAt = yield* nowIso;
@@ -348,12 +340,10 @@ export const decideBots = Effect.fn("decideBots")(function* ({
       const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
 
       if (bossGroup) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${command.botId}' is the boss of group '${bossGroup.id}'. Set a new boss before deleting it.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot '${command.botId}' is the boss of group '${bossGroup.id}'. Set a new boss before deleting it.`,
+        });
       }
 
       const undersizedGroup = readModel.groups.find((group) => {
@@ -372,12 +362,10 @@ export const decideBots = Effect.fn("decideBots")(function* ({
       });
 
       if (undersizedGroup) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Group '${undersizedGroup.id}' requires at least two active bots.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Group '${undersizedGroup.id}' requires at least two active bots.`,
+        });
       }
 
       const occurredAt = yield* nowIso;

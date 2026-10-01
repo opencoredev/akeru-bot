@@ -84,6 +84,9 @@ export class ServerPreviewBrowser extends Context.Service<
 >()("akeru-bot/preview/ServerPreviewBrowser") {}
 
 export const make = Effect.gen(function* ServerPreviewBrowserMake() {
+  const runtimeContext = yield* Effect.context<never>();
+  const runPromise = Effect.runPromiseWith(runtimeContext);
+  const runSync = Effect.runSyncWith(runtimeContext);
   const previewManager = yield* PreviewManager.PreviewManager;
   const httpClient = yield* HttpClient.HttpClient;
   const settingsService = yield* ServerSettings.ServerSettingsService;
@@ -103,16 +106,16 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
 
   const getContext = (): Promise<BrowserContext> => {
     if (lease) return lease.context;
-    const scope = Effect.runSync(Scope.make());
+    const scope = runSync(Scope.make());
 
-    const context = Effect.runPromise(
+    const context = runPromise(
       RcMap.get(contexts, "browser").pipe(
         Effect.map(({ context }) => context),
         Scope.provide(scope),
       ),
     ).catch(async (cause: unknown) => {
       if (lease === current) lease = null;
-      await Effect.runPromise(Scope.close(scope, Exit.void));
+      await runPromise(Scope.close(scope, Exit.void));
       throw cause;
     });
 
@@ -186,7 +189,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       height: viewport.height,
     };
 
-    await Effect.runPromise(
+    await runPromise(
       previewManager.reportFrame({
         threadId: tab.threadId,
         tabId: tabIdFor(tab),
@@ -199,7 +202,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
 
   const reportPageStatus = async (tab: BrowserTab): Promise<void> => {
     const url = tab.page.url();
-    await Effect.runPromise(
+    await runPromise(
       previewManager.reportStatus({
         threadId: tab.threadId,
         tabId: tabIdFor(tab),
@@ -244,7 +247,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
 
   const handle = async (request: PreviewAutomationRequest) => {
     const generation = closeGeneration;
-    await Effect.runPromise(requireApiKey);
+    await runPromise(requireApiKey);
 
     if (request.operation === "status") {
       const tabId = request.tabId ?? activeByThread.get(request.threadId);
@@ -258,7 +261,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       let tab = tabId ? tabs.get(tabId) : undefined;
 
       if (!tab || input.reuseExistingTab === false) {
-        const snapshot = await Effect.runPromise(
+        const snapshot = await runPromise(
           previewManager.open({
             threadId: request.threadId,
             ...(input.url ? { url: input.url } : {}),
@@ -444,7 +447,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
         const setting = resolvePreviewViewport(input);
         const viewport = viewportForSetting(setting);
         await tab.page.setViewportSize(viewport);
-        await Effect.runPromise(
+        await runPromise(
           previewManager.resize({ threadId: request.threadId, tabId, viewport: setting }),
         );
         await publishFrame(tab);
@@ -480,7 +483,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
 
     if (!current) return;
     await current.context.catch(() => undefined);
-    await Effect.runPromise(Scope.close(current.scope, Exit.void));
+    await runPromise(Scope.close(current.scope, Exit.void));
   };
 
   return ServerPreviewBrowser.of({ handle, close });

@@ -42,19 +42,15 @@ export const requireBrowserbaseApiKey = (settingsService: ServerSettingsService[
     const settings = yield* settingsService.getSettings;
 
     if (!settings.browserProvider.enabled) {
-      return yield* Effect.fail(
-        new BrowserConfigurationError({
-          message: "Browserbase is disabled. Enable it in Settings > Browser.",
-        }),
-      );
+      return yield* new BrowserConfigurationError({
+        message: "Browserbase is disabled. Enable it in Settings > Browser.",
+      });
     }
 
     const apiKey = settings.browserProvider.browserbaseApiKey || process.env.BROWSERBASE_API_KEY;
 
     if (!apiKey)
-      return yield* Effect.fail(
-        new BrowserConfigurationError({ message: "Browserbase is not configured." }),
-      );
+      return yield* new BrowserConfigurationError({ message: "Browserbase is not configured." });
 
     return apiKey;
   });

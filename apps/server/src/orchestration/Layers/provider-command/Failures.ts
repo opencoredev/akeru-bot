@@ -51,7 +51,7 @@ export function createFailures({
 
     return (
       botId === null
-        ? Effect.succeed(undefined)
+        ? Effect.as(Effect.void, undefined)
         : projectionBotRepository.getById({ botId }).pipe(
             Effect.map(Option.getOrUndefined),
             Effect.orElseSucceed(() => undefined),

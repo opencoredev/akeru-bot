@@ -123,7 +123,7 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
                   ),
               )?.id,
           ),
-          Effect.catchCause(() => Effect.succeed(undefined)),
+          Effect.catchCause(() => Effect.void),
           Effect.flatMap((botId) =>
             botId
               ? loadConnectionSecret(ctx, connectionId).pipe(

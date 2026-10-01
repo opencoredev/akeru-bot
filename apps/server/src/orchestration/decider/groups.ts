@@ -49,12 +49,10 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
       yield* requireGroupAbsent({ readModel, command, groupId: command.groupId });
 
       if (command.bossBotId === undefined) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: "A group requires a boss bot.",
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "A group requires a boss bot.",
+        });
       }
 
       const memberBotIds = [
@@ -67,12 +65,10 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
       );
 
       if (memberBotIds.length < 2) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Group '${command.groupId}' requires at least two active bots.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Group '${command.groupId}' requires at least two active bots.`,
+        });
       }
 
       const groupCreatedEvent: PlannedOrchestrationEvent = {
@@ -186,21 +182,17 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
       const bot = yield* requireBotNotArchived({ readModel, command, botId: command.botId });
 
       if (command.role === "boss" && group.bossBotId !== null && group.bossBotId !== bot.id) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Group '${group.id}' already has boss bot '${group.bossBotId}'. Use 'group.boss.set' to replace it.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Group '${group.id}' already has boss bot '${group.bossBotId}'. Use 'group.boss.set' to replace it.`,
+        });
       }
 
       if (command.role === "specialist" && group.bossBotId === bot.id) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${bot.id}' is the boss of group '${group.id}' and cannot be assigned as a specialist.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot '${bot.id}' is the boss of group '${group.id}' and cannot be assigned as a specialist.`,
+        });
       }
 
       const occurredAt = yield* nowIso;
@@ -231,33 +223,27 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
         .find((entry) => entry.botId === command.botId);
 
       if (!member) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${command.botId}' is not a member of group '${group.id}'.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot '${command.botId}' is not a member of group '${group.id}'.`,
+        });
       }
 
       if (member.role === "boss" || group.bossBotId === command.botId) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${command.botId}' is the last boss of group '${group.id}'. Set a new boss and unassign the previous boss with one 'group.boss.set' command.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot '${command.botId}' is the last boss of group '${group.id}'. Set a new boss and unassign the previous boss with one 'group.boss.set' command.`,
+        });
       }
 
       const remainingBotIds = activeGroupBotIds(readModel, group);
       remainingBotIds.delete(command.botId);
 
       if (remainingBotIds.size < 2) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Group '${group.id}' requires at least two active bots.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Group '${group.id}' requires at least two active bots.`,
+        });
       }
 
       const occurredAt = yield* nowIso;
@@ -309,12 +295,10 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
       );
 
       if (!person) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Person '${command.personId}' is not a member of group '${group.id}'.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Person '${command.personId}' is not a member of group '${group.id}'.`,
+        });
       }
 
       const occurredAt = yield* nowIso;
@@ -345,12 +329,10 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
       });
 
       if (group.bossBotId === nextBoss.id && command.unassignPreviousBoss === true) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `Bot '${nextBoss.id}' is already the boss and cannot replace and unassign itself.`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot '${nextBoss.id}' is already the boss and cannot replace and unassign itself.`,
+        });
       }
 
       if (command.unassignPreviousBoss === true) {
@@ -360,12 +342,10 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
         remainingBotIds.add(nextBoss.id);
 
         if (remainingBotIds.size < 2) {
-          return yield* Effect.fail(
-            new OrchestrationCommandInvariantError({
-              commandType: command.type,
-              detail: `Group '${group.id}' requires at least two active bots.`,
-            }),
-          );
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Group '${group.id}' requires at least two active bots.`,
+          });
         }
       }
 
