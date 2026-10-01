@@ -596,11 +596,14 @@ async function probeHealth(url: string, headers: Record<string, string>) {
 
   try {
     return await runOAuthPromise(
-      HttpClient.HttpClient.use((client) => client.get(url, { headers })).pipe(
+      HttpClient.HttpClient.use((client) =>
+        HttpClient.withScope(client).get(url, { headers }),
+      ).pipe(
         Effect.map((response) => ({
           status: response.status,
           ok: response.status >= 200 && response.status < 300,
         })),
+        Effect.scoped,
         Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
         Effect.provideService(HttpClient.TracerPropagationEnabled, false),
       ),

@@ -1,9 +1,13 @@
 import * as Schema from "effect/Schema";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
 
 import { fixture } from "./testUtils/subscriptionAuthStorage.ts";
 import * as NodeFS from "node:fs";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { expect, it } from "@effect/vitest";
+import { describe, vi } from "vite-plus/test";
 import { ProviderInstanceId } from "@akeru/contracts";
+import { HEALTH_CHECK_TIMEOUT_MS } from "./serviceTypes.ts";
 import {
   makeTestSubscriptionAuthService,
   runWithNodeServices,
@@ -40,6 +44,87 @@ describe("provider health checks", () => {
 
     return calls;
   }
+
+  it.effect.each([200, 401])("aborts an unread response body after recording status %s", (status) =>
+    Effect.gen(function* () {
+      const { authPath } = fixture();
+      seedOAuth(authPath, "anthropic");
+      const requested = Deferred.makeUnsafe<AbortSignal>();
+      const bodyRead = vi.fn();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+          const signal = init?.signal;
+
+          if (!signal) throw new Error("Missing request signal");
+
+          Deferred.doneUnsafe(requested, Effect.succeed(signal));
+
+          return new Response(new ReadableStream({ pull: bodyRead }, { highWaterMark: 0 }), {
+            status,
+          });
+        }),
+      );
+
+      try {
+        const service = yield* Effect.promise(() => makeTestSubscriptionAuthService(authPath));
+        const check = service.testHealth("anthropic");
+        const signal = yield* Deferred.await(requested);
+        yield* Effect.promise(() => check);
+        expect(signal.aborted).toBe(true);
+        expect(bodyRead).not.toHaveBeenCalled();
+        expect(service.statuses().find((entry) => entry.provider === "anthropic")?.health).toBe(
+          status === 200 ? "healthy" : "revoked",
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }),
+  );
+
+  it.effect("aborts the actual request when the original 30-second deadline expires", () =>
+    Effect.gen(function* () {
+      const { authPath } = fixture();
+      seedOAuth(authPath, "anthropic");
+      const deadline = new AbortController();
+      const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
+      const requested = Deferred.makeUnsafe<AbortSignal>();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+          const signal = init?.signal;
+
+          if (!signal) throw new Error("Missing request signal");
+
+          return new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+            Deferred.doneUnsafe(requested, Effect.succeed(signal));
+          });
+        }),
+      );
+
+      try {
+        const service = yield* Effect.promise(() => makeTestSubscriptionAuthService(authPath));
+        const check = service.testHealth("anthropic");
+        const signal = yield* Deferred.await(requested);
+        expect(timeout).toHaveBeenCalledWith(30_000);
+        expect(HEALTH_CHECK_TIMEOUT_MS).toBe(30_000);
+        expect(signal.aborted).toBe(false);
+        deadline.abort(
+          new DOMException("The operation was aborted due to timeout", "TimeoutError"),
+        );
+        yield* Effect.promise(() => check);
+        expect(signal.aborted).toBe(true);
+        expect(
+          service.statuses().find((entry) => entry.provider === "anthropic")?.lastFailedRequest
+            ?.message,
+        ).toBe("The operation was aborted due to timeout");
+      } finally {
+        timeout.mockRestore();
+        vi.unstubAllGlobals();
+      }
+    }),
+  );
 
   it("keeps OAuth transport failure messages and sends only the original headers", async () => {
     const { authPath } = fixture();
