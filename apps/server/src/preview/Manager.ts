@@ -1,14 +1,5 @@
-/**
- * In-memory PreviewManager implementation.
- *
- * Sessions are keyed by `(threadId, tabId)`; a single thread can host
- * multiple tabs (browser-style). `open` always creates a new tab — tab
- * lifecycle is owned by the renderer.
- *
- * Events are published via Effect's `PubSub`, so subscriber failures are
- * isolated from the publishing call (a closed WS subscriber queue cannot
- * fail an in-progress `navigate()`).
- */
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import {
   type PreviewCloseInput,
   type PreviewEvent,
@@ -284,8 +275,10 @@ export const make = Effect.gen(function* PreviewManagerMake() {
         input.tabId,
         Effect.fn("PreviewManager.navigateSession")(function* (session) {
           const updatedAt = yield* currentIsoTimestamp;
-          const previousTitle =
-            session.snapshot.navStatus._tag === "Idle" ? "" : session.snapshot.navStatus.title;
+          const previousTitle = Match.value(session.snapshot.navStatus).pipe(
+            Match.tag("Idle", () => ""),
+            Match.orElse((navigation) => navigation.title),
+          );
           const resolvedTitle = input.resolvedTitle ?? previousTitle;
           const snapshot: PreviewSessionSnapshot = {
             threadId: session.threadId,
@@ -329,25 +322,24 @@ export const make = Effect.gen(function* PreviewManagerMake() {
           viewport: session.snapshot.viewport ?? FILL_PREVIEW_VIEWPORT,
           updatedAt,
         };
-        const emit: PreviewEventDraft =
-          input.navStatus._tag === "LoadFailed"
-            ? {
-                type: "failed",
-                threadId: session.threadId,
-                tabId: session.tabId,
-                createdAt: snapshot.updatedAt,
-                url: input.navStatus.url,
-                title: input.navStatus.title,
-                code: input.navStatus.code,
-                description: input.navStatus.description,
-              }
-            : {
-                type: "navigated",
-                threadId: session.threadId,
-                tabId: session.tabId,
-                createdAt: snapshot.updatedAt,
-                snapshot,
-              };
+        const emit: PreviewEventDraft = Predicate.isTagged(input.navStatus, "LoadFailed")
+          ? {
+              type: "failed",
+              threadId: session.threadId,
+              tabId: session.tabId,
+              createdAt: snapshot.updatedAt,
+              url: input.navStatus.url,
+              title: input.navStatus.title,
+              code: input.navStatus.code,
+              description: input.navStatus.description,
+            }
+          : {
+              type: "navigated",
+              threadId: session.threadId,
+              tabId: session.tabId,
+              createdAt: snapshot.updatedAt,
+              snapshot,
+            };
         return {
           next: { ...session, snapshot },
           emit,

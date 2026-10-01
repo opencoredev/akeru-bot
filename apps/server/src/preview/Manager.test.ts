@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { it } from "@effect/vitest";
 import { type PreviewEvent, ThreadId } from "@akeru/contracts";
 import { PreviewUrlNormalizationError } from "@akeru/shared/preview";
@@ -45,7 +46,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
       const snapshot = yield* manager.open({ threadId, url: "localhost:5173" });
       expect(snapshot.tabId.startsWith("tab_")).toBe(true);
       expect(snapshot.navStatus._tag).toBe("Loading");
-      if (snapshot.navStatus._tag === "Loading") {
+      if (Predicate.isTagged(snapshot.navStatus, "Loading")) {
         expect(snapshot.navStatus.url).toBe("http://localhost:5173/");
       }
 
@@ -98,7 +99,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
       const threadId = freshThreadId();
       const manager = yield* PreviewManager.PreviewManager;
       const snapshot = yield* manager.open({ threadId, url: "example.com" });
-      if (snapshot.navStatus._tag === "Loading") {
+      if (Predicate.isTagged(snapshot.navStatus, "Loading")) {
         expect(snapshot.navStatus.url).toBe("https://example.com/");
       }
     }),
@@ -153,7 +154,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
       });
 
       expect(snapshot.navStatus._tag).toBe("Success");
-      if (snapshot.navStatus._tag === "Success") {
+      if (Predicate.isTagged(snapshot.navStatus, "Success")) {
         expect(snapshot.navStatus.url).toBe("http://localhost:5173/about");
         expect(snapshot.navStatus.title).toBe("About");
       }

@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import {
   DEFAULT_VIEWPORT,
   makeBrowserbaseContexts,
@@ -52,7 +53,10 @@ const requestedUrl = (input: PreviewAutomationNavigateInput): string => {
 const viewportForSetting = (
   setting: ReturnType<typeof resolvePreviewViewport> | typeof FILL_PREVIEW_VIEWPORT,
 ): PreviewRenderedViewportSize =>
-  setting._tag === "fill" ? DEFAULT_VIEWPORT : { width: setting.width, height: setting.height };
+  Match.value(setting).pipe(
+    Match.tag("fill", () => DEFAULT_VIEWPORT),
+    Match.orElse((viewport) => ({ width: viewport.width, height: viewport.height })),
+  );
 
 const selectorFor = (input: {
   readonly locator?: string | undefined;
