@@ -223,9 +223,9 @@ export function validateBundledClientAssets(clientDir: string) {
     const indexPath = path.join(clientDir, "index.html");
     const indexHtml = yield* fs.readFileString(indexPath);
 
-    const refs = [...indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)]
-      .map((match) => match[1])
-      .filter((value): value is string => value !== undefined);
+    const refs = [...indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)].flatMap((match) =>
+      match[1] === undefined ? [] : [match[1]],
+    );
 
     const missing: string[] = [];
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import * as Predicate from "effect/Predicate";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -102,9 +103,9 @@ export type ReferenceRepoSyncError = typeof ReferenceRepoSyncError.Type;
 
 export const isReferenceRepoSyncError = Schema.is(ReferenceRepoSyncError);
 
-const decodeJsonSource = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+const decodeJsonSource = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Json));
 
-const decodeYamlSource = Schema.decodeEffect(fromYaml(Schema.Unknown));
+const decodeYamlSource = Schema.decodeEffect(fromYaml(Schema.Json));
 
 const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
   stream.pipe(
@@ -115,25 +116,27 @@ const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.
     ),
   );
 
-function readNestedString(input: unknown, keys: ReadonlyArray<string>): string | undefined {
-  let value = input;
+const isJsonObject = Schema.is(Schema.Record(Schema.String, Schema.Json));
+
+function readNestedString(input: Schema.Json, keys: ReadonlyArray<string>): string | undefined {
+  let value: Schema.Json | undefined = input;
 
   for (const key of keys) {
-    if (typeof value !== "object" || value === null || !(key in value)) {
+    if (!isJsonObject(value) || !(key in value)) {
       return undefined;
     }
 
-    value = (value as Record<string, unknown>)[key];
+    value = value[key];
   }
 
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+  return Predicate.isString(value) && value.length > 0 ? value : undefined;
 }
 
 function decodeVersionSource(
   repo: ReferenceRepo,
   sourcePath: string,
   content: string,
-): Effect.Effect<unknown, ReferenceRepoSyncError> {
+): Effect.Effect<Schema.Json, ReferenceRepoSyncError> {
   const decode =
     repo.versionSourcePath.endsWith(".yaml") || repo.versionSourcePath.endsWith(".yml")
       ? decodeYamlSource

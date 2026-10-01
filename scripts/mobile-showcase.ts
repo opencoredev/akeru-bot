@@ -10,10 +10,7 @@ import * as NodePath from "node:path";
 
 import * as NodeProcess from "node:process";
 
-import showcaseConfig, {
-  type ShowcaseAndroidDevice,
-  type ShowcaseIosDevice,
-} from "./mobile-showcase.config.ts";
+import showcaseConfig from "./mobile-showcase.config.ts";
 
 import {
   SHOWCASE_ENVIRONMENTS,
@@ -25,7 +22,6 @@ import {
   REPO_ROOT,
   IOS_APP_PATH,
   ANDROID_APK_PATH,
-  type ShowcaseCapture,
   type IosCaptureCleanup,
   type AndroidCaptureCleanup,
 } from "./mobile-showcase/paths.ts";
@@ -214,7 +210,7 @@ async function main(): Promise<void> {
 
       if (capture.device.platform === "ios") {
         await captureIos(
-          capture as ShowcaseCapture & { readonly device: ShowcaseIosDevice },
+          { ...capture, device: capture.device },
           iosAppPath,
           outputDirectory,
           showcaseConfig,
@@ -224,7 +220,7 @@ async function main(): Promise<void> {
         );
       } else {
         await captureAndroid(
-          capture as ShowcaseCapture & { readonly device: ShowcaseAndroidDevice },
+          { ...capture, device: capture.device },
           androidApkPath,
           outputDirectory,
           showcaseConfig,
@@ -292,12 +288,12 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  void main().catch((error: unknown) => {
+  void main().catch((cause: unknown) => {
     // Stack over message: the harness only fails in CI, where the line that
     // threw is the whole diagnosis and there is nobody at a terminal to
     // re-run it with more output.
     NodeProcess.stderr.write(
-      `${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+      `${cause instanceof Error ? (cause.stack ?? cause.message) : String(cause)}\n`,
     );
     NodeProcess.exit(1);
   });

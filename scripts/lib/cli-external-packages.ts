@@ -158,11 +158,7 @@ export function selectCliPackagedRuntimeDependencies(
  * backends would then fail with ERR_MODULE_NOT_FOUND because those packages
  * are not in the selected sidecar closure either.
  */
-export function findInlinedExternalPackages(source: string): {
-  readonly regionCount: number;
-  readonly inlined: ReadonlyArray<string>;
-  readonly inlinedPackages: ReadonlyArray<string>;
-} {
+export function findInlinedExternalPackages(source: string) {
   // Rolldown marks each inlined module with a `//#region <path>` comment.
   const regionPattern = /\/\/#region\s+(\S+)/g;
   const packagePattern = /node_modules\/((?:@[^/\s]+\/)?[^/\s]+)\//g;

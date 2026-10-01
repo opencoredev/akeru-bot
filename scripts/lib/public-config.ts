@@ -22,7 +22,7 @@ export function loadRepoEnv({
 }: {
   readonly baseEnv?: Environment;
   readonly repoRoot?: string;
-} = {}): Record<string, string | undefined> {
+} = {}) {
   const rootEnv = readEnvFile(NodePath.join(repoRoot, ".env"));
   const localEnv = readEnvFile(NodePath.join(repoRoot, ".env.local"));
   const config = resolvePublicConfig(baseEnv, localEnv, rootEnv);

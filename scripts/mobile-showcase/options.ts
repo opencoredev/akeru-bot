@@ -59,11 +59,13 @@ export function parseShowcaseCliArgs(args: ReadonlyArray<string>): CliOptions {
     } else if (argument === "--scene") {
       const value = argumentValue(args, index, argument);
 
-      if (!SHOWCASE_SCENES.includes(value as ShowcaseScene)) {
+      const scene = SHOWCASE_SCENES.find((scene) => scene === value);
+
+      if (scene === undefined) {
         throw new Error(`Unsupported scene '${value}'. Use ${SHOWCASE_SCENES.join(", ")}.`);
       }
 
-      scenes.add(value as ShowcaseScene);
+      scenes.add(scene);
       index += 1;
     } else if (argument === "--appearance") {
       const value = argumentValue(args, index, argument);
@@ -85,12 +87,18 @@ export function parseShowcaseCliArgs(args: ReadonlyArray<string>): CliOptions {
 
       if (value === "all") {
         for (const theme of SHOWCASE_THEMES) themes.add(theme);
-      } else if (SHOWCASE_THEMES.some((theme) => theme === value)) {
-        themes.add(value as ShowcaseTheme);
       } else {
-        // The app silently falls back to its default palette for an unknown id,
-        // so reject it here rather than shipping a mislabeled screenshot.
-        throw new Error(`Unsupported theme '${value}'. Use ${SHOWCASE_THEMES.join(", ")}, or all.`);
+        const theme = SHOWCASE_THEMES.find((theme) => theme === value);
+
+        if (theme !== undefined) {
+          themes.add(theme);
+        } else {
+          // The app silently falls back to its default palette for an unknown id,
+          // so reject it here rather than shipping a mislabeled screenshot.
+          throw new Error(
+            `Unsupported theme '${value}'. Use ${SHOWCASE_THEMES.join(", ")}, or all.`,
+          );
+        }
       }
 
       index += 1;

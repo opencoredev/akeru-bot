@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off - Host-side simulator and emulator automation uses Node subprocess and timing APIs directly.
 import * as NodeChildProcess from "node:child_process";
 
@@ -137,7 +138,7 @@ export async function reserveAvailablePort(): Promise<number> {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
 
-      if (!address || typeof address === "string") {
+      if (!address || Predicate.isString(address)) {
         server.close();
         reject(new Error("Could not reserve a local port for the showcase environment."));
 

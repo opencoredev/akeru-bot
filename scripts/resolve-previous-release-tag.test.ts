@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
@@ -83,7 +84,7 @@ it.effect("preserves git tag spawn context and the exact platform cause", () => 
       Effect.flip,
     );
 
-    if (error._tag !== "ReleaseTagListProcessError") {
+    if (!Predicate.isTagged(error, "ReleaseTagListProcessError")) {
       return assert.fail(`Unexpected error: ${error._tag}`);
     }
 
@@ -126,7 +127,7 @@ it.effect("distinguishes stdout and stderr read failures", () =>
         Effect.flip,
       );
 
-      if (error._tag !== "ReleaseTagListProcessError") {
+      if (!Predicate.isTagged(error, "ReleaseTagListProcessError")) {
         return assert.fail(`Unexpected error: ${error._tag}`);
       }
 
@@ -155,7 +156,7 @@ it.effect("reports git tag non-zero exits without manufacturing a cause", () =>
       Effect.flip,
     );
 
-    if (error._tag !== "ReleaseTagListProcessExitError") {
+    if (!Predicate.isTagged(error, "ReleaseTagListProcessExitError")) {
       return assert.fail(`Unexpected error: ${error._tag}`);
     }
 
@@ -196,7 +197,7 @@ it.effect("preserves the GITHUB_OUTPUT append path and exact cause", () => {
       Effect.flip,
     );
 
-    if (appendError._tag !== "PreviousReleaseTagGitHubOutputAppendError") {
+    if (!Predicate.isTagged(appendError, "PreviousReleaseTagGitHubOutputAppendError")) {
       return assert.fail(`Unexpected error: ${appendError._tag}`);
     }
 

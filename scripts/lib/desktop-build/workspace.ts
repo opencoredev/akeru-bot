@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import type { DesktopBuildConfiguration } from "./config.ts";
 // @effect-diagnostics nodeBuiltinImport:off - Node's typed junction API avoids Windows symlink privileges while keeping the probe isolated.
 // @effect-diagnostics nodeBuiltinImport:off - Node's typed junction API avoids Windows symlink privileges while keeping the probe isolated.
 import * as NodeFSP from "node:fs/promises";
@@ -74,8 +76,8 @@ export interface StagePackageJson {
   readonly author: string;
   readonly license: string;
   readonly main: string;
-  readonly build: Record<string, unknown>;
-  readonly dependencies: Record<string, unknown>;
+  readonly build: DesktopBuildConfiguration;
+  readonly dependencies: Record<string, string>;
   readonly devDependencies: {
     readonly electron: string;
   };
@@ -137,7 +139,13 @@ export function createStageWorkspaceConfig(input: {
   readonly linuxServerBackend?: boolean;
 }): StageWorkspaceConfig {
   const { platform, arch, allowBuilds, patchedDependencies, overrides, linuxServerBackend } = input;
-  const hostOs = platform === "mac" ? "darwin" : platform === "win" ? "win32" : "linux";
+
+  const hostOs = Match.value(platform).pipe(
+    Match.when("mac", () => "darwin"),
+    Match.when("win", () => "win32"),
+    Match.orElse(() => "linux"),
+  );
+
   const hostCpu = arch === "universal" ? ["arm64", "x64"] : [arch];
 
   // Linux AppImages execute a Linux/glibc Node process that loads
@@ -174,7 +182,7 @@ export function createStageWorkspaceConfig(input: {
 
 export function createStagePatchedDependencies(
   patchedDependencies: Record<string, string>,
-  dependencies: Record<string, unknown>,
+  dependencies: Record<string, string>,
 ): Record<string, string> {
   return Object.fromEntries(
     Object.entries(patchedDependencies).filter(([patchKey]) =>
@@ -281,9 +289,7 @@ export const findStorePackageDirectory = Effect.fn("findStorePackageDirectory")(
 
   const flattened = `${packageName.replace("/", "+")}@`;
 
-  const entries = yield* fs
-    .readDirectory(storeDir)
-    .pipe(Effect.orElseSucceed(() => [] as string[]));
+  const entries = yield* fs.readDirectory(storeDir).pipe(Effect.orElseSucceed((): string[] => []));
 
   for (const entry of entries) {
     if (!entry.startsWith(flattened)) continue;

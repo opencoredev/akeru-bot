@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
@@ -192,18 +193,39 @@ assertOmits(desktopJobHeader, "secrets.", "Desktop signing secrets are scoped at
 
 assertOmits(releaseWorkflow, "macOS x64", "unadvertised macOS x64 build");
 
-const parsedReleaseWorkflow = parse(releaseWorkflow) as {
-  readonly jobs?: {
-    readonly desktop?: {
-      readonly steps?: ReadonlyArray<{
-        readonly name?: string;
-        readonly if?: string;
-        readonly env?: Readonly<Record<string, string>>;
-        readonly with?: Readonly<Record<string, string>>;
-      }>;
-    };
-  };
-};
+const decodeReleaseWorkflow = Schema.decodeUnknownSync(
+  Schema.Struct({
+    jobs: Schema.optionalKey(
+      Schema.Struct({
+        desktop: Schema.optionalKey(
+          Schema.Struct({
+            steps: Schema.optionalKey(
+              Schema.Array(
+                Schema.Struct({
+                  name: Schema.optionalKey(Schema.String),
+                  if: Schema.optionalKey(Schema.String),
+                  env: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+                  with: Schema.optionalKey(
+                    Schema.Record(
+                      Schema.String,
+                      Schema.Union([Schema.String, Schema.Number, Schema.Boolean]),
+                    ),
+                  ),
+                }),
+              ),
+            ),
+          }),
+        ),
+      }),
+    ),
+  }),
+);
+
+const parsedReleaseWorkflow = decodeReleaseWorkflow(parse(releaseWorkflow));
+
+const decodeManifestVersion = Schema.decodeUnknownSync(
+  Schema.Struct({ version: Schema.optionalKey(Schema.String) }),
+);
 
 const macOSConditions = new Set([
   "matrix.platform == 'mac'",
@@ -322,7 +344,7 @@ try {
     "apps/web/package.json",
     "packages/contracts/package.json",
   ] as const) {
-    const manifest = JSON.parse(readFromTemp(relativePath)) as { readonly version?: unknown };
+    const manifest = decodeManifestVersion(JSON.parse(readFromTemp(relativePath)));
 
     if (manifest.version !== "9.9.9-smoke.0") {
       throw new Error(`Release version did not update ${relativePath}.`);

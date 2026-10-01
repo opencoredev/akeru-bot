@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -298,10 +299,11 @@ releaseDate: '2026-03-07T10:36:07.540Z'
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
 
-      const platformError =
-        error._tag === "ShowHelp" ? (error.errors[0] as CliError.CliError | undefined) : error;
+      const platformError = Predicate.isTagged(error, "ShowHelp")
+        ? (error.errors[0] as CliError.CliError | undefined)
+        : error;
 
-      if (!platformError || platformError._tag !== "InvalidValue") {
+      if (!platformError || !Predicate.isTagged(platformError, "InvalidValue")) {
         assert.fail(`Expected InvalidValue, got ${String(platformError?._tag)}`);
       }
 

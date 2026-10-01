@@ -154,9 +154,7 @@ describe("Akeru Remote administration", () => {
     ]);
   });
 
-  const runWindowsUninstall = (
-    schtasksScript: string,
-  ): { readonly status: number | null; readonly stderr: string; readonly calls: string[] } => {
+  const runWindowsUninstall = (schtasksScript: string) => {
     const root = tempRoot();
     NodeFS.copyFileSync(
       new URL("./akeru-remote-admin.mjs", import.meta.url),
@@ -300,14 +298,16 @@ describe("Akeru Remote administration", () => {
       const server = NodeHttp.createServer((request, response) => {
         const origin = `http://127.0.0.1:${(server.address() as NodeNet.AddressInfo).port}`;
 
-        const files: Record<string, Buffer> = {
-          [`/download/${archiveName}`]: archive,
-          "/download/AKERU-REMOTE-MANIFEST.txt": manifest,
-          "/download/AKERU-REMOTE-MANIFEST.sig": signature,
-        };
+        const files = new Map<string, Buffer>(
+          Object.entries({
+            [`/download/${archiveName}`]: archive,
+            "/download/AKERU-REMOTE-MANIFEST.txt": manifest,
+            "/download/AKERU-REMOTE-MANIFEST.sig": signature,
+          }),
+        );
 
         if (request.url === "/repos/opencoredev/akeru-bot/releases/latest") {
-          const assets = Object.keys(files).map((file) => ({
+          const assets = Array.from(files.keys()).map((file) => ({
             name: file.slice("/download/".length),
             browser_download_url: `${origin}${file}`,
           }));
@@ -323,8 +323,8 @@ describe("Akeru Remote administration", () => {
             });
             response.writeHead(202).end(JSON.stringify({ targetVersion: "1.1.0" }));
           });
-        } else if (request.url && files[request.url]) {
-          response.end(files[request.url]);
+        } else if (request.url && files.get(request.url)) {
+          response.end(files.get(request.url));
         } else {
           response.writeHead(404).end();
         }

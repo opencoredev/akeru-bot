@@ -84,9 +84,9 @@ export function resolveShowcaseAndroidAbi(
 ): NonNullable<ShowcaseAndroidDevice["abi"]> {
   if (!value) return "arm64-v8a";
 
-  if (ANDROID_ABIS.some((abi) => abi === value)) {
-    return value as NonNullable<ShowcaseAndroidDevice["abi"]>;
-  }
+  const abi = ANDROID_ABIS.find((abi) => abi === value);
+
+  if (abi !== undefined) return abi;
 
   throw new Error(
     `Unsupported T3_SHOWCASE_ANDROID_ABI '${value}'. Use ${ANDROID_ABIS.join(", ")}.`,

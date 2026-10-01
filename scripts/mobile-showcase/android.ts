@@ -68,8 +68,9 @@ async function runningAndroidAvds(): Promise<ReadonlyMap<string, string>> {
   const devices = (await commandOutput(adb, ["devices"]))
     .split("\n")
     .map((line) => line.trim().split(/\s+/u))
-    .filter((parts) => parts[0]?.startsWith("emulator-") && parts[1] === "device")
-    .map((parts) => parts[0] as string);
+    .flatMap(([serial, state]) =>
+      serial?.startsWith("emulator-") && state === "device" ? [serial] : [],
+    );
 
   const result = new Map<string, string>();
 
@@ -252,9 +253,9 @@ export async function captureAndroid(
 
   const serial =
     existingSerial ??
-    (await waitForAndroidSerial(capture.device.avd).catch(async (error: unknown) => {
+    (await waitForAndroidSerial(capture.device.avd).catch(async (cause: unknown) => {
       if (launchedEmulator) await stopProcess(launchedEmulator);
-      throw error;
+      throw cause;
     }));
 
   registerCleanup({ device: capture.device, serial, startedByRunner });

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * Shares a running dev server on the local tailnet via `tailscale serve`, so it
  * can be opened from a phone, another laptop, or by whoever is reviewing the
@@ -42,7 +43,7 @@ const DIAGNOSTIC_EXPLANATIONS: Record<TailscaleStderrDiagnostic, string | undefi
  * classified diagnostic. Never the CLI's text — see `stderrDiagnosticOf`.
  */
 const explainCommandFailure = (error: TailscaleCommandError): string | undefined =>
-  error._tag === "TailscaleCommandExitError" && error.stderrDiagnostic !== undefined
+  Predicate.isTagged(error, "TailscaleCommandExitError") && error.stderrDiagnostic !== undefined
     ? (DIAGNOSTIC_EXPLANATIONS[error.stderrDiagnostic] ?? "run the command by hand to see why")
     : undefined;
 
@@ -147,7 +148,7 @@ export const unshareDevServer = (
     Effect.catch((error: TailscaleCommandError) =>
       Effect.succeed(
         // "Nothing was mapped" leaves the port clear either way.
-        error._tag === "TailscaleCommandExitError" &&
+        Predicate.isTagged(error, "TailscaleCommandExitError") &&
           error.stderrDiagnostic === "no-existing-handler"
           ? ({ cleared: true } as const)
           : ({

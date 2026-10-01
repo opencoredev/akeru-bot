@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@akeru/shared/hostProcess";
 import { assert, it } from "@effect/vitest";
@@ -69,7 +70,7 @@ it.effect("preserves process spawn context and the exact cause", () => {
       Effect.flip,
     );
 
-    if (error._tag !== "NativeStaticCheckProcessError") {
+    if (!Predicate.isTagged(error, "NativeStaticCheckProcessError")) {
       return assert.fail(`Unexpected error: ${error._tag}`);
     }
 
@@ -101,7 +102,7 @@ it.effect("preserves process wait context and the exact cause", () => {
       Effect.flip,
     );
 
-    if (error._tag !== "NativeStaticCheckProcessError") {
+    if (!Predicate.isTagged(error, "NativeStaticCheckProcessError")) {
       return assert.fail(`Unexpected error: ${error._tag}`);
     }
 
@@ -130,7 +131,7 @@ it.effect("reports non-zero exits without manufacturing a cause", () =>
       Effect.flip,
     );
 
-    if (error._tag !== "NativeStaticCheckCommandError") {
+    if (!Predicate.isTagged(error, "NativeStaticCheckCommandError")) {
       return assert.fail(`Unexpected error: ${error._tag}`);
     }
 

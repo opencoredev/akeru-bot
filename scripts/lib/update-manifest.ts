@@ -1,3 +1,5 @@
+import * as Predicate from "effect/Predicate";
+
 export interface UpdateManifestFile {
   readonly url: string;
   readonly sha512: string;
@@ -38,9 +40,9 @@ function parseFileRecord(
   }
 
   if (
-    typeof currentFile.url !== "string" ||
-    typeof currentFile.sha512 !== "string" ||
-    typeof currentFile.size !== "number"
+    !Predicate.isString(currentFile.url) ||
+    !Predicate.isString(currentFile.sha512) ||
+    !Predicate.isNumber(currentFile.size)
   ) {
     throw new Error(
       `Invalid ${platformLabel} update manifest at ${sourcePath}:${lineNumber}: incomplete file entry.`,
@@ -154,7 +156,7 @@ export function parseUpdateManifest(
     const value = parseScalarValue(rawValue);
 
     if (key === "version") {
-      if (typeof value !== "string") {
+      if (!Predicate.isString(value)) {
         throw new Error(
           `Invalid ${platformLabel} update manifest at ${sourcePath}:${lineNumber}: version must be a string.`,
         );
@@ -165,7 +167,7 @@ export function parseUpdateManifest(
     }
 
     if (key === "releaseDate") {
-      if (typeof value !== "string") {
+      if (!Predicate.isString(value)) {
         throw new Error(
           `Invalid ${platformLabel} update manifest at ${sourcePath}:${lineNumber}: releaseDate must be a string.`,
         );
@@ -212,8 +214,8 @@ function mergeExtras(
   primary: Readonly<Record<string, UpdateManifestScalar>>,
   secondary: Readonly<Record<string, UpdateManifestScalar>>,
   platformLabel: string,
-): Record<string, UpdateManifestScalar> {
-  const merged: Record<string, UpdateManifestScalar> = { ...primary };
+) {
+  const merged = { ...primary };
 
   for (const [key, value] of Object.entries(secondary)) {
     const existing = merged[key];
@@ -269,7 +271,7 @@ function quoteYamlString(value: string): string {
 }
 
 function serializeScalarValue(value: UpdateManifestScalar): string {
-  if (typeof value === "string") {
+  if (Predicate.isString(value)) {
     return quoteYamlString(value);
   }
 

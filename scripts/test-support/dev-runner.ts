@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NetService from "@akeru/shared/Net";
 
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -27,10 +28,9 @@ export const netServiceLayer = Layer.succeed(NetService.NetService, {
 export function mockProcess(exit: number | PlatformError.PlatformError) {
   return ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(1),
-    exitCode:
-      typeof exit === "number"
-        ? Effect.succeed(ChildProcessSpawner.ExitCode(exit))
-        : Effect.fail(exit),
+    exitCode: Predicate.isNumber(exit)
+      ? Effect.succeed(ChildProcessSpawner.ExitCode(exit))
+      : Effect.fail(exit),
     isRunning: Effect.succeed(false),
     kill: () => Effect.void,
     unref: Effect.succeed(Effect.void),

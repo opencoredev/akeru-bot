@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 import desktopPackageJson from "../../../apps/desktop/package.json" with { type: "json" };
 
 import * as Config from "effect/Config";
@@ -18,6 +19,35 @@ import {
 } from "./assets.ts";
 
 const DESKTOP_APP_ID = "dev.leodoes.akeru";
+
+export interface DesktopBuildConfiguration {
+  appId: string;
+  productName: string;
+  artifactName: string;
+  electronLanguages: readonly string[];
+  files: readonly string[];
+  directories: { buildResources: string };
+  extraResources: readonly {
+    readonly from: string;
+    readonly to: string;
+    readonly filter?: readonly string[];
+  }[];
+  publish?: readonly Schema.JsonObject[];
+  mac?: Schema.JsonObject;
+  dmg?: Schema.JsonObject;
+  linux?: Schema.JsonObject;
+  win?: WindowsBuildConfiguration;
+  nsis?: { differentialPackage: boolean };
+  protocols?: readonly { name: string; schemes: readonly string[] }[];
+  npmRebuild?: boolean;
+}
+
+interface WindowsBuildConfiguration {
+  target: string[];
+  icon: string;
+  signAndEditExecutable: boolean;
+  azureSignOptions?: Config.Success<typeof AzureTrustedSigningOptionsConfig>;
+}
 
 interface PlatformConfig {
   readonly cliFlag: "--mac" | "--linux" | "--win";
@@ -199,7 +229,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       }
     | undefined,
 ) {
-  const buildConfig: Record<string, unknown> = {
+  const buildConfig: DesktopBuildConfiguration = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(),
     artifactName:
@@ -342,7 +372,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       },
     ];
 
-    const winConfig: Record<string, unknown> = {
+    const winConfig: WindowsBuildConfiguration = {
       target: [target],
       icon: "icon.ico",
       // Resource editing applies the product metadata and icon independently
