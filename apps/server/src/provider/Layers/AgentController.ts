@@ -56,6 +56,7 @@ import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -295,6 +296,8 @@ interface ActiveSession {
   model: string;
   status: ProviderSession["status"];
   turnAdmissionGeneration: number;
+  /** Completes when the current admission generation ends, cancelling turns still preparing. */
+  turnPreparationCancelled: Deferred.Deferred<void>;
   activeTurn: ActiveTurn | null;
   admittingTurn: PendingTurn | null;
   readonly pendingTurns: PendingTurn[];
@@ -2264,6 +2267,13 @@ const make = (options?: AgentControllerLiveOptions) =>
       );
     }
 
+    // Ends the current admission generation and cancels turns still preparing in it.
+    const endTurnAdmissionGeneration = (active: ActiveSession) => {
+      active.turnAdmissionGeneration += 1;
+      Deferred.doneUnsafe(active.turnPreparationCancelled, Effect.void);
+      active.turnPreparationCancelled = Deferred.makeUnsafe<void>();
+    };
+
     const finishTurn = (
       threadId: ThreadId,
       active: ActiveSession,
@@ -3578,6 +3588,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           model: resolved.modelSelection.model,
           status: "ready" as const,
           turnAdmissionGeneration: 0,
+          turnPreparationCancelled: Deferred.makeUnsafe<void>(),
           activeTurn: null,
           admittingTurn: null,
           pendingTurns: [],
@@ -3770,7 +3781,8 @@ const make = (options?: AgentControllerLiveOptions) =>
             );
         }
         const turnAdmissionGeneration = active.turnAdmissionGeneration;
-        const turnId = yield* active.turnPreparation.withPermit(
+        const turnPreparationCancelled = active.turnPreparationCancelled;
+        const prepareTurn = active.turnPreparation.withPermit(
           Effect.gen(function* () {
             if (resolved && usesMastraCode(resolved.provider)) {
               const routing = yield* legacyProviderBridge.getInstanceInfo(
@@ -3864,6 +3876,21 @@ const make = (options?: AgentControllerLiveOptions) =>
             return turnId;
           }),
         );
+        // An interrupt must not wait for a stalled attachment read: abandon the
+        // preparation, release its permit, and fail turns still queued behind it.
+        const turnId = yield* Effect.raceFirst(
+          prepareTurn,
+          Deferred.await(turnPreparationCancelled).pipe(
+            Effect.andThen(
+              Effect.fail(
+                new AgentControllerRuntimeError({
+                  operation: "sendTurn",
+                  detail: `Mastra session for thread '${input.threadId}' is not running.`,
+                }),
+              ),
+            ),
+          ),
+        );
         if (!active.activeTurn && !active.admittingTurn) {
           const nextTurn = active.pendingTurns.shift();
           if (nextTurn) {
@@ -3910,7 +3937,7 @@ const make = (options?: AgentControllerLiveOptions) =>
           ),
         );
       }
-      active.turnAdmissionGeneration += 1;
+      endTurnAdmissionGeneration(active);
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
@@ -4289,7 +4316,7 @@ const make = (options?: AgentControllerLiveOptions) =>
         }
         return yield* legacyProviderBridge.stopSession(input);
       }
-      active.turnAdmissionGeneration += 1;
+      endTurnAdmissionGeneration(active);
       active.pendingTurns.length = 0;
       active.admittingTurn = null;
       active.session.abort();
@@ -4462,7 +4489,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
         for (const [threadId, active] of sessions) {
-          active.turnAdmissionGeneration += 1;
+          endTurnAdmissionGeneration(active);
           active.pendingTurns.length = 0;
           active.admittingTurn = null;
           active.session.abort();

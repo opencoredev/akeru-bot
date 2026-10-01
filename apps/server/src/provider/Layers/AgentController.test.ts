@@ -6789,7 +6789,7 @@ describe("AgentControllerLive", () => {
         })
         .pipe(Effect.result, Effect.forkChild({ startImmediately: true }));
       yield* controller.interruptTurn({ threadId: codexThreadId });
-      finishRead();
+      // The stalled read stays unresolved: the interrupt alone must free the chat.
       expect((yield* Fiber.join(first))._tag).toBe("Failure");
       expect((yield* Fiber.join(second))._tag).toBe("Failure");
       expect(mastra.sendMessage).not.toHaveBeenCalled();
@@ -6797,6 +6797,7 @@ describe("AgentControllerLive", () => {
       yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
       expect(mastra.sendMessage).toHaveBeenCalledWith({ content: "After interrupt" });
       mastra.finishSend();
+      finishRead();
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
 
