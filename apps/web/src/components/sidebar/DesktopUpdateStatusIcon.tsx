@@ -62,7 +62,7 @@ function DesktopUpdateDownloadingIcon({ percent }: { readonly percent: number | 
           cy="10"
           r={DOWNLOAD_PROGRESS_RADIUS}
           fill="none"
-          stroke="color-mix(in srgb, currentColor 22%, transparent)"
+          className="stroke-current-faint"
           strokeWidth="1.5"
         />
         <circle
@@ -75,7 +75,7 @@ function DesktopUpdateDownloadingIcon({ percent }: { readonly percent: number | 
           strokeDashoffset={progressOffset}
           strokeLinecap="round"
           strokeWidth="1.5"
-          className="transition-[stroke-dashoffset] duration-300 ease-out motion-reduce:transition-none"
+          className="transition-stroke-dashoffset duration-300 ease-out motion-reduce:transition-none"
         />
       </svg>
       <DownloadIcon className="size-3" strokeWidth={2.25} />

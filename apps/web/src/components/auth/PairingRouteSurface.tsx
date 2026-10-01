@@ -320,7 +320,7 @@ export function PairingTokenForm({
           autoCapitalize="none"
           autoComplete="off"
           autoCorrect="off"
-          className="font-mono"
+          variant="mono"
           disabled={isSubmitting}
           nativeInput
           onChange={(event) => onCredentialChange(event.currentTarget.value)}

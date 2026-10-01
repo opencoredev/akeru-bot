@@ -24,8 +24,8 @@ describe("ComposerBannerStack", () => {
       /<div data-composer-banner-stack-expanded-items="true" class="([^"]+)">/,
     );
 
-    expect(expandedItems?.[1]).toContain("grid-rows-[0fr]");
-    expect(expandedItems?.[1]).toContain("group-hover/banner-stack:grid-rows-[1fr]");
+    expect(expandedItems?.[1]).toContain("grid-rows-collapsed");
+    expect(expandedItems?.[1]).toContain("group-hover/banner-stack:grid-rows-expanded");
     expect(expandedItems?.[1]).toContain("z-20");
     expect(expandedItems?.[1]).not.toContain("absolute");
     expect(markup.indexOf("front warning")).toBeLessThan(markup.indexOf("stacked warning"));
@@ -55,7 +55,7 @@ describe("ComposerBannerStack", () => {
     const successRoot = renderToStaticMarkup(<ComposerBanner.Root variant="success" />);
 
     for (const markup of [infoRoot, successRoot]) {
-      expect(markup).toContain("--chat-composer-attached-outline:var(--chat-composer-outline");
+      expect(markup).toContain("composer-banner-outline-neutral");
       expect(markup).not.toContain("--chat-composer-attached-tint:color-mix");
     }
 
@@ -80,7 +80,7 @@ describe("ComposerBannerStack", () => {
     expect(markup).toContain("text-xs");
     expect(markup).toContain('data-composer-banner-drawer="true"');
     expect(markup).toContain('data-variant="warning"');
-    expect(markup).toContain("transform:none");
+    expect(markup).toContain("transform-none");
     expect(markup).not.toContain("will-change:transform");
   });
   it("applies item-specific surface and action layout classes", () => {

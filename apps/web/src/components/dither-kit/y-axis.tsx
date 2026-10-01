@@ -17,7 +17,7 @@ export function YAxis({
   if (!ctx.ready) return null;
 
   return (
-    <g className="fill-current font-mono text-[10px] text-muted-foreground">
+    <g className="fill-current font-mono text-10px text-muted-foreground">
       {ctx.y.ticks(tickCount).map((t) => (
         <text
           key={t}

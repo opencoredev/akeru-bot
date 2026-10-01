@@ -102,7 +102,7 @@ export function MemoryApprovalPrompt({
           </span>
         ) : null}
         {approvals.length > 1 ? (
-          <span className="ml-auto text-[11px] font-medium text-muted-foreground tabular-nums">
+          <span className="ml-auto text-11px font-medium text-muted-foreground tabular-nums">
             {t("1 of {count}", { count: approvals.length })}
           </span>
         ) : null}

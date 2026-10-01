@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { cn } from "./lib";
 import { useChart } from "./chart-context";
 import { rgb, type Seed } from "./palette";
 import { useSeries } from "./series-context";
@@ -35,12 +36,7 @@ export function Dot({ variant = "border", r = 2 }: { variant?: DotVariant; r?: n
 
   return (
     // Fade in once the fill has drawn so dots don't float over the entrance.
-    <g
-      style={{
-        opacity: ctx.entranceDone ? 1 : 0,
-        transition: "opacity 300ms ease",
-      }}
-    >
+    <g className={cn("transition-entrance-fade", ctx.entranceDone ? "opacity-100" : "opacity-0")}>
       {band.map((b, i) => (
         <circle
           {...paint}

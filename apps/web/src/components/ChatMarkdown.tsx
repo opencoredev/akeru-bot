@@ -155,6 +155,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
 
     return (
       <MarkdownList node={node}>
+        {/* oxlint-disable-next-line shadcn/no-inline-styles -- forwards the markdown element's own style alongside the measured gutter var */}
         <ol {...props} start={start} style={gutterStyle ? { ...style, ...gutterStyle } : style} />
       </MarkdownList>
     );
@@ -306,7 +307,8 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
           <TooltipTrigger render={link} />
           <TooltipPopup
             side="top"
-            className="max-w-[min(36rem,calc(100vw-2rem))] whitespace-normal leading-tight wrap-anywhere"
+            variant="tight"
+            className="max-w-(--spacing-min-36rem-vw-2rem) whitespace-normal wrap-anywhere"
           >
             {href}
           </TooltipPopup>
@@ -453,7 +455,7 @@ function ChatMarkdown({
   return (
     <div
       className={cn(
-        "chat-markdown w-full min-w-0 text-sm leading-relaxed text-foreground/80 [overflow-wrap:anywhere] [word-break:break-word]",
+        "chat-markdown w-full min-w-0 text-sm leading-relaxed text-foreground/80 wrap-anywhere word-break-word",
         className,
       )}
       onCopy={handleCopy}

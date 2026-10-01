@@ -39,7 +39,7 @@ export function ResourceHistoryProcessNameCell({
 
   return (
     <div
-      className="grid min-w-0 grid-cols-[1.25rem_0.375rem_minmax(0,1fr)] items-center gap-2"
+      className="grid min-w-0 grid-cols-legend-row items-center gap-2"
       style={
         // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
         { paddingLeft: `${Math.min(visualDepth, 6) * 10}px` }
@@ -60,7 +60,7 @@ export function ResourceHistoryProcessNameCell({
         <TooltipPopup
           side="top"
           variant="diagnostics-process"
-          className="max-w-[min(440px,calc(100vw-2rem))] whitespace-normal break-words text-left"
+          className="max-w-(--spacing-min-440px-vw-2rem) whitespace-normal break-words text-left"
         >
           {process.command}
         </TooltipPopup>
@@ -139,7 +139,7 @@ export function ResourceHistoryWindowSelector({
           key={option.windowMs}
           type="button"
           className={cn(
-            "cursor-pointer h-6 rounded-sm px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground",
+            "cursor-pointer h-6 rounded-sm px-2 text-11px font-medium text-muted-foreground hover:text-foreground",
             selectedWindowMs === option.windowMs && "bg-muted text-foreground",
           )}
           onClick={() => onSelect(option.windowMs)}
@@ -170,7 +170,7 @@ export function ProcessResourceHistoryTable({
       scrollFade
       hideScrollbars
       variant="telemetry-process"
-      className="max-h-[min(64vh,44rem)] w-full max-w-full"
+      className="max-h-(--spacing-min-64vh-44rem) w-full max-w-full"
     >
       <table className="w-full min-w-245 table-fixed text-left text-xs">
         <colgroup>
@@ -183,7 +183,7 @@ export function ProcessResourceHistoryTable({
           <col className="w-4/25" />
           <col className="w-1/10" />
         </colgroup>
-        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-[11px] uppercase tracking-[0.08em] text-muted-foreground/70">
+        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-11px uppercase tracking-caps text-muted-foreground/70">
           <tr>
             <th className="px-4 py-2 font-semibold sm:pl-5">Process</th>
             <th className="px-3 py-2 text-right font-semibold">CPU Time</th>
@@ -238,7 +238,7 @@ export function ProcessResourceHistoryTable({
                   <TooltipPopup
                     side="top"
                     variant="diagnostics-process"
-                    className="max-w-[min(440px,calc(100vw-2rem))] whitespace-normal break-words text-left"
+                    className="max-w-(--spacing-min-440px-vw-2rem) whitespace-normal break-words text-left"
                   >
                     {process.command}
                   </TooltipPopup>

@@ -118,12 +118,11 @@ export function DictationControls({
       type="button"
       className={
         appearance === "send-slot"
-          ? `flex size-full items-center justify-center rounded-full transition-colors disabled:opacity-50 aria-disabled:opacity-50 ${
+          ? `flex size-full touch-none select-none items-center justify-center rounded-full transition-colors disabled:opacity-50 aria-disabled:opacity-50 ${
               active ? "bg-destructive text-white" : "bg-foreground text-background"
             }`
-          : "min-h-11 rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
+          : "min-h-11 touch-none select-none rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
       }
-      style={{ touchAction: "none", userSelect: "none" }}
       disabled={disabled}
       aria-disabled={explainsBlock || undefined}
       aria-label={label}

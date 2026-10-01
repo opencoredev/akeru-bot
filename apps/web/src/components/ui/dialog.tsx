@@ -134,10 +134,19 @@ function DialogFooter({
   );
 }
 
-function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
+/** `withIcon` lays the title out as a row with a leading icon. */
+function DialogTitle({
+  className,
+  withIcon = false,
+  ...props
+}: DialogPrimitive.Title.Props & { withIcon?: boolean }) {
   return (
     <DialogPrimitive.Title
-      className={cn("font-heading font-semibold text-lg leading-tight", className)}
+      className={cn(
+        "font-semibold text-lg leading-tight",
+        withIcon && "flex items-center gap-2.5",
+        className,
+      )}
       data-slot="dialog-title"
       {...props}
     />
@@ -158,11 +167,17 @@ function DialogPanel({
   className,
   scrollFade = true,
   variant = "default",
+  tone,
+  pageBack = false,
   ...props
 }: React.ComponentProps<"div"> & {
   scrollFade?: boolean;
   /** `directory` keeps the catalog body tight under a `directory` header. */
   variant?: "default" | "directory";
+  /** Body copy size and color for prose panels. */
+  tone?: "body" | "muted";
+  /** Plays the backward page transition when returning to a previous view. */
+  pageBack?: boolean;
 }) {
   return (
     <ScrollArea scrollFade={scrollFade}>
@@ -170,6 +185,9 @@ function DialogPanel({
         className={cn(
           "p-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-header])]:pt-1 in-[[data-slot=dialog-popup]:has([data-slot=dialog-footer]:not(.border-t))]:pb-1",
           variant === "directory" && "px-5 pt-5! pb-5 sm:px-6",
+          tone && "text-sm",
+          tone === "muted" && "text-muted-foreground",
+          pageBack && "motion-page-back",
           className,
         )}
         data-slot="dialog-panel"

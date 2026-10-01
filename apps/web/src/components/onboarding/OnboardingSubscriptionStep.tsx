@@ -414,7 +414,7 @@ export function SubscriptionStep({
                 ) : null}
               </div>
               <span className="mt-2 text-sm font-medium">{definition.label}</span>
-              <span className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+              <span className="mt-0.5 text-11px leading-4 text-muted-foreground">
                 {t(definition.subscription)}
               </span>
             </button>

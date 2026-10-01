@@ -61,7 +61,7 @@ describe("ResponseLoadingState", () => {
     expect(markup).toContain('role="status"');
     expect(markup).toContain('data-testid="response-loading-state"');
     expect(markup).toContain("bot-status-shimmer");
-    expect((markup.match(/animation-delay:/g) ?? []).length).toBe(LOADER_CELL_DELAYS_MS.length);
+    expect((markup.match(/--response-loading-pixel-delay:/g) ?? []).length).toBe(LOADER_CELL_DELAYS_MS.length);
     expect(markup).toContain('data-testid="response-loading-time">4s<');
   });
 

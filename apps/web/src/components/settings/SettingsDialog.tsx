@@ -177,7 +177,7 @@ export function SettingsDialog() {
       }}
     >
       <DialogPopup
-        className="h-[min(44rem,88dvh)] max-w-4xl flex-row overflow-hidden max-sm:flex-col"
+        className="h-(--spacing-min-44rem-88dvh) max-w-4xl flex-row overflow-hidden max-sm:flex-col"
         bottomStickOnMobile={false}
       >
         <DialogTitle className="sr-only">{t("Settings")}</DialogTitle>

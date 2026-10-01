@@ -291,10 +291,13 @@ export function ComputerViewerPanel(props: ComputerViewerPanelProps) {
           tabIndex={view.canSendInput ? 0 : -1}
           className={
             view.canSendInput
-              ? "relative mx-auto w-full overflow-hidden rounded-lg border-2 border-primary outline-none"
-              : "relative mx-auto w-full overflow-hidden rounded-lg border border-border outline-none"
+              ? "relative mx-auto aspect-(--frame-aspect) w-full max-w-(--frame-max-width) overflow-hidden rounded-lg border-2 border-primary outline-none"
+              : "relative mx-auto aspect-(--frame-aspect) w-full max-w-(--frame-max-width) overflow-hidden rounded-lg border border-border outline-none"
           }
-          style={{ aspectRatio: `${frame.width} / ${frame.height}`, maxWidth: frame.width }}
+          style={{
+            "--frame-aspect": `${frame.width} / ${frame.height}`,
+            "--frame-max-width": `${frame.width}px`,
+          }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onWheel={onWheel}

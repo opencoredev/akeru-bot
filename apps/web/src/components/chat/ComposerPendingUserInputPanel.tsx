@@ -202,11 +202,11 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       data-testid="pending-user-input-card"
     >
       <div className="flex items-start gap-3">
-        <p className="min-w-0 flex-1 text-[15px] font-medium leading-6 text-foreground">
+        <p className="min-w-0 flex-1 text-15px font-medium leading-6 text-foreground">
           {activeQuestion.question}
         </p>
         {prompt.questions.length > 1 ? (
-          <span className="mt-1 shrink-0 text-[11px] text-muted-foreground tabular-nums">
+          <span className="mt-1 shrink-0 text-11px text-muted-foreground tabular-nums">
             {questionIndex + 1}/{prompt.questions.length}
           </span>
         ) : null}
@@ -238,14 +238,14 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           const content = (
             <>
               {shortcutKey !== null ? (
-                <kbd className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-muted/70 text-[11px] font-medium text-muted-foreground">
+                <kbd className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-muted/70 text-11px font-medium text-muted-foreground">
                   {shortcutKey}
                 </kbd>
               ) : null}
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="text-sm font-medium">{option.label}</span>
                 {option.description && option.description !== option.label ? (
-                  <span className="text-secondary-label text-[11px]">{option.description}</span>
+                  <span className="text-secondary-label text-11px">{option.description}</span>
                 ) : null}
               </div>
               {isSelected ? <CheckIcon className="size-3.5 shrink-0 text-primary" /> : null}

@@ -42,12 +42,13 @@ export function PluginSearchField({
     <div className="relative">
       <AppIcon
         icon={Search01Icon}
-        className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        tone="muted"
+        className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2"
       />
       <input
         aria-label={t("Search plugins")}
         autoComplete="off"
-        className="h-9 w-full rounded-xl border border-border/80 bg-card ps-9 pe-9 text-sm text-foreground shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring/60 focus-visible:ring-3 focus-visible:ring-ring/15 [&::-webkit-search-cancel-button]:appearance-none"
+        className="h-9 w-full rounded-xl border border-border/80 bg-card ps-9 pe-9 text-sm text-foreground shadow-xs outline-none transition-border-shadow placeholder:text-muted-foreground focus-visible:border-ring/60 focus-visible:ring-3 focus-visible:ring-ring/15 [&::-webkit-search-cancel-button]:appearance-none"
         placeholder={t("Search plugins")}
         spellCheck={false}
         type="search"
@@ -144,7 +145,7 @@ export function PluginFilterBar({
       className="flex flex-wrap items-center justify-between gap-2"
       role="group"
     >
-      <div className="relative inline-flex rounded-[10px] bg-muted/70 p-0.5" ref={barRef}>
+      <div className="relative inline-flex rounded-10px bg-muted/70 p-0.5" ref={barRef}>
         <span
           aria-hidden="true"
           className="motion-segment-pill pointer-events-none absolute inset-y-0.5 left-0 rounded-lg bg-card opacity-0 shadow-xs ring-1 ring-border/60"
@@ -154,7 +155,7 @@ export function PluginFilterBar({
           <button
             aria-pressed={filter === item}
             className={cn(
-              "relative h-7 cursor-pointer rounded-lg px-3 text-[13px] outline-hidden transition-colors duration-(--duration-fast) ease-(--ease-smooth-out) focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+              "relative h-7 cursor-pointer rounded-lg px-3 text-13px outline-hidden transition-colors duration-(--duration-fast) ease-(--ease-smooth-out) focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
               filter === item
                 ? "font-medium text-foreground"
                 : "text-muted-foreground hover:text-foreground",
@@ -177,7 +178,8 @@ export function PluginFilterBar({
         >
           <SelectTrigger
             aria-label={t("Plugin category")}
-            className={cn("h-8", category && "text-foreground")}
+            presentation={category ? "filter-active" : undefined}
+            className="h-8"
             size="sm-dense"
             variant="ghost"
           >
@@ -205,7 +207,7 @@ export function PluginsPageHeader({ children }: { readonly children?: ReactNode 
     <WorkspacePageHeader electron={isElectron}>
       {children ?? (
         <div className="flex min-w-0 items-center gap-2">
-          <AppIcon icon={PuzzleIcon} className="size-4 shrink-0 text-muted-foreground" />
+          <AppIcon icon={PuzzleIcon} tone="muted" className="size-4 shrink-0" />
           <h1 className="truncate text-sm font-medium text-foreground">{t("Plugins")}</h1>
         </div>
       )}
@@ -242,7 +244,8 @@ export function PluginDirectoryLayout({
         </DialogHeader>
         <DialogPanel
           variant="directory"
-          className={cn(PLUGIN_DIRECTORY_PANEL_CLASS_NAME, returning && "motion-page-back")}
+          pageBack={returning}
+          className={PLUGIN_DIRECTORY_PANEL_CLASS_NAME}
         >
           {children}
         </DialogPanel>

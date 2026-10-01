@@ -127,7 +127,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
 
   const renderRemoteFields = () => (
     <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+      <div className="grid gap-3 sm:grid-cols-1fr-10rem">
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium text-foreground">Host</span>
           <Input
@@ -150,7 +150,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
         </label>
       </div>
       <div>
-        <span className="mt-1 block text-[11px] text-muted-foreground">
+        <span className="mt-1 block text-11px text-muted-foreground">
           Paste a full pairing URL here to fill both fields automatically.
         </span>
       </div>
@@ -188,7 +188,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
             spellCheck={false}
           />
         </label>
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem]">
+        <div className="grid gap-3 sm:grid-cols-1fr-7rem">
           <label className="block">
             <span className="mb-1.5 block text-xs font-medium text-foreground">Username</span>
             <Input
@@ -230,7 +230,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
         <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-muted/30 px-3 py-2">
           <div className="min-w-0">
             <p className="text-xs font-medium text-foreground">Suggested hosts</p>
-            <p className="text-[11px] text-muted-foreground">From SSH config and known hosts</p>
+            <p className="text-11px text-muted-foreground">From SSH config and known hosts</p>
           </div>
           <Button
             size="xs"

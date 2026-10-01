@@ -5,7 +5,6 @@ import { memo } from "react";
 
 import { isElectron } from "../../env";
 import { useI18n } from "../../i18n";
-import { cn } from "../../lib/utils";
 import { AkeruWordmark } from "../AkeruWordmark";
 import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
@@ -31,12 +30,10 @@ export const RosterSidebarHeader = memo(function RosterSidebarHeader({
 
   return (
     <SidebarHeader
-      className={cn(
-        "h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2",
-        isElectron && "drag-region",
-      )}
+      dragRegion={isElectron}
+      className="h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2"
     >
-      <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center group-data-[collapsible=icon]:hidden">
+      <div className="grid min-w-0 flex-1 grid-cols-grow-auto-grow items-center group-data-[collapsible=icon]:hidden">
         <div className="flex items-center justify-start">
           <SidebarTrigger className="md:hidden" />
         </div>
@@ -95,16 +92,14 @@ export function RosterPanelHeader({
 
   return (
     <SidebarHeader
-      className={cn(
-        "h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 py-0 pl-4 pr-2.5",
-        isElectron && "drag-region",
-      )}
+      dragRegion={isElectron}
+      className="h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 py-0 pl-4 pr-2.5"
     >
       <Link
         to="/"
         className="min-w-0 flex-1 rounded-md text-sidebar-foreground outline-none ring-ring focus-visible:ring-2"
       >
-        <AkeruWordmark className="text-[26px]" />
+        <AkeruWordmark className="text-26px" />
       </Link>
       <Tooltip>
         <TooltipTrigger

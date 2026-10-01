@@ -43,7 +43,7 @@ export function ProcessNameCell({
 
   return (
     <div
-      className="grid min-w-0 grid-cols-[1.25rem_0.375rem_minmax(0,1fr)] items-center gap-2"
+      className="grid min-w-0 grid-cols-legend-row items-center gap-2"
       style={
         // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
         { paddingLeft: `${Math.min(process.depth, 6) * 10}px` }
@@ -69,7 +69,7 @@ export function ProcessNameCell({
         <TooltipPopup
           side="top"
           variant="diagnostics-process"
-          className="max-w-[min(440px,calc(100vw-2rem))] whitespace-normal break-words text-left"
+          className="max-w-(--spacing-min-440px-vw-2rem) whitespace-normal break-words text-left"
         >
           {process.command}
         </TooltipPopup>
@@ -95,7 +95,7 @@ export function ProcessSignalActions({
             <button
               type="button"
               disabled={isSignaling}
-              className="cursor-pointer text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-50"
+              className="cursor-pointer text-11px font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-50"
               onClick={() => onSignal(process.pid, "SIGINT")}
             >
               INT
@@ -110,7 +110,7 @@ export function ProcessSignalActions({
             <button
               type="button"
               disabled={isSignaling}
-              className="cursor-pointer text-[11px] font-medium text-destructive underline-offset-2 hover:underline disabled:pointer-events-none disabled:opacity-50"
+              className="cursor-pointer text-11px font-medium text-destructive underline-offset-2 hover:underline disabled:pointer-events-none disabled:opacity-50"
               onClick={() => onSignal(process.pid, "SIGKILL")}
             >
               KILL
@@ -176,7 +176,7 @@ export function ProcessDiagnosticsTable({
       scrollFade
       hideScrollbars
       variant="diagnostics-process"
-      className="max-h-[min(64vh,44rem)] w-full max-w-full"
+      className="max-h-(--spacing-min-64vh-44rem) w-full max-w-full"
     >
       <table className="w-full min-w-260 table-fixed text-left text-xs">
         <colgroup>
@@ -188,7 +188,7 @@ export function ProcessDiagnosticsTable({
           <col className="w-11/100" />
           <col className="w-3/50" />
         </colgroup>
-        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-[11px] uppercase tracking-[0.08em] text-muted-foreground/70">
+        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-11px uppercase tracking-caps text-muted-foreground/70">
           <tr>
             <th className="px-4 py-2 font-semibold sm:pl-5">Name</th>
             <th className="px-3 py-2 text-right font-semibold">CPU</th>
@@ -230,7 +230,7 @@ export function ProcessDiagnosticsTable({
                   <TooltipPopup
                     side="top"
                     variant="diagnostics-process"
-                    className="max-w-[min(440px,calc(100vw-2rem))] whitespace-normal break-words text-left"
+                    className="max-w-(--spacing-min-440px-vw-2rem) whitespace-normal break-words text-left"
                   >
                     {process.command}
                   </TooltipPopup>

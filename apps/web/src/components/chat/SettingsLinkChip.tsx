@@ -51,6 +51,7 @@ export function SettingsLinkChip({
               else openSettings(destination.section, destination.targetId, environmentId);
             }}
           >
+            {/* oxlint-disable-next-line shadcn/require-static-classes -- shared inline-chip icon class imported from composerInlineChip */}
             <AppIcon icon={Settings02Icon} className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME} />
             <span className={CHAT_INLINE_CHIP_LABEL_CLASS_NAME}>{children}</span>
           </a>

@@ -171,7 +171,7 @@ export function ChannelConnectionRow({
               needsProject={needsProject}
             />
           </div>
-          <p className="truncate text-[13px] text-muted-foreground/80">
+          <p className="truncate text-13px text-muted-foreground/80">
             {providerLabel(connection.provider)}
             {externalIdentity ? ` · ${externalIdentity}` : ""}
           </p>
@@ -321,7 +321,7 @@ export function ChannelConnectionRow({
         ) : null}
       </div>
       {bot ? (
-        <p className="text-[13px] text-muted-foreground/80">
+        <p className="text-13px text-muted-foreground/80">
           {channelTestInstructions(connection.provider, bot.name, t)}
         </p>
       ) : null}

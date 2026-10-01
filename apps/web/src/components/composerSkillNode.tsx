@@ -104,7 +104,7 @@ function ComposerSkillDecorator(props: {
   return (
     <Tooltip>
       <TooltipTrigger render={chip} />
-      <TooltipPopup side="top" className="max-w-120 whitespace-normal leading-tight">
+      <TooltipPopup side="top" variant="tight" className="max-w-120 whitespace-normal">
         {props.skillDescription}
       </TooltipPopup>
     </Tooltip>

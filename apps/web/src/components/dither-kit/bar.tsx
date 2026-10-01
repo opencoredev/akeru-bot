@@ -67,7 +67,7 @@ export function Bar({
               width={slot.width}
               height={Math.abs(base - top)}
               fill="transparent"
-              style={{ cursor: "pointer" }}
+              className="cursor-pointer"
               onClick={onClick}
             />
           );

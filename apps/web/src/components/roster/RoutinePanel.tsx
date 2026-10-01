@@ -228,7 +228,7 @@ export function RoutinePanel({
             <Button
               variant="ghost-quiet"
               size="row"
-              className="-mx-2 mt-1 w-[calc(100%+1rem)] justify-start"
+              className="-mx-2 mt-1 w-(--spacing-full-plus-1rem) justify-start"
               onClick={() => setCreating(true)}
             >
               <PlusIcon aria-hidden />

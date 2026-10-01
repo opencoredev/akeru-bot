@@ -2,7 +2,15 @@ import { CommandId, MessageId, ProjectId, ThreadId } from "@akeru/contracts";
 import * as Encoding from "effect/Encoding";
 import { DraftId } from "../composerDraftStore";
 
-export { cn } from "cn";
+import type { CnFunction } from "cn";
+import { createCn } from "cn/config";
+
+import { scaleClassGroups, scaleTheme } from "./scaleTheme";
+
+/** Class merger that knows the extra theme steps declared in styles/scale-tokens.css. */
+export const cn: CnFunction = createCn({
+  extend: { theme: scaleTheme, classGroups: scaleClassGroups },
+});
 
 export function isMacPlatform(platform: string): boolean {
   return /mac|iphone|ipad|ipod/i.test(platform);

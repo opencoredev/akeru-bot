@@ -195,7 +195,7 @@ export function OnboardingPreview({
               <motion.div
                 layout
                 transition={{ duration: reducedMotion ? 0 : 0.35, ease: EASE }}
-                className="relative z-20 flex size-24 items-center justify-center rounded-[2rem] border border-border/55 bg-card/35 shadow-[0_24px_70px_-36px_rgba(0,0,0,0.45)]"
+                className="relative z-20 flex size-24 items-center justify-center rounded-2rem border border-border/55 bg-card/35 shadow-preview-frame"
               >
                 <BotAvatarView
                   avatar={draft.avatar}
@@ -206,7 +206,7 @@ export function OnboardingPreview({
               </motion.div>
               <motion.h2
                 layout
-                className="mt-5 text-xl font-medium tracking-[-0.02em]"
+                className="mt-5 text-xl font-medium tracking-title-lg"
                 data-preview-named={named ? "true" : "false"}
               >
                 {displayName}

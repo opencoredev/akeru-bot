@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef } from "react";
 
 import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
@@ -51,13 +51,13 @@ export function formatLoadingElapsed(elapsedMs: number): string {
 
 export function LoaderMeter({ className }: { readonly className?: string }) {
   return (
-    <span aria-hidden="true" className={cn("grid shrink-0 grid-cols-3 gap-[3px]", className)}>
+    <span aria-hidden="true" className={cn("grid shrink-0 grid-cols-3 gap-0.75", className)}>
       {LOADER_CELL_DELAYS_MS.map((delay, index) => (
         <i
           key={`r${Math.floor(index / 3)}c${index % 3}`}
-          className="response-loading-pixel size-1 rounded-[1px] bg-current"
+          className="response-loading-pixel size-1 rounded-1px bg-current"
           data-lit={LOADER_RESTING_CELLS[index] ? "" : undefined}
-          style={{ animationDelay: `${delay}ms` } as CSSProperties}
+          style={{ "--response-loading-pixel-delay": `${delay}ms` }}
         />
       ))}
     </span>
@@ -121,7 +121,7 @@ export function ResponseLoadingState({
       <LoaderMeter key={label} />
       <span
         className={cn(
-          "min-w-0 truncate text-[13px] font-medium",
+          "min-w-0 truncate text-13px font-medium",
           stalled ? "text-foreground" : "bot-status-shimmer",
         )}
       >

@@ -163,7 +163,7 @@ function GoalPlanView({
                 delay: reducedMotion ? 0 : index * STEP_STAGGER,
               }}
             >
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/70 text-[11px] font-medium text-muted-foreground">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/70 text-11px font-medium text-muted-foreground">
                 {index + 1}
               </span>
               <span className="text-pretty">{step}</span>

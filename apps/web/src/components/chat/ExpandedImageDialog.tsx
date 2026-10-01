@@ -126,7 +126,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 [-webkit-app-region:no-drag]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 app-region-no-drag"
       role="dialog"
       aria-modal="true"
       aria-label={t("Expanded image preview")}
@@ -142,14 +142,15 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
           type="button"
           size="icon"
           variant="ghost"
-          className="absolute left-2 top-1/2 z-20 -translate-y-1/2 text-white/90 hover:bg-white/10 hover:text-white sm:left-6"
+          presentation="image-nav"
+          className="absolute left-2 top-1/2 z-20 -translate-y-1/2 sm:left-6"
           aria-label={t("Previous image")}
           onClick={() => navigateImage(-1)}
         >
           <ChevronLeftIcon className="size-5" />
         </Button>
       )}
-      <div className="relative isolate z-10 max-h-[92vh] max-w-[92vw]">
+      <div className="relative isolate z-10 max-h-92vh max-w-92vw">
         <div className="absolute right-2 top-2 flex gap-1 rounded-md bg-background/80 p-0.5 shadow-sm">
           <Button
             type="button"
@@ -214,10 +215,10 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
         <img
           src={item.src}
           alt={item.name}
-          className="max-h-[86vh] max-w-[92vw] select-none rounded-lg border border-border/70 bg-background object-contain shadow-2xl"
+          className="max-h-86vh max-w-92vw select-none rounded-lg border border-border/70 bg-background object-contain shadow-2xl"
           draggable={false}
         />
-        <p className="mt-2 max-w-[92vw] truncate text-center text-xs text-muted-foreground/80">
+        <p className="mt-2 max-w-92vw truncate text-center text-xs text-muted-foreground/80">
           {item.name}
           {preview.images.length > 1 ? ` (${index + 1}/${preview.images.length})` : ""}
         </p>
@@ -227,7 +228,8 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
           type="button"
           size="icon"
           variant="ghost"
-          className="absolute right-2 top-1/2 z-20 -translate-y-1/2 text-white/90 hover:bg-white/10 hover:text-white sm:right-6"
+          presentation="image-nav"
+          className="absolute right-2 top-1/2 z-20 -translate-y-1/2 sm:right-6"
           aria-label={t("Next image")}
           onClick={() => navigateImage(1)}
         >

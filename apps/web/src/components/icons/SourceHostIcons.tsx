@@ -17,7 +17,7 @@ export const GitIcon: Icon = (props) => (
   <svg {...props} viewBox="0 0 256 256">
     <path
       d="M251.17 116.6 139.4 4.82a16.49 16.49 0 0 0-23.31 0l-23.21 23.2 29.44 29.45a19.57 19.57 0 0 1 24.8 24.96l28.37 28.38a19.61 19.61 0 1 1-11.75 11.06L137.28 95.4v69.64a19.62 19.62 0 1 1-16.13-.57V94.2a19.61 19.61 0 0 1-10.65-25.73L81.46 39.44 4.83 116.08a16.49 16.49 0 0 0 0 23.32L116.6 251.17a16.49 16.49 0 0 0 23.32 0l111.25-111.25a16.5 16.5 0 0 0 0-23.33"
-      fill="#DE4C36"
+      fill="var(--color-brand-git)"
     />
   </svg>
 );
@@ -64,8 +64,8 @@ export const AzureDevOpsIcon: Icon = (props) => {
           gradientTransform="matrix(1 0 0 -1 1075 158)"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="#114a8b" />
-          <stop offset="1" stopColor="#0669bc" />
+          <stop offset="0" stopColor="var(--color-brand-azure-devops-dark)" />
+          <stop offset="1" stopColor="var(--color-brand-azure-devops-mid)" />
         </linearGradient>
         <linearGradient
           id={gradientB}
@@ -91,8 +91,8 @@ export const AzureDevOpsIcon: Icon = (props) => {
           gradientTransform="matrix(1 0 0 -1 1075 158)"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="#3ccbf4" />
-          <stop offset="1" stopColor="#2892df" />
+          <stop offset="0" stopColor="var(--color-brand-azure-devops-light)" />
+          <stop offset="1" stopColor="var(--color-brand-azure-devops-sky)" />
         </linearGradient>
       </defs>
       <path
@@ -100,7 +100,7 @@ export const AzureDevOpsIcon: Icon = (props) => {
         d="M33.34 6.54h26.04l-27.03 80.1a4.15 4.15 0 0 1-3.94 2.81H8.15a4.14 4.14 0 0 1-3.93-5.47L29.4 9.38a4.15 4.15 0 0 1 3.94-2.83z"
       />
       <path
-        fill="#0078d4"
+        fill="var(--color-brand-azure-devops)"
         d="M71.17 60.26H29.88a1.91 1.91 0 0 0-1.3 3.31l26.53 24.76a4.17 4.17 0 0 0 2.85 1.13h23.38z"
       />
       <path
@@ -123,7 +123,7 @@ export const BitbucketIcon: Icon = (props) => {
     <svg {...props} viewBox="8.4 14.39 2481.29 2231.21">
       <path fill="none" d="M989.97,1493.09h518.05l125.04-730.04H852.22L989.97,1493.09z" />
       <path
-        fill="#2684FF"
+        fill="var(--color-brand-bitbucket)"
         d="M88.92,14.4C45.02,13.83,8.97,48.96,8.41,92.86c-0.06,4.61,0.28,9.22,1.02,13.77l337.48,2048.72 c8.68,51.75,53.26,89.8,105.74,90.24h1619.03c39.38,0.5,73.19-27.9,79.49-66.78l337.49-2071.78c7.03-43.34-22.41-84.17-65.75-91.2 c-4.55-0.74-9.15-1.08-13.76-1.02L88.92,14.4z M1509.99,1495.09H993.24l-139.92-731h781.89L1509.99,1495.09z"
       />
       <linearGradient
@@ -135,8 +135,8 @@ export const BitbucketIcon: Icon = (props) => {
         y2="1524.1893"
         gradientTransform="matrix(1996.6343 0 0 -1480.3047 -1884485.625 2258195)"
       >
-        <stop offset="0.18" stopColor="#0052CC" />
-        <stop offset="1" stopColor="#2684FF" />
+        <stop offset="0.18" stopColor="var(--color-brand-bitbucket-dark)" />
+        <stop offset="1" stopColor="var(--color-brand-bitbucket)" />
       </linearGradient>
       <path
         fill={`url(#${gradientId})`}

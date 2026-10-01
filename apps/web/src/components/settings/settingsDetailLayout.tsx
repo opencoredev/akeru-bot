@@ -116,9 +116,7 @@ export function SettingsLinkRow<TRouter extends RegisteredRouter, TOptions>({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-foreground">{title}</span>
           {description ? (
-            <span className="block truncate text-[13px] text-muted-foreground/80">
-              {description}
-            </span>
+            <span className="block truncate text-13px text-muted-foreground/80">{description}</span>
           ) : null}
         </span>
         <SettingsStatus tone={tone} label={statusLabel} />
@@ -154,7 +152,7 @@ export function SettingsDetailHeader({
       <Link
         to="/settings/$section"
         params={{ section: back.section }}
-        className="-ms-1 inline-flex h-6 items-center gap-0.5 rounded-md pe-1.5 text-[13px] text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="-ms-1 inline-flex h-6 items-center gap-0.5 rounded-md pe-1.5 text-13px text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ChevronLeftIcon aria-hidden className="size-4" />
         {back.label}
@@ -163,13 +161,13 @@ export function SettingsDetailHeader({
         <IconTile icon={icon} size="lg" />
         <div className="min-w-0 flex-1 space-y-0.5">
           <div className="flex min-w-0 items-center gap-2.5">
-            <h2 className="truncate text-lg font-semibold tracking-[-0.015em] text-foreground">
+            <h2 className="truncate text-lg font-semibold tracking-title text-foreground">
               {title}
             </h2>
             <SettingsStatus tone={tone} label={statusLabel} />
           </div>
           {description ? (
-            <p className="truncate text-[13px] text-muted-foreground">{description}</p>
+            <p className="truncate text-13px text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
@@ -196,7 +194,7 @@ export function SettingsMessageRow({
     >
       <p
         className={cn(
-          "min-w-0 text-[13px] leading-[1.45]",
+          "min-w-0 text-13px leading-copy",
           tone === "error" ? "text-destructive" : "text-muted-foreground",
         )}
       >

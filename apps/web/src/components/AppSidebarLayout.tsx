@@ -13,7 +13,7 @@ import { isElectron } from "../env";
 import { getLocalStorageItem, removeLocalStorageItem } from "../hooks/useLocalStorage";
 import { useI18n } from "../i18n";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
-import { cn, isMacPlatform } from "../lib/utils";
+import { isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import BotRosterSidebar from "./roster/BotRosterSidebar";
 import {
@@ -27,10 +27,7 @@ import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { useServerRosterSync } from "./roster/useServerRoster";
 import { openSettings } from "~/settingsDialogStore";
 import { openProductFeedback } from "~/productFeedbackStore";
-import {
-  resolveSidebarStageFocusRingOffsetClass,
-  useSidebarStageBackdropVariant,
-} from "./SidebarStageBackdrop";
+import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
 import {
   resolveInitialThreadSidebarWidth,
@@ -47,6 +44,7 @@ import {
   useSidebar,
   useSidebarVisibility,
 } from "./ui/sidebar";
+import { SIDEBAR_WIDTH_ICON } from "./ui/sidebarContext";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { DesktopOnboarding } from "./onboarding/DesktopOnboarding";
 
@@ -120,22 +118,15 @@ function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean 
     // the panel), so the trigger mirrors it: both clusters sit one extra pixel
     // off their edge and the titlebar reads symmetric.
     <div
-      className="pointer-events-none fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 ml-px flex h-[var(--workspace-topbar-height)] items-center"
+      className="pointer-events-none fixed left-(--workspace-controls-left) top-(--workspace-controls-top) z-50 ml-px flex h-(--workspace-topbar-height) items-center"
       data-sidebar-control=""
     >
       <Tooltip>
         <TooltipTrigger
           render={
             <SidebarTrigger
-              className={cn(
-                "pointer-events-auto",
-                isSidebarVisible &&
-                  stageBackdropVariant &&
-                  "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
-                isSidebarVisible &&
-                  stageBackdropVariant &&
-                  resolveSidebarStageFocusRingOffsetClass(stageBackdropVariant),
-              )}
+              onStage={Boolean(isSidebarVisible && stageBackdropVariant)}
+              className="pointer-events-auto"
               aria-label={t("Toggle main sidebar")}
             />
           }
@@ -201,11 +192,12 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         : sidebarWidth
     }px`,
     // Collapsed, the experiment keeps its full rail.
-    ...(sidebarExperiment ? { "--sidebar-width-icon": `${EXPERIMENTAL_RAIL_ONLY_WIDTH}px` } : {}),
-    ...(isMacosDesktop && !isWindowFullscreen
-      ? { "--workspace-controls-left": MACOS_TRAFFIC_LIGHTS_LEFT_INSET }
-      : {}),
-  } as CSSProperties;
+    "--sidebar-width-icon": sidebarExperiment
+      ? `${EXPERIMENTAL_RAIL_ONLY_WIDTH}px`
+      : SIDEBAR_WIDTH_ICON,
+    "--workspace-controls-left":
+      isMacosDesktop && !isWindowFullscreen ? MACOS_TRAFFIC_LIGHTS_LEFT_INSET : undefined,
+  } satisfies CSSProperties;
 
   useEffect(() => {
     if (!isMacosDesktop) return;
@@ -259,10 +251,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         side="left"
         collapsible="icon"
         data-app-sidebar=""
-        className={cn(
-          "bg-sidebar text-sidebar-foreground",
-          !sidebarExperiment && "border-r border-sidebar-border",
-        )}
+        surface={sidebarExperiment ? "app" : "app-bordered"}
         resizable={{
           maxWidth: sidebarMaximumWidth,
           minWidth: THREAD_SIDEBAR_MIN_WIDTH,

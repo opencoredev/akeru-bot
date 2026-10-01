@@ -6,7 +6,7 @@ import { Button } from "../ui/button";
 import { SelectTrigger } from "../ui/select";
 
 const composerControlClassName =
-  "h-7 min-h-7 gap-1.5 rounded-[var(--control-radius)] px-2.5 text-secondary-label transition-none hover:text-foreground [&_svg[data-composer-control-icon]]:mx-0 [&_svg[data-composer-control-chevron]]:-mx-0.5";
+  "h-7 min-h-7 [&_svg[data-composer-control-icon]]:mx-0 [&_svg[data-composer-control-chevron]]:-mx-0.5";
 
 export function ComposerControl({
   className,
@@ -16,6 +16,7 @@ export function ComposerControl({
 }: ComponentProps<typeof Button>) {
   return (
     <Button
+      presentation="composer-control"
       className={cn(composerControlClassName, className)}
       size={size}
       variant={variant}
@@ -61,6 +62,7 @@ export function ComposerSelectControl({
 }: ComponentProps<typeof SelectTrigger>) {
   return (
     <SelectTrigger
+      presentation="composer-control"
       className={cn(composerControlClassName, className)}
       icon={<ComposerControlChevron />}
       size={size}

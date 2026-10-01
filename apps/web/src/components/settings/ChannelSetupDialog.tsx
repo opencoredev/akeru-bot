@@ -366,7 +366,7 @@ export function ChannelSetupDialog({
     >
       <DialogPopup className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2.5">
+          <DialogTitle withIcon>
             <meta.icon className="size-5 shrink-0" aria-hidden />
             {replacing
               ? t("Update {name} credentials", { name: meta.label })
@@ -395,7 +395,7 @@ export function ChannelSetupDialog({
               <ol className="flex list-none flex-col gap-2.5">
                 {meta.steps.map((instruction, index) => (
                   <li key={instruction} className="flex gap-2.5 text-sm">
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-11px font-medium text-muted-foreground">
                       {index + 1}
                     </span>
                     <span className="min-w-0">{instruction}</span>
@@ -479,11 +479,11 @@ export function ChannelSetupDialog({
                 onChange={(event) => setName(event.currentTarget.value)}
               />
               {connectError ? (
-                <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
+                <p role="alert" className="text-sm text-caution-foreground">
                   {connectError}
                 </p>
               ) : unconfirmed !== null ? (
-                <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
+                <p role="alert" className="text-sm text-caution-foreground">
                   {unassigned
                     ? t(
                         "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.",

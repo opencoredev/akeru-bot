@@ -65,7 +65,7 @@ export const TraitsPicker = memo(function TraitsPicker({
         icon={ZapIcon}
         className={cn(
           "fill-current opacity-80",
-          provider === "claudeAgent" ? "text-[#d97757]" : "text-foreground",
+          provider === "claudeAgent" ? "text-brand-claude" : "text-foreground",
         )}
       />
       <span className="sr-only">{t("Fast mode on")}</span>
@@ -89,6 +89,7 @@ export const TraitsPicker = memo(function TraitsPicker({
               isCodexStyle
                 ? "min-w-0 max-w-40 shrink justify-start overflow-hidden whitespace-nowrap sm:max-w-48"
                 : "shrink-0 whitespace-nowrap",
+              // oxlint-disable-next-line shadcn/require-static-classes -- caller-supplied trigger class passthrough
               triggerClassName,
             )}
           />

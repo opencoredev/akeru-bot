@@ -28,7 +28,7 @@ describe("ComposerPendingApprovalPanel", () => {
     expect(markup).toContain("max-h-28");
     expect(markup).toContain("overflow-auto");
     expect(markup).toContain("whitespace-pre-wrap");
-    expect(markup).toContain("[scrollbar-width:thin]");
+    expect(markup).toContain("scrollbar-thin");
     expect(markup).toContain("[&amp;::-webkit-scrollbar]:h-1.5");
     expect(markup).toContain("break-words");
     expect(markup).not.toContain("line-clamp");

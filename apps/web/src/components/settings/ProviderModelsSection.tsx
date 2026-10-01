@@ -287,7 +287,7 @@ export function ProviderModelsSection({
             <div
               key={`${instanceId}:${model.slug}`}
               className={cn(
-                "grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1",
+                "grid min-h-7 grid-cols-1fr-auto items-center gap-2 py-1",
                 isHidden && "text-muted-foreground",
               )}
             >
@@ -316,11 +316,11 @@ export function ProviderModelsSection({
                     </TooltipTrigger>
                     <TooltipPopup side="top" className="max-w-56">
                       <div className="space-y-1">
-                        <code className="block text-[11px] text-foreground">{model.slug}</code>
+                        <code className="block text-11px text-foreground">{model.slug}</code>
                         {capLabels.length > 0 ? (
                           <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                             {capLabels.map((label) => (
-                              <span key={label} className="text-[10px] text-muted-foreground">
+                              <span key={label} className="text-10px text-muted-foreground">
                                 {label}
                               </span>
                             ))}
@@ -330,11 +330,9 @@ export function ProviderModelsSection({
                     </TooltipPopup>
                   </Tooltip>
                 ) : null}
-                {isHidden ? (
-                  <span className="text-[10px] text-muted-foreground">hidden</span>
-                ) : null}
+                {isHidden ? <span className="text-10px text-muted-foreground">hidden</span> : null}
                 {model.isCustom ? (
-                  <span className="text-[10px] text-muted-foreground">custom</span>
+                  <span className="text-10px text-muted-foreground">custom</span>
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-0.5">

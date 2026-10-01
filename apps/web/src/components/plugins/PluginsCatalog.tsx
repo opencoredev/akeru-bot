@@ -45,7 +45,7 @@ export function PluginsCatalog({
         <p className="text-sm font-medium text-foreground">
           {nothingInstalled ? t("No plugins connected yet") : t("No plugins match")}
         </p>
-        <p className="mt-1 text-[13px] text-muted-foreground">
+        <p className="mt-1 text-13px text-muted-foreground">
           {nothingInstalled
             ? t("Connect one from All and it shows up here.")
             : t("Try another name or clear the filter.")}

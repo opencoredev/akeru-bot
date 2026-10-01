@@ -23,8 +23,8 @@ describe("empty bot workspace header", () => {
       "utf8",
     );
 
-    expect(headerSource).toContain("h-[var(--workspace-topbar-height)]");
-    expect(headerSource).toContain("min-h-[var(--workspace-topbar-height)]");
+    expect(headerSource).toContain("h-(--workspace-topbar-height)");
+    expect(headerSource).toContain("min-h-(--workspace-topbar-height)");
     expect(headerSource).toContain("COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS");
   });
 });

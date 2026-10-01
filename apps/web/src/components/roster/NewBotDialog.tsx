@@ -66,7 +66,7 @@ export function NewBotDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup
-        className="flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col overflow-hidden"
+        className="flex max-h-(--spacing-dvh-2rem) max-w-2xl flex-col overflow-hidden"
         bottomStickOnMobile={false}
       >
         <form
@@ -85,7 +85,7 @@ export function NewBotDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <DialogPanel className="grid gap-6 sm:grid-cols-[12rem_minmax(0,1fr)]">
+          <DialogPanel className="grid gap-6 sm:grid-cols-(--grid-template-columns-12rem-1fr)">
             {defaultEngine.blocked && defaultEngine.unavailability ? (
               <div className="sm:col-span-2">
                 <ProviderUnavailableNotice

@@ -43,7 +43,7 @@ describe("preview favicon image", () => {
     );
 
     expect(html).not.toContain("<img");
-    expect(html).toContain("rounded-[5px]");
+    expect(html).toContain("rounded-5px");
     mocks.favicon = "data:image/png;base64,AAAA";
 
     const faviconHtml = renderToStaticMarkup(

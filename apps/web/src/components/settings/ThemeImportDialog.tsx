@@ -364,7 +364,7 @@ export function ThemeImportDialog({
 
           <div className="flex items-center gap-3" aria-hidden>
             <div className="h-px flex-1 bg-border" />
-            <span className="text-muted-foreground text-[11px] uppercase tracking-wider">
+            <span className="text-muted-foreground text-11px uppercase tracking-wider">
               or import a file
             </span>
             <div className="h-px flex-1 bg-border" />

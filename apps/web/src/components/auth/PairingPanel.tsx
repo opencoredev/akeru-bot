@@ -199,7 +199,7 @@ export function PairingPanel({
 
       {hasEnvironment ? (
         <AuthSurfaceSection>
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+          <dl className="grid grid-cols-auto-1fr gap-x-6 gap-y-2 text-sm">
             {environment.name ? (
               <>
                 <dt className="text-muted-foreground">{t("Environment")}</dt>
@@ -209,7 +209,7 @@ export function PairingPanel({
             {environment.address ? (
               <>
                 <dt className="text-muted-foreground">{t("Address")}</dt>
-                <dd className="truncate text-right font-mono text-[13px] text-foreground/80">
+                <dd className="truncate text-right font-mono text-13px text-foreground/80">
                   {environment.address}
                 </dd>
               </>
@@ -226,7 +226,7 @@ export function PairingPanel({
           <ul className="mt-3 space-y-2.5">
             {pairingGrants(t).map((grant) => (
               <li key={grant.label} className="flex items-center gap-3 text-sm">
-                <AppIcon icon={grant.icon} className="size-4 shrink-0 text-muted-foreground" />
+                <AppIcon icon={grant.icon} tone="muted" className="size-4 shrink-0" />
                 <span>{grant.label}</span>
               </li>
             ))}
@@ -240,7 +240,7 @@ export function PairingPanel({
           <ol className="mt-3 space-y-2.5 text-sm">
             <li>
               {runBefore}
-              <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[13px]">
+              <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-13px">
                 {NEW_LINK_COMMAND}
               </code>
               {runAfter}

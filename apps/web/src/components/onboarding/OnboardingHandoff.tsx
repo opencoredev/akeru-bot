@@ -67,7 +67,7 @@ function HandoffStatus({
       <AnimatePresence initial={false}>
         <motion.span
           key={status}
-          className="bot-status-shimmer bot-status-shimmer-finite absolute inset-x-0 top-0 block truncate"
+          className="bot-status-shimmer absolute inset-x-0 top-0 block truncate"
           initial={reducedMotion ? false : { opacity: 0, y: SWAP_DISTANCE, filter: SWAP_BLUR }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           exit={

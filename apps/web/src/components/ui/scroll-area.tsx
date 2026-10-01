@@ -31,7 +31,12 @@ function ScrollArea({
   chainVerticalScroll = false,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
-  variant?: "diagnostics" | "diagnostics-process" | "telemetry-process" | "provider-email";
+  variant?:
+    | "square"
+    | "diagnostics"
+    | "diagnostics-process"
+    | "telemetry-process"
+    | "provider-email";
   scrollFade?: boolean;
   scrollbarGutter?: boolean;
   hideScrollbars?: boolean;
@@ -41,7 +46,7 @@ function ScrollArea({
     <ScrollAreaPrimitive.Root
       className={cn(
         "relative size-full min-h-0 overflow-hidden rounded-[inherit]",
-        variant === "diagnostics" && "rounded-none",
+        (variant === "square" || variant === "diagnostics") && "rounded-none",
         variant === "diagnostics-process" && "rounded-none border-t border-border/60",
         variant === "telemetry-process" && "border-t border-border/60",
         variant === "provider-email" && "h-8 min-w-0 flex-1 rounded-none",
@@ -51,7 +56,7 @@ function ScrollArea({
     >
       <ScrollAreaPrimitive.Viewport
         className={cn(
-          "h-full max-h-[inherit] overflow-auto overscroll-contain rounded-[inherit] outline-none transition-shadows focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background data-has-overflow-x:overscroll-x-contain",
+          "h-full max-h-[inherit] overflow-auto overscroll-contain rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background data-has-overflow-x:overscroll-x-contain",
           chainVerticalScroll && "overscroll-y-auto",
           scrollFade &&
             "scroll-p-[var(--fade-size)] mask-t-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-start)))] mask-b-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-end)))] mask-l-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-start)))] mask-r-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-end)))] [--fade-size:1.5rem]",

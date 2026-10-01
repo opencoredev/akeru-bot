@@ -207,7 +207,7 @@ export function DurableFactList({
                 {t("Replaced:")} <span className="line-through">{fact.supersededFact}</span>
               </p>
             ) : null}
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+            <dl className="grid grid-cols-auto-grow gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
               <dt>{t("Scope")}</dt>
               <dd>{t(DURABLE_MEMORY_SCOPE_LABELS[fact.scope])}</dd>
               <dt>{t("Status")}</dt>

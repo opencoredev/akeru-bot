@@ -463,7 +463,7 @@ export function WhenExpressionBuilder({
   };
 
   return (
-    <div className="w-[min(34rem,calc(100vw-2rem))] space-y-3">
+    <div className="w-min-34rem-vw-2rem space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-medium text-foreground">{t("When")}</div>
@@ -499,7 +499,7 @@ export function WhenExpressionBuilder({
           ) : null}
         </div>
         {parseError ? (
-          <div className="flex items-center gap-1.5 text-[11px] text-destructive">
+          <div className="flex items-center gap-1.5 text-11px text-destructive">
             <CircleXIcon className="size-3.5" />
             {parseError}
           </div>
@@ -529,7 +529,7 @@ export function WhenExpressionBuilder({
           </div>
         )}
         {parseError ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg border border-destructive/30 bg-background/75 p-4 text-center text-xs text-destructive backdrop-blur-[1px]">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg border border-destructive/30 bg-background/75 p-4 text-center text-xs text-destructive backdrop-blur-1px">
             {t("Fix the expression above to continue editing visually.")}
           </div>
         ) : null}

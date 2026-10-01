@@ -6,7 +6,9 @@ export function AppIcon({
   tone,
   className,
   ...props
-}: HugeiconsIconProps & { tone?: "muted" | "sidebar" | "sidebar-muted" | undefined }) {
+}: HugeiconsIconProps & {
+  tone?: "muted" | "muted-hover" | "sidebar" | "sidebar-muted" | undefined;
+}) {
   return (
     <HugeiconsIcon
       aria-hidden="true"
@@ -15,6 +17,8 @@ export function AppIcon({
         tone
           ? cn(
               tone === "muted" && "text-muted-foreground",
+              tone === "muted-hover" &&
+                "text-muted-foreground transition-colors group-hover:text-foreground",
               tone === "sidebar" && "text-sidebar-foreground",
               tone === "sidebar-muted" && "text-sidebar-muted-foreground",
               className,

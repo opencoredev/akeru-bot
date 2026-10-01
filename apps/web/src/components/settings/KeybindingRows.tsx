@@ -108,7 +108,7 @@ export function KeybindingListRow({
         <span className="flex min-w-0 items-center gap-2">
           <Tooltip>
             <TooltipTrigger
-              render={<span className="truncate text-[13px] text-foreground" />}
+              render={<span className="truncate text-13px text-foreground" />}
               delay={400}
             >
               {title}
@@ -236,14 +236,14 @@ export function KeybindingSeriesItem({
           <ChevronRightIcon
             className={cn("size-3.5 shrink-0 text-muted-foreground", expanded && "rotate-90")}
           />
-          <span className="truncate text-[13px] text-foreground">{series.title}</span>
+          <span className="truncate text-13px text-foreground">{series.title}</span>
           {customized > 0 ? (
             <Badge variant="keybinding-custom" size="sm">
               {t("{count} custom", { count: customized })}
             </Badge>
           ) : null}
           {condition ? (
-            <span className="hidden truncate text-[12px] text-muted-foreground sm:inline">
+            <span className="hidden truncate text-12px text-muted-foreground sm:inline">
               {condition}
             </span>
           ) : null}
@@ -254,7 +254,7 @@ export function KeybindingSeriesItem({
             {series.rangeKey ? (
               <KeyCaps value={series.rangeKey} />
             ) : (
-              <span className="text-[12px] text-muted-foreground">
+              <span className="text-12px text-muted-foreground">
                 {t("{count} shortcuts", { count: series.rows.length })}
               </span>
             )}

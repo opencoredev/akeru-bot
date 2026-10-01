@@ -101,7 +101,7 @@ function MarkdownTaskListProgress({ done, total }: { done: number; total: number
       >
         <span
           className="chat-markdown-task-progress-fill"
-          style={{ width: `${Math.round((done / total) * 100)}%` }}
+          style={{ "--task-progress": `${Math.round((done / total) * 100)}%` }}
         />
       </span>
       <span>{t("{done} of {total} done", { done, total })}</span>

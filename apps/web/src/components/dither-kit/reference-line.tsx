@@ -42,7 +42,7 @@ export function ReferenceLine({
           x={width - 2}
           y={py - 3}
           textAnchor="end"
-          className="fill-muted-foreground font-mono text-[10px]"
+          className="fill-muted-foreground font-mono text-10px"
         >
           {label}
         </text>

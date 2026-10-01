@@ -49,7 +49,7 @@ const HOVER_CONTROLS_CLASS =
   "opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 has-[[aria-expanded=true]]:opacity-100 has-[[data-popup-open]]:opacity-100 max-md:opacity-100";
 
 // Offscreen rows skip layout and paint; the intrinsic size keeps the scrollbar steady.
-const ROW_VISIBILITY_CLASS = "[content-visibility:auto] [contain-intrinsic-size:auto_96px]";
+const ROW_VISIBILITY_CLASS = "content-visibility-row";
 
 function UnavailableReactionControl({
   selectedReaction,
@@ -73,9 +73,7 @@ function UnavailableReactionControl({
         }
       >
         {selectedReaction ? (
-          <span className="text-sm [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]">
-            {selectedReaction}
-          </span>
+          <span className="text-sm font-emoji">{selectedReaction}</span>
         ) : (
           <SmilePlusIcon className="size-3.5" />
         )}
@@ -155,7 +153,7 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
         id={`chat-message-${message.id}`}
         tabIndex={-1}
         className={cn(
-          `group/message mt-3 max-w-[85%] first:mt-0 ${ROW_VISIBILITY_CLASS}`,
+          `group/message mt-3 max-w-17/20 first:mt-0 ${ROW_VISIBILITY_CLASS}`,
           arrived && "motion-message-enter",
         )}
         data-testid={testId}
@@ -298,7 +296,7 @@ export const UserMessageRow = memo(function UserMessageRow({
           <UnavailableReactionControl selectedReaction={selectedReaction} />
         ) : null}
       </div>
-      <div className="flex max-w-[78%] flex-col items-end">
+      <div className="flex max-w-39/50 flex-col items-end">
         <div className="w-full rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
           {showChannelOrigin && message.channelOrigin ? (
             <div className="mb-1 text-xs font-medium text-muted-foreground">

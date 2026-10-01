@@ -111,7 +111,8 @@ function CommandPaletteDialog(props: { readonly setOpen: (open: boolean) => void
   return (
     <CommandDialogPopup
       aria-label={t("Command palette")}
-      className="overflow-hidden p-0"
+      variant="palette"
+      className="overflow-hidden"
       data-command-palette="true"
       data-testid="command-palette"
       finalFocus={false}
@@ -303,7 +304,6 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
         setHighlightedItemValue(null);
         setQuery(nextQuery);
       }}
-      panelClassName="max-h-[min(28rem,70vh)]"
       value={query}
     >
       <CommandPaletteResults

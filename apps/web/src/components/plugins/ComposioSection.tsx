@@ -88,7 +88,7 @@ export function ComposioAccounts({
 
   if (connections.length === 0) {
     return (
-      <p className="text-[13px] text-muted-foreground">
+      <p className="text-13px text-muted-foreground">
         {t("No accounts connected yet. Search above to find an app, then connect it.")}
       </p>
     );
@@ -324,7 +324,7 @@ export function ComposioSection({
           </Button>
         </div>
         {status.error ? (
-          <p className="text-[13px] text-destructive-foreground">
+          <p className="text-13px text-destructive-foreground">
             {t("Could not reach Composio: {error}", { error: String(status.error) })}
           </p>
         ) : null}
@@ -371,7 +371,7 @@ export function ComposioSection({
         ) : null}
       </section>
       {searching && toolkits.error ? (
-        <p className="px-1 text-[13px] text-destructive-foreground">
+        <p className="px-1 text-13px text-destructive-foreground">
           {t("Could not search Composio: {error}", { error: String(toolkits.error) })}
         </p>
       ) : null}

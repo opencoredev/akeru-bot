@@ -101,6 +101,15 @@
   --color-warning-bright-foreground: var(--warning-bright-foreground);
   --color-favorite-foreground: var(--favorite-foreground);
   --color-favorite-hover-foreground: var(--favorite-hover-foreground);
+  --color-caution-foreground: var(--caution-foreground);
+  --color-telemetry-warning-foreground: var(--telemetry-warning-foreground);
+  --color-telemetry-read-foreground: var(--telemetry-read-foreground);
+  --color-telemetry-write-foreground: var(--telemetry-write-foreground);
+  --color-pending-indicator: var(--pending-indicator);
+  --color-option-hover: var(--option-hover);
+  --color-skill: var(--skill);
+  --color-skill-foreground: var(--skill-foreground);
+  --color-brand-grok: var(--brand-grok);
   --color-success: var(--success);
   --color-info-foreground: var(--info-foreground);
   --color-info: var(--info);
@@ -212,6 +221,12 @@
     }
   }
 }
+
+@import "./styles/scale-tokens.css";
+
+@import "./styles/brand-colors.css";
+
+@import "./styles/one-off-utilities.css";
 
 @import "./styles/chrome-utilities.css";
 

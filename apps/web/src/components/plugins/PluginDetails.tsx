@@ -85,7 +85,7 @@ export function PluginDetailsContent({
             <div className="min-w-0 flex-1 pt-0.5">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="truncate text-lg font-semibold">{plugin.title}</h2>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-11px text-muted-foreground">
                   {plugin.category}
                 </span>
                 {brokerName ? (
@@ -125,7 +125,7 @@ export function PluginDetailsContent({
             </div>
           </div>
           {blocker ? (
-            <p className="mt-4 rounded-lg bg-muted/60 px-3 py-2 text-[13px] leading-5 text-muted-foreground">
+            <p className="mt-4 rounded-lg bg-muted/60 px-3 py-2 text-13px leading-5 text-muted-foreground">
               {blocker}
             </p>
           ) : null}
@@ -203,7 +203,7 @@ export function PluginDetailsContent({
             <h3 className="text-xs font-medium text-muted-foreground" id="plugin-permissions-title">
               Permissions
             </h3>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-11px text-muted-foreground">
               Approvals: {plugin.approvals.length > 0 ? plugin.approvals.join(", ") : "None"}
             </span>
           </div>
@@ -227,7 +227,7 @@ export function PluginDetailsContent({
               <h3 className="text-xs font-medium text-muted-foreground" id="plugin-skills-title">
                 Skills
               </h3>
-              <span className="text-[11px] text-muted-foreground">Installed separately</span>
+              <span className="text-11px text-muted-foreground">Installed separately</span>
             </div>
             <div className="overflow-hidden rounded-xl border bg-muted/35">
               {plugin.skills.map((skill) => (
@@ -245,7 +245,8 @@ export function PluginDetailsContent({
                   </div>
                   <AppIcon
                     icon={ArrowUpRight01Icon}
-                    className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+                    tone="muted-hover"
+                    className="size-4 shrink-0"
                   />
                 </button>
               ))}

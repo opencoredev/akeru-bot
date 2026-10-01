@@ -37,7 +37,7 @@ export function ProcessTreeName({
 
   return (
     <div
-      className="grid min-w-0 grid-cols-[1.25rem_0.375rem_minmax(0,1fr)] items-center gap-2"
+      className="grid min-w-0 grid-cols-legend-row items-center gap-2"
       style={
         // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
         { paddingLeft: `${Math.min(process.depth, 7) * 10}px` }
@@ -63,7 +63,7 @@ export function ProcessTreeName({
         <TooltipPopup
           side="top"
           variant="diagnostics-mono"
-          className="max-w-[min(520px,calc(100vw-2rem))] whitespace-normal break-words text-left"
+          className="max-w-(--spacing-min-520px-vw-2rem) whitespace-normal break-words text-left"
         >
           {process.command || process.name}
         </TooltipPopup>
@@ -90,7 +90,7 @@ export function ProcessActions({
   onSignal: (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => void;
 }) {
   if (!canSignalProcess(process)) {
-    return <span className="text-[10px] text-muted-foreground/35">—</span>;
+    return <span className="text-10px text-muted-foreground/35">—</span>;
   }
 
   const isSignaling = signalingKeys.has(processIdentityKey(process));
@@ -100,7 +100,7 @@ export function ProcessActions({
       <button
         type="button"
         disabled={isSignaling}
-        className="cursor-pointer text-[10px] font-semibold text-muted-foreground hover:text-foreground disabled:opacity-50"
+        className="cursor-pointer text-10px font-semibold text-muted-foreground hover:text-foreground disabled:opacity-50"
         onClick={() => onSignal(process, "SIGINT")}
       >
         INT
@@ -108,7 +108,7 @@ export function ProcessActions({
       <button
         type="button"
         disabled={isSignaling}
-        className="cursor-pointer text-[10px] font-semibold text-destructive hover:underline disabled:opacity-50"
+        className="cursor-pointer text-10px font-semibold text-destructive hover:underline disabled:opacity-50"
         onClick={() => onSignal(process, "SIGKILL")}
       >
         KILL
@@ -154,7 +154,7 @@ export function ProcessTable({
       scrollFade
       hideScrollbars
       variant="telemetry-process"
-      className="max-h-[min(68vh,48rem)] w-full max-w-full"
+      className="max-h-(--spacing-min-68vh-48rem) w-full max-w-full"
     >
       <table className="w-full min-w-330 table-fixed text-left text-xs">
         <colgroup>
@@ -170,7 +170,7 @@ export function ProcessTable({
           <col className="w-3/50" />
           <col className="w-1/25" />
         </colgroup>
-        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-[10px] uppercase tracking-[0.08em] text-muted-foreground/65">
+        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-10px uppercase tracking-caps text-muted-foreground/65">
           <tr>
             <th className="px-4 py-2 font-semibold sm:pl-5">Process</th>
             <th className="px-3 py-2 font-semibold">Category</th>
@@ -202,7 +202,7 @@ export function ProcessTable({
                   onToggle={toggle}
                 />
               </td>
-              <td className="truncate px-3 py-2 text-[11px] text-muted-foreground">
+              <td className="truncate px-3 py-2 text-11px text-muted-foreground">
                 {categoryLabel(process.category)}
               </td>
               <td className="px-3 py-2 text-right font-mono tabular-nums">
@@ -214,10 +214,10 @@ export function ProcessTable({
               <td className="px-3 py-2 text-right font-mono tabular-nums">
                 {formatBytes(process.residentBytes)}
               </td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums text-sky-700 dark:text-sky-300">
+              <td className="px-3 py-2 text-right font-mono tabular-nums text-telemetry-read-foreground">
                 {formatRate(process.ioReadBytesPerSecond)}
               </td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums text-amber-700 dark:text-amber-300">
+              <td className="px-3 py-2 text-right font-mono tabular-nums text-telemetry-write-foreground">
                 {formatRate(process.ioWriteBytesPerSecond)}
               </td>
               <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">
@@ -272,7 +272,7 @@ export function HistoryProcessTable({
           <col className="w-7/100" />
           <col className="w-1/20" />
         </colgroup>
-        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-[10px] uppercase tracking-[0.08em] text-muted-foreground/65">
+        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-10px uppercase tracking-caps text-muted-foreground/65">
           <tr>
             <th className="px-4 py-2 font-semibold sm:pl-5">Process</th>
             <th className="px-3 py-2 font-semibold">Category</th>
@@ -307,13 +307,13 @@ export function HistoryProcessTable({
                   <TooltipPopup
                     side="top"
                     variant="diagnostics-mono"
-                    className="max-w-[min(520px,calc(100vw-2rem))] whitespace-normal break-words text-left"
+                    className="max-w-(--spacing-min-520px-vw-2rem) whitespace-normal break-words text-left"
                   >
                     {process.command || process.name}
                   </TooltipPopup>
                 </Tooltip>
               </td>
-              <td className="truncate px-3 py-2 text-[11px] text-muted-foreground">
+              <td className="truncate px-3 py-2 text-11px text-muted-foreground">
                 {categoryLabel(process.category)}
               </td>
               <td className="px-3 py-2 text-right font-mono tabular-nums">
@@ -325,10 +325,10 @@ export function HistoryProcessTable({
               <td className="px-3 py-2 text-right font-mono tabular-nums">
                 {formatBytes(process.peakRssBytes)}
               </td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums text-sky-700 dark:text-sky-300">
+              <td className="px-3 py-2 text-right font-mono tabular-nums text-telemetry-read-foreground">
                 {formatBytes(process.ioReadBytes)}
               </td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums text-amber-700 dark:text-amber-300">
+              <td className="px-3 py-2 text-right font-mono tabular-nums text-telemetry-write-foreground">
                 {formatBytes(process.ioWriteBytes)}
               </td>
               <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">

@@ -139,8 +139,8 @@ export function RoutineFormDialog({
         if (routineFormClosesOnOpenChange(open, saving)) onClose();
       }}
     >
-      <DialogPopup className="max-h-[min(42rem,90dvh)] max-w-lg flex-col overflow-hidden">
-        <DialogHeader className="border-b px-6 py-5">
+      <DialogPopup className="max-h-(--spacing-min-42rem-90dvh) max-w-lg flex-col overflow-hidden">
+        <DialogHeader variant="divided" className="px-6 py-5">
           <DialogTitle>{t(title)}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-4 px-6 py-5">

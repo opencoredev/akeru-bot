@@ -40,7 +40,7 @@ const PICKER_TOOLTIP_SIDE = "left" as const;
 
 const PICKER_TOOLTIP_SIDE_OFFSET = 8;
 
-const PICKER_TOOLTIP_CLASS = "max-w-64 text-balance font-normal leading-snug";
+const PICKER_TOOLTIP_CLASS = "max-w-64";
 
 export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
   selectedInstanceId: ProviderInstanceId | "favorites";
@@ -96,16 +96,16 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
 
   return (
     <div className="w-11 shrink-0 overflow-hidden bg-muted/30" data-model-picker-sidebar="true">
-      <div className="h-full overflow-y-auto overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="h-full overflow-y-auto overscroll-contain scrollbar-none [&::-webkit-scrollbar]:hidden">
         <div ref={sidebarContentRef} className="relative flex min-h-full flex-col gap-1 p-1">
           {selectedIndicatorTop !== null ? (
             <div
               data-model-picker-selected-indicator="true"
               className={cn(
                 SELECTED_INDICATOR_CLASS,
-                "right-0 translate-y-0 transition-[top] duration-200 ease-out",
+                "right-0 top-(--indicator-top) translate-y-0 transition-top duration-200 ease-out",
               )}
-              style={{ top: selectedIndicatorTop }}
+              style={{ "--indicator-top": `${selectedIndicatorTop}px` }}
             />
           ) : null}
           {/* Favorites section */}
@@ -132,6 +132,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                     side={PICKER_TOOLTIP_SIDE}
                     sideOffset={PICKER_TOOLTIP_SIDE_OFFSET}
                     align="center"
+                    variant="hint"
                     className={PICKER_TOOLTIP_CLASS}
                   >
                     {t("Favorites")}
@@ -206,9 +207,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                         ? "var(--background)"
                         : "color-mix(in oklab, var(--muted) 30%, transparent)"
                   }
-                  {...(entry.accentColor
-                    ? { badgeClassName: "h-3 min-w-3 px-0.5 text-[7px]" }
-                    : {})}
+                  {...(entry.accentColor ? { badgeClassName: "h-3 min-w-3 px-0.5 text-7px" } : {})}
                 />
                 {showNewBadge ? (
                   <span className={NEW_BADGE_CLASS} aria-hidden>
@@ -236,6 +235,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                     side={PICKER_TOOLTIP_SIDE}
                     sideOffset={PICKER_TOOLTIP_SIDE_OFFSET}
                     align="center"
+                    variant="hint"
                     className={PICKER_TOOLTIP_CLASS}
                   >
                     {tooltip}

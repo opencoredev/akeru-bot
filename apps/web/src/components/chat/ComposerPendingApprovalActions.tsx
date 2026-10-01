@@ -23,8 +23,6 @@ interface ComposerPendingApprovalActionsProps {
   ) => Promise<unknown>;
 }
 
-const APPROVAL_ACTION_CLASS_NAME = "font-medium";
-
 type Translate = ReturnType<typeof useI18n>["t"];
 
 function defaultApprovalOptions(t: Translate): ReadonlyArray<ProviderApprovalOption> {
@@ -42,9 +40,6 @@ function routineApprovalOptions(t: Translate): ReadonlyArray<ProviderApprovalOpt
     { decision: "decline", label: t("Don't create") },
   ];
 }
-
-const APPROVAL_ACCEPT_CLASS_NAME =
-  " bg-foreground text-background [:active,[data-pressed]]:bg-foreground/80 [:hover,[data-pressed]]:bg-foreground/90";
 
 function commandApprovalOptions(
   options: ReadonlyArray<ProviderApprovalOption>,
@@ -109,13 +104,13 @@ export const ComposerPendingApprovalActions = memo(function ComposerPendingAppro
                   ? "outline"
                   : "ghost-muted"
             }
-            className={`${APPROVAL_ACTION_CLASS_NAME}${
+            presentation={
               option.decision === "accept"
-                ? APPROVAL_ACCEPT_CLASS_NAME
+                ? "approval-accept"
                 : option.decision === "acceptAlways" || option.decision === "acceptForSession"
-                  ? " border-border bg-muted/40 text-foreground [:hover,[data-pressed]]:bg-muted/70"
-                  : " text-muted-foreground [:hover,[data-pressed]]:text-foreground"
-            }`}
+                  ? "approval-always"
+                  : "approval-other"
+            }
             disabled={isResponding}
             onClick={() => void onRespondToApproval(requestId, option.decision)}
             {...(isAutoReview

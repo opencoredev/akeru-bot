@@ -13,7 +13,7 @@ describe("settings control presentation precedence", () => {
 
   it("preserves the compact connection-kind badge dimensions", () => {
     expect(cn(badgeVariants({ presentation: "connection-kind" }))).toBe(
-      cn(badgeVariants(), "h-4 px-1.5 text-[10px]"),
+      cn(badgeVariants(), "h-4 px-1.5 text-10px"),
     );
   });
 

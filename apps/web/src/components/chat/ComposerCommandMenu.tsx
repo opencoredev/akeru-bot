@@ -12,7 +12,6 @@ import {
 import { memo, useLayoutEffect, useRef } from "react";
 
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
-import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
 import { PierreEntryIcon } from "./PierreEntryIcon";
@@ -143,10 +142,8 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
     <CommandItem
       value={props.item.id}
       data-composer-item-id={props.item.id}
-      className={cn(
-        "cursor-pointer select-none gap-3 rounded-lg px-3 py-2! hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit",
-        props.isActive && "bg-accent! text-accent-foreground!",
-      )}
+      variant={props.isActive ? "composer-active" : "composer"}
+      className="cursor-pointer select-none"
       onMouseMove={() => {
         if (!props.isActive) props.onHighlight(props.item.id);
       }}
@@ -168,7 +165,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
         <ProviderSkillIcon skill={props.item.skill} className={SKILL_ROW_ICON_CLASS_NAME} />
       ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="min-w-0 max-w-[45%] shrink-0 truncate font-sans text-xs font-medium">
+        <span className="min-w-0 max-w-9/20 shrink-0 truncate font-sans text-xs font-medium">
           {isSlashSkill ? (
             <>
               <span className="text-secondary-label">/skill:</span>
@@ -178,7 +175,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
             props.item.label
           )}
         </span>
-        <span className="min-w-0 max-w-[48ch] flex-1 truncate text-left text-secondary-label text-xs">
+        <span className="min-w-0 max-w-48ch flex-1 truncate text-left text-secondary-label text-xs">
           {props.item.description}
         </span>
         {skillSourceKind ? (
@@ -195,7 +192,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
 // Same tint as the inline skill chip, a little larger so the row reads as the
 // chip it will insert. In em so it follows the row's font size.
 const SKILL_ROW_ICON_CLASS_NAME =
-  "flex size-[1.6em] shrink-0 items-center justify-center rounded-[0.45em] bg-fuchsia-500/14 text-[1em] leading-none text-fuchsia-700 dark:text-fuchsia-300 [&>svg]:size-[1em]";
+  "flex size-1.6em shrink-0 items-center justify-center rounded-0.45em bg-skill/14 text-1em leading-none text-skill-foreground [&>svg]:size-1em";
 
 const SKILL_SOURCE_LABEL_BY_KIND: Record<ProviderSkillSourceKind, string> = {
   app: "App",

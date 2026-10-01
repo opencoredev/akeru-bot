@@ -86,7 +86,7 @@ function EmptyTitle({
   return (
     <div
       className={cn(
-        "font-heading font-semibold text-xl",
+        "font-semibold text-xl",
         variant === "body" && "font-sans font-medium",
         className,
       )}

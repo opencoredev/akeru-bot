@@ -8,6 +8,34 @@ import type * as React from "react";
 import { cn } from "~/lib/utils";
 
 const buttonPresentations = {
+  "toolbar-toggle-on": "bg-accent text-foreground",
+  "toolbar-sticky": "bg-background/95",
+  "composer-control":
+    "gap-1.5 rounded-(--control-radius) px-2.5 text-secondary-label transition-none hover:text-foreground",
+  "stash-badge": "gap-1 px-1.5",
+  "stash-badge-active": "gap-1 px-1.5 [--control-icon-color:currentColor] text-foreground",
+  "approval-accept":
+    "font-medium bg-foreground text-background [:active,[data-pressed]]:bg-foreground/80 [:hover,[data-pressed]]:bg-foreground/90",
+  "approval-always":
+    "font-medium border-border bg-muted/40 text-foreground [:hover,[data-pressed]]:bg-muted/70",
+  "approval-other": "font-medium text-muted-foreground [:hover,[data-pressed]]:text-foreground",
+  "image-nav": "text-white/90 hover:bg-white/10 hover:text-white",
+  "reaction-emoji": "text-2xl sm:text-2xl font-emoji",
+  "model-favorite-toggle":
+    "text-muted-foreground/70 opacity-64 transition-color-opacity hover:text-foreground hover:opacity-100 group-hover:opacity-100",
+  "model-favorite-toggle-on":
+    "text-muted-foreground/70 opacity-64 transition-color-opacity hover:text-foreground hover:opacity-100 group-hover:opacity-100 text-foreground opacity-100",
+  "plugin-action": "rounded-full px-3.5 text-xs",
+  "muted-dismiss": "text-muted-foreground hover:text-foreground",
+  "markdown-chrome": "chat-markdown-chrome-action",
+  "reveal-on-hover":
+    "opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100",
+  "preview-tool": "[:hover,[data-pressed]]:bg-foreground/10",
+  "screen-reveal":
+    "opacity-0 transition group-focus-within/screen:opacity-100 group-hover/screen:opacity-100",
+  "text-xs": "text-xs",
+  "update-pill-dismiss":
+    "[--control-icon-color:currentColor] rounded-md text-inherit opacity-70 hover:bg-transparent hover:opacity-100",
   "provider-update-strong": "size-5 rounded-sm p-0 text-warning hover:text-warning",
   "provider-update": "size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground",
   "model-favorite": "text-favorite-foreground hover:text-favorite-hover-foreground",

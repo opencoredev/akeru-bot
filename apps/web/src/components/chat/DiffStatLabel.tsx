@@ -43,7 +43,7 @@ export const DiffStatLabel = memo(function DiffStatLabel(props: {
         className={cn(
           layout === "inline"
             ? "inline-flex items-center gap-1 tabular-nums align-middle"
-            : "inline-grid grid-cols-[4ch_4ch] gap-2 text-right tabular-nums align-middle",
+            : "inline-grid grid-cols-4ch-4ch gap-2 text-right tabular-nums align-middle",
           className,
         )}
       >

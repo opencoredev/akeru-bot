@@ -18,6 +18,12 @@ const alertVariants = cva("relative rounded-xl border px-3.5 py-3 text-card-fore
       warning:
         "border-transparent bg-warning-surface text-warning-foreground [&_[data-slot=alert-description]]:text-warning-foreground/80 [&_svg]:text-warning",
     },
+    presentation: {
+      "composer-drawer":
+        "chat-composer-drawer-surface chat-composer-drawer-attached px-3 pt-2 pb-composer-overlap-1.5 text-xs sm:px-4",
+      glass: "alert-glass rounded-[22px]",
+      "sidebar-warning": "rounded-2xl border-warning/40 bg-warning/8 text-xs",
+    },
   },
 });
 
@@ -45,6 +51,7 @@ function alertChildSlot(child: React.ReactElement): string | undefined {
 function Alert({
   className,
   variant,
+  presentation,
   controlAlignment = "center",
   children,
   ...props
@@ -76,7 +83,7 @@ function Alert({
 
   return (
     <div
-      className={cn(alertVariants({ variant }), className)}
+      className={cn(alertVariants({ variant, presentation }), className)}
       data-slot="alert"
       role="alert"
       {...props}

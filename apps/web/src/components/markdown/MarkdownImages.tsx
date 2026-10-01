@@ -6,12 +6,18 @@ import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 
 export const CHAT_MARKDOWN_IMAGE_SIZE_CLASS_NAME =
-  "h-auto w-auto max-h-[30rem] max-w-[min(100%,30rem)] object-contain";
+  "h-auto w-auto max-h-120 max-w-min-full-30rem object-contain";
 
 // block! outranks the unlayered `.chat-markdown img { display: inline-block }`
 // rule, keeping workspace images on the same block layout as their placeholder.
 const CHAT_MARKDOWN_WORKSPACE_IMAGE_CLASS_NAME = cn(
   CHAT_MARKDOWN_IMAGE_SIZE_CLASS_NAME,
+  "my-1 block! rounded-lg border border-border/40",
+);
+
+// Workspace images with known dimensions reserve their box before loading.
+const CHAT_MARKDOWN_KNOWN_SIZE_IMAGE_CLASS_NAME = cn(
+  "h-auto w-(--image-width) max-h-120 max-w-(--image-max-width) aspect-(--image-aspect) object-contain",
   "my-1 block! rounded-lg border border-border/40",
 );
 
@@ -53,7 +59,7 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
       <span
         role="status"
         aria-label={t("Loading image")}
-        className="my-1 block aspect-video w-full max-w-[30rem] rounded-lg bg-muted/60"
+        className="my-1 block aspect-video w-full max-w-120 rounded-lg bg-muted/60"
       />
     );
   }
@@ -62,10 +68,9 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
 
   const sizeStyle = knownSize
     ? {
-        width: knownSize.width,
-        height: "auto" as const,
-        aspectRatio: `${knownSize.width} / ${knownSize.height}`,
-        maxWidth: `min(100%, 30rem, ${(30 * knownSize.width) / knownSize.height}rem)`,
+        "--image-width": `${knownSize.width}px`,
+        "--image-aspect": `${knownSize.width} / ${knownSize.height}`,
+        "--image-max-width": `min(100%, 30rem, ${(30 * knownSize.width) / knownSize.height}rem)`,
       }
     : undefined;
 
@@ -75,7 +80,11 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
       alt={props.alt}
       loading="lazy"
       draggable={false}
-      className={CHAT_MARKDOWN_WORKSPACE_IMAGE_CLASS_NAME}
+      className={
+        knownSize
+          ? CHAT_MARKDOWN_KNOWN_SIZE_IMAGE_CLASS_NAME
+          : CHAT_MARKDOWN_WORKSPACE_IMAGE_CLASS_NAME
+      }
       style={sizeStyle}
       onError={() => setFailedUrl(assetUrl.url)}
     />

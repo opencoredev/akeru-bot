@@ -55,17 +55,17 @@ export function LastSampleLabel({ sampledAt }: { sampledAt: DateTime.Utc | null 
   useRelativeTimeTick();
 
   if (!sampledAt) {
-    return <span className="text-[11px] text-muted-foreground/55">Waiting for sample</span>;
+    return <span className="text-11px text-muted-foreground/55">Waiting for sample</span>;
   }
 
   const relative = formatRelativeTime(DateTime.formatIso(sampledAt));
 
   if (!relative) {
-    return <span className="text-[11px] text-muted-foreground/55">Waiting for sample</span>;
+    return <span className="text-11px text-muted-foreground/55">Waiting for sample</span>;
   }
 
   return (
-    <span className="text-[11px] text-muted-foreground/60">
+    <span className="text-11px text-muted-foreground/60">
       Updated <span className="font-mono tabular-nums">{relative.value}</span>
       {relative.suffix ? ` ${relative.suffix}` : ""}
     </span>
@@ -87,7 +87,7 @@ export function IconStat({
 }) {
   return (
     <div className="group min-w-0 px-4 py-4 sm:px-5">
-      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.11em] text-muted-foreground/70">
+      <div className="flex items-center gap-2 text-10px font-semibold uppercase tracking-caps-wide text-muted-foreground/70">
         <span className="text-muted-foreground/55 transition-colors group-hover:text-foreground/65">
           {icon}
         </span>
@@ -96,14 +96,14 @@ export function IconStat({
       <div
         className={cn(
           "mt-2.5 truncate font-mono text-2xl font-semibold tracking-tighter tabular-nums text-foreground",
-          tone === "warning" && "text-amber-600 dark:text-amber-300",
+          tone === "warning" && "text-telemetry-warning-foreground",
           tone === "danger" && "text-destructive",
         )}
       >
         {value}
       </div>
       {detail ? (
-        <div className="mt-1.5 truncate text-[10px] text-muted-foreground/60">{detail}</div>
+        <div className="mt-1.5 truncate text-10px text-muted-foreground/60">{detail}</div>
       ) : null}
     </div>
   );
@@ -122,10 +122,10 @@ export function AggregateCard({
     <div className="relative overflow-hidden border-t border-border/60 px-4 py-4 first:border-t-0 md:border-t-0 md:border-l md:first:border-l-0 sm:px-5">
       <span className={cn("absolute inset-x-5 top-0 h-0.5 rounded-full opacity-75", accentClass)} />
       <div className="flex items-center justify-between gap-3">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.11em] text-muted-foreground/75">
+        <div className="text-10px font-semibold uppercase tracking-caps-wide text-muted-foreground/75">
           {label}
         </div>
-        <div className="rounded-md bg-muted/55 px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-muted-foreground/70">
+        <div className="rounded-md bg-muted/55 px-1.5 py-0.5 font-mono text-9px tabular-nums text-muted-foreground/70">
           {aggregate.processCount} {aggregate.processCount === 1 ? "process" : "processes"}
         </div>
       </div>
@@ -142,7 +142,7 @@ export function AggregateCard({
 export function MetricPair({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/45">
+      <div className="text-9px font-semibold uppercase tracking-caps text-muted-foreground/45">
         {label}
       </div>
       <div className="truncate font-mono text-xs font-medium tabular-nums text-foreground/90">
@@ -166,8 +166,8 @@ export function HealthSource({
   return (
     <div className="flex items-start justify-between gap-4 border-t border-border/50 py-3 first:border-t-0">
       <div className="min-w-0">
-        <div className="text-[13px] font-medium text-foreground">{label}</div>
-        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground/65">
+        <div className="text-13px font-medium text-foreground">{label}</div>
+        <div className="mt-1 text-11px leading-relaxed text-muted-foreground/65">
           {expectedInBrowser
             ? "Available when this page runs inside the desktop app."
             : Option.match(health.lastError, {
@@ -203,10 +203,10 @@ export function DetailRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-4 border-t border-border/50 py-2.5 first:border-t-0">
-      <span className="text-[11px] text-muted-foreground/75">{label}</span>
+      <span className="text-11px text-muted-foreground/75">{label}</span>
       <span
         className={cn(
-          "min-w-0 truncate text-right font-mono text-[11px] tabular-nums text-foreground/85",
+          "min-w-0 truncate text-right font-mono text-11px tabular-nums text-foreground/85",
           valueClassName,
         )}
       >

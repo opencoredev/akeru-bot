@@ -252,6 +252,7 @@
   --response-loading-pixel-rest: 0.15;
   opacity: var(--response-loading-pixel-rest);
   animation: response-loading-pixel-sweep 650ms ease-in-out both;
+  animation-delay: var(--response-loading-pixel-delay, 0ms);
 }
 
 .response-loading-pixel[data-lit] {

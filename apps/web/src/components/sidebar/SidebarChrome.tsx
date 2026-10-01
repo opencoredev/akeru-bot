@@ -40,7 +40,6 @@ import { cn } from "../../lib/utils";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
-  resolveSidebarStageFocusRingOffsetClass,
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
@@ -81,28 +80,19 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 
   return (
     <SidebarHeader
-      className={cn(
-        "@container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2",
-        isElectron && "drag-region",
-      )}
+      dragRegion={isElectron}
+      className="@container/sidebar-header relative h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2"
     >
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
-      <div className="relative z-10 grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center group-data-[collapsible=icon]:hidden">
+      <div className="relative z-10 grid min-w-0 flex-1 grid-cols-grow-auto-grow items-center group-data-[collapsible=icon]:hidden">
         <div className="flex items-center justify-start">
-          <SidebarTrigger
-            className={cn(
-              "md:hidden",
-              backdropVariant &&
-                "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
-              backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
-            )}
-          />
+          <SidebarTrigger onStage={Boolean(backdropVariant)} className="md:hidden" />
         </div>
         <div className="relative flex items-center justify-center">
           <Link
             aria-label={t("Go to chats")}
             className={cn(
-              "flex items-center justify-center rounded-md outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]",
+              "flex items-center justify-center rounded-md outline-none ring-ring focus-visible:ring-2 app-region-no-drag",
               backdropVariant ? "text-white" : "text-sidebar-foreground",
             )}
             to="/"
@@ -111,7 +101,8 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           </Link>
           {pillLabel ? (
             <Badge
-              className="absolute left-full ml-2 rounded-full px-1.5 text-muted-foreground"
+              presentation="environment-pill"
+              className="absolute left-full ml-2"
               data-environment-identification="pill"
               size="sm"
               variant="secondary"
@@ -261,7 +252,7 @@ function SidebarPluginButton({
               {badgeLabel ? (
                 <span
                   aria-hidden="true"
-                  className="ms-auto text-xs tabular-nums text-sidebar-muted-foreground group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:-right-1 group-data-[collapsible=icon]:-top-1 group-data-[collapsible=icon]:ms-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:min-w-4 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:bg-sidebar-primary group-data-[collapsible=icon]:px-1 group-data-[collapsible=icon]:text-[9px] group-data-[collapsible=icon]:font-semibold group-data-[collapsible=icon]:text-sidebar-primary-foreground"
+                  className="ms-auto text-xs tabular-nums text-sidebar-muted-foreground group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:-right-1 group-data-[collapsible=icon]:-top-1 group-data-[collapsible=icon]:ms-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:min-w-4 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:px-1 group-data-[collapsible=icon]:text-9px group-data-[collapsible=icon]:font-semibold"
                 >
                   {badgeLabel}
                 </span>
@@ -356,12 +347,19 @@ function ComputerUseControlForEnvironment({
         </span>
       </div>
       <div className="mt-2 flex gap-2">
-        <Button className="h-7 flex-1 text-xs" disabled={pending} size="sm" onClick={stop}>
+        <Button
+          presentation="text-xs"
+          className="h-7 flex-1"
+          disabled={pending}
+          size="sm"
+          onClick={stop}
+        >
           {t("Stop")}
         </Button>
         <Button
           aria-label={t("Revoke Computer Use for all bots")}
-          className="h-7 flex-1 text-xs"
+          presentation="text-xs"
+          className="h-7 flex-1"
           disabled={pending}
           size="sm"
           title={t("Disable Computer Use for all bots")}
@@ -459,7 +457,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   }, [closeMobileSidebar]);
 
   return (
-    <SidebarFooter className="max-h-[min(45dvh,22rem)] shrink-0 overflow-y-auto overscroll-contain p-[var(--sidebar-content-inset)]">
+    <SidebarFooter className="max-h-(--spacing-min-45dvh-22rem) shrink-0 overflow-y-auto overscroll-contain p-(--sidebar-content-inset)">
       <div className="flex flex-col gap-2 empty:hidden group-data-[collapsible=icon]:hidden">
         <ComputerUseControl />
         <SidebarProviderUpdatePill />
@@ -468,7 +466,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
       {/* A labeled column, not a row of glyphs: each destination gets a
           full-width row with a comfortable hit target. The icon rail collapses
           it back to centered icons. */}
-      <SidebarMenu className="flex-col flex-nowrap gap-0.5 overflow-visible">
+      <SidebarMenu density="tight" className="flex-col flex-nowrap overflow-visible">
         <SidebarPluginSummary onClick={handlePluginsClick} />
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Analytics01Icon} />}

@@ -69,7 +69,7 @@ export function NewGroupDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup
-        className="flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden"
+        className="flex max-h-(--spacing-dvh-2rem) max-w-lg flex-col overflow-hidden"
         bottomStickOnMobile={false}
       >
         <form

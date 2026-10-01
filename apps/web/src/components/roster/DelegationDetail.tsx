@@ -125,7 +125,7 @@ export function DelegationDetail({
           </div>
           <DialogDescription>{delegationStateLabel(presentation.state, t)}</DialogDescription>
         </DialogHeader>
-        <DialogPanel className="flex flex-col gap-4 text-sm">
+        <DialogPanel tone="body" className="flex flex-col gap-4">
           <section>
             <h3 className="text-xs font-medium text-muted-foreground">{t("Task")}</h3>
             <p className="mt-1 whitespace-pre-wrap leading-6">{delegation.task}</p>

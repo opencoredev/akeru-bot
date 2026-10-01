@@ -172,8 +172,11 @@ export function BrowserDeviceToolbar({
 
   return (
     <div
-      className="sticky left-0 top-0 z-50 flex items-center gap-0.5 overflow-x-auto border-b border-border/70 bg-background/95 px-1.5 shadow-xs backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      style={{ width, height: BROWSER_DEVICE_TOOLBAR_HEIGHT }}
+      className="sticky left-0 top-0 z-50 flex h-(--toolbar-height) w-(--toolbar-width) items-center gap-0.5 overflow-x-auto border-b border-border/70 bg-background/95 px-1.5 shadow-xs backdrop-blur-md scrollbar-none [&::-webkit-scrollbar]:hidden"
+      style={{
+        "--toolbar-width": `${width}px`,
+        "--toolbar-height": `${BROWSER_DEVICE_TOOLBAR_HEIGHT}px`,
+      }}
       role="toolbar"
       aria-label="Browser device toolbar"
       data-browser-device-toolbar
@@ -196,7 +199,7 @@ export function BrowserDeviceToolbar({
       }}
     >
       {width >= 560 ? (
-        <span className="mr-0.5 shrink-0 text-[11px] font-medium text-muted-foreground">
+        <span className="mr-0.5 shrink-0 text-11px font-medium text-muted-foreground">
           Dimensions
         </span>
       ) : null}
@@ -210,10 +213,8 @@ export function BrowserDeviceToolbar({
         <SelectTrigger
           variant="ghost"
           size="xs"
-          className={cn(
-            "shrink-0 justify-between px-1.5 font-medium",
-            width >= 440 ? "w-36" : "w-24",
-          )}
+          presentation="device-toolbar"
+          className={cn("shrink-0 justify-between", width >= 440 ? "w-36" : "w-24")}
           aria-label="Browser device preset"
         >
           <SelectValue />
@@ -265,10 +266,8 @@ export function BrowserDeviceToolbar({
           onChange={(event) => updateCustomDimension("width", event.target.value)}
           aria-label="Viewport width"
           aria-invalid={!customValid}
-          className={cn(
-            "h-6 rounded-md text-center tabular-nums [&_[data-slot=input]]:h-full [&_[data-slot=input]]:px-1 [&_[data-slot=input]]:text-xs [&_[data-slot=input]]:leading-none [&_[data-slot=input]::-webkit-inner-spin-button]:appearance-none [&_[data-slot=input]]:[appearance:textfield]",
-            width >= 360 ? "w-14" : "w-11",
-          )}
+          variant="viewport-dimension"
+          className={width >= 360 ? "w-14" : "w-11"}
         />
         <span className="text-xs text-muted-foreground">×</span>
         <Input
@@ -292,10 +291,8 @@ export function BrowserDeviceToolbar({
           onChange={(event) => updateCustomDimension("height", event.target.value)}
           aria-label="Viewport height"
           aria-invalid={!customValid}
-          className={cn(
-            "h-6 rounded-md text-center tabular-nums [&_[data-slot=input]]:h-full [&_[data-slot=input]]:px-1 [&_[data-slot=input]]:text-xs [&_[data-slot=input]]:leading-none [&_[data-slot=input]::-webkit-inner-spin-button]:appearance-none [&_[data-slot=input]]:[appearance:textfield]",
-            width >= 360 ? "w-14" : "w-11",
-          )}
+          variant="viewport-dimension"
+          className={width >= 360 ? "w-14" : "w-11"}
         />
       </form>
 
@@ -310,7 +307,7 @@ export function BrowserDeviceToolbar({
                 aspectRatio === null ? "Lock viewport aspect ratio" : "Unlock viewport aspect ratio"
               }
               aria-pressed={aspectRatio !== null}
-              className={cn(aspectRatio !== null && "bg-accent text-foreground")}
+              presentation={aspectRatio !== null ? "toolbar-toggle-on" : undefined}
               disabled={pending || !customValid}
               onPointerDown={(event) => event.preventDefault()}
               onClick={toggleAspectRatio}
@@ -342,7 +339,8 @@ export function BrowserDeviceToolbar({
         size="icon-xs"
         type="button"
         aria-label="Close device toolbar"
-        className="sticky right-0 ml-auto bg-background/95"
+        presentation="toolbar-sticky"
+        className="sticky right-0 ml-auto"
         disabled={pending}
         onClick={() => {
           apply({ _tag: "fill" }, null);

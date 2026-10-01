@@ -97,7 +97,7 @@ export const PluginSearchResultCard = memo(function PluginSearchResultCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium">{recommendation.name}</p>
-          <span className="shrink-0 text-[11px] text-muted-foreground">
+          <span className="shrink-0 text-11px text-muted-foreground">
             {recommendationProviderLabel(recommendation)}
           </span>
         </div>
@@ -114,7 +114,8 @@ export const PluginSearchResultCard = memo(function PluginSearchResultCard({
       </div>
       <Button
         aria-label={t("{action} {name}", { action, name: recommendation.name })}
-        className="h-8 rounded-full px-3.5 text-xs"
+        presentation="plugin-action"
+        className="h-8"
         disabled={recommendation.action === "unavailable"}
         size="sm"
         variant="secondary"

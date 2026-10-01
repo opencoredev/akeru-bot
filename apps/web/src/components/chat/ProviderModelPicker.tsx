@@ -183,6 +183,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             className={cn(
               "min-w-0 justify-between whitespace-nowrap",
               props.compact ? "max-w-42 shrink-0" : "max-w-48 shrink sm:max-w-56",
+              // oxlint-disable-next-line shadcn/require-static-classes -- caller-supplied trigger class passthrough
               props.triggerClassName,
             )}
             disabled={props.disabled}
@@ -199,10 +200,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               className="size-4"
               iconClassName={cn("size-4", props.activeProviderIconClassName)}
               indicatorBackground="var(--contrast-input)"
-              badgeClassName={cn(
-                "right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3",
-                "px-0.5 text-[7px]",
-              )}
+              badgeClassName={cn("-right-0.5 -bottom-0.5 h-3 min-w-3", "px-0.5 text-7px")}
             />
           ) : null}
           <Tooltip>
@@ -216,11 +214,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           <ComposerControlChevron />
         </span>
       </PopoverTrigger>
-      <PopoverPopup
-        align="start"
-        className="before:hidden [--viewport-inline-padding:0]"
-        viewportClassName="!overflow-hidden rounded-[calc(var(--radius-lg)-1px)] p-0 [clip-path:inset(0_round_calc(var(--radius-lg)-1px))]"
-      >
+      <PopoverPopup align="start" variant="model-picker">
         <ModelPickerContent
           activeInstanceId={activeInstanceId}
           model={props.model}

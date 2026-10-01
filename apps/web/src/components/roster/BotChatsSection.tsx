@@ -60,7 +60,7 @@ export function BotChatsSection({
               variant={row.current ? "ghost-current" : "ghost-quiet"}
               size="row-relaxed"
               aria-current={row.current ? "true" : undefined}
-              className="-mx-2 w-[calc(100%+1rem)] justify-start"
+              className="-mx-2 w-(--spacing-full-plus-1rem) justify-start"
               onClick={() => {
                 if (!row.current) {
                   useRosterStore
@@ -91,7 +91,7 @@ export function BotChatsSection({
         <Button
           variant="ghost-quiet"
           size="row"
-          className="-mx-2 w-[calc(100%+1rem)] justify-start"
+          className="-mx-2 w-(--spacing-full-plus-1rem) justify-start"
           onClick={() => {
             onOpenChat?.();
             void newChat.run();

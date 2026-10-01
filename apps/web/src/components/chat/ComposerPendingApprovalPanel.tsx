@@ -26,7 +26,7 @@ function CommandGlyph() {
   return (
     <span
       aria-hidden="true"
-      className="flex size-5 shrink-0 items-center justify-center rounded-md bg-foreground/[0.07] font-mono text-[10px] text-muted-foreground"
+      className="flex size-5 shrink-0 items-center justify-center rounded-md bg-foreground/[0.07] font-mono text-10px text-muted-foreground"
     >
       $
     </span>
@@ -190,7 +190,7 @@ function RoutineProposal({
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-xs font-medium text-foreground">{t("Review routine")}</span>
           {pendingCount > 1 ? (
-            <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+            <span className="ml-auto text-10px text-muted-foreground tabular-nums">
               1/{pendingCount}
             </span>
           ) : null}
@@ -220,14 +220,14 @@ function RoutineProposal({
           ) : null}
           {details.instructions ? (
             <div className="min-w-0">
-              <p className="text-[11px] font-medium text-muted-foreground">{t("What it does")}</p>
+              <p className="text-11px font-medium text-muted-foreground">{t("What it does")}</p>
               <p className="mt-0.5 line-clamp-4 whitespace-pre-wrap break-words text-sm leading-5 text-foreground/90">
                 {details.instructions}
               </p>
             </div>
           ) : null}
           {details.uses.length > 0 ? (
-            <p className="min-w-0 truncate text-[11px] text-muted-foreground">
+            <p className="min-w-0 truncate text-11px text-muted-foreground">
               {t("Uses {list}", { list: details.uses.join(", ") })}
             </p>
           ) : null}
@@ -321,12 +321,12 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
         <div className="flex w-full min-w-0 items-center gap-2">
           <span className="text-xs font-medium text-foreground">{fallbackLabel}</span>
           {approval.appName ? (
-            <span className="max-w-32 shrink truncate text-[11px] text-muted-foreground">
+            <span className="max-w-32 shrink truncate text-11px text-muted-foreground">
               {approval.appName}
             </span>
           ) : null}
           {pendingCount > 1 ? (
-            <span className="ml-auto shrink-0 text-[10px] font-medium text-muted-foreground tabular-nums">
+            <span className="ml-auto shrink-0 text-10px font-medium text-muted-foreground tabular-nums">
               1/{pendingCount}
             </span>
           ) : null}
@@ -341,7 +341,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
           >
             <CommandGlyph />
             <code
-              className="block max-h-28 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground/90 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
+              className="block max-h-28 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground/90 scrollbar-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
               data-approval-detail="complete"
               tabIndex={0}
             >
@@ -352,19 +352,19 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-0.5">
               {details.signals.map((signal) => (
                 <span
-                  className="rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                  className="rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 text-10px font-medium text-muted-foreground"
                   key={signal}
                 >
                   {commandSignalLabel(signal, t)}
                 </span>
               ))}
               {details.workingDirectory ? (
-                <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+                <span className="min-w-0 truncate font-mono text-11px text-muted-foreground">
                   {details.workingDirectory}
                 </span>
               ) : null}
               {details.reason ? (
-                <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                <span className="min-w-0 truncate text-11px text-muted-foreground">
                   {details.reason}
                 </span>
               ) : null}
@@ -392,17 +392,17 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
             <code className="min-w-0 flex-1 truncate font-mono text-xs text-foreground/90">
               {firstLine}
             </code>
-            <span className="shrink-0 text-[11px] text-muted-foreground group-open:hidden">
+            <span className="shrink-0 text-11px text-muted-foreground group-open:hidden">
               {plural(detailLineCount, { one: "{count} line", other: "{count} lines" })}
             </span>
-            <span className="hidden shrink-0 text-[11px] text-muted-foreground group-open:inline">
+            <span className="hidden shrink-0 text-11px text-muted-foreground group-open:inline">
               {t("Collapse")}
             </span>
           </summary>
           <div className="mt-1.5 flex min-w-0 flex-col gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5">
             <code
               aria-label={detailAriaLabel}
-              className="block max-h-40 overflow-auto whitespace-pre-wrap font-mono text-xs leading-5 text-foreground/90 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
+              className="block max-h-40 overflow-auto whitespace-pre-wrap font-mono text-xs leading-5 text-foreground/90 scrollbar-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
               data-approval-detail="complete"
               tabIndex={0}
             >
