@@ -3,7 +3,7 @@ import * as Predicate from "effect/Predicate";
 import type { ProviderInstanceConfig } from "./providerInstance.ts";
 import type { SubscriptionProviderId } from "./subscriptionAuth.ts";
 
-const decodeConfigJson = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Json));
+const decodeConfigJson = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 /** Environment variables that give a provider instance its own connection. */
 export const SUBSCRIPTION_CONNECTION_ENV_KEYS: Partial<
@@ -42,14 +42,20 @@ export function instanceUsesSavedCredential(
         const config = decodeConfigJson(inlineConfig);
 
         if (config === null) return false;
+
         // Optional access also accepts JSON primitives, matching provider CLI config handling.
-        const providerConfig = Predicate.isObject(config) ? config.provider : undefined;
+        const providerConfig =
+          Predicate.isObject(config) && "provider" in config ? config.provider : undefined;
 
-        const instanceConfig = Predicate.isObject(providerConfig)
-          ? providerConfig["opencode-go"]
-          : undefined;
+        const instanceConfig =
+          Predicate.isObject(providerConfig) && "opencode-go" in providerConfig
+            ? providerConfig["opencode-go"]
+            : undefined;
 
-        const options = Predicate.isObject(instanceConfig) ? instanceConfig.options : undefined;
+        const options =
+          Predicate.isObject(instanceConfig) && "options" in instanceConfig
+            ? instanceConfig.options
+            : undefined;
 
         if (options && (Object.hasOwn(options, "apiKey") || Object.hasOwn(options, "baseURL"))) {
           return false;

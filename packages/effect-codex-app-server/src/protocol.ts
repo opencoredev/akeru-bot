@@ -112,8 +112,8 @@ const isNotificationShape = Schema.is(
 );
 
 function isIncomingNotification(
-  value: Schema.Json,
-): value is CodexAppServerIncomingNotification & Schema.Json {
+  value: JsonRpcRequestEnvelope["params"],
+): value is CodexAppServerIncomingNotification {
   return isNotificationShape(value) && !("id" in value);
 }
 
@@ -121,7 +121,7 @@ const isIncomingResponse = isJsonRpcResponseEnvelope;
 
 const encodeJsonString = Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 
-const decodeJsonString = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Json));
+const decodeJsonString = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 
 const encodeWireMessage = (
   message: OutgoingMessage,
@@ -149,7 +149,7 @@ const encodeWireMessage = (
 
 const decodeWireMessage = (
   line: string,
-): Effect.Effect<Schema.Json, CodexError.CodexAppServerProtocolParseError> =>
+): Effect.Effect<JsonRpcRequestEnvelope["params"], CodexError.CodexAppServerProtocolParseError> =>
   decodeJsonString(line).pipe(
     Effect.mapError((cause) =>
       CodexError.CodexAppServerProtocolParseError.fromSchemaError("decode-wire-message", cause),
@@ -373,7 +373,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         Effect.asVoid,
       );
 
-    const routeMessage = (message: Schema.Json) => {
+    const routeMessage = (message: JsonRpcRequestEnvelope["params"]) => {
       if (isIncomingRequest(message)) {
         return handleRequest(message);
       }

@@ -17,8 +17,6 @@ const decodeResolvedKeybindingRule = Schema.decodeUnknownEffect(ResolvedKeybindi
 
 const decodeResolvedKeybindingsConfig = Schema.decodeUnknownEffect(ResolvedKeybindingsConfig);
 
-const decodeResolvedRule = Schema.decodeUnknownEffect(ResolvedKeybindingRule);
-
 const encodeResolvedKeybindings = Schema.encodeEffect(ResolvedKeybindingsConfig);
 
 it.effect("parses keybinding rules", () =>
@@ -292,7 +290,7 @@ it.effect("encodes resolved keybindings to the plain wire shape", () =>
 );
 
 it.effect("drops unknown fields in resolved keybinding rules", () =>
-  decodeResolvedRule({
+  decodeResolvedKeybindingRule({
     command: "terminal.toggle",
     shortcut: {
       key: "j",

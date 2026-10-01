@@ -2,6 +2,7 @@ import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type * as SchemaIssue from "effect/SchemaIssue";
+import type { JsonRpcRequestEnvelope } from "./_internal/shared.ts";
 
 export const CodexAppServerRequestOperation = Schema.Literals([
   "decode-payload",
@@ -227,7 +228,7 @@ export class CodexAppServerProtocolParseError extends Schema.TaggedErrorClass<Co
     });
   }
 
-  static fromUnroutableMessage(message: Schema.Json) {
+  static fromUnroutableMessage(message: JsonRpcRequestEnvelope["params"]) {
     const diagnostics = { payloadKind: payloadKind(message) };
 
     if (
