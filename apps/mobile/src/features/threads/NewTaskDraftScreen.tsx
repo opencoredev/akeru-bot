@@ -37,7 +37,7 @@ import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { ComposerAttachmentStrip } from "../../components/ComposerAttachmentStrip";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import { AppText as Text } from "../../components/AppText";
-import { ComposerSurface } from "./ThreadComposer";
+import { ComposerSurface } from "./composer-surface";
 import {
   useThreadSettingsSheetPresentation,
   type NavigationWithFinishTransitioning,
