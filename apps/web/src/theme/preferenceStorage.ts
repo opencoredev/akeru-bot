@@ -1,10 +1,9 @@
 import * as Schema from "effect/Schema";
+import { canonicalThemePreference } from "./themeIdentity";
+import { isKnownThemePreference, parseThemeHalves, type ThemeHalves } from "./themePreference";
+import { getThemePreferenceMode } from "./themeDefinitions";
+import { removeLegacyStorageKey } from "./themeLibrary";
 import {
-  canonicalThemePreference,
-  isKnownThemePreference,
-  getThemePreferenceMode,
-  parseThemeHalves,
-  removeLegacyStorageKey,
   LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY,
   LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY,
   LEGACY_THEME_HALVES_STORAGE_KEY,
@@ -12,9 +11,8 @@ import {
   THEME_FOLLOW_SYSTEM_STORAGE_KEY,
   THEME_HALVES_STORAGE_KEY,
   ThemePreference,
-  type ThemeHalves,
   type ThemePreferenceMode,
-} from "../themePalette";
+} from "./themeTypes";
 
 export type Theme = ThemePreference;
 

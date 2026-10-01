@@ -1,12 +1,8 @@
 import type { DesktopBridge } from "@akeru/contracts";
 import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
 import * as Schema from "effect/Schema";
-import {
-  resolveDesktopTheme,
-  ThemePreference,
-  type ThemeHalves,
-  type ThemePreferenceMode,
-} from "../themePalette";
+import { resolveDesktopTheme, type ThemeHalves } from "./themePreference";
+import { ThemePreference, type ThemePreferenceMode } from "./themeTypes";
 import { type Theme, readStoredThemeHalves } from "./preferenceStorage";
 
 type DesktopThemeBridge = Pick<DesktopBridge, "setTheme">;
