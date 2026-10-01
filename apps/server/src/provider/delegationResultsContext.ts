@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { AkeruDelegationRecord, OrchestrationBot } from "@akeru/contracts";
 import { delegationSummaryText } from "@akeru/shared/delegationSummaryText";
 
@@ -26,9 +27,9 @@ export function delegationResultsContext(
       bots.find((bot) => bot.id === delegation.childBotId)?.name ?? delegation.childBotId;
     if (options.channel) {
       const outcome =
-        delegation.phase._tag === "Completed"
+        Predicate.isTagged(delegation.phase, "Completed")
           ? { _tag: "Completed" as const, summary: delegation.phase.result.summary }
-          : delegation.phase._tag === "Failed"
+          : Predicate.isTagged(delegation.phase, "Failed")
             ? { _tag: "Failed" as const, message: delegation.phase.failure.message }
             : null;
       if (outcome === null) return [];
@@ -42,9 +43,9 @@ export function delegationResultsContext(
       ];
     }
     const detail =
-      delegation.phase._tag === "Completed"
+      Predicate.isTagged(delegation.phase, "Completed")
         ? `completed: ${delegation.phase.result.summary}`
-        : delegation.phase._tag === "Failed"
+        : Predicate.isTagged(delegation.phase, "Failed")
           ? `failed (${delegation.phase.failure.failureCode}): ${delegation.phase.failure.message}`
           : null;
     if (detail === null) return [];

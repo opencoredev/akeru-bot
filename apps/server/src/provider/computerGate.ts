@@ -4,6 +4,9 @@ import * as NodeCrypto from "node:crypto";
 import { ComputerError, COMPUTER_SESSION_TTL_MS } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
+
+const isComputerError = Schema.is(ComputerError);
+
 /** One gate per native workspace. Raw MCP attachments must not coexist with this gate. */
 export class ComputerGate {
   private tail: Promise<unknown> = Promise.resolve();
@@ -127,7 +130,7 @@ export class ComputerGate {
         if (this.stopped || this.owner !== owner) this.fail("revoked");
         return result;
       } catch (cause) {
-        if (Schema.is(ComputerError)(cause)) throw cause;
+        if (isComputerError(cause)) throw cause;
         this.revokeInput = undefined;
         this.stop();
         return this.fail("adapter");

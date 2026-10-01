@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeOS from "node:os";
 
 import { ProviderDriverKind, type CodexSettings } from "@akeru/contracts";
@@ -146,7 +147,7 @@ type LinkState =
 function isNotSymlinkError(error: PlatformError.PlatformError): boolean {
   const cause = error.reason.cause;
   return (
-    error.reason._tag === "Unknown" &&
+    Predicate.isTagged(error.reason, "Unknown") &&
     typeof cause === "object" &&
     cause !== null &&
     "code" in cause &&
@@ -165,7 +166,7 @@ const readLinkState = Effect.fn("CodexHomeLayout.readLinkState")(function* (inpu
     Effect.map((target): LinkState => ({ _tag: "Symlink", target })),
     Effect.catchTags({
       PlatformError: (cause) => {
-        if (cause.reason._tag === "NotFound") {
+        if (Predicate.isTagged(cause.reason, "NotFound")) {
           return Effect.succeed<LinkState>({ _tag: "Missing" });
         }
         if (isNotSymlinkError(cause)) {
@@ -196,7 +197,7 @@ const removePrivateSymlink = Effect.fn("CodexHomeLayout.removePrivateSymlink")(f
     ...input,
     linkPath: privatePath,
   });
-  if (state._tag === "Symlink") {
+  if (Predicate.isTagged(state, "Symlink")) {
     yield* input.fileSystem.remove(privatePath).pipe(
       Effect.catchTags({
         PlatformError: (cause) =>
@@ -242,7 +243,7 @@ const ensureSymlink = Effect.fn("CodexHomeLayout.ensureSymlink")(function* (inpu
     }),
   );
 
-  if (state._tag === "NotSymlink") {
+  if (Predicate.isTagged(state, "NotSymlink")) {
     if (!REPLACEABLE_SHARED_RUNTIME_DIRECTORIES.has(input.entryName)) {
       return yield* new CodexShadowHomeEntryConflictError({
         sharedHomePath: input.sharedHomePath,
@@ -269,7 +270,7 @@ const ensureSymlink = Effect.fn("CodexHomeLayout.ensureSymlink")(function* (inpu
     return yield* createLink;
   }
 
-  if (state._tag === "Missing") {
+  if (!Predicate.isTagged(state, "Symlink")) {
     return yield* createLink;
   }
 
@@ -306,7 +307,7 @@ const ensureShadowAuthIsPrivate = Effect.fn("CodexHomeLayout.ensureShadowAuthIsP
       entryName,
       linkPath: authPath,
     });
-    if (state._tag === "Symlink") {
+    if (Predicate.isTagged(state, "Symlink")) {
       return yield* new CodexShadowHomePrivateEntrySymlinkError({
         sharedHomePath: input.sharedHomePath,
         effectiveHomePath: input.effectiveHomePath,

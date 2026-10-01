@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   ComputerError,
   ComputerFrame,
@@ -192,7 +193,7 @@ export class ComputerRegistry {
             if (!active) return;
             Queue.offerUnsafe(queue, event);
             if (
-              event._tag === "state" &&
+              Predicate.isTagged(event, "state") &&
               (event.state.status === "stopped" || event.state.status === "unavailable")
             )
               close();

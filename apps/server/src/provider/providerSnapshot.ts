@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type {
   ProviderDriverKind,
   ModelCapabilities,
@@ -128,7 +129,7 @@ export function nonEmptyTrimmed(value: string | undefined): string | undefined {
 
 export function isCommandMissingCause(error: unknown): boolean {
   if (isProviderCommandNotFoundError(error)) return true;
-  return error instanceof PlatformError.PlatformError && error.reason._tag === "NotFound";
+  return error instanceof PlatformError.PlatformError && Predicate.isTagged(error.reason, "NotFound");
 }
 
 export const spawnAndCollect = (binaryPath: string, command: ChildProcess.Command) =>

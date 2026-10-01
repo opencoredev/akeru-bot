@@ -24,6 +24,9 @@ import {
   thread,
 } from "./testUtils/delegationHarness.ts";
 
+
+const isProviderUnsupported = Schema.is(AkeruDelegationProviderUnsupportedError);
+
 // Every provider instance in this matrix is named after its driver kind.
 const onDriver = (driverKind: string) => {
   const engine = { provider: ProviderInstanceId.make(driverKind), model: `${driverKind}-model` };
@@ -144,7 +147,7 @@ describe("delegation provider matrix", () => {
         .send(parent(), request() as never)
         .catch((cause: unknown) => cause);
 
-      expect(Schema.is(AkeruDelegationProviderUnsupportedError)(refused)).toBe(true);
+      expect(isProviderUnsupported(refused)).toBe(true);
       expect((refused as Error).message).toBe(
         "Scout runs on the opencode provider, which cannot receive handed-off work. Do the work yourself or pick a bot on another provider.",
       );
