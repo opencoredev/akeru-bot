@@ -41,7 +41,15 @@ describe("BotUsageCap", () => {
   });
 
   it("accepts cloud sandbox providers on bot events", () => {
-    for (const sandbox of ["local", "e2b", "daytona", "vercel", "upstash", "tenki"] as const) {
+    for (const sandbox of [
+      "local",
+      "e2b",
+      "daytona",
+      "vercel",
+      "upstash",
+      "railway",
+      "tenki",
+    ] as const) {
       expect(
         decodeCreated({
           botId: "bot-sandbox",

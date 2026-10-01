@@ -1,6 +1,17 @@
 import type { TranslationCatalog } from "./index.ts";
 
 export const zhCNCatalog: TranslationCatalog = {
+  "API token": "API 令牌",
+  "Environment ID": "环境 ID",
+  "Run bots in a durable Railway VM. Idle VMs keep running and can incur charges. Previews require a Railway CLI tunnel.":
+    "在持久化的 Railway 虚拟机中运行机器人。空闲虚拟机会继续运行并可能产生费用。预览需要 Railway CLI 隧道。",
+  "Akeru pauses idle remote sandboxes when supported. Railway VMs keep running until cleanup.":
+    "在支持的情况下，Akeru 会暂停空闲的远程沙箱。Railway 虚拟机会持续运行，直到被清理。",
+  "Retire Railway VMs before changing access": "更改访问权限前请清理 Railway 虚拟机",
+  "Open Railway dashboard": "打开 Railway 控制台",
+  "I have reviewed my VMs — continue": "我已检查虚拟机 — 继续",
+  "Changing or removing credentials does not stop or delete Railway VMs. They can keep accruing charges. Stop active bot sessions, then open your environment in the Railway dashboard and destroy any VMs you no longer need before removing access. If you are rotating a token, keep access to the same environment to reconnect to existing VMs. Akeru preserves saved VM identities and will not silently create replacements.":
+    "更改或移除凭据不会停止或删除 Railway 虚拟机，它们可能继续产生费用。请先停止活动的机器人会话，然后在 Railway 控制台中打开环境，并在移除访问权限前销毁不再需要的虚拟机。如果正在轮换令牌，请保留对同一环境的访问权限，以便重新连接现有虚拟机。Akeru 会保留已保存的虚拟机标识，不会自动创建替代虚拟机。",
   "API key": "API 密钥",
   Actions: "操作",
   "Add Environment": "添加环境",

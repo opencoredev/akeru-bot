@@ -51,6 +51,16 @@ const SANDBOX_PROVIDER_DEFINITION_BY_ID: Readonly<
     description: "Cloud workspaces managed by Upstash Box. Requires an API key.",
     fields: [{ name: "UPSTASH_BOX_API_KEY", label: "API key", secret: true }],
   },
+  railway: {
+    id: "railway",
+    label: "Railway",
+    description:
+      "Run bots in a durable Railway VM. Idle VMs keep running and can incur charges. Previews require a Railway CLI tunnel.",
+    fields: [
+      { name: "RAILWAY_API_TOKEN", label: "API token", secret: true },
+      { name: "RAILWAY_ENVIRONMENT_ID", label: "Environment ID", secret: false },
+    ],
+  },
   tenki: {
     id: "tenki",
     label: "Tenki",
@@ -146,4 +156,17 @@ export function disconnectSandboxProvider(
     defaultProvider: settings.defaultProvider === provider ? "local" : settings.defaultProvider,
     providers: { ...settings.providers, [provider]: { environment: [] } },
   };
+}
+
+export type RailwayConnectionChange =
+  | { readonly kind: "disconnect" }
+  | { readonly kind: "save"; readonly draft: Readonly<Record<string, string>> };
+
+export function applyRailwayConnectionChange(
+  settings: SandboxSettings,
+  change: RailwayConnectionChange,
+) {
+  return change.kind === "disconnect"
+    ? disconnectSandboxProvider(settings, "railway")
+    : saveSandboxProviderConnection({ settings, provider: "railway", draft: change.draft });
 }

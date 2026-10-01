@@ -22,6 +22,8 @@ import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import {
   canSaveSandboxProviderConnection,
+  applyRailwayConnectionChange,
+  type RailwayConnectionChange,
   type CloudSandboxProvider,
   disconnectSandboxProvider,
   isSandboxProviderConnected,
@@ -40,6 +42,7 @@ const SANDBOX_PROVIDER_LABELS: Readonly<Record<SandboxProvider, string>> = {
   daytona: "Daytona",
   vercel: "Vercel Sandbox",
   upstash: "Upstash Box",
+  railway: "Railway",
   tenki: "Tenki",
 };
 
@@ -76,6 +79,7 @@ function EnvironmentSandboxSettingsPanel({
   const [draft, setDraft] = useState<Readonly<Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [railwayChange, setRailwayChange] = useState<RailwayConnectionChange | null>(null);
 
   const persist = async (next: SandboxSettings) => {
     setSaving(true);
@@ -109,6 +113,10 @@ function EnvironmentSandboxSettingsPanel({
       provider: editingProvider,
       draft,
     });
+    if (editingProvider === "railway" && isSandboxProviderConnected(sandbox, "railway")) {
+      setRailwayChange({ kind: "save", draft: { ...draft } });
+      return;
+    }
     if (await persist(next)) closeConnection();
   };
 
@@ -150,7 +158,9 @@ function EnvironmentSandboxSettingsPanel({
         />
         <SettingsRow
           {...searchableSetting("sandbox-auto-idle", t)}
-          description={t("Akeru pauses remote sandboxes when bots are idle.")}
+          description={t(
+            "Akeru pauses idle remote sandboxes when supported. Railway VMs keep running until cleanup.",
+          )}
           control={<Switch checked disabled aria-label={t("Auto-idle")} />}
         />
       </SettingsSection>
@@ -192,9 +202,10 @@ function EnvironmentSandboxSettingsPanel({
                       variant="ghost-muted"
                       aria-label={t("Disconnect {name}", { name: definition.label })}
                       disabled={saving}
-                      onClick={() =>
-                        void persist(disconnectSandboxProvider(sandbox, definition.id))
-                      }
+                      onClick={() => {
+                        if (definition.id === "railway") setRailwayChange({ kind: "disconnect" });
+                        else void persist(disconnectSandboxProvider(sandbox, definition.id));
+                      }}
                     >
                       {t("Disconnect")}
                     </Button>
@@ -206,7 +217,10 @@ function EnvironmentSandboxSettingsPanel({
         })}
       </SettingsSection>
 
-      <Dialog open={editingProvider !== null} onOpenChange={(open) => !open && closeConnection()}>
+      <Dialog
+        open={editingProvider !== null && railwayChange === null}
+        onOpenChange={(open) => !open && closeConnection()}
+      >
         <DialogPopup>
           <DialogHeader>
             <DialogTitle>
@@ -252,6 +266,53 @@ function EnvironmentSandboxSettingsPanel({
                 : editingDefinition && isSandboxProviderConnected(sandbox, editingDefinition.id)
                   ? t("Save changes")
                   : t("Connect")}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+      <Dialog
+        open={railwayChange !== null}
+        onOpenChange={(open) => !open && !saving && setRailwayChange(null)}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>{t("Retire Railway VMs before changing access")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "Changing or removing credentials does not stop or delete Railway VMs. They can keep accruing charges. Stop active bot sessions, then open your environment in the Railway dashboard and destroy any VMs you no longer need before removing access. If you are rotating a token, keep access to the same environment to reconnect to existing VMs. Akeru preserves saved VM identities and will not silently create replacements.",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <a
+            href="https://railway.com/dashboard"
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm underline"
+          >
+            {t("Open Railway dashboard")}
+          </a>
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" disabled={saving} onClick={() => setRailwayChange(null)}>
+              {t("Cancel")}
+            </Button>
+            <Button
+              disabled={saving}
+              onClick={async () => {
+                if (
+                  railwayChange &&
+                  (await persist(applyRailwayConnectionChange(sandbox, railwayChange)))
+                ) {
+                  setRailwayChange(null);
+                  closeConnection();
+                }
+              }}
+            >
+              {t("I have reviewed my VMs — continue")}
             </Button>
           </DialogFooter>
         </DialogPopup>

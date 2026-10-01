@@ -269,6 +269,7 @@ export const COMPUTER_SANDBOX_CAPABILITY: Readonly<
   daytona: { graphical: true },
   vercel: { graphical: false },
   upstash: { graphical: false },
+  railway: { graphical: false },
   tenki: { graphical: false },
 };
 

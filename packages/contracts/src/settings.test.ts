@@ -305,6 +305,7 @@ describe("ServerSettings sandbox providers", () => {
         daytona: { environment: [] },
         vercel: { environment: [] },
         upstash: { environment: [] },
+        railway: { environment: [] },
         tenki: { environment: [] },
       },
     });

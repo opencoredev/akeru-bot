@@ -52,11 +52,18 @@ const rejects = (input: unknown) => expect(() => decodeUsage3hEvent(input)).toTh
 describe("Usage3hEvent", () => {
   it("accepts the fixed anonymous aggregate payload", () => {
     expect(decodeUsage3hEvent(event)).toEqual(event);
-    expect(USAGE_3H_COUNTER_KEYS).toHaveLength(95);
+    expect(USAGE_3H_COUNTER_KEYS).toHaveLength(96);
   });
 
   it("accepts current remote sandboxes and rejects the retired hosted sandbox", () => {
-    for (const sandbox_provider of ["e2b", "daytona", "vercel", "upstash", "tenki"] as const) {
+    for (const sandbox_provider of [
+      "e2b",
+      "daytona",
+      "vercel",
+      "upstash",
+      "railway",
+      "tenki",
+    ] as const) {
       expect(
         decodeUsage3hEvent({
           ...event,
@@ -80,12 +87,15 @@ describe("Usage3hEvent", () => {
     ).toBe(0);
   });
 
-  it("defaults pre-Tenki queued counters without changing event identity", () => {
-    const properties = Object.fromEntries(
-      Object.entries(event.properties).filter(([key]) => key !== "sandbox_turns_tenki"),
-    );
-    expect(decodeUsage3hEvent({ ...event, properties })).toEqual(event);
-  });
+  it.each(["sandbox_turns_tenki", "sandbox_turns_railway"])(
+    "defaults queued %s counters without changing event identity",
+    (counter) => {
+      const properties = Object.fromEntries(
+        Object.entries(event.properties).filter(([key]) => key !== counter),
+      );
+      expect(decodeUsage3hEvent({ ...event, properties })).toEqual(event);
+    },
+  );
 
   it.each([-1, 1.5, USAGE_3H_COUNTER_MAX + 1, "1", null])(
     "rejects invalid Tenki counter %s",

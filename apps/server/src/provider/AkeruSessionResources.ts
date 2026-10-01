@@ -126,6 +126,16 @@ export class AkeruSessionResources {
     if (this.shuttingDown) {
       return Promise.reject(new Error("Akeru session resources are shutting down."));
     }
+    if (
+      input.botSandbox === "railway" &&
+      input.mcpServers.some((server) => mcpServerNeedsBrowserAttachment(server, true))
+    ) {
+      return Promise.reject(
+        new Error(
+          "Railway previews require a Railway CLI tunnel. Disable browser-dependent connectors before starting this bot; automatic browser routing is not supported.",
+        ),
+      );
+    }
     const pending = this.acquisitions.get(input.threadId);
     if (pending) return pending;
     if (this.workspaceLeases.has(input.threadId)) {
@@ -370,7 +380,9 @@ export class AkeruSessionResources {
         botWorkspace: workspaceLease.workspace.workspace,
       };
     } catch (cause) {
-      await this.releaseOnce(key, { destroy: input.botSandbox !== "tenki" }).catch(() => undefined);
+      await this.releaseOnce(key, {
+        destroy: input.botSandbox !== "railway" && input.botSandbox !== "tenki",
+      }).catch(() => undefined);
       throw cause;
     }
   }

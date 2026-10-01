@@ -11,6 +11,17 @@ export const availableLanguages = [
 ] as const;
 
 export const englishCatalog = {
+  "Retire Railway VMs before changing access": "Retire Railway VMs before changing access",
+  "Open Railway dashboard": "Open Railway dashboard",
+  "I have reviewed my VMs — continue": "I have reviewed my VMs — continue",
+  "Changing or removing credentials does not stop or delete Railway VMs. They can keep accruing charges. Stop active bot sessions, then open your environment in the Railway dashboard and destroy any VMs you no longer need before removing access. If you are rotating a token, keep access to the same environment to reconnect to existing VMs. Akeru preserves saved VM identities and will not silently create replacements.":
+    "Changing or removing credentials does not stop or delete Railway VMs. They can keep accruing charges. Stop active bot sessions, then open your environment in the Railway dashboard and destroy any VMs you no longer need before removing access. If you are rotating a token, keep access to the same environment to reconnect to existing VMs. Akeru preserves saved VM identities and will not silently create replacements.",
+  "API token": "API token",
+  "Environment ID": "Environment ID",
+  "Run bots in a durable Railway VM. Idle VMs keep running and can incur charges. Previews require a Railway CLI tunnel.":
+    "Run bots in a durable Railway VM. Idle VMs keep running and can incur charges. Previews require a Railway CLI tunnel.",
+  "Akeru pauses idle remote sandboxes when supported. Railway VMs keep running until cleanup.":
+    "Akeru pauses idle remote sandboxes when supported. Railway VMs keep running until cleanup.",
   "API key": "API key",
   Actions: "Actions",
   "Add Environment": "Add Environment",
