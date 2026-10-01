@@ -5,7 +5,6 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Deferred from "effect/Deferred";
-import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";

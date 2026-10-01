@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -26,8 +27,9 @@ export function scriptedHttpClient(
   const requests: Array<RecordedRequest> = [];
   const client = HttpClient.make((request) =>
     Effect.suspend(() => {
-      const body =
-        request.body._tag === "Uint8Array" ? new TextDecoder().decode(request.body.body) : "";
+      const body = Predicate.isTagged(request.body, "Uint8Array")
+        ? new TextDecoder().decode(request.body.body)
+        : "";
       const recorded: RecordedRequest = {
         method: request.method,
         url: request.url,

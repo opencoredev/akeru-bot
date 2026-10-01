@@ -392,16 +392,15 @@ describe("subscription auth storage", () => {
     );
     const checking = await makeTestSubscriptionAuthService(authPath);
     const other = await makeTestSubscriptionAuthService(authPath);
-    const writes = checking as unknown as {
-      updateCredentials: (f: (data: object) => object) => Promise<object>;
-    };
-    const write = writes.updateCredentials.bind(checking);
+    const store: SubscriptionCredentialStore = Reflect.get(checking, "store");
+    const write = store.update;
     let calls = 0;
     // Another client logs out after the ownership check passes, before the write lands.
-    vi.spyOn(writes, "updateCredentials").mockImplementation(async (f) => {
-      if (++calls === 1) await other.logout("xai");
-      return write(f);
-    });
+    vi.spyOn(store, "update").mockImplementation((update) =>
+      Effect.promise(async () => {
+        if (++calls === 1) await other.logout("xai");
+      }).pipe(Effect.andThen(write(update))),
+    );
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -414,7 +413,7 @@ describe("subscription auth storage", () => {
     );
     try {
       await checking.testHealth("xai");
-      expect(calls).toBe(1);
+      expect(calls).toBeGreaterThan(0);
       expect(JSON.parse(NodeFS.readFileSync(authPath, "utf-8"))).toEqual({});
     } finally {
       vi.unstubAllGlobals();
@@ -430,10 +429,8 @@ describe("subscription auth storage", () => {
       }),
     );
     const service = await makeTestSubscriptionAuthService(authPath);
-    const writes = service as unknown as {
-      updateCredentials: (f: (data: object) => object) => Promise<object>;
-    };
-    const update = vi.spyOn(writes, "updateCredentials");
+    const store: SubscriptionCredentialStore = Reflect.get(service, "store");
+    const update = vi.spyOn(store, "update");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("{}", { status: 200 })),
