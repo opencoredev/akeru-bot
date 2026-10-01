@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 
 import wasmDataUrl from "./vendor/ghostty-vt.wasm?inline";
 
+const decodeWasmResult = Schema.decodeUnknownSync(Schema.UndefinedOr(Schema.Number));
 export function decodeWasmDataUrl(dataUrl: string) {
   const encoded = dataUrl.split(",", 2)[1];
 
@@ -23,7 +24,7 @@ export async function makeGhosttyAbiFixture() {
     if (typeof callable !== "function") throw new Error(`Ghostty export ${name} is missing`);
     const result: unknown = callable(...args);
 
-    return Schema.decodeUnknownSync(Schema.UndefinedOr(Schema.Number))(result) ?? 0;
+    return decodeWasmResult(result) ?? 0;
   };
 
   const alloc = (size: number) => call("ghostty_wasm_alloc_u8_array", size);

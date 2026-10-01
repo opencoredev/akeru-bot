@@ -10,7 +10,7 @@ export const readAppStyles = Effect.gen(function* () {
 
   let styles = entry;
 
-  for (const match of entry.matchAll(/@import "(\.\/styles\/[^\"]+)";/g)) {
+  for (const match of entry.matchAll(/@import "(\.\/styles\/[^"]+)";/g)) {
     const imported = yield* fileSystem.readFileString(
       decodeURIComponent(new URL(match[1]!, import.meta.url).pathname),
     );

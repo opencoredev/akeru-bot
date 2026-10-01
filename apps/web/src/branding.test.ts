@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import {
-  resolveServerBackedAppDisplayName,
-  resolveServerBackedAppStageLabel,
-} from "./branding.logic";
+import { resolveServerBackedAppDisplayName } from "./branding.logic";
 
 const originalWindow = globalThis.window;
 
