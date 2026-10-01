@@ -1,6 +1,5 @@
 import * as Predicate from "effect/Predicate";
 import { SharedBotBrowsers } from "./resources/SharedBotBrowsers.ts";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import type { ToolsInput } from "@mastra/core/agent";

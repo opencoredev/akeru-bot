@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 
 import type { ObservationalMemoryRecord } from "@mastra/core/storage";
 import { type AkeruConversationMemorySnapshot } from "@akeru/contracts";

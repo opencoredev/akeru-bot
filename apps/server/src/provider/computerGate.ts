@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import { Clock, Duration, Effect, Fiber } from "effect";
 import * as NodeCrypto from "node:crypto";
 import { ComputerError, COMPUTER_SESSION_TTL_MS } from "@akeru/contracts";

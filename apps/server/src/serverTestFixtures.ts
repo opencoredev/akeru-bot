@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import {
   BotId,
   EnvironmentId,

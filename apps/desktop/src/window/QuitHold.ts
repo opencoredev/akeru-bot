@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off globalTimers:off -- Synchronous before-input-event handler; key events must be timed and the watchdog scheduled outside any Effect runtime.
 
 import type { QuitConfirmationMode, QuitShortcutHintEvent } from "@akeru/contracts";
 

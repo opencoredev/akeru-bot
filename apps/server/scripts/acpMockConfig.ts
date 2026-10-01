@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import type * as AcpSchema from "effect-acp/schema";
 

@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off -- A fixed instant keeps calendar-window assertions deterministic.
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {

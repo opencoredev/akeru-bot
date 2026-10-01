@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import { HostProcessEnvironment } from "@akeru/shared/hostProcess";
 
 import { DEFAULT_SERVER_SETTINGS, type PreviewEvent } from "@akeru/contracts";

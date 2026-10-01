@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Catalog validation reads repository-owned manifests and assets before an Effect runtime exists.
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 

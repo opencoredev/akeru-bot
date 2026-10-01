@@ -389,7 +389,6 @@ function makeChatSdkMessage(
       isBot: author.isBot ?? false,
       isMe: author.isMe ?? false,
     },
-    // @effect-diagnostics-next-line globalDate:off - Chat SDK Message requires a Date fixture.
     metadata: { dateSent: new Date(NOW), edited: false },
     attachments: [],
     isMention,

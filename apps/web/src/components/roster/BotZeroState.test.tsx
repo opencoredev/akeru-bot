@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - The submit guard reads its source.
 import * as NodeFS from "node:fs";
 
 import { renderToStaticMarkup } from "react-dom/server";

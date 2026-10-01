@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalConsole:off - Release verification runs before an Effect runtime exists.
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";

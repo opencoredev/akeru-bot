@@ -3,7 +3,6 @@ import * as Predicate from "effect/Predicate";
 import type * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import type { ProviderDriverKind } from "@akeru/contracts";
 import type { AcpSessionRuntimeOptions } from "../../acp/AcpSessionRuntime.ts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 import {
   ApprovalRequestId,
   type GrokSettings,

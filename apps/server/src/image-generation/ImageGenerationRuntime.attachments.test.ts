@@ -1,5 +1,4 @@
 import * as Schema from "effect/Schema";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
 
 import {
   createdAt,

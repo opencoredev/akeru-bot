@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as Duration from "effect/Duration";
 
 import * as Effect from "effect/Effect";
@@ -120,6 +119,5 @@ export const makeBrowserOtlpPayload = (spanName: string) =>
     );
 
     // SAFETY: The test collector receives JSON from the OTLP exporter and reads its TraceData wire fields.
-    // @effect-diagnostics-next-line preferSchemaOverJson:off
     return JSON.parse(request.body) as OtlpTracer.TraceData;
   });

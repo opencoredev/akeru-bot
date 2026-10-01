@@ -1,5 +1,3 @@
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";

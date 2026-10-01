@@ -1,5 +1,4 @@
 import type { TestProps, TestValue } from "../test-support/reactTree";
-// @effect-diagnostics nodeBuiltinImport:off - Source contracts read the settings modules.
 import * as NodeFS from "node:fs";
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from "react";
 

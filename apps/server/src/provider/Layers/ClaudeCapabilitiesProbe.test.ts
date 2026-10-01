@@ -121,7 +121,6 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
         ],
       });
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       const invocation = JSON.parse(yield* fs.readFileString(invocationPath)) as {
         readonly args: ReadonlyArray<string>;
         readonly cwd: string;
@@ -140,7 +139,6 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
       const settingsFlagIndex = invocation.args.indexOf("--settings");
       assert.notEqual(settingsFlagIndex, -1);
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       const flagSettings = JSON.parse(invocation.args[settingsFlagIndex + 1] ?? "{}") as {
         readonly disableAllHooks?: boolean;
       };

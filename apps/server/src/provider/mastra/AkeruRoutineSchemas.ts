@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { z } from "zod";
 
 export const routineTime = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);

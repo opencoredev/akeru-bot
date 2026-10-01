@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - This integration guard reads related source files.
 import * as NodeFS from "node:fs";
 import { BotId, McpServerId, ThreadId, type McpServer } from "@akeru/contracts";
 

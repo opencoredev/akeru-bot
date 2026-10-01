@@ -1,5 +1,4 @@
 import * as Schema from "effect/Schema";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 
 import * as NodeCrypto from "node:crypto";

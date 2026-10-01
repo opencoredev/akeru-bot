@@ -1,5 +1,4 @@
 import { decodeProviderHealth } from "./persistedSchemas.ts";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";

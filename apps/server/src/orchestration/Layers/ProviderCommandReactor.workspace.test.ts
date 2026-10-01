@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import { CommandId, DEFAULT_PROVIDER_INTERACTION_MODE, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";

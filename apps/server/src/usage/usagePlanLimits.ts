@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import type { SubscriptionProviderId, UsageProviderPlanLimits } from "@akeru/contracts";
 import * as Cache from "effect/Cache";

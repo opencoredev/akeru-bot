@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";

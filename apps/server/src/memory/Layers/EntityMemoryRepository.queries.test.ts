@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import {
   repositoryLayer,

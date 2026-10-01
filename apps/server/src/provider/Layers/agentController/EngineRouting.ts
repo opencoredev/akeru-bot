@@ -1,6 +1,5 @@
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 
 import * as Effect from "effect/Effect";
 

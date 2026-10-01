@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 /**
  * WorkspaceFileSystem - Effect service contract for workspace file mutations.
  *

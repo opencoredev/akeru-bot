@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import type * as NodeHttp from "node:http";
 
 /**

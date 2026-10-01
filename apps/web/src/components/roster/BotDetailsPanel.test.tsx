@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - The route contract reads its source.
 import * as NodeFS from "node:fs";
 
 import { createRef } from "react";

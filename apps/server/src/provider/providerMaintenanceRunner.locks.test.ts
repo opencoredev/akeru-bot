@@ -1,5 +1,4 @@
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import { it, assert } from "@effect/vitest";
 import { type ServerProvider } from "@akeru/contracts";
 import * as Cause from "effect/Cause";

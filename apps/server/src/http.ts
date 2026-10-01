@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import Mime from "@effect/platform-node/Mime";
 import * as NodeFS from "node:fs";
 import {

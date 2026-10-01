@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   CommandId,

@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off
 import { describe, expect, it, vi } from "vite-plus/test";
 import * as NodeBuffer from "node:buffer";
 import * as NodeCrypto from "node:crypto";

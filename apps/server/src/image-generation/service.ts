@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 /**
  * Image generation provider service.
  *

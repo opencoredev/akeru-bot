@@ -137,7 +137,6 @@ export class ProjectSearchEntriesError extends Schema.TaggedErrorClass<ProjectSe
 ) {
   // The structured fields are optional on the wire so newer peers can decode legacy message-only
   // failures. New application code must provide them through this constructor.
-  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
   constructor(
     props: ProjectEntriesFailureContext & {
       readonly cwd: string;
@@ -168,7 +167,6 @@ export class ProjectSearchContentsError extends Schema.TaggedErrorClass<ProjectS
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
-  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
   constructor(
     props: ProjectEntriesFailureContext & {
       readonly cwd: string;
@@ -197,7 +195,6 @@ export class ProjectListEntriesError extends Schema.TaggedErrorClass<ProjectList
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
-  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
   constructor(props: ProjectEntriesFailureContext & { readonly cwd: string }) {
     super({
       ...props,
@@ -271,7 +268,6 @@ export class ProjectReadFileError extends Schema.TaggedErrorClass<ProjectReadFil
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
-  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
   constructor(props: ProjectFileFailureContext) {
     super({
       ...props,
@@ -310,7 +306,6 @@ export class ProjectWriteFileError extends Schema.TaggedErrorClass<ProjectWriteF
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
-  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
   constructor(props: ProjectFileFailureContext) {
     super({
       ...props,

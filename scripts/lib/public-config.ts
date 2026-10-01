@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Build bootstrap reads optional root env files before an Effect runtime exists.
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";

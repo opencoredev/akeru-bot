@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { createModelSelection } from "@akeru/shared/model";
 import { it, assert } from "@effect/vitest";

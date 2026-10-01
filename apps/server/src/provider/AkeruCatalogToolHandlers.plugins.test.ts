@@ -1,5 +1,4 @@
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import { type OrchestrationCommand } from "@akeru/contracts";
 import { expect, it, vi } from "vite-plus/test";

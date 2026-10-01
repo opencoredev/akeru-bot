@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { BotId, TurnId, type OrchestrationCommand } from "@akeru/contracts";
 import type { AkeruUsageEntry } from "@akeru/contracts";

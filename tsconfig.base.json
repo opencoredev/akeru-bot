@@ -51,7 +51,61 @@
           "globalTimersInEffect": "error",
           "globalFetch": "error",
           "globalFetchInEffect": "error"
-        }
+        },
+        // Exceptions apply to whole categories of code; inline @effect-diagnostics comments are
+        // not allowed. See docs/internals/lint.md. Globs match absolute paths, so each needs a
+        // leading **/ and must end in a file pattern; a bare directory glob matches nothing.
+        "overrides": [
+          {
+            // Tests and their harnesses create temp directories with node:fs, parse captured
+            // output with JSON.parse, and pin fixtures to fixed dates. None of it runs in the product.
+            "include": [
+              "**/*.test.ts",
+              "**/*.test.tsx",
+              "**/*.test-support.ts",
+              "**/*.integration.ts",
+              "**/test/**/*.{ts,tsx}",
+              "**/testUtils/**/*.ts",
+              "**/test-support/**/*.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "off",
+                "preferSchemaOverJson": "off",
+                "globalDate": "off",
+                "globalDateInEffect": "off"
+              }
+            }
+          },
+          {
+            // Build, release, and dev scripts are one-shot Node processes on a developer or CI
+            // machine. Console output is their interface, and they often run before workspace
+            // packages are built.
+            "include": ["**/scripts/**/*.ts"],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "off",
+                "globalConsole": "off",
+                "globalDate": "off",
+                "globalFetch": "off",
+                "globalTimers": "off"
+              }
+            }
+          },
+          {
+            // The feedback Worker is a plain Cloudflare fetch handler with no Effect runtime.
+            // fetch, console, Date, and crypto are the Workers platform APIs it is built on.
+            "include": ["**/infra/feedback/**/*.ts"],
+            "options": {
+              "diagnosticSeverity": {
+                "cryptoRandomUUID": "off",
+                "globalConsole": "off",
+                "globalDate": "off",
+                "globalFetch": "off"
+              }
+            }
+          }
+        ]
       }
     ]
   }

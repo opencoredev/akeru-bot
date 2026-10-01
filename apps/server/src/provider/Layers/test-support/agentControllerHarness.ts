@@ -2,7 +2,6 @@ import type { AkeruMastraHarness } from "../../AkeruMastraHarness.ts";
 import { sessionFixture } from "./partialFixtures.ts";
 import type { AkeruMastraState } from "../../AkeruMastraHarness.ts";
 
-// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import type { AgentControllerEvent, MastraDBMessage } from "@mastra/core/agent-controller";
 import { McpServerId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";

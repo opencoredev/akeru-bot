@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off
 /**
  * Folds parsed transcript records into `(day, hourStart?, provider, model)`
  * buckets.

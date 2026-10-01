@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Source guard reads this module's renderer map.
 
 import { EnvironmentId } from "@akeru/contracts";
 

@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off globalDateInEffect:off
 import { assert, it } from "@effect/vitest";
 import { RoutineRunId, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";

@@ -233,7 +233,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isFalse(settings.providers.grok.enabled);
 
       const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       assert.isFalse(JSON.parse(raw).providers.grok.enabled);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
@@ -253,7 +252,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       yield* serverSettings.updateSettings({ addProjectBaseDirectory: "~/Development" });
 
       const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       const persisted = JSON.parse(raw);
       assert.isTrue(persisted.providers.grok.enabled);
       assert.isTrue(persisted.providers.opencode.enabled);
@@ -287,7 +285,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isFalse(resolveProviderInstanceEnabled(grok));
 
       const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       const persisted = JSON.parse(raw);
       assert.isFalse(persisted.providers.grok.enabled);
       assert.isFalse(persisted.providers.opencode.enabled);

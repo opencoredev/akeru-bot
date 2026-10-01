@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 /**
  * Best-effort provider event logging with one shared writer per thread.
  *

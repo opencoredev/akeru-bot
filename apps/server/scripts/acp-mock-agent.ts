@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @effect-diagnostics nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import * as NodeFS from "node:fs";
 import * as Effect from "effect/Effect";

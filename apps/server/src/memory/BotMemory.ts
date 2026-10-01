@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";

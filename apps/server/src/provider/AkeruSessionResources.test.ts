@@ -1,5 +1,4 @@
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import { BotId } from "@akeru/contracts";

@@ -1,6 +1,5 @@
 import type * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeAssert from "node:assert/strict";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";

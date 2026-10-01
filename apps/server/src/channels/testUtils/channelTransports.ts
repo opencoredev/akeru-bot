@@ -252,7 +252,6 @@ const chatMessage = (threadId: string, id: string, text: string, isMention: bool
     formatted: parseMarkdown(text),
     raw: {},
     author: { userId: "U1", userName: "u1", fullName: "U1", isBot: false, isMe: false },
-    // @effect-diagnostics-next-line globalDate:off - Chat SDK Message requires a Date fixture.
     metadata: { dateSent: new Date(NOW), edited: false },
     attachments: [],
     isMention,

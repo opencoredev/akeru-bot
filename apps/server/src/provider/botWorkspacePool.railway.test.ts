@@ -1,5 +1,4 @@
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import { it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { expect, it, vi } from "vite-plus/test";

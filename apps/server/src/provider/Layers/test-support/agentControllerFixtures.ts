@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import { ProviderInstanceId, ThreadId } from "@akeru/contracts";
 
 export const codexThreadId = ThreadId.make("thread-mastra-codex");

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - This integration guard reads the listener source.
 import * as NodeFS from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
 

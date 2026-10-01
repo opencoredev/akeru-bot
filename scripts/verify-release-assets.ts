@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @effect-diagnostics nodeBuiltinImport:off - Release verification runs before an Effect runtime exists.
 
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";

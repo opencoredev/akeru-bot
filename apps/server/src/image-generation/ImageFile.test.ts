@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
 
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";

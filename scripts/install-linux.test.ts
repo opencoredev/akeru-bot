@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests pin installer shell text and exercise its arg parsing.
 import * as NodeAssert from "node:assert/strict";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";

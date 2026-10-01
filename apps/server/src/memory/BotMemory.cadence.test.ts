@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
 
 import { NodeFS, directories, fixture, acceptPrompt } from "./testUtils/botMemory.ts";
 import * as NodeOS from "node:os";

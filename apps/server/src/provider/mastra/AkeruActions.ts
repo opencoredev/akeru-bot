@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { AKERU_CREATE_ROUTINE_TOOL_NAME, classifyAkeruSensitivePath } from "@akeru/contracts";
 import * as Predicate from "effect/Predicate";
 import {

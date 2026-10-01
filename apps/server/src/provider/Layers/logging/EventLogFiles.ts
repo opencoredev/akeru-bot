@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 
 import { RotatingFileSink } from "@akeru/shared/logging";
 

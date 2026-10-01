@@ -1,5 +1,4 @@
 import * as Schema from "effect/Schema";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import type { ToolsInput } from "@mastra/core/agent";
 import type { Workspace } from "@mastra/core/workspace";
 import type { AkeruBrowserEndpoint } from "../workspace/BotWorkspaceTypes.ts";

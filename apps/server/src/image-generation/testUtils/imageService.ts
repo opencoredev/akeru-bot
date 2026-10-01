@@ -1,5 +1,4 @@
 import { decodeJsonString, jsonObject } from "../../json.ts";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";

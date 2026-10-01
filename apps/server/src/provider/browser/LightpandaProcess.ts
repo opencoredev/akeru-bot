@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeNet from "node:net";
 import * as NodeTimersPromises from "node:timers/promises";
 import type { ProcessHandle, WorkspaceSandbox } from "@mastra/core/workspace";
@@ -37,7 +36,6 @@ export function browserRequestTransport(
 ): BrowserRequestTransport {
   return async (request) => {
     // This runtime is owned by Mastra's promise-based workspace API, not an Effect layer.
-    // @effect-diagnostics-next-line globalFetch:off
     const response = await fetch(url, {
       method: request.method,
       headers: {

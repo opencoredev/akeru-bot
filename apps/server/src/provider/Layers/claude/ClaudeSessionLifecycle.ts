@@ -2,7 +2,6 @@ import type { SdkRecord } from "../ProtocolJson.ts";
 import { readSdkRecord } from "../ProtocolJson.ts";
 import { isSdkRecord } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
  * ClaudeAdapterLive - Scoped live implementation for the Claude Agent provider adapter.
  *

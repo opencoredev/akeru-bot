@@ -8,7 +8,6 @@ import type { AkeruToolRuntime } from "../../AkeruToolRuntime.ts";
 import type { RuntimeMode } from "@akeru/contracts";
 import type { AkeruRuntimeSeam } from "../../AkeruRuntimeSeam.ts";
 import type { AgentControllerLiveOptions } from "./Options.ts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 
 import type { AgentControllerEvent, MastraDBMessage } from "@mastra/core/agent-controller";
 

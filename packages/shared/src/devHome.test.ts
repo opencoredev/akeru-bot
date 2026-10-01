@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - builds real worktree layouts on disk.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeFS from "node:fs";

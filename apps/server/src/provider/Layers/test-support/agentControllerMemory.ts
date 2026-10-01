@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import {
   AkeruMemoryEntityId,
   AkeruMemoryId,

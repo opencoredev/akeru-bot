@@ -102,7 +102,6 @@ describe("observability", () => {
   });
 
   it("normalizes invalid dates without throwing", () => {
-    // @effect-diagnostics-next-line globalDate:off
     const invalidDate = new Date("not-a-real-date");
     assert.deepStrictEqual(
       compactTraceAttributes({

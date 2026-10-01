@@ -1,7 +1,6 @@
 import * as Schema from "effect/Schema";
 import type { AkeruToolResult } from "./tools/AkeruToolTypes.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";

@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { type Agent } from "@opencode-ai/sdk/v2";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";

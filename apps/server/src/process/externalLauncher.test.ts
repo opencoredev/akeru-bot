@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - the Windows reveal smoke test drives a real PowerShell through Node process and filesystem APIs.
 
 import { testLayer } from "./testUtils/externalLauncher.ts";
 import * as NodeChildProcess from "node:child_process";
@@ -140,12 +139,9 @@ async function runWindowsRevealSmoke() {
     // Start-Process returns before the recorder runs; wait for its output.
     // The waits run outside the Effect runtime on purpose: the test
     // exercises the real Windows process chain in real time.
-    // @effect-diagnostics-next-line globalTimers:off
     const sleep = (millis: number) => new Promise((resolve) => setTimeout(resolve, millis));
-    // @effect-diagnostics-next-line globalDate:off
     const deadline = Date.now() + 20_000;
 
-    // @effect-diagnostics-next-line globalDate:off
     while (!NodeFS.existsSync(outputPath) && Date.now() < deadline) {
       await sleep(100);
     }

@@ -1,5 +1,4 @@
 import { claudeMessage } from "./test-support/claudeMessages.ts";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
 import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";

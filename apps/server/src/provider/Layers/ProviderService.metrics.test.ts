@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import { ProviderDriverKind } from "@akeru/contracts";
 import { assert } from "@effect/vitest";
 import * as Effect from "effect/Effect";

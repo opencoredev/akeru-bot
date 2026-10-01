@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalConsole:off
 /**
  * Print the Effect migration audit signals for the server source tree.
  *

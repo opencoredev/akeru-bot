@@ -13,7 +13,6 @@ interface ParsedPlanUsage {
   readonly windows: readonly UsagePlanWindow[];
 }
 
-// @effect-diagnostics nodeBuiltinImport:off
 
 export function asRecord(value: Schema.Json | undefined): Schema.JsonObject | null {
   return isJsonObject(value) ? value : null;

@@ -39,7 +39,6 @@ import { createSessionLifecycle } from "./agentController/SessionLifecycle.ts";
 import { createTurnRequests } from "./agentController/TurnRequests.ts";
 import { createApprovals } from "./agentController/Approvals.ts";
 import { createConversation } from "./agentController/Conversation.ts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";

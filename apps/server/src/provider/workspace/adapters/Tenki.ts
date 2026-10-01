@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { type AkeruRemoteSession, type AkeruWorkspaceState } from "../BotWorkspaceTypes.ts";
 
 export function tenki(session: import("@tenkicloud/sandbox").Session): AkeruRemoteSession {

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 /**
  * Raw filesystem access for transcript scanning.
  *

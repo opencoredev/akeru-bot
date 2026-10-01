@@ -1,5 +1,4 @@
 import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

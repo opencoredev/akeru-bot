@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - tests use POSIX path joining to match the Linux startup boundary.
 import * as NodePath from "node:path";
 import { assert, describe, it } from "@effect/vitest";
 

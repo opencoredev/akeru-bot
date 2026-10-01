@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodePath from "node:path";
 
 import type {

@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { createMcpManager, type McpServerConfig } from "@mastra/code-sdk/mcp/index";
 import type { Workspace } from "@mastra/core/workspace";
 import type { BotId, BotSandbox, McpServer } from "@akeru/contracts";

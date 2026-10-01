@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests inspect and run the installer script.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import { describe, expect, it } from "vite-plus/test";

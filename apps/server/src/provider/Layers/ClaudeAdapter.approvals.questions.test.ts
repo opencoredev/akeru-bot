@@ -1,6 +1,5 @@
 import type * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { ApprovalRequestId, ProviderDriverKind } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";

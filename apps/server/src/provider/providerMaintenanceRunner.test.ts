@@ -1,5 +1,4 @@
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import { it, assert } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

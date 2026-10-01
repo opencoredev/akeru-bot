@@ -1,7 +1,6 @@
 import * as Schema from "effect/Schema";
 import { toolRuntimeFixture } from "./toolRuntimeFixture.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";

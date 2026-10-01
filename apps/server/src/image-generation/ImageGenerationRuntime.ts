@@ -1,5 +1,4 @@
 import type { AkeruToolExecution } from "../provider/AkeruToolRuntime.ts";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 
 import * as NodeCrypto from "node:crypto";

@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import {
   AKERU_TOOL_CATALOG,
   BotId,

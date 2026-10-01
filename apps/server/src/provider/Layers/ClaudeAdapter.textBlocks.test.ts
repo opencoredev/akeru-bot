@@ -1,5 +1,4 @@
 import { claudeMessage } from "./test-support/claudeMessages.ts";
-// @effect-diagnostics nodeBuiltinImport:off
 
 import { ProviderDriverKind } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";

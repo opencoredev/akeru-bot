@@ -132,7 +132,6 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
 
       return yield* withFakeClaudeEnv(
         {
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           output: JSON.stringify({
             structured_output: {
               title: "Use Claude home",

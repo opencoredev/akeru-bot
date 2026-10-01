@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import type { ProviderRuntimeEvent } from "@akeru/contracts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { it, assert } from "@effect/vitest";

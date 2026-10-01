@@ -1,6 +1,5 @@
 import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -156,7 +155,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           "content-type": "application/json",
           origin: "http://localhost:5733",
         },
-        // @effect-diagnostics-next-line preferSchemaOverJson:off
         body: HttpBody.text(JSON.stringify(payload), "application/json"),
       });
 
@@ -271,7 +269,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             cookie: yield* getAuthenticatedSessionCookieHeader(),
             "content-type": "application/json",
           },
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           body: HttpBody.text(JSON.stringify(payload), "application/json"),
         });
 

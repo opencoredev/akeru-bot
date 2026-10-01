@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off - This host-side fixture creates an isolated local T3 environment.
 export const SHOWCASE_PROJECT_ID = "t3code";
 
 export const SHOWCASE_THREAD_ID = "remote-command-center";

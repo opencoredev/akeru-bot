@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";

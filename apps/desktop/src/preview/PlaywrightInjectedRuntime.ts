@@ -1,6 +1,5 @@
 import { runtimeValueType } from "@akeru/shared/observability";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off - Extracts Playwright's installed Node bundle for browser injection.
 import * as NodeFSP from "node:fs/promises";
 import * as NodeModule from "node:module";
 import * as NodePath from "node:path";

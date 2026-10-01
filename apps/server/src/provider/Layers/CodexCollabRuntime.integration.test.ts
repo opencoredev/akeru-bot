@@ -9,7 +9,6 @@ import * as Predicate from "effect/Predicate";
  * test can't reach: ordering between the legacy receiver-turn suppressor and
  * v2 interception, registration state, and synthetic event emission.
  */
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
@@ -95,7 +94,6 @@ const peerPath = NodePath.join(import.meta.dirname, "../testFixtures/codexCollab
 describe("CodexSessionRuntime collab integration", () => {
   it.effect("replays the captured fan-out into synthetic agent events without child leaks", () =>
     Effect.gen(function* () {
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       NodeFS.writeFileSync(scriptPath, JSON.stringify(buildScript()), "utf8");
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => NodeFS.rmSync(scriptPath, { force: true })),
@@ -244,7 +242,6 @@ describe("CodexSessionRuntime collab integration", () => {
         ],
       };
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       NodeFS.writeFileSync(scriptPath, JSON.stringify(script), "utf8");
       const interruptsPath = `${scriptPath}.interrupts`;
       NodeFS.rmSync(interruptsPath, { force: true });
@@ -328,7 +325,6 @@ describe("CodexSessionRuntime collab integration", () => {
         notifications: [],
       };
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       NodeFS.writeFileSync(scriptPath, JSON.stringify(script), "utf8");
       const interruptsPath = `${scriptPath}.interrupts`;
       NodeFS.rmSync(interruptsPath, { force: true });
@@ -429,7 +425,6 @@ describe("CodexSessionRuntime collab integration", () => {
         };
 
         const responsesPath = `${scriptPath}.responses`;
-        // @effect-diagnostics-next-line preferSchemaOverJson:off
         NodeFS.writeFileSync(scriptPath, JSON.stringify(script), "utf8");
         NodeFS.rmSync(responsesPath, { force: true });
         yield* Effect.addFinalizer(() =>

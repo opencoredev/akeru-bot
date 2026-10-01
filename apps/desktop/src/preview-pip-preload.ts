@@ -1,6 +1,5 @@
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
-// @effect-diagnostics globalDate:off - This isolated Electron preload does not run inside an Effect runtime.
 import {
   DesktopPreviewRecordingFrameSchema,
   type DesktopPreviewRecordingFrame,

@@ -1,6 +1,5 @@
 import { decodeJsonString, jsonObject } from "../json.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeChildProcess from "node:child_process";

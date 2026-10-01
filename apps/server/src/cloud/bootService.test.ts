@@ -197,7 +197,6 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       expect(yield* fs.readFileString(plan.launcherPath)).toBe("export {};\n");
       expect((yield* service.status).current).toBe(true);
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off - fixed launcher-owned test document.
       const pendingState = JSON.stringify({
         protocol: SERVICE_LAUNCHER_PROTOCOL,
         activeVersion: "1.2.3",
@@ -256,7 +255,6 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       const { service, fs, statePath, commands } = yield* makeHarness();
       yield* service.install;
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off - fixed launcher-owned test document.
       const pendingState = JSON.stringify({
         protocol: SERVICE_LAUNCHER_PROTOCOL - 1,
         activeVersion: "1.2.3",
@@ -406,7 +404,6 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       yield* service.install;
       const plistPath = (yield* service.status).unitPath;
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off - fixed launcher-owned test document.
       const pendingState = JSON.stringify({
         protocol: SERVICE_LAUNCHER_PROTOCOL - 1,
         activeVersion: "1.2.3",

@@ -1,5 +1,4 @@
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import {
   AkeruDelegationProviderUnsupportedError,
   CommandId,

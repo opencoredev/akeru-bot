@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
 import type * as NodeNet from "node:net";
 import { afterEach, describe, expect, it } from "vite-plus/test";

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - The route/store integration guard reads source.
 import * as NodeFS from "node:fs";
 
 import { AVAILABLE_CONNECTION_STATE } from "@akeru/client-runtime/connection";

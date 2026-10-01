@@ -3,7 +3,6 @@ import type { AkeruRunOptions } from "./mastra/AkeruModels.ts";
 import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import { createAkeruConversation } from "./mastra/AkeruConversation.ts";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 import { Agent } from "@mastra/core/agent";
 import {

@@ -1,7 +1,6 @@
 import * as Option from "effect/Option";
 import { flow } from "effect/Function";
 
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeNet from "node:net";
 import { DesktopHostTelemetryMessage, DesktopTelemetryControlMessage } from "@akeru/contracts";

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off
 
 import { fixture, requestSignal } from "./testUtils/subscriptionAuthStorage.ts";
 import * as NodeFS from "node:fs";

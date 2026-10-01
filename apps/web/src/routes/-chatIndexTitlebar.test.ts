@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 // Regression coverage compares the empty workspace header with the shared titlebar contract.
 import * as NodeFS from "node:fs";
 

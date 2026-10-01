@@ -1,6 +1,5 @@
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";

@@ -1,5 +1,4 @@
 import type * as Schema from "effect/Schema";
-// @effect-diagnostics nodeBuiltinImport:off - the parser tests need real symlinks and tmpdirs.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

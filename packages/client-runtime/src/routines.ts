@@ -2,7 +2,6 @@ import { asRecord } from "./work-log-command.ts";
 import type { PendingApproval } from "./pendingRequests.ts";
 import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalDate:off -- Routine labels format wall-clock run times with Intl for display.
 import type {
   BotId,
   McpServer,

@@ -77,7 +77,6 @@ export class ComputerCdp {
       endpoint.url.endsWith("/") ? endpoint.url : `${endpoint.url}/`,
     );
 
-    // @effect-diagnostics-next-line globalFetch:off
     const response = await fetch(url, {
       headers: endpoint.requestHeaders,
       signal: AbortSignal.timeout(30_000),

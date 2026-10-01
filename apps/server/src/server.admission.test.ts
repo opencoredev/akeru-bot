@@ -1,5 +1,4 @@
 import * as Schema from "effect/Schema";
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -172,12 +171,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         yield* fileSystem.makeDirectory(secretsDir, { recursive: true });
         yield* fileSystem.writeFileString(
           authPath,
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           JSON.stringify({ "openai-codex": { type: "api-key", access: "sk-shared" } }),
         );
         yield* fileSystem.writeFileString(
           `${authPath}.health`,
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           JSON.stringify({
             "openai-codex": {
               lastFailedRequest: { at: "2026-01-01T00:00:00.000Z", message: "Unauthorized" },

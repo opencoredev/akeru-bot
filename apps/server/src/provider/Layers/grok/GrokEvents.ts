@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 
 import { EventId, type ProviderRuntimeEvent, type ThreadId, TurnId } from "@akeru/contracts";
 

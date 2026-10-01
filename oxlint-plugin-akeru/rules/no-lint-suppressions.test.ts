@@ -40,4 +40,14 @@ describe("akeru/no-lint-suppressions", () => {
   );
 
   rule.invalid("reports ts-nocheck", `// @ts-nocheck\nconst a = 1;`);
+
+  rule.invalid(
+    "reports a file-wide Effect diagnostics toggle",
+    `// @effect-diagnostics nodeBuiltinImport:off\nimport * as NodeFS from "node:fs";`,
+  );
+
+  rule.invalid(
+    "reports a next-line Effect diagnostics toggle",
+    `// @effect-diagnostics-next-line globalDate:off\nconst now = Date.now();`,
+  );
 });

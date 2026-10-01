@@ -9,7 +9,6 @@
  * agent CLI installed, the prompt and context are written to disk for the user
  * to paste into whatever agent they do have.
  */
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeOS from "node:os";
 import * as NodeReadlinePromises from "node:readline/promises";

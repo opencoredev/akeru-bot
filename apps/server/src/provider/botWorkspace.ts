@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import { TOOL_NAME_OVERRIDES } from "@mastra/code-sdk/tool-names";
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 
 import type { ThreadId } from "@akeru/contracts";
 import { RotatingFileSink } from "@akeru/shared/logging";

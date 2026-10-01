@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { type ToolsInput } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
 import type { StandardSchemaWithJSON } from "@mastra/core/schema";

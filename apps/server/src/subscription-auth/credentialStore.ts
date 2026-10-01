@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 /**
  * The subscription credential file: `<secretsDir>/subscription-auth.json`.
  *

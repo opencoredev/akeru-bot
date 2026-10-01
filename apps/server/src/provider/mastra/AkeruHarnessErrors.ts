@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as Schema from "effect/Schema";
 
 export const errorMessage = (cause: unknown) =>

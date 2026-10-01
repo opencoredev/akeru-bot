@@ -1,5 +1,4 @@
 import * as Match from "effect/Match";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import type { WorkspaceSandbox } from "@mastra/core/workspace";
 

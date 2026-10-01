@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off - CLI integration exercises Node HTTP and filesystem boundaries.
 import * as NodeHttp from "node:http";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -294,7 +293,6 @@ describe("akeru pair", () => {
           runCli(["auth", "pairing", "list", "--base-dir", baseDir, "--json"]),
         );
 
-        // @effect-diagnostics-next-line preferSchemaOverJson:off - CLI JSON output is decoded as a presentation DTO.
         const credentials = JSON.parse(listed) as ReadonlyArray<{ readonly label?: string }>;
         assert.equal(credentials.length, 1);
         assert.equal(credentials[0]?.label, "akeru pair");
@@ -414,7 +412,6 @@ describe("akeru pair", () => {
         assert.include(output, "grants admin scope");
         assert.match(output, /Pairing URL: http:\/\/127\.0\.0\.1:\d+\/pair#token=[A-Z2-9]+/);
 
-        // @effect-diagnostics-next-line preferSchemaOverJson:off - CLI JSON output is decoded as a presentation DTO.
         const credentials = JSON.parse(listed) as ReadonlyArray<{
           readonly label?: string;
           readonly scopes: ReadonlyArray<string>;

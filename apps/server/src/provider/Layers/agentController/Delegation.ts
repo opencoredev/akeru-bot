@@ -1,6 +1,5 @@
 import type { AkeruRuntimeSeam } from "../../AkeruRuntimeSeam.ts";
 import type { AgentControllerLiveOptions } from "./Options.ts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 import * as NodeCrypto from "node:crypto";
 
 import {

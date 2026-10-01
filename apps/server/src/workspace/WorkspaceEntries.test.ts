@@ -1,5 +1,4 @@
 import * as Deferred from "effect/Deferred";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { FileFinder } from "@ff-labs/fff-node";
 import { it, afterEach, describe, expect } from "@effect/vitest";

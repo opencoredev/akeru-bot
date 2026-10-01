@@ -192,7 +192,6 @@ export const liveStreamBudget = Effect.fn("makeLiveStreamBudget")(function* (lim
           Effect.forkScoped,
         );
 
-        // @effect-diagnostics-next-line returnEffectInGen:off - Stream.fromPull needs the pull effect as its result.
         return Effect.gen(function* () {
           // RpcServer requests the next batch only after the client ACKs this
           // one. Removing items from a queue alone does not mean delivery ended.

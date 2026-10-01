@@ -1,7 +1,6 @@
 import * as Match from "effect/Match";
 
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 
 import * as NodePath from "node:path";
 import { errorTag } from "@akeru/shared/observability";

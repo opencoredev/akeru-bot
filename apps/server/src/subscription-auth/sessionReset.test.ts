@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";

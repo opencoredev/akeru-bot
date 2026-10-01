@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import { vi } from "vite-plus/test";
 import type { AkeruBotWorkspace } from "../botWorkspace.ts";

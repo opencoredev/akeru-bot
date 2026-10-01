@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { Workspace } from "@mastra/core/workspace";
 import type { BotSandbox } from "@akeru/contracts";
 import { WorkspaceComputer } from "../workspaceComputer.ts";

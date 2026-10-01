@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import { DateTime } from "effect";
 import { vi } from "vite-plus/test";
 import { ascii, type AkeruRemoteSession } from "../botWorkspace.ts";

@@ -1,4 +1,3 @@
-// @effect-diagnostics deterministicKeys:off
 // Preserve the existing service key when moving the declaration.
 import type {
   HostPowerSnapshot,

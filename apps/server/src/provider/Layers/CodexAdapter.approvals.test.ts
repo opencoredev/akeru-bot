@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeAssert from "node:assert/strict";
 import { ApprovalRequestId, ProviderDriverKind, type ProviderEvent } from "@akeru/contracts";
 

@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import {
   type BotId,
   type VoiceCallSnapshot,

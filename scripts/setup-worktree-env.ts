@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - worktree setup runs before the application runtime.
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";

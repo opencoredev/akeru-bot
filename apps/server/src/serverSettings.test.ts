@@ -406,7 +406,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
         const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
         assert.deepEqual(
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           JSON.parse(raw).sourceControlWriterModelSelection,
           sourceControlWriterModelSelection,
         );
@@ -598,7 +597,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       assert.equal(next.botSandboxBrowserSharing, "shared");
       const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       assert.equal(JSON.parse(raw).botSandboxBrowserSharing, "shared");
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
@@ -630,7 +628,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.equal(next.providers.codex.binaryPath, "/opt/homebrew/bin/codex");
 
       const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       assert.deepEqual(JSON.parse(raw), {
         addProjectBaseDirectory: "~/Development",
         observability: {

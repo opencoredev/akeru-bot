@@ -1,5 +1,4 @@
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { RequestContext } from "@mastra/core/request-context";
 import { ProviderDriverKind } from "@akeru/contracts";

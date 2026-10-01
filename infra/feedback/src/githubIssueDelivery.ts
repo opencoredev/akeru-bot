@@ -1,6 +1,5 @@
 import type * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics cryptoRandomUUID:off globalConsole:off globalDate:off
 import type { StoredProductFeedbackSubmission } from "@akeru/contracts";
 import * as NodeBuffer from "node:buffer";
 import * as NodeCrypto from "node:crypto";

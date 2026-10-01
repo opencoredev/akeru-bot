@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 import * as NodeCrypto from "node:crypto";
 import * as Effect from "effect/Effect";
 import { type SubscriptionAuthData, type SubscriptionCredentialStore } from "./credentialStore.ts";

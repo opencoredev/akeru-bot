@@ -1,6 +1,5 @@
 import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
