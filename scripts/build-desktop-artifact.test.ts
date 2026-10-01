@@ -7,9 +7,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 
 import {
   DESKTOP_PACKAGE_NAME,
+  createBuildConfig,
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_FILE_EXCLUSIONS,
   InvalidMockUpdateServerPortError,
@@ -28,6 +31,27 @@ import {
 import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 
 it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
+  it.effect("resolves packaged signing resources from the checkout root", () =>
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "1.2.3",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      const parsed = yield* Schema.decodeUnknownEffect(
+        Schema.Struct({
+          mac: Schema.Struct({ sign: Schema.String }),
+        }),
+      )(config);
+      assert.equal(parsed.mac.sign, path.join(repoRoot, "scripts/sign-macos.ts"));
+    }),
+  );
   it("uses the latest updater channel", () => {
     assert.equal(DESKTOP_UPDATE_CHANNEL, "latest");
   });
