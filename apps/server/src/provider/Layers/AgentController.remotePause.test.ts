@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -470,7 +471,7 @@ describe("AgentControllerLive", () => {
 
         assert.equal(error._tag, "ProviderValidationError");
 
-        if (error._tag === "ProviderValidationError") {
+        if (Predicate.isTagged(error, "ProviderValidationError")) {
           assert.include(error.issue, "disabled in Akeru Bot settings");
         }
 

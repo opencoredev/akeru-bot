@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 import {
   ApprovalRequestId,
@@ -197,10 +198,9 @@ export function createCodexNotifications(deps: {
 
       switch (notification.method) {
         case "turn/started": {
-          const childTurnId =
-            typeof (notification.params as { turn?: { id?: unknown } }).turn?.id === "string"
-              ? ((notification.params as { turn: { id: string } }).turn.id as string)
-              : undefined;
+          const childTurnId = Predicate.isString(notification.params.turn?.id)
+            ? notification.params.turn.id
+            : undefined;
 
           if (childTurnId) {
             yield* Ref.update(deps.collabChildLiveTurnsRef, (current) => {
@@ -309,7 +309,7 @@ export function createCodexNotifications(deps: {
           // Stop (review finding). Terminal errors clean up the live turn
           // like thread/closed and reuse the statusChanged systemError
           // path.
-          const willRetry = (notification.params as { willRetry?: boolean }).willRetry === true;
+          const willRetry = notification.params.willRetry === true;
 
           if (willRetry) {
             return true;
@@ -406,10 +406,9 @@ export function createCodexNotifications(deps: {
 
         if (foreignThreadId !== undefined) {
           if (notification.method === "turn/started") {
-            const foreignTurnId =
-              typeof (notification.params as { turn?: { id?: unknown } }).turn?.id === "string"
-                ? (notification.params as { turn: { id: string } }).turn.id
-                : undefined;
+            const foreignTurnId = Predicate.isString(notification.params.turn?.id)
+              ? notification.params.turn.id
+              : undefined;
 
             if (foreignTurnId) {
               yield* Ref.update(deps.collabChildLiveTurnsRef, (current) => {
@@ -447,10 +446,9 @@ export function createCodexNotifications(deps: {
       let itemId = route.itemId;
 
       if (notification.method === "serverRequest/resolved") {
-        const rawRequestId =
-          typeof notification.params.requestId === "string"
-            ? notification.params.requestId
-            : String(notification.params.requestId);
+        const rawRequestId = Predicate.isString(notification.params.requestId)
+          ? notification.params.requestId
+          : String(notification.params.requestId);
 
         const correlation = rawRequestId
           ? (yield* Ref.get(deps.approvalCorrelationsRef)).get(rawRequestId)

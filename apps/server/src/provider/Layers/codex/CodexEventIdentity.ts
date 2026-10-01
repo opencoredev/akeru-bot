@@ -19,7 +19,7 @@ export function providerRefsFromEvent(
 
   if (event.requestId) refs.providerRequestId = event.requestId;
 
-  return Object.keys(refs).length > 0 ? (refs as ProviderRuntimeEvent["providerRefs"]) : undefined;
+  return Object.keys(refs).length > 0 ? refs : undefined;
 }
 
 export function runtimeEventBase(

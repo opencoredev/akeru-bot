@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
@@ -424,7 +425,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
       const adapter = yield* makeTestAdapter(wrapperPath, {
         nativeEventLogger: {
           filePath: "memory://grok-cancelled-native-events",
-          write: (record: unknown) =>
+          write: <Input>(record: Input) =>
             JSON.stringify(record).includes("late after cancel")
               ? Deferred.succeed(lateNativeUpdate, undefined).pipe(Effect.asVoid)
               : Effect.void,
@@ -650,7 +651,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
       const requestLog = yield* Effect.promise(() => readJsonLines(requestLogPath));
 
       const methods = requestLog.flatMap((entry) =>
-        typeof entry.method === "string" ? [entry.method] : [],
+        Predicate.isString(entry.method) ? [entry.method] : [],
       );
 
       const turnStartedEvents = runtimeEvents.filter(

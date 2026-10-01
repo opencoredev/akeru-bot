@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { ProviderItemId, TurnId } from "@akeru/contracts";
 import * as CodexRpc from "effect-codex-app-server/rpc";
 
@@ -12,6 +13,8 @@ export function makeCodexServerNotification<M extends CodexRpc.ServerNotificatio
   method: M,
   params: CodexRpc.ServerNotificationParamsByMethod[M],
 ): CodexServerNotification {
+  // SAFETY: M indexes the params for this exact method; TypeScript cannot
+  // distribute the generic indexed access over the mapped notification union.
   return { method, params } as CodexServerNotification;
 }
 
@@ -77,7 +80,7 @@ export function makeMemoryConsolidationNotificationFilter(): (
 
       if (
         thread.threadSource === "memory_consolidation" ||
-        (typeof source === "object" &&
+        (Predicate.isObject(source) &&
           source !== null &&
           "subAgent" in source &&
           source.subAgent === "memory_consolidation")
@@ -93,7 +96,7 @@ export function makeMemoryConsolidationNotificationFilter(): (
     const threadId =
       notification.method === "thread/started"
         ? notification.params.thread.id
-        : "threadId" in params && typeof params.threadId === "string"
+        : "threadId" in params && Predicate.isString(params.threadId)
           ? params.threadId
           : undefined;
 
@@ -113,10 +116,7 @@ export function makeMemoryConsolidationNotificationFilter(): (
   };
 }
 
-export function readRouteFields(notification: CodexServerNotification): {
-  readonly turnId: TurnId | undefined;
-  readonly itemId: ProviderItemId | undefined;
-} {
+export function readRouteFields(notification: CodexServerNotification) {
   switch (notification.method) {
     case "thread/started":
       return {
@@ -216,31 +216,32 @@ export function readThreadSpawnSource(thread: { readonly source: unknown }):
   | undefined {
   const source = thread.source;
 
-  if (typeof source !== "object" || source === null || !("subAgent" in source)) {
+  if (!Predicate.isObject(source) || source === null || !("subAgent" in source)) {
     return undefined;
   }
 
-  const subAgent = (source as { subAgent: unknown }).subAgent;
+  const subAgent = source.subAgent;
 
-  if (typeof subAgent !== "object" || subAgent === null || !("thread_spawn" in subAgent)) {
+  if (!Predicate.isObject(subAgent) || subAgent === null || !("thread_spawn" in subAgent)) {
     return undefined;
   }
 
-  const spawn = (subAgent as { thread_spawn: unknown }).thread_spawn;
+  const spawn = subAgent.thread_spawn;
 
-  if (typeof spawn !== "object" || spawn === null) {
+  if (!Predicate.isObject(spawn) || spawn === null) {
     return undefined;
   }
 
-  const record = spawn as Record<string, unknown>;
+  const record = spawn;
 
   return {
-    nickname: typeof record.agent_nickname === "string" ? record.agent_nickname : undefined,
-    role: typeof record.agent_role === "string" ? record.agent_role : undefined,
-    agentPath: typeof record.agent_path === "string" ? record.agent_path : undefined,
-    depth: typeof record.depth === "number" ? record.depth : undefined,
-    parentThreadId:
-      typeof record.parent_thread_id === "string" ? record.parent_thread_id : undefined,
+    nickname: Predicate.isString(record.agent_nickname) ? record.agent_nickname : undefined,
+    role: Predicate.isString(record.agent_role) ? record.agent_role : undefined,
+    agentPath: Predicate.isString(record.agent_path) ? record.agent_path : undefined,
+    depth: Predicate.isNumber(record.depth) ? record.depth : undefined,
+    parentThreadId: Predicate.isString(record.parent_thread_id)
+      ? record.parent_thread_id
+      : undefined,
   };
 }
 

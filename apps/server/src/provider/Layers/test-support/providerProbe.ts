@@ -153,7 +153,7 @@ export function mockSpawnerLayer(
   return Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) => {
-      const cmd = command as unknown as { args: ReadonlyArray<string> };
+      const cmd = command as { args: ReadonlyArray<string> };
 
       return Effect.succeed(mockHandle(handler(cmd.args)));
     }),
@@ -175,7 +175,7 @@ export function recordingMockSpawnerLayer(
   const layer = Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) => {
-      const cmd = command as unknown as {
+      const cmd = command as {
         args: ReadonlyArray<string>;
         options?: {
           readonly env?: NodeJS.ProcessEnv;
@@ -200,7 +200,7 @@ export function mockCommandSpawnerLayer(
   return Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) => {
-      const cmd = command as unknown as {
+      const cmd = command as {
         command: string;
         args: ReadonlyArray<string>;
       };

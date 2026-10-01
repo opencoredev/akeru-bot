@@ -326,7 +326,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                       homePath: `/tmp/${missingBinary}_home`,
                     },
                   },
-                } as unknown as ContractServerSettings["providerInstances"],
+                } as ContractServerSettings["providerInstances"],
               }),
             ),
           );

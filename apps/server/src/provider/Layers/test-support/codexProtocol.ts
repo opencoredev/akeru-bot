@@ -14,18 +14,24 @@ export function makeThreadOpenResponse(
     modelProvider: "openai",
     approvalPolicy: "never",
     approvalsReviewer: "user",
-    sandbox: { type: "danger-full-access" },
+    sandbox: { type: "dangerFullAccess" },
     thread: {
       id: threadId,
-      createdAt: "2026-04-18T00:00:00.000Z",
-      source: { session: "cli" },
+      createdAt: 1776470400,
+      updatedAt: 1776470400,
+      cliVersion: "0.0.0",
+      cwd: "/tmp/project",
+      ephemeral: true,
+      modelProvider: "openai",
+      preview: "",
+      sessionId: threadId,
+      source: "cli",
       turns: [],
       status: {
-        state: "idle",
-        activeFlags: [],
+        type: "idle",
       },
     },
-  } as unknown as CodexRpc.ClientRequestResponsesByMethod["thread/start"];
+  };
 }
 
 export const request = {

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type ModelCapabilities,
   type OpenCodeSettings,
@@ -72,7 +73,7 @@ function formatOpenCodeProbeError(input: {
   readonly cause: unknown;
   readonly isExternalServer: boolean;
   readonly serverUrl: string;
-}): { readonly installed: boolean; readonly message: string } {
+}) {
   const detail = normalizedErrorMessage(input.cause);
   const lower = detail?.toLowerCase() ?? "";
 
@@ -422,7 +423,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
         ),
     );
 
-    if (versionExit._tag === "Failure") {
+    if (Predicate.isTagged(versionExit, "Failure")) {
       return fallback(Cause.squash(versionExit.cause));
     }
 
@@ -487,7 +488,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
     ),
   );
 
-  if (inventoryExit._tag === "Failure") {
+  if (Predicate.isTagged(inventoryExit, "Failure")) {
     return fallback(Cause.squash(inventoryExit.cause), version);
   }
 

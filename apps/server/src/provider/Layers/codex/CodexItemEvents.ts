@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { type ProviderEvent, type ProviderRuntimeEvent, ThreadId } from "@akeru/contracts";
 import * as EffectCodexSchema from "effect-codex-app-server/schema";
 
@@ -32,14 +33,15 @@ export function mapItemLifecycle(
 
   const detail = itemDetail(itemType, item);
 
-  const status =
-    lifecycle === "item.started"
-      ? "inProgress"
-      : lifecycle === "item.completed"
-        ? "status" in item && (item.status === "failed" || item.status === "declined")
-          ? item.status
-          : "completed"
-        : undefined;
+  const status = Match.value(lifecycle).pipe(
+    Match.when("item.started", () => "inProgress" as const),
+    Match.when("item.completed", () =>
+      "status" in item && (item.status === "failed" || item.status === "declined")
+        ? item.status
+        : "completed",
+    ),
+    Match.orElse(() => undefined),
+  );
 
   return {
     ...runtimeEventBase(event, canonicalThreadId),

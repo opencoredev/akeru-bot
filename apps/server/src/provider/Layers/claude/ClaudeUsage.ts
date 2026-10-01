@@ -1,3 +1,7 @@
+import { readSdkRecord } from "../ProtocolJson.ts";
+import { isSdkRecord } from "../ProtocolJson.ts";
+import type { SdkRecord } from "../ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 import {
   type SDKRateLimitInfo,
   type SDKResultMessage,
@@ -180,19 +184,23 @@ export function selectedClaudeContextWindow(
   }
 }
 
-export function finiteNonNegativeInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
+export function finiteNonNegativeInteger<Input0>(valueInput: Input0): number | undefined {
+  const value = valueInput;
+
+  return Predicate.isNumber(value) && Number.isFinite(value) && value >= 0
     ? Math.round(value)
     : undefined;
 }
 
-export function finitePositiveInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value > 0
+export function finitePositiveInteger<Input0>(valueInput: Input0): number | undefined {
+  const value = valueInput;
+
+  return Predicate.isNumber(value) && Number.isFinite(value) && value > 0
     ? Math.round(value)
     : undefined;
 }
 
-export function claudeUsageInputTokens(usage: Record<string, unknown>): number {
+export function claudeUsageInputTokens(usage: SdkRecord): number {
   return (
     (finiteNonNegativeInteger(usage.input_tokens) ?? 0) +
     (finiteNonNegativeInteger(usage.cache_creation_input_tokens) ?? 0) +
@@ -200,27 +208,29 @@ export function claudeUsageInputTokens(usage: Record<string, unknown>): number {
   );
 }
 
-export function claudeUsageOutputTokens(usage: Record<string, unknown>): number {
+export function claudeUsageOutputTokens(usage: SdkRecord): number {
   return finiteNonNegativeInteger(usage.output_tokens) ?? 0;
 }
 
-export function lastClaudeUsageIteration(
-  value: Record<string, unknown>,
-): Record<string, unknown> | undefined {
+export function lastClaudeUsageIteration(value: SdkRecord): SdkRecord | undefined {
   const iterations = Array.isArray(value.iterations) ? value.iterations : [];
 
   return iterations.findLast(
-    (iteration): iteration is Record<string, unknown> =>
-      iteration !== null && typeof iteration === "object" && !Array.isArray(iteration),
+    (iteration): iteration is SdkRecord =>
+      iteration !== null && isSdkRecord(iteration) && !Array.isArray(iteration),
   );
 }
 
-export function claudeTotalProcessedTokens(value: unknown): number | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+export function claudeTotalProcessedTokens<Input0>(valueInput: Input0): number | undefined {
+  const value = valueInput;
+
+  if (!value || !isSdkRecord(value) || Array.isArray(value)) {
     return undefined;
   }
 
-  const usage = value as Record<string, unknown>;
+  const usage = readSdkRecord(value);
+
+  if (!usage) return undefined;
   const explicitTotal = finiteNonNegativeInteger(usage.total_tokens);
 
   if (explicitTotal !== undefined && explicitTotal > 0) {
@@ -283,16 +293,20 @@ export function makeClaudeTokenUsageSnapshot(input: {
   };
 }
 
-export function normalizeClaudeActiveTokenUsage(
-  value: unknown,
+export function normalizeClaudeActiveTokenUsage<Input0>(
+  valueInput: Input0,
   contextWindow?: number,
   totalProcessedTokens?: number,
 ): ThreadTokenUsageSnapshot | undefined {
-  if (!value || typeof value !== "object") {
+  const value = valueInput;
+
+  if (!value || !isSdkRecord(value)) {
     return undefined;
   }
 
-  const usage = value as Record<string, unknown>;
+  const usage = readSdkRecord(value);
+
+  if (!usage) return undefined;
   const activeUsage = lastClaudeUsageIteration(usage) ?? usage;
   const inputTokens = claudeUsageInputTokens(activeUsage);
   const outputTokens = claudeUsageOutputTokens(activeUsage);
@@ -314,17 +328,17 @@ export function normalizeClaudeActiveTokenUsage(
 }
 
 export function compactBoundaryTokenUsageSnapshot(
-  message: Record<string, unknown>,
+  message: SdkRecord,
   contextWindow?: number,
   totalProcessedTokens?: number,
 ): ThreadTokenUsageSnapshot | undefined {
   const metadata = message.compact_metadata;
 
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+  if (!metadata || !isSdkRecord(metadata) || Array.isArray(metadata)) {
     return undefined;
   }
 
-  const compactMetadata = metadata as Record<string, unknown>;
+  const compactMetadata = metadata;
   const postTokens = finiteNonNegativeInteger(compactMetadata.post_tokens);
 
   if (postTokens === undefined || postTokens <= 0) {
@@ -341,10 +355,12 @@ export function compactBoundaryTokenUsageSnapshot(
   });
 }
 
-export function normalizeClaudeTaskProgressTokenUsage(
-  value: unknown,
+export function normalizeClaudeTaskProgressTokenUsage<Input0>(
+  valueInput: Input0,
   context: ClaudeSessionContext,
 ): ThreadTokenUsageSnapshot | undefined {
+  const value = valueInput;
+
   const totalTokens = claudeTotalProcessedTokens(value);
 
   if (totalTokens === undefined || totalTokens <= 0) {
@@ -360,7 +376,9 @@ export function normalizeClaudeTaskProgressTokenUsage(
     return undefined;
   }
 
-  const usage = value as Record<string, unknown>;
+  const usage = readSdkRecord(value);
+
+  if (!usage) return undefined;
 
   const snapshot = makeClaudeTokenUsageSnapshot({
     activeTokens,
@@ -396,14 +414,13 @@ export function isOverloadedResult(result: SDKResultMessage): boolean {
   return result.subtype === "success" && result.api_error_status === 529;
 }
 
+export interface ClaudeResultOutcome {
+  readonly status: ProviderRuntimeTurnStatus;
+  readonly errorMessage: string | undefined;
+}
+
 /** Derives turn status and its error from the same provider result. */
-export function resultOutcome(
-  result: SDKResultMessage,
-  failureHint?: string,
-): {
-  status: ProviderRuntimeTurnStatus;
-  errorMessage: string | undefined;
-} {
+export function resultOutcome(result: SDKResultMessage, failureHint?: string): ClaudeResultOutcome {
   // A success result flagged is_error only fails when the turn already
   // reported its cause (expired login, rejected usage window).
   const successTaggedFailure = result.subtype === "success" && result.is_error === true;
@@ -423,7 +440,7 @@ export function resultOutcome(
       ? undefined
       : listedErrors.find(
           (error): error is string =>
-            typeof error === "string" && !error.startsWith("[ede_diagnostic]"),
+            Predicate.isString(error) && !error.startsWith("[ede_diagnostic]"),
         );
 
   const errorMessage = listedError || structuredError;

@@ -539,14 +539,14 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           webFetch: deps.webFetch,
           // The router bounds each provider attempt and interruptTurn cancels
           // in-flight requests, so there is no outer deadline here.
-          generateImage: async (request: unknown) => {
+          generateImage: async (request) => {
             const generate = options?.generateImage ?? runImageGenerationTool;
 
             return deps.runPromise(generate(threadId, request));
           },
           ...(deps.wired().pluginRuntimeOptions
             ? {
-                addMcpServer: async (input: unknown) => {
+                addMcpServer: async (input) => {
                   const value = decodeAkeruToolInput("AddMcpServer", input);
 
                   const base = {
@@ -583,7 +583,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                     serverId,
                     "mcp-remove",
                   ),
-                renameMcpAccount: async (input: unknown) => {
+                renameMcpAccount: async (input) => {
                   const value = decodeAkeruToolInput("RenameMcpAccount", input);
 
                   const server = (

@@ -366,7 +366,7 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
 
     if (existing) return existing;
 
-    const write = Effect.fnUntraced(function* (event: unknown, threadId: ThreadId | null) {
+    const write = Effect.fnUntraced(function* <Event>(event: Event, threadId: ThreadId | null) {
       if (!shouldPersist(stream, event)) return;
       const startedAt = yield* Clock.currentTimeMillis;
 

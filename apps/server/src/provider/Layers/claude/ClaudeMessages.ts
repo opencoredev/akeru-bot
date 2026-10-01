@@ -1,3 +1,5 @@
+import { isSdkRecord } from "../ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
  * ClaudeAdapterLive - Scoped live implementation for the Claude Agent provider adapter.
@@ -264,8 +266,7 @@ export function createClaudeMessages(deps: {
     // subagent's own conversation, not the parent's. Emitting them created
     // interleaved "Agent N done"-adjacent leak messages and spawned synthetic
     // turns per subagent completion (which also reset the Working timer).
-    const assistantParentToolUseId = (message as { parent_tool_use_id?: string | null })
-      .parent_tool_use_id;
+    const assistantParentToolUseId = message.parent_tool_use_id;
 
     if (assistantParentToolUseId !== null && assistantParentToolUseId !== undefined) {
       // The snapshot's message.model is the authoritative API model the
@@ -331,16 +332,11 @@ export function createClaudeMessages(deps: {
 
     if (Array.isArray(content)) {
       for (const block of content) {
-        if (!block || typeof block !== "object") {
+        if (!block || !isSdkRecord(block)) {
           continue;
         }
 
-        const toolUse = block as {
-          type?: unknown;
-          id?: unknown;
-          name?: unknown;
-          input?: unknown;
-        };
+        const toolUse = block;
 
         if (toolUse.type !== "tool_use" || toolUse.name !== "ExitPlanMode") {
           continue;
@@ -354,7 +350,7 @@ export function createClaudeMessages(deps: {
 
         yield* deps.emitProposedPlanCompleted(context, {
           planMarkdown,
-          toolUseId: typeof toolUse.id === "string" ? toolUse.id : undefined,
+          toolUseId: Predicate.isString(toolUse.id) ? toolUse.id : undefined,
           rawSource: "claude.sdk.message",
           rawMethod: "claude/assistant",
           rawPayload: message,

@@ -34,7 +34,7 @@ import { SubscriptionAuthService } from "../../../subscription-auth/service.ts";
 import { type AkeruMastraHarness } from "../../AkeruMastraHarness.ts";
 import { type AkeruChannelRuntime } from "../../AkeruChannelRuntime.ts";
 import { type AkeruBotStateRuntime } from "../../AkeruBotStateRuntime.ts";
-import { makeAkeruWorkerRuntime } from "../../AkeruWorkerRuntime.ts";
+import type { AkeruWorkerRuntime } from "../../AkeruWorkerRuntime.ts";
 import {
   createAkeruPluginRuntime,
   type AkeruPluginRuntimeOptions,
@@ -57,13 +57,7 @@ export interface SessionLifecycleDependencies {
   readonly webFetch: ReturnType<typeof createAkeruWebFetch>;
   readonly runPromise: AkeruRuntimeSeam["runPromise"];
   readonly projectionSnapshotQuery: Option.Option<ProjectionSnapshotQuery["Service"]>;
-  readonly workerRuntime: ReturnType<typeof makeAkeruWorkerRuntime> extends Effect.Effect<
-    infer A,
-    infer _E,
-    infer _R
-  >
-    ? A
-    : never;
+  readonly workerRuntime: AkeruWorkerRuntime;
   readonly wired: () => {
     readonly channelRuntime?: AkeruChannelRuntime;
     readonly pluginRuntime?: ReturnType<typeof createAkeruPluginRuntime>;

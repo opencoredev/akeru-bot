@@ -1,5 +1,8 @@
+import type * as Schema from "effect/Schema";
+import { claudeMessage } from "./test-support/claudeMessages.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
-import type { PermissionResult, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { ApprovalRequestId, ProviderDriverKind, ProviderItemId } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -80,29 +83,34 @@ describe("ClaudeAdapterLive", () => {
       });
       yield* Stream.take(adapter.streamEvents, 1).pipe(Stream.runDrain);
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-approval-1",
-        uuid: "stream-approval-thread",
-        parent_tool_use_id: null,
-        event: {
-          type: "message_start",
-          message: {
-            id: "msg-approval-thread",
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-approval-1",
+          uuid: "stream-approval-thread",
+          parent_tool_use_id: null,
+          event: {
+            type: "message_start",
+            message: {
+              id: "msg-approval-thread",
+            },
           },
-        },
-      } as unknown as SDKMessage);
+        }),
+      );
 
       const threadStarted = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(threadStarted._tag, "Some");
 
-      if (threadStarted._tag !== "Some" || threadStarted.value.type !== "thread.started") {
+      if (
+        !Predicate.isTagged(threadStarted, "Some") ||
+        threadStarted.value.type !== "thread.started"
+      ) {
         return;
       }
 
       const createInput = harness.getLastCreateQueryInput();
       const canUseTool = createInput?.options.canUseTool;
-      assert.equal(typeof canUseTool, "function");
+      assert.isTrue(Predicate.isFunction(canUseTool));
 
       if (!canUseTool) {
         return;
@@ -127,7 +135,7 @@ describe("ClaudeAdapterLive", () => {
       const requested = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(requested._tag, "Some");
 
-      if (requested._tag !== "Some") {
+      if (!Predicate.isTagged(requested, "Some")) {
         return;
       }
 
@@ -141,7 +149,7 @@ describe("ClaudeAdapterLive", () => {
         providerItemId: ProviderItemId.make("tool-use-1"),
       });
       const runtimeRequestId = requested.value.requestId;
-      assert.equal(typeof runtimeRequestId, "string");
+      assert.isTrue(Predicate.isString(runtimeRequestId));
 
       if (runtimeRequestId === undefined) {
         return;
@@ -156,7 +164,7 @@ describe("ClaudeAdapterLive", () => {
       const resolved = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(resolved._tag, "Some");
 
-      if (resolved._tag !== "Some") {
+      if (!Predicate.isTagged(resolved, "Some")) {
         return;
       }
 
@@ -205,7 +213,7 @@ describe("ClaudeAdapterLive", () => {
 
       const createInput = harness.getLastCreateQueryInput();
       const canUseTool = createInput?.options.canUseTool;
-      assert.equal(typeof canUseTool, "function");
+      assert.isTrue(Predicate.isFunction(canUseTool));
 
       if (!canUseTool) {
         return;
@@ -215,12 +223,12 @@ describe("ClaudeAdapterLive", () => {
         const requested = yield* Stream.runHead(adapter.streamEvents);
         assert.equal(requested._tag, "Some");
 
-        if (requested._tag !== "Some" || requested.value.type !== "request.opened") {
+        if (!Predicate.isTagged(requested, "Some") || requested.value.type !== "request.opened") {
           return;
         }
 
         const runtimeRequestId = requested.value.requestId;
-        assert.equal(typeof runtimeRequestId, "string");
+        assert.isTrue(Predicate.isString(runtimeRequestId));
 
         if (runtimeRequestId === undefined) {
           return;
@@ -326,7 +334,7 @@ describe("ClaudeAdapterLive", () => {
 
       const createInput = harness.getLastCreateQueryInput();
       const canUseTool = createInput?.options.canUseTool;
-      assert.equal(typeof canUseTool, "function");
+      assert.isTrue(Predicate.isFunction(canUseTool));
 
       if (!canUseTool) {
         return;
@@ -344,7 +352,10 @@ describe("ClaudeAdapterLive", () => {
       const agentRequested = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(agentRequested._tag, "Some");
 
-      if (agentRequested._tag !== "Some" || agentRequested.value.type !== "request.opened") {
+      if (
+        !Predicate.isTagged(agentRequested, "Some") ||
+        agentRequested.value.type !== "request.opened"
+      ) {
         return;
       }
 
@@ -370,7 +381,10 @@ describe("ClaudeAdapterLive", () => {
       const grepRequested = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(grepRequested._tag, "Some");
 
-      if (grepRequested._tag !== "Some" || grepRequested.value.type !== "request.opened") {
+      if (
+        !Predicate.isTagged(grepRequested, "Some") ||
+        grepRequested.value.type !== "request.opened"
+      ) {
         return;
       }
 
@@ -462,7 +476,7 @@ describe("ClaudeAdapterLive", () => {
       yield* Stream.take(adapter.streamEvents, 3).pipe(Stream.runDrain);
 
       const onUserDialog = harness.getLastCreateQueryInput()?.options.onUserDialog;
-      assert.equal(typeof onUserDialog, "function");
+      assert.isTrue(Predicate.isFunction(onUserDialog));
 
       if (!onUserDialog) return;
 
@@ -477,7 +491,8 @@ describe("ClaudeAdapterLive", () => {
       const requested = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(requested._tag, "Some");
 
-      if (requested._tag !== "Some" || requested.value.type !== "user-input.requested") return;
+      if (!Predicate.isTagged(requested, "Some") || requested.value.type !== "user-input.requested")
+        return;
       const question = requested.value.payload.questions[0];
       assert.equal(question?.header, "Resume session");
       assert.match(question?.question ?? "", /2h 25m/);
@@ -498,7 +513,8 @@ describe("ClaudeAdapterLive", () => {
       const resolved = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(resolved._tag, "Some");
 
-      if (resolved._tag === "Some") assert.equal(resolved.value.type, "user-input.resolved");
+      if (Predicate.isTagged(resolved, "Some"))
+        assert.equal(resolved.value.type, "user-input.resolved");
       assert.deepEqual(yield* Effect.promise(() => dialogPromise), {
         behavior: "completed",
         result: "compact",
@@ -534,29 +550,34 @@ describe("ClaudeAdapterLive", () => {
       });
       yield* Stream.take(adapter.streamEvents, 1).pipe(Stream.runDrain);
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-user-input-1",
-        uuid: "stream-user-input-thread",
-        parent_tool_use_id: null,
-        event: {
-          type: "message_start",
-          message: {
-            id: "msg-user-input-thread",
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-user-input-1",
+          uuid: "stream-user-input-thread",
+          parent_tool_use_id: null,
+          event: {
+            type: "message_start",
+            message: {
+              id: "msg-user-input-thread",
+            },
           },
-        },
-      } as unknown as SDKMessage);
+        }),
+      );
 
       const threadStarted = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(threadStarted._tag, "Some");
 
-      if (threadStarted._tag !== "Some" || threadStarted.value.type !== "thread.started") {
+      if (
+        !Predicate.isTagged(threadStarted, "Some") ||
+        threadStarted.value.type !== "thread.started"
+      ) {
         return;
       }
 
       const createInput = harness.getLastCreateQueryInput();
       const canUseTool = createInput?.options.canUseTool;
-      assert.equal(typeof canUseTool, "function");
+      assert.isTrue(Predicate.isFunction(canUseTool));
 
       if (!canUseTool) {
         return;
@@ -586,7 +607,7 @@ describe("ClaudeAdapterLive", () => {
       const requestedEvent = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(requestedEvent._tag, "Some");
 
-      if (requestedEvent._tag !== "Some") {
+      if (!Predicate.isTagged(requestedEvent, "Some")) {
         return;
       }
 
@@ -597,7 +618,7 @@ describe("ClaudeAdapterLive", () => {
       }
 
       const requestId = requestedEvent.value.requestId;
-      assert.equal(typeof requestId, "string");
+      assert.isTrue(Predicate.isString(requestId));
       assert.equal(requestedEvent.value.payload.questions.length, 1);
       assert.equal(requestedEvent.value.payload.questions[0]?.question, "Which framework?");
       // Regression for #2388: `id` must equal the full question text so the
@@ -616,7 +637,7 @@ describe("ClaudeAdapterLive", () => {
       const resolvedEvent = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(resolvedEvent._tag, "Some");
 
-      if (resolvedEvent._tag !== "Some") {
+      if (!Predicate.isTagged(resolvedEvent, "Some")) {
         return;
       }
 
@@ -637,8 +658,7 @@ describe("ClaudeAdapterLive", () => {
       const permissionResult = yield* Effect.promise(() => permissionPromise);
       assert.equal((permissionResult as PermissionResult).behavior, "allow");
 
-      const updatedInput = (permissionResult as { updatedInput: Record<string, unknown> })
-        .updatedInput;
+      const updatedInput = (permissionResult as { updatedInput: Schema.JsonObject }).updatedInput;
 
       assert.deepEqual(updatedInput.answers, { "Which framework?": "React" });
       // Original questions should be passed through.
@@ -648,7 +668,7 @@ describe("ClaudeAdapterLive", () => {
       // must produce a non-empty rendered tool_result on BOTH SDK iteration
       // patterns we have seen, so we don't regress the issue and we don't
       // break users still on the older Claude CLI.
-      const sdkAnswers = updatedInput.answers as Record<string, unknown>;
+      const sdkAnswers = updatedInput.answers as Schema.JsonObject;
 
       const sdkQuestions = updatedInput.questions as ReadonlyArray<{
         readonly question: string;

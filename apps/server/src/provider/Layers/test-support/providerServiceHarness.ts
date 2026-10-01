@@ -30,6 +30,7 @@ import type { ProviderAdapterShape } from "../../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../../Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../../Services/ProviderSessionDirectory.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured ProviderServiceLive double or Layer for isolated provider tests.
 import { makeProviderServiceLive } from "../ProviderService.ts";
 import * as ProviderEventLoggers from "../ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "../ProviderSessionDirectory.ts";
@@ -38,6 +39,7 @@ import * as ProviderSessionRuntime from "../../../persistence/ProviderSessionRun
 import { SqlitePersistenceMemory } from "../../../persistence/Layers/Sqlite.ts";
 import * as ServerConfig from "../../../config.ts";
 import * as ServerSettings from "../../../serverSettings.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured AdapterRegistryMock double or Layer for isolated provider tests.
 import { makeAdapterRegistryMock } from "../../testUtils/providerAdapterRegistryMock.ts";
 
 export const defaultServerSettingsLayer = ServerSettings.ServerSettingsService.layerTest();
@@ -74,7 +76,14 @@ export type LegacyProviderRuntimeEvent = {
   readonly itemId?: string | undefined;
   readonly requestId?: string | undefined;
   readonly payload?: unknown | undefined;
-  readonly [key: string]: unknown;
+  readonly status?: string;
+  readonly toolKind?: string;
+  readonly delta?: string;
+  readonly summary?: string;
+  readonly title?: string;
+  readonly exitCode?: number;
+  readonly errorMessage?: string;
+  readonly detail?: string;
 };
 
 export function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
@@ -144,7 +153,11 @@ export function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER
     (
       _threadId: ThreadId,
       _requestId: string,
-      _answers: Record<string, unknown>,
+      _answers: ProviderAdapterShape<ProviderAdapterError>["respondToUserInput"] extends (
+        ...args: infer Args
+      ) => object
+        ? Args[2]
+        : never,
     ): Effect.Effect<void, ProviderAdapterError> => Effect.void,
   );
 
@@ -225,7 +238,7 @@ export function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER
   };
 
   const emit = (event: LegacyProviderRuntimeEvent): void => {
-    Effect.runSync(PubSub.publish(runtimeEventPubSub, event as unknown as ProviderRuntimeEvent));
+    Effect.runSync(PubSub.publish(runtimeEventPubSub, event as ProviderRuntimeEvent));
   };
 
   const updateSession = (

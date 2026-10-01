@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import type { ProviderSendTurnInput, ProviderSession } from "@akeru/contracts";
 import {
@@ -165,9 +166,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       assert.equal(routing.codex.startSession.mock.calls.length, 1);
       const resumedStartInput = routing.codex.startSession.mock.calls[0]?.[0];
-      assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+      assert.equal(Predicate.isObject(resumedStartInput) && resumedStartInput !== null, true);
 
-      if (resumedStartInput && typeof resumedStartInput === "object") {
+      if (resumedStartInput && Predicate.isObject(resumedStartInput)) {
         const startPayload = resumedStartInput as {
           provider?: string;
           cwd?: string;
@@ -215,7 +216,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
 
       const turnInput = routing.codex.sendTurn.mock.calls[0]?.[0] as ProviderSendTurnInput;
-      assert.equal(typeof turnInput.input, "string");
+      assert.isTrue(Predicate.isString(turnInput.input));
       const turnText = turnInput.input ?? "";
       assert.equal(turnText.startsWith("use this screenshot"), true);
       assert.include(turnText, '[Attached image "screenshot.png" is saved at: ');
@@ -252,9 +253,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(session.provider, "claudeAgent");
       assert.equal(routing.claude.startSession.mock.calls.length, 1);
       const startInput = routing.claude.startSession.mock.calls[0]?.[0];
-      assert.equal(typeof startInput === "object" && startInput !== null, true);
+      assert.equal(Predicate.isObject(startInput) && startInput !== null, true);
 
-      if (startInput && typeof startInput === "object") {
+      if (startInput && Predicate.isObject(startInput)) {
         const startPayload = startInput as {
           provider?: string;
           providerInstanceId?: ProviderInstanceId;
@@ -311,13 +312,13 @@ validation.layer("ProviderServiceLive validation", (it) => {
 
       assert.equal(failure._tag, "Failure");
 
-      if (failure._tag !== "Failure") {
+      if (!Predicate.isTagged(failure, "Failure")) {
         return;
       }
 
       assert.equal(failure.failure._tag, "ProviderValidationError");
 
-      if (failure.failure._tag !== "ProviderValidationError") {
+      if (!Predicate.isTagged(failure.failure, "ProviderValidationError")) {
         return;
       }
 

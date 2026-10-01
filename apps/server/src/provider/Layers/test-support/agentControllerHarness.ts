@@ -1,5 +1,9 @@
+import type { AkeruMastraHarness } from "../../AkeruMastraHarness.ts";
+import { sessionFixture } from "./partialFixtures.ts";
+import type { AkeruMastraState } from "../../AkeruMastraHarness.ts";
+
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
-import type { AgentControllerEvent, MastraDBMessage, Session } from "@mastra/core/agent-controller";
+import type { AgentControllerEvent, MastraDBMessage } from "@mastra/core/agent-controller";
 import { McpServerId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import { vi } from "vite-plus/test";
@@ -47,7 +51,7 @@ export function makeMastraHarness() {
   const listeners = new Set<(event: AgentControllerEvent) => void>();
   let modeId = "build";
   let modelId = "openai/gpt-5.6-sol";
-  let state: Record<string, unknown> = {};
+  let state: AkeruMastraState = {};
   let resolveSend: (() => void) | undefined;
   const rejectSends: Array<(cause: unknown) => void> = [];
   let sendMessageCount = 0;
@@ -67,10 +71,10 @@ export function makeMastraHarness() {
     });
   });
 
-  const session = {
+  const session = sessionFixture({
     state: {
       get: () => state,
-      set: vi.fn(async (next: Record<string, unknown>) => {
+      set: vi.fn(async (next: AkeruMastraState) => {
         state = next;
       }),
     },
@@ -100,11 +104,15 @@ export function makeMastraHarness() {
     abort: vi.fn(),
     respondToToolApproval: vi.fn(),
     respondToToolSuspension: vi.fn(async () => undefined),
-  } as unknown as Session<Record<string, unknown>>;
+  });
 
-  const createSession = vi.fn(async (_input: unknown) => session as never);
+  const createSession = vi.fn(async <Input>(_input: Input) => session as never);
   const deleteSession = vi.fn(async () => true);
-  const observeExternalTurn = vi.fn(async () => undefined);
+
+  const observeExternalTurn = vi.fn(
+    async (_input: Parameters<NonNullable<AkeruMastraHarness["observeExternalTurn"]>>[0]) =>
+      undefined,
+  );
 
   const factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]> = (options) =>
     Effect.sync(() => {

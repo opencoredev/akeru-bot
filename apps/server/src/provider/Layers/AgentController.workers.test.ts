@@ -101,7 +101,8 @@ describe("AgentControllerLive", () => {
             groupId: null,
             parentThreadId: codexThreadId,
           });
-          const childThreadId = (create as { readonly threadId: ThreadId }).threadId;
+          assert(create?.type === "thread.create");
+          const childThreadId = create.threadId;
           expect(start).toMatchObject({ type: "thread.turn.start", threadId: childThreadId });
           expect(start).not.toHaveProperty("respondingBotId");
 
@@ -302,7 +303,7 @@ describe("AgentControllerLive", () => {
           expect(start).toMatchObject({ type: "thread.turn.start" });
           expect(discard).toMatchObject({
             type: "thread.delete",
-            threadId: (create as { readonly threadId: ThreadId }).threadId,
+            threadId: create?.type === "thread.create" ? create.threadId : undefined,
           });
         }),
         bridge.service,

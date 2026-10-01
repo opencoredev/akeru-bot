@@ -35,6 +35,7 @@ import {
   type CodexSessionRuntimeShape,
   type CodexThreadSnapshot,
 } from "../CodexSessionRuntime.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured CodexAdapter double or Layer for isolated provider tests.
 import { makeCodexAdapter } from "../CodexAdapter.ts";
 
 export const decodeCodexSettings = Schema.decodeSync(CodexSettings);

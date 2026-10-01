@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { mapCodexRequestEvents } from "./CodexRequestEvents.ts";
 import { mapCodexTelemetryEvents } from "./CodexTelemetryEvents.ts";
 import { type ProviderEvent, type ProviderRuntimeEvent, ThreadId } from "@akeru/contracts";
@@ -121,16 +122,12 @@ export function mapToRuntimeEvents(
         type: "thread.state.changed",
         ...runtimeEventBase(event, canonicalThreadId),
         payload: {
-          state:
-            event.method === "thread/archived"
-              ? "archived"
-              : event.method === "thread/closed"
-                ? "closed"
-                : event.method === "thread/compacted"
-                  ? "compacted"
-                  : payload
-                    ? toThreadState(payload.status)
-                    : "active",
+          state: Match.value(event.method).pipe(
+            Match.when("thread/archived", () => "archived" as const),
+            Match.when("thread/closed", () => "closed" as const),
+            Match.when("thread/compacted", () => "compacted" as const),
+            Match.orElse(() => (payload ? toThreadState(payload.status) : "active")),
+          ),
           ...(event.payload !== undefined ? { detail: event.payload } : {}),
         },
       },

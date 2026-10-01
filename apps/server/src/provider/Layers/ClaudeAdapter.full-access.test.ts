@@ -1,5 +1,6 @@
+import { claudeMessage } from "./test-support/claudeMessages.ts";
 // @effect-diagnostics nodeBuiltinImport:off
-import type { PermissionMode, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import { ProviderDriverKind, type RuntimeMode } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -94,29 +95,33 @@ describe("ClaudeAdapterLive", () => {
         (event) => event.type === "turn.completed",
       ).pipe(Stream.runHead, Effect.forkChild);
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-native-log",
-        uuid: "stream-native-log",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_delta",
-          index: 0,
-          delta: {
-            type: "text_delta",
-            text: "hi",
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-native-log",
+          uuid: "stream-native-log",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: {
+              type: "text_delta",
+              text: "hi",
+            },
           },
-        },
-      } as unknown as SDKMessage);
+        }),
+      );
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        errors: [],
-        session_id: "sdk-session-native-log",
-        uuid: "result-native-log",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          session_id: "sdk-session-native-log",
+          uuid: "result-native-log",
+        }),
+      );
 
       const turnCompleted = yield* Fiber.join(turnCompletedFiber);
       assert.equal(turnCompleted._tag, "Some");

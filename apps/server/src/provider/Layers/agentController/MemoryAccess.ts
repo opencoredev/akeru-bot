@@ -1,3 +1,4 @@
+import { readSdkRecord } from "../ProtocolJson.ts";
 import type { AkeruRuntimeSeam } from "../../AkeruRuntimeSeam.ts";
 import type { AgentControllerLiveOptions } from "./Options.ts";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
@@ -199,14 +200,14 @@ export function createMemoryAccess(deps: {
       }
 
       if (!settings.privateBotMemory) {
-        const { target, operations, share } = input.input as {
-          readonly target?: AkeruMemoryDocumentTarget;
-          readonly operations?: ReadonlyArray<unknown>;
-          readonly share?: unknown;
-        };
+        const memoryInput = readSdkRecord(input.input);
+        const target = memoryInput?.target;
+        const operations = memoryInput?.operations;
+        const share = memoryInput?.share;
 
         // A share-only call never reads or changes the target document.
-        const shareOnly = share !== undefined && operations?.length === 0;
+        const shareOnly =
+          share !== undefined && Array.isArray(operations) && operations.length === 0;
 
         if (target === "memory" && !shareOnly) {
           throw new Error("Private bot memory is disabled.");

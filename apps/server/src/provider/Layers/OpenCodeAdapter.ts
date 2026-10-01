@@ -1,3 +1,6 @@
+import type { OpenCodeNativeLogRecord } from "./opencode/OpenCodeAdapterState.ts";
+
+import * as Predicate from "effect/Predicate";
 import {
   addRelatedOpenCodeSession,
   isRelatedOpenCodeSession,
@@ -31,6 +34,7 @@ import { ServerConfig } from "../../config.ts";
 import { subscriptionRuntimeEnvironment } from "../../subscription-auth/runtime.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { type EventNdjsonLogger } from "./logging/EventLogTypes.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root creates the scoped logger with this adapter configuration.
 import { makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
   ProviderAdapterRequestError,
@@ -180,21 +184,11 @@ export function makeOpenCodeAdapter(
     const emit = (event: ProviderRuntimeEvent) =>
       Queue.offer(runtimeEvents, event).pipe(Effect.asVoid);
 
-    const writeNativeEvent = (
-      threadId: ThreadId,
-      event: {
-        readonly observedAt: string;
-        readonly event: Record<string, unknown>;
-      },
-    ) => (nativeEventLogger ? nativeEventLogger.write(event, threadId) : Effect.void);
+    const writeNativeEvent = (threadId: ThreadId, event: OpenCodeNativeLogRecord) =>
+      nativeEventLogger ? nativeEventLogger.write(event, threadId) : Effect.void;
 
-    const writeNativeEventBestEffort = (
-      threadId: ThreadId,
-      event: {
-        readonly observedAt: string;
-        readonly event: Record<string, unknown>;
-      },
-    ) => writeNativeEvent(threadId, event).pipe(Effect.catchCause(() => Effect.void));
+    const writeNativeEventBestEffort = (threadId: ThreadId, event: OpenCodeNativeLogRecord) =>
+      writeNativeEvent(threadId, event).pipe(Effect.catchCause(() => Effect.void));
 
     const emitUnexpectedExit = Effect.fn("emitUnexpectedExit")(function* (
       context: OpenCodeSessionContext,
@@ -786,7 +780,7 @@ export function makeOpenCodeAdapter(
         ),
         // The question stays pending until OpenCode reports it replied, so the answer can be sent again.
         Effect.mapError((cause) =>
-          cause._tag === "ProviderAdapterRequestError"
+          Predicate.isTagged(cause, "ProviderAdapterRequestError")
             ? cause
             : new ProviderAdapterRequestError({
                 provider: PROVIDER,

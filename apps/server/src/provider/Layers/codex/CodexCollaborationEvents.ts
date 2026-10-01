@@ -1,3 +1,7 @@
+import { readProtocolRecord } from "../ProtocolJson.ts";
+import type * as Schema from "effect/Schema";
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import {
   type ProviderEvent,
   type ProviderRuntimeEvent,
@@ -21,12 +25,9 @@ export function mapCollabAgentEvent(
   event: ProviderEvent,
   canonicalThreadId: ThreadId,
 ): ReadonlyArray<ProviderRuntimeEvent> {
-  const payload =
-    typeof event.payload === "object" && event.payload !== null
-      ? (event.payload as Record<string, unknown>)
-      : undefined;
+  const payload = readProtocolRecord(event.payload);
 
-  const agentThreadId = typeof payload?.agentThreadId === "string" ? payload.agentThreadId : "";
+  const agentThreadId = Predicate.isString(payload?.agentThreadId) ? payload.agentThreadId : "";
 
   if (!payload || agentThreadId.length === 0) {
     return [];
@@ -34,12 +35,12 @@ export function mapCollabAgentEvent(
 
   const base = runtimeEventBase(event, canonicalThreadId);
   const taskId = RuntimeTaskId.make(agentThreadId);
-  const agentPath = typeof payload.agentPath === "string" ? payload.agentPath : undefined;
+  const agentPath = Predicate.isString(payload.agentPath) ? payload.agentPath : undefined;
   const pathLeaf = agentPath?.split("/").findLast((segment) => segment.length > 0);
-  const nickname = typeof payload.nickname === "string" ? payload.nickname : undefined;
+  const nickname = Predicate.isString(payload.nickname) ? payload.nickname : undefined;
 
   const role =
-    (typeof payload.role === "string" ? payload.role : undefined) ?? pathLeaf ?? "general-purpose";
+    (Predicate.isString(payload.role) ? payload.role : undefined) ?? pathLeaf ?? "general-purpose";
 
   // A bare thread id is not a name. Omitting the title lets the client fold
   // keep the real one from task.started instead of clobbering it (probe
@@ -69,7 +70,7 @@ export function mapCollabAgentEvent(
             title,
             role,
             ...(agentPath ? { agentPath } : {}),
-            ...(typeof payload.parentThreadId === "string"
+            ...(Predicate.isString(payload.parentThreadId)
               ? { parentAgentId: payload.parentThreadId }
               : {}),
             timelineBypass: true,
@@ -77,7 +78,7 @@ export function mapCollabAgentEvent(
         },
       ];
     case "collabAgent/activity": {
-      const activityKind = typeof payload.activityKind === "string" ? payload.activityKind : "";
+      const activityKind = Predicate.isString(payload.activityKind) ? payload.activityKind : "";
 
       if (activityKind === "interrupted") {
         return [
@@ -125,19 +126,15 @@ export function mapCollabAgentEvent(
       ];
     case "collabAgent/turnCompleted": {
       // Idle, not terminal: the identity is resumable via sendInput/resume.
-      const turn =
-        typeof payload.turn === "object" && payload.turn !== null
-          ? (payload.turn as Record<string, unknown>)
-          : undefined;
+      const turn = readProtocolRecord(payload.turn);
 
-      const turnStatus = typeof turn?.status === "string" ? turn.status : undefined;
+      const turnStatus = Predicate.isString(turn?.status) ? turn.status : undefined;
 
-      const status =
-        turnStatus === "failed"
-          ? ("failed" as const)
-          : turnStatus === "interrupted"
-            ? ("interrupted" as const)
-            : ("idle" as const);
+      const status = Match.value(turnStatus).pipe(
+        Match.when("failed", () => "failed" as const),
+        Match.when("interrupted", () => "interrupted" as const),
+        Match.orElse(() => "idle" as const),
+      );
 
       return [
         {
@@ -149,12 +146,9 @@ export function mapCollabAgentEvent(
     }
 
     case "collabAgent/statusChanged": {
-      const status =
-        typeof payload.status === "object" && payload.status !== null
-          ? (payload.status as Record<string, unknown>)
-          : undefined;
+      const status = readProtocolRecord(payload.status);
 
-      const statusType = typeof status?.type === "string" ? status.type : undefined;
+      const statusType = Predicate.isString(status?.type) ? status.type : undefined;
 
       if (statusType === "systemError") {
         // Silently dropping this once left children stuck running forever.
@@ -199,18 +193,12 @@ export function mapCollabAgentEvent(
     case "collabAgent/tokenUsage": {
       // Cumulative per child thread: always the `total` breakdown, never
       // `last` (which shrinks on follow-ups). Client folds max-merge.
-      const tokenUsage =
-        typeof payload.tokenUsage === "object" && payload.tokenUsage !== null
-          ? (payload.tokenUsage as Record<string, unknown>)
-          : undefined;
+      const tokenUsage = readProtocolRecord(payload.tokenUsage);
 
-      const total =
-        typeof tokenUsage?.total === "object" && tokenUsage.total !== null
-          ? (tokenUsage.total as Record<string, unknown>)
-          : undefined;
+      const total = readProtocolRecord(tokenUsage?.total);
 
-      const count = (value: unknown): number | undefined =>
-        typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+      const count = (value: Schema.Json | undefined): number | undefined =>
+        Predicate.isNumber(value) && Number.isFinite(value) && value >= 0 ? value : undefined;
 
       // Same validation as every other field: RuntimeTaskUsage.totalTokens
       // is NonNegativeInt, so NaN/Infinity/negative wire values must miss.
@@ -252,12 +240,9 @@ export function mapCollabAgentEvent(
     }
 
     case "collabAgent/item": {
-      const item =
-        typeof payload.item === "object" && payload.item !== null
-          ? (payload.item as Record<string, unknown>)
-          : undefined;
+      const item = readProtocolRecord(payload.item);
 
-      const itemTypeRaw = typeof item?.type === "string" ? item.type : undefined;
+      const itemTypeRaw = Predicate.isString(item?.type) ? item.type : undefined;
 
       if (!itemTypeRaw) {
         return [];
@@ -267,9 +252,9 @@ export function mapCollabAgentEvent(
       // this boundary (synthetic event payload), so read best-effort fields
       // rather than force a schema decode.
       const looseSummary =
-        (typeof item?.command === "string" ? item.command : undefined) ??
-        (typeof item?.title === "string" ? item.title : undefined) ??
-        (typeof item?.query === "string" ? item.query : undefined);
+        (Predicate.isString(item?.command) ? item.command : undefined) ??
+        (Predicate.isString(item?.title) ? item.title : undefined) ??
+        (Predicate.isString(item?.query) ? item.query : undefined);
 
       const canonical = toCanonicalItemType(itemTypeRaw);
       const summary = looseSummary ?? canonical.replaceAll("_", " ");

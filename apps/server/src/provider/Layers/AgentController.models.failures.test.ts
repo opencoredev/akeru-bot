@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -390,7 +391,7 @@ describe("AgentControllerLive", () => {
 
           assert.equal(failure._tag, "AgentControllerUnsupportedEngineError");
 
-          if (failure._tag === "AgentControllerUnsupportedEngineError") {
+          if (Predicate.isTagged(failure, "AgentControllerUnsupportedEngineError")) {
             assert.include(failure.detail, "Model 'not-a-model' is not available for codex.");
           }
 
@@ -677,7 +678,7 @@ describe("AgentControllerLive", () => {
           const event = yield* Fiber.join(interrupted);
           assert.equal(event._tag, "Some");
 
-          if (event._tag === "Some") {
+          if (Predicate.isTagged(event, "Some")) {
             assert.equal(event.value.turnId, turn.turnId);
           }
 

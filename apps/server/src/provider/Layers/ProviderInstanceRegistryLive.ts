@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * ProviderInstanceRegistryLive — runtime implementation of
  * `ProviderInstanceRegistry` plus its sibling mutator.
@@ -103,7 +104,10 @@ const entryEqual = (a: ProviderInstanceConfig, b: ProviderInstanceConfig): boole
  * decoded config's flag (which carries the driver schema's default for
  * built-ins and forks alike), then enabled by default.
  */
-const resolveEntryEnabled = (entry: ProviderInstanceConfig, typedConfig: unknown): boolean => {
+const resolveEntryEnabled = <Config>(
+  entry: ProviderInstanceConfig,
+  typedConfig: Config,
+): boolean => {
   const rawConfigEnabled = providerInstanceConfigEnabledFlag(entry.config);
 
   if (entry.enabled === false || rawConfigEnabled === false) {
@@ -150,7 +154,7 @@ const buildEntry = <R>(input: {
     const decoder = Schema.decodeUnknownEffect(driver.configSchema);
     const decodeResult = yield* decoder(entry.config ?? driver.defaultConfig()).pipe(Effect.result);
 
-    if (decodeResult._tag === "Failure") {
+    if (Predicate.isTagged(decodeResult, "Failure")) {
       const issue = decodeResult.failure;
       const detail = issue.message ?? String(issue);
       yield* Effect.logError("Failed to decode provider instance config", {
@@ -191,7 +195,7 @@ const buildEntry = <R>(input: {
       })
       .pipe(Effect.provideService(Scope.Scope, childScope), Effect.result);
 
-    if (createResult._tag === "Failure") {
+    if (Predicate.isTagged(createResult, "Failure")) {
       yield* Effect.logError("Failed to create provider instance", {
         instanceId: rawInstanceId,
         driver: entry.driver,
@@ -416,14 +420,9 @@ export const makeProviderInstanceRegistry = <R>(input: {
           }),
         ),
       listInstances: Ref.get(entries).pipe(
-        Effect.map(
-          (map) =>
-            Array.from(map.values(), (live) => live.instance) as ReadonlyArray<ProviderInstance>,
-        ),
+        Effect.map((map) => Array.from(map.values(), (live) => live.instance)),
       ),
-      listUnavailable: Ref.get(unavailable).pipe(
-        Effect.map((map) => Array.from(map.values()) as ReadonlyArray<ServerProvider>),
-      ),
+      listUnavailable: Ref.get(unavailable).pipe(Effect.map((map) => Array.from(map.values()))),
       // Getters: each read constructs a fresh Stream / Effect descriptor
       // so multiple consumers don't share a single already-started
       // Channel or subscription. Matches the pattern `ProviderRegistry`
@@ -464,6 +463,6 @@ export const ProviderInstanceRegistryMutableLayer = <R>(input: {
         ),
       ),
     ),
-  ) as Layer.Layer<ProviderInstanceRegistry | ProviderInstanceRegistryMutator, never, R>;
+  );
 
 export { defaultInstanceIdForDriver };

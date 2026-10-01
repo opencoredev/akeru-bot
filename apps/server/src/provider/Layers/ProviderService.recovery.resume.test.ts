@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -123,9 +124,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       assert.equal(secondClaude.startSession.mock.calls.length, 1);
       const resumedStartInput = secondClaude.startSession.mock.calls[0]?.[0];
-      assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+      assert.equal(Predicate.isObject(resumedStartInput) && resumedStartInput !== null, true);
 
-      if (resumedStartInput && typeof resumedStartInput === "object") {
+      if (resumedStartInput && Predicate.isObject(resumedStartInput)) {
         const startPayload = resumedStartInput as {
           provider?: string;
           cwd?: string;
@@ -236,9 +237,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
         assert.equal(secondClaude.startSession.mock.calls.length, 1);
         const resumedStartInput = secondClaude.startSession.mock.calls[0]?.[0];
-        assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+        assert.equal(Predicate.isObject(resumedStartInput) && resumedStartInput !== null, true);
 
-        if (resumedStartInput && typeof resumedStartInput === "object") {
+        if (resumedStartInput && Predicate.isObject(resumedStartInput)) {
           const startPayload = resumedStartInput as {
             provider?: string;
             cwd?: string;

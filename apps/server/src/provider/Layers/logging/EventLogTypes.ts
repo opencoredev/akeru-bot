@@ -34,7 +34,7 @@ export type EventNdjsonStream = "native" | "canonical" | "orchestration";
 
 export interface EventNdjsonLogger {
   readonly filePath: string;
-  readonly write: (event: unknown, threadId: ThreadId | null) => Effect.Effect<void>;
+  readonly write: <Event>(event: Event, threadId: ThreadId | null) => Effect.Effect<void>;
   readonly close: () => Effect.Effect<void>;
 }
 

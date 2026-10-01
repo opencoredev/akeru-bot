@@ -1,3 +1,4 @@
+import { emptyOpenCodeInventory, openCodeModelFixture } from "./test-support/openCodeInventory.ts";
 import * as NodeAssert from "node:assert/strict";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -40,11 +41,7 @@ const runtimeMock = {
     inventoryError: null as Error | null,
     inventoryCwd: null as string | null,
     closeCalls: 0,
-    inventory: {
-      providerList: { connected: [] as string[], all: [] as unknown[], default: {} },
-      agents: [] as unknown[],
-      skills: [] as unknown[],
-    } as unknown,
+    inventory: emptyOpenCodeInventory(),
   },
   reset() {
     this.state.runVersionError = null;
@@ -54,9 +51,9 @@ const runtimeMock = {
     this.state.inventoryCwd = null;
     this.state.closeCalls = 0;
     this.state.inventory = {
-      providerList: { connected: [], all: [] as unknown[], default: {} },
-      agents: [] as unknown[],
-      skills: [] as unknown[],
+      providerList: { connected: [], all: [], default: {} },
+      agents: [],
+      skills: [],
     };
   },
 };
@@ -96,7 +93,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
           )
         : Effect.succeed({ stdout: runtimeMock.state.versionStdout, stderr: "", code: 0 }),
   createOpenCodeSdkClient: () =>
-    ({}) as unknown as ReturnType<OpenCodeRuntimeShape["createOpenCodeSdkClient"]>,
+    ({}) as ReturnType<OpenCodeRuntimeShape["createOpenCodeSdkClient"]>,
   loadOpenCodeInventory: () =>
     runtimeMock.state.inventoryError
       ? Effect.fail(
@@ -106,7 +103,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
             cause: runtimeMock.state.inventoryError,
           }),
         )
-      : Effect.succeed(runtimeMock.state.inventory as OpenCodeInventory),
+      : Effect.succeed(runtimeMock.state.inventory),
   loadInventoryFromCli: ({ cwd }) => {
     runtimeMock.state.inventoryCwd = cwd;
 
@@ -120,6 +117,14 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         )
       : Effect.succeed(runtimeMock.state.inventory as OpenCodeInventory);
   },
+};
+
+// Extra SDK fields are retained in a wire fixture and ignored by skill mapping.
+const noIconSkill = {
+  name: "no-icon",
+  description: "No icon available.",
+  location: "/Users/test/.agents/skills/no-icon/SKILL.md",
+  icon: "should-be-ignored",
 };
 
 beforeEach(() => {
@@ -198,8 +203,11 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
             {
               id: "openai",
               name: "OpenAI",
+              source: "config",
+              env: [],
+              options: {},
               models: {
-                "gpt-5.4": {
+                "gpt-5.4": openCodeModelFixture({
                   id: "gpt-5.4",
                   name: "GPT-5.4",
                   variants: {
@@ -209,16 +217,17 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
                     high: {},
                     xhigh: {},
                   },
-                },
+                }),
               },
             },
           ],
           default: {},
         },
         agents: [
-          { name: "build", hidden: false, mode: "primary" },
-          { name: "plan", hidden: false, mode: "primary" },
+          { name: "build", hidden: false, mode: "primary", permission: [], options: {} },
+          { name: "plan", hidden: false, mode: "primary", permission: [], options: {} },
         ],
+        skills: [],
       };
 
       const snapshot = yield* checkOpenCodeProviderStatus(makeOpenCodeSettings(), process.cwd());
@@ -257,12 +266,15 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
             {
               id: "openai",
               name: "OpenAI",
+              source: "config",
+              env: [],
+              options: {},
               models: {
-                "gpt-5.4": {
+                "gpt-5.4": openCodeModelFixture({
                   id: "gpt-5.4",
                   name: "GPT-5.4",
                   variants: {},
-                },
+                }),
               },
             },
           ],
@@ -285,14 +297,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
             description: "This incomplete SDK row should be skipped.",
             location: "",
           },
-          {
-            // The OpenCode SDK reports no icon field; unknown keys are
-            // tolerated but never mapped onto the provider skill.
-            name: "no-icon",
-            description: "No icon available.",
-            location: "/Users/test/.agents/skills/no-icon/SKILL.md",
-            icon: "should-be-ignored",
-          },
+          noIconSkill,
         ],
       };
 

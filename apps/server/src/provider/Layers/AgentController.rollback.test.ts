@@ -1,3 +1,10 @@
+import { DelegationId, type AkeruDelegationRecord } from "@akeru/contracts";
+import {
+  projectionQueryFixture,
+  providerRuntimeContext,
+} from "./test-support/projectionFixtures.ts";
+import type { AkeruMastraState } from "../AkeruMastraHarness.ts";
+
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -96,7 +103,7 @@ describe("AgentControllerLive", () => {
       const dispatchStarted = Promise.withResolvers<void>();
       const finishDispatch = Promise.withResolvers<void>();
       const dispatchAborted = Promise.withResolvers<void>();
-      const sessions: Session<Record<string, unknown>>[] = [];
+      const sessions: Session<AkeruMastraState>[] = [];
       let harness: AkeruMastraHarness | undefined;
       let failRestart = false;
 
@@ -301,8 +308,24 @@ describe("AgentControllerLive", () => {
       const delegatedParentThreadId = ThreadId.make("thread-delegated-parent");
       const orphanThreadId = ThreadId.make("worker-thread-restricted");
 
-      const parentDelegation = {
-        delegationId: "delegation-restricted",
+      const parentDelegation: AkeruDelegationRecord = {
+        delegationId: DelegationId.make("delegation-restricted"),
+        parentDelegationId: null,
+        parentBotId: bossBotId,
+        childBotId: bossBotId,
+        parentTurnId: TurnId.make("parent-turn"),
+        ancestorBotIds: [],
+        depth: 1,
+        task: "Restricted delegation",
+        expectedResult: "Summary",
+        deadline: null,
+        billedBotId: bossBotId,
+        keep: false,
+        anchorMessageId: null,
+        retryOfDelegationId: null,
+        trigger: "bot",
+        createdAt: "2026-09-01T00:00:00.000Z",
+        updatedAt: "2026-09-01T00:01:00.000Z",
         parentThreadId: codexThreadId,
         phase: {
           _tag: "Completed",
@@ -310,7 +333,7 @@ describe("AgentControllerLive", () => {
           childTurnId: null,
           startedAt: "2026-09-01T00:00:00.000Z",
           completedAt: "2026-09-01T00:01:00.000Z",
-          result: { summary: "Done.", childThreadId: delegatedParentThreadId },
+          result: { summary: "Done.", childThreadId: delegatedParentThreadId, childTurnId: null },
           acknowledgedAt: null,
         },
         access: {
@@ -365,20 +388,28 @@ describe("AgentControllerLive", () => {
       ).pipe(
         Effect.provideService(
           ProjectionSnapshotQuery.ProjectionSnapshotQuery,
-          ProjectionSnapshotQuery.ProjectionSnapshotQuery.of({
-            getThreadRuntimeContext: (threadId: ThreadId) =>
-              Effect.succeed(
-                Option.some(
-                  threadId === orphanThreadId
-                    ? { botId: bossBotId, parentThreadId: delegatedParentThreadId }
-                    : { botId: bossBotId },
+          ProjectionSnapshotQuery.ProjectionSnapshotQuery.of(
+            projectionQueryFixture({
+              getThreadRuntimeContext: (threadId: ThreadId) =>
+                Effect.succeed(
+                  Option.some(
+                    providerRuntimeContext(
+                      threadId === orphanThreadId
+                        ? {
+                            id: threadId,
+                            botId: bossBotId,
+                            parentThreadId: delegatedParentThreadId,
+                          }
+                        : { id: threadId, botId: bossBotId },
+                    ),
+                  ),
                 ),
-              ),
-            getBotById: () => Effect.succeed(Option.none()),
-            getGroupById: () => Effect.succeed(Option.none()),
-            listThreadDelegations: (threadId: ThreadId) =>
-              Effect.succeed(threadId === delegatedParentThreadId ? [parentDelegation] : []),
-          } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
+              getBotById: () => Effect.succeed(Option.none()),
+              getGroupById: () => Effect.succeed(Option.none()),
+              listThreadDelegations: (threadId: ThreadId) =>
+                Effect.succeed(threadId === delegatedParentThreadId ? [parentDelegation] : []),
+            }),
+          ),
         ),
       );
     });

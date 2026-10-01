@@ -1,3 +1,8 @@
+import { emptyProviderSnapshot, providerThreadFixture } from "./projectionFixtures.ts";
+import { sessionFixture } from "./partialFixtures.ts";
+import type { AkeruMastraState } from "../../AkeruMastraHarness.ts";
+
+import * as Match from "effect/Match";
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { AgentControllerEvent, Session } from "@mastra/core/agent-controller";
@@ -33,6 +38,7 @@ import { AgentController } from "../../Services/AgentController.ts";
 import { ProviderValidationError } from "../../Errors.ts";
 import { LegacyProviderBridge } from "../../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../../Services/ProviderService.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured AgentControllerLive double or Layer for isolated provider tests.
 import { makeAgentControllerLive, type AgentControllerLiveOptions } from "../AgentController.ts";
 import {
   RoutineDraftDispatcher,
@@ -53,7 +59,9 @@ import {
   codexSelection,
   instanceModelCatalog,
 } from "./agentControllerFixtures.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured UsageLedger double or Layer for isolated provider tests.
 import { makeUsageLedger } from "./agentControllerMemory.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured MastraHarness double or Layer for isolated provider tests.
 import { makeMastraHarness } from "./agentControllerHarness.ts";
 
 export function makeProviderSession(
@@ -66,12 +74,11 @@ export function makeProviderSession(
     threadId,
     status: "ready",
     runtimeMode: "full-access",
-    model:
-      provider === "codex"
-        ? "gpt-5.6-sol"
-        : provider === "opencode"
-          ? "anthropic/claude-sonnet-4-5"
-          : "claude-fable-5",
+    model: Match.value(provider).pipe(
+      Match.when("codex", () => "gpt-5.6-sol" as const),
+      Match.when("opencode", () => "anthropic/claude-sonnet-4-5" as const),
+      Match.orElse(() => "claude-fable-5" as const),
+    ),
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
@@ -118,11 +125,11 @@ export function makeBridge() {
     Effect.succeed(
       makeProviderSession(
         threadId,
-        String(input.provider) === "codex"
-          ? "codex"
-          : String(input.provider) === "opencode"
-            ? "opencode"
-            : "claudeAgent",
+        Match.value(String(input.provider)).pipe(
+          Match.when("codex", () => "codex" as const),
+          Match.when("opencode", () => "opencode" as const),
+          Match.orElse(() => "claudeAgent" as const),
+        ),
       ),
     ),
   );
@@ -432,8 +439,9 @@ export const linearServer: McpServer = {
 };
 
 export const groupParentSnapshot = {
+  ...emptyProviderSnapshot(),
   threads: [
-    {
+    providerThreadFixture({
       id: codexThreadId,
       projectId: ProjectId.make("project-workers"),
       botId: null,
@@ -443,17 +451,17 @@ export const groupParentSnapshot = {
       modelSelection: codexSelection,
       branch: null,
       worktreePath: null,
-    },
+    }),
   ],
   bots: [],
   groups: [],
   delegations: [],
-} as unknown as OrchestrationReadModel;
+} satisfies OrchestrationReadModel;
 
-export const makeWorkerSession = (base: Session<Record<string, unknown>>) => {
+export const makeWorkerSession = (base: Session<AkeruMastraState>) => {
   const listeners = new Set<(event: AgentControllerEvent) => void>();
 
-  const session = {
+  const session = sessionFixture({
     ...base,
     subscribe: vi.fn((listener: (event: AgentControllerEvent) => void) => {
       listeners.add(listener);
@@ -462,7 +470,7 @@ export const makeWorkerSession = (base: Session<Record<string, unknown>>) => {
     }),
     sendMessage: vi.fn(() => new Promise<void>(() => undefined)),
     respondToToolApproval: vi.fn(),
-  } as unknown as Session<Record<string, unknown>>;
+  });
 
   return {
     session,

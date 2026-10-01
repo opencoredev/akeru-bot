@@ -1,3 +1,5 @@
+import { emptyProviderSnapshot, providerBotFixture } from "./test-support/projectionFixtures.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodeHttp from "node:http";
@@ -63,7 +65,7 @@ describe("AgentControllerLive", () => {
       attempts: [],
     };
 
-    const generateImage = vi.fn((_threadId: ThreadId, _input: unknown) =>
+    const generateImage = vi.fn(<Input>(_threadId: ThreadId, _input: Input) =>
       Effect.succeed(imageResult),
     );
 
@@ -118,9 +120,10 @@ describe("AgentControllerLive", () => {
         yield* controller.configurePluginRuntime!({
           readSnapshot: async () =>
             ({
-              bots: snapshotBots,
+              ...emptyProviderSnapshot(),
+              bots: snapshotBots.map(providerBotFixture),
               mcpServers: [docsServer, localServer],
-            }) as unknown as OrchestrationReadModel,
+            }) satisfies OrchestrationReadModel,
           dispatch: async (command) => {
             dispatched.push(command);
 
@@ -160,7 +163,7 @@ describe("AgentControllerLive", () => {
           ]),
         );
 
-        const run = (toolId: AkeruRuntimeToolId, toolCallId: string, input: unknown) =>
+        const run = (toolId: AkeruRuntimeToolId, toolCallId: string, input: Schema.Json) =>
           Effect.promise(() => {
             const execution = { threadId: String(codexThreadId), toolId, toolCallId, input };
             runtime.grantApproval(execution);
@@ -255,7 +258,7 @@ describe("AgentControllerLive", () => {
             })
             .then(
               () => undefined,
-              (error: unknown) => error,
+              (cause: unknown) => cause,
             ),
         );
 
@@ -438,7 +441,7 @@ describe("AgentControllerLive", () => {
         yield* controller.interruptTurn({ threadId: codexThreadId });
         const cancelledExit = yield* Fiber.await(pending);
         expect(
-          cancelledExit._tag === "Success" ? cancelledExit.value : cancelledExit,
+          Predicate.isTagged(cancelledExit, "Success") ? cancelledExit.value : cancelledExit,
         ).toMatchObject({ status: "failed", kind: "cancelled" });
       }).pipe(Effect.provide(runtimeLayer)),
       bridge.service,

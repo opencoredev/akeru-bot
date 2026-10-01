@@ -52,6 +52,7 @@ import {
   writeProviderStatusCache,
 } from "../providerStatusCache.ts";
 import type { ProviderInstance } from "../ProviderDriver.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure maintenance capability value builder; no Effect service is constructed.
 import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 import type { ProviderSnapshotSource } from "../builtInProviderCatalog.ts";
 
@@ -178,7 +179,7 @@ export const ProviderRegistryLive = Layer.effect(
             Effect.provideService(FileSystem.FileSystem, fileSystem),
             Effect.flatMap((cachedProvider) => {
               if (cachedProvider === undefined) {
-                return Effect.void.pipe(Effect.as(undefined as ServerProvider | undefined));
+                return Effect.void.pipe(Effect.as(undefined));
               }
 
               const correlation = {
@@ -193,7 +194,7 @@ export const ProviderRegistryLive = Layer.effect(
                   cachedInstanceId: cachedProvider.instanceId ?? null,
                   driver: source.driverKind,
                   cachedDriver: cachedProvider.driver ?? null,
-                }).pipe(Effect.as(undefined as ServerProvider | undefined));
+                }).pipe(Effect.as(undefined));
               }
 
               return Effect.succeed(hydrateCachedProvider(correlation));

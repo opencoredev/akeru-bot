@@ -1,3 +1,5 @@
+import { readSdkRecord } from "./ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 import { createClaudeTextStreams } from "./claude/ClaudeTextStreams.ts";
 import { createClaudeMessages } from "./claude/ClaudeMessages.ts";
 import { createClaudeSystemMessages } from "./claude/ClaudeSystemMessages.ts";
@@ -44,6 +46,7 @@ import * as Stream from "effect/Stream";
 import { ServerConfig } from "../../config.ts";
 
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Provider composition root constructs an environment from this instance configuration.
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import { discoverClaudeSkills } from "../Drivers/ClaudeSkills.ts";
 import {
@@ -60,6 +63,7 @@ import {
 } from "../Errors.ts";
 import { type ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
 import { type EventNdjsonLogger } from "./logging/EventLogTypes.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root creates the scoped logger with this adapter configuration.
 import { makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 import {
@@ -133,7 +137,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       query({
         prompt: input.prompt,
         options: input.options,
-      }) as ClaudeQueryRuntime);
+      }));
 
   const sessions = new Map<ThreadId, ClaudeSessionContext>();
   const runtimeEventQueue = yield* Queue.unbounded<ProviderRuntimeEvent>();
@@ -174,14 +178,14 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         observedAt,
         event: {
           id:
-            "uuid" in message && typeof message.uuid === "string"
+            "uuid" in message && Predicate.isString(message.uuid)
               ? message.uuid
               : yield* randomUUIDv4,
           kind: "notification",
           provider: PROVIDER,
           createdAt: observedAt,
           method: sdkNativeMethod(message),
-          ...(typeof message.session_id === "string"
+          ...(Predicate.isString(message.session_id)
             ? { providerThreadId: message.session_id }
             : {}),
           ...(context.turnState
@@ -252,7 +256,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     context: ClaudeSessionContext,
     message: SDKMessage,
   ) {
-    if (typeof message.session_id !== "string" || message.session_id.length === 0) {
+    if (!Predicate.isString(message.session_id) || message.session_id.length === 0) {
       return;
     }
 
@@ -318,7 +322,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   const emitRuntimeWarning = Effect.fn("emitRuntimeWarning")(function* (
     context: ClaudeSessionContext,
     message: string,
-    detail?: unknown,
+    detail?: Extract<ProviderRuntimeEvent, { type: "runtime.warning" }>["payload"]["detail"],
     lifecycle?: { readonly key: string; readonly resolved?: boolean },
   ) {
     const turnState = context.turnState;
@@ -431,10 +435,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         // Exhaustiveness guard (see handleSystemMessage): new SDK top-level
         // message types fail typecheck here instead of warning at runtime.
         message satisfies never;
-        const unknownMessage = message as never as { type: string };
+        const unknownMessage = readSdkRecord(message);
         yield* emitRuntimeWarning(
           context,
-          describeUnknownSdkMessage(`Claude SDK message '${unknownMessage.type}'`, message),
+          describeUnknownSdkMessage(`Claude SDK message '${unknownMessage?.type}'`, message),
           message,
         );
 
@@ -705,7 +709,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     );
 
     for (const result of results) {
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         return yield* Effect.fail(result.failure);
       }
     }

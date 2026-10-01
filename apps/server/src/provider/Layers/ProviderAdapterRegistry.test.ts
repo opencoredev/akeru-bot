@@ -104,12 +104,12 @@ const makeFakeInstance = (
         provider: driverKind,
         packageName: null,
       }),
-      getSnapshot: Effect.succeed({} as unknown as ServerProvider),
-      refresh: Effect.succeed({} as unknown as ServerProvider),
+      getSnapshot: Effect.succeed({} as ServerProvider),
+      refresh: Effect.succeed({} as ServerProvider),
       streamChanges: Stream.empty,
     },
     adapter,
-    textGeneration: {} as unknown as TextGeneration.TextGeneration["Service"],
+    textGeneration: {} as TextGeneration.TextGeneration["Service"],
   };
 };
 

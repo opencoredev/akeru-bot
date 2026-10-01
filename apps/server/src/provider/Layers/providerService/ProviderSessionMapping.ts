@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   ModelSelection,
   NonNegativeInt,
@@ -79,7 +80,7 @@ export function toRuntimePayloadFromSession(
     readonly lastRuntimeEvent?: string;
     readonly lastRuntimeEventAt?: string;
   },
-): Record<string, unknown> {
+) {
   return {
     cwd: session.cwd ?? null,
     model: session.model ?? null,
@@ -96,7 +97,7 @@ export function toRuntimePayloadFromSession(
 export function readPersistedModelSelection(
   runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
 ): ModelSelection | undefined {
-  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
+  if (!runtimePayload || !Predicate.isObject(runtimePayload) || Array.isArray(runtimePayload)) {
     return undefined;
   }
 
@@ -108,13 +109,13 @@ export function readPersistedModelSelection(
 export function readPersistedCwd(
   runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
 ): string | undefined {
-  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
+  if (!runtimePayload || !Predicate.isObject(runtimePayload) || Array.isArray(runtimePayload)) {
     return undefined;
   }
 
   const rawCwd = "cwd" in runtimePayload ? runtimePayload.cwd : undefined;
 
-  if (typeof rawCwd !== "string") return undefined;
+  if (!Predicate.isString(rawCwd)) return undefined;
   const trimmed = rawCwd.trim();
 
   return trimmed.length > 0 ? trimmed : undefined;

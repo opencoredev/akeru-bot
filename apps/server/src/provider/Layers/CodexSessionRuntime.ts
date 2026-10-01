@@ -60,7 +60,9 @@ import {
 import { toMcpElicitationResponse } from "./codex/CodexMcpElicitation.ts";
 import {
   type CodexServerNotification,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure method/params envelope builder; no Effect service is constructed.
   makeCodexServerNotification,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure notification predicate factory; no Effect service is constructed.
   makeMemoryConsolidationNotificationFilter,
   type CollabChildAgentState,
 } from "./codex/CodexRuntimeNotifications.ts";
@@ -546,9 +548,7 @@ export const makeCodexSessionRuntime = (
       );
 
     yield* Effect.forEach(
-      Object.values(
-        CodexRpc.SERVER_NOTIFICATION_METHODS,
-      ) as ReadonlyArray<CodexRpc.ServerNotificationMethod>,
+      Object.values(CodexRpc.SERVER_NOTIFICATION_METHODS),
       registerServerNotification,
       { concurrency: 1, discard: true },
     );

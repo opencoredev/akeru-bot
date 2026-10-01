@@ -32,7 +32,9 @@ describe("buildTurnStartParams", () => {
         attachments: [
           {
             type: "image",
-            url: { secret } as unknown as string,
+            // Intentionally malformed fixture exercises the builder's diagnostic boundary.
+            // @ts-expect-error The protocol must reject a non-string image URL.
+            url: { secret },
           },
         ],
       }).pipe(Effect.flip),

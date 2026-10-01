@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
 import type { AkeruToolRuntime } from "../../AkeruToolRuntime.ts";
@@ -395,7 +396,7 @@ export function createTurnRequests(deps: {
           }
 
           const content = [input.input, ...attachmentFiles.map(({ pathLine }) => pathLine)]
-            .filter((part): part is string => typeof part === "string" && part.length > 0)
+            .filter((part): part is string => Predicate.isString(part) && part.length > 0)
             .join("\n\n");
 
           const files = attachmentFiles.map(({ file }) => file);

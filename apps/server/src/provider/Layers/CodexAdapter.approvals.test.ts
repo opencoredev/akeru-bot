@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeAssert from "node:assert/strict";
 import { ApprovalRequestId, ProviderDriverKind, type ProviderEvent } from "@akeru/contracts";
@@ -45,7 +46,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "request.opened") {
+      if (!Predicate.isTagged(firstEvent, "Some") || firstEvent.value.type !== "request.opened") {
         return;
       }
 
@@ -85,7 +86,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "request.resolved") {
+      if (!Predicate.isTagged(firstEvent, "Some") || firstEvent.value.type !== "request.resolved") {
         return;
       }
 
@@ -122,7 +123,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 

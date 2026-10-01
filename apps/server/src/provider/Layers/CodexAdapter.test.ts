@@ -1,3 +1,5 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeAssert from "node:assert/strict";
 import * as NodeFS from "node:fs";
@@ -287,7 +289,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         Effect.forkChild,
       );
 
-      const childEvent = (id: string, method: string, payload: Record<string, unknown>) => ({
+      const childEvent = (id: string, method: string, payload: Schema.JsonObject) => ({
         id: asEventId(id),
         kind: "notification" as const,
         provider: ProviderDriverKind.make("codex"),
@@ -368,7 +370,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 
@@ -409,7 +411,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 

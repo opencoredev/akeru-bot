@@ -1,3 +1,6 @@
+import { readSdkRecord } from "../ProtocolJson.ts";
+import { readProtocolRecord } from "../ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 import {
   type ProviderSession,
   ThreadId,
@@ -35,18 +38,22 @@ import {
  * rather than an error. Re-adopting the session id IS the resume mechanism —
  * OpenCode scopes a conversation's history by session id.
  */
-export function parseOpenCodeResume(raw: unknown): { readonly sessionId: string } | undefined {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+export function parseOpenCodeResume<Input0>(
+  rawInput: Input0,
+): { readonly sessionId: string } | undefined {
+  const raw = rawInput;
+
+  if (!Predicate.isObject(raw) || raw === null || Array.isArray(raw)) {
     return undefined;
   }
 
-  const record = raw as Record<string, unknown>;
+  const record = raw;
 
   if (record.schemaVersion !== OPENCODE_RESUME_VERSION) {
     return undefined;
   }
 
-  if (typeof record.sessionId !== "string" || record.sessionId.trim().length === 0) {
+  if (!Predicate.isString(record.sessionId) || record.sessionId.trim().length === 0) {
     return undefined;
   }
 
@@ -72,22 +79,20 @@ export function isOpenCodeNotFound(cause: unknown): boolean {
   for (let steps = 0; queue.length > 0 && steps < 32; steps += 1) {
     const node = queue.shift();
 
-    if (node === null || typeof node !== "object" || seen.has(node)) {
+    if (node === null || !Predicate.isObject(node) || seen.has(node)) {
       continue;
     }
 
     seen.add(node);
-    const record = node as Record<string, unknown>;
+    const record = node;
 
     const response = record.response;
 
     const statuses = [
       record.status,
       record.statusCode,
-      response !== null && typeof response === "object"
-        ? (response as { readonly status?: unknown }).status
-        : undefined,
-    ].filter((status): status is number => typeof status === "number");
+      response !== null && Predicate.isObject(response) ? response.status : undefined,
+    ].filter((status): status is number => Predicate.isNumber(status));
 
     if (statuses.includes(404)) {
       return true;
@@ -99,11 +104,14 @@ export function isOpenCodeNotFound(cause: unknown): boolean {
 
     const name = record.name;
 
-    if (typeof name === "string" && name.toLowerCase() === "notfounderror") {
+    if (Predicate.isString(name) && name.toLowerCase() === "notfounderror") {
       return true;
     }
 
-    if (record._tag === "QuestionNotFoundError" || record._tag === "PermissionNotFoundError") {
+    if (
+      Predicate.isTagged(record, "QuestionNotFoundError") ||
+      Predicate.isTagged(record, "PermissionNotFoundError")
+    ) {
       return true;
     }
 
@@ -157,22 +165,22 @@ export function trimText(value: string | undefined | null): string | undefined {
 }
 
 export function openCodeEventSessionId(event: OpenCodeSubscribedEvent): string | undefined {
-  const properties = "properties" in event ? event.properties : undefined;
+  const properties = readProtocolRecord("properties" in event ? event.properties : undefined);
 
-  if (!properties || typeof properties !== "object") {
+  if (!properties || !Predicate.isObject(properties)) {
     return undefined;
   }
 
-  const sessionID = (properties as { readonly sessionID?: unknown }).sessionID;
-  const sessionIDFromProperties = typeof sessionID === "string" ? sessionID : undefined;
+  const sessionID = properties.sessionID;
+  const sessionIDFromProperties = Predicate.isString(sessionID) ? sessionID : undefined;
 
   if (sessionIDFromProperties) {
     return sessionIDFromProperties;
   }
 
-  const info = (properties as { readonly info?: { readonly id?: unknown } }).info;
+  const info = readProtocolRecord(properties.info);
 
-  return info && typeof info.id === "string" ? info.id : undefined;
+  return info && Predicate.isString(info.id) ? info.id : undefined;
 }
 
 export function openCodeEventSessionTitle(event: OpenCodeSubscribedEvent): string | undefined {
@@ -348,15 +356,18 @@ export function normalizeQuestionRequest(
   }));
 }
 
-export function sessionErrorMessage(error: unknown): string {
-  if (!error || typeof error !== "object") {
+export function sessionErrorMessage<Input0>(errorInput: Input0): string {
+  const error = readSdkRecord(errorInput);
+
+  if (!error || !Predicate.isObject(error)) {
     return "OpenCode session failed.";
   }
 
-  const data = "data" in error && error.data && typeof error.data === "object" ? error.data : null;
+  const data = error.data && Predicate.isObject(error.data) ? error.data : null;
+
   const message = data && "message" in data ? data.message : null;
 
-  return typeof message === "string" && message.trim().length > 0
+  return Predicate.isString(message) && message.trim().length > 0
     ? message
     : "OpenCode session failed.";
 }
@@ -376,9 +387,9 @@ export function updateProviderSession(
       ...context.session,
       ...patch,
       updatedAt,
-    } as ProviderSession & Record<string, unknown>;
+    };
 
-    const mutableSession = nextSession as Record<string, unknown>;
+    const mutableSession = nextSession;
 
     if (options?.clearActiveTurnId) {
       delete mutableSession.activeTurnId;

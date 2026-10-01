@@ -1,3 +1,7 @@
+import * as Match from "effect/Match";
+import { UserInputResolution } from "./GrokAdapterState.ts";
+import { isProtocolRecord } from "../ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 import {
   ApprovalRequestId,
   type ProviderApprovalDecision,
@@ -23,7 +27,7 @@ export const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(
   Schema.fromJsonString(Schema.Unknown),
 );
 
-export function encodeJsonStringForDiagnostics(input: unknown): string | undefined {
+export function encodeJsonStringForDiagnostics<Input>(input: Input): string | undefined {
   const result = encodeUnknownJsonStringExit(input);
 
   return Exit.isSuccess(result) ? result.value : undefined;
@@ -44,7 +48,8 @@ export function settlePendingUserInputsAsCancelled(
 ): Effect.Effect<void> {
   return Effect.forEach(
     Array.from(pendingUserInputs.values()),
-    (pending) => Deferred.succeed(pending.resolution, { _tag: "cancelled" }).pipe(Effect.ignore),
+    (pending) =>
+      Deferred.succeed(pending.resolution, UserInputResolution.cancelled()).pipe(Effect.ignore),
     { discard: true },
   );
 }
@@ -65,9 +70,7 @@ export function appendPromptResultToTurn(
     : [...ctx.turns, { id: turnId, items: [{ prompt: promptParts, result }] }];
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export const isRecord = isProtocolRecord;
 
 export const resolveNotificationTurnId = (ctx: GrokSessionContext): TurnId | undefined =>
   ctx.activeTurnId;
@@ -84,12 +87,14 @@ export const resolveSessionCallbackTurnId = (
   return ctx ? resolveCallbackTurnId(ctx) : undefined;
 };
 
-export function parseGrokResume(raw: unknown): { sessionId: string } | undefined {
-  if (!isRecord(raw)) return undefined;
+export function parseGrokResume<Input0>(rawInput: Input0): { sessionId: string } | undefined {
+  const raw = rawInput;
+
+  if (!Predicate.isObject(raw)) return undefined;
 
   if (raw.schemaVersion !== GROK_RESUME_VERSION) return undefined;
 
-  if (typeof raw.sessionId !== "string" || !raw.sessionId.trim()) return undefined;
+  if (!Predicate.isString(raw.sessionId) || !raw.sessionId.trim()) return undefined;
 
   return { sessionId: raw.sessionId.trim() };
 }
@@ -98,12 +103,11 @@ export function selectGrokPermissionOptionId(
   request: EffectAcpSchema.RequestPermissionRequest,
   decision: Exclude<ProviderApprovalDecision, "cancel">,
 ): string | undefined {
-  const preferredKind =
-    decision === "acceptForSession"
-      ? "allow_always"
-      : decision === "accept"
-        ? "allow_once"
-        : "reject_once";
+  const preferredKind = Match.value(decision).pipe(
+    Match.when("acceptForSession", () => "allow_always" as const),
+    Match.when("accept", () => "allow_once" as const),
+    Match.orElse(() => "reject_once" as const),
+  );
 
   const preferred = request.options.find((entry) => entry.kind === preferredKind);
   const preferredId = preferred?.optionId.trim();
@@ -170,10 +174,7 @@ export function grokTurnCompletionForPromptEpoch(input: {
   readonly stored: GrokTurnTerminal | undefined;
   readonly incoming: GrokTurnTerminal | undefined;
   readonly emitTurnCompletion: boolean;
-}): {
-  readonly stored: GrokTurnTerminal | undefined;
-  readonly emit: GrokTurnTerminal | undefined;
-} {
+}) {
   const superseded = input.promptEpoch < input.discardBeforeEpoch;
 
   const stored =

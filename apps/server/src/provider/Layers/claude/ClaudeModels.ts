@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type ModelCapabilities,
   type ModelSelection,
@@ -381,7 +382,7 @@ export function resolveClaudeEffort(
   const effortDescriptor = descriptors.find((descriptor) => descriptor.id === "effort");
   const value = getProviderOptionCurrentValue(effortDescriptor);
 
-  return typeof value === "string" ? value : undefined;
+  return Predicate.isString(value) ? value : undefined;
 }
 
 /**
@@ -441,7 +442,7 @@ export function resolveClaudeContextWindow(
   const descriptor = descriptors.find((candidate) => candidate.id === "contextWindow");
   const value = getProviderOptionCurrentValue(descriptor);
 
-  return typeof value === "string" ? value : undefined;
+  return Predicate.isString(value) ? value : undefined;
 }
 
 export function resolveClaudeApiModelId(modelSelection: ModelSelection): string {

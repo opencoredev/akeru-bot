@@ -14,7 +14,7 @@ export function createSessionContext(
     !["Completed", "Failed", "Canceled"].includes(delegation.phase._tag);
 
   const isChildOf = (delegation: AkeruDelegationRecord, threadId: ThreadId) =>
-    delegation.phase._tag !== "Queued" && delegation.phase.childThreadId === threadId;
+    "childThreadId" in delegation.phase && delegation.phase.childThreadId === threadId;
 
   // Resolves the thread's bot, group boss, and delegation links with by-id
   // reads. Falls back to the command read model for query doubles that do

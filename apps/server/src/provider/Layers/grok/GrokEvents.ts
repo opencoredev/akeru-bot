@@ -6,6 +6,7 @@ import * as Effect from "effect/Effect";
 
 import { ProviderAdapterRequestError } from "../../Errors.ts";
 
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
 import { makeAcpPlanUpdatedEvent } from "../../acp/AcpCoreRuntimeEvents.ts";
 
 import { type EventNdjsonLogger } from "../logging/EventLogTypes.ts";
@@ -18,7 +19,11 @@ export function createGrokEvents(deps: {
   readonly randomUUIDv4: Effect.Effect<string, ProviderAdapterRequestError, never>;
   readonly offerRuntimeEvent: (event: ProviderRuntimeEvent) => Effect.Effect<void, never, never>;
 }) {
-  const logNative = (threadId: ThreadId, method: string, payload: unknown) =>
+  const logNative = (
+    threadId: ThreadId,
+    method: string,
+    payload: NonNullable<ProviderRuntimeEvent["raw"]>["payload"],
+  ) =>
     Effect.gen(function* () {
       if (!deps.nativeEventLogger) return;
       const observedAt = yield* deps.nowIso;
@@ -58,7 +63,7 @@ export function createGrokEvents(deps: {
         readonly status: "pending" | "inProgress" | "completed";
       }>;
     },
-    rawPayload: unknown,
+    rawPayload: NonNullable<ProviderRuntimeEvent["raw"]>["payload"],
     method: string,
   ) =>
     Effect.gen(function* () {

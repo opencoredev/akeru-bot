@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
@@ -64,10 +65,10 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
         requests.some(
           (entry) =>
             !("method" in entry) &&
-            typeof entry.result === "object" &&
+            Predicate.isObject(entry.result) &&
             entry.result !== null &&
             "outcome" in entry.result &&
-            typeof entry.result.outcome === "object" &&
+            Predicate.isObject(entry.result.outcome) &&
             entry.result.outcome !== null &&
             "optionId" in entry.result.outcome &&
             entry.result.outcome.optionId === "agent-defined-approval-id",

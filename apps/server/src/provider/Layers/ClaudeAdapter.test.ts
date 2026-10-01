@@ -1,8 +1,9 @@
+import { claudeMessage } from "./test-support/claudeMessages.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+
 import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { createModelSelection } from "@akeru/shared/model";
 import { assert, describe, it } from "@effect/vitest";
@@ -420,30 +421,34 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        errors: [],
-        num_turns: 1,
-        session_id: "sdk-session-1",
-        uuid: "result-real",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          num_turns: 1,
+          session_id: "sdk-session-1",
+          uuid: "result-real",
+        }),
+      );
 
       // Second result with no turn in flight — the shape the resume
       // handshake (system/init + result(num_turns: 0)) delivers, and the
       // same completeTurn branch every no-turnState result lands in. This
       // used to emit an untargeted turn.completed; it must emit nothing.
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        errors: [],
-        num_turns: 0,
-        usage: { input_tokens: 0, output_tokens: 0 },
-        session_id: "sdk-session-1",
-        uuid: "result-handshake",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          num_turns: 0,
+          usage: { input_tokens: 0, output_tokens: 0 },
+          session_id: "sdk-session-1",
+          uuid: "result-handshake",
+        }),
+      );
 
       harness.query.finish();
 
@@ -499,25 +504,29 @@ describe("ClaudeAdapterLive", () => {
 
       assert.equal(String(steeredTurn.turnId), String(turn.turnId));
 
-      harness.query.emit({
-        type: "assistant",
-        session_id: "sdk-session-steer",
-        uuid: "assistant-steer-1",
-        parent_tool_use_id: null,
-        message: {
-          id: "assistant-message-steer-1",
-          content: [{ type: "text", text: "Adjusting to 15." }],
-        },
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "assistant",
+          session_id: "sdk-session-steer",
+          uuid: "assistant-steer-1",
+          parent_tool_use_id: null,
+          message: {
+            id: "assistant-message-steer-1",
+            content: [{ type: "text", text: "Adjusting to 15." }],
+          },
+        }),
+      );
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        errors: [],
-        session_id: "sdk-session-steer",
-        uuid: "result-steer-1",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          session_id: "sdk-session-steer",
+          uuid: "result-steer-1",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const turnStartedEvents = runtimeEvents.filter((event) => event.type === "turn.started");
@@ -560,58 +569,66 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-todo-plan",
-        uuid: "stream-todo-start",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_start",
-          index: 1,
-          content_block: {
-            type: "tool_use",
-            id: "tool-todo-1",
-            name: "TodoWrite",
-            input: {},
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-todo-plan",
+          uuid: "stream-todo-start",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_start",
+            index: 1,
+            content_block: {
+              type: "tool_use",
+              id: "tool-todo-1",
+              name: "TodoWrite",
+              input: {},
+            },
           },
-        },
-      } as unknown as SDKMessage);
+        }),
+      );
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-todo-plan",
-        uuid: "stream-todo-input",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_delta",
-          index: 1,
-          delta: {
-            type: "input_json_delta",
-            partial_json:
-              '{"todos":[{"content":"   ","status":"in_progress"},{"content":"Ship it","status":"completed"}]}',
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-todo-plan",
+          uuid: "stream-todo-input",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 1,
+            delta: {
+              type: "input_json_delta",
+              partial_json:
+                '{"todos":[{"content":"   ","status":"in_progress"},{"content":"Ship it","status":"completed"}]}',
+            },
           },
-        },
-      } as unknown as SDKMessage);
+        }),
+      );
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-todo-plan",
-        uuid: "stream-todo-stop",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_stop",
-          index: 1,
-        },
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-todo-plan",
+          uuid: "stream-todo-stop",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_stop",
+            index: 1,
+          },
+        }),
+      );
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        errors: [],
-        session_id: "sdk-session-todo-plan",
-        uuid: "result-todo-plan",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          session_id: "sdk-session-todo-plan",
+          uuid: "result-todo-plan",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const planUpdated = runtimeEvents.find((event) => event.type === "turn.plan.updated");

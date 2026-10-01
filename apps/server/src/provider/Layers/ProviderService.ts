@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import { createProviderSessionBindings } from "./providerService/ProviderSessionBindings.ts";
 import { createProviderMcpSessions } from "./providerService/ProviderMcpSessions.ts";
 import { createProviderSessionRecovery } from "./providerService/ProviderSessionRecovery.ts";
@@ -395,7 +397,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       attachmentPathLines.length === 0
         ? parsed.input
         : [parsed.input, attachmentPathLines.join("\n")]
-            .filter((part): part is string => typeof part === "string" && part.length > 0)
+            .filter((part): part is string => Predicate.isString(part) && part.length > 0)
             .join("\n\n");
 
     const input = {
@@ -677,11 +679,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
               ),
             ),
         { concurrency: "unbounded" },
-      ).pipe(
-        Effect.orElseSucceed(
-          () => [] as Array<Option.Option<ProviderSessionDirectory.ProviderRuntimeBinding>>,
-        ),
-      );
+      ).pipe(Effect.orElseSucceed(() => []));
 
       const bindingsByThreadId = new Map<
         ThreadId,
@@ -707,9 +705,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }
 
         const overrides: {
-          resumeCursor?: ProviderSession["resumeCursor"];
-          runtimeMode?: ProviderSession["runtimeMode"];
-          providerInstanceId?: ProviderSession["providerInstanceId"];
+          -readonly [Key in
+            | "resumeCursor"
+            | "runtimeMode"
+            | "providerInstanceId"]?: ProviderSession[Key];
         } = {};
 
         overrides.providerInstanceId = dieOnMissingBindingInstanceId(
@@ -762,19 +761,19 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     Effect.gen(function* () {
       const result = yield* registry.dispatchIfEnabled(instanceId, dispatch);
 
-      switch (result._tag) {
-        case "Dispatched":
-          return result.value;
-        case "Disabled":
-          return yield* toValidationError(
+      return yield* Match.value(result).pipe(
+        Match.tag("Dispatched", ({ value }) => Effect.succeed(value)),
+        Match.tag("Disabled", () =>
+          toValidationError(
             operation,
             `Provider instance '${instanceId}' is disabled in Akeru Bot settings.`,
-          );
-        case "Missing":
-          return yield* new ProviderUnsupportedError({
-            provider: instanceId,
-          });
-      }
+          ),
+        ),
+        Match.tag("Missing", () =>
+          Effect.fail(new ProviderUnsupportedError({ provider: instanceId })),
+        ),
+        Match.exhaustive,
+      );
     });
 
   const rollbackConversation: ProviderServiceMethod<"rollbackConversation"> = Effect.fn(

@@ -1,6 +1,8 @@
+import { claudeMessage } from "./test-support/claudeMessages.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+
 import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { createModelSelection } from "@akeru/shared/model";
 import { assert, describe, it } from "@effect/vitest";
@@ -93,12 +95,14 @@ describe("ClaudeAdapterLive", () => {
 
         yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
         harness.query.emit(AUTH_FAILURE_ASSISTANT);
-        harness.query.emit({
-          type: "result",
-          ...result,
-          session_id: "sdk-session-auth",
-          uuid: "result-auth",
-        } as unknown as SDKMessage);
+        harness.query.emit(
+          claudeMessage({
+            type: "result",
+            ...result,
+            session_id: "sdk-session-auth",
+            uuid: "result-auth",
+          }),
+        );
         const payload = completedTurn(Array.from(yield* Fiber.join(runtimeEventsFiber)));
         assert.equal(payload.state, state);
 
@@ -152,15 +156,17 @@ describe("ClaudeAdapterLive", () => {
           attachments: [],
         });
         harness.query.emit(AUTH_FAILURE_ASSISTANT);
-        harness.query.emit({
-          type: "result",
-          subtype: "success",
-          is_error: false,
-          terminal_reason: "api_error",
-          errors: [],
-          session_id: "sdk-session-auth",
-          uuid: "result-auth",
-        } as unknown as SDKMessage);
+        harness.query.emit(
+          claudeMessage({
+            type: "result",
+            subtype: "success",
+            is_error: false,
+            terminal_reason: "api_error",
+            errors: [],
+            session_id: "sdk-session-auth",
+            uuid: "result-auth",
+          }),
+        );
         const events = Array.from(yield* Fiber.join(eventsFiber));
         const completed = events.at(-1);
         assert(completed?.type === "turn.completed");
@@ -213,27 +219,31 @@ describe("ClaudeAdapterLive", () => {
 
       assert.equal(turn.threadId, THREAD_ID);
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-thread-real",
-        uuid: "stream-thread-real",
-        parent_tool_use_id: null,
-        event: {
-          type: "message_start",
-          message: {
-            id: "msg-thread-real",
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-thread-real",
+          uuid: "stream-thread-real",
+          parent_tool_use_id: null,
+          event: {
+            type: "message_start",
+            message: {
+              id: "msg-thread-real",
+            },
           },
-        },
-      } as unknown as SDKMessage);
+        }),
+      );
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        errors: [],
-        session_id: "sdk-thread-real",
-        uuid: "result-thread-real",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          session_id: "sdk-thread-real",
+          uuid: "result-thread-real",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       assert.deepEqual(
@@ -334,47 +344,53 @@ describe("ClaudeAdapterLive", () => {
         runtimeMode: "full-access",
       });
 
-      harness.query.emit({
-        type: "system",
-        subtype: "hook_started",
-        hook_id: "resume-hook-1",
-        hook_name: "SessionStart:resume",
-        hook_event: "SessionStart",
-        session_id: transientHookSessionId,
-        uuid: "resume-hook-started",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "hook_started",
+          hook_id: "resume-hook-1",
+          hook_name: "SessionStart:resume",
+          hook_event: "SessionStart",
+          session_id: transientHookSessionId,
+          uuid: "resume-hook-started",
+        }),
+      );
 
-      harness.query.emit({
-        type: "system",
-        subtype: "hook_response",
-        hook_id: "resume-hook-1",
-        hook_name: "SessionStart:resume",
-        hook_event: "SessionStart",
-        output: "",
-        stdout: "",
-        stderr: "",
-        outcome: "success",
-        session_id: transientHookSessionId,
-        uuid: "resume-hook-response",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "hook_response",
+          hook_id: "resume-hook-1",
+          hook_name: "SessionStart:resume",
+          hook_event: "SessionStart",
+          output: "",
+          stdout: "",
+          stderr: "",
+          outcome: "success",
+          session_id: transientHookSessionId,
+          uuid: "resume-hook-response",
+        }),
+      );
 
-      harness.query.emit({
-        type: "system",
-        subtype: "init",
-        apiKeySource: "none",
-        claude_code_version: "test",
-        cwd: "/tmp/claude-adapter-test",
-        tools: [],
-        mcp_servers: [],
-        model: "claude-sonnet-4-5",
-        permissionMode: "bypassPermissions",
-        slash_commands: [],
-        output_style: "default",
-        skills: [],
-        plugins: [],
-        session_id: durableSessionId,
-        uuid: "resume-init",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "init",
+          apiKeySource: "none",
+          claude_code_version: "test",
+          cwd: "/tmp/claude-adapter-test",
+          tools: [],
+          mcp_servers: [],
+          model: "claude-sonnet-4-5",
+          permissionMode: "bypassPermissions",
+          slash_commands: [],
+          output_style: "default",
+          skills: [],
+          plugins: [],
+          session_id: durableSessionId,
+          uuid: "resume-init",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const threadStartedEvents = runtimeEvents.filter((event) => event.type === "thread.started");
@@ -426,7 +442,7 @@ describe("ClaudeAdapterLive", () => {
       };
 
       assert.equal(sessionResumeCursor.threadId, THREAD_ID);
-      assert.equal(typeof sessionResumeCursor.resume, "string");
+      assert.isTrue(Predicate.isString(sessionResumeCursor.resume));
       assert.equal(sessionResumeCursor.turnCount, 0);
       assert.match(
         sessionResumeCursor.resume ?? "",
@@ -467,19 +483,24 @@ describe("ClaudeAdapterLive", () => {
           (event) => event.type === "turn.completed",
         ).pipe(Stream.runHead, Effect.forkChild);
 
-        harness.query.emit({
-          type: "result",
-          subtype: "success",
-          is_error: false,
-          errors: [],
-          session_id: "sdk-session-rollback",
-          uuid: "result-first",
-        } as unknown as SDKMessage);
+        harness.query.emit(
+          claudeMessage({
+            type: "result",
+            subtype: "success",
+            is_error: false,
+            errors: [],
+            session_id: "sdk-session-rollback",
+            uuid: "result-first",
+          }),
+        );
 
         const firstCompleted = yield* Fiber.join(firstCompletedFiber);
         assert.equal(firstCompleted._tag, "Some");
 
-        if (firstCompleted._tag === "Some" && firstCompleted.value.type === "turn.completed") {
+        if (
+          Predicate.isTagged(firstCompleted, "Some") &&
+          firstCompleted.value.type === "turn.completed"
+        ) {
           assert.equal(String(firstCompleted.value.turnId), String(firstTurn.turnId));
         }
 
@@ -494,19 +515,24 @@ describe("ClaudeAdapterLive", () => {
           (event) => event.type === "turn.completed",
         ).pipe(Stream.runHead, Effect.forkChild);
 
-        harness.query.emit({
-          type: "result",
-          subtype: "success",
-          is_error: false,
-          errors: [],
-          session_id: "sdk-session-rollback",
-          uuid: "result-second",
-        } as unknown as SDKMessage);
+        harness.query.emit(
+          claudeMessage({
+            type: "result",
+            subtype: "success",
+            is_error: false,
+            errors: [],
+            session_id: "sdk-session-rollback",
+            uuid: "result-second",
+          }),
+        );
 
         const secondCompleted = yield* Fiber.join(secondCompletedFiber);
         assert.equal(secondCompleted._tag, "Some");
 
-        if (secondCompleted._tag === "Some" && secondCompleted.value.type === "turn.completed") {
+        if (
+          Predicate.isTagged(secondCompleted, "Some") &&
+          secondCompleted.value.type === "turn.completed"
+        ) {
           assert.equal(String(secondCompleted.value.turnId), String(secondTurn.turnId));
         }
 

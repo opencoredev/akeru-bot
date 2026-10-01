@@ -1,3 +1,6 @@
+import * as Match from "effect/Match";
+import { readSdkRecord } from "../ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
  * ClaudeAdapterLive - Scoped live implementation for the Claude Agent provider adapter.
@@ -74,7 +77,7 @@ export function createClaudeSystemMessages(deps: {
   readonly emitRuntimeWarning: (
     context: ClaudeSessionContext,
     message: string,
-    detail?: unknown,
+    detail?: Extract<ProviderRuntimeEvent, { type: "runtime.warning" }>["payload"]["detail"],
     lifecycle?: { readonly key: string; readonly resolved?: boolean } | undefined,
   ) => Effect.Effect<void, ProviderAdapterRequestError, never>;
   readonly emitRuntimeError: (
@@ -88,9 +91,7 @@ export function createClaudeSystemMessages(deps: {
     base: Omit<ProviderRuntimeEvent, "type" | "payload">,
     message: Extract<SDKMessage, { type: "system"; subtype: "task_progress" }>,
   ) {
-    const progress = parseWorkflowProgress(
-      (message as unknown as Record<string, unknown>).workflow_progress,
-    );
+    const progress = parseWorkflowProgress(readSdkRecord(message)?.workflow_progress);
 
     if (!progress) {
       return;
@@ -192,7 +193,7 @@ export function createClaudeSystemMessages(deps: {
     // ({kind: commit|push|rebase}) and `code_change_published`
     // ({provider, url, repo}) are informational CLI notices; the work log
     // already shows the underlying git/gh tool calls.
-    switch (message.subtype as string) {
+    switch (String(message.subtype)) {
       case "background_tasks_changed":
       case "vcs_state_changed":
       case "code_change_published":
@@ -205,7 +206,7 @@ export function createClaudeSystemMessages(deps: {
           ...base,
           type: "session.configured",
           payload: {
-            config: message as Record<string, unknown>,
+            config: message,
           },
         });
 
@@ -231,7 +232,7 @@ export function createClaudeSystemMessages(deps: {
         yield* deps.emitThreadTokenUsage(
           context,
           compactBoundaryTokenUsageSnapshot(
-            message as unknown as Record<string, unknown>,
+            message,
             context.lastKnownContextWindow,
             context.lastKnownTotalProcessedTokens,
           ),
@@ -285,7 +286,7 @@ export function createClaudeSystemMessages(deps: {
             output: message.output,
             stdout: message.stdout,
             stderr: message.stderr,
-            ...(typeof message.exit_code === "number" ? { exitCode: message.exit_code } : {}),
+            ...(Predicate.isNumber(message.exit_code) ? { exitCode: message.exit_code } : {}),
           },
         });
 
@@ -324,7 +325,7 @@ export function createClaudeSystemMessages(deps: {
 
         const effort =
           trimmedString(rawLaunchEffort) ??
-          (typeof rawLaunchEffort === "number" && Number.isFinite(rawLaunchEffort)
+          (Predicate.isNumber(rawLaunchEffort) && Number.isFinite(rawLaunchEffort)
             ? String(rawLaunchEffort)
             : context.currentEffort);
 
@@ -381,7 +382,7 @@ export function createClaudeSystemMessages(deps: {
         // with this full row, and the thinner upsert overwrote usage and
         // progress text (review finding).
         const workflowPhases = parseWorkflowProgress(
-          (message as unknown as Record<string, unknown>).workflow_progress,
+          readSdkRecord(message)?.workflow_progress,
         )?.phases;
 
         yield* deps.offerRuntimeEvent({
@@ -417,7 +418,7 @@ export function createClaudeSystemMessages(deps: {
         }
 
         const endedAt =
-          typeof patch.end_time === "number" && Number.isFinite(patch.end_time)
+          Predicate.isNumber(patch.end_time) && Number.isFinite(patch.end_time)
             ? DateTime.formatIso(DateTime.makeUnsafe(patch.end_time))
             : undefined;
 
@@ -514,12 +515,11 @@ export function createClaudeSystemMessages(deps: {
           ...base,
           type: "session.state.changed",
           payload: {
-            state:
-              message.state === "running"
-                ? "running"
-                : message.state === "requires_action"
-                  ? "waiting"
-                  : "ready",
+            state: Match.value(message.state).pipe(
+              Match.when("running", () => "running" as const),
+              Match.when("requires_action", () => "waiting" as const),
+              Match.orElse(() => "ready" as const),
+            ),
             reason: `session_state:${message.state}`,
           },
         });
@@ -570,10 +570,10 @@ export function createClaudeSystemMessages(deps: {
         // warning at runtime. The runtime fallback still catches undeclared
         // wire-only subtypes (like background_tasks_changed used to be).
         message satisfies never;
-        const unknownMessage = message as never as { subtype: string };
+        const unknownMessage = readSdkRecord(message);
         yield* deps.emitRuntimeWarning(
           context,
-          describeUnknownSdkMessage(`Claude system message '${unknownMessage.subtype}'`, message),
+          describeUnknownSdkMessage(`Claude system message '${unknownMessage?.subtype}'`, message),
           message,
         );
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
@@ -514,7 +515,7 @@ describe("AgentControllerLive", () => {
         );
 
         assert.equal(denied._tag, "Failure");
-        expect(denied._tag === "Failure" ? denied.failure.cause.message : "").toContain(
+        expect(Predicate.isTagged(denied, "Failure") ? denied.failure.cause.message : "").toContain(
           "Private bot memory is disabled.",
         );
 
@@ -527,9 +528,9 @@ describe("AgentControllerLive", () => {
           share: { fact: "The project uses pnpm.", scope: "project" },
         }).pipe(Effect.result);
 
-        expect(shareOnly._tag === "Failure" ? shareOnly.failure.cause.message : "").toBe(
-          "Shared memory is not available in this chat.",
-        );
+        expect(
+          Predicate.isTagged(shareOnly, "Failure") ? shareOnly.failure.cause.message : "",
+        ).toBe("Shared memory is not available in this chat.");
         const userStillAllowed = yield* callMemoryTool({ target: "user", operations: [] });
         expect(userStillAllowed).toMatchObject({ success: true });
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -304,9 +305,9 @@ it.effect(
 
       assert.equal(secondCodex.startSession.mock.calls.length, 1);
       const resumedStartInput = secondCodex.startSession.mock.calls[0]?.[0];
-      assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+      assert.equal(Predicate.isObject(resumedStartInput) && resumedStartInput !== null, true);
 
-      if (resumedStartInput && typeof resumedStartInput === "object") {
+      if (resumedStartInput && Predicate.isObject(resumedStartInput)) {
         const startPayload = resumedStartInput as {
           provider?: string;
           cwd?: string;
@@ -322,7 +323,7 @@ it.effect(
 
       assert.equal(secondCodex.rollbackThread.mock.calls.length, 1);
       const rollbackCall = secondCodex.rollbackThread.mock.calls[0];
-      assert.equal(typeof rollbackCall?.[0], "string");
+      assert.isTrue(Predicate.isString(rollbackCall?.[0]));
       assert.equal(rollbackCall?.[1], 1);
 
       NodeFS.rmSync(tempDir, { recursive: true, force: true });
@@ -401,9 +402,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       assert.equal(routing.codex.startSession.mock.calls.length, 1);
       const resumedStartInput = routing.codex.startSession.mock.calls[0]?.[0];
-      assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+      assert.equal(Predicate.isObject(resumedStartInput) && resumedStartInput !== null, true);
 
-      if (resumedStartInput && typeof resumedStartInput === "object") {
+      if (resumedStartInput && Predicate.isObject(resumedStartInput)) {
         const startPayload = resumedStartInput as {
           provider?: string;
           cwd?: string;
@@ -462,9 +463,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       assert.equal(routing.codex.startSession.mock.calls.length, 1);
       const resumedStartInput = routing.codex.startSession.mock.calls[0]?.[0];
-      assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+      assert.equal(Predicate.isObject(resumedStartInput) && resumedStartInput !== null, true);
 
-      if (resumedStartInput && typeof resumedStartInput === "object") {
+      if (resumedStartInput && Predicate.isObject(resumedStartInput)) {
         const startPayload = resumedStartInput as {
           provider?: string;
           cwd?: string;
@@ -541,9 +542,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       assert.equal(routing.codex.startSession.mock.calls.length, 1);
       const resumedStartInput = routing.codex.startSession.mock.calls[0]?.[0];
-      assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+      assert.equal(Predicate.isObject(resumedStartInput) && resumedStartInput !== null, true);
 
-      if (resumedStartInput && typeof resumedStartInput === "object") {
+      if (resumedStartInput && Predicate.isObject(resumedStartInput)) {
         const startPayload = resumedStartInput as {
           provider?: string;
           cwd?: string;
@@ -592,9 +593,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       assert.equal(routing.claude.startSession.mock.calls.length, 1);
       const resumedStartInput = routing.claude.startSession.mock.calls[0]?.[0];
-      assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+      assert.equal(Predicate.isObject(resumedStartInput) && resumedStartInput !== null, true);
 
-      if (resumedStartInput && typeof resumedStartInput === "object") {
+      if (resumedStartInput && Predicate.isObject(resumedStartInput)) {
         const startPayload = resumedStartInput as {
           provider?: string;
           cwd?: string;
@@ -651,9 +652,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
         assert.equal(runningRuntime.value.status, "running");
         assert.deepEqual(runningRuntime.value.resumeCursor, session.resumeCursor);
         const payload = runningRuntime.value.runtimePayload;
-        assert.equal(payload !== null && typeof payload === "object", true);
+        assert.equal(payload !== null && Predicate.isObject(payload), true);
 
-        if (payload !== null && typeof payload === "object" && !Array.isArray(payload)) {
+        if (payload !== null && Predicate.isObject(payload) && !Array.isArray(payload)) {
           const runtimePayload = payload as {
             cwd: string;
             model: string | null;

@@ -59,7 +59,9 @@ export function classifyCodexStderrLine(rawLine: string): { readonly message: st
   return { message: line };
 }
 
-export function isRecoverableThreadResumeError(error: unknown): boolean {
+export function isRecoverableThreadResumeError(cause: unknown): boolean {
+  const error = cause;
+
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
 
   if (!message.includes("thread")) {

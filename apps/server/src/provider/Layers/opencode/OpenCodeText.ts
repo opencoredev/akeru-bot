@@ -99,13 +99,7 @@ export function resolveLatestAssistantText(
   return nextText;
 }
 
-export function mergeOpenCodeAssistantText(
-  previousText: string | undefined,
-  nextText: string,
-): {
-  readonly latestText: string;
-  readonly deltaToEmit: string;
-} {
+export function mergeOpenCodeAssistantText(previousText: string | undefined, nextText: string) {
   const latestText = resolveLatestAssistantText(previousText, nextText);
 
   return {
@@ -114,13 +108,7 @@ export function mergeOpenCodeAssistantText(
   };
 }
 
-export function appendOpenCodeAssistantTextDelta(
-  previousText: string,
-  delta: string,
-): {
-  readonly nextText: string;
-  readonly deltaToEmit: string;
-} {
+export function appendOpenCodeAssistantTextDelta(previousText: string, delta: string) {
   return {
     nextText: previousText + delta,
     deltaToEmit: delta,

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeCrypto from "node:crypto";
 
 import { type McpManager } from "@mastra/code-sdk/mcp/index";
@@ -40,8 +41,8 @@ export const BUILTIN_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(
   Object.values(TOOL_NAME_OVERRIDES).map((tool) => tool.name),
 );
 
-export function omitNullToolFields(input: unknown): unknown {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+export function omitNullToolFields<Input0>(input: Input0) {
+  if (!input || !Predicate.isObject(input) || Array.isArray(input)) return input;
 
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null));
 }
@@ -130,7 +131,7 @@ export function messageText(message: MastraDBMessage): string {
   return message.content.parts
     .filter(
       (part): part is MastraMessagePart & { text: string } =>
-        part.type === "text" && typeof part.text === "string",
+        part.type === "text" && Predicate.isString(part.text),
     )
     .map((part) => part.text)
     .join("");
@@ -150,9 +151,7 @@ export function permissionPolicy(
 }
 
 export function mcpToolNeedsApproval(manager: McpManager | undefined, toolName: string): boolean {
-  const tool = manager?.getTools()?.[toolName] as
-    | { readonly mcp?: { readonly annotations?: { readonly readOnlyHint?: boolean } } }
-    | undefined;
+  const tool = manager?.getTools()?.[toolName];
 
   if (tool) return tool.mcp?.annotations?.readOnlyHint !== true;
   // Akeru's own tools declare their risk; plain workspace tools follow the bot's mode.
@@ -206,7 +205,7 @@ export function itemType(
 }
 
 export function ThreadIdBrand(value: string): ThreadId {
-  return value as ThreadId;
+  return ThreadId.make(value);
 }
 
 export function approvalDecision(decision: ProviderApprovalDecision): "approve" | "decline" {

@@ -26,7 +26,7 @@ describe("EventNdjsonLogger", () => {
     return Effect.gen(function* () {
       const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
       const basePath = NodePath.join(tempDir, "provider-native.ndjson");
-      const circular: Record<string, unknown> = { secret };
+      const circular: CircularLogFixture = { secret };
       circular.self = circular;
 
       try {
@@ -112,7 +112,7 @@ describe("EventNdjsonLogger", () => {
           }
 
           yield* logger.write({ id: "evt-no-thread" }, null);
-          yield* logger.write({ id: "evt-invalid-thread" }, "!!!" as unknown as ThreadId);
+          yield* logger.write({ id: "evt-invalid-thread" }, "!!!" as ThreadId);
           yield* logger.close();
 
           const globalPath = ownedLogPath(basePath, "_global");
@@ -186,7 +186,7 @@ describe("EventNdjsonLogger", () => {
         const canonical = store.logger("canonical");
         const native = store.logger("native");
         const threadId = ThreadId.make("thread-filtered");
-        const circularDelta: Record<string, unknown> = { type: "content.delta" };
+        const circularDelta: CircularLogFixture = { type: "content.delta" };
         circularDelta["self"] = circularDelta;
 
         yield* canonical.write(circularDelta, threadId);
@@ -331,3 +331,9 @@ describe("EventNdjsonLogger", () => {
       }),
   );
 });
+
+interface CircularLogFixture {
+  secret?: string;
+  type?: string;
+  self?: object;
+}

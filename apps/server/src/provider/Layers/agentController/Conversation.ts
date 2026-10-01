@@ -24,7 +24,7 @@ import { ProjectionTurnRepository } from "../../../persistence/Services/Projecti
 
 import { type AkeruMastraHarness } from "../../AkeruMastraHarness.ts";
 
-import { makeAkeruWorkerRuntime } from "../../AkeruWorkerRuntime.ts";
+import type { AkeruWorkerRuntime } from "../../AkeruWorkerRuntime.ts";
 
 import { cancelActiveImageGenerations } from "../../../image-generation/ImageGenerationRuntime.ts";
 
@@ -78,13 +78,7 @@ export function createConversation(deps: {
     string,
     { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
   >;
-  readonly workerRuntime: ReturnType<typeof makeAkeruWorkerRuntime> extends Effect.Effect<
-    infer A,
-    infer _E,
-    infer _R
-  >
-    ? A
-    : never;
+  readonly workerRuntime: AkeruWorkerRuntime;
   readonly workerTurnDefaults: Map<
     string,
     "approval-required" | "auto-accept-edits" | "auto" | "full-access"

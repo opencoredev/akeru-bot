@@ -96,7 +96,7 @@ export function privatePolicyRevisions(
   ];
 }
 
-export function entityMemorySection(context: unknown): string {
+export function entityMemorySection<Context>(context: Context): string {
   const match = /<entity-memory>[\s\S]*?<\/entity-memory>/u.exec(String(context ?? ""));
 
   return match?.[0] ?? "";

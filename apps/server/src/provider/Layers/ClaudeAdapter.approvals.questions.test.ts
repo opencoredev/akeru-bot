@@ -1,3 +1,5 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { ApprovalRequestId, ProviderDriverKind } from "@akeru/contracts";
@@ -32,7 +34,7 @@ describe("ClaudeAdapterLive", () => {
 
       const createInput = harness.getLastCreateQueryInput();
       const canUseTool = createInput?.options.canUseTool;
-      assert.equal(typeof canUseTool, "function");
+      assert.isTrue(Predicate.isFunction(canUseTool));
 
       if (!canUseTool) {
         return;
@@ -61,7 +63,10 @@ describe("ClaudeAdapterLive", () => {
       const requestedEvent = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(requestedEvent._tag, "Some");
 
-      if (requestedEvent._tag !== "Some" || requestedEvent.value.type !== "user-input.requested") {
+      if (
+        !Predicate.isTagged(requestedEvent, "Some") ||
+        requestedEvent.value.type !== "user-input.requested"
+      ) {
         assert.fail("Expected user-input.requested event");
 
         return;
@@ -79,8 +84,7 @@ describe("ClaudeAdapterLive", () => {
       const permissionResult = yield* Effect.promise(() => permissionPromise);
       assert.equal((permissionResult as PermissionResult).behavior, "allow");
 
-      const updatedInput = (permissionResult as { updatedInput: Record<string, unknown> })
-        .updatedInput;
+      const updatedInput = (permissionResult as { updatedInput: Schema.JsonObject }).updatedInput;
 
       assert.deepEqual(updatedInput.answers, { "Deploy to which env?": "Staging" });
     }).pipe(
@@ -107,7 +111,7 @@ describe("ClaudeAdapterLive", () => {
 
       const createInput = harness.getLastCreateQueryInput();
       const canUseTool = createInput?.options.canUseTool;
-      assert.equal(typeof canUseTool, "function");
+      assert.isTrue(Predicate.isFunction(canUseTool));
 
       if (!canUseTool) {
         return;
@@ -136,7 +140,10 @@ describe("ClaudeAdapterLive", () => {
       const requestedEvent = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(requestedEvent._tag, "Some");
 
-      if (requestedEvent._tag !== "Some" || requestedEvent.value.type !== "user-input.requested") {
+      if (
+        !Predicate.isTagged(requestedEvent, "Some") ||
+        requestedEvent.value.type !== "user-input.requested"
+      ) {
         assert.fail("Expected user-input.requested event");
 
         return;
@@ -149,7 +156,10 @@ describe("ClaudeAdapterLive", () => {
       const resolvedEvent = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(resolvedEvent._tag, "Some");
 
-      if (resolvedEvent._tag !== "Some" || resolvedEvent.value.type !== "user-input.resolved") {
+      if (
+        !Predicate.isTagged(resolvedEvent, "Some") ||
+        resolvedEvent.value.type !== "user-input.resolved"
+      ) {
         assert.fail("Expected user-input.resolved event");
 
         return;
@@ -185,7 +195,7 @@ describe("ClaudeAdapterLive", () => {
       yield* Stream.take(adapter.streamEvents, 3).pipe(Stream.runDrain);
 
       const canUseTool = harness.getLastCreateQueryInput()?.options.canUseTool;
-      assert.equal(typeof canUseTool, "function");
+      assert.isTrue(Predicate.isFunction(canUseTool));
 
       if (!canUseTool) {
         return;
@@ -258,7 +268,7 @@ describe("ClaudeAdapterLive", () => {
       yield* Stream.take(adapter.streamEvents, 3).pipe(Stream.runDrain);
 
       const canUseTool = harness.getLastCreateQueryInput()?.options.canUseTool;
-      assert.equal(typeof canUseTool, "function");
+      assert.isTrue(Predicate.isFunction(canUseTool));
 
       if (!canUseTool) {
         return;
@@ -281,7 +291,10 @@ describe("ClaudeAdapterLive", () => {
 
       const requestedEvent = yield* Stream.runHead(adapter.streamEvents);
 
-      if (requestedEvent._tag !== "Some" || requestedEvent.value.type !== "user-input.requested") {
+      if (
+        !Predicate.isTagged(requestedEvent, "Some") ||
+        requestedEvent.value.type !== "user-input.requested"
+      ) {
         assert.fail("Expected user-input.requested event");
 
         return;
@@ -292,7 +305,10 @@ describe("ClaudeAdapterLive", () => {
 
       const resolvedEvent = yield* Stream.runHead(adapter.streamEvents);
 
-      if (resolvedEvent._tag !== "Some" || resolvedEvent.value.type !== "user-input.resolved") {
+      if (
+        !Predicate.isTagged(resolvedEvent, "Some") ||
+        resolvedEvent.value.type !== "user-input.resolved"
+      ) {
         assert.fail("Expected user-input.resolved event");
 
         return;

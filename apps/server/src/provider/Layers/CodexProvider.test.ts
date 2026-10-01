@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off - the parser tests need real symlinks and tmpdirs.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -166,7 +167,7 @@ it("ignores custom models that shadow a preferred slug", () => {
 });
 
 describe("parseCodexSkillsListResponse", () => {
-  const makeSkill = (overrides: Record<string, unknown>) => ({
+  const makeSkill = (overrides: Schema.JsonObject) => ({
     name: "skill",
     path: "/repo/.agents/skills/skill/SKILL.md",
     description: "Skill description.",

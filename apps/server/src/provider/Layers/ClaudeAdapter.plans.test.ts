@@ -1,5 +1,7 @@
+import { claudeMessage } from "./test-support/claudeMessages.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
-import type { PermissionResult, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { ProviderDriverKind, ProviderItemId } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -38,7 +40,7 @@ describe("ClaudeAdapterLive", () => {
 
       const createInput = harness.getLastCreateQueryInput();
       const canUseTool = createInput?.options.canUseTool;
-      assert.equal(typeof canUseTool, "function");
+      assert.isTrue(Predicate.isFunction(canUseTool));
 
       if (!canUseTool) {
         return;
@@ -59,7 +61,7 @@ describe("ClaudeAdapterLive", () => {
       const proposedEvent = yield* Stream.runHead(adapter.streamEvents);
       assert.equal(proposedEvent._tag, "Some");
 
-      if (proposedEvent._tag !== "Some") {
+      if (!Predicate.isTagged(proposedEvent, "Some")) {
         return;
       }
 
@@ -117,36 +119,38 @@ describe("ClaudeAdapterLive", () => {
         (event) => event.type === "turn.proposed.completed",
       ).pipe(Stream.runHead, Effect.forkChild);
 
-      harness.query.emit({
-        type: "assistant",
-        session_id: "sdk-session-exit-plan",
-        uuid: "assistant-exit-plan",
-        parent_tool_use_id: null,
-        message: {
-          model: "claude-opus-4-6",
-          id: "msg-exit-plan",
-          type: "message",
-          role: "assistant",
-          content: [
-            {
-              type: "tool_use",
-              id: "tool-exit-2",
-              name: "ExitPlanMode",
-              input: {
-                plan: "# Final plan\n\n- capture it",
+      harness.query.emit(
+        claudeMessage({
+          type: "assistant",
+          session_id: "sdk-session-exit-plan",
+          uuid: "assistant-exit-plan",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-opus-4-6",
+            id: "msg-exit-plan",
+            type: "message",
+            role: "assistant",
+            content: [
+              {
+                type: "tool_use",
+                id: "tool-exit-2",
+                name: "ExitPlanMode",
+                input: {
+                  plan: "# Final plan\n\n- capture it",
+                },
               },
-            },
-          ],
-          stop_reason: null,
-          stop_sequence: null,
-          usage: {},
-        },
-      } as unknown as SDKMessage);
+            ],
+            stop_reason: null,
+            stop_sequence: null,
+            usage: {},
+          },
+        }),
+      );
 
       const proposedEvent = yield* Fiber.join(proposedEventFiber);
       assert.equal(proposedEvent._tag, "Some");
 
-      if (proposedEvent._tag !== "Some") {
+      if (!Predicate.isTagged(proposedEvent, "Some")) {
         return;
       }
 

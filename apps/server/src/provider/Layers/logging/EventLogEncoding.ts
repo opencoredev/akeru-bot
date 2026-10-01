@@ -1,3 +1,6 @@
+import * as Match from "effect/Match";
+
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 
 import * as NodePath from "node:path";
@@ -35,18 +38,25 @@ export const transientNativeMethods = new Set([
 
 export const transientAcpUpdates = new Set(["agent_message_chunk", "agent_thought_chunk"]);
 
-export function logWarning(message: string, context: Record<string, unknown>): Effect.Effect<void> {
+export function logWarning(
+  message: string,
+  context: Record<string, string | number | Error>,
+): Effect.Effect<void> {
   return Effect.logWarning(message, context).pipe(Effect.annotateLogs({ scope: LOG_SCOPE }));
 }
 
 export function resolveThreadSegment(raw: string | null | undefined): string {
-  const normalized = typeof raw === "string" ? toSafeThreadAttachmentSegment(raw) : null;
+  const normalized = Predicate.isString(raw) ? toSafeThreadAttachmentSegment(raw) : null;
 
   return normalized ?? GLOBAL_THREAD_SEGMENT;
 }
 
 export function resolveStreamLabel(stream: EventNdjsonStream): string {
-  return stream === "native" ? "NTIVE" : stream === "orchestration" ? "ORCH" : "CANON";
+  return Match.value(stream).pipe(
+    Match.when("native", () => "NTIVE" as const),
+    Match.when("orchestration", () => "ORCH" as const),
+    Match.orElse(() => "CANON" as const),
+  );
 }
 
 export function providerLogPrefix(filePath: string): string {
@@ -60,57 +70,61 @@ export function providerLogPath(directory: string, prefix: string, threadSegment
   return NodePath.join(directory, `${prefix}${threadSegment}.log`);
 }
 
-export function shouldPersist(stream: EventNdjsonStream, event: unknown): boolean {
-  if (stream === "orchestration" || typeof event !== "object" || event === null) {
+export function shouldPersist<Input0>(stream: EventNdjsonStream, eventInput: Input0): boolean {
+  const event = eventInput;
+
+  if (stream === "orchestration" || !Predicate.isObject(event)) {
     return true;
   }
 
   try {
-    const type = Reflect.get(event, "type");
+    const type = event.type;
 
-    if (typeof type === "string" && transientCanonicalEventTypes.has(type)) {
+    if (Predicate.isString(type) && transientCanonicalEventTypes.has(type)) {
       return false;
     }
 
     if (stream !== "native") return true;
 
-    const nested = Reflect.get(event, "event");
-    const nativeEvent = typeof nested === "object" && nested !== null ? nested : event;
-    const method = Reflect.get(nativeEvent, "method");
+    const nested = event.event;
+
+    const nativeEvent = Predicate.isObject(nested) ? nested : event;
+
+    const method = nativeEvent.method;
 
     if (
-      typeof method === "string" &&
+      Predicate.isString(method) &&
       (transientNativeMethods.has(method) ||
         method.startsWith("claude/stream_event/content_block_delta/"))
     ) {
       return false;
     }
 
-    const nativeType = Reflect.get(nativeEvent, "type");
+    const nativeType = nativeEvent.type;
 
     if (nativeType === "message.part.delta") return false;
 
-    const payload = Reflect.get(nativeEvent, "payload");
+    const payload = nativeEvent.payload;
 
-    if (typeof payload !== "object" || payload === null) return true;
+    if (!Predicate.isObject(payload) || payload === null) return true;
 
     if (method === "session/update") {
-      const update = Reflect.get(payload, "update");
+      const update = payload.update;
 
-      if (typeof update !== "object" || update === null) return true;
-      const updateType = Reflect.get(update, "sessionUpdate");
+      if (!Predicate.isObject(update) || update === null) return true;
+      const updateType = update.sessionUpdate;
 
-      return typeof updateType !== "string" || !transientAcpUpdates.has(updateType);
+      return !Predicate.isString(updateType) || !transientAcpUpdates.has(updateType);
     }
 
     if (nativeType === "message.part.updated") {
-      const properties = Reflect.get(payload, "properties");
+      const properties = payload.properties;
 
-      if (typeof properties !== "object" || properties === null) return true;
-      const part = Reflect.get(properties, "part");
+      if (!Predicate.isObject(properties) || properties === null) return true;
+      const part = properties.part;
 
-      if (typeof part !== "object" || part === null) return true;
-      const partType = Reflect.get(part, "type");
+      if (!Predicate.isObject(part) || part === null) return true;
+      const partType = part.type;
 
       return partType !== "text" && partType !== "reasoning";
     }
@@ -121,7 +135,7 @@ export function shouldPersist(stream: EventNdjsonStream, event: unknown): boolea
   }
 }
 
-export const serializeEvent = Effect.fnUntraced(function* (event: unknown) {
+export const serializeEvent = Effect.fnUntraced(function* <Event>(event: Event) {
   return yield* encodeUnknownJsonString(event).pipe(
     Effect.catch((error) =>
       logWarning("failed to serialize provider event log record", {

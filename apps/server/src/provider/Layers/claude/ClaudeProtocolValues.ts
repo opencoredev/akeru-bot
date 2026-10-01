@@ -1,3 +1,9 @@
+import * as Match from "effect/Match";
+import { readSdkRecord } from "../ProtocolJson.ts";
+import { isSdkRecord } from "../ProtocolJson.ts";
+import { readProtocolRecord as readJsonRecord } from "../ProtocolJson.ts";
+import type { SdkRecord } from "../ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 import { type PermissionUpdate, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import {
   ApprovalRequestId,
@@ -36,10 +42,10 @@ export const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(
 );
 
 export const decodeUnknownJsonStringExit = Schema.decodeUnknownExit(
-  Schema.fromJsonString(Schema.Unknown),
+  Schema.fromJsonString(Schema.Json),
 );
 
-export function encodeJsonStringForDiagnostics(input: unknown): string | undefined {
+export function encodeJsonStringForDiagnostics<Input>(input: Input): string | undefined {
   const result = encodeUnknownJsonStringExit(input);
 
   return Exit.isSuccess(result) ? result.value : undefined;
@@ -134,7 +140,13 @@ export function getEffectiveClaudeAgentEffort(
 ): ClaudeSdkEffort | null {
   const normalized = normalizeClaudeCliEffort(effort, model);
 
-  return normalized ? (normalized as ClaudeSdkEffort) : null;
+  return normalized === "low" ||
+    normalized === "medium" ||
+    normalized === "high" ||
+    normalized === "max" ||
+    normalized === "xhigh"
+    ? normalized
+    : null;
 }
 
 export function asRuntimeItemId(value: string): RuntimeItemId {
@@ -149,39 +161,37 @@ export function asRuntimeRequestId(value: ApprovalRequestId): RuntimeRequestId {
   return RuntimeRequestId.make(value);
 }
 
-export function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState | undefined {
-  if (!resumeCursor || typeof resumeCursor !== "object") {
+export function readClaudeResumeState<Input0>(
+  resumeCursorInput: Input0,
+): ClaudeResumeState | undefined {
+  const resumeCursor = readSdkRecord(resumeCursorInput);
+
+  if (!resumeCursor || !isSdkRecord(resumeCursor)) {
     return undefined;
   }
 
-  const cursor = resumeCursor as {
-    threadId?: unknown;
-    resume?: unknown;
-    sessionId?: unknown;
-    resumeSessionAt?: unknown;
-    turnCount?: unknown;
-  };
+  const cursor = resumeCursor;
 
-  const threadIdCandidate = typeof cursor.threadId === "string" ? cursor.threadId : undefined;
+  const threadIdCandidate = Predicate.isString(cursor.threadId) ? cursor.threadId : undefined;
 
   const threadId =
     threadIdCandidate && !isSyntheticClaudeThreadId(threadIdCandidate)
       ? ThreadId.make(threadIdCandidate)
       : undefined;
 
-  const resumeCandidate =
-    typeof cursor.resume === "string"
-      ? cursor.resume
-      : typeof cursor.sessionId === "string"
-        ? cursor.sessionId
-        : undefined;
+  const resumeCandidate = Predicate.isString(cursor.resume)
+    ? cursor.resume
+    : Predicate.isString(cursor.sessionId)
+      ? cursor.sessionId
+      : undefined;
 
   const resume = resumeCandidate && isUuid(resumeCandidate) ? resumeCandidate : undefined;
 
-  const resumeSessionAt =
-    typeof cursor.resumeSessionAt === "string" ? cursor.resumeSessionAt : undefined;
+  const resumeSessionAt = Predicate.isString(cursor.resumeSessionAt)
+    ? cursor.resumeSessionAt
+    : undefined;
 
-  const turnCountValue = typeof cursor.turnCount === "number" ? cursor.turnCount : undefined;
+  const turnCountValue = Predicate.isNumber(cursor.turnCount) ? cursor.turnCount : undefined;
 
   return {
     ...(threadId ? { threadId } : {}),
@@ -265,16 +275,16 @@ export function classifyRequestType(toolName: string): CanonicalRequestType {
 
   const itemType = classifyToolItemType(toolName);
 
-  return itemType === "command_execution"
-    ? "command_execution_approval"
-    : itemType === "file_change"
-      ? "file_change_approval"
-      : "dynamic_tool_call";
+  return Match.value(itemType).pipe(
+    Match.when("command_execution", () => "command_execution_approval" as const),
+    Match.when("file_change", () => "file_change_approval" as const),
+    Match.orElse(() => "dynamic_tool_call" as const),
+  );
 }
 
-export function summarizeToolRequest(toolName: string, input: Record<string, unknown>): string {
+export function summarizeToolRequest(toolName: string, input: SdkRecord): string {
   const commandValue = input.command ?? input.cmd;
-  const command = typeof commandValue === "string" ? commandValue : undefined;
+  const command = Predicate.isString(commandValue) ? commandValue : undefined;
 
   if (command && command.trim().length > 0) {
     return `${toolName}: ${command.trim().slice(0, 400)}`;
@@ -286,10 +296,11 @@ export function summarizeToolRequest(toolName: string, input: Record<string, unk
   const itemType = classifyToolItemType(toolName);
 
   if (itemType === "collab_agent_tool_call") {
-    const description =
-      typeof input.description === "string" ? input.description.trim() : undefined;
+    const description = Predicate.isString(input.description)
+      ? input.description.trim()
+      : undefined;
 
-    const prompt = typeof input.prompt === "string" ? input.prompt.trim() : undefined;
+    const prompt = Predicate.isString(input.prompt) ? input.prompt.trim() : undefined;
     const label = description || (prompt ? prompt.slice(0, 200) : undefined);
 
     if (label) {
@@ -351,7 +362,7 @@ export function extractAssistantTextBlocks(message: SDKMessage): Array<string> {
     return [];
   }
 
-  const content = (message.message as { content?: unknown } | undefined)?.content;
+  const content = message.message?.content;
 
   if (!Array.isArray(content)) {
     return [];
@@ -360,15 +371,15 @@ export function extractAssistantTextBlocks(message: SDKMessage): Array<string> {
   const fragments: string[] = [];
 
   for (const block of content) {
-    if (!block || typeof block !== "object") {
+    if (!block || !isSdkRecord(block)) {
       continue;
     }
 
-    const candidate = block as { type?: unknown; text?: unknown };
+    const candidate = block;
 
     if (
       candidate.type === "text" &&
-      typeof candidate.text === "string" &&
+      Predicate.isString(candidate.text) &&
       candidate.text.length > 0
     ) {
       fragments.push(candidate.text);
@@ -378,51 +389,54 @@ export function extractAssistantTextBlocks(message: SDKMessage): Array<string> {
   return fragments;
 }
 
-export function extractContentBlockText(block: unknown): string {
-  if (!block || typeof block !== "object") {
+export function extractContentBlockText<Input0>(blockInput: Input0): string {
+  const block = readSdkRecord(blockInput);
+
+  if (!block || !isSdkRecord(block)) {
     return "";
   }
 
-  const candidate = block as { type?: unknown; text?: unknown };
+  const candidate = block;
 
-  return candidate.type === "text" && typeof candidate.text === "string" ? candidate.text : "";
+  return candidate.type === "text" && Predicate.isString(candidate.text) ? candidate.text : "";
 }
 
-export function extractTextContent(value: unknown): string {
-  if (typeof value === "string") {
+export function extractTextContent<Input>(input: Input): string {
+  return textContent(input);
+}
+
+function textContent<Input>(value: Input): string {
+  if (Predicate.isString(value)) {
     return value;
   }
 
   if (Array.isArray(value)) {
-    return value.map((entry) => extractTextContent(entry)).join("");
+    return value.map(textContent).join("");
   }
 
-  if (!value || typeof value !== "object") {
+  if (!isSdkRecord(value)) {
     return "";
   }
 
-  const record = value as {
-    text?: unknown;
-    content?: unknown;
-  };
+  const record = value;
 
-  if (typeof record.text === "string") {
+  if (Predicate.isString(record.text)) {
     return record.text;
   }
 
-  return extractTextContent(record.content);
+  return textContent(record.content);
 }
 
-export function extractExitPlanModePlan(value: unknown): string | undefined {
-  if (!value || typeof value !== "object") {
+export function extractExitPlanModePlan<Input0>(valueInput: Input0): string | undefined {
+  const value = readSdkRecord(valueInput);
+
+  if (!value || !isSdkRecord(value)) {
     return undefined;
   }
 
-  const record = value as {
-    plan?: unknown;
-  };
+  const record = value;
 
-  return typeof record.plan === "string" && record.plan.trim().length > 0
+  return Predicate.isString(record.plan) && record.plan.trim().length > 0
     ? record.plan.trim()
     : undefined;
 }
@@ -436,7 +450,7 @@ export function exitPlanCaptureKey(input: {
     : `plan:${input.planMarkdown}`;
 }
 
-export function tryParseJsonRecord(value: string): Record<string, unknown> | undefined {
+export function tryParseJsonRecord(value: string): Schema.JsonObject | undefined {
   const result = decodeUnknownJsonStringExit(value);
 
   if (!Exit.isSuccess(result)) {
@@ -445,12 +459,10 @@ export function tryParseJsonRecord(value: string): Record<string, unknown> | und
 
   const parsed = result.value;
 
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed as Record<string, unknown>)
-    : undefined;
+  return readJsonRecord(parsed);
 }
 
-export function toolInputFingerprint(input: Record<string, unknown>): string | undefined {
+export function toolInputFingerprint(input: SdkRecord): string | undefined {
   return encodeJsonStringForDiagnostics(input);
 }
 
@@ -469,7 +481,7 @@ export function toolResultStreamKind(
 
 export function toolResultBlocksFromUserMessage(message: SDKMessage): Array<{
   readonly toolUseId: string;
-  readonly block: Record<string, unknown>;
+  readonly block: SdkRecord;
   readonly text: string;
   readonly isError: boolean;
 }> {
@@ -477,7 +489,7 @@ export function toolResultBlocksFromUserMessage(message: SDKMessage): Array<{
     return [];
   }
 
-  const content = (message.message as { content?: unknown } | undefined)?.content;
+  const content = message.message?.content;
 
   if (!Array.isArray(content)) {
     return [];
@@ -485,23 +497,25 @@ export function toolResultBlocksFromUserMessage(message: SDKMessage): Array<{
 
   const blocks: Array<{
     readonly toolUseId: string;
-    readonly block: Record<string, unknown>;
+    readonly block: SdkRecord;
     readonly text: string;
     readonly isError: boolean;
   }> = [];
 
   for (const entry of content) {
-    if (!entry || typeof entry !== "object") {
+    if (!entry || !isSdkRecord(entry)) {
       continue;
     }
 
-    const block = entry as Record<string, unknown>;
+    const block = readSdkRecord(entry);
+
+    if (!block) continue;
 
     if (block.type !== "tool_result") {
       continue;
     }
 
-    const toolUseId = typeof block.tool_use_id === "string" ? block.tool_use_id : undefined;
+    const toolUseId = Predicate.isString(block.tool_use_id) ? block.tool_use_id : undefined;
 
     if (!toolUseId) {
       continue;
@@ -562,24 +576,28 @@ export function toRequestError(
   });
 }
 
-export function sdkMessageType(value: unknown): string | undefined {
-  if (!value || typeof value !== "object") {
+export function sdkMessageType<Input0>(valueInput: Input0): string | undefined {
+  const value = readSdkRecord(valueInput);
+
+  if (!value || !isSdkRecord(value)) {
     return undefined;
   }
 
-  const record = value as { type?: unknown };
+  const record = value;
 
-  return typeof record.type === "string" ? record.type : undefined;
+  return Predicate.isString(record.type) ? record.type : undefined;
 }
 
-export function sdkMessageSubtype(value: unknown): string | undefined {
-  if (!value || typeof value !== "object") {
+export function sdkMessageSubtype<Input0>(valueInput: Input0): string | undefined {
+  const value = readSdkRecord(valueInput);
+
+  if (!value || !isSdkRecord(value)) {
     return undefined;
   }
 
-  const record = value as { subtype?: unknown };
+  const record = value;
 
-  return typeof record.subtype === "string" ? record.subtype : undefined;
+  return Predicate.isString(record.subtype) ? record.subtype : undefined;
 }
 
 export function sdkNativeMethod(message: SDKMessage): string {
@@ -595,7 +613,7 @@ export function sdkNativeMethod(message: SDKMessage): string {
     if (streamType) {
       const deltaType =
         streamType === "content_block_delta"
-          ? sdkMessageType((message.event as { delta?: unknown }).delta)
+          ? sdkMessageType("delta" in message.event ? message.event.delta : undefined)
           : undefined;
 
       if (deltaType) {
@@ -625,25 +643,27 @@ export const SDK_MESSAGE_NOISE_KEYS = new Set([
 // yet, so the work-log row shows what actually arrived (e.g. a notification's
 // text) instead of an opaque "unhandled subtype" placeholder. Nested structures
 // are left to the full payload retained in the event's `detail`.
-export function previewUnknownSdkContent(message: unknown): string | undefined {
-  if (!message || typeof message !== "object") {
+export function previewUnknownSdkContent<Input0>(messageInput: Input0): string | undefined {
+  const message = readSdkRecord(messageInput);
+
+  if (!message || !isSdkRecord(message)) {
     return undefined;
   }
 
   const parts: string[] = [];
 
-  for (const [key, value] of Object.entries(message as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(message)) {
     if (SDK_MESSAGE_NOISE_KEYS.has(key)) {
       continue;
     }
 
-    if (typeof value === "string") {
+    if (Predicate.isString(value)) {
       const trimmed = value.trim();
 
       if (trimmed.length > 0) {
         parts.push(`${key}: ${trimmed}`);
       }
-    } else if (typeof value === "number" || typeof value === "boolean") {
+    } else if (Predicate.isNumber(value) || Predicate.isBoolean(value)) {
       parts.push(`${key}: ${String(value)}`);
     }
   }
@@ -657,7 +677,9 @@ export function previewUnknownSdkContent(message: unknown): string | undefined {
   return joined.length > 280 ? `${joined.slice(0, 279)}…` : joined;
 }
 
-export function describeUnknownSdkMessage(kind: string, message: unknown): string {
+export function describeUnknownSdkMessage<Input0>(kind: string, messageInput: Input0): string {
+  const message = readSdkRecord(messageInput);
+
   const preview = previewUnknownSdkContent(message);
 
   return preview ? `${kind} — ${preview}` : `${kind} (no displayable text content)`;
@@ -665,9 +687,9 @@ export function describeUnknownSdkMessage(kind: string, message: unknown): strin
 
 export function sdkNativeItemId(message: SDKMessage): string | undefined {
   if (message.type === "assistant") {
-    const maybeId = (message.message as { id?: unknown }).id;
+    const maybeId = message.message.id;
 
-    if (typeof maybeId === "string") {
+    if (Predicate.isString(maybeId)) {
       return maybeId;
     }
 
@@ -679,12 +701,13 @@ export function sdkNativeItemId(message: SDKMessage): string | undefined {
   }
 
   if (message.type === "stream_event") {
-    const event = message.event as {
-      type?: unknown;
-      content_block?: { id?: unknown };
-    };
+    const event = message.event;
 
-    if (event.type === "content_block_start" && typeof event.content_block?.id === "string") {
+    if (
+      event.type === "content_block_start" &&
+      "id" in event.content_block &&
+      Predicate.isString(event.content_block.id)
+    ) {
       return event.content_block.id;
     }
   }

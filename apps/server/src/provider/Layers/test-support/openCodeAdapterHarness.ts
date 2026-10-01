@@ -1,3 +1,5 @@
+import type { OpencodeClient } from "@opencode-ai/sdk/v2";
+import { openCodeClientFixture } from "./partialFixtures.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -16,6 +18,7 @@ import {
   OpenCodeRuntimeError,
   type OpenCodeRuntimeShape,
 } from "../../opencodeRuntime.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured OpenCodeAdapter double or Layer for isolated provider tests.
 import { makeOpenCodeAdapter } from "../OpenCodeAdapter.ts";
 
 export class OpenCodeAdapter extends Context.Service<OpenCodeAdapter, OpenCodeAdapterShape>()(
@@ -59,7 +62,7 @@ export function makeOpenCodeAdapterHarness() {
     state: {
       startCalls: [] as string[],
       sessionCreateUrls: [] as string[],
-      sessionCreateInputs: [] as Array<Record<string, unknown>>,
+      sessionCreateInputs: [] as Array<Parameters<OpencodeClient["session"]["create"]>[0]>,
       authHeaders: [] as Array<string | null>,
       abortCalls: [] as string[],
       abortImplementation: null as ((sessionID: string) => Promise<void>) | null,
@@ -85,7 +88,16 @@ export function makeOpenCodeAdapterHarness() {
       permissionReplyCalls: [] as Array<{ requestID: string; reply: string }>,
       permissionReplyError: null as Error | null,
       questionReplyCalls: [] as string[],
-      questionReplyError: null as unknown,
+      questionReplyError: null as
+        | Error
+        | {
+            readonly status?: number;
+            readonly _tag?: string;
+            readonly requestID?: string;
+            readonly message?: string;
+            readonly body?: { readonly _tag: string };
+          }
+        | null,
       permissionReplyImplementation: null as
         | ((requestID: string, reply: string, signal?: AbortSignal) => Promise<void>)
         | null,
@@ -167,9 +179,9 @@ export function makeOpenCodeAdapterHarness() {
       }),
     runOpenCodeCommand: () => Effect.succeed({ stdout: "", stderr: "", code: 0 }),
     createOpenCodeSdkClient: ({ baseUrl, serverPassword }) =>
-      ({
+      openCodeClientFixture({
         session: {
-          create: async (input: Record<string, unknown>) => {
+          create: async (input) => {
             runtimeMock.state.sessionCreateUrls.push(baseUrl);
             runtimeMock.state.sessionCreateInputs.push(input);
             runtimeMock.state.authHeaders.push(
@@ -208,7 +220,7 @@ export function makeOpenCodeAdapterHarness() {
               },
             };
           },
-          update: async ({ sessionID, permission }: { sessionID: string; permission: unknown }) => {
+          update: async ({ sessionID, permission }) => {
             runtimeMock.state.sessionUpdateCalls.push({ sessionID, permission });
 
             return { data: { id: sessionID } };
@@ -233,7 +245,7 @@ export function makeOpenCodeAdapterHarness() {
 
             return { data: runtimeMock.state.sessionChildrenById.get(sessionID) ?? [] };
           },
-          promptAsync: async (input: unknown) => {
+          promptAsync: async <Input>(input: Input) => {
             runtimeMock.state.promptCalls.push(input);
 
             if (runtimeMock.state.promptAsyncError) {
@@ -273,10 +285,7 @@ export function makeOpenCodeAdapterHarness() {
           }),
         },
         permission: {
-          reply: async (
-            { requestID, reply }: { requestID: string; reply: string },
-            options?: { signal?: AbortSignal },
-          ) => {
+          reply: async ({ requestID, reply = "once" }, options) => {
             runtimeMock.state.permissionReplyCalls.push({ requestID, reply });
 
             if (runtimeMock.state.permissionReplyError) {
@@ -286,7 +295,7 @@ export function makeOpenCodeAdapterHarness() {
             await runtimeMock.state.permissionReplyImplementation?.(
               requestID,
               reply,
-              options?.signal,
+              options?.signal ?? undefined,
             );
           },
         },
@@ -300,13 +309,14 @@ export function makeOpenCodeAdapterHarness() {
           },
         },
         mcp: {
-          add: async (input: { name: string; config: unknown }) => {
-            runtimeMock.state.mcpAddCalls.push(input);
+          add: async (input) => {
+            if (!input?.name || !input.config) throw new Error("Expected MCP name and config");
+            runtimeMock.state.mcpAddCalls.push({ name: input.name, config: input.config });
 
             return { data: true };
           },
         },
-      }) as unknown as ReturnType<OpenCodeRuntimeShape["createOpenCodeSdkClient"]>,
+      }),
     loadOpenCodeInventory: () =>
       Effect.fail(
         new OpenCodeRuntimeError({
