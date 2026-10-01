@@ -16,7 +16,7 @@ export const resolveClaudeHomePath = Effect.fn("resolveClaudeHomePath")(function
   const path = yield* Path.Path;
   const homePath = config.homePath.trim();
 
-  return path.resolve(homePath.length > 0 ? expandHomePath(homePath) : NodeOS.homedir());
+  return path.resolve(homePath.length > 0 ? expandHomePath(homePath, path) : NodeOS.homedir());
 });
 
 export const claudeEnvironmentForConfig = Effect.fn("makeClaudeEnvironment")(function* (

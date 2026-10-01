@@ -42,7 +42,7 @@ const REPLACEABLE_SHARED_RUNTIME_DIRECTORIES = new Set(["mcp-oauth-locks"]);
 function resolveHomePath(path: Path.Path, value: string | undefined): string {
   const expanded =
     value && value.trim().length > 0
-      ? expandHomePath(value)
+      ? expandHomePath(value, path)
       : path.join(NodeOS.homedir(), ".codex");
 
   return path.resolve(expanded);
@@ -64,7 +64,7 @@ export const resolveCodexHomeLayout = Effect.fn("resolveCodexHomeLayout")(functi
     };
   }
 
-  const effectiveHomePath = path.resolve(expandHomePath(shadowHomePath));
+  const effectiveHomePath = path.resolve(expandHomePath(shadowHomePath, path));
 
   return {
     mode: "authOverlay",
