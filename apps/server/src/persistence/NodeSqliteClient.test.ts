@@ -2,12 +2,46 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-
 import * as SqliteClient from "./NodeSqliteClient.ts";
 
 const layer = it.layer(SqliteClient.layerMemory());
 
 layer("NodeSqliteClient", (it) => {
+  it.effect("preserves named bindings for row, raw, and positional execution", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const query = sql.unsafe("SELECT $value AS value", [{ value: "named" }]);
+      assert.deepEqual(yield* query, [{ value: "named" }]);
+      assert.deepEqual(yield* query.raw, [{ value: "named" }]);
+      assert.deepEqual(yield* query.values, [["named"]]);
+      assert.deepEqual(yield* query.valuesUnprepared, [["named"]]);
+    }),
+  );
+  it.effect("applies safe integers to prepared and unprepared positional values", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      for (const query of [
+        sql`SELECT 9007199254740993 AS value`.values,
+        sql`SELECT 9007199254740993 AS value`.valuesUnprepared,
+      ]) {
+        assert.deepEqual(yield* query.pipe(Effect.provideService(SqlClient.SafeIntegers, true)), [
+          [9007199254740993n],
+        ]);
+        assert.equal(
+          (yield* Effect.flip(query.pipe(Effect.provideService(SqlClient.SafeIntegers, false))))
+            ._tag,
+          "SqlError",
+        );
+        assert.deepEqual(yield* query.pipe(Effect.provideService(SqlClient.SafeIntegers, true)), [
+          [9007199254740993n],
+        ]);
+      }
+      const rows = yield* sql`SELECT 9007199254740993 AS value`.pipe(
+        Effect.provideService(SqlClient.SafeIntegers, true),
+      );
+      assert.deepEqual(rows, [{ value: 9007199254740993n }]);
+    }),
+  );
   it.effect("runs prepared queries and returns positional values", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
