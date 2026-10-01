@@ -20,6 +20,7 @@ function logPathHydrationWarning(message: string, error?: unknown): void {
 
 function hydratePosixPath(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): void {
   let shellPath: string | undefined;
+
   for (const shell of listLoginShellCandidates(platform, env.SHELL)) {
     try {
       shellPath = readPathFromLoginShell(shell);
@@ -32,6 +33,7 @@ function hydratePosixPath(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): vo
 
   const launchctlPath = platform === "darwin" && !shellPath ? readPathFromLaunchctl() : undefined;
   const mergedPath = mergePathEntries(shellPath ?? launchctlPath, env.PATH, platform);
+
   if (mergedPath) {
     env.PATH = mergedPath;
   }
@@ -44,6 +46,7 @@ export function hydratePosixHome(
   if ((env.HOME?.trim() ?? "").length > 0) return;
 
   const homeDir = resolveHomeDir();
+
   if (homeDir.length > 0) {
     env.HOME = homeDir;
   }
@@ -62,15 +65,18 @@ export const fixPath = Effect.fn("fixPath")(function* (): Effect.fn.Return<
       Effect.catchDefect((defect) =>
         Effect.sync(() => {
           logPathHydrationWarning("Failed to hydrate PATH from the user environment.", defect);
-          return {} as Partial<NodeJS.ProcessEnv>;
+
+          return {};
         }),
       ),
     );
+
     for (const [key, value] of Object.entries(repairedEnvironment)) {
       if (value !== undefined) {
         env[key] = value;
       }
     }
+
     return;
   }
 
@@ -94,19 +100,24 @@ export const fixPath = Effect.fn("fixPath")(function* (): Effect.fn.Return<
 
 export const expandHomePath = Effect.fn(function* (input: string) {
   const { join } = yield* Path.Path;
+
   if (input === "~") {
     return NodeOS.homedir();
   }
+
   if (input.startsWith("~/") || input.startsWith("~\\")) {
     return join(NodeOS.homedir(), input.slice(2));
   }
+
   return input;
 });
 
 export const resolveBaseDir = Effect.fn(function* (raw: string | undefined) {
   const { join, resolve } = yield* Path.Path;
+
   if (!raw || raw.trim().length === 0) {
     return join(NodeOS.homedir(), PRODUCT_HOME_DIRNAME);
   }
+
   return resolve(yield* expandHomePath(raw.trim()));
 });

@@ -7,7 +7,6 @@ import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
-import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
@@ -96,6 +95,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and threa
 
   return Effect.gen(function* () {
     const dispatchCalls = yield* Ref.make<ReadonlyArray<string>>([]);
+
     const targets = yield* ServerRuntimeStartup.resolveAutoBootstrapWelcomeTargets.pipe(
       Effect.provideService(ServerConfig.ServerConfig, {
         cwd: "/tmp/startup-project",
@@ -160,6 +160,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and threa
 it.effect("resolveAutoBootstrapWelcomeTargets creates a project and thread when missing", () =>
   Effect.gen(function* () {
     const dispatchCalls = yield* Ref.make<ReadonlyArray<string>>([]);
+
     const targets = yield* ServerRuntimeStartup.resolveAutoBootstrapWelcomeTargets.pipe(
       Effect.provideService(ServerConfig.ServerConfig, {
         cwd: "/tmp/startup-project",
@@ -212,6 +213,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const dispatchCalls = yield* Ref.make<ReadonlyArray<string>>([]);
+
       const targets = yield* ServerRuntimeStartup.resolveAutoBootstrapWelcomeTargets.pipe(
         Effect.provideService(ServerConfig.ServerConfig, {
           cwd: "/tmp/startup-project",
@@ -264,6 +266,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const dispatchCalls = yield* Ref.make<ReadonlyArray<string>>([]);
+
       const targets = yield* ServerRuntimeStartup.resolveAutoBootstrapWelcomeTargets.pipe(
         Effect.provideService(ServerConfig.ServerConfig, {
           cwd: "/tmp/startup-project",
@@ -314,12 +317,14 @@ it.effect(
 it.effect("resolveAutoBootstrapWelcomeTargets preserves typed UUID generation failures", () =>
   Effect.gen(function* () {
     const crypto = yield* Crypto.Crypto;
+
     const uuidError = PlatformError.systemError({
       _tag: "Unknown",
       module: "Crypto",
       method: "randomUUIDv4",
       description: "UUID generation unavailable",
     });
+
     const dispatchCalls = yield* Ref.make<ReadonlyArray<string>>([]);
 
     const error = yield* ServerRuntimeStartup.resolveAutoBootstrapWelcomeTargets.pipe(
@@ -375,9 +380,11 @@ it.effect("resolveAutoBootstrapWelcomeTargets preserves typed UUID generation fa
 it.effect("channel restore logs never carry provider errors or secrets", () => {
   const secret = "xoxb-secret-token";
   const logs: Array<unknown> = [];
+
   const logger = Logger.make(({ fiber, message }) => {
     logs.push({ message, annotations: fiber.getRef(References.CurrentLogAnnotations) });
   });
+
   const providerFailure = new ChannelRuntime.ChannelTransportError({
     message: "Channel provider request failed.",
     cause: new Error(`401 Unauthorized for token ${secret}`),

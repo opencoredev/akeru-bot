@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * ServerConfig - Runtime configuration services.
  *
@@ -20,9 +21,11 @@ import { sweepStalePendingAttachments } from "./attachmentStore.ts";
 export const DEFAULT_PORT = 3773;
 
 export const RuntimeMode = Schema.Literals(["web", "desktop"]);
+
 export type RuntimeMode = typeof RuntimeMode.Type;
 
 export const StartupPresentation = Schema.Literals(["browser", "headless"]);
+
 export type StartupPresentation = typeof StartupPresentation.Type;
 
 /**
@@ -108,15 +111,18 @@ export const deriveServerPaths = Effect.fn(function* (
   options: DeriveServerPathsOptions = {},
 ): Effect.fn.Return<ServerDerivedPaths, never, Path.Path> {
   const { join } = yield* Path.Path;
+
   const stateDir = join(
     baseDir,
     devUrl !== undefined && !options.baseDirIsExplicit ? "dev" : "userdata",
   );
+
   const dbPath = join(stateDir, "state.sqlite");
   const attachmentsDir = join(stateDir, "attachments");
   const logsDir = join(stateDir, "logs");
   const providerLogsDir = join(logsDir, "provider");
   const providerStatusCacheDir = join(baseDir, "caches");
+
   return {
     stateDir,
     dbPath,
@@ -165,6 +171,7 @@ export const ensureServerDirectories = Effect.fn(function* (derivedPaths: Server
     attachmentsDir: derivedPaths.attachmentsDir,
     nowMs: yield* Clock.currentTimeMillis,
   });
+
   if (swept.deleted > 0) {
     yield* Effect.logInfo("Removed expired attachment uploads.", { deleted: swept.deleted });
   }
@@ -176,10 +183,11 @@ const makeTest = Effect.fn("ServerConfig.makeTest")(function* (
 ) {
   const devUrl = undefined;
   const fs = yield* FileSystem.FileSystem;
-  const baseDir =
-    typeof baseDirOrPrefix === "string"
-      ? baseDirOrPrefix
-      : yield* fs.makeTempDirectoryScoped({ prefix: baseDirOrPrefix.prefix });
+
+  const baseDir = Predicate.isString(baseDirOrPrefix)
+    ? baseDirOrPrefix
+    : yield* fs.makeTempDirectoryScoped({ prefix: baseDirOrPrefix.prefix });
+
   const derivedPaths = yield* deriveServerPaths(baseDir, devUrl);
   yield* ensureServerDirectories(derivedPaths);
 
@@ -223,19 +231,24 @@ export const resolveStaticDir = Effect.fn(function* () {
   const { join, resolve } = yield* Path.Path;
   const { exists } = yield* FileSystem.FileSystem;
   const bundledClient = resolve(join(import.meta.dirname, "client"));
+
   const bundledStat = yield* exists(join(bundledClient, "index.html")).pipe(
     Effect.orElseSucceed(() => false),
   );
+
   if (bundledStat) {
     return bundledClient;
   }
 
   const monorepoClient = resolve(join(import.meta.dirname, "../../web/dist"));
+
   const monorepoStat = yield* exists(join(monorepoClient, "index.html")).pipe(
     Effect.orElseSucceed(() => false),
   );
+
   if (monorepoStat) {
     return monorepoClient;
   }
+
   return undefined;
 });

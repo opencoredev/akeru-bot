@@ -27,13 +27,16 @@ it.layer(NodeServices.layer)("ui-fixture", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-ui-fixture-" });
+
         for (const scenario of UI_FIXTURE_CASES) {
           const first = yield* runUiFixture({ baseDir, scenario });
+
           const before = yield* runSqliteState({
             operation: "query",
             baseDir,
             sql: "SELECT * FROM projection_threads ORDER BY thread_id",
           });
+
           const second = yield* runUiFixture({ baseDir, scenario });
           yield* Effect.gen(function* () {
             const query = yield* ProjectionSnapshotQuery;
@@ -42,6 +45,7 @@ it.layer(NodeServices.layer)("ui-fixture", (it) => {
               snapshot.threads.length,
               scenario === "empty" ? 0 : scenario === "edge" ? 3 : 2,
             );
+
             for (const thread of snapshot.threads.filter((thread) => thread.messages.length > 0)) {
               assert.deepStrictEqual(
                 thread.messages.map((message) => message.role),
@@ -62,15 +66,19 @@ it.layer(NodeServices.layer)("ui-fixture", (it) => {
           assert.ok(second.backup);
           assert.notEqual(first.backup, second.backup);
           assert.equal((yield* fs.stat(second.backup!)).mode & 0o777, 0o600);
+
           const after = yield* runSqliteState({
             operation: "query",
             baseDir,
             sql: "SELECT * FROM projection_threads ORDER BY thread_id",
           });
+
           assert.deepStrictEqual(before, after);
+
           if (after.operation === "query") {
             assert.equal(after.rows.length, scenario === "empty" ? 0 : scenario === "edge" ? 3 : 2);
           }
+
           const counts = yield* runSqliteState({
             operation: "query",
             baseDir,
@@ -81,6 +89,7 @@ it.layer(NodeServices.layer)("ui-fixture", (it) => {
           (SELECT COUNT(*) FROM provider_session_runtime) AS providers,
           (SELECT COUNT(*) FROM projection_thread_messages) AS messages`,
           });
+
           if (counts.operation === "query")
             assert.deepStrictEqual(counts.rows, [
               {
@@ -139,13 +148,16 @@ it.layer(NodeServices.layer)("ui-fixture", (it) => {
       yield* fs.makeDirectory(nested, { recursive: true });
       const alias = path.join(parent, "alias");
       yield* fs.symlink(nested, alias);
+
       for (const baseDir of [shared, nested, alias]) {
         const error = yield* runUiFixture(
           { baseDir, scenario: "empty" },
           { sharedHome: shared },
         ).pipe(Effect.flip);
+
         assert.equal(error._tag, "SqliteStateSharedHomeMutationError");
       }
+
       assert.deepStrictEqual(yield* fs.readDirectory(nested), []);
       yield* fs.writeFileString(path.join(nested, "keep"), "not fixture data");
       const error = yield* runUiFixture({ baseDir: nested, scenario: "empty" }).pipe(Effect.flip);
@@ -194,11 +206,13 @@ it.layer(NodeServices.layer)("ui-fixture", (it) => {
         const error = yield* runUiFixture({ baseDir, scenario: "empty" }).pipe(Effect.flip);
         assert.equal(error._tag, "UiFixtureSafetyError");
         assert.deepStrictEqual(yield* fs.readDirectory(path.dirname(fixture.database)), before);
+
         const result = yield* runSqliteState({
           operation: "query",
           baseDir,
           sql: "SELECT COUNT(*) AS count FROM projection_threads",
         });
+
         if (result.operation === "query") assert.deepStrictEqual(result.rows, [{ count: 2 }]);
       }),
   );

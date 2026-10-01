@@ -16,9 +16,12 @@ import * as NodePath from "node:path";
  */
 export function expandHomePath(value: string): string {
   if (!value) return value;
+
   if (value === "~") return NodeOS.homedir();
+
   if (value.startsWith("~/") || value.startsWith("~\\")) {
     return NodePath.join(NodeOS.homedir(), value.slice(2));
   }
+
   return value;
 }

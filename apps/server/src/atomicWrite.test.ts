@@ -13,6 +13,7 @@ import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import { writeFileStringAtomically } from "./atomicWrite.ts";
 
 const NodeFS = NodeFSP;
+
 const directories: string[] = [];
 
 afterEach(async () => {
@@ -26,11 +27,13 @@ it.effect("syncs durable contents before publishing and the directory afterward"
     const directory = yield* Effect.promise(() =>
       NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-atomic-write-")),
     );
+
     directories.push(directory);
     const filePath = NodePath.join(directory, "memory.md");
     const operations: string[] = [];
     const fs = yield* FileSystem.FileSystem;
     const platform = yield* HostProcessPlatform;
+
     const observedFs = {
       ...fs,
       open: (...args: Parameters<typeof fs.open>) =>
@@ -49,6 +52,7 @@ it.effect("syncs durable contents before publishing and the directory afterward"
           operations.push("rename");
         }).pipe(Effect.flatMap(() => fs.rename(...args))),
     } satisfies FileSystem.FileSystem;
+
     yield* writeFileStringAtomically({
       filePath,
       contents: "saved",
@@ -64,6 +68,7 @@ it.effect("syncs durable contents before publishing and the directory afterward"
         : ["file sync (r+)", "rename", "directory sync"],
     );
     assert.equal(yield* Effect.promise(() => NodeFS.readFile(filePath, "utf8")), "saved");
+
     if (platform !== "win32") {
       assert.equal((yield* Effect.promise(() => NodeFS.stat(filePath))).mode & 0o777, 0o600);
     }
@@ -75,10 +80,12 @@ it.effect("keeps the previous file when syncing the replacement fails", () =>
     const directory = yield* Effect.promise(() =>
       NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-atomic-write-")),
     );
+
     directories.push(directory);
     const filePath = NodePath.join(directory, "memory.md");
     yield* Effect.promise(() => NodeFS.writeFile(filePath, "previous"));
     const fs = yield* FileSystem.FileSystem;
+
     const failingFs = {
       ...fs,
       open: (...args: Parameters<typeof fs.open>) =>
@@ -86,11 +93,13 @@ it.effect("keeps the previous file when syncing the replacement fails", () =>
           .open(...args)
           .pipe(Effect.map((file) => ({ ...file, sync: Effect.die(new Error("sync failed")) }))),
     } satisfies FileSystem.FileSystem;
+
     const result = yield* Effect.exit(
       writeFileStringAtomically({ filePath, contents: "replacement", durable: true }).pipe(
         Effect.provideService(FileSystem.FileSystem, failingFs),
       ),
     );
+
     assert.isTrue(Exit.isFailure(result));
     assert.equal(yield* Effect.promise(() => NodeFS.readFile(filePath, "utf8")), "previous");
   }).pipe(Effect.provide(NodeServices.layer)),
@@ -101,11 +110,13 @@ it.effect("checks beforeReplace after syncing and keeps the previous file when i
     const directory = yield* Effect.promise(() =>
       NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-atomic-write-")),
     );
+
     directories.push(directory);
     const filePath = NodePath.join(directory, "memory.md");
     yield* Effect.promise(() => NodeFS.writeFile(filePath, "previous"));
     const operations: string[] = [];
     const fs = yield* FileSystem.FileSystem;
+
     const observedFs = {
       ...fs,
       open: (...args: Parameters<typeof fs.open>) =>
@@ -118,6 +129,7 @@ it.effect("checks beforeReplace after syncing and keeps the previous file when i
           })),
         ),
     } satisfies FileSystem.FileSystem;
+
     const result = yield* Effect.exit(
       writeFileStringAtomically({
         filePath,
@@ -125,10 +137,12 @@ it.effect("checks beforeReplace after syncing and keeps the previous file when i
         durable: true,
         beforeReplace: Effect.suspend(() => {
           operations.push("beforeReplace");
+
           return Effect.fail("lock lost");
         }),
       }).pipe(Effect.provideService(FileSystem.FileSystem, observedFs)),
     );
+
     assert.isTrue(Exit.isFailure(result));
     assert.deepEqual(operations, ["sync", "beforeReplace"]);
     assert.equal(yield* Effect.promise(() => NodeFS.readFile(filePath, "utf8")), "previous");

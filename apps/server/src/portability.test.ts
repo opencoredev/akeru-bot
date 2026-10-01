@@ -1,317 +1,35 @@
 import {
   AuthSessionId,
-  BotId,
   DEFAULT_SERVER_SETTINGS,
-  EventId,
   GroupId,
-  McpServerId,
-  MessageId,
   ProjectId,
-  ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
-  type OrchestrationReadModel,
-  type PortabilityArchiveRecord,
-  type ServerSettings,
 } from "@akeru/contracts";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { it as effectIt } from "@effect/vitest";
-import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
-
-import { decideCommandSequence } from "./orchestration/decider.ts";
-import { createEmptyReadModel } from "./orchestration/projector.ts";
 import {
   canonicalJson,
   commandsForPortabilityImport,
   createPortabilityArchive,
   isPortabilityPreviewCurrent,
-  normalizePortabilityProjectFolders,
   parsePortabilityArchive,
   portabilityChecksum,
   portableRecords,
   previewPortabilityImport,
   serializePortabilityArchive,
-  summarizePortabilityApply,
 } from "./portability.ts";
 
-const NOW = "2026-08-30T12:00:00.000Z";
-const LATER = "2026-08-30T13:00:00.000Z";
-const PROJECT_ID = ProjectId.make("project-portable");
-const THREAD_ID = ThreadId.make("thread-portable");
-const BOT_ID = BotId.make("bot-portable");
-const SPECIALIST_BOT_ID = BotId.make("bot-portable-specialist");
-const GROUP_ID = GroupId.make("group-portable");
-const URL_MCP_ID = McpServerId.make("builtin-search");
-const STDIO_MCP_ID = McpServerId.make("local-tool");
-const AVAILABLE_PROVIDER_IDS = new Set(["codex", "private"]);
-
-function makeSnapshot(overrides: Partial<OrchestrationReadModel> = {}): OrchestrationReadModel {
-  return {
-    ...createEmptyReadModel(NOW),
-    snapshotSequence: 7,
-    projects: [
-      {
-        id: PROJECT_ID,
-        title: "Portable project",
-        workspaceRoot: "/Users/leo/work/portable-project",
-        repositoryIdentity: {
-          canonicalKey: "github.com/example/private",
-          locator: {
-            source: "git-remote",
-            remoteName: "origin",
-            remoteUrl: "git@github.com:example/private.git",
-          },
-          rootPath: "/Users/leo/work/portable-project",
-          displayName: "example/private",
-          provider: "github",
-          owner: "example",
-          name: "private",
-        },
-        defaultModelSelection: {
-          instanceId: ProviderInstanceId.make("codex"),
-          model: "gpt-5.6-sol",
-        },
-        scripts: [
-          {
-            id: "secret-script",
-            name: "Deploy",
-            command: "printenv TOKEN",
-            icon: "build",
-            runOnWorktreeCreate: false,
-          },
-        ],
-        faviconPath: "/Users/leo/work/portable-project/icon.png",
-        createdAt: NOW,
-        updatedAt: NOW,
-        deletedAt: null,
-      },
-    ],
-    mcpServers: [
-      {
-        id: URL_MCP_ID,
-        name: "Search",
-        transport: "url",
-        url: "https://user:password@example.com/mcp?token=secret#private",
-        enabled: true,
-        createdAt: NOW,
-        updatedAt: NOW,
-      },
-      {
-        id: STDIO_MCP_ID,
-        name: "Local tool",
-        transport: "stdio",
-        command: "/Users/leo/.local/bin/local-tool",
-        args: [
-          "serve",
-          "--config",
-          "/Users/leo/.config/local-tool.json",
-          "API_KEY=secret",
-          "--token",
-          "secret-value",
-          "postgres://user:hunter2@example.com/database",
-          '{"apiKey":"json-secret-value"}',
-          "--safe",
-        ],
-        enabled: true,
-        createdAt: NOW,
-        updatedAt: NOW,
-      },
-    ],
-    bots: [
-      {
-        id: BOT_ID,
-        name: "Akeru",
-        title: "Builder",
-        label: null,
-        description: [
-          "Builds the project",
-          '{"apiKey":"json-secret-value"}',
-          "-----BEGIN PRIVATE KEY-----\nprivate-key-value\n-----END PRIVATE KEY-----",
-          "postgres://user:hunter2@example.com/database",
-          "xai-private-value",
-          "eyJhbGciOiJIUzI1NiJ9.cHJpdmF0ZQ.c2lnbmF0dXJl",
-          "npm_private-package-token",
-          "glpat-private-gitlab-token",
-          "sk_live_private-stripe-token",
-          "~/.ssh/id_rsa",
-        ].join("\n"),
-        disabledMcpServerIds: [STDIO_MCP_ID, McpServerId.make("deleted-server")],
-        avatar: {
-          kind: "image",
-          assetPath: "/Users/leo/.akeru/avatars/private.png",
-          dithered: true,
-        },
-        engine: { provider: "codex", model: "gpt-5.6-sol" },
-        sandbox: "local",
-        runtimeMode: "full-access",
-        usageCap: null,
-        imageProvider: null,
-        voiceEnabled: true,
-        channelBindings: [],
-        groupId: GROUP_ID,
-        archivedAt: null,
-        createdAt: NOW,
-        updatedAt: NOW,
-      },
-    ],
-    groups: [
-      {
-        id: GROUP_ID,
-        name: "Builders",
-        bossBotId: BOT_ID,
-        members: [{ kind: "bot", botId: BOT_ID, role: "boss" }],
-        createdAt: NOW,
-        updatedAt: NOW,
-      },
-    ],
-    threads: [
-      {
-        id: THREAD_ID,
-        projectId: PROJECT_ID,
-        botId: BOT_ID,
-        groupId: null,
-        respondingBotId: BOT_ID,
-        title: "Portable thread",
-        modelSelection: {
-          instanceId: ProviderInstanceId.make("codex"),
-          model: "gpt-5.6-sol",
-        },
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        branch: "refs/heads/private-branch",
-        worktreePath: "/Users/leo/work/portable-project",
-        latestTurn: null,
-        createdAt: NOW,
-        updatedAt: NOW,
-        archivedAt: null,
-        settledOverride: null,
-        settledAt: null,
-        snoozedUntil: LATER,
-        snoozedAt: NOW,
-        pinnedAt: NOW,
-        deletedAt: null,
-        messages: [
-          {
-            id: MessageId.make("message-secret"),
-            role: "user",
-            text: [
-              "Authorization: Bearer private-token",
-              "COOKIE=session-secret",
-              "CODEX_HOME=/Users/leo/.codex",
-              "refs/heads/private-branch",
-              "/Users/leo/work/portable-project/private.txt",
-            ].join("\n"),
-            turnId: null,
-            streaming: false,
-            createdAt: NOW,
-            updatedAt: NOW,
-          },
-          {
-            id: MessageId.make("message-diff"),
-            role: "assistant",
-            text: "diff --git a/private.ts b/private.ts\n+secret\n-public",
-            turnId: null,
-            streaming: false,
-            createdAt: NOW,
-            updatedAt: NOW,
-          },
-        ],
-        proposedPlans: [
-          {
-            id: "plan-private",
-            turnId: null,
-            planMarkdown: "Read /Users/leo/private.txt with token=private-plan-token",
-            implementedAt: null,
-            implementationThreadId: null,
-            createdAt: NOW,
-            updatedAt: NOW,
-          },
-        ],
-        activities: [
-          {
-            id: EventId.make("event-private"),
-            tone: "approval",
-            kind: "approval.requested",
-            summary: "Contains private payload",
-            payload: { token: "approval-secret" },
-            turnId: null,
-            sequence: 991,
-            createdAt: NOW,
-          },
-        ],
-        checkpoints: [],
-        session: null,
-      },
-    ],
-    ...overrides,
-  };
-}
-
-function makePreflightSnapshot(): OrchestrationReadModel {
-  const snapshot = makeSnapshot();
-  const boss = snapshot.bots[0]!;
-
-  return {
-    ...snapshot,
-    bots: [
-      boss,
-      {
-        ...boss,
-        id: SPECIALIST_BOT_ID,
-        name: "Verifier",
-        title: "QA engineer",
-        avatar: { kind: "dither", seed: SPECIALIST_BOT_ID },
-      },
-    ],
-    groups: [
-      {
-        ...snapshot.groups[0]!,
-        members: [
-          { kind: "bot", botId: BOT_ID, role: "boss" },
-          { kind: "bot", botId: SPECIALIST_BOT_ID, role: "specialist" },
-        ],
-      },
-    ],
-  };
-}
-
-function makeSettings(): ServerSettings {
-  return {
-    ...DEFAULT_SERVER_SETTINGS,
-    enableProviderUpdateChecks: false,
-    enableAgentBrowserAccess: false,
-    providers: {
-      ...DEFAULT_SERVER_SETTINGS.providers,
-      codex: {
-        ...DEFAULT_SERVER_SETTINGS.providers.codex,
-        binaryPath: "/Users/leo/.local/bin/codex",
-        homePath: "/Users/leo/.codex",
-        launchArgs: "--token provider-secret",
-      },
-    },
-    providerInstances: {
-      [ProviderInstanceId.make("private")]: {
-        driver: ProviderDriverKind.make("codex"),
-        environment: [{ name: "OPENAI_API_KEY", value: "provider-secret", sensitive: true }],
-        config: { opaqueSecret: "provider-secret" },
-      },
-    },
-  };
-}
-
-function resignArchive(
-  archive: ReturnType<typeof createPortabilityArchive>,
-  records: readonly PortabilityArchiveRecord[],
-): ReturnType<typeof createPortabilityArchive> {
-  const signedRecords = records.map((record) => {
-    const { checksum: _checksum, ...core } = record;
-    return { ...core, checksum: portabilityChecksum(core) } as PortabilityArchiveRecord;
-  });
-  const body = { ...archive, records: signedRecords };
-  const { checksum: _checksum, ...unsigned } = body;
-  return { ...unsigned, checksum: portabilityChecksum(unsigned) };
-}
+import {
+  makeSnapshot,
+  makeSettings,
+  NOW,
+  AVAILABLE_PROVIDER_IDS,
+  resignArchive,
+  BOT_ID,
+  LATER,
+  GROUP_ID,
+  URL_MCP_ID,
+} from "./portabilityTestSupport.ts";
 
 describe("portability archive", () => {
   it("creates deterministic sorted records and an exact manifest", () => {
@@ -349,12 +67,14 @@ describe("portability archive", () => {
     expect(settingsRecord?.data.botSandboxBrowserSharing).toBe("shared");
 
     const separateSettings = { ...sharedSettings, botSandboxBrowserSharing: "separate" as const };
+
     const preview = previewPortabilityImport(
       archive,
       snapshot,
       separateSettings,
       AVAILABLE_PROVIDER_IDS,
     );
+
     expect(preview.changes).toContainEqual(
       expect.objectContaining({ recordType: "server-settings" }),
     );
@@ -371,9 +91,11 @@ describe("portability archive", () => {
       archive.records.map((record) => {
         if (record.type !== "server-settings") return record;
         const { botSandboxBrowserSharing: _sharing, ...data } = record.data;
+
         return { ...record, data };
       }),
     );
+
     const parsedLegacy = parsePortabilityArchive(JSON.stringify(legacy));
     expect(
       previewPortabilityImport(parsedLegacy, snapshot, separateSettings, AVAILABLE_PROVIDER_IDS)
@@ -427,6 +149,7 @@ describe("portability archive", () => {
     ]) {
       expect(text).not.toContain(excluded);
     }
+
     expect(text).toContain('"command": "local-tool"');
     expect(text).toContain('"serve"');
     expect(text).toContain('"--safe"');
@@ -439,6 +162,7 @@ describe("portability archive", () => {
 
   it("omits paired people while preserving bot group membership", () => {
     const snapshot = makeSnapshot();
+
     const source = {
       ...snapshot,
       groups: [
@@ -455,10 +179,12 @@ describe("portability archive", () => {
         },
       ],
     };
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
     const group = archive.records.find((record) => record.type === "group");
 
     expect(group?.data.members).toEqual([{ kind: "bot", botId: BOT_ID, role: "boss" }]);
+
     const commandTypes = commandsForPortabilityImport(
       archive,
       source,
@@ -472,11 +198,13 @@ describe("portability archive", () => {
 
   it("rejects paired identities in imported group records", () => {
     const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+
     const withPerson = resignArchive(
       archive,
       archive.records.map((record) =>
         record.type === "group"
-          ? ({
+          ? // SAFETY: This deliberately invalid record tests rejection of paired identities.
+            ({
               ...record,
               data: {
                 ...record.data,
@@ -489,7 +217,7 @@ describe("portability archive", () => {
                   },
                 ],
               },
-            } as unknown as PortabilityArchiveRecord)
+            } as never)
           : record,
       ),
     );
@@ -499,6 +227,7 @@ describe("portability archive", () => {
 
   it("allows one bot to belong to multiple groups", () => {
     const secondGroupId = GroupId.make("group-second");
+
     const source = makeSnapshot({
       groups: [
         makeSnapshot().groups[0]!,
@@ -509,9 +238,11 @@ describe("portability archive", () => {
         },
       ],
     });
+
     const archive = parsePortabilityArchive(
       serializePortabilityArchive(createPortabilityArchive(source, makeSettings(), NOW)),
     );
+
     const preview = previewPortabilityImport(
       archive,
       makeSnapshot(),
@@ -529,6 +260,7 @@ describe("portability archive", () => {
     const base = makeSnapshot();
     const deletedProjectId = ProjectId.make("project-deleted");
     const deletedThreadId = ThreadId.make("thread-deleted");
+
     const snapshot = {
       ...base,
       projects: [
@@ -550,45 +282,54 @@ describe("portability archive", () => {
         },
       ],
     };
+
     const text = serializePortabilityArchive(
       createPortabilityArchive(snapshot, makeSettings(), NOW),
     );
+
     expect(text).not.toContain("Deleted secret project");
     expect(text).not.toContain("Deleted secret thread");
     expect(text).not.toContain("project-deleted");
     expect(text).not.toContain("thread-deleted");
 
     const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+
     const target = {
       ...base,
       threads: [{ ...base.threads[0]!, deletedAt: NOW }],
     };
+
     const preview = previewPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     expect(preview.conflicts.map((entry) => `${entry.recordType}:${entry.id}`)).toContain(
       "thread:thread-portable",
     );
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     expect(plan.commands.filter((command) => command.type.startsWith("thread."))).toEqual([]);
   });
 
   it("rejects tampering, unsafe MCP recipes, bad counts, and broken references", () => {
     const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+
     const changed = {
       ...archive,
       records: archive.records.map((record, index) =>
         index === 0 ? { ...record, updatedAt: LATER } : record,
       ),
     };
+
     expect(() => parsePortabilityArchive(JSON.stringify(changed))).toThrow("Checksum failed");
 
     const badMcp = resignArchive(
@@ -608,6 +349,7 @@ describe("portability archive", () => {
           : record,
       ),
     );
+
     expect(() => parsePortabilityArchive(JSON.stringify(badMcp))).toThrow("local path");
 
     const badCountsBody = {
@@ -617,11 +359,14 @@ describe("portability archive", () => {
         recordCounts: { ...archive.manifest.recordCounts, bot: 99 },
       },
     };
+
     const { checksum: _badCountsChecksum, ...badCountsUnsigned } = badCountsBody;
+
     const badCounts = {
       ...badCountsUnsigned,
       checksum: portabilityChecksum(badCountsUnsigned),
     };
+
     expect(() => parsePortabilityArchive(JSON.stringify(badCounts))).toThrow("record counts");
 
     const broken = resignArchive(
@@ -632,6 +377,7 @@ describe("portability archive", () => {
           : record,
       ),
     );
+
     expect(() => parsePortabilityArchive(JSON.stringify(broken))).toThrow("missing project");
 
     const unsafeAvatar = resignArchive(
@@ -652,6 +398,7 @@ describe("portability archive", () => {
           : record,
       ),
     );
+
     expect(() => parsePortabilityArchive(JSON.stringify(unsafeAvatar))).toThrow(
       "image avatar path",
     );
@@ -664,6 +411,7 @@ describe("portability archive", () => {
           : record,
       ),
     );
+
     expect(() => parsePortabilityArchive(JSON.stringify(unsafeText))).toThrow("unsafe text");
   });
 });
@@ -687,7 +435,9 @@ describe("portability import", () => {
         },
       ],
     });
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
+
     const target = makeSnapshot({
       snapshotSequence: 8,
       bots: [],
@@ -695,6 +445,7 @@ describe("portability import", () => {
       mcpServers: [],
       threads: [],
     });
+
     const preview = previewPortabilityImport(
       archive,
       target,
@@ -734,6 +485,7 @@ describe("portability import", () => {
 
   it("reports newer target records and unrestorable groups as conflicts", () => {
     const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+
     const newerTarget = makeSnapshot({
       mcpServers: [
         {
@@ -744,6 +496,7 @@ describe("portability import", () => {
       ],
       groups: [{ ...makeSnapshot().groups[0]!, bossBotId: null, members: [] }],
     });
+
     const groupWithoutBoss = resignArchive(
       archive,
       archive.records.map((record) =>
@@ -752,6 +505,7 @@ describe("portability import", () => {
           : record,
       ),
     );
+
     const preview = previewPortabilityImport(
       groupWithoutBoss,
       newerTarget,
@@ -763,817 +517,6 @@ describe("portability import", () => {
       `group:${GROUP_ID}`,
       `mcp-server:${URL_MCP_ID}`,
     ]);
-  });
-
-  it("conflicts with different existing conversation history", () => {
-    const source = makeSnapshot();
-    const target = makeSnapshot({
-      threads: [
-        {
-          ...makeSnapshot().threads[0]!,
-          messages: [
-            {
-              ...makeSnapshot().threads[0]!.messages[0]!,
-              text: "Target-only conversation",
-            },
-          ],
-          proposedPlans: [],
-          activities: [],
-        },
-      ],
-    });
-    const archive = createPortabilityArchive(source, makeSettings(), NOW);
-    const preview = previewPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-
-    expect(preview.conflicts).toContainEqual(
-      expect.objectContaining({ recordType: "thread", id: THREAD_ID }),
-    );
-    expect(
-      commandsForPortabilityImport(archive, target, makeSettings(), AVAILABLE_PROVIDER_IDS)
-        .commands,
-    ).not.toContainEqual(expect.objectContaining({ type: "thread.history.restore" }));
-  });
-
-  it("does not overwrite newer server settings", () => {
-    const preview = previewPortabilityImport(
-      createPortabilityArchive(makeSnapshot(), makeSettings(), NOW),
-      makeSnapshot({ updatedAt: LATER }),
-      DEFAULT_SERVER_SETTINGS,
-      AVAILABLE_PROVIDER_IDS,
-    );
-
-    expect(preview.conflicts).toContainEqual({
-      recordType: "server-settings",
-      id: "server-settings",
-      title: "Server settings",
-    });
-  });
-
-  it("updates safe project fields only when the workspace reference matches", () => {
-    const sourceProject = {
-      ...makeSnapshot().projects[0]!,
-      title: "Renamed portable project",
-      defaultThreadEnvMode: "worktree" as const,
-      updatedAt: LATER,
-    };
-    const source = makeSnapshot({ projects: [sourceProject], updatedAt: LATER });
-    const archive = createPortabilityArchive(source, makeSettings(), LATER);
-    const target = makeSnapshot();
-    const preview = previewPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-    const plan = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-
-    expect(preview.changes).toContainEqual(
-      expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
-    );
-    expect(plan.commands).toContainEqual({
-      type: "project.meta.update",
-      commandId: expect.any(String),
-      projectId: PROJECT_ID,
-      title: "Renamed portable project",
-      defaultModelSelection: sourceProject.defaultModelSelection,
-      defaultThreadEnvMode: "worktree",
-    });
-    expect(plan.commands).not.toContainEqual(
-      expect.objectContaining({ type: "project.meta.update", workspaceRoot: expect.anything() }),
-    );
-  });
-
-  it("maps projects and threads to a different target project ID by repository identity", () => {
-    const targetProjectId = ProjectId.make("project-target");
-    const sourceProject = {
-      ...makeSnapshot().projects[0]!,
-      title: "Renamed portable project",
-      updatedAt: LATER,
-    };
-    const archive = createPortabilityArchive(
-      makeSnapshot({ projects: [sourceProject], updatedAt: LATER }),
-      makeSettings(),
-      LATER,
-    );
-    const target = makeSnapshot({
-      projects: [
-        {
-          ...makeSnapshot().projects[0]!,
-          id: targetProjectId,
-          title: "Local project",
-          workspaceRoot: "/Volumes/code/private-clone",
-        },
-      ],
-      threads: [],
-    });
-
-    const preview = previewPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-    const plan = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-
-    expect(preview.changes).toContainEqual(
-      expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
-    );
-    expect(preview.additions).toContainEqual(
-      expect.objectContaining({ recordType: "thread", id: THREAD_ID }),
-    );
-    expect(plan.commands).toContainEqual(
-      expect.objectContaining({ type: "project.meta.update", projectId: targetProjectId }),
-    );
-    expect(plan.commands).toContainEqual(
-      expect.objectContaining({ type: "thread.create", projectId: targetProjectId }),
-    );
-    expect(plan.commandItems).toContainEqual(
-      expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
-    );
-  });
-
-  it("uses an unambiguous workspace name when repository identity is unavailable", () => {
-    const targetProjectId = ProjectId.make("project-target");
-    const source = makeSnapshot({
-      projects: [{ ...makeSnapshot().projects[0]!, repositoryIdentity: null }],
-    });
-    const target = makeSnapshot({
-      projects: [
-        {
-          ...makeSnapshot().projects[0]!,
-          id: targetProjectId,
-          workspaceRoot: "/Volumes/code/portable-project",
-          repositoryIdentity: null,
-        },
-      ],
-      threads: [],
-    });
-    const archive = createPortabilityArchive(source, makeSettings(), NOW);
-    const plan = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-
-    expect(plan.commands).toContainEqual(
-      expect.objectContaining({ type: "thread.create", projectId: targetProjectId }),
-    );
-  });
-
-  it("reports ambiguous project matches as conflicts", () => {
-    const source = makeSnapshot();
-    const baseProject = source.projects[0]!;
-    const target = makeSnapshot({
-      projects: [
-        {
-          ...baseProject,
-          id: ProjectId.make("project-target-a"),
-          workspaceRoot: "/Volumes/a/portable-project",
-        },
-        {
-          ...baseProject,
-          id: ProjectId.make("project-target-b"),
-          workspaceRoot: "/Volumes/b/portable-project",
-        },
-      ],
-      threads: [],
-    });
-    const archive = createPortabilityArchive(source, makeSettings(), NOW);
-    const preview = previewPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-    const plan = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-
-    expect(preview.conflicts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
-        expect.objectContaining({ recordType: "thread", id: THREAD_ID }),
-      ]),
-    );
-    expect(plan.commands.some((command) => command.type.startsWith("project."))).toBe(false);
-    expect(plan.commands.some((command) => command.type.startsWith("thread."))).toBe(false);
-  });
-
-  it("skips unmapped project records while applying independent records", () => {
-    const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
-    const target = makeSnapshot({
-      projects: [],
-      bots: [],
-      groups: [],
-      mcpServers: [],
-      threads: [],
-    });
-    const preview = previewPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-    const plan = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-    expect(
-      preview.unsupported.some((item) => item.kind === "project" || item.kind === "thread"),
-    ).toBe(false);
-    expect(preview.projectFolders).toEqual([
-      {
-        projectId: PROJECT_ID,
-        title: "Portable project",
-        workspaceName: "portable-project",
-        destination: null,
-      },
-    ]);
-    expect(plan.commands.map((command) => command.type)).toEqual(
-      expect.arrayContaining(["mcp-server.create", "bot.create", "group.create"]),
-    );
-    expect(plan.commands.some((command) => command.type.startsWith("project."))).toBe(false);
-    expect(plan.commands.some((command) => command.type.startsWith("thread."))).toBe(false);
-    expect(plan.skipped).toBe(2);
-  });
-
-  it("creates projects and restores their threads into reviewed folders", () => {
-    const source = makeSnapshot({
-      projects: [{ ...makeSnapshot().projects[0]!, defaultThreadEnvMode: "worktree" }],
-    });
-    const archive = createPortabilityArchive(source, makeSettings(), NOW);
-    const target = makeSnapshot({ projects: [], threads: [] });
-    const projectFolders = { [PROJECT_ID]: "/tmp/restored-portable-project" };
-    const preview = previewPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-      projectFolders,
-    );
-    const plan = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-      projectFolders,
-    );
-
-    expect(preview.projectFolders).toEqual([
-      expect.objectContaining({
-        projectId: PROJECT_ID,
-        destination: "/tmp/restored-portable-project",
-      }),
-    ]);
-    expect(preview.additions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
-        expect.objectContaining({ recordType: "thread", id: THREAD_ID }),
-      ]),
-    );
-    expect(plan.commands).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "project.create",
-          projectId: PROJECT_ID,
-          workspaceRoot: "/tmp/restored-portable-project",
-        }),
-        expect.objectContaining({
-          type: "thread.create",
-          threadId: THREAD_ID,
-          projectId: PROJECT_ID,
-        }),
-        expect.objectContaining({
-          type: "project.meta.update",
-          projectId: PROJECT_ID,
-          defaultThreadEnvMode: "worktree",
-        }),
-      ]),
-    );
-    expect(plan.commands.findIndex((command) => command.type === "project.create")).toBeLessThan(
-      plan.commands.findIndex((command) => command.type === "thread.create"),
-    );
-    expect(
-      isPortabilityPreviewCurrent(
-        target,
-        makeSettings(),
-        AVAILABLE_PROVIDER_IDS,
-        preview,
-        projectFolders,
-      ),
-    ).toBe(true);
-    expect(
-      isPortabilityPreviewCurrent(target, makeSettings(), AVAILABLE_PROVIDER_IDS, preview, {
-        [PROJECT_ID]: "/tmp/other-folder",
-      }),
-    ).toBe(false);
-  });
-
-  it("skips threads when a mapped project needs a missing provider", () => {
-    const sourceProject = makeSnapshot().projects[0]!;
-    const source = makeSnapshot({
-      projects: [
-        {
-          ...sourceProject,
-          defaultModelSelection: {
-            instanceId: ProviderInstanceId.make("missing-project-provider"),
-            model: "missing-model",
-          },
-        },
-      ],
-    });
-    const archive = createPortabilityArchive(source, makeSettings(), NOW);
-    const target = makeSnapshot({ projects: [], threads: [] });
-    const projectFolders = { [PROJECT_ID]: "/tmp/restored-portable-project" };
-    const preview = previewPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-      projectFolders,
-    );
-    const plan = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-      projectFolders,
-    );
-
-    expect(preview.conflicts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
-        expect.objectContaining({ recordType: "thread", id: THREAD_ID }),
-      ]),
-    );
-    expect(plan.commands.some((command) => command.type.startsWith("project."))).toBe(false);
-    expect(plan.commands.some((command) => command.type.startsWith("thread."))).toBe(false);
-  });
-
-  it("matches an already restored project by its imported ID", () => {
-    const source = makeSnapshot();
-    const archive = createPortabilityArchive(source, makeSettings(), NOW);
-    const target = makeSnapshot({
-      projects: [
-        {
-          ...source.projects[0]!,
-          workspaceRoot: "/tmp/restored-under-a-new-name",
-          repositoryIdentity: null,
-        },
-      ],
-      threads: [],
-    });
-    const preview = previewPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-    const plan = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-
-    expect(preview.projectFolders).toEqual([]);
-    expect(plan.commands).not.toContainEqual(expect.objectContaining({ type: "project.create" }));
-    expect(plan.commands).toContainEqual(
-      expect.objectContaining({ type: "thread.create", projectId: PROJECT_ID }),
-    );
-  });
-
-  it("restores a deleted same-ID project under a fresh ID", () => {
-    const source = makeSnapshot();
-    const archive = createPortabilityArchive(source, makeSettings(), NOW);
-    const deletedProject = { ...source.projects[0]!, deletedAt: NOW };
-    const target = makeSnapshot({ projects: [deletedProject], threads: [] });
-    const projectFolders = { [PROJECT_ID]: "/tmp/restored-after-delete" };
-    const preview = previewPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-      projectFolders,
-    );
-    const plan = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-      projectFolders,
-    );
-    const createProject = plan.commands.find((command) => command.type === "project.create");
-
-    expect(preview.additions).toContainEqual(
-      expect.objectContaining({ recordType: "project", id: PROJECT_ID }),
-    );
-    expect(createProject).toEqual(
-      expect.objectContaining({
-        type: "project.create",
-        workspaceRoot: "/tmp/restored-after-delete",
-      }),
-    );
-    expect(createProject?.projectId).not.toBe(PROJECT_ID);
-    expect(plan.commands).toContainEqual(
-      expect.objectContaining({ type: "thread.create", projectId: createProject?.projectId }),
-    );
-  });
-
-  effectIt.effect("preflights new project restores through the decider", () => {
-    const source = makePreflightSnapshot();
-    const target = makeSnapshot({
-      projects: [],
-      bots: [],
-      groups: [],
-      mcpServers: [],
-      threads: [],
-    });
-    const commands = commandsForPortabilityImport(
-      createPortabilityArchive(source, makeSettings(), NOW),
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-      { [PROJECT_ID]: "/tmp/restored-portable-project" },
-    ).commands;
-
-    return decideCommandSequence({ commands, readModel: target }).pipe(
-      Effect.tap((events) =>
-        Effect.sync(() => {
-          expect(events).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({ type: "project.created" }),
-              expect.objectContaining({ type: "thread.created" }),
-            ]),
-          );
-        }),
-      ),
-      Effect.provide(NodeServices.layer),
-    );
-  });
-
-  it("rejects unsafe project folder maps", () => {
-    const firstProject = makeSnapshot().projects[0]!;
-    const secondProjectId = ProjectId.make("project-second");
-    const source = makeSnapshot({
-      projects: [
-        firstProject,
-        {
-          ...firstProject,
-          id: secondProjectId,
-          title: "Second project",
-          workspaceRoot: "/source/second-project",
-          repositoryIdentity: null,
-        },
-      ],
-    });
-    const archive = createPortabilityArchive(source, makeSettings(), NOW);
-    const target = makeSnapshot({ projects: [], threads: [] });
-
-    expect(() =>
-      normalizePortabilityProjectFolders(archive, target, {
-        [PROJECT_ID]: "relative/project",
-      }),
-    ).toThrow("absolute path");
-    expect(() =>
-      normalizePortabilityProjectFolders(archive, target, {
-        [PROJECT_ID]: "/tmp/restored",
-        [secondProjectId]: "/tmp/restored/",
-      }),
-    ).toThrow("same destination");
-  });
-
-  it("rejects a stale preview token when projection state changes", () => {
-    const snapshot = makeSnapshot();
-    const settings = makeSettings();
-    const archive = createPortabilityArchive(snapshot, settings, NOW);
-    const preview = previewPortabilityImport(archive, snapshot, settings, AVAILABLE_PROVIDER_IDS);
-
-    expect(isPortabilityPreviewCurrent(snapshot, settings, AVAILABLE_PROVIDER_IDS, preview)).toBe(
-      true,
-    );
-    expect(
-      isPortabilityPreviewCurrent(
-        { ...snapshot, snapshotSequence: 8 },
-        settings,
-        AVAILABLE_PROVIDER_IDS,
-        preview,
-      ),
-    ).toBe(false);
-    expect(
-      isPortabilityPreviewCurrent(
-        snapshot,
-        { ...settings, enableProviderUpdateChecks: !settings.enableProviderUpdateChecks },
-        AVAILABLE_PROVIDER_IDS,
-        preview,
-      ),
-    ).toBe(false);
-    expect(isPortabilityPreviewCurrent(snapshot, settings, new Set(), preview)).toBe(false);
-  });
-
-  it("previews forced MCP disable as a change", () => {
-    const snapshot = makeSnapshot();
-    const settings = makeSettings();
-    const preview = previewPortabilityImport(
-      createPortabilityArchive(snapshot, settings, NOW),
-      snapshot,
-      settings,
-      AVAILABLE_PROVIDER_IDS,
-    );
-
-    expect(preview.changes.map((entry) => entry.id)).toEqual([URL_MCP_ID, STDIO_MCP_ID]);
-  });
-
-  it("plans valid orchestration commands and keeps every restored MCP server disabled", () => {
-    const source = makeSnapshot();
-    const archive = createPortabilityArchive(source, makeSettings(), NOW);
-    const target = makeSnapshot({
-      bots: [],
-      groups: [],
-      mcpServers: [
-        {
-          id: URL_MCP_ID,
-          name: "Old search",
-          transport: "url" as const,
-          url: "https://example.com/mcp",
-          enabled: true,
-          createdAt: NOW,
-          updatedAt: NOW,
-        },
-      ],
-      threads: [],
-    });
-    const first = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-    const second = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-
-    expect(first.commands.map((command) => command.type)).toEqual(
-      expect.arrayContaining([
-        "mcp-server.update",
-        "mcp-server.disable",
-        "mcp-server.create",
-        "bot.create",
-        "group.create",
-        "thread.create",
-        "thread.history.restore",
-      ]),
-    );
-    expect(first.commands).toContainEqual(
-      expect.objectContaining({
-        type: "mcp-server.create",
-        mcpServerId: STDIO_MCP_ID,
-        enabled: false,
-      }),
-    );
-    expect(first.commands).toContainEqual(
-      expect.objectContaining({ type: "mcp-server.disable", mcpServerId: URL_MCP_ID }),
-    );
-    expect(first.commands).not.toContainEqual(
-      expect.objectContaining({ type: "mcp-server.disable", mcpServerId: STDIO_MCP_ID }),
-    );
-    expect(
-      first.commands.findIndex(
-        (command) => command.type === "mcp-server.disable" && command.mcpServerId === URL_MCP_ID,
-      ),
-    ).toBeLessThan(
-      first.commands.findIndex(
-        (command) => command.type === "mcp-server.update" && command.mcpServerId === URL_MCP_ID,
-      ),
-    );
-    expect(first.commands).not.toContainEqual(expect.objectContaining({ type: "bot.restore" }));
-    expect(first.commands.map((command) => command.commandId)).not.toEqual(
-      second.commands.map((command) => command.commandId),
-    );
-    expect(first.applied).toBeGreaterThan(0);
-  });
-
-  it("exports MCP guidance and restores it after the server", () => {
-    const base = makeSnapshot();
-    const source = makeSnapshot({
-      mcpServers: (base.mcpServers ?? []).map((server) =>
-        server.id === URL_MCP_ID ? { ...server, instructions: "Use for web search." } : server,
-      ),
-    });
-    const archive = createPortabilityArchive(source, makeSettings(), NOW);
-    expect(
-      archive.records.find((record) => record.type === "mcp-server" && record.id === URL_MCP_ID)
-        ?.data,
-    ).toMatchObject({ instructions: "Use for web search." });
-
-    const target = makeSnapshot({ bots: [], groups: [], mcpServers: [], threads: [] });
-    const { commands } = commandsForPortabilityImport(
-      archive,
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    );
-    const createIndex = commands.findIndex(
-      (command) => command.type === "mcp-server.create" && command.mcpServerId === URL_MCP_ID,
-    );
-    const instructionsIndex = commands.findIndex(
-      (command) =>
-        command.type === "mcp-server.instructions.set" &&
-        command.mcpServerId === URL_MCP_ID &&
-        command.instructions === "Use for web search.",
-    );
-    expect(createIndex).toBeGreaterThanOrEqual(0);
-    expect(instructionsIndex).toBeGreaterThan(createIndex);
-    expect(
-      commands.some(
-        (command) =>
-          command.type === "mcp-server.instructions.set" && command.mcpServerId === STDIO_MCP_ID,
-      ),
-    ).toBe(false);
-  });
-
-  effectIt.effect("preflights the complete restore plan through the decider", () => {
-    const source = makePreflightSnapshot();
-    const target = makeSnapshot({ bots: [], groups: [], mcpServers: [], threads: [] });
-    const commands = commandsForPortabilityImport(
-      createPortabilityArchive(source, makeSettings(), NOW),
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    ).commands;
-    const historyCommand = commands.find((command) => command.type === "thread.history.restore");
-
-    return decideCommandSequence({ commands, readModel: target }).pipe(
-      Effect.tap((events) =>
-        Effect.sync(() => {
-          expect(events.length).toBeGreaterThan(0);
-          expect(events.map((event) => event.type)).toEqual(
-            expect.arrayContaining([
-              "thread.message-sent",
-              "thread.proposed-plan-upserted",
-              "thread.activity-appended",
-              "thread.snoozed",
-              "thread.pinned",
-            ]),
-          );
-          expect(
-            events.find((event) => event.type === "thread.activity-appended")?.payload,
-          ).toEqual(
-            expect.objectContaining({
-              activity: expect.objectContaining({ kind: "approval.history" }),
-            }),
-          );
-          expect(
-            events
-              .filter((event) => event.commandId === historyCommand?.commandId)
-              .every((event) => event.metadata.importedHistory === true),
-          ).toBe(true);
-        }),
-      ),
-      Effect.provide(NodeServices.layer),
-    );
-  });
-
-  it("sets a replacement boss before changing the remaining membership", () => {
-    const secondBotId = BotId.make("bot-second");
-    const source = makeSnapshot({
-      bots: [
-        makeSnapshot().bots[0]!,
-        {
-          ...makeSnapshot().bots[0]!,
-          id: secondBotId,
-          name: "Second",
-          avatar: { kind: "dither", seed: secondBotId },
-        },
-      ],
-      groups: [
-        {
-          ...makeSnapshot().groups[0]!,
-          bossBotId: secondBotId,
-          members: [
-            { kind: "bot", botId: secondBotId, role: "boss" },
-            { kind: "bot", botId: BOT_ID, role: "specialist" },
-          ],
-        },
-      ],
-    });
-    const target = makeSnapshot({
-      bots: source.bots,
-      groups: makeSnapshot().groups,
-    });
-    const commands = commandsForPortabilityImport(
-      createPortabilityArchive(source, makeSettings(), NOW),
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    ).commands;
-    const bossIndex = commands.findIndex((command) => command.type === "group.boss.set");
-    const memberIndex = commands.findIndex((command) => command.type.startsWith("group.member."));
-
-    expect(bossIndex).toBeGreaterThanOrEqual(0);
-    expect(memberIndex === -1 || bossIndex < memberIndex).toBe(true);
-  });
-
-  it("temporarily restores an archived bot before restoring its thread", () => {
-    const archivedBot = {
-      ...makeSnapshot().bots[0]!,
-      groupId: null,
-      archivedAt: NOW,
-    };
-    const source = makeSnapshot({ bots: [archivedBot], groups: [] });
-    const target = makeSnapshot({ bots: [archivedBot], groups: [], threads: [] });
-    const commands = commandsForPortabilityImport(
-      createPortabilityArchive(source, makeSettings(), NOW),
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    ).commands;
-    const restoreIndex = commands.findIndex((command) => command.type === "bot.restore");
-    const threadIndex = commands.findIndex((command) => command.type === "thread.create");
-    const archiveIndex = commands.findIndex((command) => command.type === "bot.archive");
-
-    expect(restoreIndex).toBeGreaterThanOrEqual(0);
-    expect(threadIndex).toBeGreaterThan(restoreIndex);
-    expect(archiveIndex).toBeGreaterThan(threadIndex);
-  });
-
-  it("restores conversation history and lifecycle without starting a provider turn", () => {
-    const archivedThread = { ...makeSnapshot().threads[0]!, archivedAt: NOW, pinnedAt: NOW };
-    const source = makeSnapshot({ threads: [archivedThread] });
-    const target = makeSnapshot({
-      threads: [
-        { ...archivedThread, pinnedAt: null, messages: [], proposedPlans: [], activities: [] },
-      ],
-    });
-    const commands = commandsForPortabilityImport(
-      createPortabilityArchive(source, makeSettings(), NOW),
-      target,
-      makeSettings(),
-      AVAILABLE_PROVIDER_IDS,
-    ).commands;
-    const restore = commands.find((command) => command.type === "thread.history.restore");
-
-    expect(restore).toMatchObject({
-      type: "thread.history.restore",
-      archivedAt: NOW,
-      pinnedAt: NOW,
-      snoozedUntil: LATER,
-    });
-    expect(restore?.messages).toHaveLength(2);
-    expect(restore?.proposedPlans).toHaveLength(1);
-    expect(restore?.activities).toEqual([
-      expect.objectContaining({ kind: "approval.history", payload: expect.any(Object) }),
-    ]);
-    expect(commands).not.toContainEqual(expect.objectContaining({ type: "thread.turn.start" }));
-  });
-
-  it("reports failed and partly applied records separately", () => {
-    const botItem = { recordType: "bot" as const, id: BOT_ID, title: "Akeru" };
-    const groupItem = { recordType: "group" as const, id: GROUP_ID, title: "Builders" };
-
-    expect(
-      summarizePortabilityApply(
-        [
-          { item: botItem, succeeded: true },
-          { item: botItem, succeeded: false, message: "Archive step failed." },
-          { item: groupItem, succeeded: false, message: "Group restore failed." },
-        ],
-        2,
-      ),
-    ).toEqual({
-      applied: 0,
-      skipped: 2,
-      failed: 1,
-      partial: 1,
-      failures: [
-        { ...botItem, partial: true, message: "Archive step failed." },
-        { ...groupItem, partial: false, message: "Group restore failed." },
-      ],
-    });
   });
 
   it("derives the current projection only from safe records", () => {

@@ -35,5 +35,6 @@ export function guardHttpResponseWriteErrors<T extends NodeHttp.Server>(
       onError?.(error);
     });
   });
+
   return server;
 }
