@@ -172,7 +172,7 @@ function SheetTitle({
   return (
     <SheetPrimitive.Title
       className={cn(
-        "font-heading font-semibold text-xl leading-none",
+        "font-semibold text-xl leading-none",
         variant === "compact" && "text-base leading-6",
         className,
       )}

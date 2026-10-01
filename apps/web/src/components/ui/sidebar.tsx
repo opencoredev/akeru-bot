@@ -211,7 +211,7 @@ function SidebarTrigger({
       className={cn(
         "size-[var(--workspace-titlebar-control-size)]! [-webkit-app-region:no-drag]",
         onStage &&
-          "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
+          "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15 focus-visible:ring-offset-(--stage-art-bottom)",
         className,
       )}
       data-sidebar="trigger"

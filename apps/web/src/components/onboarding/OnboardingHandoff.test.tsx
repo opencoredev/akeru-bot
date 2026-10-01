@@ -54,7 +54,7 @@ describe("onboarding handoff", () => {
   });
 
   it("shimmers the status briefly rather than for the whole wait", () => {
-    expect(markup("waking")).toContain("bot-status-shimmer bot-status-shimmer-finite");
+    expect(markup("waking")).toContain("bot-status-shimmer absolute");
   });
 
   it("truncates a long bot name instead of overflowing the row", () => {

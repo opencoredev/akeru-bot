@@ -107,7 +107,7 @@ function AlertDialogFooter({
 function AlertDialogTitle({ className, ...props }: AlertDialogPrimitive.Title.Props) {
   return (
     <AlertDialogPrimitive.Title
-      className={cn("font-heading font-semibold text-xl leading-none", className)}
+      className={cn("font-semibold text-xl leading-none", className)}
       data-slot="alert-dialog-title"
       {...props}
     />

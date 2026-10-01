@@ -183,6 +183,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             className={cn(
               "min-w-0 justify-between whitespace-nowrap",
               props.compact ? "max-w-42 shrink-0" : "max-w-48 shrink sm:max-w-56",
+              // oxlint-disable-next-line shadcn/require-static-classes -- caller-supplied trigger class passthrough
               props.triggerClassName,
             )}
             disabled={props.disabled}

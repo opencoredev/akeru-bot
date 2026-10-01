@@ -213,6 +213,7 @@ function ComposerBannerStackAlert({
     <Alert
       variant={visualVariant}
       presentation={attached ? "composer-drawer" : "glass"}
+      // oxlint-disable-next-line shadcn/require-static-classes -- caller-supplied per-banner class passthrough
       className={item.className}
       data-variant={visualVariant}
     >
@@ -222,6 +223,7 @@ function ComposerBannerStackAlert({
       {item.actions || item.onDismiss ? (
         <AlertAction
           className={cn(
+            // oxlint-disable-next-line shadcn/require-static-classes -- caller-supplied per-banner action class passthrough
             item.actionClassName,
             dismissOnly
               ? "max-sm:col-start-3 max-sm:row-start-1 max-sm:mt-0 max-sm:self-start"

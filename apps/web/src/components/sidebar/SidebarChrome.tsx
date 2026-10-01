@@ -40,7 +40,6 @@ import { cn } from "../../lib/utils";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
-  resolveSidebarStageFocusRingOffsetClass,
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
@@ -87,13 +86,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
       <div className="relative z-10 grid min-w-0 flex-1 grid-cols-grow-auto-grow items-center group-data-[collapsible=icon]:hidden">
         <div className="flex items-center justify-start">
-          <SidebarTrigger
-            onStage={Boolean(backdropVariant)}
-            className={cn(
-              "md:hidden",
-              backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
-            )}
-          />
+          <SidebarTrigger onStage={Boolean(backdropVariant)} className="md:hidden" />
         </div>
         <div className="relative flex items-center justify-center">
           <Link

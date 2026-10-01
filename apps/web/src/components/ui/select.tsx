@@ -70,7 +70,7 @@ function SelectButton({ className, size, variant, render, children, ...props }: 
         )}
       </>
     ),
-    className: cn(selectTriggerVariants({ size, variant }), "min-w-none", className),
+    className: cn(selectTriggerVariants({ size, variant }), className),
     "data-slot": "select-button",
     type: typeValue,
   };
