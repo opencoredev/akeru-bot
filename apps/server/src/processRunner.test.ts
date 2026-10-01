@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -180,7 +181,7 @@ describe("runProcess", () => {
       }).pipe(Effect.flip);
 
       expect(error._tag).toBe("ProcessSpawnError");
-      if (error._tag !== "ProcessSpawnError") {
+      if (!Predicate.isTagged(error, "ProcessSpawnError")) {
         return expect.fail("Expected ProcessSpawnError");
       }
       expect(error).toMatchObject({
@@ -211,7 +212,7 @@ describe("runProcess", () => {
       }).pipe(Effect.flip);
 
       expect(error._tag).toBe("ProcessOutputLimitError");
-      if (error._tag !== "ProcessOutputLimitError") {
+      if (!Predicate.isTagged(error, "ProcessOutputLimitError")) {
         return expect.fail("Expected ProcessOutputLimitError");
       }
       expect(error).toMatchObject({
@@ -355,7 +356,7 @@ describe("runProcess", () => {
       const error = yield* Fiber.join(errorFiber);
 
       expect(error._tag).toBe("ProcessTimeoutError");
-      if (error._tag !== "ProcessTimeoutError") {
+      if (!Predicate.isTagged(error, "ProcessTimeoutError")) {
         return expect.fail("Expected ProcessTimeoutError");
       }
       expect(error).toMatchObject({

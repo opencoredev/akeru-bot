@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EventId, MessageId, type OrchestrationEvent, ORCHESTRATION_WS_METHODS } from "@akeru/contracts";
@@ -374,7 +375,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   Effect.result,
                 );
                 if (oversized) {
-                  assertTrue(threadResult._tag === "Failure");
+                  assertTrue(Predicate.isTagged(threadResult, "Failure"));
                   assert.equal(threadResult.failure._tag, "OrchestrationGetSnapshotError");
                   assert.equal(
                     threadResult.failure.message,
@@ -382,7 +383,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   );
                   return;
                 }
-                assertTrue(threadResult._tag === "Success");
+                assertTrue(Predicate.isTagged(threadResult, "Success"));
                 assert.deepEqual(threadResult.success, [{ kind: "synchronized" }]);
                 const shellItems = yield* client[ORCHESTRATION_WS_METHODS.subscribeShell]({
                   afterSequence: 0,

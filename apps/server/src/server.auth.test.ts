@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -389,7 +390,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ),
       );
       assert.equal(deniedRead._tag, "EnvironmentAuthorizationError");
-      if (deniedRead._tag === "EnvironmentAuthorizationError") {
+      if (Predicate.isTagged(deniedRead, "EnvironmentAuthorizationError")) {
         assert.equal(deniedRead.requiredScope, "access:read");
       }
       const deniedRepair = yield* Effect.flip(

@@ -16,13 +16,14 @@ export function mcpCommand(
   record: Extract<PortabilityArchiveRecord, { type: "mcp-server" }>,
 ): OrchestrationCommand {
   const config = record.data.configuration;
-  return {
-    type,
+  const common = {
     commandId: nextCommandId(),
     mcpServerId: McpServerId.make(record.id),
     ...config,
-    ...(type === "mcp-server.create" ? { enabled: false, createdAt: record.updatedAt } : {}),
-  } as OrchestrationCommand;
+  };
+  return type === "mcp-server.create"
+    ? { ...common, type, enabled: false, createdAt: record.updatedAt }
+    : { ...common, type };
 }
 
 export function itemForCommand(

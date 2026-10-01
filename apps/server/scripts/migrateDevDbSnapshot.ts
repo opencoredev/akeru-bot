@@ -123,15 +123,15 @@ export const pruneSnapshot = Effect.fn("pruneDevDbSnapshot")(function* (input: R
     SELECT COUNT(*) AS count FROM orchestration_events`;
 
   return {
-    projects: keptProjects as ReadonlyArray<KeptProject>,
+    projects: keptProjects,
     eventCount: events?.count ?? 0,
   };
 });
 
-export /** Compare this checkout's migration registry against what the cloned
+/** Compare this checkout's migration registry against what the cloned
  * database recorded: same slot under a different name means the migration
  * was skipped, not applied. */
-const verifyMigrationSlots = Effect.fn("verifyMigrationSlots")(function* () {
+export const verifyMigrationSlots = Effect.fn("verifyMigrationSlots")(function* () {
   const sql = yield* SqlClient.SqlClient;
   const applied = yield* sql<{ migration_id: number; name: string }>`
     SELECT migration_id, name FROM effect_sql_migrations`;

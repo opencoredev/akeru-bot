@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -119,7 +120,7 @@ export const createWsWorkspaceHandlers = ({ projectionSnapshotQuery, externalLau
           observeRpcEffect(
             WS_METHODS.assetsCreateUrl,
             Effect.gen(function* () {
-              if (input.resource._tag === "attachment") {
+              if (Predicate.isTagged(input.resource, "attachment")) {
                 return yield* issueAssetUrl({ resource: input.resource });
               }
               const thread = yield* projectionSnapshotQuery

@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { BotId, CommandId, GroupId, MessageId, ORCHESTRATION_WS_METHODS, ProviderDriverKind, ProviderInstanceId, ThreadId } from "@akeru/contracts";
@@ -78,7 +79,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ),
       );
       assert.equal(error._tag, "OrchestrationDispatchCommandError");
-      if (error._tag === "OrchestrationDispatchCommandError") {
+      if (Predicate.isTagged(error, "OrchestrationDispatchCommandError")) {
         assert.equal(error.unavailability, "temporary-failure");
       }
       assert.equal(dispatch.mock.calls.length, 0);
@@ -364,7 +365,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         );
         assert.equal(error._tag, "OrchestrationDispatchCommandError");
-        if (error._tag === "OrchestrationDispatchCommandError") {
+        if (Predicate.isTagged(error, "OrchestrationDispatchCommandError")) {
           assert.equal(error.unavailability, "usage-cap");
         }
       }

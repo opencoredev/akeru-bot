@@ -447,7 +447,7 @@ const { resolveMemoryAccess, resolveBotMemoryAccess, readArchiveConversations } 
       const observeRpcEffect = <A, E, R>(
         method: string,
         effect: Effect.Effect<A, E, R>,
-        traceAttributes?: Readonly<Record<string, unknown>>,
+        traceAttributes?: Parameters<typeof instrumentRpcEffect>[2],
       ) =>
         instrumentRpcEffect(
           method,
@@ -458,7 +458,7 @@ const { resolveMemoryAccess, resolveBotMemoryAccess, readArchiveConversations } 
       const observeRpcStream = <A, E, R>(
         method: string,
         stream: Stream.Stream<A, E, R>,
-        traceAttributes?: Readonly<Record<string, unknown>>,
+        traceAttributes?: Parameters<typeof instrumentRpcEffect>[2],
       ) =>
         instrumentRpcStream(
           method,
@@ -473,7 +473,7 @@ const { resolveMemoryAccess, resolveBotMemoryAccess, readArchiveConversations } 
           EffectError,
           EffectContext
         >,
-        traceAttributes?: Readonly<Record<string, unknown>>,
+        traceAttributes?: Parameters<typeof instrumentRpcEffect>[2],
       ) =>
         instrumentRpcStreamEffect(
           method,

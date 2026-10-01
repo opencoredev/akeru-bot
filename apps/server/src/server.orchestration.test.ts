@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { CommandId, ORCHESTRATION_WS_METHODS, ProjectId, ThreadId } from "@akeru/contracts";
@@ -176,8 +177,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ).pipe(Effect.result),
       );
 
-      assertTrue(result._tag === "Failure");
-      assertTrue(result.failure._tag === "OrchestrationGetSnapshotError");
+      assertTrue(Predicate.isTagged(result, "Failure"));
+      assertTrue(Predicate.isTagged(result.failure, "OrchestrationGetSnapshotError"));
       assertTrue(result.failure.cause instanceof Error);
       assert.include(result.failure.cause.message, projectionError.message);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),

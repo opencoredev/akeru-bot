@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { type ChannelBinding, ChannelConnectionId, CommandId, ORCHESTRATION_WS_METHODS, ProjectId } from "@akeru/contracts";
@@ -151,7 +152,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
-      if (failure._tag !== "OrchestrationDispatchCommandError") {
+      if (!Predicate.isTagged(failure, "OrchestrationDispatchCommandError")) {
         throw new Error(`Expected channel dispatch error, received ${failure._tag}`);
       }
       assert.equal(failure.message, "The selected project is unavailable. Choose another project.");

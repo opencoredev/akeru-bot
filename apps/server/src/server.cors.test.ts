@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { WS_METHODS } from "@akeru/contracts";
@@ -54,7 +55,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         Effect.scoped(withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverGetConfig]({}))),
       );
       assert.equal(rpcError._tag, "EnvironmentAuthorizationError");
-      if (rpcError._tag === "EnvironmentAuthorizationError") {
+      if (Predicate.isTagged(rpcError, "EnvironmentAuthorizationError")) {
         assert.equal(rpcError.requiredScope, "orchestration:read");
       }
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),

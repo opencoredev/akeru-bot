@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { type AkeruDelegationRecord, BotId, DelegationId, EventId, MessageId, type OrchestrationEvent, ORCHESTRATION_WS_METHODS, ProjectId, ThreadId, TurnId } from "@akeru/contracts";
@@ -218,7 +219,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const streamedUpdate = Array.from(items)[1];
       assert.isTrue(
         streamedUpdate?.kind === "delegation-upserted" &&
-          streamedUpdate.delegation.phase._tag === "Completed" &&
+          Predicate.isTagged(streamedUpdate.delegation.phase, "Completed") &&
           streamedUpdate.delegation.phase.result.summary.length < 10_000,
       );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),

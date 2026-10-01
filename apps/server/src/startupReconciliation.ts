@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { type AkeruDelegationRecord, CommandId } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -110,7 +111,7 @@ export const reconcileDelegations = Effect.gen(function* () {
   const { delegations } = yield* query.getCommandReadModel();
   for (const delegation of delegations) {
     const phase = delegation.phase;
-    if (phase._tag !== "Queued" && phase._tag !== "Running") {
+    if (!Predicate.isTagged(phase, "Queued") && !Predicate.isTagged(phase, "Running")) {
       continue;
     }
     yield* Effect.gen(function* () {
@@ -123,9 +124,9 @@ export const reconcileDelegations = Effect.gen(function* () {
         ...delegation,
         phase: {
           _tag: "Failed",
-          childThreadId: phase._tag === "Queued" ? null : phase.childThreadId,
-          childTurnId: phase._tag === "Queued" ? null : phase.childTurnId,
-          startedAt: phase._tag === "Queued" ? null : phase.startedAt,
+          childThreadId: Predicate.isTagged(phase, "Queued") ? null : phase.childThreadId,
+          childTurnId: Predicate.isTagged(phase, "Queued") ? null : phase.childTurnId,
+          startedAt: Predicate.isTagged(phase, "Queued") ? null : phase.startedAt,
           completedAt,
           failure: { failureCode: "internal", message: DELEGATION_RESTART_FAILURE_MESSAGE },
           acknowledgedAt: null,

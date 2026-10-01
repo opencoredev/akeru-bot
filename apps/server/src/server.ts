@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { EnvironmentHttpApi } from "@akeru/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -157,7 +158,7 @@ export const makeServerLayer = Layer.unwrap(
           yield* awaitActivation;
           const server = yield* HttpServer.HttpServer;
           const address = server.address;
-          if (typeof address === "string" || !("port" in address)) {
+          if (Predicate.isString(address) || !("port" in address)) {
             return;
           }
 
@@ -190,7 +191,7 @@ export const makeServerLayer = Layer.unwrap(
               yield* awaitActivation;
               const server = yield* HttpServer.HttpServer;
               const address = server.address;
-              if (typeof address === "string" || !("port" in address)) {
+              if (Predicate.isString(address) || !("port" in address)) {
                 return null;
               }
 

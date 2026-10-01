@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   type AkeruDelegationRecord,
@@ -210,14 +211,14 @@ const seed = Effect.gen(function* () {
       commandId: commandId(),
       delegation: { ...record, phase: { _tag: "Queued" }, updatedAt: CREATED_AT },
     });
-    if (record.phase._tag === "Queued") continue;
+    if (!("childTurnId" in record.phase)) continue;
     const started = running(record, childThreadId, record.phase.childTurnId);
     yield* engine.dispatch({
       type: "delegation.state.set",
       commandId: commandId(),
       delegation: started,
     });
-    if (record.phase._tag !== "Running") {
+    if (!Predicate.isTagged(record.phase, "Running")) {
       yield* engine.dispatch({
         type: "delegation.state.set",
         commandId: commandId(),
@@ -281,7 +282,7 @@ it.effect("fails only open delegations after a restart, once", () =>
       const record = byId.get(original.delegationId);
       assert.ok(record);
       assert.equal(record.phase._tag, "Failed");
-      if (record.phase._tag !== "Failed") continue;
+      if (!Predicate.isTagged(record.phase, "Failed")) continue;
       assert.deepStrictEqual(record.phase.failure, {
         failureCode: "internal",
         message: ServerRuntimeStartup.DELEGATION_RESTART_FAILURE_MESSAGE,

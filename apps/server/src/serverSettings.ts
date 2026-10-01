@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { createSettingsSecretReads } from "./serverSettingsSecretReads.ts";
 import { createSettingsSecretWrites } from "./serverSettingsSecretWrites.ts";
 import { createSettingsSecretRollback } from "./serverSettingsSecretRollback.ts";
@@ -77,10 +78,15 @@ export class ServerSettingsService extends Context.Service<
   }
 >()("akeru-bot/serverSettings/ServerSettingsService") {
   /** @deprecated Import and use `layerTest` from this module. */
-  static readonly layerTest = (overrides: DeepPartial<ServerSettings> = {}) => layerTest(overrides);
+  static readonly layerTest = (overrides: TestSettingsOverrides = {}) => layerTest(overrides);
 }
 
-const makeTest = (overrides: DeepPartial<ServerSettings> = {}) =>
+type TestSettingsOverrides = Omit<
+  DeepPartial<ServerSettings>,
+  "automaticGitFetchInterval" | "providerHealthRefreshInterval"
+> & Partial<Pick<ServerSettings, "automaticGitFetchInterval" | "providerHealthRefreshInterval">>;
+
+const makeTest = (overrides: TestSettingsOverrides = {}) =>
   Effect.gen(function* () {
     const { automaticGitFetchInterval, providerHealthRefreshInterval, ...overridesForMerge } =
       overrides;
@@ -88,10 +94,10 @@ const makeTest = (overrides: DeepPartial<ServerSettings> = {}) =>
     const initialSettings = yield* normalizeServerSettings({
       ...merged,
       ...(automaticGitFetchInterval !== undefined
-        ? { automaticGitFetchInterval: automaticGitFetchInterval as Duration.Duration }
+        ? { automaticGitFetchInterval: automaticGitFetchInterval }
         : {}),
       ...(providerHealthRefreshInterval !== undefined
-        ? { providerHealthRefreshInterval: providerHealthRefreshInterval as Duration.Duration }
+        ? { providerHealthRefreshInterval: providerHealthRefreshInterval }
         : {}),
     });
     const currentSettingsRef = yield* Ref.make<ServerSettings>(initialSettings);
@@ -112,7 +118,7 @@ const makeTest = (overrides: DeepPartial<ServerSettings> = {}) =>
     } satisfies ServerSettingsService["Service"];
   });
 
-export const layerTest = (overrides: DeepPartial<ServerSettings> = {}) =>
+export const layerTest = (overrides: TestSettingsOverrides = {}) =>
   Layer.effect(ServerSettingsService, makeTest(overrides));
 
 const make = Effect.gen(function* () {
@@ -162,12 +168,12 @@ const make = Effect.gen(function* () {
       const raw = yield* readRawConfig;
       const decoded = decodeServerSettingsJsonExit(raw);
       const persistedSettings = decodePersistedOptionalProviderSettingsJsonExit(raw);
-      if (persistedSettings._tag === "Success") {
+      if (Predicate.isTagged(persistedSettings, "Success")) {
         persisted = persistedSettings.value;
       }
-      if (decoded._tag === "Failure" || persistedSettings._tag === "Failure") {
-        const failure = decoded._tag === "Failure" ? decoded : persistedSettings;
-        if (failure._tag === "Failure") {
+      if (Predicate.isTagged(decoded, "Failure") || Predicate.isTagged(persistedSettings, "Failure")) {
+        const failure = Predicate.isTagged(decoded, "Failure") ? decoded : persistedSettings;
+        if (Predicate.isTagged(failure, "Failure")) {
           yield* Effect.logWarning("failed to parse settings.json, using defaults", {
             path: settingsPath,
             issues: Cause.pretty(failure.cause),
@@ -375,7 +381,7 @@ const make = Effect.gen(function* () {
     });
 
     const startupExit = yield* Effect.exit(startup);
-    if (startupExit._tag === "Failure") {
+    if (Predicate.isTagged(startupExit, "Failure")) {
       yield* Deferred.failCause(startedDeferred, startupExit.cause).pipe(Effect.orDie);
       return yield* Effect.failCause(startupExit.cause);
     }

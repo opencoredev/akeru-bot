@@ -161,7 +161,7 @@ const make = Effect.gen(function* () {
     return yield* Effect.forEach(rawConfig, (entry) =>
       Effect.gen(function* () {
         const decodedRule = decodeKeybindingRuleExit(entry);
-        if (decodedRule._tag === "Failure") {
+        if (Predicate.isTagged(decodedRule, "Failure")) {
           yield* Effect.logWarning("ignoring invalid keybinding entry", {
             path: keybindingsConfigPath,
             entry,
@@ -170,7 +170,7 @@ const make = Effect.gen(function* () {
           return null;
         }
         const resolved = decodeResolvedKeybindingFromConfigExit(decodedRule.value);
-        if (resolved._tag === "Failure") {
+        if (Predicate.isTagged(resolved, "Failure")) {
           yield* Effect.logWarning("ignoring invalid keybinding entry", {
             path: keybindingsConfigPath,
             entry,
@@ -196,7 +196,7 @@ const make = Effect.gen(function* () {
 
     const rawConfig = yield* readRawConfig;
     const decodedEntries = decodeRawKeybindingsEntriesExit(rawConfig);
-    if (decodedEntries._tag === "Failure") {
+    if (Predicate.isTagged(decodedEntries, "Failure")) {
       const detail = `expected JSON array (${Cause.pretty(decodedEntries.cause)})`;
       return {
         keybindings: [],
@@ -208,7 +208,7 @@ const make = Effect.gen(function* () {
     const issues: ServerConfigIssue[] = [];
     for (const [index, entry] of decodedEntries.value.entries()) {
       const decodedRule = decodeKeybindingRuleExit(entry);
-      if (decodedRule._tag === "Failure") {
+      if (Predicate.isTagged(decodedRule, "Failure")) {
         const detail = Cause.pretty(decodedRule.cause);
         issues.push(invalidEntryIssue(index, detail));
         yield* Effect.logWarning("ignoring invalid keybinding entry", {
@@ -221,7 +221,7 @@ const make = Effect.gen(function* () {
       }
 
       const resolvedRule = decodeResolvedKeybindingFromConfigExit(decodedRule.value);
-      if (resolvedRule._tag === "Failure") {
+      if (Predicate.isTagged(resolvedRule, "Failure")) {
         const detail = Cause.pretty(resolvedRule.cause);
         issues.push(invalidEntryIssue(index, detail));
         yield* Effect.logWarning("ignoring invalid keybinding entry", {
@@ -449,7 +449,7 @@ const make = Effect.gen(function* () {
     });
 
     const startupExit = yield* Effect.exit(startup);
-    if (startupExit._tag === "Failure") {
+    if (Predicate.isTagged(startupExit, "Failure")) {
       yield* Deferred.failCause(startedDeferred, startupExit.cause).pipe(Effect.orDie);
       return yield* Effect.failCause(startupExit.cause);
     }

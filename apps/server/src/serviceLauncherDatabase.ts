@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
@@ -56,8 +57,8 @@ export async function syncDirectory(
       await handle.close();
     }
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code !== undefined && UNSUPPORTED_DIRECTORY_SYNC.has(code)) return;
+    const code = error instanceof Error && "code" in error ? error.code : undefined;
+    if (Predicate.isString(code) && UNSUPPORTED_DIRECTORY_SYNC.has(code)) return;
     throw error;
   }
 }

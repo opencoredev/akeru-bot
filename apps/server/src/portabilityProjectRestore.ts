@@ -139,7 +139,7 @@ export function normalizePortabilityProjectFolders(
       .map((project) => normalizeProjectPathForComparison(project.workspaceRoot)),
   );
   const targetWorkspaceRoots = new Map<string, string>();
-  const normalized: Record<string, string> = {};
+  const normalized: Record<ProjectId, string> = {};
 
   for (const [projectId, destination] of Object.entries(projectFolders)) {
     if (!sourceProjects.has(projectId)) {
@@ -166,10 +166,10 @@ export function normalizePortabilityProjectFolders(
       );
     }
     targetWorkspaceRoots.set(comparisonRoot, projectId);
-    normalized[projectId] = workspaceRoot;
+    normalized[ProjectId.make(projectId)] = workspaceRoot;
   }
 
-  return normalized as PortabilityProjectFolderMap;
+  return normalized;
 }
 
 export function resolveProjectRestoreMatches(

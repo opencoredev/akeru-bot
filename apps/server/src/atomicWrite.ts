@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -50,7 +51,7 @@ export const writeFileStringAtomically = <E = never>(input: {
           Effect.catch((error) => {
             const cause = "cause" in error.reason ? error.reason.cause : undefined;
             const code =
-              typeof cause === "object" && cause !== null && "code" in cause
+              Predicate.isObjectOrArray(cause) && cause !== null && "code" in cause
                 ? cause.code
                 : undefined;
             return code === "EINVAL" || code === "ENOTSUP" || code === "EOPNOTSUPP"

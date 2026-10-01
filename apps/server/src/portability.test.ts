@@ -1,4 +1,4 @@
-import { AuthSessionId, DEFAULT_SERVER_SETTINGS, GroupId, ProjectId, ProviderInstanceId, ThreadId, type PortabilityArchiveRecord } from "@akeru/contracts";
+import { AuthSessionId, DEFAULT_SERVER_SETTINGS, GroupId, ProjectId, ProviderInstanceId, ThreadId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import { canonicalJson, commandsForPortabilityImport, createPortabilityArchive, isPortabilityPreviewCurrent, parsePortabilityArchive, portabilityChecksum, portableRecords, previewPortabilityImport, serializePortabilityArchive } from "./portability.ts";
 
@@ -171,7 +171,9 @@ describe("portability archive", () => {
       archive,
       archive.records.map((record) =>
         record.type === "group"
-          ? ({
+          ? (
+            // SAFETY: This deliberately invalid record tests rejection of paired identities.
+            {
               ...record,
               data: {
                 ...record.data,
@@ -184,7 +186,7 @@ describe("portability archive", () => {
                   },
                 ],
               },
-            } as unknown as PortabilityArchiveRecord)
+            } as never)
           : record,
       ),
     );

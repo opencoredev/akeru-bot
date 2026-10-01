@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
@@ -142,8 +143,8 @@ it.describe("ws bot engine model routing preflight", () => {
         ).pipe(Effect.result),
       );
 
-      assertTrue(result._tag === "Failure");
-      if (result._tag === "Failure") {
+      assertTrue(Predicate.isTagged(result, "Failure"));
+      if (Predicate.isTagged(result, "Failure")) {
         assert.equal(result.failure._tag, "OrchestrationDispatchCommandError");
         assert.include(result.failure.message, "not-a-model");
         assert.equal(
@@ -236,8 +237,8 @@ it.describe("ws bot engine model routing preflight", () => {
         ).pipe(Effect.result),
       );
 
-      assertTrue(result._tag === "Success");
-      if (result._tag === "Success") assert.equal(result.success.sequence, 1);
+      assertTrue(Predicate.isTagged(result, "Success"));
+      if (Predicate.isTagged(result, "Success")) assert.equal(result.success.sequence, 1);
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );
 
@@ -278,8 +279,8 @@ it.describe("ws bot engine model routing preflight", () => {
         ).pipe(Effect.result),
       );
 
-      assertTrue(result._tag === "Failure");
-      if (result._tag === "Failure") {
+      assertTrue(Predicate.isTagged(result, "Failure"));
+      if (Predicate.isTagged(result, "Failure")) {
         assert.equal(result.failure._tag, "OrchestrationDispatchCommandError");
         assert.include(result.failure.message, "dropped-model");
         assert.equal(
@@ -335,8 +336,8 @@ it.describe("ws bot engine model routing preflight", () => {
         ).pipe(Effect.result),
       );
 
-      assertTrue(result._tag === "Success");
-      if (result._tag === "Success") assert.equal(result.success.sequence, 1);
+      assertTrue(Predicate.isTagged(result, "Success"));
+      if (Predicate.isTagged(result, "Success")) assert.equal(result.success.sequence, 1);
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );
 
@@ -386,8 +387,8 @@ it.describe("ws bot engine model routing preflight", () => {
           ).pipe(Effect.result),
         );
 
-        assertTrue(result._tag === "Success");
-        if (result._tag === "Success") assert.equal(result.success.sequence, 1);
+        assertTrue(Predicate.isTagged(result, "Success"));
+        if (Predicate.isTagged(result, "Success")) assert.equal(result.success.sequence, 1);
       }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );
 
@@ -441,7 +442,7 @@ it.describe("ws bot engine model routing preflight", () => {
         ).pipe(Effect.result),
       );
 
-      assertTrue(result._tag === "Success");
-      if (result._tag === "Success") assert.equal(result.success.sequence, 1);
+      assertTrue(Predicate.isTagged(result, "Success"));
+      if (Predicate.isTagged(result, "Success")) assert.equal(result.success.sequence, 1);
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );});

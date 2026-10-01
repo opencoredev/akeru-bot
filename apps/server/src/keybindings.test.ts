@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
@@ -115,7 +116,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         command: "terminal.new",
       });
 
-      if (result._tag !== "Failure") {
+      if (!Predicate.isTagged(result, "Failure")) {
         assert.fail("Expected invalid keybinding decode to fail");
       }
 

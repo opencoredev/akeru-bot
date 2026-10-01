@@ -145,11 +145,13 @@ const resolveSqlSource = Effect.fn("resolveSqliteStateSqlSource")(function* (
   let source: string;
   if (sql !== undefined) {
     source = sql;
-  } else {
-    const filePath = path.resolve(file as string);
+  } else if (file !== undefined) {
+    const filePath = path.resolve(file);
     source = yield* fs
       .readFileString(filePath)
       .pipe(Effect.mapError((cause) => new SqliteStateSqlFileError({ filePath, cause })));
+  } else {
+    return yield* new SqliteStateMissingSqlSourceError();
   }
 
   const trimmed = source.trim();

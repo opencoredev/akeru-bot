@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { DEFAULT_SERVER_SETTINGS, ServerSettings } from "@akeru/contracts";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
@@ -51,14 +52,11 @@ export function stripDefaultServerSettings(current: unknown, defaults: unknown):
   }
 
   if (
-    current !== null &&
-    defaults !== null &&
-    typeof current === "object" &&
-    typeof defaults === "object"
+    Predicate.isObject(current) && Predicate.isObject(defaults)
   ) {
-    const currentRecord = current as Record<string, unknown>;
-    const defaultsRecord = defaults as Record<string, unknown>;
-    const next: Record<string, unknown> = {};
+    const currentRecord = current;
+    const defaultsRecord = defaults;
+    const next: typeof currentRecord = {};
 
     for (const key of Object.keys(currentRecord)) {
       if (ATOMIC_SETTINGS_KEYS.has(key)) {

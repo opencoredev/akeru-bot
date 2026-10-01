@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
@@ -182,8 +183,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       if (
-        results.search._tag !== "Failure" ||
-        results.search.failure._tag !== "ProjectSearchEntriesError"
+        !Predicate.isTagged(results.search, "Failure") ||
+        !Predicate.isTagged(results.search.failure, "ProjectSearchEntriesError")
       ) {
         assert.fail("Expected a ProjectSearchEntriesError");
       }
@@ -203,8 +204,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.isDefined(searchError.cause);
 
       if (
-        results.list._tag !== "Failure" ||
-        results.list.failure._tag !== "ProjectListEntriesError"
+        !Predicate.isTagged(results.list, "Failure") ||
+        !Predicate.isTagged(results.list.failure, "ProjectListEntriesError")
       ) {
         assert.fail("Expected a ProjectListEntriesError");
       }
@@ -215,7 +216,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(listError.normalizedCwd, invalidWorkspace);
       assert.isDefined(listError.cause);
 
-      if (results.read._tag !== "Failure" || results.read.failure._tag !== "ProjectReadFileError") {
+      if (!Predicate.isTagged(results.read, "Failure") || !Predicate.isTagged(results.read.failure, "ProjectReadFileError")) {
         assert.fail("Expected a ProjectReadFileError");
       }
       const readError = results.read.failure;
@@ -255,7 +256,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         );
       }).pipe(Effect.ensuring(fs.chmod(blockedRoot, 0o700).pipe(Effect.ignore)));
 
-      if (result._tag !== "Failure" || result.failure._tag !== "ProjectListEntriesError") {
+      if (!Predicate.isTagged(result, "Failure") || !Predicate.isTagged(result.failure, "ProjectListEntriesError")) {
         assert.fail("Expected a ProjectListEntriesError");
       }
       const error = result.failure;
@@ -361,7 +362,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.equal(result._tag, "Failure");
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         assert.include(result.failure.message, "did not start");
       }
       assert.equal(dispatchCount, 0);
@@ -386,7 +387,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ).pipe(Effect.result),
       );
 
-      if (result._tag !== "Failure" || result.failure._tag !== "ProjectWriteFileError") {
+      if (!Predicate.isTagged(result, "Failure") || !Predicate.isTagged(result.failure, "ProjectWriteFileError")) {
         assert.fail("Expected a ProjectWriteFileError");
       }
       const writeError = result.failure;
@@ -494,7 +495,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.deepEqual(revealed, { cwd: attachmentPath, editor: "file-manager", reveal: true });
-      assertTrue(missing._tag === "Failure");
-      assertTrue(missing.failure._tag === "AttachmentNotFoundError");
+      assertTrue(Predicate.isTagged(missing, "Failure"));
+      assertTrue(Predicate.isTagged(missing.failure, "AttachmentNotFoundError"));
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );});

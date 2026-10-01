@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @effect-diagnostics nodeBuiltinImport:off
-// @effect-diagnostics nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeFS from "node:fs";
 import * as Effect from "effect/Effect";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -135,16 +135,16 @@ const program = Effect.gen(function* () {
           },
         );
       }
-      if (request.configId === "mode" && typeof request.value === "string") {
+      if (request.configId === "mode" && Predicate.isString(request.value)) {
         scenarioState.currentModeId = request.value;
       }
-      if (request.configId === "model" && typeof request.value === "string") {
+      if (request.configId === "model" && Predicate.isString(request.value)) {
         scenarioState.currentModelId = request.value;
       }
-      if (request.configId === "reasoning" && typeof request.value === "string") {
+      if (request.configId === "reasoning" && Predicate.isString(request.value)) {
         scenarioState.currentReasoning = request.value;
       }
-      if (request.configId === "context" && typeof request.value === "string") {
+      if (request.configId === "context" && Predicate.isString(request.value)) {
         scenarioState.currentContext = request.value;
       }
       if (request.configId === "fast") {
@@ -188,26 +188,26 @@ yield* agent.handlePrompt(createPromptScenario(scenarioState, agent));
     }
 
     const nextModeId =
-      typeof params === "object" &&
+      Predicate.isObjectOrArray(params) &&
       params !== null &&
       "modeId" in params &&
-      typeof params.modeId === "string"
+      Predicate.isString(params.modeId)
         ? params.modeId
-        : typeof params === "object" &&
+        : Predicate.isObjectOrArray(params) &&
             params !== null &&
             "mode" in params &&
-            typeof params.mode === "string"
+            Predicate.isString(params.mode)
           ? params.mode
           : undefined;
     const requestedSessionId =
-      typeof params === "object" &&
+      Predicate.isObjectOrArray(params) &&
       params !== null &&
       "sessionId" in params &&
-      typeof params.sessionId === "string"
+      Predicate.isString(params.sessionId)
         ? params.sessionId
         : sessionId;
 
-    if (typeof nextModeId === "string" && nextModeId.trim()) {
+    if (Predicate.isString(nextModeId) && nextModeId.trim()) {
       scenarioState.currentModeId = nextModeId.trim();
       return agent.client
         .sessionUpdate({
@@ -234,7 +234,7 @@ yield* agent.handlePrompt(createPromptScenario(scenarioState, agent));
               if (event.direction !== "incoming" || event.stage !== "raw") {
                 return Effect.void;
               }
-              if (typeof event.payload !== "string") {
+              if (!Predicate.isString(event.payload)) {
                 return Effect.void;
               }
               const payload = event.payload;

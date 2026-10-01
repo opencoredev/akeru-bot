@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
@@ -94,12 +95,15 @@ export const wsRpcProtocolLayer = (wsUrl: string) => {
   const { cookie, url } = parseSessionCookieFromWsUrl(wsUrl);
   const webSocketConstructorLayer = Layer.succeed(
     Socket.WebSocketConstructor,
-    (socketUrl, protocols) =>
-      new NodeSocket.NodeWS.WebSocket(
+    (socketUrl, protocols) => {
+      const socket: Pick<globalThis.WebSocket, "close" | "readyState"> = new NodeSocket.NodeWS.WebSocket(
         socketUrl,
         protocols,
         cookie ? { headers: { cookie } } : undefined,
-      ) as unknown as globalThis.WebSocket,
+      );
+      // SAFETY: ws supports the send and event listener APIs consumed by Effect; DOM dispatchEvent and URL are unused.
+      return socket as globalThis.WebSocket;
+    },
   );
 
   return RpcClient.layerProtocolSocket().pipe(
@@ -133,7 +137,7 @@ export const withFirstWsAckHeld = (
         ...protocol,
         send: (clientId, request, transferables) => {
           const send = protocol.send(clientId, request, transferables);
-          if (request._tag !== "Ack" || !holdNextAck) {
+          if (!Predicate.isTagged(request, "Ack") || !holdNextAck) {
             return send;
           }
           holdNextAck = false;

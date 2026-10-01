@@ -300,7 +300,7 @@ export function resignArchive(
 ): ReturnType<typeof createPortabilityArchive> {
   const signedRecords = records.map((record) => {
     const { checksum: _checksum, ...core } = record;
-    return { ...core, checksum: portabilityChecksum(core) } as PortabilityArchiveRecord;
+    return { ...core, checksum: portabilityChecksum(core) };
   });
   const body = { ...archive, records: signedRecords };
   const { checksum: _checksum, ...unsigned } = body;

@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { AKERU_ARCHIVE_FORMAT, AKERU_ARCHIVE_VERSION, BALANCED_BOT_PERSONALITY_TONE, EventId, MessageId, isGroupBotMember, type PortabilityArchiveRecord, type OrchestrationReadModel, type ServerSettings } from "@akeru/contracts";
 
 import { portabilityChecksum, canonicalJson, canonicalValue } from "./portabilityChecksums.ts";
@@ -21,26 +23,29 @@ export const ARCHIVE_EXCLUSIONS = [
   "Conversation attachments, raw approval payloads, provider request details, and deleted threads and projects",
 ] as const;
 
-export type RecordCore = Omit<PortabilityArchiveRecord, "checksum">;
+type WithoutChecksum<T> = T extends PortabilityArchiveRecord ? Omit<T, "checksum"> : never;
+export type RecordCore = WithoutChecksum<PortabilityArchiveRecord>;
 
 export function withChecksum(record: RecordCore): PortabilityArchiveRecord {
-  return { ...record, checksum: portabilityChecksum(record) } as PortabilityArchiveRecord;
+  return { ...record, checksum: portabilityChecksum(record) };
 }
 
 export function portableId(prefix: string, value: unknown): string {
   return `${prefix}-${portabilityChecksum(value).slice(0, 32)}`;
 }
 
-export const APPROVAL_ACTIVITY_KINDS = new Set([
+const ApprovalActivityKind = Schema.Literals([
   "approval.requested",
   "approval.resolved",
   "provider.approval.respond.failed",
 ]);
+export const APPROVAL_ACTIVITY_KINDS = new Set<string>(ApprovalActivityKind.literals);
+const isApprovalActivityKind = Schema.is(ApprovalActivityKind);
 
 export function stringField(payload: unknown, key: string): string | undefined {
-  if (typeof payload !== "object" || payload === null) return undefined;
-  const value = (payload as Record<string, unknown>)[key];
-  return typeof value === "string" && value.trim().length > 0 ? safeText(value) : undefined;
+  if (!Predicate.isObjectOrArray(payload) || !Predicate.hasProperty(payload, key)) return undefined;
+  const value = payload[key];
+  return Predicate.isString(value) && value.trim().length > 0 ? safeText(value) : undefined;
 }
 
 export function portableRecords(
@@ -161,11 +166,11 @@ export function portableRecords(
         const approvalHistory = thread.activities
           .flatMap((activity) => {
             const archivedKind = stringField(activity.payload, "originalKind");
-            const originalKind = APPROVAL_ACTIVITY_KINDS.has(activity.kind)
+            const originalKind = isApprovalActivityKind(activity.kind)
               ? activity.kind
               : activity.kind === "approval.history" &&
                   archivedKind !== undefined &&
-                  APPROVAL_ACTIVITY_KINDS.has(archivedKind)
+                  isApprovalActivityKind(archivedKind)
                 ? archivedKind
                 : undefined;
             if (originalKind === undefined) return [];
@@ -179,10 +184,7 @@ export function portableRecords(
             const outcome = stringField(activity.payload, "outcome");
             return [
               {
-                originalKind: originalKind as
-                  | "approval.requested"
-                  | "approval.resolved"
-                  | "provider.approval.respond.failed",
+                originalKind,
                 summary: safeText(activity.summary),
                 ...(requestId ? { requestId } : {}),
                 ...(requestKind ? { requestKind } : {}),

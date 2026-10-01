@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * ServerConfig - Runtime configuration services.
  *
@@ -177,7 +178,7 @@ const makeTest = Effect.fn("ServerConfig.makeTest")(function* (
   const devUrl = undefined;
   const fs = yield* FileSystem.FileSystem;
   const baseDir =
-    typeof baseDirOrPrefix === "string"
+    Predicate.isString(baseDirOrPrefix)
       ? baseDirOrPrefix
       : yield* fs.makeTempDirectoryScoped({ prefix: baseDirOrPrefix.prefix });
   const derivedPaths = yield* deriveServerPaths(baseDir, devUrl);

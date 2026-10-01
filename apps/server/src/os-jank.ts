@@ -62,7 +62,7 @@ export const fixPath = Effect.fn("fixPath")(function* (): Effect.fn.Return<
       Effect.catchDefect((defect) =>
         Effect.sync(() => {
           logPathHydrationWarning("Failed to hydrate PATH from the user environment.", defect);
-          return {} as Partial<NodeJS.ProcessEnv>;
+          return {};
         }),
       ),
     );

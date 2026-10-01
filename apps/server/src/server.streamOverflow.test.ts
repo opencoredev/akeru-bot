@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EventId, MessageId, type OrchestrationShellStreamItem, type OrchestrationEvent, ORCHESTRATION_WS_METHODS, TurnId } from "@akeru/contracts";
@@ -147,7 +148,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               assert.deepEqual(received, [1]);
               yield* Deferred.succeed(releaseAck, undefined);
               const result = yield* Fiber.join(attempt);
-              assertTrue(result._tag === "Failure");
+              assertTrue(Predicate.isTagged(result, "Failure"));
               assert.equal(result.failure._tag, "OrchestrationGetSnapshotError");
 
               const recovered = yield* client[ORCHESTRATION_WS_METHODS.subscribeThread]({
@@ -264,7 +265,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             assert.equal(yield* PubSub.size(liveEvents), 0);
             yield* Deferred.succeed(releaseAck, undefined);
             const result = yield* Fiber.join(attempt);
-            assertTrue(result._tag === "Failure");
+            assertTrue(Predicate.isTagged(result, "Failure"));
             assert.equal(result.failure._tag, "OrchestrationGetSnapshotError");
             assert.equal(received.length, 1);
             const initial = received[0];

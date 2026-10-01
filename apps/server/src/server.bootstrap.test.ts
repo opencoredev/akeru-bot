@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { CommandId, MessageId, type OrchestrationCommand, ORCHESTRATION_WS_METHODS, ThreadId, WS_METHODS } from "@akeru/contracts";
@@ -454,8 +455,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ).pipe(Effect.result),
       );
 
-      assertTrue(result._tag === "Failure");
-      assertTrue(result.failure._tag === "OrchestrationDispatchCommandError");
+      assertTrue(Predicate.isTagged(result, "Failure"));
+      assertTrue(Predicate.isTagged(result.failure, "OrchestrationDispatchCommandError"));
       assert.include(result.failure.message, "worktree exploded");
       assert.strictEqual(result.failure.bootstrapThreadDisposition, "deleted");
       assert.deepEqual(
@@ -545,8 +546,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ).pipe(Effect.result),
       );
 
-      assertTrue(result._tag === "Failure");
-      assertTrue(result.failure._tag === "OrchestrationDispatchCommandError");
+      assertTrue(Predicate.isTagged(result, "Failure"));
+      assertTrue(Predicate.isTagged(result.failure, "OrchestrationDispatchCommandError"));
       assert.include(result.failure.message, "worktree exploded");
       assert.strictEqual(result.failure.bootstrapThreadDisposition, undefined);
       assert.deepEqual(

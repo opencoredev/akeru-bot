@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -5,7 +6,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
-import { AkeruMemoryOperationError, type AuthAccessStreamEvent, AuthSessionId, ClientSurface, type FileManagerRevealKind, type OrchestrationClientOrigin, type OrchestrationReadModel, OrchestrationDispatchCommandError, type OrchestrationEvent, type OrchestrationShellStreamEvent, PortabilityArchiveError, type PortabilityArchive, type PortabilityProjectFolderMap, type ProjectEntriesFailure, type ProjectFileFailure, type ProjectFileOperation, type ServerProvider, type SubscriptionProviderId, McpServerAuthenticationError, ThreadId } from "@akeru/contracts";
+import { AkeruMemoryOperationError, type AuthAccessStreamEvent, AuthSessionId, ClientSurface, type FileManagerRevealKind, type OrchestrationClientOrigin, type OrchestrationReadModel, OrchestrationDispatchCommandError, type OrchestrationEvent, type OrchestrationShellStreamEvent, PortabilityArchiveError, type PortabilityArchive, type PortabilityProjectFolderMap, type ProjectEntriesFailure, type ProjectFileFailure, type ProjectFileOperation, type ServerProvider, SubscriptionProviderId, McpServerAuthenticationError, ThreadId } from "@akeru/contracts";
 import { HttpServerRequest } from "effect/unstable/http";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
@@ -27,9 +28,9 @@ export const subscriptionDriverByProvider: Record<SubscriptionProviderId, string
 };
 
 export const subscriptionProviderForDriver = (driver: string): SubscriptionProviderId | undefined =>
-  Object.entries(subscriptionDriverByProvider).find(
-    ([, candidate]) => candidate === driver,
-  )?.[0] as SubscriptionProviderId | undefined;
+  SubscriptionProviderId.literals.find(
+    (provider) => subscriptionDriverByProvider[provider] === driver,
+  );
 
 export const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -47,7 +48,7 @@ export const memoryOperationError = (operation: string, cause: unknown) =>
     detail:
       cause instanceof Error
         ? cause.message
-        : typeof cause === "string"
+        : Predicate.isString(cause)
           ? cause
           : "The memory operation failed.",
   });
@@ -91,7 +92,7 @@ export const validatePortabilityProjectFolders = Effect.fn("validatePortabilityP
         .normalizeWorkspaceRoot(workspaceRoot)
         .pipe(Effect.map((normalizedRoot) => [projectId, normalizedRoot] as const)),
     ),
-  ) as PortabilityProjectFolderMap;
+  );
 });
 
 export const resolveDiscoveryForConfig = <A, E, R>(

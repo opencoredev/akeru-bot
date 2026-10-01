@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as AcpError from "effect-acp/errors";
 import type * as AcpSchema from "effect-acp/schema";
@@ -343,7 +344,7 @@ export const createPromptScenario = (scenarioState: typeof ScenarioState, agent:
             mode: "default",
           },
         });
-        if (typeof result !== "object" || result === null || !("outcome" in result)) {
+        if (!Predicate.isObjectOrArray(result) || result === null || !("outcome" in result)) {
           throw new Error("Expected _x.ai/ask_user_question response outcome.");
         }
         if (result.outcome === "cancelled") {
@@ -352,7 +353,7 @@ export const createPromptScenario = (scenarioState: typeof ScenarioState, agent:
         if (
           result.outcome !== "accepted" ||
           !("answers" in result) ||
-          typeof result.answers !== "object" ||
+          !Predicate.isObjectOrArray(result.answers) ||
           result.answers === null
         ) {
           throw new Error("Expected accepted _x.ai/ask_user_question response answers.");

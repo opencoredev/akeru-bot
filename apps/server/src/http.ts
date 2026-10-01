@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import Mime from "@effect/platform-node/Mime";
 import * as NodeFS from "node:fs";
@@ -342,8 +343,8 @@ const streamStaticFile = (file: FileSystem.File, size: bigint) =>
   );
 
 function mutableFileEtag(file: FileSystem.File): string | undefined {
-  const descriptor = (file as FileSystem.File & { readonly fd?: unknown }).fd;
-  if (typeof descriptor !== "number") return undefined;
+  if (!("fd" in file) || !Predicate.isNumber(file.fd)) return undefined;
+  const descriptor = file.fd;
   try {
     const info = NodeFS.fstatSync(descriptor, { bigint: true });
     return `W/"${info.dev.toString(16)}-${info.ino.toString(16)}-${info.size.toString(16)}-${info.mtimeNs.toString(16)}-${info.ctimeNs.toString(16)}"`;

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeOS from "node:os";
 
 import type { AuthClientSession } from "@akeru/contracts";
@@ -81,10 +82,10 @@ export const resolveHeadlessConnectionString = (
 
 export const resolveListeningPort = (address: unknown, fallbackPort: number): number => {
   if (
-    typeof address === "object" &&
+    Predicate.isObjectOrArray(address) &&
     address !== null &&
     "port" in address &&
-    typeof address.port === "number"
+    Predicate.isNumber(address.port)
   ) {
     return address.port;
   }

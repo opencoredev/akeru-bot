@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { AkeruMemoryEntityId, AkeruMemoryId, AkeruMemoryPartitionId, AkeruMemoryRootId, AkeruMemoryTenantId, AkeruMemoryUserId, type AkeruMemoryRevision, type AkeruMemoryThreadAccess, BotId, ProjectId, ThreadId, WS_METHODS } from "@akeru/contracts";
@@ -400,7 +401,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const missing = yield* repository
         .getCurrent({ access, rootId: seeded.rootId })
         .pipe(Effect.exit);
-      assert.isTrue(missing._tag === "Failure");
+      assert.isTrue(Predicate.isTagged(missing, "Failure"));
 
       // A mutation against a thread that is not the owner is rejected before
       // any repository write.

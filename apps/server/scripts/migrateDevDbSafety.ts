@@ -37,8 +37,8 @@ export class MigrateDevDbDestinationBusyError extends Schema.TaggedErrorClass<Mi
   }
 }
 
-export /** The slice of server-runtime.json this script cares about. */
-const ServerRuntimeState = Schema.fromJsonString(Schema.Struct({ pid: Schema.Number }));
+/** The slice of server-runtime.json this script cares about. */
+export const ServerRuntimeState = Schema.fromJsonString(Schema.Struct({ pid: Schema.Number }));
 
 export const decodeServerRuntimeState = Schema.decodeEffect(ServerRuntimeState);
 
@@ -48,7 +48,7 @@ export const isProcessAlive = (pid: number): boolean => {
     return true;
   } catch (error) {
     // EPERM means the process exists but belongs to someone else.
-    return (error as NodeJS.ErrnoException).code === "EPERM";
+    return error instanceof Error && "code" in error && error.code === "EPERM";
   }
 };
 

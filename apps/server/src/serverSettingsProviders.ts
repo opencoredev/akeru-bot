@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { DEFAULT_TEXT_GENERATION_MODEL, DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER, DEFAULT_MODEL_BY_PROVIDER, type ModelSelection, type ProviderInstanceConfig, ProviderDriverKind, ProviderInstanceId, resolveProviderInstanceEnabled, ServerSettings, ServerSettingsError } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import { isModelSelectionProviderEnabled } from "@akeru/shared/serverSettings";
@@ -24,17 +25,14 @@ export const foldProviderInstanceEnabledFlags = (settings: ServerSettings): Serv
     // stay in the blob so driver schema validation flags it instead of the
     // fold silently repairing the config.
     if (
-      config === null ||
-      typeof config !== "object" ||
-      Array.isArray(config) ||
-      typeof (config as { readonly enabled?: unknown }).enabled !== "boolean"
+      !Predicate.isObject(config) ||
+      !Predicate.isBoolean(config.enabled)
     ) {
       providerInstances[instanceId] = instance;
       continue;
     }
-    const { enabled: configEnabled, ...restConfig } = config as Record<string, unknown> & {
-      readonly enabled: boolean;
-    };
+    const configEnabled = config.enabled;
+    const { enabled: _enabled, ...restConfig } = config;
     const resolved =
       instance.enabled === false || configEnabled === false
         ? false
@@ -51,7 +49,7 @@ export const foldProviderInstanceEnabledFlags = (settings: ServerSettings): Serv
   }
   return {
     ...settings,
-    providerInstances: providerInstances as ServerSettings["providerInstances"],
+    providerInstances,
   };
 };
 

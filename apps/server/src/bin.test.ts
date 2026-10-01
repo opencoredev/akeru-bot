@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - CLI integration exercises Node HTTP and filesystem boundaries.
+import * as Predicate from "effect/Predicate";
 import * as NodeHttp from "node:http";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -176,7 +177,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (!CliError.isCliError(error)) {
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
-      if (error._tag !== "InvalidValue") {
+      if (!Predicate.isTagged(error, "InvalidValue")) {
         assert.fail(`Expected InvalidValue, got ${error._tag}`);
       }
       assert.equal(error.option, "log-level");
@@ -282,12 +283,12 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (!CliError.isCliError(error)) {
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
-      if (error._tag !== "ShowHelp") {
+      if (!Predicate.isTagged(error, "ShowHelp")) {
         assert.fail(`Expected ShowHelp, got ${error._tag}`);
       }
       assert.deepEqual(error.commandPath, ["akeru", "auth", "pairing", "create"]);
       const ttlError = error.errors[0] as CliError.CliError | undefined;
-      if (!ttlError || ttlError._tag !== "InvalidValue") {
+      if (!ttlError || !Predicate.isTagged(ttlError, "InvalidValue")) {
         assert.fail(`Expected InvalidValue, got ${String(ttlError?._tag)}`);
       }
       assert.equal(ttlError.option, "ttl");
@@ -450,12 +451,12 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (!CliError.isCliError(error)) {
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
-      if (error._tag !== "ShowHelp") {
+      if (!Predicate.isTagged(error, "ShowHelp")) {
         assert.fail(`Expected ShowHelp, got ${error._tag}`);
       }
       assert.deepEqual(error.commandPath, ["akeru", "project", "add"]);
       const optionError = error.errors[0] as CliError.CliError | undefined;
-      if (!optionError || optionError._tag !== "UnrecognizedOption") {
+      if (!optionError || !Predicate.isTagged(optionError, "UnrecognizedOption")) {
         assert.fail(`Expected UnrecognizedOption, got ${String(optionError?._tag)}`);
       }
       assert.equal(optionError.option, "--dev-url");

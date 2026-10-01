@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -125,7 +126,7 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
         { sharedHome: sourceDir },
       ).pipe(Effect.flip);
       assert.equal(error._tag, "MigrateDevDbSlotCollisionError");
-      if (error._tag === "MigrateDevDbSlotCollisionError") {
+      if (Predicate.isTagged(error, "MigrateDevDbSlotCollisionError")) {
         assert.equal(error.slot, 1);
         assert.equal(error.appliedName, "SomebodyElsesMigration");
       }
@@ -152,7 +153,7 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
         { sharedHome: sourceDir },
       ).pipe(Effect.flip);
       assert.equal(error._tag, "MigrateDevDbServerRunningError");
-      if (error._tag === "MigrateDevDbServerRunningError") {
+      if (Predicate.isTagged(error, "MigrateDevDbServerRunningError")) {
         assert.equal(error.pid, process.pid);
       }
     }),

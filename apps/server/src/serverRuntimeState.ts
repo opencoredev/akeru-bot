@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -110,7 +111,7 @@ export const readPersistedServerRuntimeState = (path: string) =>
     const raw = yield* fs.readFileString(path).pipe(
       Effect.matchEffect({
         onFailure: (cause) =>
-          cause.reason._tag === "NotFound"
+          Predicate.isTagged(cause.reason, "NotFound")
             ? Effect.succeed(Option.none<string>())
             : Effect.fail(
                 new ServerRuntimeStateError({

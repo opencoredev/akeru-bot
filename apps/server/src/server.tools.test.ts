@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ThreadId, WS_METHODS } from "@akeru/contracts";
@@ -123,7 +124,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.strictEqual(error._tag, "ProviderUploadFeedbackError");
-      if (error._tag === "ProviderUploadFeedbackError") {
+      if (Predicate.isTagged(error, "ProviderUploadFeedbackError")) {
         assert.strictEqual(error.threadId, threadId);
         assert.strictEqual(error.message, `Failed to upload feedback for thread ${threadId}.`);
         assert.isDefined(error.cause);
@@ -196,7 +197,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ).pipe(Effect.result),
       );
 
-      assertTrue(result._tag === "Failure");
+      assertTrue(Predicate.isTagged(result, "Failure"));
       const failureMessage = String(result.failure);
       assertTrue(
         failureMessage.includes("SocketOpenError") || failureMessage.includes("SocketCloseError"),
