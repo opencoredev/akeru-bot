@@ -1,5 +1,4 @@
 import { isMacPlatform } from "../../lib/utils";
-import { collectWrappedTerminalLinkLine, extractTerminalLinks } from "../../terminal-links";
 import {
   GhosttyTerminalCore,
   type GhosttyScrollbar,
@@ -10,134 +9,52 @@ import {
   measureGhosttyCell,
   renderGhosttySnapshot,
   terminalGridSize,
-  type GhosttyCellRange,
   type GhosttyCellMetrics,
 } from "./renderer";
-import symbolsFontUrl from "./fonts/SymbolsNerdFontMono-Regular.woff2?url";
-import { isMonospaceFamily } from "../../appearanceFonts";
 import {
   terminalLatencyCallbacks,
   type TerminalLatencyProbe,
   type TerminalLatencyCallbacks,
 } from "../latency";
+import {
+  type GhosttyTerminalFont,
+  terminalFontSize,
+  ensureTerminalSymbolsFont,
+  loadTerminalFontFamily,
+  terminalFontFamily,
+} from "./surfaceFont";
+import {
+  CONTENT_PADDING,
+  type TerminalLinkWithRange,
+  terminalScrollbarGeometry,
+  terminalScrollbarOffsetAtPointer,
+  terminalContentOriginY,
+  terminalGridCellAt,
+  terminalLinkAtPositionWithRange,
+} from "./surfaceGeometry";
+import {
+  type TerminalSelectionClickSequence,
+  isTerminalAltGraphText,
+  isTerminalCopyShortcut,
+  isTerminalPasteShortcut,
+  isTerminalCompositionKey,
+  primeTerminalCopyInput,
+  clearPrimedTerminalCopyInput,
+  applyTerminalCopyEvent,
+  isTerminalCompositionCommitInput,
+  shouldReportTerminalMouse,
+  ghosttyMouseButton,
+  isTerminalLinkPointerGesture,
+  advanceTerminalSelectionClickSequence,
+  terminalWheelDeltaRows,
+  terminalWheelArrowData,
+  type TerminalMouseAction,
+  resolveTerminalMouseData,
+  resolveTerminalMouseTrackingState,
+} from "./surfaceInput";
 
-export const DEFAULT_TERMINAL_FONT_SIZE = 12;
-const MIN_TERMINAL_FONT_SIZE = 6;
-const MAX_TERMINAL_FONT_SIZE = 32;
-// The glyph fallbacks only supply symbols the text faces are missing (powerline
-// separators, devicons, and other private-use prompt symbols), so shells
-// configured for a locally installed Nerd Font keep their prompt glyphs no
-// matter which text face is active.
-const TERMINAL_GLYPH_FALLBACKS =
-  '"Symbols Nerd Font Mono", "Symbols Nerd Font", "JetBrainsMono Nerd Font", ' +
-  '"JetBrainsMono NF", "FiraCode Nerd Font", "Hack Nerd Font", "MesloLGS NF", ' +
-  '"CaskaydiaCove Nerd Font", "PowerlineSymbols", monospace';
-// The platform's own monospace faces; concrete names only, because an
-// unknown keyword (like ui-monospace) makes canvas font shorthand parsing
-// reject the whole string.
-export const DEFAULT_TERMINAL_FONT_FAMILY =
-  '"SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", ' + TERMINAL_GLYPH_FALLBACKS;
-const CONTENT_PADDING = 4;
-const MIN_SCROLLBAR_THUMB_HEIGHT = 18;
 /** Half a blink cycle: the visible and hidden phases are equally long. */
 const CURSOR_BLINK_INTERVAL_MS = 500;
-const TERMINAL_FONT_LOAD_TEXT = "iMW0@# .";
-const TERMINAL_FONT_LOAD_VARIANTS = [
-  "normal 400",
-  "normal 700",
-  "italic 400",
-  "italic 700",
-] as const;
-
-/** Requested terminal font; omitted fields fall back to the defaults. */
-export interface GhosttyTerminalFont {
-  readonly family?: string;
-  readonly size?: number;
-}
-
-let symbolsFontLoad: Promise<void> | null = null;
-
-/**
- * Register the bundled symbols-only Nerd Font once per page. It loads lazily
- * with the first terminal, and because it carries no regular text glyphs it
- * composes with any text face without changing metrics — prompt symbols and
- * devicons render even on machines without a locally installed Nerd Font.
- */
-function ensureTerminalSymbolsFont(): Promise<void> {
-  if (symbolsFontLoad !== null) return symbolsFontLoad;
-  symbolsFontLoad = (async () => {
-    try {
-      const face = new FontFace("Symbols Nerd Font Mono", `url(${symbolsFontUrl})`);
-      document.fonts.add(await face.load());
-    } catch {
-      // Locally installed fallback faces still apply.
-    }
-  })();
-  return symbolsFontLoad;
-}
-
-function quoteTerminalFontFamilies(list: string): string {
-  return list
-    .split(",")
-    .map((name) => {
-      const bare = name.trim();
-      if (bare.length === 0) return "";
-      if (/^(['"]).*\1$/.test(bare)) return bare;
-      if (/^[a-zA-Z][a-zA-Z0-9-]*$/.test(bare)) return bare;
-      return `"${bare.replaceAll('"', "")}"`;
-    })
-    .filter((name) => name.length > 0)
-    .join(", ");
-}
-
-function uncheckedTerminalFontFamily(family?: string): string {
-  const custom = family === undefined ? "" : quoteTerminalFontFamilies(family);
-  return custom.length === 0
-    ? DEFAULT_TERMINAL_FONT_FAMILY
-    : `${custom}, ${TERMINAL_GLYPH_FALLBACKS}`;
-}
-
-export function terminalFontFamily(family?: string): string {
-  // Quote non-ident names ("3270 Nerd Font", "M+ 1m"): an unquoted one makes
-  // the whole canvas font string invalid and the assignment silently no-ops.
-  const custom = family === undefined ? "" : quoteTerminalFontFamilies(family);
-  if (custom.length === 0) return DEFAULT_TERMINAL_FONT_FAMILY;
-  // The grid places the cursor and selection on one cell advance, so a
-  // proportional face would draw its text narrower than its own cells. Refuse
-  // it here rather than render a ragged grid with a stranded cursor.
-  if (!isMonospaceFamily(custom)) return DEFAULT_TERMINAL_FONT_FAMILY;
-  // A custom face keeps the glyph fallbacks so prompt symbols stay covered.
-  return uncheckedTerminalFontFamily(custom);
-}
-
-/** Load every style the renderer can request, then validate the actual face. */
-export async function loadTerminalFontFamily(
-  family: string | undefined,
-  size: number,
-  environment?: {
-    readonly load: (font: string, text: string) => Promise<unknown>;
-    readonly resolve: (family: string | undefined) => string;
-  },
-): Promise<string> {
-  const candidate = uncheckedTerminalFontFamily(family);
-  const load =
-    environment?.load ?? ((font: string, text: string) => document.fonts.load(font, text));
-  try {
-    await Promise.all(
-      TERMINAL_FONT_LOAD_VARIANTS.map((variant) =>
-        load(`${variant} ${size}px ${candidate}`, TERMINAL_FONT_LOAD_TEXT),
-      ),
-    );
-  } catch {
-    // The fixed-width fallback stack remains available if a face cannot load.
-  }
-  return (environment?.resolve ?? terminalFontFamily)(family);
-}
-
-export function terminalFontSize(size?: number): number {
-  if (size === undefined || !Number.isFinite(size)) return DEFAULT_TERMINAL_FONT_SIZE;
-  return Math.max(MIN_TERMINAL_FONT_SIZE, Math.min(MAX_TERMINAL_FONT_SIZE, Math.round(size)));
-}
 
 /**
  * Whether the cursor should keep toggling. An unfocused surface draws a steady
@@ -151,381 +68,6 @@ export function shouldBlinkTerminalCursor(state: {
   readonly reducedMotion: boolean;
 }): boolean {
   return state.focused && state.cursorBlinking && state.cursorVisible && !state.reducedMotion;
-}
-
-/**
- * Vertical origin of the grid inside the mount. While content is shorter than
- * the viewport the grid sits at the top like a fresh terminal. Once scrollback
- * exists the prompt lives on the bottom row, so the grid anchors to the bottom
- * edge instead: the sub-row remainder moves above row 0 and resizing within a
- * row boundary keeps the prompt pinned instead of snapping up and down.
- */
-export function terminalContentOriginY(
-  mountHeight: number,
-  padding: number,
-  rows: number,
-  cellHeight: number,
-  anchorBottom: boolean,
-): number {
-  if (!anchorBottom) return padding;
-  const slack = mountHeight - padding * 2 - rows * cellHeight;
-  return padding + Math.max(0, slack);
-}
-
-export interface TerminalScrollbarGeometry {
-  readonly thumbHeight: number;
-  readonly thumbTop: number;
-  readonly maxOffset: number;
-}
-
-export function terminalScrollbarGeometry(
-  state: GhosttyScrollbar,
-  trackHeight: number,
-): TerminalScrollbarGeometry | null {
-  const total = Math.max(0, state.total);
-  const len = Math.max(0, Math.min(state.len, total));
-  const maxOffset = Math.max(0, total - len);
-  if (trackHeight <= 0 || len <= 0 || maxOffset === 0) return null;
-  const thumbHeight = Math.min(
-    trackHeight,
-    Math.max(MIN_SCROLLBAR_THUMB_HEIGHT, (trackHeight * len) / total),
-  );
-  const travel = Math.max(0, trackHeight - thumbHeight);
-  const offset = Math.max(0, Math.min(state.offset, maxOffset));
-  return {
-    thumbHeight,
-    thumbTop: travel * (offset / maxOffset),
-    maxOffset,
-  };
-}
-
-export function terminalScrollbarOffsetAtPointer(
-  state: GhosttyScrollbar,
-  trackHeight: number,
-  pointerY: number,
-  pointerOffset: number,
-): number {
-  const geometry = terminalScrollbarGeometry(state, trackHeight);
-  if (geometry === null) return 0;
-  const travel = Math.max(0, trackHeight - geometry.thumbHeight);
-  if (travel === 0) return 0;
-  const thumbTop = Math.max(0, Math.min(pointerY - pointerOffset, travel));
-  return Math.round((thumbTop / travel) * geometry.maxOffset);
-}
-
-export function terminalGridCellAt(options: {
-  bounds: { left: number; top: number };
-  clientX: number;
-  clientY: number;
-  cols: number;
-  rows: number;
-  metrics: Pick<GhosttyCellMetrics, "width" | "height">;
-  padding: number;
-  originY: number;
-}): { x: number; y: number } | null {
-  const { bounds, clientX, clientY, cols, rows, metrics, padding, originY } = options;
-  const gridX = clientX - bounds.left - padding;
-  const gridY = clientY - bounds.top - originY;
-  if (gridX < 0 || gridY < 0 || gridX >= cols * metrics.width || gridY >= rows * metrics.height) {
-    return null;
-  }
-  return {
-    x: Math.floor(gridX / metrics.width),
-    y: Math.floor(gridY / metrics.height),
-  };
-}
-
-function terminalRowText(row: GhosttySnapshot["rowData"][number], trimRight: boolean): string {
-  const text = row.cells.map((cell) => cell.text || " ").join("");
-  return trimRight ? text.trimEnd() : text;
-}
-
-function terminalColumnOffset(row: GhosttySnapshot["rowData"][number], column: number): number {
-  let offset = 0;
-  for (let cellIndex = 0; cellIndex < column; cellIndex += 1) {
-    offset += row.cells[cellIndex]?.text.length || 1;
-  }
-  return offset;
-}
-
-export function terminalLinkAtPosition(
-  rows: GhosttySnapshot["rowData"],
-  rowIndex: number,
-  column: number,
-): string | null {
-  return terminalLinkAtPositionWithRange(rows, rowIndex, column)?.text ?? null;
-}
-
-export interface TerminalLinkWithRange {
-  readonly text: string;
-  readonly range: GhosttyCellRange;
-}
-
-function terminalColumnAtOffset(row: GhosttySnapshot["rowData"][number], offset: number): number {
-  for (let column = 0; column < row.cells.length; column += 1) {
-    const nextOffset = terminalColumnOffset(row, column + 1);
-    if (offset < nextOffset) return column;
-  }
-  return Math.max(0, row.cells.length - 1);
-}
-
-export function terminalLinkAtPositionWithRange(
-  rows: GhosttySnapshot["rowData"],
-  rowIndex: number,
-  column: number,
-): TerminalLinkWithRange | null {
-  const wrappedLine = collectWrappedTerminalLinkLine(rowIndex + 1, (index) => {
-    const row = rows[index];
-    if (!row) return null;
-    return {
-      isWrapped: row.isWrapContinuation,
-      translateToString: (trimRight = false) => terminalRowText(row, trimRight),
-    };
-  });
-  if (!wrappedLine) return null;
-  // Only viewport rows are available: a wrapped line whose head scrolled above
-  // the viewport would resolve a truncated match into a wrong link.
-  const firstSegment = wrappedLine.segments[0];
-  if (firstSegment && rows[firstSegment.bufferLineNumber - 1]?.isWrapContinuation) {
-    return null;
-  }
-  const segment = wrappedLine.segments.find((value) => value.bufferLineNumber === rowIndex + 1);
-  const row = rows[rowIndex];
-  if (!segment || !row) return null;
-  const lastSegment = wrappedLine.segments.at(-1);
-  const lastRow = lastSegment ? rows[lastSegment.bufferLineNumber - 1] : undefined;
-  // Ghostty's soft-wrap flag is authoritative: when the last collected row
-  // still wraps onward, its continuation is outside the viewport.
-  const continuesBelowViewport = lastRow !== undefined && lastRow.wrapsToNext;
-  const offset = segment.startIndex + terminalColumnOffset(row, column);
-  for (const match of extractTerminalLinks(wrappedLine.text)) {
-    if (offset >= match.start && offset < match.end) {
-      // A truncated tail must not activate as a complete link.
-      if (match.end === wrappedLine.text.length && continuesBelowViewport) return null;
-      const startSegment = wrappedLine.segments.find(
-        (value) => match.start >= value.startIndex && match.start < value.endIndex,
-      );
-      const endSegment = wrappedLine.segments.find(
-        (value) => match.end - 1 >= value.startIndex && match.end - 1 < value.endIndex,
-      );
-      const startRow = startSegment ? rows[startSegment.bufferLineNumber - 1] : undefined;
-      const endRow = endSegment ? rows[endSegment.bufferLineNumber - 1] : undefined;
-      if (!startSegment || !endSegment || !startRow || !endRow) return null;
-      return {
-        text: match.text,
-        range: {
-          start: {
-            x: terminalColumnAtOffset(startRow, match.start - startSegment.startIndex),
-            y: startSegment.bufferLineNumber - 1,
-          },
-          end: {
-            x: terminalColumnAtOffset(endRow, match.end - 1 - endSegment.startIndex),
-            y: endSegment.bufferLineNumber - 1,
-          },
-        },
-      };
-    }
-  }
-  return null;
-}
-
-export function terminalLinkAtColumn(row: GhosttySnapshot["rowData"][number], column: number) {
-  return terminalLinkAtPosition([row], 0, column);
-}
-
-export function isTerminalCopyShortcut(
-  event: Pick<KeyboardEvent, "ctrlKey" | "key" | "metaKey" | "shiftKey">,
-  platform = navigator.platform,
-) {
-  if (event.key.toLowerCase() !== "c") return false;
-  return isMacPlatform(platform) ? event.metaKey : event.ctrlKey;
-}
-
-/**
- * Canvas terminals have no DOM selection. Native copy and Electron's Edit
- * menu `role: "copy"` both read the focused textarea, so an empty IME field
- * writes blankness to the clipboard. Park the Ghostty selection there first.
- */
-export function primeTerminalCopyInput(
-  input: Pick<HTMLTextAreaElement, "value" | "select">,
-  selection: string,
-): void {
-  input.value = selection;
-  if (selection.length === 0) return;
-  input.select();
-}
-
-export function clearPrimedTerminalCopyInput(
-  input: Pick<HTMLTextAreaElement, "value">,
-  primedSelection: string,
-): void {
-  // Only blank the copy we parked. The same textarea holds the IME candidate;
-  // wiping whatever is there would cancel CJK composition.
-  if (primedSelection.length === 0 || input.value !== primedSelection) return;
-  input.value = "";
-}
-
-/**
- * Only a copy event that actually received the selection may cancel the
- * clipboard.writeText fallback. Claiming without clipboardData (Electron's
- * menu Copy) used to preventDefault an empty write and skip the fallback,
- * which is how Cmd+C copied blankness.
- */
-export function applyTerminalCopyEvent(
-  selection: string,
-  clipboardData: { setData: (type: string, data: string) => void } | null | undefined,
-): { preventDefault: boolean; claimWriteFallback: boolean } {
-  if (selection.length === 0 || !clipboardData) {
-    return { preventDefault: false, claimWriteFallback: false };
-  }
-  clipboardData.setData("text/plain", selection);
-  return { preventDefault: true, claimWriteFallback: true };
-}
-
-export function isTerminalPasteShortcut(
-  event: Pick<KeyboardEvent, "ctrlKey" | "key" | "metaKey" | "shiftKey">,
-  platform = navigator.platform,
-) {
-  const key = event.key.toLowerCase();
-  if (key === "insert" && !isMacPlatform(platform)) {
-    return event.shiftKey && !event.ctrlKey && !event.metaKey;
-  }
-  if (key !== "v") return false;
-  return isMacPlatform(platform) ? event.metaKey : event.ctrlKey && event.shiftKey;
-}
-
-export function isTerminalCompositionCommitInput(event: Pick<InputEvent, "inputType">): boolean {
-  return (
-    event.inputType === "" ||
-    event.inputType === "insertCompositionText" ||
-    event.inputType === "insertFromComposition"
-  );
-}
-
-/** IME keydowns must not touch the hidden textarea; it holds the candidate. */
-export function isTerminalCompositionKey(
-  event: Pick<KeyboardEvent, "isComposing" | "key" | "keyCode">,
-  composing: boolean,
-): boolean {
-  return event.isComposing || composing || event.key === "Process" || event.keyCode === 229;
-}
-
-export function isTerminalAltGraphText(
-  event: Pick<KeyboardEvent, "getModifierState" | "key">,
-): boolean {
-  return event.getModifierState("AltGraph") && [...event.key].length === 1;
-}
-
-export function shouldReportTerminalMouse(
-  tracking: boolean,
-  event: Pick<MouseEvent, "ctrlKey" | "metaKey" | "shiftKey">,
-): boolean {
-  return tracking && !event.shiftKey && !event.ctrlKey && !event.metaKey;
-}
-
-type TerminalMouseAction = "press" | "release" | "motion";
-
-export function resolveTerminalMouseData(
-  action: TerminalMouseAction,
-  data: string,
-  previousMotionData: string,
-): { readonly send: boolean; readonly nextMotionData: string } {
-  const nextMotionData = action === "motion" ? data : "";
-  return {
-    send: data.length > 0 && (action !== "motion" || data !== previousMotionData),
-    nextMotionData,
-  };
-}
-
-export function resolveTerminalMouseTrackingState(
-  previousTracking: boolean,
-  tracking: boolean,
-  motionData: string,
-): { readonly tracking: boolean; readonly motionData: string } {
-  return {
-    tracking,
-    motionData: previousTracking === tracking ? motionData : "",
-  };
-}
-
-export function terminalWheelDeltaRows(
-  event: Pick<WheelEvent, "deltaY" | "deltaMode">,
-  cellHeight: number,
-  viewportRows: number,
-  remainder: number,
-): { readonly rows: number; readonly remainder: number } {
-  // deltaMode: 0 pixels, 1 lines, 2 pages.
-  const pixels =
-    event.deltaMode === 1
-      ? event.deltaY * cellHeight
-      : event.deltaMode === 2
-        ? event.deltaY * viewportRows * cellHeight
-        : event.deltaY;
-  const total = remainder + pixels / cellHeight;
-  const rows = Math.trunc(total);
-  return { rows, remainder: total - rows };
-}
-
-export function terminalWheelArrowData(rows: number, applicationCursorKeys: boolean): string {
-  if (rows === 0) return "";
-  const sequence =
-    rows < 0
-      ? applicationCursorKeys
-        ? "\u001bOA"
-        : "\u001b[A"
-      : applicationCursorKeys
-        ? "\u001bOB"
-        : "\u001b[B";
-  return sequence.repeat(Math.abs(rows));
-}
-
-export function isTerminalLinkPointerGesture(
-  event: Pick<MouseEvent, "ctrlKey" | "metaKey">,
-  platform = navigator.platform,
-): boolean {
-  return isMacPlatform(platform)
-    ? event.metaKey && !event.ctrlKey
-    : event.ctrlKey && !event.metaKey;
-}
-
-export function ghosttyMouseButton(button: number): number | null {
-  switch (button) {
-    case 0:
-      return 1;
-    case 1:
-      return 3;
-    case 2:
-      return 2;
-    case 3:
-      return 4;
-    case 4:
-      return 5;
-    default:
-      return null;
-  }
-}
-
-export interface TerminalSelectionClickSequence {
-  readonly count: number;
-  readonly time: number;
-  readonly x: number;
-  readonly y: number;
-}
-
-export function advanceTerminalSelectionClickSequence(
-  previous: TerminalSelectionClickSequence | null,
-  event: Pick<PointerEvent, "clientX" | "clientY" | "timeStamp">,
-): TerminalSelectionClickSequence {
-  const repeats =
-    previous !== null &&
-    event.timeStamp - previous.time <= 500 &&
-    Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= 4;
-  return {
-    count: repeats ? (previous.count >= 3 ? 1 : previous.count + 1) : 1,
-    time: event.timeStamp,
-    x: event.clientX,
-    y: event.clientY,
-  };
 }
 
 export interface GhosttySelectionPosition {
@@ -1952,3 +1494,44 @@ export class GhosttyTerminalSurface {
     return null;
   }
 }
+
+export {
+  DEFAULT_TERMINAL_FONT_SIZE,
+  DEFAULT_TERMINAL_FONT_FAMILY,
+  type GhosttyTerminalFont,
+  terminalFontFamily,
+  loadTerminalFontFamily,
+  terminalFontSize,
+} from "./surfaceFont";
+
+export {
+  terminalContentOriginY,
+  type TerminalScrollbarGeometry,
+  terminalScrollbarGeometry,
+  terminalScrollbarOffsetAtPointer,
+  terminalGridCellAt,
+  terminalLinkAtPosition,
+  type TerminalLinkWithRange,
+  terminalLinkAtPositionWithRange,
+  terminalLinkAtColumn,
+} from "./surfaceGeometry";
+
+export {
+  isTerminalCopyShortcut,
+  primeTerminalCopyInput,
+  clearPrimedTerminalCopyInput,
+  applyTerminalCopyEvent,
+  isTerminalPasteShortcut,
+  isTerminalCompositionCommitInput,
+  isTerminalCompositionKey,
+  isTerminalAltGraphText,
+  shouldReportTerminalMouse,
+  resolveTerminalMouseData,
+  resolveTerminalMouseTrackingState,
+  terminalWheelDeltaRows,
+  terminalWheelArrowData,
+  isTerminalLinkPointerGesture,
+  ghosttyMouseButton,
+  type TerminalSelectionClickSequence,
+  advanceTerminalSelectionClickSequence,
+} from "./surfaceInput";
