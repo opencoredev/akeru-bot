@@ -1,220 +1,17 @@
-// @effect-diagnostics globalDate:off globalRandom:off nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
+import { createAkeruDelegationControls } from "./delegation/AkeruDelegationControls.ts";
+import { createAkeruDelegationDelivery } from "./delegation/AkeruDelegationDelivery.ts";
+// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
-
-import {
-  AKERU_DELEGATION_CONTEXT_MAX_CHARS,
-  AKERU_DELEGATION_MAX_CONCURRENCY,
-  AKERU_DELEGATION_MAX_DEPTH,
-  AKERU_TOOL_CATALOG,
-  BotId,
-  CommandId,
-  DelegationId,
-  EventId,
-  MessageId,
-  ProviderInstanceId,
-  ThreadId,
-  type AkeruDelegationAccessGrant,
-  type AkeruDelegationFailureCode,
-  type AkeruDelegationPhase,
-  type AkeruDelegationRecord,
-  akeruDelegationStateOf,
-  type AkeruToolInputSchemas,
-  type AkeruToolReceipt,
-  AkeruDelegationContextTooLongError,
-  AkeruDelegationProviderUnsupportedError,
-  acknowledgeAkeruDelegation,
-  isAkeruDelegationResultPending,
-  type OrchestrationBot,
-  type OrchestrationCommand,
-  type OrchestrationReadModel,
-  TurnId,
-  isGroupBotMember,
-} from "@akeru/contracts";
+import * as DateTime from "effect/DateTime";
+import { AKERU_DELEGATION_CONTEXT_MAX_CHARS, AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH, AKERU_TOOL_CATALOG, CommandId, DelegationId, MessageId, ProviderInstanceId, ThreadId, type AkeruDelegationAccessGrant, type AkeruDelegationFailureCode, type AkeruDelegationRecord, akeruDelegationStateOf, type AkeruToolInputSchemas, AkeruDelegationContextTooLongError, AkeruDelegationProviderUnsupportedError, type OrchestrationCommand, TurnId } from "@akeru/contracts";
 import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
 import { withoutErrorStack } from "@akeru/shared/errorText";
-import * as Schema from "effect/Schema";
-
-import { intersectDelegationAccess } from "./AkeruToolRuntime.ts";
-import { PendingWaiterTimeoutError } from "./PendingWaiters.ts";
-
-const isPendingWaiterTimeout = Schema.is(PendingWaiterTimeoutError);
-const TERMINAL_PHASES = new Set<AkeruDelegationPhase["_tag"]>(["Completed", "Failed", "Canceled"]);
-const phaseChildThreadId = (delegation: AkeruDelegationRecord): ThreadId | null =>
-  delegation.phase._tag === "Queued" ? null : delegation.phase.childThreadId;
-const phaseChildTurnId = (delegation: AkeruDelegationRecord): TurnId | null =>
-  delegation.phase._tag === "Queued" ? null : delegation.phase.childTurnId;
-const phaseStartedAt = (delegation: AkeruDelegationRecord): string | null =>
-  delegation.phase._tag === "Queued" ? null : delegation.phase.startedAt;
-
-/**
- * The user message that started the parent turn, so clients can place the work
- * card under it. Null when the turn has no recorded request message; clients
- * then fall back to parentTurnId.
- */
-const parentTurnRequestMessageId = (
-  thread: OrchestrationReadModel["threads"][number],
-  turnId: TurnId,
-): MessageId | null =>
-  thread.latestTurn?.turnId === turnId ? (thread.latestTurn.requestMessageId ?? null) : null;
-
-export interface AkeruDelegationParent {
-  readonly threadId: ThreadId;
-  readonly turnId: TurnId;
-  readonly botId: BotId;
-  readonly parentDelegationId: DelegationId | null;
-  readonly ancestorBotIds: ReadonlyArray<BotId>;
-  readonly depth: number;
-  readonly access: AkeruDelegationAccessGrant;
-}
-
-export interface AkeruDelegationChildOutcome {
-  readonly state: "completed" | "failed" | "blocked";
-  readonly turnId: TurnId | null;
-  readonly summary?: string;
-  readonly error?: string;
-  readonly usage?: {
-    readonly inputTokens?: number;
-    readonly outputTokens?: number;
-  };
-}
-
-export interface AkeruDelegationRuntimeOptions {
-  readonly readSnapshot: () => Promise<OrchestrationReadModel>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
-  /**
-   * Resolves with the child's turn outcome. Rejects with
-   * `PendingWaiterTimeoutError` at the deadline, or after a bounded default
-   * when the deadline is null, so a silent child never hangs the watch.
-   */
-  readonly awaitChild: (
-    threadId: ThreadId,
-    deadline: string | null,
-  ) => Promise<AkeruDelegationChildOutcome>;
-  readonly interruptChild: (threadId: ThreadId, turnId: TurnId | null) => Promise<void>;
-  readonly recordUsage?: (input: {
-    readonly botId: BotId;
-    readonly threadId: ThreadId;
-    readonly turnId: TurnId | null;
-    readonly category: "delegated";
-    readonly inputTokens: number;
-    readonly outputTokens: number;
-  }) => Promise<void>;
-  /**
-   * Driver kind behind a provider instance, or null when the instance is
-   * unknown. SendToAgent refuses a target whose instance is unknown or whose
-   * driver cannot run delegated work before it creates the child thread.
-   */
-  readonly providerDriverKind?: (instanceId: ProviderInstanceId) => Promise<string | null>;
-  /** Reports a background child watch that could not record its outcome. */
-  readonly onWatchError?: (delegationId: DelegationId, cause: unknown) => void;
-  /**
-   * Reports a completed result the group chat did not show because the child
-   * bot is no longer an active member or the group is gone. The result stays
-   * recorded and reaches the parent on its next turn.
-   */
-  readonly onGroupResultSkipped?: (
-    delegationId: DelegationId,
-    reason: AkeruGroupResultSkipReason,
-  ) => void;
-  readonly now?: () => string;
-  readonly id?: () => string;
-}
-
-/**
- * Bot work started without a live parent turn. `Retry` repeats a Failed or
- * Canceled record; `Scheduled` is a routine run handing work from the owner
- * chat to another bot.
- */
-export type AkeruDelegationDispatch =
-  | { readonly _tag: "Retry"; readonly delegationId: DelegationId }
-  | {
-      readonly _tag: "Scheduled";
-      readonly parentThreadId: ThreadId;
-      readonly parentBotId: BotId;
-      readonly childBotId: BotId;
-      readonly task: string;
-      readonly expectedResult: string;
-      readonly runtimeMode: AkeruDelegationAccessGrant["runtimeMode"];
-    };
-
-/** How a record was started, when not by a bot tool call inside a live turn. */
-interface AkeruDelegationOrigin {
-  readonly trigger: AkeruDelegationRecord["trigger"];
-  readonly retryOfDelegationId: DelegationId | null;
-  readonly anchorMessageId: MessageId | null;
-}
-
-const isDispatchedDelegation = (delegation: AkeruDelegationRecord) =>
-  delegation.trigger !== "bot" || delegation.retryOfDelegationId !== null;
-/** Why a group chat did not receive a finished delegation's result message. */
-export type AkeruGroupResultSkipReason = "bot_left_group" | "group_unavailable";
-
-/** Returned by SendToAgent and MessageAgent as soon as the child turn is dispatched. */
-export interface AkeruDelegationHandle {
-  readonly delegationId: DelegationId;
-  readonly childThreadId: ThreadId;
-  readonly childBotId: BotId;
-  readonly name: string;
-  readonly phase: "running";
-}
-
-// The child offers every memory scope; intersectDelegationAccess narrows it to
-// what the parent holds and the request names, so an omitted request grants none.
-function childAccess(
-  bot: OrchestrationBot,
-  parentMcpServerIds: ReadonlyArray<AkeruDelegationAccessGrant["enabledMcpServerIds"][number]>,
-  requestedMemoryScopes: AkeruDelegationAccessGrant["memoryScopes"] | undefined,
-): AkeruDelegationAccessGrant {
-  return {
-    allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
-    memoryScopes: requestedMemoryScopes ?? [],
-    sandbox: bot.sandbox,
-    runtimeMode: bot.runtimeMode,
-    hasUserComputer: bot.sandbox === "local",
-    enabledMcpServerIds: parentMcpServerIds.filter(
-      (serverId) => !bot.disabledMcpServerIds.includes(serverId),
-    ),
-    disabledMcpServerIds: bot.disabledMcpServerIds,
-    approvalCeiling: "secrets",
-  };
-}
-
-/**
- * A bot can take work from a group chat only when it is a member of that
- * group. A bot may belong to several groups, so membership is read from the
- * group, not from the bot's legacy `groupId`. A direct chat can reach any bot.
- */
-function isReachableFromThread(
-  snapshot: OrchestrationReadModel,
-  parentThread: OrchestrationReadModel["threads"][number],
-  bot: OrchestrationBot,
-): boolean {
-  if (parentThread.groupId === null) return true;
-  const group = snapshot.groups.find((candidate) => candidate.id === parentThread.groupId);
-  return (
-    group !== undefined &&
-    group.members.some((member) => isGroupBotMember(member) && member.botId === bot.id)
-  );
-}
-
-function childInstructions(input: {
-  readonly task: string;
-  readonly expectedResult: string;
-  readonly deadline: string | null;
-  readonly context: string | undefined;
-}): string {
-  return [
-    "This work was delegated from another bot chat.",
-    `Task: ${input.task}`,
-    `Expected result: ${input.expectedResult}`,
-    ...(input.deadline ? [`Deadline: ${input.deadline}`] : []),
-    ...(input.context?.trim() ? ["Context from the parent bot:", input.context.trim()] : []),
-    "Return a concise final result to the parent chat. Report a concrete blocker or failure.",
-  ].join("\n");
-}
+import { intersectDelegationAccess } from "./tools/AkeruToolAuthorization.ts";
+import { type AkeruDelegationRuntimeOptions, type AkeruDelegationParent, phaseChildThreadId, phaseChildTurnId, isReachableFromThread, TERMINAL_PHASES, phaseStartedAt, type AkeruDelegationOrigin, childAccess, parentTurnRequestMessageId, type AkeruDelegationChildOutcome, childInstructions, isPendingWaiterTimeout, type AkeruDelegationHandle, type AkeruDelegationDispatch, isDispatchedDelegation } from "./delegation/AkeruDelegationPolicy.ts";
 
 export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOptions) {
-  const now = options.now ?? (() => new Date().toISOString());
+  const now = options.now ?? (() => DateTime.formatIso(DateTime.nowUnsafe()));
   const id = options.id ?? (() => NodeCrypto.randomUUID());
   const accessByThread = new Map<ThreadId, AkeruDelegationAccessGrant>();
   const watchers = new Set<Promise<void>>();
@@ -226,156 +23,8 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
   const dispatch = (command: OrchestrationCommand) =>
     options.dispatch(command).then(() => undefined);
   const commandId = (label: string) => CommandId.make(`delegation:${label}:${id()}`);
+  const { sendToUser, deliver, postGroupResult } = createAkeruDelegationDelivery(options, now, id, commandId, dispatch);
 
-  const sendToUser = async (
-    parent: AkeruDelegationParent,
-    request: (typeof AkeruToolInputSchemas.SendToUser)["Type"],
-  ): Promise<AkeruToolReceipt> => {
-    const snapshot = await options.readSnapshot();
-    const sourceThread = snapshot.threads.find((thread) => thread.id === parent.threadId);
-    const sourceBot = snapshot.bots.find((bot) => bot.id === parent.botId);
-    if (
-      !sourceThread ||
-      sourceThread.deletedAt !== null ||
-      sourceThread.archivedAt !== null ||
-      !sourceBot ||
-      sourceBot.archivedAt !== null ||
-      (sourceThread.respondingBotId ?? sourceThread.botId) !== parent.botId ||
-      sourceThread.latestTurn?.turnId !== parent.turnId ||
-      sourceThread.latestTurn.state !== "running"
-    ) {
-      throw new Error("The source bot is not authorized for this active chat.");
-    }
-
-    const messageId = MessageId.make(`bot-message-${id()}`);
-    const createdAt = now();
-    await options.dispatch({
-      type: "thread.message.assistant.delta",
-      commandId: commandId("message"),
-      threadId: parent.threadId,
-      messageId,
-      delta: request.message,
-      turnId: parent.turnId,
-      createdAt,
-    });
-    await options.dispatch({
-      type: "thread.message.assistant.complete",
-      commandId: commandId("message-complete"),
-      threadId: parent.threadId,
-      messageId,
-      turnId: parent.turnId,
-      createdAt,
-    });
-
-    return {
-      receiptId: `message:${messageId}`,
-      toolId: "SendToUser",
-      phase: "success",
-      threadId: parent.threadId,
-      botId: parent.botId,
-      summary: "Message sent to the user.",
-      fatalToThread: false,
-      createdAt,
-    };
-  };
-
-  const deliver = async (delegation: AkeruDelegationRecord, detail: string) => {
-    const state = akeruDelegationStateOf(delegation.phase);
-    const createdAt = now();
-    await dispatch({
-      type: "thread.activity.append",
-      commandId: commandId("delivery"),
-      threadId: delegation.parentThreadId,
-      activity: {
-        id: EventId.make(`delegation:${delegation.delegationId}:${state}:${id()}`),
-        tone: state === "failed" ? "error" : "info",
-        kind: `delegation.${state}`,
-        summary: detail,
-        payload: {
-          delegationId: delegation.delegationId,
-          childThreadId: phaseChildThreadId(delegation),
-          childTurnId: phaseChildTurnId(delegation),
-          childBotId: delegation.childBotId,
-          state,
-          result: delegation.phase._tag === "Completed" ? delegation.phase.result : null,
-          failure: delegation.phase._tag === "Failed" ? delegation.phase.failure : null,
-        },
-        turnId: delegation.parentTurnId,
-        createdAt,
-      },
-      createdAt,
-    });
-  };
-
-  // Why the group chat cannot show a message from this bot right now, or null
-  // when it can. Mirrors the decider's active-member check for attribution.
-  const groupResultSkipReason = (
-    snapshot: OrchestrationReadModel,
-    threadId: ThreadId,
-    botId: BotId,
-  ): AkeruGroupResultSkipReason | null => {
-    const thread = snapshot.threads.find((candidate) => candidate.id === threadId);
-    if (thread === undefined || thread.groupId === null) return "group_unavailable";
-    const group = snapshot.groups.find((candidate) => candidate.id === thread.groupId);
-    if (group === undefined) return "group_unavailable";
-    const bot = snapshot.bots.find((candidate) => candidate.id === botId);
-    const member = group.members.some((entry) => isGroupBotMember(entry) && entry.botId === botId);
-    return bot === undefined || bot.archivedAt !== null || !member ? "bot_left_group" : null;
-  };
-
-  // Shows a group the finished work as a message from the bot that did it.
-  // Server-authored, so it starts no turn; the parent still receives the result
-  // on its next turn. Reads the group fresh so a renamed parent shows its
-  // current name and a bot removed mid-task is reported as skipped rather
-  // than as a dispatch failure.
-  const postGroupResult = async (input: {
-    readonly delegationId: DelegationId;
-    readonly threadId: ThreadId;
-    readonly botId: BotId;
-    readonly parentBotId: BotId;
-    readonly task: string;
-    readonly summary: string;
-  }) => {
-    const snapshot = await options.readSnapshot();
-    const skipped = groupResultSkipReason(snapshot, input.threadId, input.botId);
-    if (skipped !== null) {
-      options.onGroupResultSkipped?.(input.delegationId, skipped);
-      return;
-    }
-    const parentBotName =
-      snapshot.bots.find((candidate) => candidate.id === input.parentBotId)?.name ?? "the group";
-    const messageId = MessageId.make(`delegation-result-${id()}`);
-    const createdAt = now();
-    try {
-      await dispatch({
-        type: "thread.message.assistant.delta",
-        commandId: commandId("group-result"),
-        threadId: input.threadId,
-        messageId,
-        delta: `Finished work for ${parentBotName}: ${input.task}\n\n${input.summary}`,
-        respondingBotId: input.botId,
-        createdAt,
-      });
-      await dispatch({
-        type: "thread.message.assistant.complete",
-        commandId: commandId("group-result-complete"),
-        threadId: input.threadId,
-        messageId,
-        respondingBotId: input.botId,
-        createdAt,
-      });
-    } catch (cause) {
-      // The bot can leave between the read and the dispatch; the decider then
-      // refuses the attribution. Report that as a skip, anything else as an error.
-      const raced = groupResultSkipReason(
-        await options.readSnapshot(),
-        input.threadId,
-        input.botId,
-      );
-      if (raced === null) throw cause;
-      options.onGroupResultSkipped?.(input.delegationId, raced);
-    }
-  };
 
   const setState = async (delegation: AkeruDelegationRecord) => {
     await dispatch({
@@ -384,126 +33,8 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       delegation,
     });
   };
+  const { create, check, stop } = createAkeruDelegationControls(options, now, id, commandId, dispatch, setState);
 
-  const availableBot = (
-    snapshot: OrchestrationReadModel,
-    parent: AkeruDelegationParent,
-    botId: BotId,
-  ) => {
-    const parentThread = snapshot.threads.find((thread) => thread.id === parent.threadId);
-    const bot = snapshot.bots.find((candidate) => candidate.id === botId);
-    if (!parentThread || !bot || bot.archivedAt !== null) {
-      throw new Error("The target bot is not available in this workspace.");
-    }
-    if (!isReachableFromThread(snapshot, parentThread, bot)) {
-      throw new Error("The target bot is not available in the current group.");
-    }
-    return { parentThread, bot };
-  };
-
-  const create = async (
-    parent: AkeruDelegationParent,
-    request: (typeof AkeruToolInputSchemas.CreateAgent)["Type"],
-  ) => {
-    const snapshot = await options.readSnapshot();
-    const { parentThread, bot: parentBot } = availableBot(snapshot, parent, parent.botId);
-    if (
-      snapshot.bots.some(
-        (candidate) =>
-          candidate.archivedAt === null &&
-          candidate.name.localeCompare(request.name, undefined, { sensitivity: "accent" }) === 0,
-      )
-    ) {
-      throw new Error(`A bot named '${request.name}' already exists.`);
-    }
-    const botId = BotId.make(`bot-${id()}`);
-    await dispatch({
-      type: "bot.create",
-      commandId: commandId("bot-create"),
-      botId,
-      name: request.name,
-      title: request.title ?? "Bot",
-      label: null,
-      description: request.description ?? null,
-      disabledMcpServerIds: parentBot.disabledMcpServerIds,
-      avatar: { kind: "dither", seed: String(botId) },
-      engine: parentBot.engine,
-      sandbox: parentBot.sandbox,
-      runtimeMode: parent.access.runtimeMode,
-      usageCap: null,
-      imageProvider: null,
-      voiceEnabled: false,
-      groupId: parentThread.groupId ?? null,
-      createdAt: now(),
-    });
-    return { botId, name: request.name };
-  };
-
-  const check = async (
-    parent: AkeruDelegationParent,
-    request: (typeof AkeruToolInputSchemas.CheckAgent)["Type"],
-  ) => {
-    const snapshot = await options.readSnapshot();
-    const { bot } = availableBot(snapshot, parent, request.botId);
-    // A group thread holds work from several parent bots; each bot reads and
-    // acknowledges only its own results.
-    const delegations = snapshot.delegations.filter(
-      (delegation) =>
-        delegation.parentThreadId === parent.threadId &&
-        delegation.parentBotId === parent.botId &&
-        delegation.childBotId === bot.id,
-    );
-    // Reading a finished result here is its delivery, so the next parent turn
-    // does not receive it again.
-    for (const delegation of delegations) {
-      if (isAkeruDelegationResultPending(delegation)) {
-        await setState(acknowledgeAkeruDelegation(delegation, now()));
-      }
-    }
-    return {
-      botId: bot.id,
-      name: bot.name,
-      title: bot.title,
-      delegations: delegations.map((delegation) => ({
-        delegationId: delegation.delegationId,
-        state: akeruDelegationStateOf(delegation.phase),
-        childThreadId: phaseChildThreadId(delegation),
-        summary:
-          delegation.phase._tag === "Completed"
-            ? delegation.phase.result.summary
-            : delegation.phase._tag === "Failed"
-              ? delegation.phase.failure.message
-              : null,
-        result: delegation.phase._tag === "Completed" ? delegation.phase.result : null,
-        failure: delegation.phase._tag === "Failed" ? delegation.phase.failure : null,
-      })),
-    };
-  };
-
-  const stop = async (
-    parent: AkeruDelegationParent,
-    request: (typeof AkeruToolInputSchemas.StopAgent)["Type"],
-  ) => {
-    const snapshot = await options.readSnapshot();
-    availableBot(snapshot, parent, request.botId);
-    const active = snapshot.delegations.filter(
-      (delegation) =>
-        delegation.parentThreadId === parent.threadId &&
-        delegation.childBotId === request.botId &&
-        !TERMINAL_PHASES.has(delegation.phase._tag),
-    );
-    if (active.length === 0) throw new Error("The target bot has no active delegated work.");
-    for (const delegation of active) {
-      await dispatch({
-        type: "delegation.cancel",
-        commandId: commandId("stop"),
-        delegationId: delegation.delegationId,
-        keep: false,
-        createdAt: now(),
-      });
-    }
-    return { botId: request.botId, stopped: active.map((entry) => entry.delegationId) };
-  };
 
   // Every failure lands here, so the card and the parent's activity get one
   // readable line whatever error produced it. A stack never reaches the
@@ -856,12 +387,12 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
    */
   const dispatchDelegation = async (input: AkeruDelegationDispatch) => {
     const snapshot = await options.readSnapshot();
-    if (input._tag === "Retry") {
+    if (Predicate.isTagged(input, "Retry")) {
       const original = snapshot.delegations.find(
         (delegation) => delegation.delegationId === input.delegationId,
       );
       if (!original) throw new Error("The bot work to retry no longer exists.");
-      if (original.phase._tag !== "Failed" && original.phase._tag !== "Canceled") {
+      if (!Predicate.isTagged(original.phase, "Failed") && !Predicate.isTagged(original.phase, "Canceled")) {
         throw new Error("Only failed or canceled bot work can be retried.");
       }
       // Two retries accepted before either started must not both start work.
@@ -1032,3 +563,12 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
 }
 
 export type AkeruDelegationRuntime = ReturnType<typeof createAkeruDelegationRuntime>;
+
+export {
+  type AkeruDelegationParent,
+  type AkeruDelegationChildOutcome,
+  type AkeruDelegationRuntimeOptions,
+  type AkeruDelegationDispatch,
+  type AkeruGroupResultSkipReason,
+  type AkeruDelegationHandle,
+} from "./delegation/AkeruDelegationPolicy.ts";
