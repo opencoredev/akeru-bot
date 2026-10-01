@@ -4,23 +4,18 @@ import type { EnvironmentThreadSearchMatch } from "@akeru/client-runtime/state/t
 import { canSnooze, resolveSnoozePresets } from "@akeru/client-runtime/state/thread-settled";
 import type { MenuAction } from "@react-native-menu/menu";
 import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
-import { Alert, Platform, Pressable, useWindowDimensions, View } from "react-native";
+import { Alert, Pressable, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
-
 import { useAtomValue } from "@effect/atom-react";
-
 import { SymbolView } from "../../components/AppSymbol";
 import { BotAvatarView, seededBlobAvatar } from "../../components/BotAvatarView";
 import { GroupAvatarStack } from "../../components/GroupAvatarStack";
 import { AppText as Text } from "../../components/AppText";
 import { ControlPillMenu } from "../../components/ControlPill";
 import { cn } from "../../lib/cn";
-import { relativeTime } from "../../lib/time";
 import { useThemeColor } from "../../lib/useThemeColor";
 import { environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
-import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
-import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
 import {
   resolveThreadListV2SnoozeMenuSelection,
@@ -31,39 +26,14 @@ import {
 } from "./threadListV2";
 import { resolveThreadIdentity } from "./threadIdentity";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
-
-/**
- * Thread List v2 renders one flat native list: rich edge-to-edge rows for
- * active work and a receded settled tail, all with native swipe and
- * long-press actions. State reads through colored status labels and text
- * hierarchy rather than card fills.
- */
-
-/** Bot-style display name for rows whose thread has no configured bot. */
-const PROVIDER_BOT_NAMES: Record<string, string> = {
-  claude: "Claude",
-  codex: "Codex",
-  grok: "Grok",
-  kimi: "Kimi",
-  opencode: "OpenCode",
-  opencodeGo: "OpenCode",
-};
-
-/**
- * Display name for a thread that has no configured bot. Returns null until the
- * provider is known so callers can pick their own wording rather than show a
- * generic "Bot".
- */
-export function providerBotName(driver: string | null): string | null {
-  if (!driver) return null;
-  return PROVIDER_BOT_NAMES[driver] ?? driver.charAt(0).toUpperCase() + driver.slice(1);
-}
-
-const MONO_FONT = Platform.select({
-  ios: "Menlo",
-  android: "monospace",
-  default: "monospace",
-});
+import { MONO_FONT, SIDEBAR_V2_ROW_RADIUS, providerBotName } from "./thread-list-v2-presentation";
+export { providerBotName, threadListV2TimeLabel } from "./thread-list-v2-presentation";
+export {
+  ThreadListV2SectionDivider,
+  ThreadListV2SettledShelfHeader,
+  ThreadListV2SnoozedShelfHeader,
+} from "./thread-list-v2-shelves";
+export { ThreadListV2PendingRow } from "./thread-list-v2-pending-row";
 
 // Status hues follow the system-wide convention set by sidebar v1 and the
 // Live Activity/widgets (amber approval, indigo input, sky working) so a
@@ -76,11 +46,6 @@ const STATUS_LABEL_BY_STATUS: Partial<
   working: { label: "Working", className: "text-sky-600 dark:text-sky-400" },
   failed: { label: "Failed", className: "text-red-700 dark:text-red-300" },
 };
-
-/** Relative time shown on a v2 row. Parents compute it on their minute tick. */
-export function threadListV2TimeLabel(thread: EnvironmentThreadShell): string {
-  return relativeTime(thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt);
-}
 
 // Menus keep lifecycle and title regeneration together. Archive keeps its
 // own surface (thread screen / settings) rather than crowding v2 rows.
@@ -104,212 +69,6 @@ const LEGACY_MENU_ACTIONS: MenuAction[] = [
   { id: "archive", title: "Archive", image: "archivebox" },
   { id: "delete", title: "Delete", image: "trash", attributes: { destructive: true } },
 ];
-
-/** Rounded-row radius shared with the v1 sidebar rows. */
-const SIDEBAR_V2_ROW_RADIUS = 12;
-
-/** Section label + rule: the only structure in an otherwise flat list. */
-export const ThreadListV2SectionDivider = memo(function ThreadListV2SectionDivider(props: {
-  readonly label: string;
-  readonly pane?: "screen" | "sidebar";
-}) {
-  const borderColor = useThemeColor("--color-border");
-  return (
-    <View
-      className={cn(
-        "mb-1.5 mt-4 flex-row items-center gap-2.5",
-        props.pane === "sidebar" ? "px-3" : "px-5",
-      )}
-    >
-      <Text className="text-xs font-t3-medium text-foreground-tertiary">{props.label}</Text>
-      <View className="h-px flex-1" style={{ backgroundColor: borderColor }} />
-    </View>
-  );
-});
-
-const SNOOZE_ACCENT_LIGHT = "#2563eb";
-const SNOOZE_ACCENT_DARK = "#60a5fa";
-
-export const ThreadListV2SnoozedShelfHeader = memo(function ThreadListV2SnoozedShelfHeader(props: {
-  readonly count: number;
-  readonly disabled?: boolean;
-  readonly expanded: boolean;
-  readonly onToggle: () => void;
-  readonly pane?: "screen" | "sidebar";
-}) {
-  const { t } = useMobileI18n();
-  const { themeAppearance: colorScheme } = useAppearancePreferences();
-  return (
-    <Pressable
-      accessibilityHint={
-        props.expanded ? "Collapses the snoozed chats." : "Expands the snoozed chats."
-      }
-      accessibilityLabel={props.count === 1 ? "1 snoozed chat" : `${props.count} snoozed chats`}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: props.disabled, expanded: props.expanded }}
-      className={cn(
-        "mb-1.5 mt-4 flex-row items-center gap-2.5",
-        props.pane === "sidebar" ? "px-3" : "px-5",
-      )}
-      disabled={props.disabled}
-      onPress={props.onToggle}
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-    >
-      <Text className="text-xs font-t3-medium text-blue-600 dark:text-blue-400">
-        {props.expanded ? t("Snoozed") : `${t("Snoozed")} (${props.count})`}
-      </Text>
-      <View className="h-px flex-1 bg-blue-500/20 dark:bg-blue-400/15" />
-      <SymbolView
-        name="chevron.down"
-        size={10}
-        tintColor={colorScheme === "dark" ? SNOOZE_ACCENT_DARK : SNOOZE_ACCENT_LIGHT}
-        type="monochrome"
-        style={{ transform: [{ rotate: props.expanded ? "180deg" : "0deg" }] }}
-      />
-    </Pressable>
-  );
-});
-
-export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledShelfHeader(props: {
-  readonly count: number;
-  readonly disabled?: boolean;
-  readonly expanded: boolean;
-  readonly onToggle: () => void;
-  readonly pane?: "screen" | "sidebar";
-}) {
-  const { t } = useMobileI18n();
-  const mutedColor = useThemeColor("--color-foreground-muted");
-  return (
-    <Pressable
-      accessibilityHint={
-        props.expanded ? "Collapses the settled chats." : "Expands the settled chats."
-      }
-      accessibilityLabel={props.count === 1 ? "1 settled chat" : `${props.count} settled chats`}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: props.disabled, expanded: props.expanded }}
-      className={cn(
-        "mb-1.5 mt-4 flex-row items-center gap-2.5",
-        props.pane === "sidebar" ? "px-3" : "px-5",
-      )}
-      disabled={props.disabled}
-      onPress={props.onToggle}
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-    >
-      <Text className="text-xs font-t3-medium text-foreground-tertiary">
-        {props.expanded ? t("Settled") : `${t("Settled")} (${props.count})`}
-      </Text>
-      <View className="h-px flex-1 bg-border" />
-      <SymbolView
-        name="chevron.down"
-        size={10}
-        tintColor={mutedColor}
-        type="monochrome"
-        style={{ transform: [{ rotate: props.expanded ? "180deg" : "0deg" }] }}
-      />
-    </Pressable>
-  );
-});
-
-const PENDING_TASK_MENU_ACTIONS: MenuAction[] = [
-  { id: "delete", title: "Delete", image: "trash", attributes: { destructive: true } },
-];
-
-/**
- * A queued new task, in the same idiom as an active v2 row: it is work the
- * user wrote, so it reads like the threads it will become. "Queued" takes
- * the status slot — the state is the one thing that differs — and stays
- * uncolored because nothing is asked of the user; the environment is simply
- * not reachable yet.
- */
-export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props: {
-  readonly pendingTask: PendingNewTask;
-  readonly project: EnvironmentProject | null;
-  readonly projectTitle?: string;
-  readonly environmentLabel: string | null;
-  readonly pane?: "screen" | "sidebar";
-  /** Draws the "Pending" divider above the first queued row. */
-  readonly showPendingDivider: boolean;
-  /** Keeps row hairlines inside a section; section headers draw their own rule. */
-  readonly showTrailingDivider?: boolean;
-  readonly onSelectPendingTask: (pendingTask: PendingNewTask) => void;
-  readonly onDeletePendingTask: (pendingTask: PendingNewTask) => void;
-}) {
-  const { t } = useMobileI18n();
-  const { pendingTask, onSelectPendingTask, onDeletePendingTask } = props;
-  const drawerColor = useThemeColor("--color-drawer");
-  const pressedBackgroundColor = useThemeColor("--color-subtle");
-  const sidebarPane = props.pane === "sidebar";
-  const projectTitle =
-    props.projectTitle ?? props.project?.title ?? pendingTask.creation.projectTitle ?? "";
-  const branch = pendingTask.creation.branch;
-
-  const handleMenuAction = useCallback(
-    ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
-      if (nativeEvent.event === "delete") onDeletePendingTask(pendingTask);
-    },
-    [onDeletePendingTask, pendingTask],
-  );
-
-  const rowContent = (
-    <>
-      <Text className="text-[17px] font-t3-medium leading-snug text-foreground" numberOfLines={1}>
-        {pendingTask.title}
-      </Text>
-      <Text className="mt-1 text-[13px] text-foreground-muted" numberOfLines={1}>
-        Queued
-        {projectTitle ? `  ·  ${projectTitle}` : ""}
-        {branch ? (
-          <Text className="text-[13px] text-foreground-muted" style={{ fontFamily: MONO_FONT }}>
-            {`  ·  ${branch}`}
-          </Text>
-        ) : null}
-        {props.environmentLabel ? (
-          <Text className="text-[13px] text-foreground-tertiary">
-            {`  ·  ${props.environmentLabel}`}
-          </Text>
-        ) : null}
-      </Text>
-    </>
-  );
-
-  return (
-    <>
-      {props.showPendingDivider ? (
-        <ThreadListV2SectionDivider label={t("Pending")} pane={props.pane} />
-      ) : null}
-      <ControlPillMenu
-        actions={PENDING_TASK_MENU_ACTIONS}
-        onPressAction={handleMenuAction}
-        shouldOpenOnLongPress
-      >
-        <Pressable
-          accessibilityHint={t("Opens the queued chat for editing")}
-          accessibilityLabel={pendingTask.title}
-          accessibilityRole="button"
-          onPress={() => onSelectPendingTask(pendingTask)}
-          style={
-            sidebarPane
-              ? ({ pressed }) => ({
-                  backgroundColor: pressed ? pressedBackgroundColor : drawerColor,
-                  borderRadius: SIDEBAR_V2_ROW_RADIUS,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                })
-              : ({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })
-          }
-        >
-          {sidebarPane ? (
-            rowContent
-          ) : (
-            <View className="bg-screen">
-              <View className="px-5 py-3">{rowContent}</View>
-            </View>
-          )}
-        </Pressable>
-      </ControlPillMenu>
-    </>
-  );
-});
 
 export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly thread: EnvironmentThreadShell;
