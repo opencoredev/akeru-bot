@@ -499,7 +499,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
   it.effect("routes websocket rpc shell.revealAttachment to the stored file", () =>
     Effect.gen(function* () {
-      let revealed: unknown = null;
+      let revealed:
+        | Parameters<
+            import("./process/externalLauncher.ts").ExternalLauncher["Service"]["launchEditor"]
+          >[0]
+        | null = null;
 
       const config = yield* buildAppUnderTest({
         layers: {

@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -142,7 +143,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       assert.equal(response.status, 400);
-      const error = (yield* response.json) as Record<string, unknown>;
+      const error = (yield* response.json) as Schema.JsonObject;
       assert.equal(error.reason, "invalid_command");
       assert.equal(error.detail, "codex is turned off in Settings > Providers.");
       assert.equal(error.unavailability, "temporary-failure");
@@ -393,7 +394,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       assert.equal(response.status, 400);
-      const error = (yield* response.json) as Record<string, unknown>;
+      const error = (yield* response.json) as Schema.JsonObject;
       assert.equal(error.unavailability, "usage-cap");
       assert.equal(error.repairAction, "usage");
       assert.equal(dispatch.mock.calls.length, 0);

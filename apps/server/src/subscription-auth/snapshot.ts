@@ -1,3 +1,5 @@
+import { SUBSCRIPTION_PROVIDER_IDS } from "./serviceTypes.ts";
+import * as Predicate from "effect/Predicate";
 import type {
   BotEngine,
   BotId,
@@ -37,9 +39,9 @@ export function subscriptionDependentBots(
       providers.find((provider) => provider.instanceId === bot.engine?.provider)?.driver ??
       bot.engine.provider;
 
-    const subscriptionProvider = Object.entries(SUBSCRIPTION_DRIVER).find(
-      ([, candidate]) => candidate === driver,
-    )?.[0] as SubscriptionProviderId | undefined;
+    const subscriptionProvider = SUBSCRIPTION_PROVIDER_IDS.find(
+      (provider) => SUBSCRIPTION_DRIVER[provider] === driver,
+    );
 
     return subscriptionProvider
       ? [{ id: bot.id, name: bot.name, provider: subscriptionProvider }]
@@ -59,11 +61,11 @@ type BotAccess = {
 function requestHealthState(
   health: ActualRequestHealth | RequestHealthStatus,
 ): ActualRequestHealth {
-  return typeof health === "string" || health === undefined ? health : health.health;
+  return Predicate.isString(health) || health === undefined ? health : health.health;
 }
 
 function requestHealthFields(health: ActualRequestHealth | RequestHealthStatus) {
-  return typeof health === "object"
+  return Predicate.isObjectKeyword(health)
     ? {
         ...(health.lastSuccessfulRequestAt
           ? { lastSuccessfulRequestAt: health.lastSuccessfulRequestAt }
@@ -75,9 +77,9 @@ function requestHealthFields(health: ActualRequestHealth | RequestHealthStatus) 
 }
 
 function dependentBotsForProvider(bots: ReadonlyArray<BotAccess>, instanceId: string) {
-  return bots
-    .filter((bot) => bot.engine?.provider === instanceId)
-    .map(({ id, name }) => ({ id, name }));
+  return bots.flatMap((bot) =>
+    bot.engine?.provider === instanceId ? [{ id: bot.id, name: bot.name }] : [],
+  );
 }
 
 function providerAccessHealth(
@@ -211,9 +213,9 @@ export function buildProviderAccessCapabilities(
         ? { pluginId: String(server.id).slice("builtin-".length) }
         : {}),
       ...requestHealthFields(requestHealth),
-      dependentBots: bots
-        .filter((bot) => !bot.disabledMcpServerIds?.includes(server.id))
-        .map(({ id, name }) => ({ id, name })),
+      dependentBots: bots.flatMap((bot) =>
+        !bot.disabledMcpServerIds?.includes(server.id) ? [{ id: bot.id, name: bot.name }] : [],
+      ),
     };
   });
 

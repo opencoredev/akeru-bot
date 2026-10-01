@@ -59,7 +59,7 @@ const captureStdout = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     const result = yield* effect;
 
     const output =
-      (yield* TestConsole.logLines).findLast((line): line is string => typeof line === "string") ??
+      (yield* TestConsole.logLines).findLast((line): line is string => Predicate.isString(line)) ??
       "";
 
     return { result, output };
@@ -156,7 +156,7 @@ const withLiveProjectCliServer = <A, E, R>(baseDir: string, run: () => Effect.Ef
         const server = yield* HttpServer.HttpServer;
         const address = server.address;
 
-        if (typeof address === "string" || !("port" in address)) {
+        if (Predicate.isString(address) || !("port" in address)) {
           assert.fail(`Expected TCP address, got ${address}`);
         }
 
@@ -237,8 +237,8 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
         readonly credential?: string;
       }>;
 
-      assert.equal(typeof created.id, "string");
-      assert.equal(typeof created.credential, "string");
+      assert.equal(Predicate.isString(created.id), true);
+      assert.equal(Predicate.isString(created.credential), true);
       assert.equal(created.credential.length > 0, true);
       assert.equal(listed.length, 1);
       assert.equal(listed[0]?.id, created.id);
@@ -274,8 +274,8 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
         readonly scopes: ReadonlyArray<string>;
       }>;
 
-      assert.equal(typeof issued.sessionId, "string");
-      assert.equal(typeof issued.token, "string");
+      assert.equal(Predicate.isString(issued.sessionId), true);
+      assert.equal(Predicate.isString(issued.token), true);
       assert.deepEqual(issued.scopes, [
         "orchestration:read",
         "orchestration:operate",

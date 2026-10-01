@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
 import * as Predicate from "effect/Predicate";
 
@@ -15,7 +16,6 @@ import {
   LOCK_STALE_AFTER_MS,
   LOCK_WAIT_LIMIT_MS,
   BotMemoryError,
-  makeBotMemoryError,
   toBotMemoryError,
 } from "./BotMemoryTypes.ts";
 
@@ -25,7 +25,7 @@ export async function pathExists(filePath: string): Promise<boolean> {
 
     return true;
   } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return false;
+    if ((Predicate.hasProperty(cause, "code") ? cause.code : undefined) === "ENOENT") return false;
     throw cause;
   }
 }
@@ -34,7 +34,7 @@ export async function ensurePrivateDirectory(memoryRoot: string, directory: stri
   const relative = NodePath.relative(memoryRoot, directory);
 
   if (relative.startsWith("..") || NodePath.isAbsolute(relative)) {
-    throw makeBotMemoryError("io-error", "Memory storage escaped its configured root.");
+    throw BotMemoryError.fromCode("io-error", "Memory storage escaped its configured root.");
   }
 
   // A new profile may not have its state directory yet. That configured
@@ -56,13 +56,13 @@ export async function ensurePrivateDirectory(memoryRoot: string, directory: stri
     try {
       await NodeFS.mkdir(current, { mode: 0o700 });
     } catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code !== "EEXIST") throw cause;
+      if ((Predicate.hasProperty(cause, "code") ? cause.code : undefined) !== "EEXIST") throw cause;
     }
 
     const stat = await NodeFS.lstat(current);
 
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
-      throw makeBotMemoryError("io-error", "Memory directories may not be symbolic links.");
+      throw BotMemoryError.fromCode("io-error", "Memory directories may not be symbolic links.");
     }
 
     await NodeFS.chmod(current, 0o700);
@@ -74,10 +74,10 @@ export async function assertNotSymlink(filePath: string): Promise<void> {
     const stat = await NodeFS.lstat(filePath);
 
     if (stat.isSymbolicLink()) {
-      throw makeBotMemoryError("io-error", "Memory paths may not be symbolic links.");
+      throw BotMemoryError.fromCode("io-error", "Memory paths may not be symbolic links.");
     }
   } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+    if ((Predicate.hasProperty(cause, "code") ? cause.code : undefined) !== "ENOENT") throw cause;
   }
 }
 
@@ -85,7 +85,7 @@ export async function assertMemoryPath(memoryRoot: string, filePath: string): Pr
   const relative = NodePath.relative(memoryRoot, filePath);
 
   if (relative.startsWith("..") || NodePath.isAbsolute(relative)) {
-    throw makeBotMemoryError("io-error", "Memory storage escaped its configured root.");
+    throw BotMemoryError.fromCode("io-error", "Memory storage escaped its configured root.");
   }
 
   let current = memoryRoot;
@@ -97,10 +97,10 @@ export async function assertMemoryPath(memoryRoot: string, filePath: string): Pr
       const stat = await NodeFS.lstat(current);
 
       if (stat.isSymbolicLink()) {
-        throw makeBotMemoryError("io-error", "Memory paths may not be symbolic links.");
+        throw BotMemoryError.fromCode("io-error", "Memory paths may not be symbolic links.");
       }
     } catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code === "ENOENT") return;
+      if ((Predicate.hasProperty(cause, "code") ? cause.code : undefined) === "ENOENT") return;
       throw cause;
     }
   }
@@ -122,17 +122,7 @@ export const readLockRecord = async (lockPath: string): Promise<BotMemoryLockRec
   if (raw === null) return null;
 
   try {
-    const record = JSON.parse(raw) as Partial<BotMemoryLockRecord>;
-
-    if (
-      typeof record.pid !== "number" ||
-      !Number.isInteger(record.pid) ||
-      typeof record.token !== "string" ||
-      typeof record.heartbeatAtMs !== "number"
-    )
-      return null;
-
-    return record as BotMemoryLockRecord;
+    return decodeLockRecord(raw);
   } catch {
     return null;
   }
@@ -144,9 +134,9 @@ export const isProcessAlive = (pid: number): boolean => {
 
     return true;
   } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code === "EPERM") return true;
+    if ((Predicate.hasProperty(cause, "code") ? cause.code : undefined) === "EPERM") return true;
 
-    if ((cause as NodeJS.ErrnoException).code === "ESRCH") return false;
+    if ((Predicate.hasProperty(cause, "code") ? cause.code : undefined) === "ESRCH") return false;
     throw cause;
   }
 };
@@ -175,7 +165,10 @@ export const acquireBotMemoryFileLock = Effect.fn("acquireBotMemoryFileLock")(fu
 
   const verifyOwnership = async (): Promise<void> => {
     if (!(await readOwnRecord())) {
-      throw makeBotMemoryError("lock-lost", "The memory file lock was taken by another owner.");
+      throw BotMemoryError.fromCode(
+        "lock-lost",
+        "The memory file lock was taken by another owner.",
+      );
     }
   };
 
@@ -218,9 +211,9 @@ export const acquireBotMemoryFileLock = Effect.fn("acquireBotMemoryFileLock")(fu
       }
     },
     catch: (cause) =>
-      (cause as NodeJS.ErrnoException).code === "EEXIST"
-        ? makeBotMemoryError("lock-timeout", "Timed out waiting for the memory file lock.")
-        : makeBotMemoryError("io-error", "Could not acquire the memory file lock.", { cause }),
+      (Predicate.hasProperty(cause, "code") ? cause.code : undefined) === "EEXIST"
+        ? BotMemoryError.fromCode("lock-timeout", "Timed out waiting for the memory file lock.")
+        : BotMemoryError.fromCode("io-error", "Could not acquire the memory file lock.", { cause }),
   });
 
   const acquire = open.pipe(
@@ -257,7 +250,7 @@ export const acquireBotMemoryFileLock = Effect.fn("acquireBotMemoryFileLock")(fu
           catch: toBotMemoryError,
         });
 
-        return yield* makeBotMemoryError(
+        return yield* BotMemoryError.fromCode(
           "lock-timeout",
           "Timed out waiting for the memory file lock.",
         );
@@ -335,3 +328,13 @@ export async function writeMemoryFile(
     throw lostLock ?? cause;
   });
 }
+
+const decodeLockRecord = Schema.decodeUnknownSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      pid: Schema.Number.check(Schema.makeFilter(Number.isInteger)),
+      token: Schema.String,
+      heartbeatAtMs: Schema.Number,
+    }),
+  ),
+);

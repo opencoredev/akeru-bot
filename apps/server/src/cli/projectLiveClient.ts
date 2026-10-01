@@ -57,6 +57,7 @@ export const dispatchLiveOrchestrationCommand = (
 ) =>
   Effect.gen(function* () {
     const client = yield* makeLiveServerClient(origin);
+    // SAFETY: ProjectCliDispatchCommand is a schema-valid project command; the RPC client has a distributed envelope union that cannot infer the correlated payload.
     yield* client.orchestration.dispatch({
       headers: { authorization: `Bearer ${bearerToken}` },
       payload: command,

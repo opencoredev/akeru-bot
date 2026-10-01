@@ -84,12 +84,12 @@ function withFakeAcpGrok<A, E, R>(
 
 function readJsonRpcRequests(
   filePath: string,
-): ReadonlyArray<{ readonly method?: string; readonly params?: Record<string, unknown> }> {
+): ReadonlyArray<{ readonly method?: string; readonly params?: Schema.JsonObject }> {
   return NodeFS.readFileSync(filePath, "utf8")
     .trim()
     .split("\n")
     .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as { method?: string; params?: Record<string, unknown> });
+    .map((line) => JSON.parse(line) as { method?: string; params?: Schema.JsonObject });
 }
 
 it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {

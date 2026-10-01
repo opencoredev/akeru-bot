@@ -65,7 +65,7 @@ export const deterministicChannelId = (
     .digest("hex")}`;
 
 export const normalizedInboundMessage = (
-  thread: Thread,
+  thread: Pick<Thread, "id" | "recentMessages" | "refresh">,
   message: Message,
   text = message.text,
 ): InboundChannelMessage => ({
@@ -77,7 +77,7 @@ export const normalizedInboundMessage = (
 });
 
 export async function mentionWithContext(
-  thread: Thread,
+  thread: Pick<Thread, "id" | "recentMessages" | "refresh">,
   message: Message,
 ): Promise<InboundChannelMessage> {
   await thread.refresh().catch(() => undefined);

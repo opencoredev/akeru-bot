@@ -1,3 +1,4 @@
+import { decodeJsonString } from "../json.ts";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeBuffer from "node:buffer";
 import {
@@ -116,9 +117,8 @@ export function voiceFailure(reason: VoiceCallError["reason"] = "upstream-failed
   return new VoiceCallError({
     reason,
     message:
-      reason in messages
-        ? messages[reason as keyof typeof messages]
-        : "The voice call is unavailable.",
+      Object.entries(messages).find(([key]) => key === reason)?.[1] ??
+      "The voice call is unavailable.",
   });
 }
 
@@ -202,9 +202,11 @@ export function makeVoiceAdapters(fetcher: VoiceFetch = fetch) {
     path: string,
     signal: AbortSignal,
     body?: RequestInit["body"],
-  ): Promise<unknown> {
+  ): Promise<Schema.Json> {
     try {
-      return JSON.parse(new TextDecoder().decode(await request(provider, key, path, signal, body)));
+      return decodeJsonString(
+        new TextDecoder().decode(await request(provider, key, path, signal, body)),
+      );
     } catch (cause) {
       throw classifyVoiceFailure(cause, signal);
     }

@@ -114,7 +114,7 @@ export function logExit(reason: string): void {
   NodeFS.appendFileSync(exitLogPath, `${reason}\n`, "utf8");
 }
 
-export function writeJsonRpcNotification(method: string, params: unknown): void {
+export function writeJsonRpcNotification<Value>(method: string, params: Value): void {
   process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
 }
 

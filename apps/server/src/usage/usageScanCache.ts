@@ -1,3 +1,6 @@
+import { isJsonObject } from "../json.ts";
+import * as Predicate from "effect/Predicate";
+import type * as Schema from "effect/Schema";
 /**
  * Durable per-file scan cache.
  *
@@ -20,7 +23,7 @@ import type { UsageRecord } from "./usageTranscripts.ts";
 
 // v2: Codex fork-copy suppression changed what a file parses to, so v1
 // entries would keep serving double-counted records forever.
-export const USAGE_SCAN_CACHE_VERSION = 2 as const;
+export const USAGE_SCAN_CACHE_VERSION = 2;
 
 export interface CachedFile {
   readonly size: number;
@@ -106,49 +109,45 @@ export function encodeScanCache(cache: ScanCache): SerializedCache {
   return { version: USAGE_SCAN_CACHE_VERSION, models, sessions, files };
 }
 
-function isRecordArray(value: unknown): value is readonly unknown[] {
-  return Array.isArray(value);
-}
-
 /**
  * Rebuilds the cache from a parsed document.
  *
  * Anything malformed yields an empty cache rather than an error: a corrupt
  * cache should cost one cold scan, never a broken page.
  */
-export function decodeScanCache(document: unknown): ScanCache {
+export function decodeScanCache(document: Schema.Json): ScanCache {
   const cache: ScanCache = new Map();
 
-  if (typeof document !== "object" || document === null) return cache;
+  if (!isJsonObject(document)) return cache;
 
-  const root = document as Partial<SerializedCache>;
+  const root = document;
 
   if (root.version !== USAGE_SCAN_CACHE_VERSION) return cache;
 
-  if (!isRecordArray(root.models) || !isRecordArray(root.sessions)) return cache;
+  if (!Array.isArray(root.models) || !Array.isArray(root.sessions)) return cache;
 
-  if (typeof root.files !== "object" || root.files === null) return cache;
+  if (!isJsonObject(root.files)) return cache;
 
   // The intern tables must be all strings: a numeric entry would pass the
   // undefined guard below, land in a record's model, and crash the aggregate
   // at lookupRate. A corrupt table rejects the whole cache.
-  if (!root.models.every((value) => typeof value === "string")) return cache;
+  if (!root.models.every((value) => Predicate.isString(value))) return cache;
 
-  if (!root.sessions.every((value) => typeof value === "string")) return cache;
-  const models = root.models as readonly string[];
-  const sessions = root.sessions as readonly string[];
+  if (!root.sessions.every((value) => Predicate.isString(value))) return cache;
+  const models = root.models;
+  const sessions = root.sessions;
 
   for (const [path, raw] of Object.entries(root.files)) {
-    if (typeof raw !== "object" || raw === null) continue;
-    const entry = raw as Partial<SerializedFile>;
+    if (!isJsonObject(raw)) continue;
+    const entry = raw;
 
-    if (typeof entry.s !== "number" || typeof entry.m !== "number") continue;
+    if (!Predicate.isNumber(entry.s) || !Predicate.isNumber(entry.m)) continue;
 
     if (entry.p !== "claude" && entry.p !== "codex") continue;
 
-    if (!isRecordArray(entry.r)) continue;
+    if (!Array.isArray(entry.r)) continue;
 
-    const provider: UsageProviderKind = entry.p;
+    const provider = entry.p;
     const records: UsageRecord[] = [];
     // Any corrupt row disqualifies the whole entry. Keeping the survivors
     // under the original (size, mtime) would read as a valid warm hit and the
@@ -156,7 +155,7 @@ export function decodeScanCache(document: unknown): ScanCache {
     let corrupt = false;
 
     for (const row of entry.r) {
-      if (!isRecordArray(row) || row.length < 10) {
+      if (!Array.isArray(row) || row.length < 10) {
         corrupt = true;
         break;
       }
@@ -172,18 +171,23 @@ export function decodeScanCache(document: unknown): ScanCache {
         reasoning,
         dedupeKey,
         reportedCostUsd,
-      ] = row as SerializedRecord;
+      ] = row;
 
-      const model = typeof modelIndex === "number" ? models[modelIndex] : undefined;
+      const model = Predicate.isNumber(modelIndex) ? models[modelIndex] : undefined;
 
       if (
-        typeof timestampMs !== "number" ||
+        !Predicate.isNumber(timestampMs) ||
         !Number.isFinite(timestampMs) ||
         model === undefined ||
+        !Predicate.isNumber(uncached) ||
         !Number.isFinite(uncached) ||
+        !Predicate.isNumber(cached) ||
         !Number.isFinite(cached) ||
+        !Predicate.isNumber(cacheCreation) ||
         !Number.isFinite(cacheCreation) ||
+        !Predicate.isNumber(output) ||
         !Number.isFinite(output) ||
+        !Predicate.isNumber(reasoning) ||
         !Number.isFinite(reasoning)
       ) {
         corrupt = true;
@@ -194,7 +198,7 @@ export function decodeScanCache(document: unknown): ScanCache {
         provider,
         timestampMs,
         model,
-        sessionId: (typeof sessionIndex === "number" ? sessions[sessionIndex] : undefined) ?? "",
+        sessionId: (Predicate.isNumber(sessionIndex) ? sessions[sessionIndex] : undefined) ?? "",
         totals: {
           uncachedInputTokens: uncached,
           cachedInputTokens: cached,
@@ -202,8 +206,8 @@ export function decodeScanCache(document: unknown): ScanCache {
           outputTokens: output,
           reasoningTokens: reasoning,
         },
-        reportedCostUsd: typeof reportedCostUsd === "number" ? reportedCostUsd : null,
-        dedupeKey: typeof dedupeKey === "string" ? dedupeKey : null,
+        reportedCostUsd: Predicate.isNumber(reportedCostUsd) ? reportedCostUsd : null,
+        dedupeKey: Predicate.isString(dedupeKey) ? dedupeKey : null,
       });
     }
 

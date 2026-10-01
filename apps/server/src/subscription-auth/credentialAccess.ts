@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 import * as NodeCrypto from "node:crypto";
 import * as Effect from "effect/Effect";
@@ -94,11 +95,11 @@ export class SubscriptionCredentialAccess {
     )
       return undefined;
 
-    if (typeof credential.connectionId !== "string" || !credential.connectionId) {
+    if (!Predicate.isString(credential.connectionId) || !credential.connectionId) {
       await this.updateCredentials((data) => {
         const current = credentialAt(data, key);
 
-        if (!current || (typeof current.connectionId === "string" && current.connectionId))
+        if (!current || (Predicate.isString(current.connectionId) && current.connectionId))
           return data;
 
         return { ...data, [key]: { ...current, connectionId: NodeCrypto.randomUUID() } };
@@ -112,11 +113,11 @@ export class SubscriptionCredentialAccess {
     if (!current) return undefined;
 
     const accountId =
-      current.type === "oauth" && typeof current.accountId === "string" && current.accountId
+      current.type === "oauth" && Predicate.isString(current.accountId) && current.accountId
         ? current.accountId
         : current.connectionId;
 
-    if (typeof accountId !== "string" || !accountId)
+    if (!Predicate.isString(accountId) || !accountId)
       throw new Error("Plan account identity is unavailable.");
 
     return { accessToken: accessToken ? current.access : null, accountId };
@@ -148,7 +149,7 @@ export class SubscriptionCredentialAccess {
     const credential = credentialAt(this.data, credentialKey("openai-codex", instanceId));
     const accountId = credential?.type === "oauth" ? credential.accountId : undefined;
 
-    return accessToken && typeof accountId === "string" && accountId.length > 0
+    return accessToken && Predicate.isString(accountId) && accountId.length > 0
       ? { accessToken, accountId }
       : undefined;
   }

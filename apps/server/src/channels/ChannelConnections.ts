@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import {
   BotId,
@@ -113,29 +114,29 @@ export const saveChannelConnection = (
           name: input.name,
           provider: input.provider,
           adapter: input.provider === "imessage" ? "photon" : input.provider,
-          ...(input.provider === "whatsapp"
-            ? {
-                externalIdentity: input.phoneNumberId,
-                ...optionalWebhookUrl(deps.publicOrigin, input.connectionId),
-              }
-            : input.provider === "imessage"
-              ? {
-                  externalIdentity:
-                    input.mode === "hosted" ? input.projectId : (input.phone ?? input.serverUrl),
-                  ...(input.mode === "hosted"
-                    ? {
-                        managementUrl: `https://app.photon.codes/dashboard/${encodeURIComponent(input.projectId)}`,
-                      }
-                    : {}),
-                }
-              : input.provider === "slack"
-                ? { managementUrl: "https://api.slack.com/apps" }
-                : input.provider === "discord"
-                  ? {
-                      externalIdentity: input.applicationId,
-                      managementUrl: `https://discord.com/developers/applications/${encodeURIComponent(input.applicationId)}`,
-                    }
-                  : {}),
+          ...Match.value(input).pipe(
+            Match.when({ provider: "whatsapp" }, (input) => ({
+              externalIdentity: input.phoneNumberId,
+              ...optionalWebhookUrl(deps.publicOrigin, input.connectionId),
+            })),
+            Match.when({ provider: "imessage" }, (input) => ({
+              externalIdentity:
+                input.mode === "hosted" ? input.projectId : (input.phone ?? input.serverUrl),
+              ...(input.mode === "hosted"
+                ? {
+                    managementUrl: `https://app.photon.codes/dashboard/${encodeURIComponent(input.projectId)}`,
+                  }
+                : {}),
+            })),
+            Match.when({ provider: "slack" }, (_input) => ({
+              managementUrl: "https://api.slack.com/apps",
+            })),
+            Match.when({ provider: "discord" }, (input) => ({
+              externalIdentity: input.applicationId,
+              managementUrl: `https://discord.com/developers/applications/${encodeURIComponent(input.applicationId)}`,
+            })),
+            Match.orElse((_input) => ({})),
+          ),
         };
 
         yield* deps.secretStore.set(

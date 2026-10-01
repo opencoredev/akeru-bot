@@ -1,3 +1,4 @@
+import { PreviewAutomationSnapshot } from "@akeru/contracts";
 import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -25,10 +26,9 @@ export const previewSnapshotFailure = <E>(cause: Cause.Cause<E>) => {
   const firstFailure = failures[0]?.error;
 
   const errorTag =
-    typeof firstFailure === "object" &&
-    firstFailure !== null &&
+    Predicate.isObjectOrArray(firstFailure) &&
     "_tag" in firstFailure &&
-    typeof firstFailure._tag === "string"
+    Predicate.isString(firstFailure._tag)
       ? firstFailure._tag
       : "PreviewSnapshotError";
 
@@ -50,6 +50,8 @@ export const previewSnapshotFailure = <E>(cause: Cause.Cause<E>) => {
     failureCount: failures.length,
   }).pipe(Effect.as(result));
 };
+
+const decodeSnapshot = Schema.decodeUnknownSync(PreviewAutomationSnapshot);
 
 export type ToolInputSchema = ReturnType<typeof Tool.getJsonSchema>;
 
@@ -97,8 +99,9 @@ export const registerPreviewStandardTools = Effect.fn("McpHttpServer.registerPre
                 ({ encodedResult }) =>
                   new McpSchema.CallToolResult({
                     isError: false,
-                    structuredContent:
-                      typeof encodedResult === "object" ? encodedResult : undefined,
+                    structuredContent: Predicate.isObjectKeyword(encodedResult)
+                      ? encodedResult
+                      : undefined,
                     content: [{ type: "text", text: JSON.stringify(encodedResult) }],
                   }),
               ),
@@ -169,15 +172,7 @@ export const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewS
             Effect.matchCauseEffect({
               onFailure: previewSnapshotFailure,
               onSuccess: ({ encodedResult }) => {
-                const snapshot = encodedResult as {
-                  readonly screenshot: {
-                    readonly mimeType: "image/png";
-                    readonly data: string;
-                    readonly width: number;
-                    readonly height: number;
-                  };
-                  readonly [key: string]: unknown;
-                };
+                const snapshot = decodeSnapshot(encodedResult);
 
                 const { screenshot, ...page } = snapshot;
 

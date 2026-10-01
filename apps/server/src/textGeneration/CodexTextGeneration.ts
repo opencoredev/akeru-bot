@@ -93,7 +93,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
 
   const encodeJsonForOperation = (
     operation: "generateBranchName" | "generateThreadTitle",
-    value: unknown,
+    value: ReturnType<typeof toJsonSchemaObject>,
   ): Effect.Effect<string, TextGenerationError> =>
     encodeJsonString(value).pipe(
       Effect.mapError(

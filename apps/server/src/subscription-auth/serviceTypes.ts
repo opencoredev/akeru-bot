@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 import { SubscriptionBaseUrl, type BotId, type ProviderInstanceId } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
@@ -41,7 +42,7 @@ export const SUBSCRIPTION_PROVIDER_IDS = [
 export type SubscriptionProviderId = (typeof SUBSCRIPTION_PROVIDER_IDS)[number];
 
 export function isSubscriptionProviderId(value: string): value is SubscriptionProviderId {
-  return (SUBSCRIPTION_PROVIDER_IDS as readonly string[]).includes(value);
+  return SUBSCRIPTION_PROVIDER_IDS.some((candidate) => candidate === value);
 }
 
 /** How a started login is finished: polled by the client, or completed with a pasted code. */
@@ -152,7 +153,7 @@ export function oauthHealthRequest(
         headers: {
           Authorization: `Bearer ${credential.access}`,
           ...getKimiCodingDeviceHeaders(
-            typeof credential.deviceId === "string" ? credential.deviceId : "",
+            Predicate.isString(credential.deviceId) ? credential.deviceId : "",
           ),
         },
       };
@@ -213,9 +214,9 @@ export function storeErrorStatus(
     lastFailedRequest,
     reconnectAction: provider === "opencode-go" ? "Connect API key" : "Connect account",
     healthTest: { status: "not-run" },
-    dependentBots: dependentBots
-      .filter((bot) => bot.provider === provider)
-      .map(({ id, name }) => ({ id, name })),
+    dependentBots: dependentBots.flatMap((bot) =>
+      bot.provider === provider ? [{ id: bot.id, name: bot.name }] : [],
+    ),
     dependentRoutines: [],
   };
 }
@@ -249,7 +250,7 @@ export function credentialAt(
   data: SubscriptionAuthData,
   key: string,
 ): SubscriptionCredential | undefined {
-  const value = (data as Record<string, unknown>)[key];
+  const value = data[key];
 
   return isSubscriptionCredential(value) ? value : undefined;
 }
@@ -289,7 +290,7 @@ export function runRefresh(
       return refreshKimiToken(
         credential.refresh,
         undefined,
-        typeof credential.deviceId === "string" ? credential.deviceId : undefined,
+        Predicate.isString(credential.deviceId) ? credential.deviceId : undefined,
       );
     case "opencode-go":
       throw new Error("OpenCode Go API keys do not refresh.");

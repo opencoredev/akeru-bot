@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import { encodeJson, makeLayers, readState, pendingEvent } from "./testUtils/analytics.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { USAGE_3H_COUNTER_KEYS } from "@akeru/contracts";
@@ -440,7 +441,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
         );
 
         const request = captured[0] as {
-          readonly batch: ReadonlyArray<{ readonly properties: Record<string, unknown> }>;
+          readonly batch: ReadonlyArray<{ readonly properties: Schema.JsonObject }>;
         };
 
         const properties = request.batch[0]?.properties;

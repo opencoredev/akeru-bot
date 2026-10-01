@@ -1,3 +1,4 @@
+import { ProviderDriverKind } from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
@@ -27,9 +28,9 @@ const makeStubInstance = (
 ): ProviderInstance =>
   ({
     instanceId,
-    driverKind: instanceId as unknown as ProviderInstance["driverKind"],
+    driverKind: ProviderDriverKind.make(instanceId),
     continuationIdentity: {
-      driverKind: instanceId as unknown as ProviderInstance["driverKind"],
+      driverKind: ProviderDriverKind.make(instanceId),
       continuationKey: `${instanceId}:test`,
     },
     displayName: undefined,

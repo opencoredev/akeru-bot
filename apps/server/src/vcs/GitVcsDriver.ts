@@ -25,6 +25,7 @@ import {
   type VcsStatusInput,
   type VcsStatusResult,
 } from "@akeru/contracts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
 import { makeGitVcsDriverCore } from "./GitVcsDriverCore.ts";
 import * as VcsDriver from "./VcsDriver.ts";
 import * as VcsProcess from "./VcsProcess.ts";

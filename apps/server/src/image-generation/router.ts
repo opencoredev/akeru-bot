@@ -103,7 +103,7 @@ export function imageRoutePlan(input: {
   readonly settings: ImageGenerationSettings;
   readonly botOverride: ImageProviderId | null;
   readonly explicit: ImageProviderId | undefined;
-}): { readonly intended: ImageProviderId | null; readonly candidates: ImageProviderId[] } {
+}): ImageRoutePlanResult {
   if (input.explicit) return { intended: input.explicit, candidates: [input.explicit] };
 
   const ordered = [
@@ -301,3 +301,8 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
     parts,
   };
 });
+
+type ImageRoutePlanResult = {
+  readonly intended: ImageProviderId | null;
+  readonly candidates: ImageProviderId[];
+};

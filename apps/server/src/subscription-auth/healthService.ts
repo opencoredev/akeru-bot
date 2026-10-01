@@ -1,3 +1,4 @@
+import { decodeProviderHealth } from "./persistedSchemas.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -58,13 +59,13 @@ export class SubscriptionHealthService {
     }
 
     try {
-      this.health = JSON.parse(NodeFS.readFileSync(this.healthPath, "utf-8")) as ProviderHealthData;
+      this.health = decodeProviderHealth(NodeFS.readFileSync(this.healthPath, "utf-8"));
     } catch {
       this.health = {};
     }
   }
 
-  public writeSecureJson(filePath: string, value: unknown): void {
+  public writeSecureJson<Value>(filePath: string, value: Value): void {
     const dir = NodePath.dirname(filePath);
 
     if (!NodeFS.existsSync(dir)) {

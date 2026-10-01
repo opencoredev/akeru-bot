@@ -23,7 +23,7 @@ const isServerEnvironmentLabelCommandError = Schema.is(
 
 interface CapturedLog {
   readonly message: unknown;
-  readonly annotations: Readonly<Record<string, unknown>>;
+  readonly annotations: typeof References.CurrentLogAnnotations.Service;
 }
 
 const runMock = vi.fn<ProcessRunner.ProcessRunner["Service"]["run"]>();

@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Schema from "effect/Schema";
 import {
   environmentId,
   tabId,
@@ -178,50 +180,47 @@ it.effect("registers annotated tools and preserves authenticated request context
           connectionId: event.connectionId,
           requestId: event.request.requestId,
           ok: true,
-          result:
-            event.request.operation === "snapshot"
-              ? {
-                  url: "http://example.test/",
-                  title: "Example",
-                  loading: false,
-                  visibleText: "leo@example.com token=secret-value",
-                  interactiveElements: [],
-                  accessibilityTree: {},
-                  consoleEntries: [],
-                  networkEntries: [],
-                  actionTimeline: [],
-                  screenshot: {
-                    mimeType: "image/png",
-                    data: screenshot,
-                    width: 10,
-                    height: 5,
-                  },
-                }
-              : event.request.operation === "evaluate"
-                ? {
-                    arbitrary: "unrecognizable-secret",
-                    chatPath: "/Users/leo/.akeru/chat.json",
-                    screenshot,
-                  }
-                : event.request.operation === "recordingStop"
-                  ? {
-                      id: "recording-1",
-                      tabId,
-                      path: "/Users/leo/.akeru/browser-artifacts/recording.webm",
-                      mimeType: "video/webm",
-                      sizeBytes: 123,
-                      createdAt: "2026-01-01T00:00:00Z",
-                    }
-                  : event.request.operation === "press"
-                    ? undefined
-                    : {
-                        available: true,
-                        visible: true,
-                        tabId,
-                        url: "http://example.test/",
-                        title: "Example",
-                        loading: false,
-                      },
+          result: Match.value(event.request.operation).pipe(
+            Match.when("snapshot", () => ({
+              url: "http://example.test/",
+              title: "Example",
+              loading: false,
+              visibleText: "leo@example.com token=secret-value",
+              interactiveElements: [],
+              accessibilityTree: {},
+              consoleEntries: [],
+              networkEntries: [],
+              actionTimeline: [],
+              screenshot: {
+                mimeType: "image/png",
+                data: screenshot,
+                width: 10,
+                height: 5,
+              },
+            })),
+            Match.when("evaluate", () => ({
+              arbitrary: "unrecognizable-secret",
+              chatPath: "/Users/leo/.akeru/chat.json",
+              screenshot,
+            })),
+            Match.when("recordingStop", () => ({
+              id: "recording-1",
+              tabId,
+              path: "/Users/leo/.akeru/browser-artifacts/recording.webm",
+              mimeType: "video/webm",
+              sizeBytes: 123,
+              createdAt: "2026-01-01T00:00:00Z",
+            })),
+            Match.when("press", () => undefined),
+            Match.orElse(() => ({
+              available: true,
+              visible: true,
+              tabId,
+              url: "http://example.test/",
+              title: "Example",
+              loading: false,
+            })),
+          ),
         });
       }).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
@@ -255,13 +254,13 @@ it.effect("registers annotated tools and preserves authenticated request context
         expect(registered, `${toolName} must be advertised`).toBeDefined();
 
         const inputSchema = registered?.inputSchema as {
-          readonly properties?: Readonly<Record<string, unknown>>;
+          readonly properties?: Readonly<Schema.JsonObject>;
         };
 
-        const fieldSchema = inputSchema.properties?.[field] as Record<string, unknown>;
+        const fieldSchema = inputSchema.properties?.[field] as Schema.JsonObject;
 
         const variants = Array.isArray(fieldSchema.anyOf)
-          ? (fieldSchema.anyOf as Array<Record<string, unknown>>)
+          ? (fieldSchema.anyOf as Array<Schema.JsonObject>)
           : [fieldSchema];
 
         return variants.find((variant) => variant.type === "string");

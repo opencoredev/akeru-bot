@@ -86,7 +86,7 @@ export function collapse<T extends string>(
 
 // Retired providers such as Cursor fall through to "other" so historical
 // buckets still match the event schema.
-export const providerValues = new Set([
+export const providerValues = new Set<UsageAnalyticsProvider | "claudeagent">([
   "codex",
   "claude",
   "claudeagent",
@@ -100,10 +100,15 @@ export function normalizeProvider(value: string): UsageAnalyticsProvider {
 
   if (value === "other") return "other";
 
-  return providerValues.has(value) ? (value as UsageAnalyticsProvider) : "other";
+  return (
+    [...providerValues].find(
+      (candidate): candidate is UsageAnalyticsProvider =>
+        candidate !== "claudeagent" && candidate === value,
+    ) ?? "other"
+  );
 }
 
-export const sandboxValues = new Set([
+export const sandboxValues = new Set<UsageSandboxProvider>([
   "none",
   "local",
   "e2b",
@@ -118,15 +123,15 @@ export const sandboxValues = new Set([
 export function normalizeSandbox(value: string): UsageSandboxProvider {
   if (value === "other") return "other";
 
-  return sandboxValues.has(value) ? (value as UsageSandboxProvider) : "other";
+  return [...sandboxValues].find((candidate) => candidate === value) ?? "other";
 }
 
-export const clientValues = new Set(["web", "desktop", "mobile"]);
+export const clientValues = new Set<UsageClientType>(["web", "desktop", "mobile"]);
 
 export function normalizeClient(value: string): UsageClientType {
   if (value === "other") return "none";
 
-  return clientValues.has(value) ? (value as UsageClientType) : "none";
+  return [...clientValues].find((candidate) => candidate === value) ?? "none";
 }
 
 export function operatingSystem(value: string): UsageOperatingSystem {

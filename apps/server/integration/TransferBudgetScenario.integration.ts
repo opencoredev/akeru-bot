@@ -15,6 +15,7 @@ import type { TurnProcessingQuiescedReceipt } from "../src/orchestration/Service
 import type { OrchestrationIntegrationHarness } from "./OrchestrationEngineHarness.integration.ts";
 import {
   expectedRecordedAssistantText,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This pure integration fixture creates the recorded turn used to measure transport bytes.
   makeRecordedTransferTurn,
   TRANSFER_HISTORY_TURN_COUNT,
 } from "./fixtures/transferBudget.ts";

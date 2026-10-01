@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -440,7 +441,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         });
 
         assert.equal(response.status, 400);
-        const error = (yield* response.json) as Record<string, unknown>;
+        const error = (yield* response.json) as Schema.JsonObject;
         assert.equal(error.unavailability, "usage-cap");
       }
 

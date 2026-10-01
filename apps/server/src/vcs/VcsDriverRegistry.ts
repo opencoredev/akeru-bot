@@ -44,10 +44,7 @@ function detectionCacheKey(input: {
   return `${input.requestedKind}\0${input.cwd}`;
 }
 
-function parseDetectionCacheKey(key: string): {
-  readonly cwd: string;
-  readonly requestedKind: VcsDriverKind | "auto";
-} {
+function parseDetectionCacheKey(key: string): Required<VcsDriverResolveInput> {
   const separatorIndex = key.indexOf("\0");
 
   if (separatorIndex === -1) {
@@ -58,6 +55,7 @@ function parseDetectionCacheKey(key: string): {
   }
 
   return {
+    // SAFETY: The private cache only receives keys from detectionCacheKey with a typed kind.
     requestedKind: key.slice(0, separatorIndex) as VcsDriverKind | "auto",
     cwd: key.slice(separatorIndex + 1),
   };

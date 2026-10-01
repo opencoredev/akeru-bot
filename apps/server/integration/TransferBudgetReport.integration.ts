@@ -38,7 +38,7 @@ const TRANSFER_BUDGET = {
   measuredTurnWebSocketMessages: 21,
 } satisfies ProviderTransferBudget;
 
-export const TRANSFER_BUDGETS: Readonly<Record<string, ProviderTransferBudget>> = {
+export const TRANSFER_BUDGETS = {
   codex: TRANSFER_BUDGET,
   claudeAgent: TRANSFER_BUDGET,
   opencode: TRANSFER_BUDGET,
@@ -63,7 +63,9 @@ function observedTransfer(run: TransferBudgetRun) {
 export function formatTransferBudgetResult(runs: ReadonlyArray<TransferBudgetRun>): string {
   const providers = Object.fromEntries(
     runs.flatMap((run) => {
-      const ceiling = TRANSFER_BUDGETS[run.provider];
+      const ceiling = Object.entries(TRANSFER_BUDGETS).find(
+        ([provider]) => provider === run.provider,
+      )?.[1];
 
       return ceiling ? [[run.provider, { observed: observedTransfer(run), ceiling }]] : [];
     }),
@@ -114,7 +116,9 @@ export function transferBudgetViolations(runs: ReadonlyArray<TransferBudgetRun>)
   const violations: string[] = [];
 
   for (const run of runs) {
-    const budget = TRANSFER_BUDGETS[run.provider];
+    const budget = Object.entries(TRANSFER_BUDGETS).find(
+      ([provider]) => provider === run.provider,
+    )?.[1];
 
     if (!budget) {
       violations.push(`${run.provider}: no transfer budget is configured`);
@@ -161,7 +165,9 @@ export function formatTransferBudgetReport(runs: ReadonlyArray<TransferBudgetRun
     "| Provider | Total thread wire | Budget | Result |",
     "| --- | ---: | ---: | --- |",
     ...runs.flatMap((run) => {
-      const budget = TRANSFER_BUDGETS[run.provider];
+      const budget = Object.entries(TRANSFER_BUDGETS).find(
+        ([provider]) => provider === run.provider,
+      )?.[1];
 
       if (!budget) return [];
       const observed = observedTransfer(run).totalWireBytes;
@@ -178,7 +184,9 @@ export function formatTransferBudgetReport(runs: ReadonlyArray<TransferBudgetRun
   ];
 
   for (const run of runs) {
-    const budget = TRANSFER_BUDGETS[run.provider];
+    const budget = Object.entries(TRANSFER_BUDGETS).find(
+      ([provider]) => provider === run.provider,
+    )?.[1];
 
     if (!budget) continue;
     lines.push(

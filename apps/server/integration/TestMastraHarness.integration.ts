@@ -1,3 +1,5 @@
+import type { AkeruMastraState } from "../src/provider/AkeruMastraHarness.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off
 /**
  * Mastra-side twin of `TestProviderAdapter.integration.ts`.
@@ -42,7 +44,7 @@ export interface TestMastraHarness {
 interface SessionState {
   readonly threadId: ThreadId;
   cwd: string | undefined;
-  stateSnapshot: Record<string, unknown>;
+  stateSnapshot: AkeruMastraState;
   readonly queuedResponses: Array<TestTurnResponse>;
   readonly listeners: Set<(event: AgentControllerEvent) => void>;
   readonly interruptCalls: Array<TurnId | undefined>;
@@ -64,10 +66,10 @@ interface SessionState {
   resolvePendingApproval: (() => void) | undefined;
 }
 
-const DECISION_BY_RESPONSE: Record<string, ProviderApprovalDecision> = {
+const DECISION_BY_RESPONSE = {
   approve: "accept",
   decline: "decline",
-};
+} satisfies Record<string, ProviderApprovalDecision>;
 
 function assistantMessage(threadId: ThreadId, index: number, text: string): MastraDBMessage {
   return {
@@ -80,20 +82,20 @@ function assistantMessage(threadId: ThreadId, index: number, text: string): Mast
     },
     threadId: String(threadId),
     resourceId: String(threadId),
-  } as MastraDBMessage;
+  };
 }
 
 function payloadString(
   raw: TestTurnResponse["events"][number],
   key: "delta" | "detail" | "state" | "status" | "message" | "title",
 ): string | undefined {
-  const direct = key in raw ? Reflect.get(raw, key) : undefined;
+  const direct = Predicate.hasProperty(raw, key) ? raw[key] : undefined;
 
-  if (typeof direct === "string") return direct;
+  if (Predicate.isString(direct)) return direct;
   const payload = "payload" in raw ? raw.payload : undefined;
-  const nested = payload && key in payload ? Reflect.get(payload, key) : undefined;
+  const nested = payload && Predicate.hasProperty(payload, key) ? payload[key] : undefined;
 
-  return typeof nested === "string" ? nested : undefined;
+  return Predicate.isString(nested) ? nested : undefined;
 }
 
 export function makeTestMastraHarness(): TestMastraHarness {
@@ -141,7 +143,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
 
       case "approval.requested":
       case "request.opened": {
-        const toolCallId = typeof raw.requestId === "string" ? raw.requestId : nextToolCallId();
+        const toolCallId = Predicate.isString(raw.requestId) ? raw.requestId : nextToolCallId();
         state.pendingApprovalToolCallIds.push(toolCallId);
         publish(state, {
           type: "tool_approval_required",
@@ -228,9 +230,10 @@ export function makeTestMastraHarness(): TestMastraHarness {
     for (const raw of terminal) emitFixtureEvent(state, raw);
   };
 
+  // SAFETY: This integration factory implements the controller and conversation methods exercised by AgentController; unused SDK machinery is intentionally absent.
   const createSession = (state: SessionState) =>
     // SAFETY: The controller test harness invokes only the session methods implemented below.
-    Object.assign({} as Session<Record<string, unknown>>, {
+    Object.assign({} as Session<AkeruMastraState>, {
       stream: {
         isActive: () => state.activeTurnId !== undefined,
         waitForTeardown: async () => undefined,
@@ -241,10 +244,10 @@ export function makeTestMastraHarness(): TestMastraHarness {
       },
       state: {
         get: () => state.stateSnapshot,
-        set: async (next: Record<string, unknown>) => {
+        set: async (next: AkeruMastraState) => {
           state.stateSnapshot = next;
 
-          if (typeof next.projectPath === "string") state.cwd = next.projectPath;
+          if (Predicate.isString(next.projectPath)) state.cwd = next.projectPath;
         },
       },
       mode: { get: () => "build", switch: async () => undefined },
@@ -293,7 +296,9 @@ export function makeTestMastraHarness(): TestMastraHarness {
         state.approvalResponses.push({
           threadId: state.threadId,
           requestId: ApprovalRequestId.make(toolCallId),
-          decision: DECISION_BY_RESPONSE[decision] ?? "decline",
+          decision:
+            Object.entries(DECISION_BY_RESPONSE).find(([key]) => key === decision)?.[1] ??
+            "decline",
         });
         const index = state.pendingApprovalToolCallIds.indexOf(toolCallId);
 
@@ -305,6 +310,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
       respondToToolSuspension: async () => undefined,
     });
 
+  // SAFETY: This integration factory implements the controller and conversation methods exercised by AgentController; unused SDK machinery is intentionally absent.
   const factory: TestMastraHarness["factory"] = () =>
     Effect.succeed({
       rebuildConversation: async (threadId: string, messages: ReadonlyArray<MastraDBMessage>) => {

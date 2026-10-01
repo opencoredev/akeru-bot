@@ -12,13 +12,13 @@ import {
   type SearchEntityMemoryInput,
 } from "../Services/EntityMemoryRepository.ts";
 import { EntityMemoryDbRow, selectColumns, decodeRow } from "./EntityMemoryRows.ts";
-import type { makeEntityMemoryStorage } from "./EntityMemoryStorage.ts";
+import type { EntityMemoryStorageServices } from "./EntityMemoryStorage.ts";
 
 export const makeEntityMemoryQueries = (dependencies: {
-  sql: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["sql"];
-  getCurrent: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["getCurrent"];
+  sql: EntityMemoryStorageServices["sql"];
+  getCurrent: EntityMemoryStorageServices["getCurrent"];
 }) =>
-  Effect.gen(function* () {
+  Effect.sync(() => {
     const { sql, getCurrent } = dependencies;
 
     const searchOne = (partition: AuthorizedMemoryPartition, query: string, limit: number) => {
@@ -223,3 +223,7 @@ export const makeEntityMemoryQueries = (dependencies: {
 
     return { search, listCurrent, isRevisionAuthorized, listHistory, listByPartitions };
   });
+
+export type EntityMemoryQueriesServices = Effect.Success<
+  ReturnType<typeof makeEntityMemoryQueries>
+>;

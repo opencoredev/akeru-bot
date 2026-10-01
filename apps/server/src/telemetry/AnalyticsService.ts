@@ -274,7 +274,7 @@ export const make = Effect.gen(function* () {
       }
 
       for (const usage of toolUsage) {
-        if (usage.itemType && USAGE_TOOL_IDS.includes(usage.itemType as never)) {
+        if (usage.itemType && USAGE_TOOL_IDS.some((toolId) => toolId === usage.itemType)) {
           capabilityCounters[`tool_calls_${usage.itemType}`] = clampCounter(
             (capabilityCounters[`tool_calls_${usage.itemType}`] ?? 0) + usage.count,
           );
@@ -296,6 +296,7 @@ export const make = Effect.gen(function* () {
         );
       }
 
+      // SAFETY: All property fields are constructed from the analytics schema counters and enum normalizers; computed private fields are filled before validation.
       const properties = {
         app_version: packageJson.version,
         operating_system: operatingSystem(hostPlatform),

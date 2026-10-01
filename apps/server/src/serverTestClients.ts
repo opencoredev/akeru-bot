@@ -85,9 +85,7 @@ export const makeAuthTestLayer = () =>
     ),
   );
 
-export const parseSessionCookieFromWsUrl = (
-  wsUrl: string,
-): { readonly cookie: string | null; readonly url: string } => {
+export const parseSessionCookieFromWsUrl = (wsUrl: string): ParseSessionCookieFromWsUrlResult => {
   const next = new URL(wsUrl);
 
   const cookie = next.hash.startsWith("#cookie=")
@@ -176,7 +174,10 @@ export const appendSessionCookieToWsUrl = (url: string, sessionCookieHeader: str
 export const getHttpServerUrl = (pathname = "") =>
   Effect.gen(function* () {
     const server = yield* HttpServer.HttpServer;
-    const address = server.address as HttpServer.TcpAddress;
+    const address = server.address;
+
+    if (!Predicate.isTagged(address, "TcpAddress"))
+      return yield* Effect.die("Test server must listen on TCP");
 
     return `http://127.0.0.1:${address.port}${pathname}`;
   });
@@ -288,19 +289,19 @@ export const testRequestUrl = (input: Parameters<typeof fetch>[0]): string => {
   return `${url.pathname}${url.search}`;
 };
 
+const decodeHttpMethod = Schema.decodeUnknownSync(
+  Schema.Literals(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE"]),
+);
+
 export const fetchEffect = (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-  const request = HttpClientRequest.make((init?.method ?? "GET") as "GET" | "POST")(
-    testRequestUrl(input),
-    {
-      headers: init?.headers as Record<string, string> | undefined,
-    },
-  ).pipe(
-    typeof init?.body === "string"
-      ? HttpClientRequest.bodyText(
-          init.body,
-          (init.headers as Record<string, string> | undefined)?.["content-type"] ??
-            "application/json",
-        )
+  const method = decodeHttpMethod(init?.method ?? "GET");
+  const headers = Object.fromEntries(new Headers(init?.headers));
+
+  const request = HttpClientRequest.make(method)(testRequestUrl(input), {
+    headers,
+  }).pipe(
+    Predicate.isString(init?.body)
+      ? HttpClientRequest.bodyText(init.body, headers["content-type"] ?? "application/json")
       : (request) => request,
   );
 
@@ -313,10 +314,11 @@ export const fetchEffect = (input: Parameters<typeof fetch>[0], init?: RequestIn
   ).pipe(Effect.mapError((cause) => new TestHttpRequestError({ cause })));
 };
 
-export const jsonRequestBody = (value: unknown): string => {
+export const jsonRequestBody = <Value>(value: Value): string => {
   return JSON.stringify(value);
 };
 
+// SAFETY: The test selects A to match the fixture served by this request; production RPC uses schema decoders.
 export const responseJsonEffect = <A>(response: HttpClientResponse.HttpClientResponse) =>
   response.json.pipe(
     Effect.map((json) => json as A),
@@ -425,7 +427,10 @@ export const getWsServerUrl = (
 ) =>
   Effect.gen(function* () {
     const server = yield* HttpServer.HttpServer;
-    const address = server.address as HttpServer.TcpAddress;
+    const address = server.address;
+
+    if (!Predicate.isTagged(address, "TcpAddress"))
+      return yield* Effect.die("Test server must listen on TCP");
     const baseUrl = `ws://127.0.0.1:${address.port}${pathname}`;
 
     if (options?.authenticated === false) {
@@ -459,3 +464,5 @@ export const NodeHttpServerTestWithWsDeflate = HttpServer.layerTestClient.pipe(
     ),
   ),
 );
+
+type ParseSessionCookieFromWsUrlResult = { readonly cookie: string | null; readonly url: string };

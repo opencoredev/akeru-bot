@@ -1,3 +1,5 @@
+import { decodeJsonString, jsonObject } from "../json.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -39,7 +41,7 @@ const commandOk = async (command: string, args: ReadonlyArray<string>) =>
   (await Effect.runPromise(commandOutput(command, args))).ok;
 
 const isMissingFile = (cause: unknown) =>
-  typeof cause === "object" && cause !== null && "code" in cause && cause.code === "ENOENT";
+  Predicate.isObjectOrArray(cause) && "code" in cause && cause.code === "ENOENT";
 
 /**
  * Provider CLIs the doctor looks for on PATH. Kimi For Coding and OpenCode Go run inside the
@@ -117,11 +119,13 @@ export async function runRemoteDoctor(input: {
 
   const readRuntimePort = () => {
     try {
-      const { port } = JSON.parse(
-        NodeFS.readFileSync(NodePath.join(stateDir, "server-runtime.json"), "utf8"),
-      ) as { port?: unknown };
+      const port = jsonObject(
+        decodeJsonString(
+          NodeFS.readFileSync(NodePath.join(stateDir, "server-runtime.json"), "utf8"),
+        ),
+      )?.port;
 
-      return typeof port === "number" ? String(port) : undefined;
+      return Predicate.isNumber(port) ? String(port) : undefined;
     } catch {
       return undefined;
     }
@@ -204,7 +208,7 @@ export async function runRemoteDoctor(input: {
   if (NodeFS.existsSync(dbPath)) {
     try {
       const db = new NodeSqlite.DatabaseSync(dbPath, { readOnly: true });
-      const result = db.prepare("PRAGMA quick_check").get() as Record<string, unknown>;
+      const result = db.prepare("PRAGMA quick_check").get() ?? {};
       db.close();
       const healthy = Object.values(result)[0] === "ok";
       checks.push(
@@ -221,7 +225,7 @@ export async function runRemoteDoctor(input: {
     checks.push(check("database", "warning", "Database has not been created yet."));
   }
 
-  let binding: Record<string, unknown> | undefined;
+  let binding: Schema.JsonObject | undefined;
 
   if (NodeFS.existsSync(bindingPath)) {
     try {
@@ -233,7 +237,7 @@ export async function runRemoteDoctor(input: {
         repairsApplied.push("binding-permissions");
       }
 
-      binding = JSON.parse(NodeFS.readFileSync(bindingPath, "utf8")) as Record<string, unknown>;
+      binding = jsonObject(decodeJsonString(NodeFS.readFileSync(bindingPath, "utf8")));
       const secure = (NodeFS.statSync(bindingPath).mode & 0o077) === 0;
       checks.push(
         check(
@@ -306,10 +310,11 @@ export async function runRemoteDoctor(input: {
     : "";
 
   // The binding is local state, so only probe an HTTPS origin and never follow redirects.
-  const endpointOrigin =
-    typeof binding?.endpoint === "string" ? httpsOrigin(binding.endpoint) : undefined;
+  const endpointOrigin = Predicate.isString(binding?.endpoint)
+    ? httpsOrigin(binding.endpoint)
+    : undefined;
 
-  if (typeof binding?.endpoint === "string") {
+  if (Predicate.isString(binding?.endpoint)) {
     const response = endpointOrigin
       ? await Effect.runPromise(
           commandOutput("curl", [
@@ -326,9 +331,7 @@ export async function runRemoteDoctor(input: {
     let servedId = "";
 
     try {
-      servedId = String(
-        (JSON.parse(response.stdout || "{}") as { environmentId?: unknown }).environmentId ?? "",
-      );
+      servedId = String(jsonObject(decodeJsonString(response.stdout || "{}"))?.environmentId ?? "");
     } catch {
       servedId = "";
     }
@@ -344,7 +347,7 @@ export async function runRemoteDoctor(input: {
     );
   }
 
-  if (binding?.endpointKind === "tailscale" && typeof binding.endpoint === "string") {
+  if (binding?.endpointKind === "tailscale" && Predicate.isString(binding.endpoint)) {
     const tailscaleHealthy = await commandOk("tailscale", ["status"]);
     checks.push(
       check(
@@ -354,9 +357,7 @@ export async function runRemoteDoctor(input: {
       ),
     );
 
-    const mapping = binding.tailscaleServe as
-      | { httpsPort?: unknown; endpoint?: unknown }
-      | undefined;
+    const mapping = jsonObject(binding.tailscaleServe);
 
     const owned = mapping?.httpsPort === 443 && mapping.endpoint === binding.endpoint;
     checks.push(
@@ -381,23 +382,20 @@ export async function runRemoteDoctor(input: {
     );
   } else
     try {
-      const state = JSON.parse(NodeFS.readFileSync(runtimeStatePath, "utf8")) as {
-        activeVersion?: string;
-        update?: { status?: string };
-      };
+      const state = jsonObject(decodeJsonString(NodeFS.readFileSync(runtimeStatePath, "utf8")));
 
-      const pending = state.update?.status === "pending";
+      const pending = jsonObject(state?.update)?.status === "pending";
       checks.push(
         check(
           "update-state",
           pending ? "warning" : "pass",
           pending
             ? "A transactional update is pending."
-            : `Runtime ${state.activeVersion ?? "unknown"} has no pending update.`,
+            : `Runtime ${state?.activeVersion ?? "unknown"} has no pending update.`,
           false,
           {
-            activeVersion: state.activeVersion ?? "unknown",
-            updateStatus: state.update?.status ?? "none",
+            activeVersion: String(state?.activeVersion ?? "unknown"),
+            updateStatus: String(jsonObject(state?.update)?.status ?? "none"),
           },
         ),
       );

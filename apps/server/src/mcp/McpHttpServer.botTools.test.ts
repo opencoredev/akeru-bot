@@ -1,3 +1,4 @@
+import { decodeJson } from "../json.ts";
 import { threadId, invocation, client, TestLayer } from "./testUtils/mcpHttpServer.ts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -13,7 +14,7 @@ it.effect("requires both memory capability and a thread-scoped handler", () =>
     McpMemoryToolSession.setMcpMemoryToolSession(threadId, async ({ input }) => {
       calls += 1;
 
-      return { success: true, message: "Memory updated.", input };
+      return { success: true, message: "Memory updated.", input: decodeJson(input) };
     });
     const memoryInvocation = { ...invocation, capabilities: new Set(["memory"] as const) };
 

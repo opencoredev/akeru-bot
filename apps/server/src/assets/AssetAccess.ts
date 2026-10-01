@@ -206,120 +206,114 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
   let fileName: string;
   let imageDimensions: ImageDimensions | null = null;
 
-  switch (input.resource._tag) {
-    case "workspace-file": {
-      if (!input.workspaceRoot) {
-        return yield* new AssetWorkspaceContextNotFoundError({
-          resource: input.resource,
-        });
-      }
-
-      const workspaceRoot = yield* workspacePaths.normalizeWorkspaceRoot(input.workspaceRoot).pipe(
-        Effect.mapError(
-          (cause) =>
-            new AssetWorkspaceRootNormalizationError({
-              resource: input.resource,
-              cause,
-            }),
-        ),
-      );
-
-      const relativePath = path.isAbsolute(input.resource.path)
-        ? path.relative(workspaceRoot, input.resource.path)
-        : input.resource.path;
-
-      const resolved = yield* workspacePaths
-        .resolveRelativePathWithinRoot({ workspaceRoot, relativePath })
-        .pipe(
-          Effect.mapError(
-            (cause) =>
-              new AssetWorkspacePathValidationError({
-                resource: input.resource,
-                cause,
-              }),
-          ),
-        );
-
-      if (!isWorkspacePreviewEntryPath(resolved.relativePath)) {
-        return yield* new AssetPreviewTypeValidationError({
-          resource: input.resource,
-        });
-      }
-
-      const canonicalFile = yield* resolveCanonicalWorkspaceFile({
-        workspaceRoot,
-        relativePath: resolved.relativePath,
-      }).pipe(
-        Effect.mapError(
-          (cause) =>
-            new AssetWorkspaceAssetInspectionError({
-              resource: input.resource,
-              cause,
-            }),
-        ),
-      );
-
-      if (!canonicalFile) {
-        return yield* new AssetWorkspaceAssetNotFoundError({
-          resource: input.resource,
-        });
-      }
-
-      imageDimensions = yield* readImageDimensionsFromHeader(canonicalFile);
-
-      const canonicalWorkspaceRoot = yield* fileSystem.realPath(workspaceRoot).pipe(
-        Effect.mapError(
-          (cause) =>
-            new AssetWorkspaceResolutionError({
-              resource: input.resource,
-              cause,
-            }),
-        ),
-      );
-
-      claims = isWorkspaceImagePreviewPath(resolved.relativePath)
-        ? {
-            version: 1,
-            kind: "workspace-file-exact",
-            workspaceRoot: canonicalWorkspaceRoot,
-            relativePath: resolved.relativePath,
-            expiresAt,
-          }
-        : {
-            version: 1,
-            kind: "workspace-file",
-            workspaceRoot: canonicalWorkspaceRoot,
-            baseRelativePath: path.dirname(resolved.relativePath),
-            expiresAt,
-          };
-      fileName = path.basename(resolved.relativePath);
-      break;
-    }
-
-    case "attachment": {
-      const config = yield* ServerConfig.ServerConfig;
-
-      const attachmentPath = resolveAttachmentPathById({
-        attachmentsDir: config.attachmentsDir,
-        attachmentId: input.resource.attachmentId,
+  if (Predicate.isTagged(input.resource, "workspace-file")) {
+    if (!input.workspaceRoot) {
+      return yield* new AssetWorkspaceContextNotFoundError({
+        resource: input.resource,
       });
-
-      if (!attachmentPath) {
-        return yield* new AssetAttachmentNotFoundError({
-          resource: input.resource,
-        });
-      }
-
-      imageDimensions = yield* readImageDimensionsFromHeader(attachmentPath);
-      claims = {
-        version: 1,
-        kind: "attachment",
-        attachmentId: input.resource.attachmentId,
-        expiresAt,
-      };
-      fileName = path.basename(attachmentPath);
-      break;
     }
+
+    const workspaceRoot = yield* workspacePaths.normalizeWorkspaceRoot(input.workspaceRoot).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AssetWorkspaceRootNormalizationError({
+            resource: input.resource,
+            cause,
+          }),
+      ),
+    );
+
+    const relativePath = path.isAbsolute(input.resource.path)
+      ? path.relative(workspaceRoot, input.resource.path)
+      : input.resource.path;
+
+    const resolved = yield* workspacePaths
+      .resolveRelativePathWithinRoot({ workspaceRoot, relativePath })
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new AssetWorkspacePathValidationError({
+              resource: input.resource,
+              cause,
+            }),
+        ),
+      );
+
+    if (!isWorkspacePreviewEntryPath(resolved.relativePath)) {
+      return yield* new AssetPreviewTypeValidationError({
+        resource: input.resource,
+      });
+    }
+
+    const canonicalFile = yield* resolveCanonicalWorkspaceFile({
+      workspaceRoot,
+      relativePath: resolved.relativePath,
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AssetWorkspaceAssetInspectionError({
+            resource: input.resource,
+            cause,
+          }),
+      ),
+    );
+
+    if (!canonicalFile) {
+      return yield* new AssetWorkspaceAssetNotFoundError({
+        resource: input.resource,
+      });
+    }
+
+    imageDimensions = yield* readImageDimensionsFromHeader(canonicalFile);
+
+    const canonicalWorkspaceRoot = yield* fileSystem.realPath(workspaceRoot).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AssetWorkspaceResolutionError({
+            resource: input.resource,
+            cause,
+          }),
+      ),
+    );
+
+    claims = isWorkspaceImagePreviewPath(resolved.relativePath)
+      ? {
+          version: 1,
+          kind: "workspace-file-exact",
+          workspaceRoot: canonicalWorkspaceRoot,
+          relativePath: resolved.relativePath,
+          expiresAt,
+        }
+      : {
+          version: 1,
+          kind: "workspace-file",
+          workspaceRoot: canonicalWorkspaceRoot,
+          baseRelativePath: path.dirname(resolved.relativePath),
+          expiresAt,
+        };
+    fileName = path.basename(resolved.relativePath);
+  } else {
+    const config = yield* ServerConfig.ServerConfig;
+
+    const attachmentPath = resolveAttachmentPathById({
+      attachmentsDir: config.attachmentsDir,
+      attachmentId: input.resource.attachmentId,
+    });
+
+    if (!attachmentPath) {
+      return yield* new AssetAttachmentNotFoundError({
+        resource: input.resource,
+      });
+    }
+
+    imageDimensions = yield* readImageDimensionsFromHeader(attachmentPath);
+    claims = {
+      version: 1,
+      kind: "attachment",
+      attachmentId: input.resource.attachmentId,
+      expiresAt,
+    };
+    fileName = path.basename(attachmentPath);
   }
 
   const secretStore = yield* ServerSecretStore.ServerSecretStore;

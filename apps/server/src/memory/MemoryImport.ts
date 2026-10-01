@@ -21,7 +21,6 @@ import {
 const checksum = (value: string) => NodeCrypto.createHash("sha256").update(value).digest("hex");
 
 const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
-  readonly repository: EntityMemoryRepositoryShape;
   readonly access: AkeruMemoryThreadAccess;
   readonly target: AkeruMemoryArchiveTarget;
   readonly archive: AkeruMemoryArchive;
@@ -156,7 +155,7 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
 });
 
 export function previewAkeruMemoryImport(input: {
-  readonly repository: EntityMemoryRepositoryShape;
+  readonly repository: Pick<EntityMemoryRepositoryShape, "previewImport">;
   readonly access: AkeruMemoryThreadAccess;
   readonly target: AkeruMemoryArchiveTarget;
   readonly archive: AkeruMemoryArchive;
@@ -169,7 +168,7 @@ export function previewAkeruMemoryImport(input: {
 }
 
 export function applyAkeruMemoryImport(input: {
-  readonly repository: EntityMemoryRepositoryShape;
+  readonly repository: Pick<EntityMemoryRepositoryShape, "applyImport">;
   readonly access: AkeruMemoryThreadAccess;
   readonly target: AkeruMemoryArchiveTarget;
   readonly archive: AkeruMemoryArchive;

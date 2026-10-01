@@ -1,4 +1,3 @@
-import { Composio } from "@composio/core";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -82,7 +81,7 @@ function fakeClient(input?: {
       delete: vi.fn(async () => ({})),
     },
     sessions: { create: createSession },
-  } as unknown as InstanceType<typeof Composio>;
+  };
 
   return { client, createSession, sessionDeletes };
 }

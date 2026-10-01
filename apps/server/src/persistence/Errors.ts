@@ -1,18 +1,19 @@
+import * as Match from "effect/Match";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 
 function summarizeSchemaIssue(issue: SchemaIssue.Issue): string {
-  switch (issue._tag) {
-    case "Filter":
-    case "Encoding":
-    case "Pointer":
+  return Match.value(issue).pipe(
+    Match.tag("Filter", "Encoding", "Pointer", (issue): string => {
       return `${issue._tag}(${summarizeSchemaIssue(issue.issue)})`;
-    case "Composite":
-    case "AnyOf":
+    }),
+    Match.tag("Composite", "AnyOf", (issue): string => {
       return `${issue._tag}(${issue.issues.map(summarizeSchemaIssue).join(",")})`;
-    default:
+    }),
+    Match.orElse((issue): string => {
       return issue._tag;
-  }
+    }),
+  );
 }
 
 // ===============================
@@ -91,7 +92,7 @@ export function toPersistenceDecodeError(operation: string) {
     PersistenceDecodeError.fromSchemaError(operation, cause);
 }
 
-export const isPersistenceError = (u: unknown) =>
+export const isPersistenceError = (u: unknown): u is PersistenceSqlError | PersistenceDecodeError =>
   isPersistenceSqlError(u) || isPersistenceDecodeError(u);
 
 // ===============================

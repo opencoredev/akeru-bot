@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import { AkeruBotUsageSummary } from "@akeru/contracts";
 import * as Context from "effect/Context";
@@ -64,12 +65,11 @@ const make = Effect.gen(function* () {
     const priorReported =
       current.state === "reported" ? (current.inputTokens ?? 0) + (current.outputTokens ?? 0) : 0;
 
-    const nextReported =
-      input.state === "reported"
-        ? input.inputTokens + input.outputTokens
-        : input.state === "unavailable"
-          ? current.reservedTokens
-          : 0;
+    const nextReported = Match.value(input).pipe(
+      Match.when({ state: "reported" }, (reported) => reported.inputTokens + reported.outputTokens),
+      Match.when({ state: "unavailable" }, () => current.reservedTokens),
+      Match.orElse(() => 0),
+    );
 
     if (current.state === "reported") {
       if (input.state !== "reported" || nextReported < priorReported) {
@@ -566,7 +566,7 @@ const make = Effect.gen(function* () {
       const entries = yield* Effect.forEach(rows, decodeEntry);
       const totals = measurements[0]!;
 
-      return yield* Schema.decodeUnknownEffect(AkeruBotUsageSummary)({
+      return yield* decodeUsageSummary({
         botId,
         consumedTokens: balances[0]?.consumedTokens ?? 0,
         reservedTokens: balances[0]?.reservedTokens ?? 0,
@@ -701,6 +701,8 @@ const make = Effect.gen(function* () {
     pricingTotals,
   } satisfies BotUsageLedgerShape;
 });
+
+const decodeUsageSummary = Schema.decodeUnknownEffect(AkeruBotUsageSummary);
 
 export const BotUsageLedgerLive = Layer.effect(BotUsageLedger, make);
 

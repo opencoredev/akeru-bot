@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * RFC 8628 (OAuth 2.0 Device Authorization Grant) polling helpers.
  *
@@ -39,7 +40,7 @@ export function createDeviceCodePollState(options: {
   now: number;
 }): DeviceCodePollState {
   const intervalSeconds =
-    typeof options.intervalSeconds === "number" && options.intervalSeconds > 0
+    Predicate.isNumber(options.intervalSeconds) && options.intervalSeconds > 0
       ? options.intervalSeconds
       : DEFAULT_INTERVAL_SECONDS;
 
@@ -108,7 +109,7 @@ function foldOutcome<T>(
         // RFC 8628 section 3.5: grow the interval by 5 seconds, unless the
         // server told us the interval to use.
         intervalMs:
-          typeof outcome.intervalSeconds === "number" && outcome.intervalSeconds > 0
+          Predicate.isNumber(outcome.intervalSeconds) && outcome.intervalSeconds > 0
             ? outcome.intervalSeconds * 1000
             : Math.max(1000, state.intervalMs + SLOW_DOWN_INTERVAL_INCREMENT_MS),
       };
@@ -118,7 +119,7 @@ function foldOutcome<T>(
 
     case "pending": {
       const next: DeviceCodePollState =
-        typeof outcome.intervalSeconds === "number" && outcome.intervalSeconds > 0
+        Predicate.isNumber(outcome.intervalSeconds) && outcome.intervalSeconds > 0
           ? { ...state, intervalMs: Math.max(1000, outcome.intervalSeconds * 1000) }
           : state;
 

@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+
 import * as Predicate from "effect/Predicate";
 import { ExecutionEnvironmentDescriptor } from "@akeru/contracts";
 import { resolveWorktreeT3Home } from "@akeru/shared/devHome";
@@ -83,7 +85,7 @@ export const resolvePublicPairingBaseUrl = Effect.fn("pair.resolvePublicPairingB
 
     const parsed = parsePublicPairingBaseUrl(input.publicUrl.value);
 
-    if (typeof parsed === "string") {
+    if (Predicate.isString(parsed)) {
       return parsed;
     }
 
@@ -147,7 +149,7 @@ export const probeEnvironmentDescriptor = (
     const response = yield* client.execute(request).pipe(
       Effect.timeout(PAIR_PROBE_TIMEOUT),
       // Transport failure or timeout: nothing (reachable) is listening there.
-      Effect.mapError(() => ({ _tag: "unreachable" }) as const),
+      Effect.mapError(() => EnvironmentProbe["unreachable"]()),
     );
 
     // Bad-gateway family means a proxy (Tailscale Serve) answered for a
@@ -155,17 +157,17 @@ export const probeEnvironmentDescriptor = (
     // it as unreachable lets `akeru pair --tailscale` repair its own mapping
     // after the server's port changed.
     if (response.status === 502 || response.status === 503 || response.status === 504) {
-      return { _tag: "unreachable" } as const;
+      return EnvironmentProbe["unreachable"]();
     }
 
     // Anything else that answered HTTP but not with a valid descriptor is
     // some other service.
     const descriptor = yield* HttpClientResponse.filterStatusOk(response).pipe(
       Effect.flatMap(HttpClientResponse.schemaBodyJson(ExecutionEnvironmentDescriptor)),
-      Effect.mapError(() => ({ _tag: "not-a-t3-server" }) as const),
+      Effect.mapError(() => EnvironmentProbe["not-a-t3-server"]()),
     );
 
-    return { _tag: "descriptor", descriptor } as const;
+    return EnvironmentProbe["descriptor"]({ descriptor });
   }).pipe(Effect.catch((outcome) => Effect.succeed(outcome)));
 
 // signal 0 delivers nothing; it only reports whether the pid exists. EPERM
@@ -252,7 +254,7 @@ export const discoverPairTarget = Effect.fn("pair.discoverPairTarget")(function*
 });
 
 export const awaitEnvironmentDescriptor = Effect.fn(function* (baseUrl: string) {
-  let last: EnvironmentProbeResult = { _tag: "unreachable" };
+  let last: EnvironmentProbeResult = EnvironmentProbe["unreachable"]();
 
   for (let attempt = 0; attempt < TAILSCALE_PROBE_ATTEMPTS; attempt += 1) {
     last = yield* probeEnvironmentDescriptor(baseUrl);
@@ -342,3 +344,5 @@ export const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairi
     return { baseUrl, notes };
   },
 );
+
+const EnvironmentProbe = Data.taggedEnum<EnvironmentProbeResult>();

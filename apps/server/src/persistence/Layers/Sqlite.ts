@@ -10,7 +10,7 @@ import { ServerConfig } from "../../config.ts";
 
 type RuntimeSqliteLayerConfig = {
   readonly filename: string;
-  readonly spanAttributes?: Record<string, unknown>;
+  readonly spanAttributes?: import("@effect/sql-sqlite-bun/SqliteClient").SqliteClientConfig["spanAttributes"];
 };
 
 type Loader = {

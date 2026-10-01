@@ -46,7 +46,7 @@ export function withChecksum(record: RecordCore): PortabilityArchiveRecord {
   return { ...record, checksum: portabilityChecksum(record) };
 }
 
-export function portableId(prefix: string, value: unknown): string {
+export function portableId<Value>(prefix: string, value: Value): string {
   return `${prefix}-${portabilityChecksum(value).slice(0, 32)}`;
 }
 
@@ -60,7 +60,10 @@ export const APPROVAL_ACTIVITY_KINDS = new Set<string>(ApprovalActivityKind.lite
 
 const isApprovalActivityKind = Schema.is(ApprovalActivityKind);
 
-export function stringField(payload: unknown, key: string): string | undefined {
+export function stringField(
+  payload: OrchestrationReadModel["threads"][number]["activities"][number]["payload"],
+  key: string,
+): string | undefined {
   if (!Predicate.isObjectOrArray(payload) || !Predicate.hasProperty(payload, key)) return undefined;
   const value = payload[key];
 

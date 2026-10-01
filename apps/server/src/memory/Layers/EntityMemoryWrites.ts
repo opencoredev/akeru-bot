@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import {
   AkeruMemoryEntityId,
@@ -19,30 +20,22 @@ import {
   type DeleteEntityMemoryInput,
 } from "../Services/EntityMemoryRepository.ts";
 import { EntityMemoryDbRow, selectColumns, decodeRow } from "./EntityMemoryRows.ts";
-import type { makeEntityMemoryStorage } from "./EntityMemoryStorage.ts";
-import type { makeEntityMemoryQueries } from "./EntityMemoryQueries.ts";
+import type { EntityMemoryStorageServices } from "./EntityMemoryStorage.ts";
+import type { EntityMemoryQueriesServices } from "./EntityMemoryQueries.ts";
 
 export const makeEntityMemoryWrites = (dependencies: {
-  sql: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["sql"];
-  writeLock: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["writeLock"];
-  insertRow: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["insertRow"];
-  samePartition: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["samePartition"];
-  expectedEntity: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["expectedEntity"];
-  authorizeRevision: Effect.Success<
-    ReturnType<typeof makeEntityMemoryStorage>
-  >["authorizeRevision"];
-  getCurrent: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["getCurrent"];
-  invalidateDerivedCopies: Effect.Success<
-    ReturnType<typeof makeEntityMemoryStorage>
-  >["invalidateDerivedCopies"];
-  invalidateObservations: Effect.Success<
-    ReturnType<typeof makeEntityMemoryStorage>
-  >["invalidateObservations"];
-  isRevisionAuthorized: Effect.Success<
-    ReturnType<typeof makeEntityMemoryQueries>
-  >["isRevisionAuthorized"];
+  sql: EntityMemoryStorageServices["sql"];
+  writeLock: EntityMemoryStorageServices["writeLock"];
+  insertRow: EntityMemoryStorageServices["insertRow"];
+  samePartition: EntityMemoryStorageServices["samePartition"];
+  expectedEntity: EntityMemoryStorageServices["expectedEntity"];
+  authorizeRevision: EntityMemoryStorageServices["authorizeRevision"];
+  getCurrent: EntityMemoryStorageServices["getCurrent"];
+  invalidateDerivedCopies: EntityMemoryStorageServices["invalidateDerivedCopies"];
+  invalidateObservations: EntityMemoryStorageServices["invalidateObservations"];
+  isRevisionAuthorized: EntityMemoryQueriesServices["isRevisionAuthorized"];
 }) =>
-  Effect.gen(function* () {
+  Effect.sync(() => {
     const {
       sql,
       writeLock,
@@ -309,12 +302,11 @@ export const makeEntityMemoryWrites = (dependencies: {
 
       if (authorized.length === 0) return null;
 
-      const preferred =
-        scope === "bot"
-          ? authorized.find((partition) => partition.scope === "bot")
-          : scope === "private"
-            ? authorized.find((partition) => partition.scope === "bot-user")
-            : authorized.find((partition) => partition.scope === scope);
+      const preferred = Match.value(scope).pipe(
+        Match.when("bot", () => authorized.find((partition) => partition.scope === "bot")),
+        Match.when("private", () => authorized.find((partition) => partition.scope === "bot-user")),
+        Match.orElse(() => authorized.find((partition) => partition.scope === scope)),
+      );
 
       return preferred ?? authorized[0]!;
     };

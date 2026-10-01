@@ -1,3 +1,6 @@
+import { isJsonObject } from "../json.ts";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 /**
  * Model rate lookup and cost arithmetic.
  *
@@ -26,16 +29,8 @@ export interface ModelRate {
 
 export type RateTable = ReadonlyMap<string, ModelRate>;
 
-/** Raw shape of one LiteLLM entry, narrowed to the fields we read. */
-interface LiteLlmEntry {
-  readonly input_cost_per_token?: unknown;
-  readonly output_cost_per_token?: unknown;
-  readonly cache_read_input_token_cost?: unknown;
-  readonly cache_creation_input_token_cost?: unknown;
-}
-
-function finiteNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+function finiteNumber(value: Schema.Json | undefined): number | null {
+  return Predicate.isNumber(value) && Number.isFinite(value) ? value : null;
 }
 
 /**
@@ -48,14 +43,14 @@ function finiteNumber(value: unknown): number | null {
  * Entries keep their full normalized key; a bare name is aliased only when no
  * canonical entry exists and every qualified entry has the same rate.
  */
-export function parseRateTable(document: unknown): RateTable {
+export function parseRateTable(document: Schema.Json): RateTable {
   const table = new Map<string, ModelRate>();
 
-  if (typeof document !== "object" || document === null) return table;
+  if (!isJsonObject(document)) return table;
 
-  for (const [name, raw] of Object.entries(document as Record<string, unknown>)) {
-    if (typeof raw !== "object" || raw === null) continue;
-    const entry = raw as LiteLlmEntry;
+  for (const [name, raw] of Object.entries(document)) {
+    if (!isJsonObject(raw)) continue;
+    const entry = raw;
     const input = finiteNumber(entry.input_cost_per_token);
     const output = finiteNumber(entry.output_cost_per_token);
 

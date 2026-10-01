@@ -114,6 +114,107 @@ interface NodeWebSocketWithTransport extends NodeSocket.NodeWS.WebSocket {
   };
 }
 
+class TransportCloseEvent extends Event implements CloseEvent {
+  readonly code: number;
+  readonly reason: string;
+  readonly wasClean: boolean;
+  constructor(code: number, reason: string, wasClean: boolean) {
+    super("close");
+    this.code = code;
+    this.reason = reason;
+    this.wasClean = wasClean;
+  }
+}
+
+class BrowserWebSocketTransport extends EventTarget implements WebSocket {
+  readonly CONNECTING = 0;
+  readonly OPEN = 1;
+  readonly CLOSING = 2;
+  readonly CLOSED = 3;
+  onopen: WebSocket["onopen"] = null;
+  onclose: WebSocket["onclose"] = null;
+  onerror: WebSocket["onerror"] = null;
+  onmessage: WebSocket["onmessage"] = null;
+  private readonly socket: NodeSocket.NodeWS.WebSocket;
+  private selectedBinaryType: WebSocket["binaryType"] = "arraybuffer";
+  constructor(socket: NodeSocket.NodeWS.WebSocket) {
+    super();
+    this.socket = socket;
+    socket.on("open", () => {
+      const event = new Event("open");
+      this.onopen?.(event);
+      this.dispatchEvent(event);
+    });
+    socket.on("message", (data, binary) => {
+      const chunks = Array.isArray(data) ? data : [data];
+
+      const bytes = Buffer.concat(
+        chunks.map((chunk) => (Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))),
+      );
+
+      const payload = binary
+        ? this.selectedBinaryType === "nodebuffer"
+          ? bytes
+          : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+        : bytes.toString();
+
+      const event = new MessageEvent("message", { data: payload });
+      this.onmessage?.(event);
+      this.dispatchEvent(event);
+    });
+    socket.on("error", () => {
+      const event = new Event("error");
+      this.onerror?.(event);
+      this.dispatchEvent(event);
+    });
+    socket.on("close", (code, reason) => {
+      const event = new TransportCloseEvent(code, reason.toString(), code === 1000);
+      this.onclose?.(event);
+      this.dispatchEvent(event);
+    });
+  }
+  get binaryType(): WebSocket["binaryType"] {
+    return this.selectedBinaryType;
+  }
+  set binaryType(value: WebSocket["binaryType"]) {
+    this.selectedBinaryType = value;
+    this.socket.binaryType = "arraybuffer";
+  }
+  get bufferedAmount() {
+    return this.socket.bufferedAmount;
+  }
+  get extensions() {
+    return this.socket.extensions;
+  }
+  get protocol() {
+    return this.socket.protocol;
+  }
+  get readyState() {
+    return this.socket.readyState;
+  }
+  get url() {
+    return this.socket.url;
+  }
+  get URL() {
+    return this.socket.url;
+  }
+  ping(data?: string | ArrayBufferView | ArrayBufferLike) {
+    this.socket.ping(data);
+  }
+  pong(data?: string | ArrayBufferView | ArrayBufferLike) {
+    this.socket.pong(data);
+  }
+  terminate() {
+    this.socket.terminate();
+  }
+  close(code?: number, reason?: string) {
+    this.socket.close(code, reason);
+  }
+  send(data: Parameters<WebSocket["send"]>[0]) {
+    this.socket.send(data);
+  }
+}
+
 function rawDataBytes(data: NodeSocket.NodeWS.RawData): number {
   if (Array.isArray(data)) {
     return data.reduce((total, chunk) => total + chunk.byteLength, 0);
@@ -129,6 +230,7 @@ export function makeWebSocketTransferRecorder(): WebSocketTransferRecorder {
 
   return {
     connect: (url, protocols, cookie) => {
+      // SAFETY: ws owns this optional native socket handle; only its bytesRead counter is inspected for integration transport measurement.
       const nextSocket = new NodeSocket.NodeWS.WebSocket(url, protocols, {
         headers: { cookie },
         perMessageDeflate: true,
@@ -141,7 +243,7 @@ export function makeWebSocketTransferRecorder(): WebSocketTransferRecorder {
         messages += 1;
       });
 
-      return nextSocket as unknown as globalThis.WebSocket;
+      return new BrowserWebSocketTransport(nextSocket);
     },
     totals: () => ({
       wireBytes: socket?._socket?.bytesRead ?? 0,

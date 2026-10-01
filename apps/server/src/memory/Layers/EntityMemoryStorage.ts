@@ -247,3 +247,7 @@ export const makeEntityMemoryStorage = () =>
       recordDerivedCopies,
     };
   });
+
+export type EntityMemoryStorageServices = Effect.Success<
+  ReturnType<typeof makeEntityMemoryStorage>
+>;

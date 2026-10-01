@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as NodeCrypto from "node:crypto";
 
 import {
@@ -11,7 +12,7 @@ import {
 } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
-import { makeBotMemoryError, type BotMemoryAccess, type BotMemoryStore } from "./BotMemory.ts";
+import { BotMemoryError, type BotMemoryAccess, type BotMemoryStore } from "./BotMemory.ts";
 import { encodeMemoryArchiveJson } from "./MemoryArchiveJson.ts";
 
 const checksum = (value: string) => NodeCrypto.createHash("sha256").update(value).digest("hex");
@@ -19,11 +20,11 @@ const checksum = (value: string) => NodeCrypto.createHash("sha256").update(value
 const decodeArchive = Schema.decodeUnknownSync(AkeruMarkdownMemoryArchiveV3);
 
 const documentPath = (access: BotMemoryAccess, target: AkeruMemoryDocumentTarget): string =>
-  target === "user"
-    ? `bots/${access.botId}/USER.md`
-    : target === "memory"
-      ? `bots/${access.botId}/MEMORY.md`
-      : `bots/${access.botId}/groups/${access.groupId}/GROUP.md`;
+  Match.value(target).pipe(
+    Match.when("user", () => `bots/${access.botId}/USER.md`),
+    Match.when("memory", () => `bots/${access.botId}/MEMORY.md`),
+    Match.orElse(() => `bots/${access.botId}/groups/${access.groupId}/GROUP.md`),
+  );
 
 const manifestValue = (archive: Omit<AkeruMarkdownMemoryArchiveV3Value, "manifestSha256">) =>
   encodeMemoryArchiveJson({
@@ -97,15 +98,18 @@ async function prepareImport(input: {
   const { archive, access } = input;
 
   if (archive.anchorThreadId !== input.threadId) {
-    throw makeBotMemoryError("access-denied", "Restore this memory archive in its original chat.");
+    throw BotMemoryError.fromCode(
+      "access-denied",
+      "Restore this memory archive in its original chat.",
+    );
   }
 
   if (String(archive.botId) !== String(access.botId)) {
-    throw makeBotMemoryError("access-denied", "The archive belongs to a different bot.");
+    throw BotMemoryError.fromCode("access-denied", "The archive belongs to a different bot.");
   }
 
   if (String(archive.groupId) !== String(access.groupId)) {
-    throw makeBotMemoryError(
+    throw BotMemoryError.fromCode(
       "access-denied",
       "The archive group does not match the active conversation group.",
     );
@@ -114,11 +118,11 @@ async function prepareImport(input: {
   if (
     checksum(encodeMemoryArchiveJson(archive.conversation.snapshot)) !== archive.conversation.sha256
   ) {
-    throw makeBotMemoryError("io-error", "The observational-memory checksum is invalid.");
+    throw BotMemoryError.fromCode("io-error", "The observational-memory checksum is invalid.");
   }
 
   if (checksum(manifestValue(archive)) !== archive.manifestSha256) {
-    throw makeBotMemoryError("io-error", "The memory archive manifest checksum is invalid.");
+    throw BotMemoryError.fromCode("io-error", "The memory archive manifest checksum is invalid.");
   }
 
   const expectedTargets = new Set<AkeruMemoryDocumentTarget>([
@@ -128,7 +132,10 @@ async function prepareImport(input: {
   ]);
 
   if (archive.documents.length !== expectedTargets.size) {
-    throw makeBotMemoryError("invalid-operation", "The memory archive has missing or extra files.");
+    throw BotMemoryError.fromCode(
+      "invalid-operation",
+      "The memory archive has missing or extra files.",
+    );
   }
 
   const seen = new Set<AkeruMemoryDocumentTarget>();
@@ -143,7 +150,7 @@ async function prepareImport(input: {
 
   const prepared = archive.documents.map((document) => {
     if (!expectedTargets.has(document.target) || seen.has(document.target)) {
-      throw makeBotMemoryError(
+      throw BotMemoryError.fromCode(
         "invalid-operation",
         "The memory archive contains an invalid file set.",
       );
@@ -158,7 +165,10 @@ async function prepareImport(input: {
       document.path !== documentPath(access, document.target) ||
       checksum(document.content) !== document.sha256
     ) {
-      throw makeBotMemoryError("io-error", `The ${document.target} memory file failed validation.`);
+      throw BotMemoryError.fromCode(
+        "io-error",
+        `The ${document.target} memory file failed validation.`,
+      );
     }
 
     const validated = input.store.validateDocumentReplacement(
@@ -189,7 +199,7 @@ async function prepareImport(input: {
       (document) => document.target === "memory" && document.classification !== "unchanged",
     )
   ) {
-    throw makeBotMemoryError(
+    throw BotMemoryError.fromCode(
       "invalid-operation",
       "Private bot memory is turned off. Turn it on to restore MEMORY.md from this archive.",
     );
@@ -248,7 +258,7 @@ export async function applyBotMemoryImport(input: {
     const prepared = await prepareImport(input);
 
     if (prepared.previewHash !== input.previewHash) {
-      throw makeBotMemoryError(
+      throw BotMemoryError.fromCode(
         "invalid-operation",
         "Memory changed after the import preview. Preview the archive again.",
       );

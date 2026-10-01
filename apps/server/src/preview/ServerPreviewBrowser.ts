@@ -1,24 +1,28 @@
+import * as Schema from "effect/Schema";
+import * as Data from "effect/Data";
+import type { PreviewSessionSnapshot } from "@akeru/contracts";
 import * as Match from "effect/Match";
 import {
   DEFAULT_VIEWPORT,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This browser layer owns the Browserbase context pool and its finalizer.
   makeBrowserbaseContexts,
   requireBrowserbaseApiKey,
 } from "./BrowserbaseContext.ts";
 import {
   FILL_PREVIEW_VIEWPORT,
-  type PreviewAutomationClickInput,
-  type PreviewAutomationEvaluateInput,
-  type PreviewAutomationNavigateInput,
-  type PreviewAutomationOpenInput,
-  type PreviewAutomationPressInput,
+  PreviewAutomationClickInput,
+  PreviewAutomationEvaluateInput,
+  PreviewAutomationNavigateInput,
+  PreviewAutomationOpenInput,
+  PreviewAutomationPressInput,
   type PreviewAutomationRequest,
-  type PreviewAutomationResizeInput,
-  type PreviewAutomationScrollInput,
-  type PreviewAutomationSetColorSchemeInput,
-  type PreviewAutomationSnapshot,
+  PreviewAutomationResizeInput,
+  PreviewAutomationScrollInput,
+  PreviewAutomationSetColorSchemeInput,
+  PreviewAutomationSnapshot,
   type PreviewAutomationStatus,
-  type PreviewAutomationTypeInput,
-  type PreviewAutomationWaitForInput,
+  PreviewAutomationTypeInput,
+  PreviewAutomationWaitForInput,
   type PreviewRenderedViewportSize,
   type PreviewTabId,
   type ThreadId,
@@ -73,7 +77,9 @@ const errorMessage = (cause: unknown): string =>
 export class ServerPreviewBrowser extends Context.Service<
   ServerPreviewBrowser,
   {
-    readonly handle: (request: PreviewAutomationRequest) => Promise<unknown>;
+    readonly handle: (
+      request: PreviewAutomationRequest,
+    ) => Promise<import("@akeru/contracts").PreviewAutomationResponse["result"]>;
     readonly close: () => Promise<void>;
   }
 >()("akeru-bot/preview/ServerPreviewBrowser") {}
@@ -198,11 +204,10 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       previewManager.reportStatus({
         threadId: tab.threadId,
         tabId: tabIdFor(tab),
-        navStatus: {
-          _tag: "Success",
+        navStatus: Navigation["Success"]({
           url: url === "about:blank" ? "about:blank" : url,
           title: await tab.page.title(),
-        },
+        }),
         canGoBack: false,
         canGoForward: false,
       }),
@@ -221,12 +226,11 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     try {
       await tab.page.goto(url, {
         timeout: input.timeoutMs ?? fallbackTimeout,
-        waitUntil:
-          readiness === "domContentLoaded"
-            ? "domcontentloaded"
-            : readiness === "none"
-              ? "commit"
-              : "load",
+        waitUntil: Match.value(readiness).pipe(
+          Match.when("domContentLoaded", (): "domcontentloaded" => "domcontentloaded"),
+          Match.when("none", (): "commit" => "commit"),
+          Match.orElse((): "load" => "load"),
+        ),
       });
       tab.loading = false;
       await reportPageStatus(tab);
@@ -239,7 +243,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     }
   };
 
-  const handle = async (request: PreviewAutomationRequest): Promise<unknown> => {
+  const handle = async (request: PreviewAutomationRequest) => {
     const generation = closeGeneration;
     await Effect.runPromise(requireApiKey);
 
@@ -250,7 +254,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     }
 
     if (request.operation === "open") {
-      const input = request.input as PreviewAutomationOpenInput;
+      const input = decodeOpenInput(request.input);
       let tabId = request.tabId ?? activeByThread.get(request.threadId);
       let tab = tabId ? tabs.get(tabId) : undefined;
 
@@ -291,11 +295,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
 
     switch (request.operation) {
       case "navigate":
-        return await navigate(
-          tab,
-          request.input as PreviewAutomationNavigateInput,
-          request.timeoutMs,
-        );
+        return await navigate(tab, decodeNavigateInput(request.input), request.timeoutMs);
       case "snapshot": {
         const [rawPageData, screenshot] = await Promise.all([
           tab.page.evaluate(`(() => {
@@ -320,10 +320,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
           publishFrame(tab),
         ]);
 
-        const pageData = rawPageData as {
-          readonly visibleText: string;
-          readonly interactiveElements: PreviewAutomationSnapshot["interactiveElements"];
-        };
+        const pageData = decodePageData(rawPageData);
 
         return {
           url: tab.page.url(),
@@ -342,7 +339,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       }
 
       case "click": {
-        const input = request.input as PreviewAutomationClickInput;
+        const input = decodeClickInput(request.input);
         const selector = selectorFor(input);
 
         if (selector)
@@ -354,7 +351,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       }
 
       case "type": {
-        const input = request.input as PreviewAutomationTypeInput;
+        const input = decodeTypeInput(request.input);
         const selector = selectorFor(input);
 
         if (selector) {
@@ -377,7 +374,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       }
 
       case "press": {
-        const input = request.input as PreviewAutomationPressInput;
+        const input = decodePressInput(request.input);
         await tab.page.keyboard.press([...(input.modifiers ?? []), input.key].join("+"));
         await publishFrame(tab);
 
@@ -385,7 +382,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       }
 
       case "scroll": {
-        const input = request.input as PreviewAutomationScrollInput;
+        const input = decodeScrollInput(request.input);
         const selector = selectorFor(input);
 
         if (selector) {
@@ -402,7 +399,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       }
 
       case "evaluate": {
-        const input = request.input as PreviewAutomationEvaluateInput;
+        const input = decodeEvaluateInput(request.input);
         const session = await (await contextFor(generation)).newCDPSession(tab.page);
 
         try {
@@ -423,9 +420,9 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       }
 
       case "waitFor": {
-        const input = request.input as PreviewAutomationWaitForInput;
+        const input = decodeWaitForInput(request.input);
         const timeout = input.timeoutMs ?? request.timeoutMs;
-        const waits: Promise<unknown>[] = [];
+        const waits: Promise<void>[] = [];
         const selector = selectorFor(input);
 
         if (selector) waits.push(tab.page.locator(selector).waitFor({ state: "visible", timeout }));
@@ -444,7 +441,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       }
 
       case "resize": {
-        const input = request.input as PreviewAutomationResizeInput;
+        const input = decodeResizeInput(request.input);
         const setting = resolvePreviewViewport(input);
         const viewport = viewportForSetting(setting);
         await tab.page.setViewportSize(viewport);
@@ -457,7 +454,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       }
 
       case "setColorScheme": {
-        const input = request.input as PreviewAutomationSetColorSchemeInput;
+        const input = decodeSetColorSchemeInput(request.input);
         await tab.page.emulateMedia({
           colorScheme: input.colorScheme === "system" ? null : input.colorScheme,
         });
@@ -495,4 +492,33 @@ export const layer = Layer.effect(
   Effect.acquireRelease(make, (browser) =>
     Effect.promise(() => browser.close()).pipe(Effect.orDie),
   ),
+);
+
+const Navigation = Data.taggedEnum<PreviewSessionSnapshot["navStatus"]>();
+
+const decodeOpenInput = Schema.decodeUnknownSync(PreviewAutomationOpenInput);
+
+const decodeNavigateInput = Schema.decodeUnknownSync(PreviewAutomationNavigateInput);
+
+const decodeClickInput = Schema.decodeUnknownSync(PreviewAutomationClickInput);
+
+const decodeTypeInput = Schema.decodeUnknownSync(PreviewAutomationTypeInput);
+
+const decodePressInput = Schema.decodeUnknownSync(PreviewAutomationPressInput);
+
+const decodeScrollInput = Schema.decodeUnknownSync(PreviewAutomationScrollInput);
+
+const decodeEvaluateInput = Schema.decodeUnknownSync(PreviewAutomationEvaluateInput);
+
+const decodeWaitForInput = Schema.decodeUnknownSync(PreviewAutomationWaitForInput);
+
+const decodeResizeInput = Schema.decodeUnknownSync(PreviewAutomationResizeInput);
+
+const decodeSetColorSchemeInput = Schema.decodeUnknownSync(PreviewAutomationSetColorSchemeInput);
+
+const decodePageData = Schema.decodeUnknownSync(
+  Schema.Struct({
+    visibleText: Schema.String,
+    interactiveElements: PreviewAutomationSnapshot.fields.interactiveElements,
+  }),
 );

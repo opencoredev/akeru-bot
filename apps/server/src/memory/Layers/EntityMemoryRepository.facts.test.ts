@@ -588,7 +588,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
         threadId: ThreadId.make("thread-decide-seed"),
       };
 
-      const encodeJson = (value: unknown) =>
+      const encodeJson = <Value>(value: Value) =>
         // The seeded row only carries empty objects and short bot-id arrays;
         // keep the JSON encoding inline and side-effect free.
         JSON.stringify(value) as string;

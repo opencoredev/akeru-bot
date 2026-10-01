@@ -1,12 +1,20 @@
 import * as Effect from "effect/Effect";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
 import { makeGitExecution } from "./GitExecution.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
 import { makeGitBranches } from "./GitBranches.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
 import { makeGitRepositoryPaths } from "./GitRepositoryPaths.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
 import { makeGitRemoteStatus } from "./GitRemoteStatus.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
 import { makeGitLocalStatus } from "./GitLocalStatus.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
 import { makeGitPull } from "./GitPull.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
 import { makeGitWorktrees } from "./GitWorktrees.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
 import { makeGitRefs } from "./GitRefs.ts";
 
 export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* () {

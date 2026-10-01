@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
 
 import { fixture } from "./testUtils/subscriptionAuthStorage.ts";
@@ -12,7 +13,7 @@ import {
 describe("provider health checks", () => {
   const kimiDeviceId = "0123456789abcdef0123456789abcdef";
 
-  function seedOAuth(authPath: string, provider: string, extra: Record<string, unknown> = {}) {
+  function seedOAuth(authPath: string, provider: string, extra: Schema.JsonObject = {}) {
     NodeFS.writeFileSync(
       authPath,
       JSON.stringify({

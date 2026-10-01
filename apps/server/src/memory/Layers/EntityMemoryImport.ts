@@ -14,22 +14,18 @@ import {
 } from "../Services/EntityMemoryRepository.ts";
 import { encodeMemoryArchiveJson } from "../MemoryArchiveJson.ts";
 import { EntityMemoryDbRow, selectColumns, encodeJson, decodeRow } from "./EntityMemoryRows.ts";
-import type { makeEntityMemoryStorage } from "./EntityMemoryStorage.ts";
-import type { makeEntityMemoryQueries } from "./EntityMemoryQueries.ts";
+import type { EntityMemoryStorageServices } from "./EntityMemoryStorage.ts";
+import type { EntityMemoryQueriesServices } from "./EntityMemoryQueries.ts";
 
 export const makeEntityMemoryImport = (dependencies: {
-  sql: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["sql"];
-  writeLock: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["writeLock"];
-  insertRow: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["insertRow"];
-  expectedEntity: Effect.Success<ReturnType<typeof makeEntityMemoryStorage>>["expectedEntity"];
-  invalidateDerivedCopies: Effect.Success<
-    ReturnType<typeof makeEntityMemoryStorage>
-  >["invalidateDerivedCopies"];
-  isRevisionAuthorized: Effect.Success<
-    ReturnType<typeof makeEntityMemoryQueries>
-  >["isRevisionAuthorized"];
+  sql: EntityMemoryStorageServices["sql"];
+  writeLock: EntityMemoryStorageServices["writeLock"];
+  insertRow: EntityMemoryStorageServices["insertRow"];
+  expectedEntity: EntityMemoryStorageServices["expectedEntity"];
+  invalidateDerivedCopies: EntityMemoryStorageServices["invalidateDerivedCopies"];
+  isRevisionAuthorized: EntityMemoryQueriesServices["isRevisionAuthorized"];
 }) =>
-  Effect.gen(function* () {
+  Effect.sync(() => {
     const {
       sql,
       writeLock,

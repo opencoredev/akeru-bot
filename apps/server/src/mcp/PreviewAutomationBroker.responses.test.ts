@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   makeBroker,
   scope,
@@ -208,7 +209,7 @@ it.effect("does not let a no-tab response suppress an earlier tab decision", () 
         routedRequests.push(request);
 
         const marker =
-          typeof request.input === "object" && request.input !== null && "marker" in request.input
+          Predicate.isObjectOrArray(request.input) && "marker" in request.input
             ? request.input.marker
             : undefined;
 

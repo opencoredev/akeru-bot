@@ -84,7 +84,10 @@ export const resolveHeadlessConnectionString = (
   return `http://${formatHostForUrl(connectionHost)}:${port}`;
 };
 
-export const resolveListeningPort = (address: unknown, fallbackPort: number): number => {
+export const resolveListeningPort = (
+  address: HttpServer.Address | { readonly port?: number } | string | null,
+  fallbackPort: number,
+): number => {
   if (
     Predicate.isObjectOrArray(address) &&
     address !== null &&

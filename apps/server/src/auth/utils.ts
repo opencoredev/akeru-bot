@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type {
   AuthClientMetadata,
   AuthClientMetadataDeviceType,
@@ -82,7 +83,7 @@ export function isRemoteReachableHost(host: string | undefined): boolean {
 }
 
 export function base64UrlEncode(input: string | Uint8Array): string {
-  return typeof input === "string"
+  return Predicate.isString(input)
     ? Encoding.encodeBase64Url(new TextEncoder().encode(input))
     : Encoding.encodeBase64Url(input);
 }
@@ -107,7 +108,7 @@ export function timingSafeEqualBase64Url(left: string, right: string): boolean {
 }
 
 function normalizeNonEmptyString(value: string | null | undefined): string | undefined {
-  if (typeof value !== "string") {
+  if (!Predicate.isString(value)) {
     return undefined;
   }
 
@@ -190,19 +191,25 @@ function inferOs(userAgent: string | undefined): string | undefined {
   return undefined;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Native HTTP request sources have several socket shapes; this probe accepts those runtime objects.
 function readRemoteAddressFromSource(source: unknown): string | undefined {
-  if (!source || typeof source !== "object") {
+  if (!source || !Predicate.isObjectKeyword(source)) {
     return undefined;
   }
 
-  const candidate = source as {
-    readonly remoteAddress?: string | null;
-    readonly socket?: {
-      readonly remoteAddress?: string | null;
-    };
-  };
+  const socket = Predicate.hasProperty(source, "socket") ? source.socket : undefined;
 
-  return normalizeIpAddress(candidate.socket?.remoteAddress ?? candidate.remoteAddress);
+  const socketAddress = Predicate.hasProperty(socket, "remoteAddress")
+    ? socket.remoteAddress
+    : undefined;
+
+  const directAddress = Predicate.hasProperty(source, "remoteAddress")
+    ? source.remoteAddress
+    : undefined;
+
+  const address = socketAddress ?? directAddress;
+
+  return Predicate.isString(address) ? normalizeIpAddress(address) : undefined;
 }
 
 export function deriveAuthClientMetadata(input: {

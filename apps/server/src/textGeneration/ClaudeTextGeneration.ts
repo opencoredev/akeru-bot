@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * ClaudeTextGeneration – Text generation layer using the Claude CLI.
  *
@@ -37,6 +38,7 @@ import {
   resolveClaudeApiModelId,
   resolveClaudeEffort,
 } from "../provider/Layers/ClaudeProvider.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The CLI invocation needs a settings-specific process environment, not a shared service.
 import { makeClaudeEnvironment } from "../provider/Drivers/ClaudeHome.ts";
 import { subscriptionRuntimeEnvironment } from "../subscription-auth/runtime.ts";
 
@@ -90,7 +92,13 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
 
   const encodeJsonForOperation = (
     operation: "generateBranchName" | "generateThreadTitle",
-    value: unknown,
+    value:
+      | ReturnType<typeof toJsonSchemaObject>
+      | {
+          readonly disableAllHooks: boolean;
+          readonly alwaysThinkingEnabled?: boolean;
+          readonly fastMode?: boolean;
+        },
     detail: string,
   ): Effect.Effect<string, TextGenerationError> =>
     encodeJsonString(value).pipe(
@@ -150,7 +158,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
 
     const settings = {
       disableAllHooks: true,
-      ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
+      ...(Predicate.isBoolean(thinking) ? { alwaysThinkingEnabled: thinking } : {}),
       ...(fastMode ? { fastMode: true } : {}),
       ...(ultracode ? { ultracode: true } : {}),
     };

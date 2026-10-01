@@ -57,7 +57,7 @@ const DESKTOP_RENDERER_ORIGINS = ["akeru://app", "akeru-dev://app"];
 
 const SVG_CONTENT_SECURITY_POLICY = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
-export function assetResponseHeaders(filePath: string): Record<string, string> {
+export function assetResponseHeaders(filePath: string) {
   const lowerPath = filePath.toLowerCase();
 
   return {
@@ -471,7 +471,13 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
     const immutable =
       /^assets\/.+-[\w-]{8}\.[^/]+$/.test(relativePath) && immutableBuildAssets.has(relativePath);
 
-    const headers: Record<string, string> = {
+    type StaticResponseHeaders = {
+      "Cache-Control": string;
+      ETag?: string;
+      "Last-Modified"?: string;
+    };
+
+    const headers: StaticResponseHeaders = {
       "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
     };
 

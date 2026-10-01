@@ -312,7 +312,6 @@ const makeProjectionTurnRepository = Effect.gen(function* () {
           "ProjectionTurnRepository.listByThreadId:decodeRows",
         ),
       ),
-      Effect.map((rows) => rows as ReadonlyArray<Schema.Schema.Type<typeof ProjectionTurn>>),
     );
 
   const getByTurnId: ProjectionTurnRepositoryShape["getByTurnId"] = (input) =>
@@ -326,8 +325,7 @@ const makeProjectionTurnRepository = Effect.gen(function* () {
       Effect.flatMap((rowOption) =>
         Option.match(rowOption, {
           onNone: () => Effect.succeed(Option.none()),
-          onSome: (row) =>
-            Effect.succeed(Option.some(row as Schema.Schema.Type<typeof ProjectionTurnById>)),
+          onSome: (row) => Effect.succeed(Option.some(row)),
         }),
       ),
     );

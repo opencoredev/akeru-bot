@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 /**
  * The subscription credential file: `<secretsDir>/subscription-auth.json`.
@@ -36,7 +37,7 @@ const OAuthCredentialSchema = Schema.StructWithRest(
     access: Schema.String,
     expires: Schema.Number,
   }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
+  [Schema.Record(Schema.String, Schema.UndefinedOr(Schema.Json))],
 );
 
 const ApiKeyCredentialSchema = Schema.Struct({
@@ -398,6 +399,8 @@ function fileFingerprint(filePath: string): string {
 
     return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}`;
   } catch (cause) {
-    return (cause as NodeJS.ErrnoException).code === "ENOENT" ? "absent" : "unavailable";
+    return (Predicate.hasProperty(cause, "code") ? cause.code : undefined) === "ENOENT"
+      ? "absent"
+      : "unavailable";
   }
 }

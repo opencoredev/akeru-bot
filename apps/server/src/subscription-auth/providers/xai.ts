@@ -107,7 +107,7 @@ function validateVerificationUri(
 }
 
 const credentialsFromTokenResponse = Effect.fn("xai.credentialsFromTokenResponse")(function* (
-  body: unknown,
+  body: Schema.Json | undefined,
   previousRefreshToken?: string,
 ) {
   const tokens = yield* decodeOAuthBody(

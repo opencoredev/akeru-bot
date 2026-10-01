@@ -1,3 +1,4 @@
+import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 import { OpenCodeSettings, ProviderInstanceId, TextGenerationError } from "@akeru/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
@@ -65,42 +66,47 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
     }),
   runOpenCodeCommand: () => Effect.succeed({ stdout: "", stderr: "", code: 0 }),
   createOpenCodeSdkClient: ({ baseUrl, serverPassword }) =>
-    ({
-      session: {
-        create: async () => {
-          if (runtimeMock.state.sessionCreateError !== undefined) {
-            throw runtimeMock.state.sessionCreateError;
+    createOpencodeClient({
+      baseUrl,
+      throwOnError: true,
+      fetch: Object.assign(
+        async (request: Parameters<typeof fetch>[0]) => {
+          const url = new URL(request instanceof Request ? request.url : String(request));
+
+          if (url.pathname.endsWith("/session")) {
+            if (runtimeMock.state.sessionCreateError !== undefined)
+              throw runtimeMock.state.sessionCreateError;
+
+            return Response.json(
+              runtimeMock.state.sessionResult?.data ??
+                (runtimeMock.state.sessionResult === undefined
+                  ? { id: `${baseUrl}/session` }
+                  : null),
+            );
           }
 
-          return runtimeMock.state.sessionResult ?? { data: { id: `${baseUrl}/session` } };
-        },
-        prompt: async () => {
           runtimeMock.state.promptUrls.push(baseUrl);
           runtimeMock.state.authHeaders.push(
             serverPassword ? `Basic ${btoa(`opencode:${serverPassword}`)}` : null,
           );
 
-          if (runtimeMock.state.promptRequestError !== undefined) {
+          if (runtimeMock.state.promptRequestError !== undefined)
             throw runtimeMock.state.promptRequestError;
-          }
 
-          return (
-            runtimeMock.state.promptResult ?? {
-              data: {
-                parts: [
-                  {
-                    type: "text",
-                    text: JSON.stringify({
-                      title: "Improve OpenCode reuse",
-                    }),
-                  },
-                ],
-              },
-            }
+          return Response.json(
+            runtimeMock.state.promptResult?.data ??
+              (runtimeMock.state.promptResult === undefined
+                ? {
+                    parts: [
+                      { type: "text", text: JSON.stringify({ title: "Improve OpenCode reuse" }) },
+                    ],
+                  }
+                : null),
           );
         },
-      },
-    }) as unknown as ReturnType<OpenCodeRuntime.OpenCodeRuntimeShape["createOpenCodeSdkClient"]>,
+        { preconnect: () => undefined },
+      ),
+    }),
   loadOpenCodeInventory: () =>
     Effect.fail(
       new OpenCodeRuntime.OpenCodeRuntimeError({

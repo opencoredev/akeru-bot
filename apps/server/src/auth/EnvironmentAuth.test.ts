@@ -1,3 +1,4 @@
+import * as Headers from "effect/unstable/http/Headers";
 import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { AuthAdministrativeScopes } from "@akeru/contracts";
@@ -70,15 +71,12 @@ const makeInterleavingEnvironmentAuthLayer = () =>
 const makeCookieRequest = (
   cookieName: string,
   sessionToken: string,
-): Parameters<EnvironmentAuth.EnvironmentAuth["Service"]["authenticateHttpRequest"]>[0] =>
-  ({
-    cookies: {
-      [cookieName]: sessionToken,
-    },
-    headers: {},
-  }) as unknown as Parameters<
-    EnvironmentAuth.EnvironmentAuth["Service"]["authenticateHttpRequest"]
-  >[0];
+): Parameters<EnvironmentAuth.EnvironmentAuth["Service"]["authenticateHttpRequest"]>[0] => ({
+  cookies: {
+    [cookieName]: sessionToken,
+  },
+  headers: Headers.empty,
+});
 
 const requestMetadata = {
   deviceType: "desktop" as const,

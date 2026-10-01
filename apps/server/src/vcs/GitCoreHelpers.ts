@@ -150,7 +150,7 @@ export interface ExecuteGitOptions {
   progress?: GitVcsDriver.ExecuteGitProgress | undefined;
 }
 
-export function parseBranchAb(value: string): { ahead: number; behind: number } {
+export function parseBranchAb(value: string) {
   const match = value.match(/^\+(\d+)\s+-(\d+)$/);
 
   if (!match) return { ahead: 0, behind: 0 };
@@ -234,11 +234,7 @@ export function paginateBranches(input: {
   refs: ReadonlyArray<VcsRef>;
   cursor?: number | undefined;
   limit?: number | undefined;
-}): {
-  refs: ReadonlyArray<VcsRef>;
-  nextCursor: number | null;
-  totalCount: number;
-} {
+}) {
   const cursor = input.cursor ?? 0;
   const limit = input.limit ?? GIT_LIST_BRANCHES_DEFAULT_LIMIT;
   const totalCount = input.refs.length;
@@ -432,8 +428,7 @@ export function isMissingGitCwdError(error: GitCommandError): boolean {
   return (
     Predicate.isTagged(reason, "BadResource") &&
     reason.pathOrDescriptor === error.cwd &&
-    typeof reason.cause === "object" &&
-    reason.cause !== null &&
+    Predicate.isObjectOrArray(reason.cause) &&
     "code" in reason.cause &&
     reason.cause.code === "ENOTDIR"
   );
@@ -473,7 +468,10 @@ export const nowUnixNano = DateTime.now.pipe(
   Effect.map((now) => BigInt(DateTime.toEpochMillis(now)) * 1_000_000n),
 );
 
-export const addCurrentSpanEvent = (name: string, attributes: Record<string, unknown>) =>
+export const addCurrentSpanEvent = (
+  name: string,
+  attributes: Record<string, string | number | boolean | null | undefined>,
+) =>
   Effect.gen(function* () {
     const span = yield* Effect.currentSpan;
     const timestamp = yield* nowUnixNano;
@@ -486,19 +484,19 @@ export const addCurrentSpanEvent = (name: string, attributes: Record<string, unk
     }),
   );
 
-export function trace2ChildKey(record: Record<string, unknown>): string | null {
+export function trace2ChildKey(record: typeof Trace2Record.Type): string | null {
   const childId = record.child_id;
 
-  if (typeof childId === "number" || typeof childId === "string") {
+  if (Predicate.isNumber(childId) || Predicate.isString(childId)) {
     return String(childId);
   }
 
   const hookName = record.hook_name;
 
-  return typeof hookName === "string" && hookName.trim().length > 0 ? hookName.trim() : null;
+  return Predicate.isString(hookName) && hookName.trim().length > 0 ? hookName.trim() : null;
 }
 
-export const Trace2Record = Schema.Record(Schema.String, Schema.Unknown);
+export const Trace2Record = Schema.Record(Schema.String, Schema.Json);
 
 export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
   input: Pick<GitVcsDriver.ExecuteGitInput, "operation" | "cwd" | "args">,
@@ -561,8 +559,9 @@ export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
 
     const started = hookStartByChildKey.get(childKey);
 
-    const hookNameFromEvent =
-      typeof traceRecord.success.hook_name === "string" ? traceRecord.success.hook_name.trim() : "";
+    const hookNameFromEvent = Predicate.isString(traceRecord.success.hook_name)
+      ? traceRecord.success.hook_name.trim()
+      : "";
 
     const hookName = hookNameFromEvent.length > 0 ? hookNameFromEvent : (started?.hookName ?? "");
 
@@ -587,7 +586,7 @@ export const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
     if (event === "child_exit") {
       hookStartByChildKey.delete(childKey);
       const code = traceRecord.success.exitCode;
-      const exitCode = typeof code === "number" && Number.isInteger(code) ? code : null;
+      const exitCode = Predicate.isNumber(code) && Number.isInteger(code) ? code : null;
       const now = yield* DateTime.now;
 
       const durationMs = started

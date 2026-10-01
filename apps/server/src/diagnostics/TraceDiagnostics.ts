@@ -1,3 +1,6 @@
+import { decodeJsonString, isJsonObject } from "../json.ts";
+import * as Data from "effect/Data";
+
 import * as Predicate from "effect/Predicate";
 import type {
   ServerTraceDiagnosticsErrorKind,
@@ -18,21 +21,10 @@ import * as PlatformError from "effect/PlatformError";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
-interface TraceRecordLike {
-  readonly name?: unknown;
-  readonly traceId?: unknown;
-  readonly spanId?: unknown;
-  readonly startTimeUnixNano?: unknown;
-  readonly endTimeUnixNano?: unknown;
-  readonly durationMs?: unknown;
-  readonly exit?: unknown;
-  readonly events?: unknown;
-}
-
 interface TraceEventLike {
-  readonly name?: unknown;
-  readonly timeUnixNano?: unknown;
-  readonly attributes?: unknown;
+  readonly name?: Schema.Json;
+  readonly timeUnixNano?: Schema.Json;
+  readonly attributes?: Schema.Json;
 }
 
 export interface TraceDiagnosticsOptions {
@@ -96,19 +88,19 @@ function toRotatedTracePaths(traceFilePath: string, maxFiles: number): ReadonlyA
   return [...backups, traceFilePath];
 }
 
-function isRecordObject(value: unknown): value is TraceRecordLike {
-  return typeof value === "object" && value !== null;
+function isRecordObject(value: Schema.Json | undefined): value is Schema.JsonObject {
+  return isJsonObject(value);
 }
 
-function toStringValue(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
+function toStringValue(value: Schema.Json | undefined): string | null {
+  return Predicate.isString(value) && value.trim().length > 0 ? value : null;
 }
 
-function toNumberValue(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+function toNumberValue(value: Schema.Json | undefined): number | null {
+  return Predicate.isNumber(value) && Number.isFinite(value) ? value : null;
 }
 
-function unixNanoToDateTime(value: unknown): DateTime.Utc | null {
+function unixNanoToDateTime(value: Schema.Json | undefined): DateTime.Utc | null {
   const text = toStringValue(value);
 
   if (!text) return null;
@@ -122,26 +114,24 @@ function unixNanoToDateTime(value: unknown): DateTime.Utc | null {
   }
 }
 
-function readExitTag(exit: unknown): string | null {
+function readExitTag(exit: Schema.Json | undefined): string | null {
   if (!isRecordObject(exit) || !("_tag" in exit)) return null;
 
   return toStringValue(exit._tag);
 }
 
-function readExitCause(exit: unknown): string {
+function readExitCause(exit: Schema.Json | undefined): string {
   if (!isRecordObject(exit) || !("cause" in exit)) return "Failure";
 
   return toStringValue(exit.cause)?.trim() ?? "Failure";
 }
 
-function isTraceEvent(value: unknown): value is TraceEventLike {
-  return typeof value === "object" && value !== null;
+function isTraceEvent(value: Schema.Json | undefined): value is Schema.JsonObject {
+  return isJsonObject(value);
 }
 
-function readEventAttributes(event: TraceEventLike): Readonly<Record<string, unknown>> {
-  return typeof event.attributes === "object" && event.attributes !== null
-    ? (event.attributes as Readonly<Record<string, unknown>>)
-    : {};
+function readEventAttributes(event: TraceEventLike): Schema.JsonObject {
+  return isJsonObject(event.attributes) ? event.attributes : {};
 }
 
 function makeEmptyDiagnostics(input: {
@@ -244,10 +234,10 @@ export function aggregateTraceDiagnostics(
     for (const line of lines) {
       if (line.trim().length === 0) continue;
 
-      let parsed: unknown;
+      let parsed: Schema.Json;
 
       try {
-        parsed = JSON.parse(line);
+        parsed = decodeJsonString(line);
       } catch {
         parseErrorCount += 1;
         continue;
@@ -419,11 +409,11 @@ function readTraceFile(
   path: string,
 ): Effect.Effect<TraceFileReadResult, TraceFileReadError> {
   return fileSystem.readFileString(path).pipe(
-    Effect.map((text): TraceFileReadResult => ({ _tag: "Loaded", path, text })),
+    Effect.map((text): TraceFileReadResult => TraceFile["Loaded"]({ path, text })),
     Effect.catchTags({
       PlatformError: (cause) =>
         isNotFoundError(cause)
-          ? Effect.succeed<TraceFileReadResult>({ _tag: "Missing", path })
+          ? Effect.succeed<TraceFileReadResult>(TraceFile["Missing"]({ path }))
           : Effect.fail(
               new TraceFileReadError({
                 traceFilePath: path,
@@ -519,3 +509,5 @@ export function readTraceDiagnostics(
     return yield* diagnostics.read(options);
   });
 }
+
+const TraceFile = Data.taggedEnum<TraceFileReadResult>();

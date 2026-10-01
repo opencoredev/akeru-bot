@@ -777,7 +777,7 @@ it.layer(repositoryLayer)("EntityMemoryRepository", (it) => {
       const repository = yield* EntityMemoryRepository;
       const access = { ...botAccess, projectId: ProjectId.make("project-pending-archive") };
       const rootId = AkeruMemoryRootId.make("pending-archive-roundtrip-root");
-      const encodeJson = (value: unknown) => JSON.stringify(value) as string;
+      const encodeJson = <Value>(value: Value) => JSON.stringify(value) as string;
 
       const pending = makeRevision("pending-archive-roundtrip-1", "project", {
         rootId,

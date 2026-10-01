@@ -149,7 +149,7 @@ export const createWsBotServicesHandlers = ({
                 }
               : { status: "unavailable" as const, usd: null };
 
-          const driverConnection: Record<string, Exclude<SubscriptionProviderId, "cursor">> = {
+          const driverConnection = {
             claude: "anthropic",
             claudeAgent: "anthropic",
             codex: "openai-codex",
@@ -157,7 +157,7 @@ export const createWsBotServicesHandlers = ({
             kimi: "kimi-for-coding",
             opencode: "opencode-go",
             opencodeGo: "opencode-go",
-          };
+          } satisfies Record<string, Exclude<SubscriptionProviderId, "cursor">>;
 
           const providers = yield* providerRegistry.getProviders;
 
@@ -166,7 +166,10 @@ export const createWsBotServicesHandlers = ({
                 ?.driver ?? bot.value.engine.provider)
             : undefined;
 
-          const connection = driver === undefined ? undefined : driverConnection[driver];
+          const connection =
+            driver === undefined
+              ? undefined
+              : Object.entries(driverConnection).find(([key]) => key === driver)?.[1];
 
           const planLimits =
             connection === undefined

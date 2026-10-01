@@ -1,5 +1,6 @@
+import { flow } from "effect/Function";
+
 import type {
-  ResourceMonitorEvent,
   ResourceMonitorHelloEvent,
   ResourceMonitorSnapshotEvent,
   ResourceTelemetrySourceStatus,
@@ -10,7 +11,7 @@ import {
 } from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
-import * as Effect from "effect/Effect";
+
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as ResourceMonitorBinary from "./ResourceMonitorBinary.ts";
@@ -166,11 +167,7 @@ export interface NativeTelemetrySnapshot {
   readonly snapshot: ResourceMonitorSnapshotEvent;
 }
 
-export const decodeMonitorEvent: (
-  value: unknown,
-) => Effect.Effect<ResourceMonitorEvent, Schema.SchemaError> = Schema.decodeUnknownEffect(
-  ResourceMonitorEventSchema,
-);
+export const decodeMonitorEvent = Schema.decodeUnknownEffect(ResourceMonitorEventSchema);
 
 export const encodeMonitorCommand = Schema.encodeEffect(
   Schema.fromJsonString(ResourceMonitorCommandSchema),
@@ -182,9 +179,6 @@ export const isDecodeFailed = Schema.is(NativeTelemetryDecodeFailed);
 
 export const isCommandFailed = Schema.is(NativeTelemetryCommandFailed);
 
-export function eventVersion(value: unknown): number | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const version = Reflect.get(value, "version");
+const decodeVersion = Schema.decodeUnknownOption(Schema.Struct({ version: Schema.Number }));
 
-  return typeof version === "number" ? version : undefined;
-}
+export const eventVersion = flow(decodeVersion, Option.getOrUndefined, (value) => value?.version);

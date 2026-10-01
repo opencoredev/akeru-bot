@@ -214,7 +214,7 @@ describe("TraceDiagnostics", () => {
               ),
       });
 
-      const logAnnotations: Array<Record<string, unknown>> = [];
+      const logAnnotations: Array<typeof References.CurrentLogAnnotations.Service> = [];
 
       const logger = Logger.make<unknown, void>((options) => {
         logAnnotations.push({ ...options.fiber.getRef(References.CurrentLogAnnotations) });

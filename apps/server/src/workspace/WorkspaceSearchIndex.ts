@@ -197,7 +197,7 @@ function mapDirectorySearchResult(
 function mapMixedSearchResult(
   result: MixedSearchResult,
   limit: number,
-): { readonly entries: ProjectEntry[]; readonly truncated: boolean } {
+): MapMixedSearchResultResult {
   const entries: ProjectEntry[] = [];
 
   for (const item of result.items) {
@@ -242,10 +242,22 @@ function withDirectoryAncestors(entries: ReadonlyArray<ProjectEntry>): ProjectEn
   return [...entryByPath.values()];
 }
 
-const createFinder = Effect.fn("WorkspaceSearchIndex.createFinder")(function* (cwd: string) {
+type WorkspaceFinder = Pick<
+  FileFinder,
+  "destroy" | "waitForIndexReady" | "directorySearch" | "fileSearch" | "mixedSearch" | "scanFiles"
+>;
+
+type WorkspaceFinderFactory = (
+  options: Parameters<typeof FileFinder.create>[0],
+) => Result<WorkspaceFinder>;
+
+const createFinder = Effect.fn("WorkspaceSearchIndex.createFinder")(function* (
+  cwd: string,
+  create: WorkspaceFinderFactory,
+) {
   const result = yield* Effect.try({
     try: () =>
-      FileFinder.create({
+      create({
         basePath: cwd,
         disableMmapCache: true,
         // Only paths are searched, so skip the content index's scan CPU and memory.
@@ -272,7 +284,7 @@ const createFinder = Effect.fn("WorkspaceSearchIndex.createFinder")(function* (c
 
 const waitForIndexReady = Effect.fn("WorkspaceSearchIndex.waitForIndexReady")(function* <E>(
   cwd: string,
-  finder: FileFinder,
+  finder: WorkspaceFinder,
   onFailure: (input: { readonly reason: string; readonly cause?: unknown }) => E,
 ): Effect.fn.Return<void, E | WorkspaceSearchIndexScanTimedOut> {
   const result = yield* Effect.tryPromise({
@@ -296,8 +308,11 @@ const waitForIndexReady = Effect.fn("WorkspaceSearchIndex.waitForIndexReady")(fu
   }
 });
 
-export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (cwd: string) {
-  const finder = yield* Effect.acquireRelease(createFinder(cwd), (finder) =>
+export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
+  cwd: string,
+  create: WorkspaceFinderFactory = FileFinder.create,
+) {
+  const finder = yield* Effect.acquireRelease(createFinder(cwd, create), (finder) =>
     Effect.try({
       try: () => finder.destroy(),
       catch: (cause) => new WorkspaceSearchIndexDestroyFailed({ cwd, cause }),
@@ -444,3 +459,5 @@ export class WorkspaceSearchIndexMap extends LayerMap.Service<WorkspaceSearchInd
     idleTimeToLive: WORKSPACE_INDEX_IDLE_TTL,
   },
 ) {}
+
+type MapMixedSearchResultResult = { readonly entries: ProjectEntry[]; readonly truncated: boolean };

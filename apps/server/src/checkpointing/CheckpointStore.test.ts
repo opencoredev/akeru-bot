@@ -425,11 +425,11 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
         );
 
         expect(inclusiveSummary).toEqual(
-          expectedFiles
-            .filter((file) => file.path !== "empty.txt")
-            .map((file) =>
-              file.path === "copy-source.txt" ? { ...file, additions: 1, deletions: 20 } : file,
-            ),
+          expectedFiles.flatMap((file) =>
+            file.path === "empty.txt"
+              ? []
+              : [file.path === "copy-source.txt" ? { ...file, additions: 1, deletions: 20 } : file],
+          ),
         );
         expect(
           yield* checkpointStore.diffCheckpoints({ ...input, toCheckpointRef: baseline }),

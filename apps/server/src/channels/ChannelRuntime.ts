@@ -21,6 +21,7 @@ import {
   type ChannelRuntimeShape,
 } from "./ChannelRuntimeTypes.ts";
 import {
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This pure helper creates the per-runtime channel lock map.
   makeKeyedLock,
   stopChannelsForBot,
   clearChannelThreadStatuses,

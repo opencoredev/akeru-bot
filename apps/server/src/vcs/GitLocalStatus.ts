@@ -12,35 +12,23 @@ import {
   isNonRepositoryGitStderr,
   isUnbornHeadStderr,
 } from "./GitCoreHelpers.ts";
-import type { makeGitExecution } from "./GitExecution.ts";
-import type { makeGitRepositoryPaths } from "./GitRepositoryPaths.ts";
-import type { makeGitRemoteStatus } from "./GitRemoteStatus.ts";
+import type { GitExecutionServices } from "./GitExecution.ts";
+import type { GitRepositoryPathsServices } from "./GitRepositoryPaths.ts";
+import type { GitRemoteStatusServices } from "./GitRemoteStatus.ts";
 
 export const makeGitLocalStatus = (dependencies: {
-  executeGitWithStableDiagnostics: Effect.Success<
-    ReturnType<typeof makeGitExecution>
-  >["executeGitWithStableDiagnostics"];
-  runGitStdout: Effect.Success<ReturnType<typeof makeGitExecution>>["runGitStdout"];
-  resolveRepositoryPaths: Effect.Success<
-    ReturnType<typeof makeGitRepositoryPaths>
-  >["resolveRepositoryPaths"];
-  defaultBranchCache: Effect.Success<ReturnType<typeof makeGitRemoteStatus>>["defaultBranchCache"];
-  originExistsCache: Effect.Success<ReturnType<typeof makeGitRemoteStatus>>["originExistsCache"];
-  refreshStatusUpstreamIfStale: Effect.Success<
-    ReturnType<typeof makeGitRemoteStatus>
-  >["refreshStatusUpstreamIfStale"];
-  resolveDefaultBranchName: Effect.Success<
-    ReturnType<typeof makeGitRemoteStatus>
-  >["resolveDefaultBranchName"];
-  originRemoteExists: Effect.Success<ReturnType<typeof makeGitRemoteStatus>>["originRemoteExists"];
-  computeAheadCountAgainstBase: Effect.Success<
-    ReturnType<typeof makeGitRemoteStatus>
-  >["computeAheadCountAgainstBase"];
-  readStatusDetailsRemote: Effect.Success<
-    ReturnType<typeof makeGitRemoteStatus>
-  >["readStatusDetailsRemote"];
+  executeGitWithStableDiagnostics: GitExecutionServices["executeGitWithStableDiagnostics"];
+  runGitStdout: GitExecutionServices["runGitStdout"];
+  resolveRepositoryPaths: GitRepositoryPathsServices["resolveRepositoryPaths"];
+  defaultBranchCache: GitRemoteStatusServices["defaultBranchCache"];
+  originExistsCache: GitRemoteStatusServices["originExistsCache"];
+  refreshStatusUpstreamIfStale: GitRemoteStatusServices["refreshStatusUpstreamIfStale"];
+  resolveDefaultBranchName: GitRemoteStatusServices["resolveDefaultBranchName"];
+  originRemoteExists: GitRemoteStatusServices["originRemoteExists"];
+  computeAheadCountAgainstBase: GitRemoteStatusServices["computeAheadCountAgainstBase"];
+  readStatusDetailsRemote: GitRemoteStatusServices["readStatusDetailsRemote"];
 }) =>
-  Effect.gen(function* () {
+  Effect.sync(() => {
     const {
       executeGitWithStableDiagnostics,
       runGitStdout,
@@ -327,3 +315,5 @@ export const makeGitLocalStatus = (dependencies: {
 
     return { statusDetailsLocal, statusDetails, statusDetailsRemote, status };
   });
+
+export type GitLocalStatusServices = Effect.Success<ReturnType<typeof makeGitLocalStatus>>;

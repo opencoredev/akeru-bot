@@ -217,7 +217,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         tokenBody.scope,
         "orchestration:read orchestration:operate access:read access:write",
       );
-      assert.equal(typeof tokenBody.access_token, "string");
+      assert.equal(Predicate.isString(tokenBody.access_token), true);
 
       const sessionUrl = yield* getHttpServerUrl("/api/auth/session");
 
@@ -392,9 +392,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }>(wsTicketResponse);
 
       assert.equal(wsTicketResponse.status, 200);
-      assert.equal(typeof wsTicketBody.ticket, "string");
+      assert.equal(Predicate.isString(wsTicketBody.ticket), true);
       assert.isTrue(wsTicketBody.ticket.length > 0);
-      assert.equal(typeof wsTicketBody.expiresAt, "string");
+      assert.equal(Predicate.isString(wsTicketBody.expiresAt), true);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

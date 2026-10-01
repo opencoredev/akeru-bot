@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import {
   ChannelFailureCategory as ChannelFailureCategorySchema,
   type ChannelFailureCategory,
@@ -65,21 +67,32 @@ export const networkErrorCodes = new Set([
 ]);
 
 export const isNetworkFailure = (cause: unknown, depth = 0): boolean => {
-  if (depth > 4 || typeof cause !== "object" || cause === null) return false;
-  const record = cause as Record<string, unknown>;
+  if (depth > 4 || !Predicate.isObjectOrArray(cause)) return false;
+  const code = Predicate.hasProperty(cause, "code") ? cause.code : undefined;
 
-  if (typeof record.code === "string" && networkErrorCodes.has(record.code)) {
+  if (Predicate.isString(code) && networkErrorCodes.has(code)) {
     // Discord wraps API rejections in NETWORK_ERROR; an HTTP status means the request arrived.
-    const original = record.originalError as Record<string, unknown> | undefined;
+    const original =
+      Predicate.hasProperty(cause, "originalError") &&
+      Predicate.isObjectOrArray(cause.originalError)
+        ? cause.originalError
+        : undefined;
 
-    return typeof original?.status !== "number";
+    return !(
+      original &&
+      Predicate.hasProperty(original, "status") &&
+      Predicate.isNumber(original.status)
+    );
   }
 
   if (cause instanceof TypeError && cause.message === "fetch failed") return true;
 
   if (cause instanceof DOMException && cause.name === "TimeoutError") return true;
 
-  return isNetworkFailure(record.cause, depth + 1);
+  return isNetworkFailure(
+    Predicate.hasProperty(cause, "cause") ? cause.cause : undefined,
+    depth + 1,
+  );
 };
 
 export const isChannelRuntimeError = Schema.is(ChannelRuntimeError);
@@ -90,12 +103,12 @@ export const isChannelPostRejected = Schema.is(ChannelPostRejectedError);
 export const isChannelTransportError = Schema.is(ChannelTransportError);
 
 /** Classifies a failed channel operation. Unknown provider rejections count as credentials. */
-export const channelFailureCategory = (error: unknown): ChannelFailureCategory => {
-  if (isChannelRuntimeError(error) || isChannelPostRejected(error))
-    return error.category ?? "credentials";
+export const channelFailureCategory = (cause: unknown): ChannelFailureCategory => {
+  if (isChannelRuntimeError(cause) || isChannelPostRejected(cause))
+    return cause.category ?? "credentials";
 
-  if (isChannelTransportError(error))
-    return isNetworkFailure(error.cause) ? "network" : "credentials";
+  if (isChannelTransportError(cause))
+    return isNetworkFailure(cause.cause) ? "network" : "credentials";
 
   return "credentials";
 };
@@ -126,18 +139,18 @@ export const channelCommandFailedMessage = "Channel command failed. Try again.";
  * written here; transport errors get a fixed message for their category; everything else is
  * internal. Provider error text never passes through.
  */
-export const channelFailurePresentation = (error: unknown): ChannelFailurePresentation => {
-  if (isChannelRuntimeError(error))
-    return { message: error.message, category: channelFailureCategory(error) };
+export const channelFailurePresentation = (cause: unknown): ChannelFailurePresentation => {
+  if (isChannelRuntimeError(cause))
+    return { message: cause.message, category: channelFailureCategory(cause) };
 
-  if (isChannelTransportError(error)) {
-    const category = channelFailureCategory(error);
+  if (isChannelTransportError(cause)) {
+    const category = channelFailureCategory(cause);
 
     return { message: channelFailureMessage(category), category };
   }
 
-  if (isChannelPostRejected(error))
-    return { message: channelDeliveryRejectedError, category: channelFailureCategory(error) };
+  if (isChannelPostRejected(cause))
+    return { message: channelDeliveryRejectedError, category: channelFailureCategory(cause) };
 
   return { message: channelCommandFailedMessage };
 };
@@ -230,13 +243,12 @@ export const postChannelText = (
     // Provider errors can contain credentials. Do not retain their messages or causes.
     catch: (cause) =>
       cause instanceof Error &&
-      (provider === "slack"
-        ? isSlackPostRejection(cause)
-        : provider === "discord"
-          ? isDiscordPostRejection(cause)
-          : provider === "telegram"
-            ? isTelegramPostRejection(cause)
-            : false)
+      Match.value(provider).pipe(
+        Match.when("slack", () => isSlackPostRejection(cause)),
+        Match.when("discord", () => isDiscordPostRejection(cause)),
+        Match.when("telegram", () => isTelegramPostRejection(cause)),
+        Match.orElse(() => false),
+      )
         ? new ChannelPostRejectedError({ message: channelDeliveryRejectedError })
         : new ChannelRuntimeError({ message: channelDeliveryUnknownError }),
   }).pipe(Effect.asVoid);

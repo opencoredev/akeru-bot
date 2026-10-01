@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
 
 import {
@@ -349,7 +350,7 @@ describe("ImageGenerationRuntime", () => {
         SELECT payload_json AS "payload" FROM orchestration_events
       `;
 
-      const usage = yield* sql<Record<string, unknown>>`SELECT * FROM akeru_bot_usage_entries`;
+      const usage = yield* sql<Schema.JsonObject>`SELECT * FROM akeru_bot_usage_entries`;
       assert.equal(events.length > 0 && usage.length === 1, true);
 
       const stored = [

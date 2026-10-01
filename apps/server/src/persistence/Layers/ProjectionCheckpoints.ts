@@ -174,7 +174,6 @@ const makeProjectionCheckpointRepository = Effect.gen(function* () {
           "ProjectionCheckpointRepository.listByThreadId:decodeRows",
         ),
       ),
-      Effect.map((rows) => rows as ReadonlyArray<Schema.Schema.Type<typeof ProjectionCheckpoint>>),
     );
 
   const getByThreadAndTurnCount: ProjectionCheckpointRepositoryShape["getByThreadAndTurnCount"] = (
@@ -190,8 +189,7 @@ const makeProjectionCheckpointRepository = Effect.gen(function* () {
       Effect.flatMap((rowOption) =>
         Option.match(rowOption, {
           onNone: () => Effect.succeed(Option.none()),
-          onSome: (row) =>
-            Effect.succeed(Option.some(row as Schema.Schema.Type<typeof ProjectionCheckpoint>)),
+          onSome: (row) => Effect.succeed(Option.some(row)),
         }),
       ),
     );

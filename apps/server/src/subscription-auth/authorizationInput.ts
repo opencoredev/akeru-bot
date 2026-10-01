@@ -10,10 +10,7 @@
  *   - a raw query string (`code=...&state=...`)
  *   - a bare authorization code
  */
-export function parseAuthorizationInput(input: string): {
-  code?: string | undefined;
-  state?: string | undefined;
-} {
+export function parseAuthorizationInput(input: string): ParseAuthorizationInputResult {
   const value = input.trim();
 
   if (!value) return {};
@@ -46,3 +43,8 @@ export function parseAuthorizationInput(input: string): {
 
   return { code: value };
 }
+
+type ParseAuthorizationInputResult = {
+  code?: string | undefined;
+  state?: string | undefined;
+};

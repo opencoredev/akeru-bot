@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   ServerConfigLayer,
   TestLayer,
@@ -219,7 +220,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           (ref) => ref.name === "feature/newline-path",
         )?.worktreePath;
 
-        if (typeof listedPath !== "string") {
+        if (!Predicate.isString(listedPath)) {
           return assert.fail("expected the linked branch to include its worktree path");
         }
 

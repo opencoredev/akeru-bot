@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Runtime from "effect/Runtime";
@@ -17,25 +18,24 @@ export const reportExpectedCliError =
   (expectedTags: ReadonlyArray<string>) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.tapError(effect, (error) => {
-      const tagged = error as { readonly _tag?: unknown; readonly cause?: unknown };
-
       if (
         !(error instanceof Error) ||
-        typeof tagged._tag !== "string" ||
-        !expectedTags.includes(tagged._tag)
+        !Predicate.hasProperty(error, "_tag") ||
+        !Predicate.isString(error._tag) ||
+        !expectedTags.includes(error._tag)
       ) {
         return Effect.void;
       }
 
       const lines =
-        tagged.cause === undefined
+        error.cause === undefined
           ? [error.message]
-          : [error.message, `Caused by: ${String(tagged.cause)}`];
+          : [error.message, `Caused by: ${String(error.cause)}`];
 
       return Console.error(lines.join("\n")).pipe(
         Effect.andThen(
           Effect.sync(() => {
-            (error as Record<string, unknown>)[Runtime.errorReported] = false;
+            Object.assign(error, { [Runtime.errorReported]: false });
           }),
         ),
       );

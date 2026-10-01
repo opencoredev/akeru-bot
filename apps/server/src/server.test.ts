@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -391,7 +392,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   };
                 }
 
-                return Reflect.get(target, key, target);
+                return Predicate.hasProperty(target, key) ? target[key] : undefined;
               },
             });
           }),

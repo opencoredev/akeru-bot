@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import {
   DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
   McpServerId,
@@ -168,12 +169,11 @@ export function previewPortabilityImport(
   );
 
   for (const record of archive.records) {
-    const projectMatch =
-      record.type === "project"
-        ? projectMatches.get(record.id)
-        : record.type === "thread"
-          ? projectMatches.get(record.data.projectId)
-          : undefined;
+    const projectMatch = Match.value(record).pipe(
+      Match.when({ type: "project" }, (record) => projectMatches.get(record.id)),
+      Match.when({ type: "thread" }, (record) => projectMatches.get(record.data.projectId)),
+      Match.orElse((_record) => undefined),
+    );
 
     if (projectMatch?.kind === "unsupported") {
       continue;

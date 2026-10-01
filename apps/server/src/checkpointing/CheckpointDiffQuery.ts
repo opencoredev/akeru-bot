@@ -7,7 +7,7 @@
  * @module CheckpointDiffQuery
  */
 import {
-  type CheckpointRef,
+  CheckpointRef,
   OrchestrationGetTurnDiffResult,
   type OrchestrationGetFullThreadDiffInput,
   type OrchestrationGetFullThreadDiffResult,
@@ -269,7 +269,7 @@ export const make = Effect.gen(function* () {
       .diffCheckpoints({
         cwd: workspaceCwd,
         fromCheckpointRef: checkpointRefForThreadTurn(input.threadId, 0),
-        toCheckpointRef: threadContext.value.toCheckpointRef as CheckpointRef,
+        toCheckpointRef: CheckpointRef.make(threadContext.value.toCheckpointRef),
         fallbackFromToHead: false,
         ignoreWhitespace,
       })

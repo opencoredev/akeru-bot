@@ -11,6 +11,21 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const unusedFinderMethods = () => ({
+  directorySearch: () => {
+    throw new Error("unused directory search");
+  },
+  fileSearch: () => {
+    throw new Error("unused file search");
+  },
+  mixedSearch: () => {
+    throw new Error("unused mixed search");
+  },
+  scanFiles: () => {
+    throw new Error("unused refresh");
+  },
+});
+
 function fileItem(relativePath: string): FileItem {
   return {
     relativePath,
@@ -43,14 +58,18 @@ it.effect("filters image searches before applying the result limit", () =>
       }));
 
       const finder = {
+        ...unusedFinderMethods(),
         destroy: vi.fn(),
-        waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: true })),
+        waitForIndexReady: vi.fn(async () => ({
+          ok: true as const,
+          value: true,
+        })),
         fileSearch,
-      } as unknown as FileFinder;
+      };
 
-      vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+      const create = () => ({ ok: true as const, value: finder });
 
-      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project");
+      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project", create);
       const resultWithoutKind = yield* searchIndex.search("", 200, undefined, true);
       const resultWithDirectoryKind = yield* searchIndex.search("", 200, "directory", true);
 
@@ -107,13 +126,14 @@ it.effect("waits for the full index warmup before returning", () =>
     const waitForIndexReady = vi.fn(async () => ({ ok: true as const, value: true }));
 
     const finder = {
+      ...unusedFinderMethods(),
       destroy: vi.fn(),
       waitForIndexReady,
-    } as unknown as FileFinder;
+    };
 
-    vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+    const create = () => ({ ok: true as const, value: finder });
 
-    yield* Effect.scoped(WorkspaceSearchIndex.make("/workspace/project"));
+    yield* Effect.scoped(WorkspaceSearchIndex.make("/workspace/project", create));
 
     expect(waitForIndexReady).toHaveBeenCalledWith(15_000);
   }),
@@ -122,14 +142,18 @@ it.effect("waits for the full index warmup before returning", () =>
 it.effect("preserves a full-index warmup timeout as a structured error", () =>
   Effect.gen(function* () {
     const finder = {
+      ...unusedFinderMethods(),
       destroy: vi.fn(),
-      waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: false })),
-    } as unknown as FileFinder;
+      waitForIndexReady: vi.fn(async () => ({
+        ok: true as const,
+        value: false,
+      })),
+    };
 
-    vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+    const create = () => ({ ok: true as const, value: finder });
 
     const error = yield* Effect.flip(
-      Effect.scoped(WorkspaceSearchIndex.make("/workspace/project")),
+      Effect.scoped(WorkspaceSearchIndex.make("/workspace/project", create)),
     );
 
     expect(error).toMatchObject({
@@ -145,15 +169,19 @@ it.effect("preserves FileFinder destroy failures as structured defects", () =>
     const cause = new Error("native destroy failed");
 
     const finder = {
+      ...unusedFinderMethods(),
       destroy: vi.fn(() => {
         throw cause;
       }),
-      waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: true })),
-    } as unknown as FileFinder;
+      waitForIndexReady: vi.fn(async () => ({
+        ok: true as const,
+        value: true,
+      })),
+    };
 
-    vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+    const create = () => ({ ok: true as const, value: finder });
 
-    const exit = yield* Effect.scoped(WorkspaceSearchIndex.make("/workspace/project")).pipe(
+    const exit = yield* Effect.scoped(WorkspaceSearchIndex.make("/workspace/project", create)).pipe(
       Effect.exit,
     );
 
@@ -176,15 +204,25 @@ it.effect("keeps returned search diagnostics out of the cause chain", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const finder = {
+        ...unusedFinderMethods(),
         destroy: vi.fn(),
-        waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: true })),
-        mixedSearch: vi.fn(() => ({ ok: false, error: "native query rejected" })),
-        scanFiles: vi.fn(() => ({ ok: false, error: "native refresh rejected" })),
-      } as unknown as FileFinder;
+        waitForIndexReady: vi.fn(async () => ({
+          ok: true as const,
+          value: true,
+        })),
+        mixedSearch: vi.fn(() => ({
+          ok: false as const,
+          error: "native query rejected",
+        })),
+        scanFiles: vi.fn(() => ({
+          ok: false as const,
+          error: "native refresh rejected",
+        })),
+      };
 
-      vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+      const create = () => ({ ok: true as const, value: finder });
 
-      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project");
+      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project", create);
       const query = "authorization: Bearer secret-token";
       const searchError = yield* Effect.flip(searchIndex.search(query, 3));
       const refreshError = yield* Effect.flip(searchIndex.refresh());

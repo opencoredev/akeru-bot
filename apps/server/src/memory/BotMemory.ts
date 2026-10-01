@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 
 import * as NodeCrypto from "node:crypto";
@@ -24,7 +25,6 @@ import { scanMemoryContent } from "./memoryContentSafety.ts";
 import {
   NodeFS,
   BotMemoryError,
-  makeBotMemoryError,
   type BotMemoryAccess,
   type ResolvedDocument,
   type ReadDocumentResult,
@@ -57,6 +57,8 @@ import {
   withFileLock,
   writeMemoryFile,
 } from "./BotMemoryFileStorage.ts";
+
+const isBotMemoryError = Schema.is(BotMemoryError);
 
 export {
   AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS,
@@ -93,11 +95,11 @@ export class BotMemoryStore {
     try {
       return parseReviewCadence(await NodeFS.readFile(filePath, "utf8"));
     } catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code === "ENOENT") return EMPTY_REVIEW_CADENCE;
+      if ((Predicate.hasProperty(cause, "code") ? cause.code : undefined) === "ENOENT")
+        return EMPTY_REVIEW_CADENCE;
 
-      if (Schema.is(BotMemoryError)(cause) || cause instanceof InvalidReviewCadenceError)
-        throw cause;
-      throw makeBotMemoryError("io-error", "Could not read the bot memory review cadence.", {
+      if (isBotMemoryError(cause) || cause instanceof InvalidReviewCadenceError) throw cause;
+      throw BotMemoryError.fromCode("io-error", "Could not read the bot memory review cadence.", {
         cause,
       });
     }
@@ -262,8 +264,10 @@ export class BotMemoryStore {
       if (before.reviewClaim?.id !== reservation.id) return this.toReviewCadence(before);
       const claimedIds = new Set(before.reviewClaim.inputIds);
 
+      const { reviewClaim: _reviewClaim, ...withoutClaim } = before;
+
       const next: BotMemoryReviewCadenceState = {
-        ...before,
+        ...withoutClaim,
         reviewedThroughPromptCount: completed
           ? Math.max(before.reviewedThroughPromptCount, before.reviewClaim.throughPromptCount)
           : before.reviewedThroughPromptCount,
@@ -272,7 +276,6 @@ export class BotMemoryStore {
           : before.reviewInputs,
       };
 
-      delete (next as { reviewClaim?: unknown }).reviewClaim;
       await writeMemoryFile(
         this.memoryRoot,
         filePath,
@@ -340,7 +343,7 @@ export class BotMemoryStore {
       access.groupId === null ||
       !access.groupMemberBotIds.some((memberBotId) => memberBotId === access.botId)
     ) {
-      throw makeBotMemoryError(
+      throw BotMemoryError.fromCode(
         "access-denied",
         "Group memory is available only while the responding bot is a current group member.",
       );
@@ -367,14 +370,18 @@ export class BotMemoryStore {
 
       return { entries: parseEntries(content), updatedAt: stat.mtime.toISOString() };
     } catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code === "ENOENT") {
+      if ((Predicate.hasProperty(cause, "code") ? cause.code : undefined) === "ENOENT") {
         return { entries: [], updatedAt: null };
       }
 
-      if (Schema.is(BotMemoryError)(cause)) throw cause;
-      throw makeBotMemoryError("io-error", "Could not read the memory file without data loss.", {
-        cause,
-      });
+      if (isBotMemoryError(cause)) throw cause;
+      throw BotMemoryError.fromCode(
+        "io-error",
+        "Could not read the memory file without data loss.",
+        {
+          cause,
+        },
+      );
     }
   }
 
@@ -414,7 +421,10 @@ export class BotMemoryStore {
     const resolved = this.resolve(access, input.target);
 
     if (input.operations.length === 0) {
-      throw makeBotMemoryError("invalid-operation", "At least one memory operation is required.");
+      throw BotMemoryError.fromCode(
+        "invalid-operation",
+        "At least one memory operation is required.",
+      );
     }
 
     return withFileLock(this.memoryRoot, resolved.filePath, async (lock) => {
@@ -425,7 +435,7 @@ export class BotMemoryStore {
       const content = renderEntries(entries);
 
       if (content.length > resolved.charLimit) {
-        throw makeBotMemoryError(
+        throw BotMemoryError.fromCode(
           "limit-exceeded",
           `${NodePath.basename(resolved.filePath)} would exceed its ${resolved.charLimit.toLocaleString()} character limit.`,
           {
@@ -458,7 +468,7 @@ export class BotMemoryStore {
     expectedContent?: string,
   ): Promise<AkeruMemoryDocument> {
     if (access.botId !== expectedBotId) {
-      throw makeBotMemoryError(
+      throw BotMemoryError.fromCode(
         "access-denied",
         "The active bot changed. Reopen memory before saving.",
       );
@@ -471,7 +481,7 @@ export class BotMemoryStore {
       const before = await this.readResolved(resolved);
 
       if (expectedContent !== undefined && expectedContent !== renderEntries(before.entries)) {
-        throw makeBotMemoryError(
+        throw BotMemoryError.fromCode(
           "invalid-operation",
           "Memory changed since you opened it. Reopen memory before saving.",
         );
@@ -540,7 +550,10 @@ export class BotMemoryStore {
           const original = originals.get(target);
 
           if (!original)
-            throw makeBotMemoryError("access-denied", "Memory target is outside this transaction.");
+            throw BotMemoryError.fromCode(
+              "access-denied",
+              "Memory target is outside this transaction.",
+            );
           const { normalized } = this.validateDocumentReplacement(access, target, content);
           touched.add(target);
           await writeMemoryFile(
@@ -589,13 +602,13 @@ export class BotMemoryStore {
     access: BotMemoryAccess,
     target: AkeruMemoryDocumentTarget,
     content: string,
-  ): { readonly normalized: string; readonly charLimit: number } {
+  ): ValidateDocumentReplacementResult {
     const resolved = this.resolve(access, target);
     const normalized = renderEntries(parseEntries(content.replaceAll("\r\n", "\n")));
     assertSafeContent(normalized);
 
     if (normalized.length > resolved.charLimit) {
-      throw makeBotMemoryError(
+      throw BotMemoryError.fromCode(
         "limit-exceeded",
         `${NodePath.basename(resolved.filePath)} exceeds its ${resolved.charLimit.toLocaleString()} character limit.`,
         { charCount: normalized.length, charLimit: resolved.charLimit },
@@ -763,3 +776,8 @@ export type { BotMemoryReviewInput } from "./BotMemoryReviewState.ts";
 export { assertSafeContent } from "./BotMemoryEntries.ts";
 
 export { acquireBotMemoryFileLock } from "./BotMemoryFileStorage.ts";
+
+type ValidateDocumentReplacementResult = {
+  readonly normalized: string;
+  readonly charLimit: number;
+};

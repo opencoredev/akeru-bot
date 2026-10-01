@@ -281,8 +281,9 @@ describe("image provider health test", () => {
 
     // Drive the real getAccessToken -> refreshCredential -> runRefresh path:
     // the provider's token endpoint rejects the refresh grant.
-    const fetchFn = vi.fn(async (_input: unknown, _init?: unknown) =>
-      Promise.resolve(new Response("invalid_grant", { status: 400 })),
+    const fetchFn = vi.fn(
+      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
+        Promise.resolve(new Response("invalid_grant", { status: 400 })),
     );
 
     vi.stubGlobal("fetch", fetchFn);

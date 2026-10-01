@@ -30,12 +30,12 @@ import { categoryGroup, delta, applyLifecycleCounters, aggregate } from "./Proce
 
 export function mergeProcesses(input: MergeProcessesInput): MergeProcessesResult {
   const nativeProcesses = Option.match(input.nativeSnapshot, {
-    onNone: () => [] as ReadonlyArray<ResourceMonitorProcessSample>,
+    onNone: (): ReadonlyArray<ResourceMonitorProcessSample> => [],
     onSome: (snapshot) => snapshot.processes,
   });
 
   const electronMetrics = Option.match(input.desktopSnapshot, {
-    onNone: () => [] as ReadonlyArray<DesktopElectronProcessMetric>,
+    onNone: (): ReadonlyArray<DesktopElectronProcessMetric> => [],
     onSome: (snapshot) => snapshot.electronProcesses,
   });
 

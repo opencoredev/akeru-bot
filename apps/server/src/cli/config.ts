@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NetService from "@akeru/shared/Net";
 import { parsePersistedServerObservabilitySettings } from "@akeru/shared/serverSettings";
 import { DesktopBackendBootstrap, PortSchema } from "@akeru/contracts";
@@ -484,12 +485,13 @@ const parseDurationInput = (value: string): Duration.Duration | null => {
 
   const shorthand = DurationShorthandPattern.exec(trimmed);
 
+  // SAFETY: Duration.fromInput performs runtime parsing; the string may be invalid and is rejected by its Option result.
   const normalizedInput = shorthand?.groups
     ? (() => {
         const amountText = shorthand.groups.value;
         const unitText = shorthand.groups.unit;
 
-        if (typeof amountText !== "string" || typeof unitText !== "string") {
+        if (!Predicate.isString(amountText) || !Predicate.isString(unitText)) {
           return null;
         }
 
@@ -518,6 +520,7 @@ const parseDurationInput = (value: string): Duration.Duration | null => {
 
   if (normalizedInput === null) return null;
 
+  // SAFETY: Duration.fromInput performs runtime parsing; the string may be invalid and is rejected by its Option result.
   const decoded = Duration.fromInput(normalizedInput as Duration.Input);
 
   return Option.isSome(decoded) ? decoded.value : null;

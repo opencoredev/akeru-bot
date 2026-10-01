@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * Kimi For Coding OAuth flow (Moonshot).
  *
@@ -49,11 +50,11 @@ function asciiHeaderValue(value: string): string {
   return sanitized || "unknown";
 }
 
-export function isKimiCodingDeviceId(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{32}$/.test(value);
+export function isKimiCodingDeviceId(value: Schema.Json | undefined): value is string {
+  return Predicate.isString(value) && /^[0-9a-f]{32}$/.test(value);
 }
 
-export function getKimiCodingDeviceHeaders(deviceId: string): Record<string, string> {
+export function getKimiCodingDeviceHeaders(deviceId: string) {
   if (!isKimiCodingDeviceId(deviceId)) throw new Error("Invalid Kimi For Coding device id");
 
   return {
@@ -84,8 +85,8 @@ const DeviceAuthorizationResponse = Schema.Struct({
   user_code: Schema.NonEmptyString,
   verification_uri: HttpsUrl,
   verification_uri_complete: HttpsUrl,
-  interval: Schema.optional(Schema.Unknown),
-  expires_in: Schema.optional(Schema.Unknown),
+  interval: Schema.optional(Schema.Json),
+  expires_in: Schema.optional(Schema.Json),
 });
 
 const TokenResponse = Schema.Struct({
@@ -95,9 +96,9 @@ const TokenResponse = Schema.Struct({
 });
 
 const TokenErrorBody = Schema.Struct({
-  error: Schema.optional(Schema.Unknown),
-  error_description: Schema.optional(Schema.Unknown),
-  interval: Schema.optional(Schema.Unknown),
+  error: Schema.optional(Schema.Json),
+  error_description: Schema.optional(Schema.Json),
+  interval: Schema.optional(Schema.Json),
 });
 
 const isPositiveFinite = Schema.is(PositiveFinite);
@@ -106,7 +107,7 @@ const isTokenErrorBody = Schema.is(TokenErrorBody);
 
 const hasAccessToken = Schema.is(Schema.Struct({ access_token: Schema.String }));
 
-const positiveOr = (value: unknown, fallback: number) =>
+const positiveOr = (value: Schema.Json | undefined, fallback: number) =>
   isPositiveFinite(value) ? value : fallback;
 
 const postToken = (label: string, deviceId: string, params: Record<string, string>) =>
@@ -120,7 +121,7 @@ const postToken = (label: string, deviceId: string, params: Record<string, strin
   );
 
 const credentialsFromTokenResponse = Effect.fn("kimi.credentialsFromTokenResponse")(function* (
-  body: unknown,
+  body: Schema.Json | undefined,
   operation: string,
   deviceId: string,
 ) {
@@ -246,13 +247,14 @@ const pollTokenOnce = Effect.fn("kimi.pollTokenOnce")(
       return { status: "failed", error: "Kimi For Coding login was denied." };
     }
 
-    const description =
-      typeof data.error_description === "string" ? `: ${data.error_description}` : "";
+    const description = Predicate.isString(data.error_description)
+      ? `: ${data.error_description}`
+      : "";
 
     return {
       status: "failed",
       error: `Kimi For Coding token request failed: ${response.status}${
-        typeof error === "string" ? ` ${error}${description}` : ""
+        Predicate.isString(error) ? ` ${error}${description}` : ""
       }`,
     };
   },
@@ -319,7 +321,7 @@ const refreshToken = Effect.fn("kimi.refreshToken")(function* (
 
             return Effect.fail(
               new SubscriptionAuthRequestError({
-                message: `${label}: ${response.status}${typeof error === "string" ? ` ${error}` : ""}`,
+                message: `${label}: ${response.status}${Predicate.isString(error) ? ` ${error}` : ""}`,
                 status: response.status,
               }),
             );

@@ -1,3 +1,6 @@
+import * as Schema from "effect/Schema";
+import * as Exit from "effect/Exit";
+import { flow } from "effect/Function";
 import { type BotId } from "@akeru/contracts";
 import {
   AKERU_MEMORY_REVIEW_BATCH_MAX_CHARS,
@@ -76,20 +79,46 @@ export function boundReviewInputs(
   return kept;
 }
 
-export function parseReviewInput(value: unknown): BotMemoryReviewInput {
-  const entry = value as Record<string, unknown>;
+export class InvalidReviewCadenceError extends Error {}
 
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    !(typeof entry.id === "string" || entry.id === undefined) ||
-    typeof entry.threadId !== "string" ||
-    !(typeof entry.groupId === "string" || entry.groupId === null) ||
-    typeof entry.text !== "string"
-  ) {
-    throw new InvalidReviewCadenceError("A review input is invalid.");
-  }
+const ReviewInput = Schema.Struct({
+  id: Schema.optional(Schema.String),
+  threadId: Schema.String,
+  groupId: Schema.NullOr(Schema.String),
+  text: Schema.String,
+});
 
+const NonNegativeSafeInteger = Schema.Number.check(
+  Schema.makeFilter((value) => Number.isSafeInteger(value) && value >= 0),
+);
+
+const ReviewClaim = Schema.Struct({
+  id: Schema.String,
+  acquiredAtMs: NonNegativeSafeInteger,
+  leaseExpiresAtMs: NonNegativeSafeInteger,
+  throughPromptCount: NonNegativeSafeInteger,
+  inputIds: Schema.Array(Schema.String),
+}).check(Schema.makeFilter((claim) => claim.leaseExpiresAtMs >= claim.acquiredAtMs));
+
+const ReviewCadence = Schema.Struct({
+  acceptedPromptCount: NonNegativeSafeInteger,
+  reviewedThroughPromptCount: NonNegativeSafeInteger,
+  reviewInputs: Schema.optional(Schema.Array(ReviewInput)),
+  settledTurnIds: Schema.optional(Schema.Array(Schema.String)),
+  reviewClaim: Schema.optional(ReviewClaim),
+}).check(
+  Schema.makeFilter((value) => value.reviewedThroughPromptCount <= value.acceptedPromptCount),
+);
+
+const decodeReviewInput = Schema.decodeUnknownExit(ReviewInput);
+
+const decodeReviewInputs = Schema.decodeUnknownExit(
+  Schema.UndefinedOr(Schema.Array(Schema.Unknown)),
+);
+
+const decodeReviewCadence = Schema.decodeUnknownSync(Schema.fromJsonString(ReviewCadence));
+
+function normalizeReviewInput(entry: typeof ReviewInput.Type): BotMemoryReviewInput {
   return {
     ...(entry.id ? { id: entry.id } : {}),
     threadId: entry.threadId,
@@ -98,61 +127,33 @@ export function parseReviewInput(value: unknown): BotMemoryReviewInput {
   };
 }
 
-export function parseReviewInputs(value: unknown): ReadonlyArray<BotMemoryReviewInput> {
-  if (value === undefined) return [];
+export const parseReviewInput = flow(decodeReviewInput, (result): BotMemoryReviewInput => {
+  if (Exit.isFailure(result)) throw new InvalidReviewCadenceError("A review input is invalid.");
 
-  if (!Array.isArray(value)) throw new InvalidReviewCadenceError("Review inputs are invalid.");
+  return normalizeReviewInput(result.value);
+});
 
-  return value.map(parseReviewInput);
-}
+export const parseReviewInputs = flow(
+  decodeReviewInputs,
+  (result): ReadonlyArray<BotMemoryReviewInput> => {
+    if (Exit.isFailure(result)) throw new InvalidReviewCadenceError("Review inputs are invalid.");
 
-export class InvalidReviewCadenceError extends Error {}
+    return result.value?.map((value) => parseReviewInput(value)) ?? [];
+  },
+);
 
 export function parseReviewCadence(raw: string): BotMemoryReviewCadenceState {
   try {
-    const value = JSON.parse(raw) as Partial<BotMemoryReviewCadenceState>;
+    const value = decodeReviewCadence(raw);
 
-    if (
-      Number.isSafeInteger(value.acceptedPromptCount) &&
-      Number.isSafeInteger(value.reviewedThroughPromptCount) &&
-      value.acceptedPromptCount! >= 0 &&
-      value.reviewedThroughPromptCount! >= 0 &&
-      value.reviewedThroughPromptCount! <= value.acceptedPromptCount!
-    ) {
-      return {
-        acceptedPromptCount: value.acceptedPromptCount!,
-        reviewedThroughPromptCount: value.reviewedThroughPromptCount!,
-        reviewInputs: parseReviewInputs(value.reviewInputs),
-        ...(Array.isArray(value.settledTurnIds) &&
-        value.settledTurnIds.every((id) => typeof id === "string")
-          ? { settledTurnIds: value.settledTurnIds }
-          : value.settledTurnIds === undefined
-            ? {}
-            : (() => {
-                throw new InvalidReviewCadenceError("Settled turn IDs are invalid.");
-              })()),
-        ...(typeof value.reviewClaim === "object" &&
-        value.reviewClaim !== null &&
-        typeof value.reviewClaim.id === "string" &&
-        Number.isSafeInteger(value.reviewClaim.acquiredAtMs) &&
-        value.reviewClaim.acquiredAtMs >= 0 &&
-        Number.isSafeInteger(value.reviewClaim.leaseExpiresAtMs) &&
-        value.reviewClaim.leaseExpiresAtMs >= value.reviewClaim.acquiredAtMs &&
-        Number.isSafeInteger(value.reviewClaim.throughPromptCount) &&
-        value.reviewClaim.throughPromptCount >= 0 &&
-        Array.isArray(value.reviewClaim.inputIds) &&
-        value.reviewClaim.inputIds.every((id) => typeof id === "string")
-          ? { reviewClaim: value.reviewClaim }
-          : value.reviewClaim === undefined
-            ? {}
-            : (() => {
-                throw new InvalidReviewCadenceError("The bot memory review claim is invalid.");
-              })()),
-      };
-    }
+    return {
+      acceptedPromptCount: value.acceptedPromptCount,
+      reviewedThroughPromptCount: value.reviewedThroughPromptCount,
+      reviewInputs: value.reviewInputs?.map(normalizeReviewInput) ?? [],
+      ...(value.settledTurnIds === undefined ? {} : { settledTurnIds: value.settledTurnIds }),
+      ...(value.reviewClaim === undefined ? {} : { reviewClaim: value.reviewClaim }),
+    };
   } catch {
-    // The error below includes the stable public failure shape.
+    throw new InvalidReviewCadenceError("The bot memory review cadence file is invalid.");
   }
-
-  throw new InvalidReviewCadenceError("The bot memory review cadence file is invalid.");
 }

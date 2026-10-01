@@ -11,24 +11,20 @@ import {
   gitCommandContext,
   isMissingWorktreeStderr,
 } from "./GitCoreHelpers.ts";
-import type { makeGitExecution } from "./GitExecution.ts";
-import type { makeGitBranches } from "./GitBranches.ts";
-import type { makeGitRemoteStatus } from "./GitRemoteStatus.ts";
+import type { GitExecutionServices } from "./GitExecution.ts";
+import type { GitBranchesServices } from "./GitBranches.ts";
+import type { GitRemoteStatusServices } from "./GitRemoteStatus.ts";
 
 export const makeGitWorktrees = (dependencies: {
-  fileSystem: Effect.Success<ReturnType<typeof makeGitExecution>>["fileSystem"];
-  path: Effect.Success<ReturnType<typeof makeGitExecution>>["path"];
-  executeGit: Effect.Success<ReturnType<typeof makeGitExecution>>["executeGit"];
-  executeGitWithStableDiagnostics: Effect.Success<
-    ReturnType<typeof makeGitExecution>
-  >["executeGitWithStableDiagnostics"];
-  runGit: Effect.Success<ReturnType<typeof makeGitExecution>>["runGit"];
-  runGitStdout: Effect.Success<ReturnType<typeof makeGitExecution>>["runGitStdout"];
-  resolveAvailableBranchName: Effect.Success<
-    ReturnType<typeof makeGitBranches>
-  >["resolveAvailableBranchName"];
-  remoteExists: Effect.Success<ReturnType<typeof makeGitRemoteStatus>>["remoteExists"];
-  listRemoteNames: Effect.Success<ReturnType<typeof makeGitRemoteStatus>>["listRemoteNames"];
+  fileSystem: GitExecutionServices["fileSystem"];
+  path: GitExecutionServices["path"];
+  executeGit: GitExecutionServices["executeGit"];
+  executeGitWithStableDiagnostics: GitExecutionServices["executeGitWithStableDiagnostics"];
+  runGit: GitExecutionServices["runGit"];
+  runGitStdout: GitExecutionServices["runGitStdout"];
+  resolveAvailableBranchName: GitBranchesServices["resolveAvailableBranchName"];
+  remoteExists: GitRemoteStatusServices["remoteExists"];
+  listRemoteNames: GitRemoteStatusServices["listRemoteNames"];
 }) =>
   Effect.gen(function* () {
     const { worktreesDir } = yield* ServerConfig;
@@ -356,3 +352,5 @@ export const makeGitWorktrees = (dependencies: {
       initRepo,
     };
   });
+
+export type GitWorktreesServices = Effect.Success<ReturnType<typeof makeGitWorktrees>>;

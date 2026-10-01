@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+
 import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import {
@@ -137,7 +139,7 @@ const buildLoadingSnapshot = (input: {
 }): PreviewSessionSnapshot => ({
   threadId: input.threadId,
   tabId: input.tabId,
-  navStatus: { _tag: "Loading", url: input.url, title: input.title },
+  navStatus: Navigation["Loading"]({ url: input.url, title: input.title }),
   canGoBack: false,
   canGoForward: false,
   viewport: input.viewport,
@@ -152,7 +154,7 @@ const buildIdleSnapshot = (input: {
 }): PreviewSessionSnapshot => ({
   threadId: input.threadId,
   tabId: input.tabId,
-  navStatus: { _tag: "Idle" },
+  navStatus: Navigation["Idle"](),
   canGoBack: false,
   canGoForward: false,
   viewport: input.viewport,
@@ -196,15 +198,19 @@ export const make = Effect.gen(function* PreviewManagerMake() {
       const session = state.sessions.get(compositeKey(threadId, tabId));
 
       if (!session) {
-        return Effect.succeed([
+        return Effect.succeed<readonly [ModifyResult, ManagerState]>([
           { kind: "fail", error: new PreviewSessionLookupError({ threadId, tabId }) },
           state,
-        ] as readonly [ModifyResult, ManagerState]);
+        ]);
       }
 
       return mutator(session).pipe(
         Effect.flatMap(
-          Effect.fn("PreviewManager.commitMutation")(function* ({ next, emit, result }) {
+          Effect.fn("PreviewManager.commitMutation")(function* ({
+            next,
+            emit,
+            result,
+          }): Effect.fn.Return<readonly [ModifyResult, ManagerState]> {
             const revision = emit ? state.revision + 1 : state.revision;
 
             if (emit) {
@@ -212,15 +218,15 @@ export const make = Effect.gen(function* PreviewManagerMake() {
                 ...emit,
                 revision,
                 serverEpoch,
-              } as PreviewEvent);
+              });
             }
 
             const sessions = new Map(state.sessions);
             sessions.set(compositeKey(threadId, tabId), next);
 
-            return [{ kind: "ok", result } as ModifyResult, { sessions, revision }] as readonly [
-              ModifyResult,
-              ManagerState,
+            return [
+              { kind: "ok", result },
+              { sessions, revision },
             ];
           }),
         ),
@@ -299,7 +305,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
           const snapshot: PreviewSessionSnapshot = {
             threadId: session.threadId,
             tabId: session.tabId,
-            navStatus: { _tag: "Success", url, title: resolvedTitle },
+            navStatus: Navigation["Success"]({ url, title: resolvedTitle }),
             canGoBack: session.snapshot.canGoBack,
             canGoForward: session.snapshot.canGoForward,
             viewport: session.snapshot.viewport ?? FILL_PREVIEW_VIEWPORT,
@@ -363,7 +369,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
         return {
           next: { ...session, snapshot },
           emit,
-          result: undefined as void,
+          result: undefined,
         };
       }),
     );
@@ -383,7 +389,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
             createdAt,
             frame: input.frame,
           },
-          result: undefined as void,
+          result: undefined,
         })),
       ),
     );
@@ -424,7 +430,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
       // Verify the session exists; the desktop bridge handles the actual reload
       // and will report progress back via `reportStatus`. No event emitted.
       yield* mutateExistingSession(input.threadId, input.tabId, (session) =>
-        Effect.succeed({ next: session, emit: null, result: undefined as void }),
+        Effect.succeed({ next: session, emit: null, result: undefined }),
       );
     },
   );
@@ -502,3 +508,5 @@ export const make = Effect.gen(function* PreviewManagerMake() {
 }).pipe(Effect.withSpan("PreviewManager.make"));
 
 export const layer = Layer.effect(PreviewManager, make);
+
+const Navigation = Data.taggedEnum<PreviewSessionSnapshot["navStatus"]>();

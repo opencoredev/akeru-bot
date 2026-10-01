@@ -14,7 +14,6 @@ import {
 import * as Effect from "effect/Effect";
 
 import { exportAkeruMemory } from "./MemoryExport.ts";
-import type { EntityMemoryRepositoryShape } from "./Services/EntityMemoryRepository.ts";
 
 const access = {
   tenantId: AkeruMemoryTenantId.make("local"),
@@ -67,7 +66,7 @@ it.effect("exports readable complete history with checksums and tombstones", () 
 
   const repository = {
     listByPartitions: () => Effect.succeed([initial, current]),
-  } as unknown as EntityMemoryRepositoryShape;
+  };
 
   return Effect.gen(function* () {
     const archive = yield* exportAkeruMemory({

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -601,7 +602,7 @@ it.live(
           entry.activities.some(
             (activity) =>
               activity.kind === "checkpoint.revert.failed" &&
-              typeof activity.payload === "object" &&
+              Predicate.isObjectKeyword(activity.payload) &&
               activity.payload !== null,
           ),
         );

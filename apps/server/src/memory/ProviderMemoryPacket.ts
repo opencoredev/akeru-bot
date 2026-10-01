@@ -11,6 +11,8 @@ import * as Schema from "effect/Schema";
 
 import { scanMemoryContent } from "./memoryContentSafety.ts";
 
+const decodeMemoryPacket = Schema.decodeUnknownSync(AkeruMemoryPacket);
+
 /**
  * Build the provider input from the durable current revisions.
  *
@@ -74,7 +76,7 @@ export function buildProviderMemoryPacket(
     estimatedTokens = nextTokens;
   }
 
-  return Schema.decodeUnknownSync(AkeruMemoryPacket)({
+  return decodeMemoryPacket({
     threadId,
     facts,
     estimatedTokens,

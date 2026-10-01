@@ -3,6 +3,8 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { toPersistenceDecodeError } from "../../persistence/Errors.ts";
 
+const decodeMemoryRevision = Schema.decodeUnknownEffect(AkeruMemoryRevision);
+
 export const EntityMemoryDbRow = Schema.Struct({
   id: AkeruMemoryId,
   rootId: AkeruMemoryRootId,
@@ -80,7 +82,7 @@ export const decodeRow = Effect.fn("EntityMemoryRepository.decodeRow")(
     const value = yield* decodeJsonValue(row.value);
     const affectedBotIds = yield* decodeJsonBotIds(row.affectedBotIds);
 
-    return yield* Schema.decodeUnknownEffect(AkeruMemoryRevision)({
+    return yield* decodeMemoryRevision({
       ...row,
       value,
       affectedBotIds,

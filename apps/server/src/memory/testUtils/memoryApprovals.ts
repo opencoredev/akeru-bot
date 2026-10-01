@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+
 export const failureInjection = {
   failResolvedActivityOnce: false,
   crashAfterScopedFactOnce: false,
@@ -13,8 +15,8 @@ import {
   ProjectId,
   ThreadId,
   type OrchestrationCommand,
-  type OrchestrationShellSnapshot,
-  type OrchestrationThreadShell,
+  OrchestrationShellSnapshot,
+  OrchestrationThreadShell,
 } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -86,21 +88,61 @@ const engineLayer = Layer.succeed(OrchestrationEngineService, {
 });
 
 // Only the two reads MemoryApprovals uses to label inbox items are real.
+const decodeThread = Schema.decodeUnknownSync(OrchestrationThreadShell);
+
+const decodeShell = Schema.decodeUnknownSync(OrchestrationShellSnapshot);
+
 const snapshotQuery = {
   getThreadShellById: (id: ThreadId) =>
     Effect.succeed(
       id === threadId
-        ? Option.some({
-            id,
-            title: "Release notes",
-            botId,
-            respondingBotId: null,
-          } as unknown as OrchestrationThreadShell)
+        ? Option.some(
+            decodeThread({
+              projectId: "project",
+              modelSelection: { instanceId: "codex", model: "gpt" },
+              runtimeMode: "approval-required",
+              branch: null,
+              worktreePath: null,
+              latestTurn: null,
+              createdAt: "2026-08-31T20:00:00.000Z",
+              updatedAt: "2026-08-31T20:00:00.000Z",
+              session: null,
+              latestUserMessageAt: null,
+              hasPendingApprovals: false,
+              hasPendingUserInput: false,
+              hasActionableProposedPlan: false,
+              id,
+              title: "Release notes",
+              botId,
+              respondingBotId: null,
+            }),
+          )
         : Option.none(),
     ),
   getShellSnapshot: () =>
-    Effect.succeed({ bots: [{ id: botId, name: "Ada" }] } as unknown as OrchestrationShellSnapshot),
-} as unknown as ProjectionSnapshotQueryShape;
+    Effect.succeed(
+      decodeShell({
+        snapshotSequence: 0,
+        projects: [],
+        threads: [],
+        updatedAt: "2026-08-31T20:00:00.000Z",
+        bots: [
+          {
+            id: botId,
+            name: "Ada",
+            title: "Assistant",
+            avatar: { kind: "blob", shape: "circle", color: "blue" },
+            engine: null,
+            sandbox: "local",
+            groupId: null,
+            archivedAt: null,
+            createdAt: "2026-08-31T20:00:00.000Z",
+            updatedAt: "2026-08-31T20:00:00.000Z",
+          },
+        ],
+      }),
+    ),
+} satisfies Partial<ProjectionSnapshotQueryShape>;
 
 const repositoryLayer = EntityMemoryRepositoryLive.pipe(Layer.provide(MemoryRevisionWriteLockLive));
 
@@ -140,7 +182,7 @@ const crashInjectingRepositoryLayer = Layer.effect(
 const testLayer = MemoryApprovalsLive.pipe(
   Layer.provideMerge(crashInjectingRepositoryLayer),
   Layer.provideMerge(engineLayer),
-  Layer.provideMerge(Layer.succeed(ProjectionSnapshotQuery, snapshotQuery)),
+  Layer.provideMerge(Layer.mock(ProjectionSnapshotQuery)(snapshotQuery)),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "akeru-memory-approvals-" })),
   Layer.provideMerge(SqlitePersistenceMemory),
   Layer.provide(NodeServices.layer),

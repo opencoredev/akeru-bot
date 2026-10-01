@@ -1,3 +1,4 @@
+import type { PreviewAutomationRequest } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import type {
   PreviewAutomationOperation,
@@ -35,7 +36,7 @@ export function normalizePreviewOpenInput(
 
 const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
   operation: PreviewAutomationOperation,
-  input: unknown,
+  input: PreviewAutomationRequest["input"],
   timeoutMs?: number,
   tabId?: PreviewTabId,
 ): Effect.fn.Return<
@@ -57,10 +58,7 @@ const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
 
 const invokeTargeted = <A>(
   operation: PreviewAutomationOperation,
-  input: {
-    readonly tabId?: PreviewTabId | undefined;
-    readonly [key: string]: unknown;
-  },
+  input: { readonly tabId?: PreviewTabId | undefined },
   timeoutMs?: number,
 ) => {
   const { tabId, ...operationInput } = input;

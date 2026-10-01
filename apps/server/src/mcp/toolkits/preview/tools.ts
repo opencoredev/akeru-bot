@@ -33,12 +33,15 @@ const PreviewActionResult = Schema.Record(Schema.String, Schema.Never).annotate(
   description: "The preview action completed successfully.",
 });
 
+// SAFETY: Tool.annotate changes annotation context while preserving the tool name, parameter schema, result schema, and handler type.
 const browserTool = <T extends Tool.Any>(tool: T): T =>
   tool.annotate(Tool.OpenWorld, true).annotate(Tool.Destructive, true) as T;
 
+// SAFETY: Tool.annotate changes annotation context while preserving the tool name, parameter schema, result schema, and handler type.
 const safeBrowserTool = <T extends Tool.Any>(tool: T): T =>
   browserTool(tool).annotate(Tool.Destructive, false) as T;
 
+// SAFETY: Tool.annotate changes annotation context while preserving the tool name, parameter schema, result schema, and handler type.
 const readonlyBrowserTool = <T extends Tool.Any>(tool: T): T =>
   safeBrowserTool(tool).annotate(Tool.Readonly, true).annotate(Tool.Idempotent, true) as T;
 

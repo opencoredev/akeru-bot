@@ -95,8 +95,8 @@ layer("OrchestrationEventStore", (it) => {
       `;
 
       assert.equal(storedRows.length, 1);
-      assert.equal(typeof storedRows[0]?.payloadJson, "string");
-      assert.equal(typeof storedRows[0]?.metadataJson, "string");
+      assert.equal(Predicate.isString(storedRows[0]?.payloadJson), true);
+      assert.equal(Predicate.isString(storedRows[0]?.metadataJson), true);
 
       const replayed = yield* Stream.runCollect(eventStore.readFromSequence(0, 10)).pipe(
         Effect.map((chunk) => Array.from(chunk)),

@@ -8,6 +8,7 @@ import { createModelSelection } from "@akeru/shared/model";
 import { CodexSettings, ProviderInstanceId } from "@akeru/contracts";
 import * as ServerConfig from "../../config.ts";
 import * as TextGeneration from "../TextGeneration.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test helper builds an isolated text-generation service with fake processes.
 import { makeCodexTextGeneration } from "../CodexTextGeneration.ts";
 
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
