@@ -84,6 +84,7 @@ describe("resource telemetry presentation", () => {
 
     expect(healthy).toContain("Native healthy");
     expect(healthy).toContain("border-success/25");
+    expect(healthy).toContain("dark:text-success-bright-foreground");
     expect(desktop).toContain("Desktop only");
     expect(desktop).not.toContain("unavailable");
   });

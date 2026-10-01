@@ -10,7 +10,7 @@ import { cn } from "~/lib/utils";
 const buttonPresentations = {
   "provider-update-strong": "size-5 rounded-sm p-0 text-warning hover:text-warning",
   "provider-update": "size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground",
-  "model-favorite": "text-yellow-500 hover:text-yellow-600",
+  "model-favorite": "text-favorite-foreground hover:text-favorite-hover-foreground",
   "compact-gap": "gap-1",
   "wizard-preview-action": "h-7 px-2 text-xs text-muted-foreground",
   "environment-add": "h-7 gap-1.5 px-2 text-xs",
