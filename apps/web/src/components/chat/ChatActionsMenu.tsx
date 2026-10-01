@@ -133,7 +133,7 @@ export function ChatActionsMenu({
     [actions, newChat, openRename, state, t, threadRef],
   );
 
-  const registryOwner = useRef({});
+  const registryOwner = useRef(Symbol("chat-actions"));
   useEffect(
     () => registerChatPaletteActions(registryOwner.current, paletteActions),
     [paletteActions],

@@ -160,9 +160,7 @@ export function deriveProviderEntriesByEnvironment(
     byEnvironment.set(
       environmentId,
       new Map(
-        deriveProviderInstanceEntries(providers).map(
-          (entry) => [entry.instanceId as string, entry] as const,
-        ),
+        deriveProviderInstanceEntries(providers).map((entry) => [entry.instanceId, entry] as const),
       ),
     );
   }
@@ -184,9 +182,7 @@ export function applyProviderInstanceSettings(
   entries: ReadonlyArray<ProviderInstanceEntry>,
   settings: Pick<ServerSettings, "providerInstances" | "providers">,
 ): ReadonlyArray<ProviderInstanceEntry> {
-  const legacyProviders = settings.providers as Readonly<
-    Record<string, { readonly enabled?: boolean } | undefined>
-  >;
+  const legacyProviders = new Map(Object.entries(settings.providers));
 
   return entries.map((entry) => {
     const explicitInstance = settings.providerInstances?.[entry.instanceId];
@@ -194,7 +190,7 @@ export function applyProviderInstanceSettings(
     const enabled = explicitInstance
       ? resolveProviderInstanceEnabled(explicitInstance)
       : entry.isDefault
-        ? (legacyProviders[entry.driverKind]?.enabled ?? entry.enabled)
+        ? (legacyProviders.get(entry.driverKind)?.enabled ?? entry.enabled)
         : false;
 
     return enabled === entry.enabled ? entry : { ...entry, enabled };

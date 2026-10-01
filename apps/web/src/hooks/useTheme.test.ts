@@ -98,7 +98,10 @@ describe("theme failure handling", () => {
     vi.doMock("react", () => ({
       useCallback: <A>(callback: A) => callback,
       useEffect: () => undefined,
-      useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
+      useSyncExternalStore: <Snapshot>(
+        _subscribe: (listener: () => void) => () => void,
+        getSnapshot: () => Snapshot,
+      ) => getSnapshot(),
     }));
     vi.stubGlobal("window", {
       addEventListener: () => undefined,
@@ -192,15 +195,15 @@ describe("theme failure handling", () => {
 
     const getItem = vi.fn((key: string) => (key === "akeru:theme" ? themeGetItem() : null));
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
-    let readSnapshot: (() => unknown) | undefined;
+    let readSnapshot: (() => void) | undefined;
     let subscribeToTheme: ((listener: () => void) => () => void) | undefined;
     let storageHandler: ((event: StorageEvent) => void) | undefined;
     vi.doMock("react", () => ({
       useCallback: <A>(callback: A) => callback,
       useEffect: () => undefined,
-      useSyncExternalStore: (
+      useSyncExternalStore: <Snapshot>(
         subscribe: (listener: () => void) => () => void,
-        getSnapshot: () => unknown,
+        getSnapshot: () => Snapshot,
       ) => {
         subscribeToTheme = subscribe;
         readSnapshot = getSnapshot;
@@ -249,7 +252,7 @@ describe("theme failure handling", () => {
 
     const error = await syncDesktopThemePreference({ setTheme }, "dark").then(
       () => undefined,
-      (failure: unknown) => failure,
+      (cause: unknown) => cause,
     );
 
     expect(error).toBeInstanceOf(DesktopThemeSyncError);
@@ -299,9 +302,9 @@ describe("legacy key cleanup", () => {
     vi.doMock("react", () => ({
       useCallback: <A>(callback: A) => callback,
       useEffect: () => undefined,
-      useSyncExternalStore: (
+      useSyncExternalStore: <Snapshot>(
         _subscribe: (listener: () => void) => () => void,
-        getSnapshot: () => unknown,
+        getSnapshot: () => Snapshot,
       ) => getSnapshot(),
     }));
   }

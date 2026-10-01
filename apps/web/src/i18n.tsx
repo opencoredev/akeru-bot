@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import {
   createContext,
@@ -24,7 +25,7 @@ import {
 
 export { availableLanguages };
 
-export function normalizeLanguagePreference(value: unknown): string {
+export function normalizeLanguagePreference(value: Schema.Json | undefined): string {
   return Predicate.isString(value) && availableLanguages.some(({ id }) => id === value)
     ? value
     : "system";

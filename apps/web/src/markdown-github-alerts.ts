@@ -14,7 +14,10 @@ interface MarkdownAstNode {
   type?: string;
   value?: unknown;
   data?: {
-    hProperties?: Record<string, unknown>;
+    hProperties?: Record<
+      string,
+      string | number | boolean | ReadonlyArray<string | number> | null | undefined
+    >;
   };
   children?: MarkdownAstNode[];
 }

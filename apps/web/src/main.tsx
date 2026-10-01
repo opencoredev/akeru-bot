@@ -29,7 +29,11 @@ if (isElectron) {
   syncDocumentWindowControlsOverlayClass();
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+const rootElement = document.getElementById("root");
+
+if (!rootElement) throw new Error("Missing app root element.");
+
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <LanguageProvider testCatalog={testLanguageCatalog}>
       <AppRoot router={router} />

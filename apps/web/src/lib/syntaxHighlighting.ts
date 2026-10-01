@@ -24,6 +24,7 @@ export function getSyntaxHighlighterPromise(language: string): Promise<DiffsHigh
 
   const promise = getSharedHighlighter({
     themes: [resolveDiffThemeName("dark"), resolveDiffThemeName("light")],
+    // SAFETY: The highlighter validates language ids and this promise falls back to text for unsupported ids.
     langs: [language as SupportedLanguages],
     preferredHighlighter: PREFERRED_HIGHLIGHTER,
   }).catch((error) => {

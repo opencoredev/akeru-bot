@@ -16,9 +16,9 @@ import { __setPrimaryHttpRunnerForTests, type PrimaryHttpEffectRunner } from "./
 type TestWindow = {
   location: URL;
   history: {
-    replaceState: (_data: unknown, _unused: string, url: string) => void;
+    replaceState: (_data: null, _unused: string, url: string) => void;
   };
-  desktopBridge?: DesktopBridge;
+  desktopBridge?: Partial<DesktopBridge>;
 };
 
 const LOOPBACK_AUTH = {
@@ -84,7 +84,7 @@ function installDesktopBootstrap() {
         bootstrapToken: "desktop-bootstrap-token",
       },
     ],
-  } as unknown as DesktopBridge;
+  };
 }
 
 function sequence<A>(...values: ReadonlyArray<A>) {
@@ -162,7 +162,7 @@ describe("resolveInitialServerAuthGateState", () => {
           bootstrapToken: "desktop-bootstrap-token",
         },
       ],
-    } as unknown as DesktopBridge;
+    };
 
     const { resolveInitialServerAuthGateState } = await import("./environments/primary");
 
@@ -219,7 +219,7 @@ describe("resolveInitialServerAuthGateState", () => {
           wsBaseUrl: "ws://127.0.0.1:3773",
         },
       ],
-    } as unknown as DesktopBridge;
+    };
 
     const { resolveInitialServerAuthGateState, resolvePrimaryEnvironmentHttpUrl } =
       await import("./environments/primary");
@@ -345,7 +345,7 @@ describe("resolveInitialServerAuthGateState", () => {
 
     const error = await submitServerAuthCredential("   ").then(
       () => null,
-      (failure: unknown) => failure,
+      (cause: unknown) => cause,
     );
 
     expect(error).toBeInstanceOf(PrimaryEnvironmentPairingCredentialRequiredError);
@@ -372,7 +372,7 @@ describe("resolveInitialServerAuthGateState", () => {
 
     const error = await submitServerAuthCredential("bad-token").then(
       () => null,
-      (failure: unknown) => failure,
+      (cause: unknown) => cause,
     );
 
     expect(error).toMatchObject({
@@ -437,7 +437,7 @@ describe("resolveInitialServerAuthGateState", () => {
           bootstrapToken: "desktop-bootstrap-token",
         },
       ],
-    } as unknown as DesktopBridge;
+    };
 
     const { resolveInitialServerAuthGateState } = await import("./environments/primary");
 

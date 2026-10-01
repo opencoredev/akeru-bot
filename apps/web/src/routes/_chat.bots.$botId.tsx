@@ -36,6 +36,7 @@ import { primaryServerProvidersAtom } from "../state/server";
 import { environmentSnapshotAtom } from "../state/shell";
 import { useAtomCommand } from "../state/use-atom-command";
 
+// SAFETY: This sentinel is used only while the environment query is disabled and is never sent to a server.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 function BotThreadRouteView() {

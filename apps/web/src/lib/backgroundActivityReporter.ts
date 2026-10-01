@@ -7,7 +7,7 @@ import {
 import {
   type BackgroundScope,
   type ClientActivityReportInput,
-  type EnvironmentId,
+  EnvironmentId,
   WS_METHODS,
 } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
@@ -160,7 +160,7 @@ export function observeBackgroundActivitySubscription(
   }
 
   return Effect.sync(() => {
-    const release = retainBackgroundScope(observation.environmentId as EnvironmentId, scope);
+    const release = retainBackgroundScope(EnvironmentId.make(observation.environmentId), scope);
 
     return Effect.sync(release);
   });

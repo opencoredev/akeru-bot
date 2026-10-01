@@ -155,8 +155,7 @@ function applyTheme(theme: Theme, suppressTransitions = false) {
 
   if (suppressTransitions) {
     // Force a reflow so the no-transitions class takes effect before removal
-    // oxlint-disable-next-line no-unused-expressions
-    document.documentElement.offsetHeight;
+    void document.documentElement.offsetHeight;
     requestAnimationFrame(() => {
       document.documentElement.classList.remove("no-transitions");
     });
@@ -385,7 +384,7 @@ export function useTheme() {
 
       try {
         const current = readStoredThemeHalves() ?? {};
-        const next: { light?: string; dark?: string } = { ...current };
+        const next: MutableThemeHalves = { ...current };
 
         if (themeId === null) delete next[appearance];
         else next[appearance] = themeId;
@@ -490,3 +489,5 @@ export {
   syncDesktopThemePreference,
   syncDesktopTheme,
 } from "../theme/desktopSync";
+
+type MutableThemeHalves = { -readonly [Key in keyof ThemeHalves]: ThemeHalves[Key] };

@@ -104,7 +104,7 @@ export function normalizeMarkdownLinkDestination(value: string): string {
   return unwrapMarkdownLinkDestination(value.trim());
 }
 
-function stripSearchAndHash(value: string): { path: string; hash: string } {
+function stripSearchAndHash(value: string) {
   const hashIndex = value.indexOf("#");
   const pathWithSearch = hashIndex >= 0 ? value.slice(0, hashIndex) : value;
   const rawHash = hashIndex >= 0 ? value.slice(hashIndex) : "";

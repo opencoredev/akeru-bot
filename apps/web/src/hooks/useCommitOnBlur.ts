@@ -47,7 +47,7 @@ export function useCommitOnBlur(value: string, onCommit: (next: string) => void)
     onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
       if (!shouldBlurCommitOnKeyDown(event)) return;
       event.preventDefault();
-      (event.target as HTMLInputElement).blur();
+      event.currentTarget.blur();
     },
   };
 }

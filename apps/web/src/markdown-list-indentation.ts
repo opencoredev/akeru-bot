@@ -3,14 +3,14 @@ import * as Predicate from "effect/Predicate";
 interface MarkdownPosition {
   readonly start?: {
     readonly line?: number;
-    readonly offset?: number;
+    readonly offset?: number | undefined;
   };
 }
 
 interface MarkdownAstNode {
   readonly type: string;
   readonly value?: unknown;
-  readonly position?: MarkdownPosition;
+  readonly position?: MarkdownPosition | undefined;
   children?: MarkdownAstNode[];
 }
 
@@ -19,7 +19,7 @@ interface MarkdownFile {
 }
 
 interface MarkdownParser {
-  parse(markdown: string): unknown;
+  parse(markdown: string): MarkdownAstNode;
 }
 
 interface RecoveredMarkdown {
@@ -66,7 +66,7 @@ function parseRecoveredMarkdown(value: string, parser: MarkdownParser): Recovere
   // Later root children are kept as blocks so blank-line-separated content is
   // never discarded.
   const source = `${INLINE_PARSE_PREFIX}${value}`;
-  const document = parser.parse(source) as MarkdownAstNode;
+  const document = parser.parse(source);
   const blocks = document.children;
   const paragraph = blocks?.[0];
   const children = paragraph?.type === "paragraph" ? paragraph.children : undefined;

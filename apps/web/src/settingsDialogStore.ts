@@ -106,26 +106,22 @@ export function clearSettingsEnvironment(): void {
  * Retired section slugs and the page (plus anchor) that now owns them, so old
  * links and bookmarks keep working.
  */
-export const LEGACY_SETTINGS_SECTIONS: Readonly<
-  Record<string, { readonly section: SettingsSection; readonly targetId?: string }>
-> = {
+export const LEGACY_SETTINGS_SECTIONS = {
   bots: { section: "channels" },
   inbox: { section: "advanced", targetId: "errors" },
   errors: { section: "advanced", targetId: "errors" },
   voice: { section: "providers", targetId: "voice" },
   "source-control": { section: "general" },
-};
+} as const satisfies Record<string, { section: SettingsSection; targetId?: string }>;
 
 /** Map a `/settings/...` pathname, current or legacy, onto a settings page. */
 export function settingsSectionFromPathname(pathname: string): SettingsSection {
   const slug = pathname.replace(/^\/settings\/?/, "").split("/")[0] ?? "";
-  const legacy = LEGACY_SETTINGS_SECTIONS[slug];
+  const legacy = Object.entries(LEGACY_SETTINGS_SECTIONS).find(([key]) => key === slug)?.[1];
 
   if (legacy) return legacy.section;
 
-  return (SETTINGS_SECTIONS as readonly string[]).includes(slug)
-    ? (slug as SettingsSection)
-    : DEFAULT_SETTINGS_SECTION;
+  return SETTINGS_SECTIONS.find((section) => section === slug) ?? DEFAULT_SETTINGS_SECTION;
 }
 
 /** The selected Bot channels tab and its setter. */

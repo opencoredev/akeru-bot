@@ -47,7 +47,7 @@ export const EMPTY_THREAD_PREVIEW_STATE: ThreadPreviewState = Object.freeze({
   desktopOverlay: null,
   desktopByTabId: {},
   framesByTabId: {},
-  recentlySeenUrls: [] as string[],
+  recentlySeenUrls: [],
   serverEpoch: null,
   serverRevision: 0,
 });

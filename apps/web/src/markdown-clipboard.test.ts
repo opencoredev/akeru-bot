@@ -48,8 +48,9 @@ class FakeElement {
   }
 }
 
-function asNode(element: FakeElement): Node {
-  return element as unknown as Node;
+function asNode(element: Pick<Node, "nodeType" | "textContent">): Node {
+  // SAFETY: The fake tree supplies the DOM fields exercised by these serializer tests; no browser mutation APIs are invoked.
+  return element as Node;
 }
 
 function shikiCodeLine(text: string): FakeElement {

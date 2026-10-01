@@ -81,7 +81,10 @@ function writeTextWithExecCommand(value: string): boolean {
     return false;
   } finally {
     textarea.remove();
-    const restoreFocus = (previouslyFocused as { focus?: unknown } | null)?.focus;
+
+    const restoreFocus = Predicate.hasProperty(previouslyFocused, "focus")
+      ? previouslyFocused.focus
+      : undefined;
 
     if (Predicate.isFunction(restoreFocus)) {
       restoreFocus.call(previouslyFocused);
@@ -148,7 +151,7 @@ export function useCopyToClipboard<TContext = void>({
   target?: string;
   onCopy?: (ctx: TContext) => void;
   onError?: (error: Error, ctx: TContext) => void;
-} = {}): { copyToClipboard: (value: string, ctx: TContext) => void; isCopied: boolean } {
+} = {}) {
   const [isCopied, setIsCopied] = React.useState(false);
   const timeoutIdRef = React.useRef<NodeJS.Timeout | null>(null);
   const onCopyRef = React.useRef(onCopy);

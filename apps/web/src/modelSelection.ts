@@ -62,8 +62,8 @@ function readInstanceCustomModels(
   const instance = settings.providerInstances?.[instanceId];
   const config = instance?.config;
 
-  if (config !== null && (config === null || Predicate.isObjectOrArray(config))) {
-    const value = (config as Record<string, unknown>).customModels;
+  if (Predicate.hasProperty(config, "customModels")) {
+    const value = config.customModels;
 
     if (Array.isArray(value)) {
       return value.filter((entry): entry is string => Predicate.isString(entry));
@@ -76,12 +76,9 @@ function readInstanceCustomModels(
     return [];
   }
 
-  const legacyProviders = settings.providers as Record<
-    string,
-    { readonly customModels: ReadonlyArray<string> } | undefined
-  >;
-
-  return legacyProviders[driverKind]?.customModels ?? [];
+  return (
+    Object.entries(settings.providers).find(([kind]) => kind === driverKind)?.[1].customModels ?? []
+  );
 }
 
 export interface AppModelOption {

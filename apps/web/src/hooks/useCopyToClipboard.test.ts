@@ -121,7 +121,7 @@ describe("writeTextToClipboard", () => {
 
     const error = await writeTextToClipboard("secret clipboard contents", "error-message").then(
       () => undefined,
-      (failure: unknown) => failure,
+      (cause: unknown) => cause,
     );
 
     expect(writeText).toHaveBeenCalledWith("secret clipboard contents");

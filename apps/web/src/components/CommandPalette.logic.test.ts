@@ -114,8 +114,8 @@ describe("roadmap palette commands", () => {
 
 describe("chat actions in the command palette", () => {
   it("publishes the open chat's actions until that chat unmounts", () => {
-    const first = {};
-    const second = {};
+    const first = Symbol("first");
+    const second = Symbol("second");
     const settle = { id: "settle", title: "Settle chat", searchTerms: ["settle"], run: vi.fn() };
     const cleanupFirst = registerChatPaletteActions(first, [settle]);
     expect(activeChatPaletteActions()).toEqual([settle]);

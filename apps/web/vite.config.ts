@@ -146,12 +146,11 @@ function devCompressionPlugin(): Plugin {
     name: "t3code:dev-compression",
     apply: "serve",
     configureServer(server) {
-      // compression() is typed against Express's req/res, which extend the
-      // node http objects Connect actually passes — safe to narrow.
+      // SAFETY: compression uses Node HTTP request/response fields available on Connect; Express only extends those types.
       server.middlewares.use(
         compression({
           brotli: { params: { [NodeZlib.constants.BROTLI_PARAM_QUALITY]: 5 } },
-        }) as unknown as Connect.NextHandleFunction,
+        }) as Connect.NextHandleFunction,
       );
     },
   };

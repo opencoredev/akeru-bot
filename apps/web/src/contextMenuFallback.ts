@@ -4,7 +4,7 @@ import type { ContextMenuItem } from "@akeru/contracts";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 // Inline Lucide-style icon paths (stroke-based, viewBox 0 0 24 24, strokeWidth 2).
-const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<string, string> }>> = {
+const ICON_PATHS = {
   archive: [
     { tag: "rect", attrs: { width: "20", height: "5", x: "2", y: "3", rx: "1" } },
     { tag: "path", attrs: { d: "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" } },
@@ -122,8 +122,10 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
   ],
 };
 
+const ICON_PATHS_LOOKUP = new Map(Object.entries(ICON_PATHS));
+
 function createIconElement(name: string, tone: "neutral" | "destructive"): SVGSVGElement | null {
-  const paths = ICON_PATHS[name];
+  const paths = ICON_PATHS_LOOKUP.get(name);
 
   if (!paths || !Predicate.isFunction(document.createElementNS)) {
     return null;
@@ -334,7 +336,7 @@ export function showContextMenuFallback<T extends string>(
         const hasChildren = Array.isArray(item.children) && item.children.length > 0;
 
         const isLeafDestructive =
-          !hasChildren && (item.destructive === true || item.id === ("delete" as T));
+          !hasChildren && (item.destructive === true || item.id === "delete");
 
         const button = document.createElement("button");
         button.type = "button";

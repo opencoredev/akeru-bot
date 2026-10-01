@@ -19,7 +19,7 @@ const NO_ACTIONS: ReadonlyArray<ChatPaletteAction> = [];
 
 let activeActions: ReadonlyArray<ChatPaletteAction> = NO_ACTIONS;
 
-let activeOwner: object | null = null;
+let activeOwner: symbol | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -31,7 +31,7 @@ function publish(actions: ReadonlyArray<ChatPaletteAction>): void {
 
 /** Returns a cleanup that only clears the registry when this owner is still the live one. */
 export function registerChatPaletteActions(
-  owner: object,
+  owner: symbol,
   actions: ReadonlyArray<ChatPaletteAction>,
 ): () => void {
   activeOwner = owner;

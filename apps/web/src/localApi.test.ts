@@ -47,8 +47,8 @@ function createLocalStorageStub(): Storage {
   };
 }
 
-function testWindow(): Window & typeof globalThis {
-  return globalThis.window ?? (globalThis as unknown as Window & typeof globalThis);
+function testWindow() {
+  return globalThis.window ?? globalThis;
 }
 
 beforeEach(() => {
@@ -122,12 +122,18 @@ describe("LocalApi", () => {
     const pickFolder = vi.fn().mockResolvedValue("/tmp/project");
     const getClientSettings = vi.fn().mockResolvedValue(DEFAULT_CLIENT_SETTINGS);
     const setClientSettings = vi.fn().mockResolvedValue(undefined);
-    testWindow().desktopBridge = {
+
+    const desktopBridge = {
       showContextMenu,
       pickFolder,
       getClientSettings,
       setClientSettings,
-    } as unknown as DesktopBridge;
+    } satisfies Partial<DesktopBridge>;
+
+    Object.defineProperty(testWindow(), "desktopBridge", {
+      configurable: true,
+      value: desktopBridge,
+    });
 
     const { createLocalApi } = await import("./localApi");
     const api = createLocalApi();

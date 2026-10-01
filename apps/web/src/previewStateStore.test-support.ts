@@ -1,7 +1,9 @@
+import * as Data from "effect/Data";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
 import {
-  type EnvironmentId,
-  type PreviewEvent,
+  EnvironmentId,
+  type PreviewNavStatus,
+  PreviewEvent,
   type PreviewSessionSnapshot,
   ThreadId,
 } from "@akeru/contracts";
@@ -10,7 +12,9 @@ import {
   resetPreviewStateForTests,
 } from "./previewStateStore";
 
-const environmentId = "env-1" as EnvironmentId;
+const navStatus = Data.taggedEnum<PreviewNavStatus>();
+
+const environmentId = EnvironmentId.make("env-1");
 
 export const ref = scopeThreadRef(environmentId, ThreadId.make("thread-1"));
 
@@ -21,7 +25,7 @@ export const makeSnapshot = (
 ): PreviewSessionSnapshot => ({
   threadId: "thread-1",
   tabId: "tab_a",
-  navStatus: { _tag: "Loading", url: "http://localhost:5173/", title: "" },
+  navStatus: navStatus.Loading({ url: "http://localhost:5173/", title: "" }),
   canGoBack: false,
   canGoForward: false,
   updatedAt: "2026-01-01T00:00:00.000Z",
@@ -40,11 +44,14 @@ let nextServerRevision = 0;
 
 export const applyPreviewServerEvent = (eventRef: typeof ref, event: PreviewEventDraft): void => {
   nextServerRevision += 1;
-  applyPreviewServerEventImpl(eventRef, {
-    ...event,
-    serverEpoch,
-    revision: nextServerRevision,
-  } as PreviewEvent);
+  applyPreviewServerEventImpl(
+    eventRef,
+    PreviewEvent.make({
+      ...event,
+      serverEpoch,
+      revision: nextServerRevision,
+    }),
+  );
 };
 
 export function resetPreviewTestFixtures() {
