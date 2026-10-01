@@ -20,7 +20,7 @@ import {
   type TurnId,
 } from "@akeru/contracts";
 
-import type { ChatMessage, SessionPhase, Thread, ThreadSession, TurnDiffSummary } from "./types";
+import type { ChatMessage, Thread } from "./types";
 
 export type ProviderPickerKind = ProviderDriverKind;
 
@@ -219,10 +219,7 @@ function toolDetailTextLooksLikeFailure(text: string): boolean {
   return false;
 }
 
-function workEntryIndicatesToolFailureFromOutput(
-  entry: WorkLogEntry,
-  includeCommand: boolean,
-): boolean {
+function workEntryIndicatesToolFailureFromOutput(entry: WorkLogEntry): boolean {
   if (entry.tone === "error") {
     return true;
   }
@@ -237,9 +234,6 @@ function workEntryIndicatesToolFailureFromOutput(
   if (entry.detail) {
     parts.push(entry.detail);
   }
-  if (includeCommand && entry.command) {
-    parts.push(entry.command);
-  }
   const blob = parts.join("\n");
   if (blob.length === 0) {
     return false;
@@ -247,58 +241,9 @@ function workEntryIndicatesToolFailureFromOutput(
   return toolDetailTextLooksLikeFailure(blob);
 }
 
-/** True when a tool failed, including providers that put error output in `command`. */
-export function workEntryIndicatesToolFailure(entry: WorkLogEntry): boolean {
-  return workEntryIndicatesToolFailureFromOutput(entry, true);
-}
-
 /** True when the rendered result indicates failure. The command itself is user intent, not output. */
 export function workEntryDisplayIndicatesToolFailure(entry: WorkLogEntry): boolean {
-  return workEntryIndicatesToolFailureFromOutput(entry, false);
-}
-
-/** Tool/command row completed without failure (blue check affordance). */
-export function workEntryIndicatesToolSuccess(entry: WorkLogEntry): boolean {
-  if (!workLogEntryIsToolLike(entry)) {
-    return false;
-  }
-  if (workEntryIndicatesToolFailure(entry)) {
-    return false;
-  }
-  if (entry.tone === "thinking") {
-    return false;
-  }
-  const ls = entry.toolLifecycleStatus;
-  if (ls === "failed" || ls === "declined") {
-    return false;
-  }
-  if (ls === "inProgress") {
-    return false;
-  }
-  if (ls === "stopped") {
-    return false;
-  }
-  return true;
-}
-
-/** Tool-like row with neither clear success nor failure (empty, incomplete, in progress, etc.). */
-export function workEntryIndicatesToolNeutralStatus(entry: WorkLogEntry): boolean {
-  // Spawn CTA rows are never neutral-hidden: mid-run they derive from
-  // task.progress (tone "thinking") and the neutral filter was swallowing
-  // them exactly while the fleet ran — the one moment they matter most.
-  if (entry.agentSpawn !== undefined) {
-    return false;
-  }
-  if (!workLogEntryIsToolLike(entry)) {
-    return false;
-  }
-  if (workEntryIndicatesToolFailure(entry)) {
-    return false;
-  }
-  if (workEntryIndicatesToolSuccess(entry)) {
-    return false;
-  }
-  return true;
+  return workEntryIndicatesToolFailureFromOutput(entry);
 }
 
 export { formatDuration, formatElapsed } from "@akeru/shared/orchestrationTiming";
@@ -336,133 +281,6 @@ export function deriveActiveWorkStartedAt(
   return sendStartedAt;
 }
 
-function planStateFromActivity(activity: OrchestrationThreadActivity): ActivePlanState | null {
-  const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
-  const rawPlan = payload?.plan;
-  if (!Array.isArray(rawPlan)) {
-    return null;
-  }
-  const steps: Array<{
-    step: string;
-    status: "pending" | "inProgress" | "completed";
-  }> = [];
-  for (const entry of rawPlan) {
-    if (!entry || typeof entry !== "object") {
-      continue;
-    }
-    const record = entry as Record<string, unknown>;
-    if (typeof record.step !== "string") {
-      continue;
-    }
-    const status =
-      record.status === "completed" || record.status === "inProgress" ? record.status : "pending";
-    steps.push({
-      step: record.step,
-      status,
-    });
-  }
-  if (steps.length === 0) {
-    return null;
-  }
-  return {
-    createdAt: activity.createdAt,
-    turnId: activity.turnId,
-    ...(payload && "explanation" in payload
-      ? { explanation: payload.explanation as string | null }
-      : {}),
-    steps,
-  };
-}
-
-function addPlanStepDurations(
-  plan: ActivePlanState,
-  activities: ReadonlyArray<OrchestrationThreadActivity>,
-): ActivePlanState {
-  const timings = new Map<string, { completedAt?: number; startedAt?: number }>();
-  let planStartedAt: number | undefined;
-
-  const keyedSteps = (steps: ActivePlanState["steps"]) => {
-    const occurrences = new Map<string, number>();
-    return steps.map((step) => {
-      const occurrence = occurrences.get(step.step) ?? 0;
-      occurrences.set(step.step, occurrence + 1);
-      return { key: `${step.step}:${occurrence}`, step };
-    });
-  };
-
-  for (const activity of activities) {
-    const snapshot = planStateFromActivity(activity);
-    const activityAt = Date.parse(activity.createdAt);
-    if (!snapshot || Number.isNaN(activityAt)) continue;
-    planStartedAt ??= activityAt;
-
-    for (const { key, step } of keyedSteps(snapshot.steps)) {
-      const timing = timings.get(key) ?? {};
-      if (step.status === "inProgress" && timing.startedAt === undefined) {
-        timing.startedAt = activityAt;
-      }
-      if (step.status === "completed" && timing.completedAt === undefined) {
-        timing.completedAt = activityAt;
-      }
-      timings.set(key, timing);
-    }
-  }
-
-  const durationByKey = new Map<string, number>();
-  let previousCompletedAt = planStartedAt;
-  for (const [key, timing] of [...timings.entries()].toSorted(
-    (left, right) => (left[1].completedAt ?? Infinity) - (right[1].completedAt ?? Infinity),
-  )) {
-    const completedAt = timing.completedAt;
-    const startedAt = timing.startedAt ?? previousCompletedAt;
-    if (completedAt === undefined) continue;
-    if (startedAt !== undefined && completedAt > startedAt) {
-      durationByKey.set(key, completedAt - startedAt);
-    }
-    previousCompletedAt = completedAt;
-  }
-
-  return {
-    ...plan,
-    steps: keyedSteps(plan.steps).map(({ key, step }) => {
-      if (step.status !== "completed") return step;
-      const durationMs = durationByKey.get(key);
-      return durationMs === undefined ? step : { ...step, durationMs };
-    }),
-  };
-}
-
-export function deriveActivePlanState(
-  activities: ReadonlyArray<OrchestrationThreadActivity>,
-  latestTurnId: TurnId | undefined,
-): ActivePlanState | null {
-  const ordered = [...activities].toSorted(compareActivitiesByOrder);
-  const allPlanActivities = ordered.filter((activity) => activity.kind === "turn.plan.updated");
-  // Prefer plan from the current turn; fall back to the most recent plan from any turn
-  // so that TodoWrite tasks persist across follow-up messages.
-  const latest = Option.firstSomeOf([
-    ...(latestTurnId
-      ? Arr.findLast(allPlanActivities, (activity) => activity.turnId === latestTurnId)
-      : Option.none()),
-    Arr.last(allPlanActivities),
-  ]).pipe(Option.getOrNull);
-  if (!latest) {
-    return null;
-  }
-  const plan = planStateFromActivity(latest);
-  if (!plan) return null;
-  const matchingActivities = allPlanActivities.filter(
-    (activity) => activity.turnId === latest.turnId,
-  );
-  const latestClearIndex = matchingActivities.findLastIndex(
-    (activity) => planStateFromActivity(activity) === null,
-  );
-  return addPlanStepDurations(plan, matchingActivities.slice(latestClearIndex + 1));
-}
-
 export interface TurnPlanEntry {
   /** Stable per-turn row id (plans rewrite constantly; the row must not churn). */
   id: string;
@@ -470,53 +288,6 @@ export interface TurnPlanEntry {
   createdAt: string;
   turnId: TurnId | null;
   plan: ActivePlanState;
-}
-
-/**
- * One inline plan chip per turn that produced plan/todo steps: the latest
- * snapshot for the turn, anchored at the first snapshot's timestamp. Turn-less
- * plan activities collapse into a single chip keyed by thread order.
- */
-export function deriveTurnPlans(
-  activities: ReadonlyArray<OrchestrationThreadActivity>,
-): TurnPlanEntry[] {
-  const ordered = [...activities].toSorted(compareActivitiesByOrder);
-  const byTurn = new Map<
-    string,
-    { activities: OrchestrationThreadActivity[]; entry: TurnPlanEntry }
-  >();
-  for (const activity of ordered) {
-    if (activity.kind !== "turn.plan.updated") {
-      continue;
-    }
-    const plan = planStateFromActivity(activity);
-    const key = activity.turnId ?? "no-turn";
-    if (!plan) {
-      // A later snapshot with no steps clears the turn's plan; keeping the
-      // stale entry would freeze the chip on a withdrawn plan.
-      byTurn.delete(key);
-      continue;
-    }
-    const existing = byTurn.get(key);
-    if (existing) {
-      existing.entry.plan = plan;
-      existing.activities.push(activity);
-    } else {
-      byTurn.set(key, {
-        activities: [activity],
-        entry: {
-          id: `turn-plan:${key}`,
-          createdAt: activity.createdAt,
-          turnId: activity.turnId,
-          plan,
-        },
-      });
-    }
-  }
-  return [...byTurn.values()].map(({ activities: planActivities, entry }) => ({
-    ...entry,
-    plan: addPlanStepDurations(entry.plan, planActivities),
-  }));
 }
 
 /**
@@ -1539,59 +1310,4 @@ function compareActivityLifecycleRank(kind: string): number {
     return 2;
   }
   return 1;
-}
-
-export function deriveTimelineEntries(
-  messages: ReadonlyArray<ChatMessage>,
-  workEntries: ReadonlyArray<WorkLogEntry>,
-  turnPlans: ReadonlyArray<TurnPlanEntry> = [],
-): TimelineEntry[] {
-  const messageRows: TimelineEntry[] = messages.map((message) => ({
-    id: message.id,
-    kind: "message",
-    createdAt: message.createdAt,
-    message,
-  }));
-  const turnPlanRows: TimelineEntry[] = turnPlans.map((turnPlan) => ({
-    id: turnPlan.id,
-    kind: "turn-plan",
-    createdAt: turnPlan.createdAt,
-    turnPlan,
-  }));
-  const workRows: TimelineEntry[] = workEntries.map((entry) => ({
-    id: entry.id,
-    kind: "work",
-    createdAt: entry.createdAt,
-    entry,
-  }));
-  return [...messageRows, ...turnPlanRows, ...workRows].toSorted((a, b) =>
-    a.createdAt.localeCompare(b.createdAt),
-  );
-}
-
-export function inferCheckpointTurnCountByTurnId(
-  summaries: ReadonlyArray<TurnDiffSummary>,
-): Record<TurnId, number> {
-  const sorted = [...summaries].toSorted((a, b) => a.completedAt.localeCompare(b.completedAt));
-  const result: Record<TurnId, number> = {};
-  for (let index = 0; index < sorted.length; index += 1) {
-    const summary = sorted[index];
-    if (!summary) continue;
-    result[summary.turnId] = index + 1;
-  }
-  return result;
-}
-
-export function derivePhase(session: ThreadSession | null): SessionPhase {
-  if (
-    !session ||
-    session.status === "stopped" ||
-    session.status === "interrupted" ||
-    session.status === "error"
-  ) {
-    return "disconnected";
-  }
-  if (session.status === "starting") return "connecting";
-  if (session.status === "running") return "running";
-  return "ready";
 }
