@@ -128,6 +128,53 @@ const undefinedValuePaths = (value: unknown, path = "$"): string[] =>
       : [];
 
 it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
+  it.effect("merges manifest models into Claude and Grok's built-in catalogs", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const config = yield* ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.makeDirectory(config.secretsDir, { recursive: true });
+        yield* fs.writeFileString(
+          NodePath.join(config.secretsDir, "subscription-auth.json"),
+          JSON.stringify({
+            anthropic: { type: "api-key", access: "test-key" },
+            xai: { type: "api-key", access: "test-key" },
+          }),
+        );
+        for (const driver of [driverCase(ClaudeDriver), driverCase(GrokDriver)]) {
+          const added = driver.driverKind === "claudeAgent" ? "claude-next" : "grok-next";
+          const manifest = {
+            ...ModelManifest.BUNDLED_MODEL_MANIFEST,
+            currentModels: {
+              ...ModelManifest.BUNDLED_MODEL_MANIFEST.currentModels,
+              [driver.driverKind]: [added],
+            },
+          };
+          const instance = yield* driver
+            .create({
+              instanceId: ProviderInstanceId.make(String(driver.driverKind)),
+              displayName: undefined,
+              enabled: true,
+              environment: [{ name: "PATH", value: "", sensitive: false }],
+            })
+            .pipe(
+              Effect.provideService(ModelManifest.ModelManifest, {
+                current: Effect.succeed(manifest),
+                refresh: Effect.succeed(manifest),
+                refreshInBackground: Effect.void,
+              }),
+            );
+          const snapshot = yield* instance.snapshot.refresh;
+          expect(snapshot.status).toBe("ready");
+          expect(snapshot.models).toContainEqual(
+            expect.objectContaining({ slug: added, isCustom: false }),
+          );
+          expect(undefinedValuePaths(snapshot)).toEqual([]);
+        }
+      }),
+    ),
+  );
+
   for (const { driver, provider, name, key } of cases) {
     describe(name, () => {
       it.effect(
@@ -348,6 +395,16 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
             if (driver.driverKind === "grok") {
               expect(after.models).toContainEqual(
                 expect.objectContaining({ slug: "grok-build", name: "Grok 4.6", isDefault: true }),
+              );
+              for (const slug of ["grok-4.6", "grok-4.5", "grok-code-fast-1"]) {
+                expect(after.models).toContainEqual(
+                  expect.objectContaining({ slug, isCustom: false }),
+                );
+              }
+            }
+            if (driver.driverKind === "claudeAgent") {
+              expect(after.models).toContainEqual(
+                expect.objectContaining({ slug: "claude-opus-4-6", isLegacy: true }),
               );
             }
             const connectedInstance = yield* create();

@@ -15,6 +15,7 @@ import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
 
 import { mastraModelId, resolveAkeruMastraModel } from "../provider/AkeruMastraHarness.ts";
 import { ServerConfig } from "../config.ts";
@@ -25,12 +26,21 @@ import { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import type { TextGeneration } from "./TextGeneration.ts";
 import { buildBranchNamePrompt, buildThreadTitlePrompt } from "./TextGenerationPrompts.ts";
 import { sanitizeThreadTitle } from "./TextGenerationUtils.ts";
+import {
+  getClaudeModelCapabilities,
+  normalizeClaudeCliEffort,
+  resolveClaudeApiModelId,
+  resolveClaudeEffort,
+} from "../provider/Layers/ClaudeProvider.ts";
 
 const decodeServiceTier = Schema.decodeUnknownEffect(
   Schema.Literals(["auto", "default", "flex", "priority"]),
 );
 const decodeReasoningEffort = Schema.decodeUnknownEffect(
   Schema.Literals(["none", "minimal", "low", "medium", "high", "xhigh", "max"]),
+);
+const decodeClaudeEffort = Schema.decodeUnknownEffect(
+  Schema.Literals(["low", "medium", "high", "xhigh", "max"]),
 );
 
 export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(function* (input: {
@@ -52,7 +62,7 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
   ) =>
     Effect.gen(function* () {
       yield* auth.reload();
-      const images = yield* Effect.forEach(
+      const imageResults = yield* Effect.forEach(
         attachments.filter((attachment) => attachment.type === "image"),
         (attachment) =>
           Effect.gen(function* () {
@@ -60,24 +70,18 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
               attachmentsDir: serverConfig.attachmentsDir,
               attachment,
             });
-            if (path === null)
-              return yield* new TextGenerationError({
-                operation,
-                detail: `Attachment '${attachment.id}' has an invalid path.`,
-              });
-            const bytes = yield* fileSystem.readFile(path).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new TextGenerationError({
-                    operation,
-                    detail: `Could not read attachment '${attachment.id}'.`,
-                    cause,
-                  }),
-              ),
+            if (path === null) return Option.none();
+            return yield* fileSystem.readFile(path).pipe(
+              Effect.map((bytes) => ({
+                type: "image" as const,
+                image: bytes,
+                mediaType: attachment.mimeType,
+              })),
+              Effect.option,
             );
-            return { type: "image" as const, image: bytes, mediaType: attachment.mimeType };
           }),
       );
+      const images = imageResults.flatMap((image) => (Option.isSome(image) ? [image.value] : []));
       const selectedTier =
         input.driver === "codex" ? getCodexServiceTierOptionValue(modelSelection) : undefined;
       const serviceTier =
@@ -117,10 +121,38 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
             ...(serviceTier ? { serviceTier } : {}),
           }
         : undefined;
+      const selectedClaudeEffort =
+        input.driver === "claudeAgent"
+          ? normalizeClaudeCliEffort(
+              resolveClaudeEffort(
+                getClaudeModelCapabilities(modelSelection.model),
+                getModelSelectionStringOptionValue(modelSelection, "effort"),
+              ),
+              modelSelection.model,
+            )
+          : undefined;
+      const claudeEffort =
+        selectedClaudeEffort === undefined
+          ? undefined
+          : yield* decodeClaudeEffort(selectedClaudeEffort).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new TextGenerationError({
+                    operation,
+                    detail: "The selected Claude effort is not supported by the Akeru harness.",
+                    cause,
+                  }),
+              ),
+            );
       const text = yield* Effect.tryPromise({
         try: async (abortSignal) => {
           const resolved = resolveAkeruMastraModel(
-            mastraModelId(input.driver, modelSelection.model),
+            mastraModelId(
+              input.driver,
+              input.driver === "claudeAgent"
+                ? resolveClaudeApiModelId(modelSelection)
+                : modelSelection.model,
+            ),
             authStorage,
             undefined,
             undefined,
@@ -154,7 +186,9 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
                   },
                 },
               }
-            : {};
+            : claudeEffort
+              ? { providerOptions: { anthropic: { effort: claudeEffort } } }
+              : {};
           const result = await agent.generate(message, { ...runOptions, abortSignal });
           return result.text;
         },
@@ -177,7 +211,15 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
             }),
         ),
       );
-    });
+    }).pipe(
+      Effect.timeoutOrElse({
+        duration: "180 seconds",
+        orElse: () =>
+          Effect.fail(
+            new TextGenerationError({ operation, detail: "Akeru writing request timed out." }),
+          ),
+      }),
+    );
   return {
     generateBranchName: (request) => {
       const { prompt, outputSchema } = buildBranchNamePrompt(request);

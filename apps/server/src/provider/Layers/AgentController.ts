@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { harnessCredentialIssue } from "../HarnessProviderStatus.ts";
+import { resolveClaudeApiModelId } from "./ClaudeProvider.ts";
 import {
   createMcpManager,
   type McpManager,
@@ -2820,7 +2821,12 @@ const make = (options?: AgentControllerLiveOptions) =>
             modelSelection,
             provider: inspected.routing.driverKind,
             providerInstanceId: modelSelection.instanceId,
-            mastraModelId: mastraModelId(inspected.routing.driverKind, modelSelection.model),
+            mastraModelId: mastraModelId(
+              inspected.routing.driverKind,
+              inspected.routing.driverKind === "claudeAgent"
+                ? resolveClaudeApiModelId(modelSelection)
+                : modelSelection.model,
+            ),
             mode: input.mode,
             botConversation: input.botConversation,
             ...(previous?.botName ? { botName: previous.botName } : {}),

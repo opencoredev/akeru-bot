@@ -167,8 +167,9 @@ models as current or legacy; it is not an exhaustive allowlist. The OAuth transp
 selected ID to the Codex API without a local catalog restriction. Account access is still checked
 by the provider when a request runs. Thinking levels come from the harness SDK, without a CLI
 `model/list` request.
-Standard and Fast service tiers remain selectable. Claude keeps its built-in capability
-catalog. Grok labels its built-in `grok-build` selection as Grok 4.6 and maps it to `grok-4.6` in
+Standard and Fast service tiers remain selectable. Claude merges manifest additions into its
+built-in capability catalog without dropping historical models. Grok includes its API model IDs
+alongside manifest additions. It labels the compatibility `grok-build` selection as Grok 4.6 and maps it to `grok-4.6` in
 `mastraModelId`, because the product slug is not an API model ID. Keeping the selection slug lets
 existing bots and the default model pass catalog validation. Custom models are retained.
 
@@ -185,12 +186,19 @@ available to saved-credential instances, matching the harness's transport preced
 
 `HarnessTextGeneration.ts` generates chat titles and branch names through
 `resolveAkeruMastraModel`, the same transport resolver as turns. It reloads saved credentials for
-each operation and preserves instance scoping, Codex reasoning effort, and service tier. Stored
+each operation and preserves instance scoping, Codex reasoning effort and service tier, and Claude
+effort and context-window selections. Claude's 1M context selection uses the same `[1m]` model
+suffix in turns and writing requests. The transport strips this CLI-style suffix from the API
+model ID and sets the extended-context beta header for API keys and OAuth alike.
+Each writing operation has a 180-second deadline and aborts
+the generation request when it expires. Stored
 image attachments are resolved through the attachment store and sent as multimodal image parts,
-not just filenames. Invalid or unreadable image attachments produce a typed writing error.
+not just filenames. Invalid or unreadable image attachments are skipped; available images and
+text still reach generation.
 It does not spawn a provider CLI. These drivers no
 longer construct legacy adapters. CLI skill catalogs and maintenance remain optional extras;
-catalog failures do not fail a workspace snapshot or change readiness. Claude still reads skill
+catalog failures do not fail a workspace snapshot or change readiness. A missing Grok CLI stays
+silent; other skill discovery failures are logged as warnings. Claude still reads skill
 files directly, without a CLI. Codex's CLI-only skills and Claude's CLI slash-command discovery are
 not part of readiness snapshots. Version checks are skipped when there is no CLI version.
 

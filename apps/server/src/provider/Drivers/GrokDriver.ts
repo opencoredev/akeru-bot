@@ -24,7 +24,7 @@ import {
   type ProviderDriver,
   type ProviderInstance,
 } from "../ProviderDriver.ts";
-import type { ServerProviderDraft } from "../providerSnapshot.ts";
+import { isCommandMissingCause, type ServerProviderDraft } from "../providerSnapshot.ts";
 import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { mergeSubscriptionInstanceEnvironment } from "../../subscription-auth/runtime.ts";
 import {
@@ -167,7 +167,11 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
               snapshot.getSnapshot,
               discoverGrokSkills(effectiveConfig, processEnv, workspaceCwd).pipe(
                 Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-                Effect.orElseSucceed(() => []),
+                Effect.catch((error) =>
+                  error.stage === "spawn" && isCommandMissingCause(error.cause)
+                    ? Effect.succeed([])
+                    : Effect.logWarning("Grok skill discovery failed", error).pipe(Effect.as([])),
+                ),
               ),
             ]).pipe(Effect.map(([machineSnapshot, skills]) => ({ ...machineSnapshot, skills })));
 

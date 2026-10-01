@@ -6,6 +6,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Path from "effect/Path";
 import * as Stream from "effect/Stream";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
@@ -200,7 +201,7 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       ),
     );
 
-    it.effect("silently falls back to an empty catalog when inspect fails", () =>
+    it.effect("logs inspect failures while falling back to an empty catalog", () =>
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
@@ -213,9 +214,36 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
           const machine = yield* instance.snapshot.refresh;
           expect(machine.skills ?? []).toEqual([]);
 
-          const workspace = yield* instance.snapshotForCwd!(workspaceCwd);
+          const messages: unknown[] = [];
+          const logger = Logger.make(({ message }) => {
+            messages.push(message);
+          });
+          const workspace = yield* instance.snapshotForCwd!(workspaceCwd).pipe(
+            Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
+          );
           expect(workspace.skills).toEqual([]);
           expect(workspace.auth).toEqual(machine.auth);
+          expect(messages.flat()).toContain("Grok skill discovery failed");
+        }),
+      ),
+    );
+
+    it.effect("keeps missing CLI skill discovery silent", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const instance = yield* createGrokInstance({
+            enabled: true,
+            binaryPath: "/no/provider/grok",
+          });
+          const messages: unknown[] = [];
+          const logger = Logger.make(({ message }) => {
+            messages.push(message);
+          });
+          const workspace = yield* instance.snapshotForCwd!(process.cwd()).pipe(
+            Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
+          );
+          expect(workspace.skills).toEqual([]);
+          expect(messages).toEqual([]);
         }),
       ),
     );

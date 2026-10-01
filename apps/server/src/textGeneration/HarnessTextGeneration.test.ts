@@ -2,10 +2,12 @@
 import * as NodePath from "node:path";
 import { NodeServices } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
-import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
+import { ProviderDriverKind, ProviderInstanceId, TextGenerationError } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import { beforeEach, vi } from "vite-plus/test";
 
 import { ServerConfig } from "../config.ts";
@@ -30,6 +32,154 @@ beforeEach(() => {
 });
 
 describe("HarnessTextGeneration", () => {
+  for (const operation of ["generateThreadTitle", "generateBranchName"] as const) {
+    it.effect(`bounds ${operation} to 180 seconds and aborts generation`, () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const config = yield* ServerConfig;
+          const instanceId = ProviderInstanceId.make("codex");
+          const writer = yield* makeHarnessTextGeneration({
+            secretsDir: config.secretsDir,
+            driver: ProviderDriverKind.make("codex"),
+            instanceId,
+            connection: {
+              environment: { OPENAI_API_KEY: "test-key" },
+              instanceEnvironment: {},
+              useSavedCredential: true,
+            },
+          });
+          const started = Promise.withResolvers<AbortSignal>();
+          generate.mockImplementationOnce((_message, options) => {
+            started.resolve(options.abortSignal);
+            return new Promise(() => {});
+          });
+          const input = {
+            cwd: config.cwd,
+            message: "Fix this",
+            modelSelection: { instanceId, model: "gpt-6-sol" },
+          };
+          const request =
+            operation === "generateThreadTitle"
+              ? writer.generateThreadTitle(input).pipe(Effect.asVoid)
+              : writer.generateBranchName(input).pipe(Effect.asVoid);
+          const fiber = yield* request.pipe(
+            Effect.flip,
+            Effect.forkChild({ startImmediately: true }),
+          );
+          const signal = yield* Effect.tryPromise({
+            try: () => started.promise,
+            catch: (cause) =>
+              new TextGenerationError({ operation, detail: "Generation did not start.", cause }),
+          });
+          yield* TestClock.adjust("180 seconds");
+          expect(yield* Fiber.join(fiber)).toMatchObject({
+            _tag: "TextGenerationError",
+            operation,
+            detail: "Akeru writing request timed out.",
+          });
+          expect(signal.aborted).toBe(true);
+        }),
+      ).pipe(
+        Effect.provide(
+          ServerConfig.layerTest(process.cwd(), { prefix: "akeru-writing-timeout-" }).pipe(
+            Layer.provideMerge(NodeServices.layer),
+          ),
+        ),
+      ),
+    );
+  }
+
+  it.effect("preserves Claude's selected 1M context window for titles and branches", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const config = yield* ServerConfig;
+        const instanceId = ProviderInstanceId.make("claudeAgent");
+        const writer = yield* makeHarnessTextGeneration({
+          secretsDir: config.secretsDir,
+          driver: ProviderDriverKind.make("claudeAgent"),
+          instanceId,
+          connection: {
+            environment: { ANTHROPIC_API_KEY: "test-key" },
+            instanceEnvironment: {},
+            useSavedCredential: true,
+          },
+        });
+        const request = {
+          cwd: config.cwd,
+          message: "Fix this",
+          modelSelection: {
+            instanceId,
+            model: "claude-opus-4-6",
+            options: [
+              { id: "contextWindow", value: "1m" },
+              { id: "effort", value: "max" },
+            ],
+          },
+        };
+        generate.mockResolvedValueOnce({ text: '{"title":"Fix This"}' });
+        yield* writer.generateThreadTitle(request);
+        generate.mockResolvedValueOnce({ text: '{"branch":"fix-this"}' });
+        yield* writer.generateBranchName(request);
+        expect(agents.mock.calls.map((call) => call[0].model.modelId)).toEqual([
+          "claude-opus-4-6",
+          "claude-opus-4-6",
+        ]);
+        expect(generate.mock.calls.map((call) => call[1].providerOptions)).toEqual([
+          { anthropic: { effort: "max" } },
+          { anthropic: { effort: "max" } },
+        ]);
+      }),
+    ).pipe(
+      Effect.provide(
+        ServerConfig.layerTest(process.cwd(), { prefix: "akeru-writing-claude-context-" }).pipe(
+          Layer.provideMerge(NodeServices.layer),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("falls back to text when screenshots are missing or have invalid paths", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const config = yield* ServerConfig;
+        const instanceId = ProviderInstanceId.make("codex");
+        const writer = yield* makeHarnessTextGeneration({
+          secretsDir: config.secretsDir,
+          driver: ProviderDriverKind.make("codex"),
+          instanceId,
+          connection: {
+            environment: { OPENAI_API_KEY: "test-key" },
+            instanceEnvironment: {},
+            useSavedCredential: true,
+          },
+        });
+        const request = {
+          cwd: config.cwd,
+          message: "Fix this",
+          modelSelection: { instanceId, model: "gpt-6-sol" },
+          attachments: ["chat-12345678-1234-1234-1234-123456789abc", "../invalid"].map((id) => ({
+            type: "image" as const,
+            id,
+            name: "missing.png",
+            mimeType: "image/png",
+            sizeBytes: 4,
+          })),
+        };
+        generate.mockResolvedValueOnce({ text: '{"title":"Fix This"}' });
+        expect(yield* writer.generateThreadTitle(request)).toEqual({ title: "Fix This" });
+        generate.mockResolvedValueOnce({ text: '{"branch":"fix-this"}' });
+        expect(yield* writer.generateBranchName(request)).toEqual({ branch: "fix-this" });
+        expect(generate.mock.calls.every((call) => typeof call[0] === "string")).toBe(true);
+      }),
+    ).pipe(
+      Effect.provide(
+        ServerConfig.layerTest(process.cwd(), { prefix: "akeru-writing-missing-images-" }).pipe(
+          Layer.provideMerge(NodeServices.layer),
+        ),
+      ),
+    ),
+  );
+
   for (const [driver, provider, model, transport] of [
     ["codex", "openai-codex", "gpt-6-sol", "gpt-6-sol"],
     ["claudeAgent", "anthropic", "claude-sonnet-5", "claude-sonnet-5"],
@@ -188,7 +338,11 @@ describe("HarnessTextGeneration", () => {
         const request = {
           cwd: config.cwd,
           message: "fix this",
-          attachments: [image],
+          attachments: [
+            image,
+            { ...image, id: "chat-12345678-1234-1234-1234-123456789abd" },
+            { ...image, id: "../invalid" },
+          ],
           modelSelection: { instanceId, model: "gpt-6-sol" },
         };
         generate.mockResolvedValueOnce({ text: '{"title":"Repair Screenshot Layout"}' });

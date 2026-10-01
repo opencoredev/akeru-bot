@@ -15,6 +15,15 @@ import {
 import type { ProviderInstance } from "./ProviderDriver.ts";
 import * as ModelManifest from "./ModelManifest.ts";
 import type { ServerProviderDraft } from "./providerSnapshot.ts";
+import { getClaudeModelCapabilities } from "./Layers/ClaudeProvider.ts";
+
+export const GROK_HARNESS_MODELS = [
+  "grok-4.6",
+  "grok-4.5",
+  "grok-4",
+  "grok-4.20-beta",
+  "grok-code-fast-1",
+] as const;
 
 export const CODEX_HARNESS_HISTORICAL_MODELS = [
   ...Object.values(MODEL_SLUG_ALIASES_BY_PROVIDER[ProviderDriverKind.make("codex")] ?? {}),
@@ -91,7 +100,6 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
       input.connection,
       auth.isConnected(input.provider, input.instanceId),
     );
-    const builtIn = draft.models.filter((model) => !model.isCustom);
     const currentModelIds = current.currentModels[input.driver];
     const modelIds =
       input.driver === "codex"
@@ -100,50 +108,54 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
             ...new Set([
               ...(currentModelIds ?? []),
               ...(ModelManifest.BUNDLED_MODEL_MANIFEST.currentModels[input.driver] ?? []),
+              ...(input.driver === "grok" ? GROK_HARNESS_MODELS : []),
             ]),
           ];
-    const models =
-      builtIn.length > 0
-        ? draft.models
-        : [
-            ...modelIds.map((slug, index) => ({
-              slug,
-              name: slug,
-              isCustom: false,
-              ...(index === 0 ? { isDefault: true } : {}),
-              capabilities:
-                input.driver === "codex"
-                  ? createModelCapabilities({
-                      optionDescriptors: [
-                        {
-                          id: "reasoningEffort",
-                          label: "Reasoning",
-                          type: "select",
-                          currentValue: "medium",
-                          options: getAvailableThinkingLevelsForModel(`openai/${slug}`).map(
-                            (level) => ({
-                              id: level,
-                              label: level[0]!.toUpperCase() + level.slice(1),
-                              ...(level === "medium" ? { isDefault: true } : {}),
-                            }),
-                          ),
-                        },
-                        {
-                          id: "serviceTier",
-                          label: "Service Tier",
-                          type: "select",
-                          currentValue: "default",
-                          options: [
-                            { id: "default", label: "Standard", isDefault: true },
-                            { id: "priority", label: "Fast" },
-                          ],
-                        },
+    const models = [
+      ...draft.models.filter((model) => !model.isCustom || !modelIds.includes(model.slug)),
+      ...modelIds
+        .filter((slug) => !draft.models.some((model) => !model.isCustom && model.slug === slug))
+        .map((slug, index) => ({
+          slug,
+          name: slug,
+          isCustom: false,
+          ...(index === 0 && !draft.models.some((model) => !model.isCustom)
+            ? { isDefault: true }
+            : {}),
+          capabilities:
+            input.driver === "codex"
+              ? createModelCapabilities({
+                  optionDescriptors: [
+                    {
+                      id: "reasoningEffort",
+                      label: "Reasoning",
+                      type: "select",
+                      currentValue: "medium",
+                      options: getAvailableThinkingLevelsForModel(`openai/${slug}`).map(
+                        (level) => ({
+                          id: level,
+                          label: level[0]!.toUpperCase() + level.slice(1),
+                          ...(level === "medium" ? { isDefault: true } : {}),
+                        }),
+                      ),
+                    },
+                    {
+                      id: "serviceTier",
+                      label: "Service Tier",
+                      type: "select",
+                      currentValue: "default",
+                      options: [
+                        { id: "default", label: "Standard", isDefault: true },
+                        { id: "priority", label: "Fast" },
                       ],
-                    })
-                  : null,
-            })),
-            ...draft.models.filter((model) => !modelIds.includes(model.slug)),
-          ];
+                    },
+                  ],
+                })
+              : input.driver === "claudeAgent"
+                ? getClaudeModelCapabilities(slug)
+                : null,
+        })),
+    ];
     return ModelManifest.applyModelManifest(
       {
         ...draft,
