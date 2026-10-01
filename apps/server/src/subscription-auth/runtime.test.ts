@@ -239,7 +239,7 @@ describe("subscription runtime credentials", () => {
     try {
       await auth.testHealth("anthropic");
       expect(request).toHaveBeenCalledWith(
-        `${environment.ANTHROPIC_BASE_URL}/v1/models`,
+        new URL(`${environment.ANTHROPIC_BASE_URL}/v1/models`),
         expect.any(Object),
       );
     } finally {
