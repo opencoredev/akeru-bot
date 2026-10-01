@@ -116,13 +116,11 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
                   className="relative h-7 overflow-hidden rounded-md bg-muted/70"
                 >
                   <div
-                    className="absolute inset-y-0 start-0 rounded-md opacity-75"
-                    /* oxlint-disable shadcn/no-inline-styles -- Remaining-share width and provider palette color are runtime data. */
+                    className="absolute inset-y-0 start-0 w-(--share-width) rounded-md bg-(--share-color) opacity-75"
                     style={{
-                      width: `${left}%`,
-                      backgroundColor: `var(--color-${presentation.color}-500, var(--foreground))`,
+                      "--share-width": `${left}%`,
+                      "--share-color": `var(--color-${presentation.color}-500, var(--foreground))`,
                     }}
-                    /* oxlint-enable shadcn/no-inline-styles */
                   />
                   <div className="absolute inset-0 bg-hatched opacity-30" />
                 </div>

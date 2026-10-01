@@ -386,9 +386,8 @@ export function UsageProviderChart({
           {ticks.map((tick) => (
             <span
               key={tick}
-              className="absolute right-0 -translate-y-1/2 text-10px text-muted-foreground tabular-nums"
-              // oxlint-disable-next-line shadcn/no-inline-styles -- Axis tick position computed from the chart scale.
-              style={{ top: `${(toY(tick) / VIEW_HEIGHT) * 100}%` }}
+              className="absolute top-(--tick-top) right-0 -translate-y-1/2 text-10px text-muted-foreground tabular-nums"
+              style={{ "--tick-top": `${(toY(tick) / VIEW_HEIGHT) * 100}%` }}
             >
               {tick === 0 ? "0" : format(tick)}
             </span>
