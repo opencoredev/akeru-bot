@@ -16,6 +16,7 @@ import type {
 
 import { resolveAnnotationSubmission } from "./AnnotationKeyboard.ts";
 import { previewAnnotationStyles } from "./AnnotationStyles.generated.ts";
+import { selectMarqueeElements } from "./MarqueeSelection.ts";
 import {
   ANNOTATION_CAPTURED_CHANNEL,
   ANNOTATION_THEME_CHANNEL,
@@ -1014,37 +1015,19 @@ function startAnnotation(): void {
   };
 
   const selectElementsInRect = (rect: PreviewAnnotationRect): number => {
-    const candidates = Array.from(document.querySelectorAll("body *"))
-      .filter((element) => !isAnnotationNode(element))
-      .map((element) => ({ element, rect: element.getBoundingClientRect() }))
-      .filter(({ rect: candidate }) => {
-        if (candidate.width < 2 || candidate.height < 2) return false;
-        return !(
-          candidate.right < rect.x ||
-          candidate.left > rect.x + rect.width ||
-          candidate.bottom < rect.y ||
-          candidate.top > rect.y + rect.height
-        );
-      })
-      .filter(({ element, rect: candidate }) => {
-        const centerX = candidate.left + candidate.width / 2;
-        const centerY = candidate.top + candidate.height / 2;
-        return (
-          centerX >= rect.x &&
-          centerX <= rect.x + rect.width &&
-          centerY >= rect.y &&
-          centerY <= rect.y + rect.height &&
-          (element.children.length === 0 ||
-            element instanceof HTMLButtonElement ||
-            element instanceof HTMLAnchorElement ||
-            element.getAttribute("role") === "button")
-        );
-      })
-      .sort(
-        (left, right) => left.rect.width * left.rect.height - right.rect.width * right.rect.height,
-      )
-      .slice(0, MAX_MARQUEE_ELEMENTS);
-    for (const candidate of candidates) addSelected(candidate.element);
+    const candidates = selectMarqueeElements({
+      elements: document.querySelectorAll("body *"),
+      rect,
+      limit: MAX_MARQUEE_ELEMENTS,
+      eligible: (element) =>
+        !isAnnotationNode(element) &&
+        (element.children.length === 0 ||
+          element instanceof HTMLButtonElement ||
+          element instanceof HTMLAnchorElement ||
+          element.getAttribute("role") === "button"),
+      measure: (element) => element.getBoundingClientRect(),
+    });
+    for (const candidate of candidates) addSelected(candidate);
     return candidates.length;
   };
 

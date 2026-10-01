@@ -96,7 +96,7 @@ function makeFakeBrowserWindow() {
     isMaximized: vi.fn(() => false),
     isMinimized: vi.fn(() => false),
     isVisible: vi.fn(() => true),
-    loadURL: vi.fn(() => Promise.resolve()),
+    loadURL: vi.fn<Electron.BrowserWindow["loadURL"]>(() => Promise.resolve()),
     maximize: vi.fn(),
     on: vi.fn((eventName: string, listener: (...args: readonly unknown[]) => void) => {
       windowListeners.set(eventName, listener);
@@ -1297,6 +1297,12 @@ describe("DesktopWindow", () => {
           // 1. WSL-only boot shows the connecting splash.
           yield* desktopWindow.showConnectingSplash;
           assert.equal(yield* Ref.get(scenario.createCalls), 1);
+          const splashUrl = splash.loadURL.mock.calls[0]?.[0];
+          assert.isString(splashUrl);
+          const splashHtml = decodeURIComponent(String(splashUrl));
+          assert.include(splashHtml, "Connecting to WSL");
+          assert.notInclude(splashHtml, "infinite");
+          assert.notInclude(splashHtml, "@keyframes");
 
           // 2. Backend reports ready, but opening the real main fails. The pool
           //    swallows that error in production, so handleBackendReady fails

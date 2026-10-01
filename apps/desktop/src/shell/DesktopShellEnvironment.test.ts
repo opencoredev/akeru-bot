@@ -397,13 +397,18 @@ describe("DesktopShellEnvironment", () => {
   );
 
   it("resolves dbus runtime dir candidates with existence checks", () => {
+    const probedPaths: string[] = [];
     const busPath = DesktopShellEnvironment.resolveDefaultLinuxDbusSessionBusAddress({
       env: { XDG_RUNTIME_DIR: "/tmp/stale-runtime" },
       uid: 1000,
-      exists: (path) => path === "/run/user/1000/bus",
+      exists: (path) => {
+        probedPaths.push(path);
+        return path === "/run/user/1000/bus";
+      },
     });
 
     assert.equal(busPath, "unix:path=/run/user/1000/bus");
+    assert.deepEqual(probedPaths, ["/tmp/stale-runtime/bus", "/run/user/1000/bus"]);
   });
 
   it.effect("logs command failures with safe probe context and the exact cause", () => {

@@ -171,7 +171,7 @@ export const make = Effect.gen(function* () {
         );
         const handle = yield* spawner.spawn(command);
         const exitCode = yield* handle.exitCode;
-        if ((exitCode as unknown as number) !== 0) {
+        if (exitCode !== 0) {
           return yield* new DesktopLinuxUrlHandlerRegistrationError({
             step: "set-default-handler",
             scheme,

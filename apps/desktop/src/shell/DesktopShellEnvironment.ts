@@ -125,11 +125,11 @@ const linuxRuntimeDirCandidates = (
 function resolveDefaultLinuxDbusSessionBusPath(input: {
   readonly env: NodeJS.ProcessEnv;
   readonly uid: number | undefined;
-  readonly exists?: (path: string) => boolean;
+  readonly exists: (path: string) => boolean;
 }): string | null {
   for (const runtimeDir of linuxRuntimeDirCandidates(input.env, input.uid)) {
     const busPath = `${runtimeDir}/bus`;
-    if (input.exists === undefined || input.exists(busPath)) {
+    if (input.exists(busPath)) {
       return busPath;
     }
   }
@@ -143,7 +143,7 @@ export function resolveDefaultLinuxDbusSessionBusAddress(input: {
   readonly uid: number | undefined;
 }): string | null {
   const busPath = resolveDefaultLinuxDbusSessionBusPath(input);
-  return busPath !== null && input.exists(busPath) ? `unix:path=${busPath}` : null;
+  return busPath !== null ? `unix:path=${busPath}` : null;
 }
 
 const pathComparisonKey = (entry: string, platform: NodeJS.Platform) => {
