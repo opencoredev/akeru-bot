@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { projectionSnapshotLayer } from "./test-support/ProjectionSnapshotHarness.ts";
 import { MessageId, ThreadId } from "@akeru/contracts";
 import { assert } from "@effect/vitest";
@@ -196,7 +197,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       assert.equal(context._tag, "Some");
 
-      if (context._tag === "Some") {
+      if (Predicate.isTagged(context, "Some")) {
         assert.deepEqual(context.value, {
           threadId: ThreadId.make("thread-context"),
           projectId: asProjectId("project-context"),
@@ -352,7 +353,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       assert.equal(threadDetail._tag, "Some");
 
-      if (threadDetail._tag === "Some") {
+      if (Predicate.isTagged(threadDetail, "Some")) {
         assert.deepEqual(threadDetail.value.activities, snapshot.threads[0]?.activities ?? []);
       }
 
@@ -518,7 +519,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const threadShell = yield* snapshotQuery.getThreadShellById(ThreadId.make("thread-1"));
       assert.equal(threadShell._tag, "Some");
 
-      if (threadShell._tag === "Some") {
+      if (Predicate.isTagged(threadShell, "Some")) {
         assert.equal(threadShell.value.latestTurn?.turnId, asTurnId("turn-running"));
         assert.equal(threadShell.value.latestTurn?.state, "running");
         assert.equal(threadShell.value.latestTurn?.requestMessageId, asMessageId("message-user-2"));
@@ -528,7 +529,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const threadDetail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
       assert.equal(threadDetail._tag, "Some");
 
-      if (threadDetail._tag === "Some") {
+      if (Predicate.isTagged(threadDetail, "Some")) {
         assert.equal(threadDetail.value.latestTurn?.turnId, asTurnId("turn-running"));
         assert.equal(threadDetail.value.latestTurn?.state, "running");
         assert.equal(

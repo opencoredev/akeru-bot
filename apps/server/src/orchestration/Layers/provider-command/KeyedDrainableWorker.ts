@@ -36,6 +36,7 @@ export const makeKeyedDrainableWorker = <K, A, E, R>(options: {
             return [undefined, state] as const;
           }
 
+          // SAFETY: The lane length was checked above, so its first item exists.
           const item = lane[0] as A;
           const lanes = new Map(state.lanes);
           lanes.set(key, lane.slice(1));

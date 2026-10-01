@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { AuthSessionId, CommandId, GroupId, type OrchestrationReadModel } from "@akeru/contracts";
 import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -32,7 +33,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         readModel: makeReadModel({}),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected group creation invariant error");
       }
 
@@ -86,7 +87,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         readModel: makeReadModel({ bots: [makeBot({ id: BOSS_ID })] }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected minimum group size invariant error");
       }
 
@@ -173,7 +174,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected boss archive invariant error");
       }
 
@@ -195,7 +196,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected minimum group size invariant error");
       }
 
@@ -233,7 +234,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected minimum group size invariant error");
       }
 
@@ -289,7 +290,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected archived bot invariant error");
       }
 
@@ -312,7 +313,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected last boss invariant error");
       }
 
@@ -336,7 +337,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected minimum group size invariant error");
       }
 
@@ -360,7 +361,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected minimum group size invariant error");
       }
 
@@ -535,7 +536,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         Effect.flip,
       );
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected group leave invariant error");
       }
 

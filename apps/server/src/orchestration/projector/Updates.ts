@@ -85,6 +85,7 @@ export function updateThread(
 
 export function decodeForEvent<A>(
   schema: Schema.Decoder<A, never>,
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Event fields enter through the supplied schema decoder here.
   value: unknown,
   eventType: OrchestrationEvent["type"],
   field: string,

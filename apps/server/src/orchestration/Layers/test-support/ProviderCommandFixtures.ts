@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { type OrchestrationEvent } from "@akeru/contracts";
 import { ApprovalRequestId, DelegationId, MessageId, ProjectId, TurnId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
@@ -34,5 +35,5 @@ export // Matches the event that hands a delegated result back to pending.
 const releasesDelegation = (delegationId: DelegationId) => (event: OrchestrationEvent) =>
   event.type === "delegation.updated" &&
   event.payload.delegation.delegationId === delegationId &&
-  event.payload.delegation.phase._tag === "Completed" &&
+  Predicate.isTagged(event.payload.delegation.phase, "Completed") &&
   event.payload.delegation.phase.acknowledgedAt === null;

@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { type OrchestrationCommand, type OrchestrationReadModel } from "@akeru/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -376,47 +377,44 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
       const occurredAt =
         command.type === "routine.run.start" ? command.startedAt : command.createdAt;
 
-      const run =
-        command.type === "routine.run.start"
-          ? {
-              ...existingRun,
-              status: "running" as const,
-              threadRef: command.threadRef,
-              startedAt: command.startedAt,
-              updatedAt: command.startedAt,
-            }
-          : command.type === "routine.run.block"
-            ? {
-                ...existingRun,
-                status: "blocked" as const,
-                failure: command.failure,
-                completedAt: command.createdAt,
-                updatedAt: command.createdAt,
-              }
-            : command.type === "routine.run.fail"
-              ? {
-                  ...existingRun,
-                  status: "failed" as const,
-                  failure: command.failure,
-                  usageRef: command.usageRef,
-                  completedAt: command.createdAt,
-                  updatedAt: command.createdAt,
-                }
-              : command.type === "routine.run.complete"
-                ? {
-                    ...existingRun,
-                    status: "completed" as const,
-                    result: command.result,
-                    usageRef: command.usageRef,
-                    completedAt: command.createdAt,
-                    updatedAt: command.createdAt,
-                  }
-                : {
-                    ...existingRun,
-                    status: "canceled" as const,
-                    completedAt: command.createdAt,
-                    updatedAt: command.createdAt,
-                  };
+      const run = Match.value(command).pipe(
+        Match.when({ type: "routine.run.start" }, (command) => ({
+          ...existingRun,
+          status: "running" as const,
+          threadRef: command.threadRef,
+          startedAt: command.startedAt,
+          updatedAt: command.startedAt,
+        })),
+        Match.when({ type: "routine.run.block" }, (command) => ({
+          ...existingRun,
+          status: "blocked" as const,
+          failure: command.failure,
+          completedAt: command.createdAt,
+          updatedAt: command.createdAt,
+        })),
+        Match.when({ type: "routine.run.fail" }, (command) => ({
+          ...existingRun,
+          status: "failed" as const,
+          failure: command.failure,
+          usageRef: command.usageRef,
+          completedAt: command.createdAt,
+          updatedAt: command.createdAt,
+        })),
+        Match.when({ type: "routine.run.complete" }, (command) => ({
+          ...existingRun,
+          status: "completed" as const,
+          result: command.result,
+          usageRef: command.usageRef,
+          completedAt: command.createdAt,
+          updatedAt: command.createdAt,
+        })),
+        Match.orElse((command) => ({
+          ...existingRun,
+          status: "canceled" as const,
+          completedAt: command.createdAt,
+          updatedAt: command.createdAt,
+        })),
+      );
 
       const terminal = command.type !== "routine.run.start";
 
@@ -426,26 +424,24 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
       const routine = {
         ...existing,
         enabled: blockedOrFailed ? false : existing.enabled,
-        lifecycle:
-          command.type === "routine.run.start"
-            ? ("running" as const)
-            : command.type === "routine.run.block"
-              ? ("blocked" as const)
-              : command.type === "routine.run.fail"
-                ? ("failed" as const)
-                : command.type === "routine.run.complete" && existing.enabled
+        lifecycle: Match.value(command).pipe(
+          Match.when({ type: "routine.run.start" }, (_command) => "running" as const),
+          Match.when({ type: "routine.run.block" }, (_command) => "blocked" as const),
+          Match.when({ type: "routine.run.fail" }, (_command) => "failed" as const),
+          Match.orElse((command) =>
+            command.type === "routine.run.complete" && existing.enabled
+              ? ("enabled" as const)
+              : command.type === "routine.run.complete"
+                ? ("completed" as const)
+                : existing.enabled
                   ? ("enabled" as const)
-                  : command.type === "routine.run.complete"
-                    ? ("completed" as const)
-                    : existing.enabled
-                      ? ("enabled" as const)
-                      : ("paused" as const),
-        nextRunAt:
-          command.type === "routine.run.complete"
-            ? command.nextRunAt
-            : blockedOrFailed
-              ? null
-              : existing.nextRunAt,
+                  : ("paused" as const),
+          ),
+        ),
+        nextRunAt: Match.value(command).pipe(
+          Match.when({ type: "routine.run.complete" }, (command) => command.nextRunAt),
+          Match.orElse((_command) => (blockedOrFailed ? null : existing.nextRunAt)),
+        ),
         lastRunAt: terminal ? occurredAt : existing.lastRunAt,
         latestResult:
           command.type === "routine.run.complete" ? command.result : existing.latestResult,
@@ -456,16 +452,13 @@ export const decideRoutines = Effect.fn("decideRoutines")(function* ({
         updatedAt: occurredAt,
       };
 
-      const type =
-        command.type === "routine.run.start"
-          ? ("routine.running" as const)
-          : command.type === "routine.run.block"
-            ? ("routine.blocked" as const)
-            : command.type === "routine.run.fail"
-              ? ("routine.failed" as const)
-              : command.type === "routine.run.complete"
-                ? ("routine.completed" as const)
-                : ("routine.run-canceled" as const);
+      const type = Match.value(command).pipe(
+        Match.when({ type: "routine.run.start" }, (_command) => "routine.running" as const),
+        Match.when({ type: "routine.run.block" }, (_command) => "routine.blocked" as const),
+        Match.when({ type: "routine.run.fail" }, (_command) => "routine.failed" as const),
+        Match.when({ type: "routine.run.complete" }, (_command) => "routine.completed" as const),
+        Match.orElse((_command) => "routine.run-canceled" as const),
+      );
 
       return {
         ...(yield* withEventBase({

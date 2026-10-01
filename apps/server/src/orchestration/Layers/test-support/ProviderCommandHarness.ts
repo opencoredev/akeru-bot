@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -25,6 +26,7 @@ import { OrchestrationCommandReceiptRepositoryLive } from "../../../persistence/
 import { ProjectionBotRepositoryLive } from "../../../persistence/Layers/ProjectionBots.ts";
 import { SqlitePersistenceMemory } from "../../../persistence/Layers/Sqlite.ts";
 import { AgentController } from "../../../provider/Services/AgentController.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test composition root builds the registry layer supplied to the harness runtime.
 import { makeProviderRegistryLayer } from "../../../provider/testUtils/providerRegistryMock.ts";
 import { TextGeneration } from "../../../textGeneration/TextGeneration.ts";
 import * as RepositoryIdentityResolver from "../../../project/RepositoryIdentityResolver.ts";
@@ -540,12 +542,11 @@ export function createProviderCommandHarness() {
       );
     }
 
-    const titleRegenerationThreadIds =
-      input?.titleRegenerationBeforeStart === "two"
-        ? [ThreadId.make("thread-1"), ThreadId.make("thread-2")]
-        : input?.titleRegenerationBeforeStart === "one"
-          ? [ThreadId.make("thread-1")]
-          : [];
+    const titleRegenerationThreadIds = Match.value(input?.titleRegenerationBeforeStart).pipe(
+      Match.when("two", () => [ThreadId.make("thread-1"), ThreadId.make("thread-2")]),
+      Match.when("one", () => [ThreadId.make("thread-1")]),
+      Match.orElse(() => []),
+    );
 
     for (const [index, threadId] of titleRegenerationThreadIds.entries()) {
       await Effect.runPromise(

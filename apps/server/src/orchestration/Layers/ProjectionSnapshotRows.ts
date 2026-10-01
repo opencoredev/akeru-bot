@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import {
   AkeruDelegationRecord,
   BotAvatar,
@@ -391,14 +392,12 @@ export function mapLatestTurn(
 ): OrchestrationLatestTurn {
   return {
     turnId: row.turnId,
-    state:
-      row.state === "error"
-        ? "error"
-        : row.state === "interrupted"
-          ? "interrupted"
-          : row.state === "completed"
-            ? "completed"
-            : "running",
+    state: Match.value(row).pipe(
+      Match.when({ state: "error" }, () => "error" as const),
+      Match.when({ state: "interrupted" }, () => "interrupted" as const),
+      Match.when({ state: "completed" }, () => "completed" as const),
+      Match.orElse(() => "running" as const),
+    ),
     requestedAt: row.requestedAt,
     startedAt: row.startedAt,
     completedAt: row.completedAt,

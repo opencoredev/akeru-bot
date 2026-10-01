@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import {
   type AssistantDeliveryMode,
   MessageId,
@@ -530,27 +531,20 @@ export function createEvents({
         case "task.progress":
         case "task.updated":
         case "task.completed": {
-          const payload = event.payload as {
-            taskId: string;
-            taskType?: string;
-            status?: string;
-            agentId?: string;
-          };
+          const payload = event.payload;
 
           threadBackgroundLiveness.recordTaskLiveness({
             threadId: thread.id,
             taskId: payload.taskId,
             taskType: payload.taskType,
-            status: payload.status,
+            status: "status" in payload ? payload.status : undefined,
             agentId: payload.agentId,
-            kind:
-              event.type === "task.started"
-                ? "started"
-                : event.type === "task.progress"
-                  ? "progress"
-                  : event.type === "task.updated"
-                    ? "updated"
-                    : "completed",
+            kind: Match.value(event).pipe(
+              Match.when({ type: "task.started" }, () => "started" as const),
+              Match.when({ type: "task.progress" }, () => "progress" as const),
+              Match.when({ type: "task.updated" }, () => "updated" as const),
+              Match.orElse(() => "completed" as const),
+            ),
           });
           break;
         }
@@ -616,16 +610,20 @@ export function createEvents({
           ...(activeTurnId === null && Option.isSome(pendingTurnStart)
             ? { requestMessageId: pendingTurnStart.value.messageId }
             : {}),
-          state:
-            event.type === "turn.completed"
-              ? event.payload.state === "completed"
-                ? "completed"
-                : event.payload.state === "failed"
-                  ? "failed"
-                  : "cancelled"
-              : event.type === "session.state.changed" && event.payload.state === "error"
-                ? "failed"
-                : "cancelled",
+          state: Match.value(event).pipe(
+            Match.when({ type: "turn.completed" }, (event) =>
+              Match.value(event.payload.state).pipe(
+                Match.when("completed", () => "completed" as const),
+                Match.when("failed", () => "failed" as const),
+                Match.orElse(() => "cancelled" as const),
+              ),
+            ),
+            Match.orElse((event) =>
+              event.type === "session.state.changed" && event.payload.state === "error"
+                ? ("failed" as const)
+                : ("cancelled" as const),
+            ),
+          ),
         });
       }
 

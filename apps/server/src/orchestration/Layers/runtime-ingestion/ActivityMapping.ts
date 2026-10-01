@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import {
   EventId,
   isToolLifecycleItemType,
@@ -19,13 +21,10 @@ export function runtimeEventToActivities(
   event: ProviderRuntimeEvent,
   taskTitle?: string,
 ): ReadonlyArray<OrchestrationThreadActivity> {
-  const maybeSequence = (() => {
-    const eventWithSequence = event as ProviderRuntimeEvent & { sessionSequence?: number };
-
-    return eventWithSequence.sessionSequence !== undefined
-      ? { sequence: eventWithSequence.sessionSequence }
+  const maybeSequence =
+    "sessionSequence" in event && Predicate.isNumber(event.sessionSequence)
+      ? { sequence: event.sessionSequence }
       : {};
-  })();
 
   switch (event.type) {
     case "request.opened": {
@@ -42,16 +41,13 @@ export function runtimeEventToActivities(
           createdAt: event.createdAt,
           tone: "approval",
           kind: "approval.requested",
-          summary:
-            requestKind === "command"
-              ? "Command approval requested"
-              : requestKind === "file-read"
-                ? "File-read approval requested"
-                : requestKind === "file-change"
-                  ? "File-change approval requested"
-                  : requestKind === "mcp-elicitation"
-                    ? "App access approval requested"
-                    : "Approval requested",
+          summary: Match.value(requestKind).pipe(
+            Match.when("command", () => "Command approval requested"),
+            Match.when("file-read", () => "File-read approval requested"),
+            Match.when("file-change", () => "File-change approval requested"),
+            Match.when("mcp-elicitation", () => "App access approval requested"),
+            Match.orElse(() => "Approval requested"),
+          ),
           payload: {
             requestId: toApprovalRequestId(event.requestId),
             ...(requestKind ? { requestKind } : {}),
@@ -212,8 +208,7 @@ export function runtimeEventToActivities(
           payload: {
             ...(event.requestId ? { requestId: event.requestId } : {}),
             questions: event.payload.questions,
-            ...("responseMode" in event.payload &&
-            (event.payload as { responseMode?: unknown }).responseMode === "message"
+            ...("responseMode" in event.payload && event.payload.responseMode === "message"
               ? { responseMode: "message" as const }
               : {}),
           },
@@ -260,7 +255,7 @@ export function runtimeEventToActivities(
             ...(event.payload.description
               ? { detail: truncateDetail(event.payload.description) }
               : {}),
-            ...taskLinkageActivityFields(event.payload as Record<string, unknown>),
+            ...taskLinkageActivityFields(event.payload),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -269,7 +264,7 @@ export function runtimeEventToActivities(
     }
 
     case "task.progress": {
-      const linkage = taskLinkageActivityFields(event.payload as Record<string, unknown>);
+      const linkage = taskLinkageActivityFields(event.payload);
       // Usage and activity are independent latest-state streams. Keeping them
       // under separate stable ids prevents a command/reasoning update from
       // replacing the last known token count (and prevents a usage-only tick
@@ -371,7 +366,7 @@ export function runtimeEventToActivities(
             ...(event.payload.isBackgrounded !== undefined
               ? { isBackgrounded: event.payload.isBackgrounded }
               : {}),
-            ...taskLinkageActivityFields(event.payload as Record<string, unknown>),
+            ...taskLinkageActivityFields(event.payload),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -442,12 +437,11 @@ export function runtimeEventToActivities(
           createdAt: event.createdAt,
           tone: event.payload.status === "failed" ? "error" : "info",
           kind: "task.completed",
-          summary:
-            event.payload.status === "failed"
-              ? "Task failed"
-              : event.payload.status === "stopped"
-                ? "Task stopped"
-                : "Task completed",
+          summary: Match.value(event.payload.status).pipe(
+            Match.when("failed", () => "Task failed"),
+            Match.when("stopped", () => "Task stopped"),
+            Match.orElse(() => "Task completed"),
+          ),
           payload: {
             taskId: event.payload.taskId,
             status: event.payload.status,
@@ -461,7 +455,7 @@ export function runtimeEventToActivities(
                 }
               : {}),
             ...(event.payload.usage !== undefined ? { usage: event.payload.usage } : {}),
-            ...taskLinkageActivityFields(event.payload as Record<string, unknown>),
+            ...taskLinkageActivityFields(event.payload),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,

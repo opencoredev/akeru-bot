@@ -10,7 +10,7 @@ import {
 } from "./Definitions.ts";
 import type { createDelegations } from "./Delegations.ts";
 
-export function makeThreads({
+export function createThreads({
   projectionThreadRepository,
   projectionThreadMessageRepository,
   projectionThreadProposedPlanRepository,

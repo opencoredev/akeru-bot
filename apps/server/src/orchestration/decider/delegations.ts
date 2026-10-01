@@ -1,3 +1,5 @@
+import { AkeruDelegationPhase } from "@akeru/contracts";
+import * as Predicate from "effect/Predicate";
 import {
   AKERU_DELEGATION_MAX_CONCURRENCY,
   AKERU_DELEGATION_MAX_DEPTH,
@@ -125,7 +127,7 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
         });
       }
 
-      if (delegation.phase._tag !== "Queued") {
+      if (!Predicate.isTagged(delegation.phase, "Queued")) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: "New delegations must start queued.",
@@ -176,7 +178,7 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
       }
 
       if (
-        next.phase._tag === "Completed" &&
+        Predicate.isTagged(next.phase, "Completed") &&
         (next.phase.result.childThreadId !== next.phase.childThreadId ||
           next.phase.result.childTurnId !== next.phase.childTurnId)
       ) {
@@ -204,14 +206,13 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
 
         const changesOnlyChildOwnership = NodeUtil.isDeepStrictEqual(current, {
           ...next,
-          phase:
-            next.phase._tag === "Queued"
-              ? next.phase
-              : {
-                  ...next.phase,
-                  childThreadId: currentChildThreadId,
-                  childTurnId: currentChildTurnId,
-                },
+          phase: Predicate.isTagged(next.phase, "Queued")
+            ? next.phase
+            : {
+                ...next.phase,
+                childThreadId: currentChildThreadId,
+                childTurnId: currentChildTurnId,
+              },
           updatedAt: current.updatedAt,
         });
 
@@ -219,7 +220,8 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
         // That stamp is the only other same-phase change allowed.
         const acknowledgesOnly =
           isAkeruDelegationResultPending(current) &&
-          (next.phase._tag === "Completed" || next.phase._tag === "Failed") &&
+          (Predicate.isTagged(next.phase, "Completed") ||
+            Predicate.isTagged(next.phase, "Failed")) &&
           next.phase.acknowledgedAt !== null &&
           NodeUtil.isDeepStrictEqual(
             acknowledgeAkeruDelegation(current, next.phase.acknowledgedAt),
@@ -279,14 +281,13 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
           ? current
           : {
               ...current,
-              phase: {
-                _tag: "Canceled",
+              phase: AkeruDelegationPhase.cases.Canceled.make({
                 childThreadId: delegationChildThreadId(current.phase),
                 childTurnId: delegationChildTurnId(current.phase),
-                startedAt: current.phase._tag === "Queued" ? null : current.phase.startedAt,
+                startedAt: "startedAt" in current.phase ? current.phase.startedAt : null,
                 completedAt: canceledAt,
                 canceledBy: "user",
-              },
+              }),
               updatedAt: canceledAt,
             };
 
@@ -309,7 +310,10 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
         delegationId: command.delegationId,
       });
 
-      if (original.phase._tag !== "Failed" && original.phase._tag !== "Canceled") {
+      if (
+        !Predicate.isTagged(original.phase, "Failed") &&
+        !Predicate.isTagged(original.phase, "Canceled")
+      ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: "Only failed or canceled bot work can be retried.",

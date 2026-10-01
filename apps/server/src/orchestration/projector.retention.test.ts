@@ -1,3 +1,4 @@
+import type { ActivityRecord } from "./ActivityPayloadBounds.ts";
 import { ProviderDriverKind, type OrchestrationEvent } from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -102,7 +103,7 @@ describe("orchestration projector", () => {
       const createdAt = "2026-03-02T10:00:00.000Z";
       let sequence = 0;
 
-      const event = (type: OrchestrationEvent["type"], payload: unknown) =>
+      const event = (type: OrchestrationEvent["type"], payload: ActivityRecord) =>
         makeEvent({
           sequence: ++sequence,
           type,

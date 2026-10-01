@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type AkeruDelegationRecord,
   releaseAkeruDelegationAcknowledgement,
@@ -44,7 +45,8 @@ export function createDelegations({
           readModel.delegations.filter(
             (delegation) =>
               delegationIds.includes(delegation.delegationId) &&
-              (delegation.phase._tag === "Completed" || delegation.phase._tag === "Failed") &&
+              (Predicate.isTagged(delegation.phase, "Completed") ||
+                Predicate.isTagged(delegation.phase, "Failed")) &&
               delegation.phase.acknowledgedAt === event.payload.createdAt,
           ),
           dispatchDelegationRelease,

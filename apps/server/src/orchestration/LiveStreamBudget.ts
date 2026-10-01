@@ -19,7 +19,7 @@ export interface RetainedLiveItem<A> {
 // object once without keeping the event or its serialized copy alive.
 const serializedSizes = new WeakMap<object, number>();
 
-function serializedSize(value: object): number {
+function serializedSize<A extends object>(value: A): number {
   const cached = serializedSizes.get(value);
 
   if (cached !== undefined) {
@@ -83,13 +83,13 @@ export const makeLiveStreamBudget = Effect.fn("makeLiveStreamBudget")(function* 
     return yield* failure;
   });
 
-  const retain = <A extends object>(value: A, payload: object = value) =>
+  const retain = <A extends object, P extends object>(value: A, payload?: P) =>
     Effect.suspend(() => {
       if (failure) {
         return Effect.fail(failure);
       }
 
-      const serializedBytes = serializedSize(payload);
+      const serializedBytes = serializedSize(payload ?? value);
       const nextItems = retained.size + 1;
       const nextSerializedBytes = retainedSerializedBytes + serializedBytes;
 

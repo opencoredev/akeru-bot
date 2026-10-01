@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ApprovalRequestId, CommandId, RuntimeRequestId, ThreadId } from "@akeru/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -109,8 +111,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const requestedPayload =
-      requested?.payload && typeof requested.payload === "object"
-        ? (requested.payload as Record<string, unknown>)
+      requested?.payload &&
+      (requested.payload === null || Predicate.isObjectOrArray(requested.payload))
+        ? (requested.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(requestedPayload?.requestKind).toBe("command");
@@ -121,8 +124,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const resolvedPayload =
-      resolved?.payload && typeof resolved.payload === "object"
-        ? (resolved.payload as Record<string, unknown>)
+      resolved?.payload &&
+      (resolved.payload === null || Predicate.isObjectOrArray(resolved.payload))
+        ? (resolved.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(resolvedPayload?.requestKind).toBe("command");
@@ -275,8 +279,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const resolvedPayload =
-      resolved?.payload && typeof resolved.payload === "object"
-        ? (resolved.payload as Record<string, unknown>)
+      resolved?.payload &&
+      (resolved.payload === null || Predicate.isObjectOrArray(resolved.payload))
+        ? (resolved.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(resolved?.kind).toBe("user-input.resolved");

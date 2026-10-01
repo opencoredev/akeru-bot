@@ -486,7 +486,7 @@ describe("ProviderCommandReactor", () => {
     await harness.waitFor(() => harness.sendTurn.mock.calls.length === 1);
 
     harness.startSession.mockImplementationOnce(
-      (_: unknown, __: unknown) => Effect.fail("simulated restart failure") as never,
+      () => Effect.fail("simulated restart failure") as never,
     );
 
     await harness.run(

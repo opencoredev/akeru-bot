@@ -66,10 +66,9 @@ interface CommandEnvelope {
   admission: TurnStartAdmission | undefined;
 }
 
-function commandToAggregateRef(command: OrchestrationCommand): {
-  readonly aggregateKind: OrchestrationEvent["aggregateKind"];
-  readonly aggregateId: OrchestrationEvent["aggregateId"];
-} {
+type CommandAggregateRef = Pick<OrchestrationEvent, "aggregateKind" | "aggregateId">;
+
+function commandToAggregateRef(command: OrchestrationCommand): CommandAggregateRef {
   switch (command.type) {
     case "project.create":
     case "project.meta.update":
@@ -419,7 +418,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
             return;
           }
 
-          const error = Cause.squash(exit.cause) as OrchestrationDispatchError;
+          const error = Cause.squash(exit.cause);
 
           if (
             !isOrchestrationCommandPreviouslyRejectedError(error) &&
@@ -453,7 +452,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
             }
           }
 
-          yield* Deferred.fail(envelope.result, error);
+          yield* Deferred.failCause(envelope.result, exit.cause);
         }),
       ),
       Effect.ensuring(Effect.sync(() => envelope.admission?.release())),

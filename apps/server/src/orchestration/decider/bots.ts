@@ -1,3 +1,5 @@
+import { AkeruDelegationPhase } from "@akeru/contracts";
+
 import {
   BALANCED_BOT_PERSONALITY_TONE,
   DEFAULT_LOCAL_EXECUTION_MODE,
@@ -408,14 +410,13 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           payload: {
             delegation: {
               ...delegation,
-              phase: {
-                _tag: "Canceled",
+              phase: AkeruDelegationPhase.cases.Canceled.make({
                 childThreadId: delegationChildThreadId(delegation.phase),
                 childTurnId: delegationChildTurnId(delegation.phase),
-                startedAt: delegation.phase._tag === "Queued" ? null : delegation.phase.startedAt,
+                startedAt: "startedAt" in delegation.phase ? delegation.phase.startedAt : null,
                 completedAt: canceledAt,
                 canceledBy: "user",
-              },
+              }),
               updatedAt: canceledAt,
             },
           },

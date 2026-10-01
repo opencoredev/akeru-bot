@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import {
   EventId,
   ProviderDriverKind,
@@ -49,7 +50,7 @@ describe("runtimeEventToActivities task progress", () => {
     expect(commandActivities.map((activity) => activity.id)).toEqual([
       "task-progress:thread-1:agent-1",
     ]);
-    const usagePayload = usageActivities[0]?.payload as Record<string, unknown> | undefined;
+    const usagePayload = usageActivities[0]?.payload as Record<string, Schema.Json> | undefined;
     expect(usagePayload?.typedUsage).toEqual({ totalTokens: 73_700_000 });
     expect(usagePayload?.usageSnapshot).toBe(true);
   });
@@ -69,8 +70,8 @@ describe("runtimeEventToActivities task progress", () => {
     } satisfies ProviderRuntimeEvent;
 
     const activities = runtimeEventToActivities(event);
-    const progressPayload = activities[0]?.payload as Record<string, unknown>;
-    const usagePayload = activities[1]?.payload as Record<string, unknown>;
+    const progressPayload = activities[0]?.payload as Record<string, Schema.Json>;
+    const usagePayload = activities[1]?.payload as Record<string, Schema.Json>;
 
     expect(activities.map((activity) => activity.id)).toEqual([
       "task-progress:thread-1:agent-2",
@@ -116,8 +117,8 @@ describe("runtimeEventToActivities tool streaming persistence", () => {
     const activities = runtimeEventToActivities(event);
 
     expect(activities).toHaveLength(1);
-    const payload = activities[0]?.payload as Record<string, unknown>;
-    const data = payload.data as Record<string, unknown>;
+    const payload = activities[0]?.payload as Record<string, Schema.Json>;
+    const data = payload.data as Record<string, Schema.Json>;
     expect(payload.status).toBe("inProgress");
     expect(data.toolCallId).toBe("tool-call-1");
     expect(data.command).toBe("blender --render");
@@ -142,7 +143,7 @@ describe("runtimeEventToActivities tool streaming persistence", () => {
     const activities = runtimeEventToActivities(event);
 
     expect(activities).toHaveLength(1);
-    const payload = activities[0]?.payload as Record<string, unknown>;
+    const payload = activities[0]?.payload as Record<string, Schema.Json>;
     expect(payload.data).toEqual(streamingData);
   });
 });
@@ -167,7 +168,7 @@ describe("runtimeEventToActivities model.rerouted", () => {
     expect(activity?.kind).toBe("model.rerouted");
     expect(activity?.tone).toBe("info");
     expect(activity?.summary).toBe("Model rerouted from gpt-5.6-sol to gpt-5.6-astra");
-    const payload = activity?.payload as Record<string, unknown>;
+    const payload = activity?.payload as Record<string, Schema.Json>;
     expect(payload.fromModel).toBe("gpt-5.6-sol");
     expect(payload.toModel).toBe("gpt-5.6-astra");
     expect(payload.reason).toBe("The requested model is unavailable on this plan.");

@@ -1,6 +1,7 @@
+import type { ActivityValue, ActivityRecord } from "./ActivityPayloadBounds.ts";
 import { asTrimmedString, asRecord, projectBoundedValue } from "./ActivityPayloadBounds.ts";
 
-function pushChangedFile(target: string[], seen: Set<string>, value: unknown): void {
+function pushChangedFile(target: string[], seen: Set<string>, value: ActivityValue): void {
   const normalized = asTrimmedString(value);
 
   if (!normalized || seen.has(normalized)) {
@@ -12,7 +13,7 @@ function pushChangedFile(target: string[], seen: Set<string>, value: unknown): v
 }
 
 export function collectChangedFiles(
-  value: unknown,
+  value: ActivityValue,
   target: string[],
   seen: Set<string>,
   depth: number,
@@ -70,16 +71,14 @@ export function collectChangedFiles(
   }
 }
 
-export function projectCommandData(
-  data: Record<string, unknown>,
-): Record<string, unknown> | undefined {
+export function projectCommandData(data: ActivityRecord): ActivityRecord | undefined {
   const item = asRecord(data.item);
 
   if (!item) {
     return undefined;
   }
 
-  const projectedItem: Record<string, unknown> = {};
+  const projectedItem: ActivityRecord = {};
 
   if ("command" in item) {
     projectedItem.command = projectBoundedValue(item.command);
@@ -104,7 +103,7 @@ export function projectCommandData(
   const result = asRecord(item.result);
 
   if (result) {
-    const projectedResult: Record<string, unknown> = {};
+    const projectedResult: ActivityRecord = {};
 
     if ("command" in result) {
       projectedResult.command = projectBoundedValue(result.command);
@@ -128,7 +127,7 @@ export function projectCommandData(
   return Object.keys(projectedItem).length > 0 ? projectedItem : undefined;
 }
 
-export function projectCommandValue(data: Record<string, unknown>): unknown {
+export function projectCommandValue(data: ActivityRecord): ActivityValue {
   if (data.command !== undefined) {
     return data.command;
   }

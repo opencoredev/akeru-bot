@@ -10,7 +10,10 @@ export function groupMentionCandidates(
   members: ReadonlyArray<GroupMembership>,
   text: string,
 ): ReadonlyArray<BotId> {
-  const memberBotIds = members.filter(isGroupBotMember).map((member) => member.botId);
+  const memberBotIds = members.flatMap((member) =>
+    isGroupBotMember(member) ? [member.botId] : [],
+  );
+
   const candidates: BotId[] = [];
 
   for (const token of collectComposerInlineTokens(`${text}\n`).toReversed()) {

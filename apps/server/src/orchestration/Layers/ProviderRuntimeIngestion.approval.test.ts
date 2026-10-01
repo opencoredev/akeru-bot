@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import {
   EventId,
   ProviderDriverKind,
@@ -114,7 +115,7 @@ describe("runtimeEventToActivities approval details", () => {
     const [activity] = runtimeEventToActivities(event);
 
     expect(activity?.kind).toBe("approval.requested");
-    expect((activity?.payload as Record<string, unknown> | undefined)?.detail).toBe(detail);
+    expect((activity?.payload as Record<string, Schema.Json> | undefined)?.detail).toBe(detail);
   });
 
   it("keeps app details and approval options available to remote clients", () => {

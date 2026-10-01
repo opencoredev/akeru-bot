@@ -13,6 +13,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import { projectActivityEvent } from "./ActivityPayloadProjection.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The coalescer owns one scoped subscription budget, which has no contextual service or layer.
 import { makeLiveStreamBudget, type RetainedLiveItem } from "./LiveStreamBudget.ts";
 
 const COALESCE_WINDOW = Duration.millis(50);
@@ -29,6 +30,7 @@ function isToolUpdated(event: OrchestrationEvent): boolean {
   );
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Coalescing probes optional fields of arbitrary wire payloads without changing them.
 function asTrimmedString(value: unknown): string | null {
   if (!Predicate.isString(value)) {
     return null;

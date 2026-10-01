@@ -1,8 +1,9 @@
+import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 import { EventId, type OrchestrationThreadActivity } from "@akeru/contracts";
 import { projectActivityPayload } from "./ActivityPayloadProjection.ts";
 
-function activity(payload: Record<string, unknown>): OrchestrationThreadActivity {
+function activity(payload: Record<string, Schema.Json>): OrchestrationThreadActivity {
   return {
     id: EventId.make("activity-1"),
     tone: "tool",
@@ -21,6 +22,40 @@ function activity(payload: Record<string, unknown>): OrchestrationThreadActivity
  * assertions are the tripwire.
  */
 describe("projectActivityPayload", () => {
+  it("drops deeply nested discarded JSON without walking its descendants", () => {
+    let discarded: Schema.Json = null;
+
+    for (let depth = 0; depth < 1_000; depth += 1) {
+      discarded = { child: discarded };
+    }
+
+    const projected = projectActivityPayload(
+      activity({ itemType: "command_execution", data: { command: "echo hello", discarded } }),
+    );
+
+    expect(projected.payload).toEqual({
+      itemType: "command_execution",
+      data: { command: "echo hello" },
+    });
+  });
+
+  it("truncates deeply nested retained MCP input at the projection depth limit", () => {
+    let input: Schema.Json = null;
+
+    for (let depth = 0; depth < 1_000; depth += 1) {
+      input = { child: input };
+    }
+
+    const projected = projectActivityPayload(
+      activity({ itemType: "mcp_tool_call", data: { input } }),
+    );
+
+    expect(projected.payload).toEqual({
+      itemType: "mcp_tool_call",
+      data: { input: { child: { child: { child: { child: "[truncated]" } } } } },
+    });
+  });
+
   it.each([
     ["x".repeat(4094) + "😀z", "x".repeat(4094) + "…"],
     ["x".repeat(4093) + "😀zz", "x".repeat(4093) + "😀…"],
@@ -42,7 +77,11 @@ describe("projectActivityPayload", () => {
       }),
     );
 
-    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+    const data = (projected.payload as Record<string, Schema.Json>).data as Record<
+      string,
+      Schema.Json
+    >;
+
     expect(data).toEqual({ command: 'printf "hi\\n"' });
   });
 
@@ -54,7 +93,9 @@ describe("projectActivityPayload", () => {
       }),
     );
 
-    expect((write.payload as Record<string, unknown>).data).toEqual({ memoryOperationCount: 1 });
+    expect((write.payload as Record<string, Schema.Json>).data).toEqual({
+      memoryOperationCount: 1,
+    });
   });
 
   it("preserves tool attribution (agentId/parentToolUseId) through data slimming", () => {
@@ -73,11 +114,11 @@ describe("projectActivityPayload", () => {
       }),
     );
 
-    const payload = projected.payload as Record<string, unknown>;
+    const payload = projected.payload as Record<string, Schema.Json>;
     expect(payload.agentId).toBe("task-123");
     expect(payload.parentToolUseId).toBe("toolu_abc");
     // Slimming itself still applies to data.
-    const data = payload.data as Record<string, unknown>;
+    const data = payload.data as Record<string, Schema.Json>;
     expect(data.somethingClientNeverReads).toBeUndefined();
   });
 
@@ -94,7 +135,11 @@ describe("projectActivityPayload", () => {
       }),
     );
 
-    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+    const data = (projected.payload as Record<string, Schema.Json>).data as Record<
+      string,
+      Schema.Json
+    >;
+
     expect(data.item).toEqual({
       command: "/bin/zsh -lc 'printf hello'",
       aggregatedOutput: "hello from codex",
@@ -151,8 +196,16 @@ describe("projectActivityPayload", () => {
       }),
     );
 
-    const claudeData = (claude.payload as Record<string, unknown>).data as Record<string, unknown>;
-    const acpData = (acp.payload as Record<string, unknown>).data as Record<string, unknown>;
+    const claudeData = (claude.payload as Record<string, Schema.Json>).data as Record<
+      string,
+      Schema.Json
+    >;
+
+    const acpData = (acp.payload as Record<string, Schema.Json>).data as Record<
+      string,
+      Schema.Json
+    >;
+
     expect(claudeData.rawOutput).toEqual({ content: "hello from claude" });
     expect(acpData.rawOutput).toEqual({ content: "hello from acp" });
     expect(JSON.stringify(claude.payload).length).toBeLessThan(500);
@@ -222,8 +275,12 @@ describe("projectActivityPayload", () => {
       }),
     );
 
-    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
-    const item = data.item as Record<string, unknown>;
+    const data = (projected.payload as Record<string, Schema.Json>).data as Record<
+      string,
+      Schema.Json
+    >;
+
+    const item = data.item as Record<string, Schema.Json>;
     expect(item.tool).toBe("fetch_pr");
     expect(item.server).toBe("github");
     expect(item.arguments).toEqual({ pr: 42 });
@@ -248,7 +305,11 @@ describe("projectActivityPayload", () => {
       }),
     );
 
-    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+    const data = (projected.payload as Record<string, Schema.Json>).data as Record<
+      string,
+      Schema.Json
+    >;
+
     expect(data.toolName).toBe("mcp__github__fetch_pr");
     expect(data.input).toEqual({ pr: 42 });
     expect(data.result).toEqual({ content: "first line of output" });
@@ -330,7 +391,10 @@ describe("projectActivityPayload", () => {
       summary: "SearchPlugins",
     });
 
-    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+    const data = (projected.payload as Record<string, Schema.Json>).data as Record<
+      string,
+      Schema.Json
+    >;
 
     expect(data.result).toMatchObject({
       kind: "plugin-search-results",

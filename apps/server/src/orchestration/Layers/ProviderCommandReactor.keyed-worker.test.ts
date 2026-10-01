@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
 import * as Deferred from "effect/Deferred";
@@ -106,25 +107,29 @@ describe("makeKeyedDrainableWorker", () => {
         const worker = yield* makeKeyedDrainableWorker<string, string, string, never>({
           concurrency: 2,
           process: (item) =>
-            item === "fail"
-              ? Effect.fail("injected failure")
-              : item === "recovered"
-                ? Deferred.succeed(recovered, undefined).pipe(Effect.asVoid)
-                : Effect.acquireUseRelease(
-                    Effect.sync(() => {
-                      active += 1;
-                      maxActive = Math.max(maxActive, active);
+            Match.value(item).pipe(
+              Match.when("fail", () => Effect.fail("injected failure")),
+              Match.when("recovered", () =>
+                Deferred.succeed(recovered, undefined).pipe(Effect.asVoid),
+              ),
+              Match.orElse(() =>
+                Effect.acquireUseRelease(
+                  Effect.sync(() => {
+                    active += 1;
+                    maxActive = Math.max(maxActive, active);
+                  }),
+                  () =>
+                    Effect.gen(function* () {
+                      yield* Deferred.succeed(started.get(item)!, undefined).pipe(Effect.orDie);
+                      yield* Deferred.await(releases.get(item)!);
                     }),
-                    () =>
-                      Effect.gen(function* () {
-                        yield* Deferred.succeed(started.get(item)!, undefined).pipe(Effect.orDie);
-                        yield* Deferred.await(releases.get(item)!);
-                      }),
-                    () =>
-                      Effect.sync(() => {
-                        active -= 1;
-                      }),
-                  ),
+                  () =>
+                    Effect.sync(() => {
+                      active -= 1;
+                    }),
+                ),
+              ),
+            ),
         });
 
         yield* worker.enqueue("a", "a");

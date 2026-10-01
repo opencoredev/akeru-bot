@@ -1,3 +1,5 @@
+import { asRecord } from "../../ActivityPayloadBounds.ts";
+import * as Predicate from "effect/Predicate";
 import {
   type AkeruDelegationRecord,
   CommandId,
@@ -135,12 +137,9 @@ export function createRecovery({
     >();
 
     for (const activity of input.activities) {
-      const payload =
-        typeof activity.payload === "object" && activity.payload !== null
-          ? (activity.payload as Record<string, unknown>)
-          : null;
+      const payload = asRecord(activity.payload);
 
-      const requestId = typeof payload?.requestId === "string" ? payload.requestId : null;
+      const requestId = Predicate.isString(payload?.requestId) ? payload.requestId : null;
 
       if (!requestId) continue;
 
@@ -154,7 +153,7 @@ export function createRecovery({
         activity.kind === "provider.approval.respond.failed" ||
         activity.kind === "provider.user-input.respond.failed"
       ) {
-        const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : "";
+        const detail = Predicate.isString(payload?.detail) ? payload.detail.toLowerCase() : "";
 
         if (detail.includes("stale pending") || detail.includes("unknown pending")) {
           pending.delete(requestId);
@@ -220,7 +219,8 @@ export function createRecovery({
 
     for (const delegation of delegations) {
       if (
-        (delegation.phase._tag !== "Completed" && delegation.phase._tag !== "Failed") ||
+        (!Predicate.isTagged(delegation.phase, "Completed") &&
+          !Predicate.isTagged(delegation.phase, "Failed")) ||
         delegation.phase.acknowledgedAt === null
       ) {
         continue;

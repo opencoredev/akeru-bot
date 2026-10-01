@@ -1,14 +1,22 @@
-export function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+
+const ActivityRecord = Schema.Record(Schema.String, Schema.Unknown);
+
+export type ActivityRecord = {
+  -readonly [Key in keyof typeof ActivityRecord.Type]: (typeof ActivityRecord.Type)[Key];
+};
+
+export type ActivityValue = ActivityRecord[string];
+
+/** Probe only the outer object; callers narrow the fields they read. */
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Persisted payloads need a shallow probe so discarded descendants never bypass projection bounds.
+export function asRecord(value: unknown): ActivityRecord | null {
+  return Predicate.isObject(value) ? value : null;
 }
 
-export function asTrimmedString(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
+export function asTrimmedString(value: ActivityValue): string | null {
+  if (!Predicate.isString(value)) return null;
   const trimmed = value.trim();
 
   return trimmed.length > 0 ? trimmed : null;
@@ -37,12 +45,17 @@ function copyTruncatedString(value: string): string {
   return `${prefix}…`;
 }
 
-export function projectBoundedValue(value: unknown, depth = 0): unknown {
-  if (typeof value === "string") {
+export function projectBoundedValue(value: ActivityValue, depth = 0): ActivityValue {
+  if (Predicate.isString(value)) {
     return copyTruncatedString(value);
   }
 
-  if (value === null || typeof value !== "object") {
+  if (
+    value === null ||
+    value === undefined ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
+  ) {
     return value;
   }
 
@@ -53,12 +66,15 @@ export function projectBoundedValue(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) {
     return value
       .slice(0, MAX_PROJECTED_ARRAY_LENGTH)
-      .map((entry) => projectBoundedValue(entry, depth + 1));
+      .map((entry: ActivityValue) => projectBoundedValue(entry, depth + 1));
   }
 
-  const projected: Record<string, unknown> = {};
+  const projected: ActivityRecord = {};
 
-  for (const [key, entry] of Object.entries(value).slice(0, MAX_PROJECTED_OBJECT_KEYS)) {
+  for (const [key, entry] of Object.entries(asRecord(value) ?? {}).slice(
+    0,
+    MAX_PROJECTED_OBJECT_KEYS,
+  )) {
     projected[key] = projectBoundedValue(entry, depth + 1);
   }
 

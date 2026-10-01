@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { ThreadId } from "@akeru/contracts";
 import { assert } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -137,7 +138,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const snapshot = yield* snapshotQuery.getThreadDetailSnapshot(threadW);
       assert.equal(snapshot._tag, "Some");
 
-      if (snapshot._tag === "Some") {
+      if (Predicate.isTagged(snapshot, "Some")) {
         assert.equal(snapshot.value.page, undefined);
         assert.equal(snapshot.value.thread.messages.length, 9);
         assert.equal(snapshot.value.thread.activities.length, 6);
@@ -158,7 +159,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const snapshot = yield* snapshotQuery.getThreadDetailSnapshot(threadW, { turnLimit: 2 });
       assert.equal(snapshot._tag, "Some");
 
-      if (snapshot._tag === "Some") {
+      if (Predicate.isTagged(snapshot, "Some")) {
         assert.deepEqual(messageIds(snapshot.value), [
           "turn-4-reply",
           "turn-5-reply",
@@ -188,7 +189,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const snapshot = yield* snapshotQuery.getThreadDetailSnapshot(threadW, { turnLimit: 3 });
       assert.equal(snapshot._tag, "Some");
 
-      if (snapshot._tag === "Some") {
+      if (Predicate.isTagged(snapshot, "Some")) {
         assert.equal(snapshot.value.thread.messages.length, 9);
         assert.equal(snapshot.value.thread.activities.length, 6);
         assert.equal(snapshot.value.page?.hasMore, false);
@@ -210,7 +211,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const firstPage = yield* snapshotQuery.getThreadDetailSnapshot(threadW, { turnLimit: 2 });
       assert.equal(firstPage._tag, "Some");
 
-      if (firstPage._tag !== "Some") return;
+      if (!Predicate.isTagged(firstPage, "Some")) return;
       const cursor = firstPage.value.page?.beforeCursor;
       assert.notEqual(cursor, null);
 
@@ -246,7 +247,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       assert.equal(olderPage._tag, "Some");
 
-      if (olderPage._tag === "Some") {
+      if (Predicate.isTagged(olderPage, "Some")) {
         // Identical older slice to what the pre-rewrite cursor would return.
         assert.deepEqual(messageIds(olderPage.value), [
           "turn-1-reply",
@@ -267,7 +268,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const firstPage = yield* snapshotQuery.getThreadDetailSnapshot(threadW, { turnLimit: 2 });
       assert.equal(firstPage._tag, "Some");
 
-      if (firstPage._tag !== "Some") return;
+      if (!Predicate.isTagged(firstPage, "Some")) return;
       const cursor = firstPage.value.page?.beforeCursor;
       assert.notEqual(cursor, null);
       assert.notEqual(cursor, undefined);
@@ -283,7 +284,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       assert.equal(olderPage._tag, "Some");
 
-      if (olderPage._tag === "Some") {
+      if (Predicate.isTagged(olderPage, "Some")) {
         assert.deepEqual(messageIds(olderPage.value), [
           "turn-1-reply",
           "turn-2-reply",
@@ -309,7 +310,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const firstPage = yield* snapshotQuery.getThreadDetailSnapshot(threadW, { turnLimit: 2 });
       assert.equal(firstPage._tag, "Some");
 
-      if (firstPage._tag !== "Some") return;
+      if (!Predicate.isTagged(firstPage, "Some")) return;
 
       const foreign = encodeThreadDetailPageCursor({
         threadId: ThreadId.make("thread-other"),
@@ -324,7 +325,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       assert.equal(snapshot._tag, "Some");
 
-      if (snapshot._tag === "Some") {
+      if (Predicate.isTagged(snapshot, "Some")) {
         assert.deepEqual(messageIds(snapshot.value), messageIds(firstPage.value));
       }
     }),
@@ -342,7 +343,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       assert.equal(snapshot._tag, "Some");
 
-      if (snapshot._tag === "Some") {
+      if (Predicate.isTagged(snapshot, "Some")) {
         assert.equal(snapshot.value.page?.hasMore, true);
         assert.equal(snapshot.value.thread.messages.length, 5);
       }
@@ -368,7 +369,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
         assert.equal(snapshot._tag, "Some");
 
-        if (snapshot._tag !== "Some") return;
+        if (!Predicate.isTagged(snapshot, "Some")) return;
         seenMessages.push(...snapshot.value.thread.messages.map((message) => message.id));
         seenActivities.push(...snapshot.value.thread.activities.map((activity) => activity.id));
         const next = snapshot.value.page?.beforeCursor;
@@ -416,7 +417,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const fullDetail = yield* snapshotQuery.getThreadDetailById(threadW);
       assert.equal(fullDetail._tag, "Some");
 
-      if (fullDetail._tag === "Some") {
+      if (Predicate.isTagged(fullDetail, "Some")) {
         assert.equal(fullDetail.value.activities.length, 500);
         assert.equal(fullDetail.value.activities[0]?.id, asEventId("activity-0002"));
         assert.equal(fullDetail.value.activities.at(-1)?.id, asEventId("activity-0501"));
@@ -428,7 +429,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       assert.equal(windowedDetail._tag, "Some");
 
-      if (windowedDetail._tag === "Some") {
+      if (Predicate.isTagged(windowedDetail, "Some")) {
         assert.equal(windowedDetail.value.thread.activities.length, 500);
         assert.equal(windowedDetail.value.thread.activities[0]?.id, asEventId("activity-0002"));
         assert.equal(windowedDetail.value.thread.activities.at(-1)?.id, asEventId("activity-0501"));
@@ -513,7 +514,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       const detailWithPinnedRequests = yield* snapshotQuery.getThreadDetailById(threadW);
       assert.equal(detailWithPinnedRequests._tag, "Some");
 
-      if (detailWithPinnedRequests._tag === "Some") {
+      if (Predicate.isTagged(detailWithPinnedRequests, "Some")) {
         const ids = new Set(
           detailWithPinnedRequests.value.activities.map((activity) => activity.id),
         );
@@ -533,7 +534,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       assert.equal(windowWithPinnedRequests._tag, "Some");
 
-      if (windowWithPinnedRequests._tag === "Some") {
+      if (Predicate.isTagged(windowWithPinnedRequests, "Some")) {
         const ids = new Set(
           windowWithPinnedRequests.value.thread.activities.map((activity) => activity.id),
         );
@@ -599,7 +600,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       assert.equal(snapshot._tag, "Some");
 
-      if (snapshot._tag === "Some") {
+      if (Predicate.isTagged(snapshot, "Some")) {
         assert.deepEqual(messageIds(snapshot.value), ["pre-turn-msg"]);
         assert.equal(snapshot.value.page?.hasMore, false);
         assert.equal(snapshot.value.page?.beforeCursor, null);
