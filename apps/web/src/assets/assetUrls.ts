@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { useAtomValue } from "@effect/atom-react";
 import { resolveAssetUrl } from "@akeru/client-runtime/state/assets";
 import type { AssetImageDimensions, AssetResource, EnvironmentId } from "@akeru/contracts";
@@ -32,11 +33,11 @@ export function useAssetUrlState(
     }),
   );
 
-  if (result._tag === "Failure") {
+  if (hasTag(result, "Failure")) {
     return { _tag: "Failure" };
   }
 
-  if (preparedConnection._tag === "None" || result._tag !== "Success") {
+  if (hasTag(preparedConnection, "None") || !hasTag(result, "Success")) {
     return { _tag: "Loading" };
   }
 
@@ -57,7 +58,7 @@ export function useAssetUrlState(
 export function useAssetUrl(environmentId: EnvironmentId, resource: AssetResource): string | null {
   const result = useAssetUrlState(environmentId, resource);
 
-  if (result._tag !== "Success") {
+  if (!hasTag(result, "Success")) {
     return null;
   }
 
@@ -79,7 +80,7 @@ export function useAssetUrls(
 
   return useMemo(
     () =>
-      preparedConnection._tag === "None"
+      hasTag(preparedConnection, "None")
         ? resources.map(() => null)
         : results.map((result) =>
             AsyncResult.isSuccess(result)

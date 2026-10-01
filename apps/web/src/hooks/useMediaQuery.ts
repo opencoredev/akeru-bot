@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { useCallback, useSyncExternalStore } from "react";
 
 const BREAKPOINTS = {
@@ -15,19 +16,19 @@ type Breakpoint = keyof typeof BREAKPOINTS;
 type BreakpointQuery = Breakpoint | `max-${Breakpoint}` | `${Breakpoint}:max-${Breakpoint}`;
 
 function resolveMin(value: Breakpoint | number): string {
-  const px = typeof value === "number" ? value : BREAKPOINTS[value];
+  const px = Predicate.isNumber(value) ? value : BREAKPOINTS[value];
 
   return `(min-width: ${px}px)`;
 }
 
 function resolveMax(value: Breakpoint | number): string {
-  const px = typeof value === "number" ? value : BREAKPOINTS[value];
+  const px = Predicate.isNumber(value) ? value : BREAKPOINTS[value];
 
   return `(max-width: ${px - 1}px)`;
 }
 
 function parseQuery(query: BreakpointQuery | MediaQueryInput | (string & {})): string {
-  if (typeof query !== "string") {
+  if (!Predicate.isString(query)) {
     const parts: string[] = [];
 
     if (query.min != null) parts.push(resolveMin(query.min));

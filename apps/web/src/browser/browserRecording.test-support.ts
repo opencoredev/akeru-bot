@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { vi } from "vite-plus/test";
 
 const {
@@ -113,7 +114,7 @@ export class FakeMediaRecorder {
     this.state = "inactive";
 
     for (const listener of this.listeners.get("stop") ?? []) {
-      if (typeof listener === "function") listener(new Event("stop"));
+      if (Predicate.isFunction(listener)) listener(new Event("stop"));
       else listener.handleEvent(new Event("stop"));
     }
   }
@@ -153,7 +154,7 @@ export function setupRecordingTest() {
     set src(_value: string) {
       const event = new Event("load");
 
-      if (typeof this.loadListener === "function") this.loadListener(event);
+      if (Predicate.isFunction(this.loadListener)) this.loadListener(event);
       else this.loadListener?.handleEvent(event);
     }
   }

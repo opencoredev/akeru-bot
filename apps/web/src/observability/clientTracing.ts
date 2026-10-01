@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
@@ -102,7 +103,7 @@ async function applyClientTracingConfig(config: ClientTracingConfig): Promise<vo
     ),
   );
 
-  if (delegateResult._tag === "Failure") {
+  if (hasTag(delegateResult, "Failure")) {
     await disposeTracerRuntime(runtime, scope);
 
     if (generation === configurationGeneration) {

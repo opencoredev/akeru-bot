@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   events,
   frameSubscription,
@@ -44,7 +45,7 @@ describe("browser recording", () => {
       finishLoading(): void {
         const event = new Event("load");
 
-        if (typeof this.loadListener === "function") this.loadListener(event);
+        if (Predicate.isFunction(this.loadListener)) this.loadListener(event);
         else this.loadListener?.handleEvent(event);
       }
     }

@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import {
   type DesktopPreviewColorScheme,
   type DesktopPreviewFavicon,
@@ -61,7 +62,7 @@ const rememberSnapshotUrl = (
   recentlySeenUrls: string[],
   snapshot: PreviewSessionSnapshot,
 ): string[] =>
-  snapshot.navStatus._tag === "Idle"
+  hasTag(snapshot.navStatus, "Idle")
     ? recentlySeenUrls
     : dedupeRecentUrls(recentlySeenUrls, snapshot.navStatus.url);
 
@@ -136,10 +137,9 @@ export function applyPreviewServerEventTransition(
 
         if (current.suppressedTabIds.has(snapshot.tabId)) return current;
 
-        const recentlySeenUrls =
-          snapshot.navStatus._tag === "Idle"
-            ? current.recentlySeenUrls
-            : dedupeRecentUrls(current.recentlySeenUrls, snapshot.navStatus.url);
+        const recentlySeenUrls = hasTag(snapshot.navStatus, "Idle")
+          ? current.recentlySeenUrls
+          : dedupeRecentUrls(current.recentlySeenUrls, snapshot.navStatus.url);
 
         const sessions = { ...current.sessions, [snapshot.tabId]: snapshot };
         const activeTabId = event.type === "opened" ? snapshot.tabId : current.activeTabId;
@@ -379,10 +379,9 @@ export function cancelPreviewSessionCloseTransition(
     return { ...current, suppressedTabIds };
   }
 
-  const recentlySeenUrls =
-    snapshot.navStatus._tag !== "Idle"
-      ? dedupeRecentUrls(current.recentlySeenUrls, snapshot.navStatus.url)
-      : current.recentlySeenUrls;
+  const recentlySeenUrls = !hasTag(snapshot.navStatus, "Idle")
+    ? dedupeRecentUrls(current.recentlySeenUrls, snapshot.navStatus.url)
+    : current.recentlySeenUrls;
 
   return {
     ...current,

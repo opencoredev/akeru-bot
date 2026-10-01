@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { GhosttyTerminalSurfaceOptions } from "./surfaceTypes";
 import { isMacPlatform } from "../../lib/utils";
 import type { GhosttyTerminalCore } from "./core";
@@ -106,7 +107,7 @@ export class SurfaceKeyboardController {
         this.clearSelectionAfterCopy = !event.shiftKey && !isMacPlatform(navigator.platform);
         const clipboard = navigator.clipboard;
 
-        if (typeof clipboard?.writeText === "function") {
+        if (Predicate.isFunction(clipboard?.writeText)) {
           // Defer the write past the default action: the native copy event
           // (dispatched synchronously with the default action) claims the
           // token first when it actually writes, and the write covers browsers
@@ -149,7 +150,7 @@ export class SurfaceKeyboardController {
       this.suppressedKeyCodes.add(event.code);
       const clipboard = navigator.clipboard;
 
-      if (typeof clipboard?.readText === "function") {
+      if (Predicate.isFunction(clipboard?.readText)) {
         // Race the async clipboard read against the browser's own paste event:
         // the native event (dispatched synchronously with the default action)
         // always claims the token first when it fires, and the read covers

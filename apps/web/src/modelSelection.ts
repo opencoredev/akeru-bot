@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_TEXT_GENERATION_MODEL,
   DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER,
@@ -61,11 +62,11 @@ function readInstanceCustomModels(
   const instance = settings.providerInstances?.[instanceId];
   const config = instance?.config;
 
-  if (config !== null && typeof config === "object") {
+  if (config !== null && (config === null || Predicate.isObjectOrArray(config))) {
     const value = (config as Record<string, unknown>).customModels;
 
     if (Array.isArray(value)) {
-      return value.filter((entry): entry is string => typeof entry === "string");
+      return value.filter((entry): entry is string => Predicate.isString(entry));
     }
   }
 

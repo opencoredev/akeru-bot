@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { RegistryContext } from "@effect/atom-react";
 import {
   executeAtomQuery,
@@ -12,9 +13,9 @@ export function useAtomQueryRunner<T, A, E>(
   options?: string | AtomCommandOptions,
 ): (target: T) => Promise<AtomCommandResult<A, E>> {
   const registry = useContext(RegistryContext);
-  const explicitLabel = typeof options === "string" ? options : options?.label;
-  const reportFailure = typeof options === "string" ? true : (options?.reportFailure ?? true);
-  const reportDefect = typeof options === "string" ? true : (options?.reportDefect ?? true);
+  const explicitLabel = Predicate.isString(options) ? options : options?.label;
+  const reportFailure = Predicate.isString(options) ? true : (options?.reportFailure ?? true);
+  const reportDefect = Predicate.isString(options) ? true : (options?.reportDefect ?? true);
 
   return useCallback(
     (target: T) => {

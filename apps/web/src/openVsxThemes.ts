@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { sha256 } from "@noble/hashes/sha2";
 import JSZip from "jszip";
 import type { ThemeDefinition } from "./themePalette";
@@ -104,9 +105,9 @@ export async function importOpenVsxThemeExtension(
   );
 
   if (
-    typeof packagedManifest.publisher !== "string" ||
+    !Predicate.isString(packagedManifest.publisher) ||
     packagedManifest.publisher.toLowerCase() !== extension.publisher.toLowerCase() ||
-    typeof packagedManifest.name !== "string" ||
+    !Predicate.isString(packagedManifest.name) ||
     `${packagedManifest.publisher}.${packagedManifest.name}`.toLowerCase() !==
       extension.id.toLowerCase() ||
     packagedManifest.version !== extension.version
@@ -134,7 +135,7 @@ export async function importOpenVsxThemeExtension(
   for (const contribution of contributions) {
     signal?.throwIfAborted();
 
-    if (typeof contribution.path !== "string") {
+    if (!Predicate.isString(contribution.path)) {
       failures.push("theme path is missing");
       continue;
     }
@@ -154,7 +155,7 @@ export async function importOpenVsxThemeExtension(
       const type = contributionType(contribution.uiTheme);
 
       const label =
-        typeof contribution.label === "string" && contribution.label.trim()
+        Predicate.isString(contribution.label) && contribution.label.trim()
           ? contribution.label.trim()
           : extension.name;
 

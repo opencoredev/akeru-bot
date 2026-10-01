@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   createContext,
   useCallback,
@@ -24,7 +25,7 @@ import {
 export { availableLanguages };
 
 export function normalizeLanguagePreference(value: unknown): string {
-  return typeof value === "string" && availableLanguages.some(({ id }) => id === value)
+  return Predicate.isString(value) && availableLanguages.some(({ id }) => id === value)
     ? value
     : "system";
 }

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ContextMenuItem } from "@akeru/contracts";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -124,7 +125,7 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
 function createIconElement(name: string, tone: "neutral" | "destructive"): SVGSVGElement | null {
   const paths = ICON_PATHS[name];
 
-  if (!paths || typeof document.createElementNS !== "function") {
+  if (!paths || !Predicate.isFunction(document.createElementNS)) {
     return null;
   }
 
@@ -178,18 +179,18 @@ function isNodeWithinMenuStack(target: EventTarget | null, menuStack: readonly H
     return menuStack.some((menu) => menu.contains(target));
   }
 
-  if (!target || typeof target !== "object") {
+  if (!Predicate.isObjectOrArray(target)) {
     return false;
   }
 
   let current: unknown = target;
 
-  while (current && typeof current === "object") {
-    if (menuStack.includes(current as HTMLDivElement)) {
+  while (Predicate.isObjectOrArray(current)) {
+    if (menuStack.some((menu) => menu === current)) {
       return true;
     }
 
-    current = (current as { parent?: unknown }).parent;
+    current = Predicate.hasProperty(current, "parent") ? current.parent : undefined;
   }
 
   return false;
@@ -361,7 +362,7 @@ export function showContextMenuFallback<T extends string>(
           button.style.pointerEvents = "none";
         }
 
-        if (typeof item.icon === "string") {
+        if (Predicate.isString(item.icon)) {
           const icon = createIconElement(item.icon, isLeafDestructive ? "destructive" : "neutral");
 
           if (icon) {

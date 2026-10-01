@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { scopedThreadKey } from "@akeru/client-runtime/environment";
 import type { ScopedThreadRef } from "@akeru/contracts";
 import { create } from "zustand";
@@ -25,7 +26,7 @@ const MAX_VALID_DATE_MS = 8_640_000_000_000_000;
 
 export function isValidHistoryTimestamp(value: unknown): value is number {
   return (
-    typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= MAX_VALID_DATE_MS
+    Predicate.isNumber(value) && Number.isFinite(value) && Math.abs(value) <= MAX_VALID_DATE_MS
   );
 }
 
@@ -123,10 +124,12 @@ export function evictExcessProjects(
 export function migratePersistedBrowserHistoryState(persistedState: unknown): {
   byProjectKey: Record<string, BrowserHistoryEntry[]>;
 } {
-  if (!persistedState || typeof persistedState !== "object") return { byProjectKey: {} };
+  if (!persistedState || !(persistedState === null || Predicate.isObjectOrArray(persistedState)))
+    return { byProjectKey: {} };
   const raw = (persistedState as { byProjectKey?: unknown }).byProjectKey;
 
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { byProjectKey: {} };
+  if (!raw || !(raw === null || Predicate.isObjectOrArray(raw)) || Array.isArray(raw))
+    return { byProjectKey: {} };
   const byProjectKey: Record<string, BrowserHistoryEntry[]> = {};
 
   for (const [projectKey, value] of Object.entries(raw as Record<string, unknown>)) {
@@ -135,10 +138,10 @@ export function migratePersistedBrowserHistoryState(persistedState: unknown): {
 
     const entries = value
       .flatMap<BrowserHistoryEntry>((candidate) => {
-        if (!candidate || typeof candidate !== "object") return [];
+        if (!candidate || !(candidate === null || Predicate.isObjectOrArray(candidate))) return [];
         const { url, lastVisitedAt, title } = candidate as Record<string, unknown>;
 
-        if (typeof url !== "string") return [];
+        if (!Predicate.isString(url)) return [];
         const normalizedUrl = normalizeHistoryUrl(url);
 
         if (!normalizedUrl) return [];
@@ -149,7 +152,7 @@ export function migratePersistedBrowserHistoryState(persistedState: unknown): {
           {
             url: normalizedUrl,
             lastVisitedAt,
-            ...(typeof title === "string" && title.length > 0
+            ...(Predicate.isString(title) && title.length > 0
               ? { title: title.slice(0, BROWSER_HISTORY_MAX_TITLE_LENGTH) }
               : {}),
           },
@@ -370,16 +373,17 @@ function migratePersistedThreadProjectKeys(
   persistedState: unknown,
   byProjectKey: Record<string, BrowserHistoryEntry[]>,
 ): Record<string, string> {
-  if (!persistedState || typeof persistedState !== "object") return {};
+  if (!persistedState || !(persistedState === null || Predicate.isObjectOrArray(persistedState)))
+    return {};
   const raw = (persistedState as { projectKeyByThreadKey?: unknown }).projectKeyByThreadKey;
 
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  if (!raw || !(raw === null || Predicate.isObjectOrArray(raw)) || Array.isArray(raw)) return {};
 
   return Object.fromEntries(
     Object.entries(raw as Record<string, unknown>)
       .filter(
         (entry): entry is [string, string] =>
-          typeof entry[1] === "string" && entry[1] in byProjectKey,
+          Predicate.isString(entry[1]) && entry[1] in byProjectKey,
       )
       .slice(-100),
   );

@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { type ServerLifecycleWelcomePayload } from "@akeru/contracts";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import { Outlet, createRootRoute, useLocation } from "@tanstack/react-router";
@@ -246,7 +247,7 @@ function EventRouter() {
       return;
     }
 
-    if (decision._tag === "Success") {
+    if (hasTag(decision, "Success")) {
       toastManager.add({
         type: "success",
         title: t("Keybindings updated"),
@@ -284,7 +285,7 @@ function EventRouter() {
                 },
               });
 
-              if (result._tag === "Success") {
+              if (hasTag(result, "Success")) {
                 return;
               }
 

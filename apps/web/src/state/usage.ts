@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import {
   aggregateUsage,
   usageWindowKey,
@@ -45,7 +46,7 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
         environmentId,
         label: presentation.entry.target.label,
         isPending: result.waiting,
-        error: result._tag === "Failure" ? "This environment could not report usage." : null,
+        error: hasTag(result, "Failure") ? "This environment could not report usage." : null,
         summary: Option.getOrNull(AsyncResult.value(result)),
       });
     }

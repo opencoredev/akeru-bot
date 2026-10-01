@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import type {
   DesktopPreviewRecordingArtifact,
   DesktopPreviewRecordingFrame,
@@ -419,7 +420,7 @@ const finalizeBrowserRecording = async (
     result = { _tag: "Failure", error };
   }
 
-  if (result._tag === "Failure" && isStartupWaitTimeout(result.error)) {
+  if (hasTag(result, "Failure") && isStartupWaitTimeout(result.error)) {
     // Do not clear `active` yet. The renderer-side start promise can still
     // resolve later, and its cancellation path will call `stopScreencast`.
     // Keeping the slot reserved prevents a newer recording for this tab from
@@ -441,7 +442,7 @@ const finalizeBrowserRecording = async (
     clearActiveRecording(recording);
   }
 
-  if (result._tag === "Failure") {
+  if (hasTag(result, "Failure")) {
     if (cleanupError) {
       throw new BrowserRecordingOperationError({
         operation: "cleanup",

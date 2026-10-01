@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Record from "effect/Record";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
@@ -186,7 +187,7 @@ export function useLocalStorage<T, E>(
         const currentValue = getLocalStorageItem(key, schema) ?? initialValue;
         let valueToStore: T;
 
-        if (typeof value === "function") {
+        if (Predicate.isFunction(value)) {
           try {
             valueToStore = (value as (val: T) => T)(currentValue);
           } catch (cause) {

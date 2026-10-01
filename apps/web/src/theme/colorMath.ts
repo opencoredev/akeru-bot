@@ -1,8 +1,9 @@
+import * as Predicate from "effect/Predicate";
 import "culori/css";
 import { converter, parse } from "culori/fn";
 
 export function isThemeColor(value: unknown): value is string {
-  return typeof value === "string" && toCanonicalThemeColor(value) !== null;
+  return Predicate.isString(value) && toCanonicalThemeColor(value) !== null;
 }
 
 export type ThemeRgbColor = {
@@ -32,7 +33,7 @@ export const THEME_BLACK_FOREGROUND: ThemeRgbColor = { r: 0, g: 0, b: 0 };
 const convertToOklch = converter("oklch");
 
 export function parseThemeColor(value: unknown): ParsedThemeColor | null {
-  if (typeof value !== "string") return null;
+  if (!Predicate.isString(value)) return null;
   const input = value.trim();
   const parsed = parse(input);
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { FAVICON_CAPTURED_AT_MAX, FAVICON_DATA_URL_MAX_LENGTH } from "@akeru/contracts";
 
 import { isLocalLoopbackHost, normalizeHostname } from "./browser/browserTargetResolver";
@@ -38,7 +39,7 @@ export function canCanonicalizeFaviconWithoutEnvironment(url: string): boolean {
 
 export function isValidFaviconCapturedAt(value: unknown): value is number {
   return (
-    typeof value === "number" &&
+    Predicate.isNumber(value) &&
     Number.isFinite(value) &&
     value >= 0 &&
     value <= FAVICON_CAPTURED_AT_MAX &&
@@ -77,7 +78,7 @@ function migratePersistedFaviconKey(key: string): string | null {
 }
 
 function persistedFaviconAlias(value: unknown): string | null {
-  if (typeof value !== "string" || value.length > BROWSER_FAVICON_MAX_ALIAS_LENGTH) return null;
+  if (!Predicate.isString(value) || value.length > BROWSER_FAVICON_MAX_ALIAS_LENGTH) return null;
   const normalized = normalizeHostname(value);
 
   if (!normalized || normalized !== value) return null;
@@ -157,7 +158,7 @@ export function faviconStorageLocation(
 
 export function isStorableFaviconDataUrl(value: unknown): value is string {
   if (
-    typeof value !== "string" ||
+    !Predicate.isString(value) ||
     !value.startsWith("data:image/png;base64,") ||
     value.length > FAVICON_DATA_URL_MAX_LENGTH
   ) {
@@ -192,10 +193,12 @@ export function evictExcessFavicons(
 export function migratePersistedBrowserFaviconState(persistedState: unknown): {
   byKey: Record<string, BrowserFaviconEntry>;
 } {
-  if (!persistedState || typeof persistedState !== "object") return { byKey: {} };
+  if (!persistedState || !(persistedState === null || Predicate.isObjectOrArray(persistedState)))
+    return { byKey: {} };
   const raw = "byKey" in persistedState ? (persistedState as { byKey?: unknown }).byKey : null;
 
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { byKey: {} };
+  if (!raw || !(raw === null || Predicate.isObjectOrArray(raw)) || Array.isArray(raw))
+    return { byKey: {} };
   const byKey: Record<string, BrowserFaviconEntry> = {};
 
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
@@ -203,7 +206,7 @@ export function migratePersistedBrowserFaviconState(persistedState: unknown): {
 
     if (!migratedKey) continue;
 
-    if (!value || typeof value !== "object") continue;
+    if (!value || !(value === null || Predicate.isObjectOrArray(value))) continue;
     const { dataUrl, capturedAt } = value as Record<string, unknown>;
 
     if (!isStorableFaviconDataUrl(dataUrl)) continue;

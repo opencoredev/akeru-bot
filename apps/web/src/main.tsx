@@ -14,6 +14,7 @@ import { AppRoot } from "./AppRoot";
 import { LanguageProvider, type TestLanguageCatalog } from "./i18n";
 
 // Browser verification injects this before navigation; production builds ignore it.
+// SAFETY: The verification harness sets this optional catalog before loading the app.
 const testLanguageCatalog = import.meta.env.DEV
   ? (window as Window & { __AKERU_TEST_I18N__?: TestLanguageCatalog }).__AKERU_TEST_I18N__
   : undefined;

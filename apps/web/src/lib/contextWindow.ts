@@ -1,15 +1,18 @@
+import * as Predicate from "effect/Predicate";
 import type { OrchestrationThreadActivity, ThreadTokenUsageSnapshot } from "@akeru/contracts";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  return value && (value === null || Predicate.isObjectOrArray(value))
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function asFiniteNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  return Predicate.isNumber(value) && Number.isFinite(value) ? value : null;
 }
 
 function asBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
+  return Predicate.isBoolean(value) ? value : null;
 }
 
 type NullableContextWindowUsage = {

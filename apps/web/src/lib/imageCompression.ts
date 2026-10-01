@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * Downscale + re-encode for image attachments that are too big for where
  * they're headed. Two consumers share the same pipeline:
@@ -226,8 +227,8 @@ function fileNameForMimeType(name: string, mimeType: string): string {
 
 function canRecompress(): boolean {
   return (
-    typeof createImageBitmap === "function" &&
-    (typeof OffscreenCanvas === "function" || typeof document !== "undefined")
+    Predicate.isFunction(createImageBitmap) &&
+    (Predicate.isFunction(OffscreenCanvas) || typeof document !== "undefined")
   );
 }
 
@@ -237,7 +238,7 @@ interface Canvas2D {
 }
 
 function createCanvas(width: number, height: number): Canvas2D | null {
-  if (typeof OffscreenCanvas === "function") {
+  if (Predicate.isFunction(OffscreenCanvas)) {
     const canvas = new OffscreenCanvas(width, height);
     const context = canvas.getContext("2d");
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type EnvironmentId,
   ModelSelection,
@@ -63,7 +64,7 @@ export const composerDebouncedStorage = createDebouncedStorage(
 export function migratePersistedComposerDraftStoreState(
   persistedState: unknown,
 ): PersistedComposerDraftStoreState {
-  if (!persistedState || typeof persistedState !== "object") {
+  if (!persistedState || !(persistedState === null || Predicate.isObjectOrArray(persistedState))) {
     return EMPTY_PERSISTED_DRAFT_STORE_STATE;
   }
 
@@ -150,7 +151,7 @@ export function partializeComposerDraftStoreState(
   > = {};
 
   for (const [threadKey, draft] of Object.entries(state.draftsByThreadKey)) {
-    if (typeof threadKey !== "string" || threadKey.length === 0) {
+    if (!Predicate.isString(threadKey) || threadKey.length === 0) {
       continue;
     }
 
@@ -258,7 +259,7 @@ export function partializeComposerDraftStoreState(
 export function normalizeCurrentPersistedComposerDraftStoreState(
   persistedState: unknown,
 ): PersistedComposerDraftStoreState {
-  if (!persistedState || typeof persistedState !== "object") {
+  if (!persistedState || !(persistedState === null || Predicate.isObjectOrArray(persistedState))) {
     return EMPTY_PERSISTED_DRAFT_STORE_STATE;
   }
 
@@ -280,7 +281,8 @@ export function normalizeCurrentPersistedComposerDraftStoreState(
 
   if (
     normalizedPersistedState.stickyModelSelectionByProvider &&
-    typeof normalizedPersistedState.stickyModelSelectionByProvider === "object"
+    (normalizedPersistedState.stickyModelSelectionByProvider === null ||
+      Predicate.isObjectOrArray(normalizedPersistedState.stickyModelSelectionByProvider))
   ) {
     stickyModelSelectionByProvider =
       normalizedPersistedState.stickyModelSelectionByProvider as Partial<

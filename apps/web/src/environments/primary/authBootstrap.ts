@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import type { AuthBrowserSessionResult, AuthSessionState } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import { PrimaryEnvironmentHttpClient } from "./httpClient";
@@ -44,7 +45,7 @@ export async function exchangeBootstrapCredential(
     } catch (error) {
       if (
         isEnvironmentHttpCommonError(error) &&
-        error._tag === "EnvironmentAuthInvalidError" &&
+        hasTag(error, "EnvironmentAuthInvalidError") &&
         error.reason === "invalid_credential"
       ) {
         throw new PrimaryEnvironmentPairingCredentialRejectedError({

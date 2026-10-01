@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { scopedThreadKey } from "@akeru/client-runtime/environment";
 import {
   type AtomCommandResult,
@@ -99,7 +100,7 @@ export function useChatActions() {
     ): Promise<boolean> => {
       const result = await run();
 
-      if (result._tag === "Success") return true;
+      if (hasTag(result, "Success")) return true;
 
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);

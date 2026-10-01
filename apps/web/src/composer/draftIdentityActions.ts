@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { StoreApi } from "zustand";
 import { ThreadId } from "@akeru/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@akeru/client-runtime/environment";
@@ -133,7 +134,7 @@ export function createDraftIdentityActions(
     },
 
     getDraftThread: (threadRef) => {
-      if (typeof threadRef === "string") {
+      if (Predicate.isString(threadRef)) {
         return get().getDraftSession(DraftId.make(threadRef));
       }
 

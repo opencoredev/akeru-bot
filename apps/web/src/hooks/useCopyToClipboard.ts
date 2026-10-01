@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as React from "react";
 import * as Schema from "effect/Schema";
 
@@ -51,7 +52,7 @@ export class ClipboardReadError extends Schema.TaggedErrorClass<ClipboardReadErr
 function writeTextWithExecCommand(value: string): boolean {
   if (
     typeof document === "undefined" ||
-    typeof document.execCommand !== "function" ||
+    !Predicate.isFunction(document.execCommand) ||
     document.body == null
   ) {
     return false;
@@ -82,7 +83,7 @@ function writeTextWithExecCommand(value: string): boolean {
     textarea.remove();
     const restoreFocus = (previouslyFocused as { focus?: unknown } | null)?.focus;
 
-    if (typeof restoreFocus === "function") {
+    if (Predicate.isFunction(restoreFocus)) {
       restoreFocus.call(previouslyFocused);
     }
   }

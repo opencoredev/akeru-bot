@@ -208,8 +208,8 @@ function splitPatch(patch: UnifiedSettingsPatch): {
   }
 
   return {
-    serverPatch: serverPatch as ServerSettingsPatch,
-    clientPatch: clientPatch as ClientSettingsPatch,
+    serverPatch: serverPatch,
+    clientPatch: clientPatch,
   };
 }
 

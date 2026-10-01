@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import type { ConnectionTarget } from "@akeru/client-runtime/connection";
 import {
   PRIMARY_LOCAL_ENVIRONMENT_ID,
@@ -27,7 +28,7 @@ export function isDesktopLocalConnectionTarget(
   target: ConnectionTarget,
 ): target is Extract<ConnectionTarget, { readonly _tag: "BearerConnectionTarget" }> {
   return (
-    target._tag === "BearerConnectionTarget" &&
+    hasTag(target, "BearerConnectionTarget") &&
     target.connectionId.startsWith(DESKTOP_LOCAL_CONNECTION_ID_PREFIX)
   );
 }
@@ -89,7 +90,7 @@ export function createDesktopSecondaryBootstrapsReader(
     readSnapshot: () => {
       const result = readResult();
 
-      return result._tag === "Success" ? result.bootstraps : snapshot;
+      return hasTag(result, "Success") ? result.bootstraps : snapshot;
     },
   };
 }

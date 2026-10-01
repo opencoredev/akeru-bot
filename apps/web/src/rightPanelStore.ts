@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * Thread-scoped right-panel surface state.
  *
@@ -118,20 +119,22 @@ const updateThread = (
 export function migratePersistedRightPanelState(persistedState: unknown): {
   byThreadKey: Record<string, ThreadRightPanelState>;
 } {
-  if (!persistedState || typeof persistedState !== "object") {
+  if (!persistedState || !(persistedState === null || Predicate.isObjectOrArray(persistedState))) {
     return { byThreadKey: {} };
   }
 
   const byThreadKey =
     "byThreadKey" in persistedState &&
     persistedState.byThreadKey &&
-    typeof persistedState.byThreadKey === "object"
+    (persistedState.byThreadKey === null || Predicate.isObjectOrArray(persistedState.byThreadKey))
       ? Object.fromEntries(
           Object.entries(persistedState.byThreadKey as Record<string, ThreadRightPanelState>)
             .filter(([threadKey]) => !isPullRequestsPanelKey(threadKey))
             .map(([threadKey, threadState]) => {
               const validThreadState =
-                threadState && typeof threadState === "object" ? threadState : null;
+                threadState && (threadState === null || Predicate.isObjectOrArray(threadState))
+                  ? threadState
+                  : null;
 
               const surfaces = Array.isArray(validThreadState?.surfaces)
                 ? validThreadState.surfaces.flatMap<RightPanelSurface>((surface) => {
@@ -158,7 +161,7 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
               // in v9) must not reopen an empty panel.
               const isOpen =
                 surfaces.length > 0 &&
-                (typeof validThreadState?.isOpen === "boolean"
+                (Predicate.isBoolean(validThreadState?.isOpen)
                   ? validThreadState.isOpen
                   : persistedActiveSurfaceId !== null);
 

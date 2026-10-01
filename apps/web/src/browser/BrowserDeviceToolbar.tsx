@@ -1,5 +1,7 @@
 "use client";
 
+import { hasTag } from "~/lib/taggedUnion";
+
 import {
   PREVIEW_VIEWPORT_MAX_AREA,
   PREVIEW_VIEWPORT_MAX_DIMENSION,
@@ -63,7 +65,7 @@ export function BrowserDeviceToolbar({
   };
 
   const selectedValue =
-    setting._tag === "preset" &&
+    hasTag(setting, "preset") &&
     PREVIEW_VIEWPORT_PRESETS.some((preset) => preset.id === setting.presetId)
       ? setting.presetId
       : RESPONSIVE_VALUE;
@@ -137,7 +139,7 @@ export function BrowserDeviceToolbar({
     if (!value) return;
 
     if (value === RESPONSIVE_VALUE) {
-      if (setting._tag === "freeform") return;
+      if (hasTag(setting, "freeform")) return;
       apply({ _tag: "freeform", width: setting.width, height: setting.height });
 
       return;

@@ -1,3 +1,5 @@
+import * as Predicate from "effect/Predicate";
+
 /**
  * Facts about a pending command approval that the collapsed row cannot show.
  * The approval panel opens its details section only when one of these is present,
@@ -27,7 +29,7 @@ function readString(args: Record<string, unknown>, keys: ReadonlyArray<string>):
   for (const key of keys) {
     const value = args[key];
 
-    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+    if (Predicate.isString(value) && value.trim().length > 0) return value.trim();
   }
 
   return null;
@@ -90,7 +92,10 @@ function signalsOf(command: string): ReadonlyArray<string> {
 }
 
 export function describeCommandApproval(command: string, args: unknown): CommandApprovalDetails {
-  const record = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
+  const record =
+    args && (args === null || Predicate.isObjectOrArray(args))
+      ? (args as Record<string, unknown>)
+      : {};
 
   const workingDirectory = readString(record, [
     "cwd",

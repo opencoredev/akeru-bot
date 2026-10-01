@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type EnvironmentId,
   ModelSelection,
@@ -57,7 +58,7 @@ import { deriveEffectiveComposerModelState } from "./composer/draftModelSelectio
 migrateLocalStorageKey(COMPOSER_DRAFT_STORAGE_KEY, LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
 
 // Flush pending composer draft writes before page unload to prevent data loss.
-if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+if (typeof window !== "undefined" && Predicate.isFunction(window.addEventListener)) {
   window.addEventListener("beforeunload", () => {
     composerDebouncedStorage.flush();
   });

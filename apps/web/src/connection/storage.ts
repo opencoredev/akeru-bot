@@ -1,3 +1,5 @@
+import { hasTag } from "~/lib/taggedUnion";
+import * as Predicate from "effect/Predicate";
 import {
   ConnectionPersistenceError,
   ConnectionRegistrationStore,
@@ -192,7 +194,7 @@ export const connectionStorageLayer = Layer.effectContext(
       loadShell: (environmentId) =>
         readDatabaseValue(database, SHELL_STORE_NAME, environmentId).pipe(
           Effect.flatMap((raw) => {
-            if (typeof raw !== "string") {
+            if (!Predicate.isString(raw)) {
               return Effect.succeed(Option.none());
             }
 
@@ -206,7 +208,7 @@ export const connectionStorageLayer = Layer.effectContext(
             );
           }),
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("load-shell", cause),
           ),
@@ -222,7 +224,7 @@ export const connectionStorageLayer = Layer.effectContext(
           yield* writeDatabaseValue(database, SHELL_STORE_NAME, environmentId, encoded);
         }).pipe(
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("save-shell", cause),
           ),
@@ -230,7 +232,7 @@ export const connectionStorageLayer = Layer.effectContext(
       loadServerConfig: (environmentId) =>
         readDatabaseValue(database, SERVER_CONFIG_STORE_NAME, environmentId).pipe(
           Effect.flatMap((raw) => {
-            if (typeof raw !== "string") {
+            if (!Predicate.isString(raw)) {
               return Effect.succeed(Option.none());
             }
 
@@ -242,7 +244,7 @@ export const connectionStorageLayer = Layer.effectContext(
             );
           }),
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("load-server-config", cause),
           ),
@@ -258,7 +260,7 @@ export const connectionStorageLayer = Layer.effectContext(
           yield* writeDatabaseValue(database, SERVER_CONFIG_STORE_NAME, environmentId, encoded);
         }).pipe(
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("save-server-config", cause),
           ),
@@ -270,7 +272,7 @@ export const connectionStorageLayer = Layer.effectContext(
           threadCacheKey(environmentId, threadId),
         ).pipe(
           Effect.flatMap((raw) => {
-            if (typeof raw !== "string") {
+            if (!Predicate.isString(raw)) {
               return Effect.succeed(Option.none());
             }
 
@@ -284,7 +286,7 @@ export const connectionStorageLayer = Layer.effectContext(
             );
           }),
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("load-thread", cause),
           ),
@@ -306,7 +308,7 @@ export const connectionStorageLayer = Layer.effectContext(
           );
         }).pipe(
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("save-thread", cause),
           ),

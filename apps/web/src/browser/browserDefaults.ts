@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 /**
  * Browser defaults - resolves the configured starting state for preview tabs.
  *
@@ -105,7 +106,7 @@ export function browserResponsiveViewportForToggle(input: {
 }): PreviewViewportSetting {
   const defaults = input.defaults ?? getBrowserDefaults();
 
-  if (defaults.viewport._tag !== "fill") return defaults.viewport;
+  if (!hasTag(defaults.viewport, "fill")) return defaults.viewport;
 
   const size = input.panelRect
     ? resolveResponsiveBrowserViewportSize(input.panelRect, input.zoomFactor)

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { Debouncer } from "@tanstack/react-pacer";
 
 export interface StateStorage<R = unknown> {
@@ -30,9 +31,9 @@ export function isStateStorage(
   return (
     storage !== null &&
     storage !== undefined &&
-    typeof storage.getItem === "function" &&
-    typeof storage.setItem === "function" &&
-    typeof storage.removeItem === "function"
+    Predicate.isFunction(storage.getItem) &&
+    Predicate.isFunction(storage.setItem) &&
+    Predicate.isFunction(storage.removeItem)
   );
 }
 

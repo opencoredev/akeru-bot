@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { useAtomValue } from "@effect/atom-react";
 import {
   BotId,
@@ -105,7 +106,7 @@ function BotThreadRouteView() {
   const routines = routinesView.kind === "ready" ? routinesView.routines : [];
 
   const requireSuccess = (result: { readonly _tag: string }, message: string) => {
-    if (result._tag === "Success") return;
+    if (hasTag(result, "Success")) return;
     toastManager.add({ type: "error", title: message });
     throw new Error(message);
   };

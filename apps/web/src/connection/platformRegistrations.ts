@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { PlatformConnectionSource } from "@akeru/client-runtime/platform";
 import {
   BearerConnectionCredential,
@@ -173,7 +174,7 @@ export function primaryRegistrationToRetainAfterTopologyRead(
   previous: ReadonlyMap<string, CachedPlatformRegistration>,
   topologyRead: PrimaryEnvironmentTargetRead,
 ): CachedPlatformRegistration | undefined {
-  return topologyRead._tag === "Failure" ? previous.get(PRIMARY_LOCAL_ENVIRONMENT_ID) : undefined;
+  return hasTag(topologyRead, "Failure") ? previous.get(PRIMARY_LOCAL_ENVIRONMENT_ID) : undefined;
 }
 
 export function canReuseCachedPlatformRegistration(
@@ -204,7 +205,7 @@ export function secondaryRegistrationsToRetainAfterTopologyRead(
   topologyRead: DesktopSecondaryBootstrapsRead,
   nowEpochMs: number,
 ): ReadonlyMap<string, CachedPlatformRegistration> {
-  if (topologyRead._tag === "Success") {
+  if (hasTag(topologyRead, "Success")) {
     return new Map();
   }
 
@@ -242,7 +243,7 @@ export const platformConnectionSourceLayer = Layer.effect(
         registrations.push(retainedPrimary.registration);
       }
 
-      if (primaryTopologyRead._tag === "Failure") {
+      if (hasTag(primaryTopologyRead, "Failure")) {
         yield* Effect.logWarning("Could not read the primary environment topology.", {
           cause: primaryTopologyRead.cause,
         });
@@ -284,7 +285,7 @@ export const platformConnectionSourceLayer = Layer.effect(
         registrations.push(cached.registration);
       }
 
-      if (topologyRead._tag === "Failure") {
+      if (hasTag(topologyRead, "Failure")) {
         yield* Effect.logWarning("Could not read the desktop-local backend topology.", {
           cause: topologyRead.cause,
         });

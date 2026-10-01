@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type KeybindingCommand,
   type KeybindingShortcut,
@@ -276,10 +277,9 @@ export function shortcutLabelForCommand(
   command: KeybindingCommand,
   options?: string | ResolvedShortcutLabelOptions,
 ): string | null {
-  const resolvedOptions =
-    typeof options === "string"
-      ? ({ platform: options } satisfies ResolvedShortcutLabelOptions)
-      : options;
+  const resolvedOptions = Predicate.isString(options)
+    ? ({ platform: options } satisfies ResolvedShortcutLabelOptions)
+    : options;
 
   const platform = resolvePlatform(resolvedOptions);
   const shortcut = findEffectiveShortcutForCommand(keybindings, command, resolvedOptions);

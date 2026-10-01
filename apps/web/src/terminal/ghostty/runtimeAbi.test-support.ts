@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
 import wasmDataUrl from "./vendor/ghostty-vt.wasm?inline";
@@ -22,7 +23,7 @@ export async function makeGhosttyAbiFixture() {
   const call = (name: string, ...args: number[]) => {
     const callable = instance.exports[name];
 
-    if (typeof callable !== "function") throw new Error(`Ghostty export ${name} is missing`);
+    if (!Predicate.isFunction(callable)) throw new Error(`Ghostty export ${name} is missing`);
     const result: unknown = callable(...args);
 
     return decodeWasmResult(result) ?? 0;

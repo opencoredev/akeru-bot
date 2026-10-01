@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { sha256 } from "@noble/hashes/sha2";
 import { parse, type ParseError } from "jsonc-parser";
 
@@ -10,7 +11,9 @@ export const MAX_THEMES_PER_EXTENSION = 40;
 type ThemeContribution = { label?: unknown; uiTheme?: unknown; path?: unknown };
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return (
+    (value === null || Predicate.isObjectOrArray(value)) && value !== null && !Array.isArray(value)
+  );
 }
 
 export function shortHash(value: string): string {
@@ -37,7 +40,7 @@ export function manifestLicenseMatches(
   license: string,
 ): boolean {
   return (
-    typeof manifest.license === "string" &&
+    Predicate.isString(manifest.license) &&
     manifest.license.trim().toLowerCase() === license.toLowerCase()
   );
 }

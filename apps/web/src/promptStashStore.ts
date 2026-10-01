@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import { create } from "zustand";
 
@@ -191,7 +192,7 @@ function readPersistedEntries(): ReadonlyArray<PromptStashEntry> | null {
   try {
     const raw = baseStashStorage.getItem(PROMPT_STASH_STORAGE_KEY);
 
-    if (typeof raw !== "string" || raw.length === 0) return null;
+    if (!Predicate.isString(raw) || raw.length === 0) return null;
     const parsed: unknown = JSON.parse(raw);
     const state = (parsed as { state?: unknown } | null)?.state;
 
@@ -302,7 +303,7 @@ export const usePromptStashStore = create<PromptStashStoreState>()((set, get) =>
     if (baseStashStorage.getItem(PROMPT_STASH_STORAGE_KEY) == null) {
       const legacyRaw = baseStashStorage.getItem(LEGACY_PROMPT_STASH_STORAGE_KEY_V2);
 
-      if (typeof legacyRaw === "string") {
+      if (Predicate.isString(legacyRaw)) {
         baseStashStorage.setItem(PROMPT_STASH_STORAGE_KEY, legacyRaw);
       }
     }

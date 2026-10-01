@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type GhosttyKeyboardLayoutMap,
   ghosttyConsumedMods,
@@ -162,7 +163,7 @@ export class GhosttyTerminalCore {
 
   write(data: string | Uint8Array): void {
     this.ensureActive();
-    const bytes = typeof data === "string" ? encoder.encode(data) : data;
+    const bytes = Predicate.isString(data) ? encoder.encode(data) : data;
 
     if (bytes.length === 0) return;
     const pointer = this.runtime.alloc(bytes.length);

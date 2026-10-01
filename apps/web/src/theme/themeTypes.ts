@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import {
   BUILT_IN_THEME_IDS,
@@ -94,7 +95,9 @@ export const RESERVED_THEME_IDS = new Set([
 ]);
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return (
+    (value === null || Predicate.isObjectOrArray(value)) && value !== null && !Array.isArray(value)
+  );
 }
 
 export function isThemeAppearance(value: unknown): value is ThemeAppearance {
@@ -102,16 +105,16 @@ export function isThemeAppearance(value: unknown): value is ThemeAppearance {
 }
 
 export function isThemeId(value: unknown): value is string {
-  return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,47})$/.test(value);
+  return Predicate.isString(value) && /^[a-z0-9](?:[a-z0-9-]{0,47})$/.test(value);
 }
 
 export function isThemeLabel(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0 && value.trim().length <= 48;
+  return Predicate.isString(value) && value.trim().length > 0 && value.trim().length <= 48;
 }
 
 export function parseThemeCollection(value: unknown): ThemeCollection | undefined {
   return isRecord(value) &&
-    typeof value.id === "string" &&
+    Predicate.isString(value.id) &&
     /^[a-z0-9][a-z0-9.:-]{0,127}$/i.test(value.id) &&
     isThemeLabel(value.label)
     ? { id: value.id, label: value.label.trim() }

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
@@ -93,7 +94,7 @@ const PROVIDER_INSTANCE_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
  * slugs (e.g. `codex_personal`) as routing keys.
  */
 export function normalizeProviderInstanceId(value: unknown): ProviderInstanceId | null {
-  if (typeof value !== "string") return null;
+  if (!Predicate.isString(value)) return null;
 
   if (!PROVIDER_INSTANCE_ID_PATTERN.test(value)) return null;
 
@@ -118,14 +119,14 @@ function coerceProviderOptionSelections(
     const out: ProviderOptionSelection[] = [];
 
     for (const entry of value) {
-      if (!entry || typeof entry !== "object") continue;
+      if (!entry || !(entry === null || Predicate.isObjectOrArray(entry))) continue;
       const record = entry as Record<string, unknown>;
       const id = record.id;
       const optionValue = record.value;
 
-      if (typeof id !== "string" || id.length === 0) continue;
+      if (!Predicate.isString(id) || id.length === 0) continue;
 
-      if (typeof optionValue === "string" || typeof optionValue === "boolean") {
+      if (Predicate.isString(optionValue) || Predicate.isBoolean(optionValue)) {
         out.push({ id, value: optionValue });
       }
     }
@@ -133,12 +134,12 @@ function coerceProviderOptionSelections(
     return out.length > 0 ? out : undefined;
   }
 
-  if (value && typeof value === "object") {
+  if (value && (value === null || Predicate.isObjectOrArray(value))) {
     const record = value as Record<string, unknown>;
     const out: ProviderOptionSelection[] = [];
 
     for (const [id, raw] of Object.entries(record)) {
-      if (typeof raw === "string" || typeof raw === "boolean") {
+      if (Predicate.isString(raw) || Predicate.isBoolean(raw)) {
         out.push({ id, value: raw });
       }
     }
@@ -161,7 +162,11 @@ export function normalizeProviderModelOptions(
   provider?: ProviderDriverKind | null,
   legacy?: LegacyCodexFields,
 ): ProviderOptionSelectionsByProvider | null {
-  const candidate = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  const candidate =
+    value && (value === null || Predicate.isObjectOrArray(value))
+      ? (value as Record<string, unknown>)
+      : null;
+
   const result: ProviderOptionSelectionsByProvider = {};
 
   for (const providerKey of ["codex", "claudeAgent", "opencode"] as const) {
@@ -176,13 +181,13 @@ export function normalizeProviderModelOptions(
   if (provider === "codex" && legacy) {
     const codexExtras: ProviderOptionSelection[] = [];
 
-    if (typeof legacy.effort === "string" && legacy.effort.length > 0) {
+    if (Predicate.isString(legacy.effort) && legacy.effort.length > 0) {
       codexExtras.push({ id: "reasoningEffort", value: legacy.effort });
     }
 
     const fastMode =
       legacy.codexFastMode === true ||
-      (typeof legacy.serviceTier === "string" && legacy.serviceTier === "fast");
+      (Predicate.isString(legacy.serviceTier) && legacy.serviceTier === "fast");
 
     if (fastMode) {
       codexExtras.push({ id: "fastMode", value: true });
@@ -220,7 +225,10 @@ export function normalizeModelSelection(
     legacyCodex?: LegacyCodexFields;
   },
 ): NormalizedModelSelection | null {
-  const candidate = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  const candidate =
+    value && (value === null || Predicate.isObjectOrArray(value))
+      ? (value as Record<string, unknown>)
+      : null;
 
   // Post-migration ModelSelection carries `instanceId`; pre-migration (v2
   // storage, legacy wire shapes) carries `provider`. Accept either so both
@@ -235,7 +243,7 @@ export function normalizeModelSelection(
 
   const rawModel = candidate?.model ?? legacy?.model;
 
-  if (typeof rawModel !== "string") {
+  if (!Predicate.isString(rawModel)) {
     return null;
   }
 

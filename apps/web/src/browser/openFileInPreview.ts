@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import type {
   AssetCreateUrlResult,
   AssetResource,
@@ -81,7 +82,7 @@ export async function openFileInPreview<AssetError, PreviewError>(input: {
     },
   });
 
-  if (assetResult._tag === "Failure") {
+  if (hasTag(assetResult, "Failure")) {
     return AsyncResult.failure(assetResult.cause);
   }
 

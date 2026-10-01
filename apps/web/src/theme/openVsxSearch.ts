@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   MAX_VSIX_BYTES,
   MAX_MANIFEST_BYTES,
@@ -61,7 +62,7 @@ function openVsxCollectionId(extensionId: string): string {
 }
 
 function trustedOpenVsxUrl(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+  if (!Predicate.isString(value)) return null;
 
   try {
     const url = new URL(value);
@@ -75,12 +76,11 @@ function trustedOpenVsxUrl(value: unknown): string | null {
 }
 
 function publicSourceUrl(value: unknown): string | null {
-  const rawValue =
-    typeof value === "string"
-      ? value
-      : isRecord(value) && typeof value.url === "string"
-        ? value.url
-        : null;
+  const rawValue = Predicate.isString(value)
+    ? value
+    : isRecord(value) && Predicate.isString(value.url)
+      ? value.url
+      : null;
 
   if (!rawValue) return null;
 
@@ -98,14 +98,14 @@ function extensionFromDetail(value: unknown): OpenVsxThemeExtension | null {
     throw new Error("Open VSX returned malformed theme details.");
   }
 
-  const namespace = typeof value.namespace === "string" ? value.namespace.trim() : "";
-  const extensionName = typeof value.name === "string" ? value.name.trim() : "";
+  const namespace = Predicate.isString(value.namespace) ? value.namespace.trim() : "";
+  const extensionName = Predicate.isString(value.name) ? value.name.trim() : "";
 
   const displayName =
-    (typeof value.displayName === "string" ? value.displayName.trim() : "") || extensionName;
+    (Predicate.isString(value.displayName) ? value.displayName.trim() : "") || extensionName;
 
-  const version = typeof value.version === "string" ? value.version.trim() : "";
-  const license = typeof value.license === "string" ? value.license.trim() : "";
+  const version = Predicate.isString(value.version) ? value.version.trim() : "";
+  const license = Predicate.isString(value.license) ? value.license.trim() : "";
   const manifestUrl = trustedOpenVsxUrl(value.files.manifest);
   const sha256Url = trustedOpenVsxUrl(value.files.sha256);
   const vsixUrl = trustedOpenVsxUrl(value.files.download);
@@ -122,9 +122,9 @@ function extensionFromDetail(value: unknown): OpenVsxThemeExtension | null {
     collectionId: openVsxCollectionId(id),
     name: displayName,
     publisher: namespace,
-    description: typeof value.description === "string" ? value.description : "",
+    description: Predicate.isString(value.description) ? value.description : "",
     downloadCount:
-      typeof value.downloadCount === "number" && Number.isFinite(value.downloadCount)
+      Predicate.isNumber(value.downloadCount) && Number.isFinite(value.downloadCount)
         ? value.downloadCount
         : 0,
     iconUrl: trustedOpenVsxUrl(value.files.icon),
@@ -205,8 +205,8 @@ export async function searchOpenVsxThemes(
 
   const identities = value.extensions.flatMap((candidate): Array<[string, string]> => {
     if (!isRecord(candidate)) return [];
-    const namespace = typeof candidate.namespace === "string" ? candidate.namespace : "";
-    const name = typeof candidate.name === "string" ? candidate.name : "";
+    const namespace = Predicate.isString(candidate.namespace) ? candidate.namespace : "";
+    const name = Predicate.isString(candidate.name) ? candidate.name : "";
 
     return namespace && name ? [[namespace, name]] : [];
   });

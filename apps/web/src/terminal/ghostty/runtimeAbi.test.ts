@@ -7,17 +7,16 @@ type WasmFunction = (...args: number[]) => number;
 
 describe("Ghostty ABI trampoline", () => {
   it("routes terminal-generated replies through the shared callback table", async () => {
-    const mainResult = await WebAssembly.instantiate(
-      decodeWasmDataUrl(wasmDataUrl).buffer as ArrayBuffer,
-      { env: { log: () => {} } },
-    );
+    const mainResult = await WebAssembly.instantiate(decodeWasmDataUrl(wasmDataUrl).buffer, {
+      env: { log: () => {} },
+    });
 
     const main = mainResult instanceof WebAssembly.Instance ? mainResult : mainResult.instance;
     const memory = main.exports.memory as WebAssembly.Memory;
     let reply = "";
 
     const trampolineResult = await WebAssembly.instantiate(
-      decodeWasmDataUrl(writePtyWasmDataUrl).buffer as ArrayBuffer,
+      decodeWasmDataUrl(writePtyWasmDataUrl).buffer,
       {
         env: {
           t3_write_pty: (_terminal: number, _userdata: number, pointer: number, length: number) => {

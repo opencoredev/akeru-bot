@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import {
@@ -76,7 +77,7 @@ function emitChange() {
 function getSystemDark() {
   return (
     typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
+    Predicate.isFunction(window.matchMedia) &&
     window.matchMedia(MEDIA_QUERY).matches
   );
 }
@@ -245,7 +246,7 @@ function subscribe(listener: () => void): () => void {
   // The system-preference and cross-tab listeners are shared by all
   // subscribers; each event applies the theme once and notifies everyone.
   if (!removeWindowListeners) {
-    const mq = typeof window.matchMedia === "function" ? window.matchMedia(MEDIA_QUERY) : null;
+    const mq = Predicate.isFunction(window.matchMedia) ? window.matchMedia(MEDIA_QUERY) : null;
     mq?.addEventListener("change", handleSystemAppearanceChange);
     window.addEventListener("storage", handleStorageChange);
     removeWindowListeners = () => {

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   createVividThemeColors,
   getThemeModes,
@@ -25,7 +26,9 @@ type VsCodeRgba = { r: number; g: number; b: number; a: number };
 type VsCodeRgb = { r: number; g: number; b: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return (
+    (value === null || Predicate.isObjectOrArray(value)) && value !== null && !Array.isArray(value)
+  );
 }
 
 /** sRGB transfer function, and its inverse, shared by the wide-gamut path. */
@@ -93,7 +96,7 @@ function parseColorFunction(value: string): VsCodeRgba | null {
 /** VS Code accepts #RGB, #RGBA, #RRGGBB, and #RRGGBBAA; some themes also use
  *  CSS color() notation for wide-gamut palettes. */
 function parseVsCodeColor(value: unknown): VsCodeRgba | null {
-  if (typeof value !== "string") return null;
+  if (!Predicate.isString(value)) return null;
   const trimmed = value.trim();
 
   if (trimmed.startsWith("color(")) return parseColorFunction(trimmed);
@@ -179,7 +182,7 @@ export function isVsCodeThemeFile(value: unknown): boolean {
 }
 
 function resolveAppearance(value: Record<string, unknown>, canvas: VsCodeRgb): ThemeAppearance {
-  const type = typeof value.type === "string" ? value.type.toLowerCase() : null;
+  const type = Predicate.isString(value.type) ? value.type.toLowerCase() : null;
 
   if (type === "light" || type === "hc-light") return "light";
 
@@ -206,7 +209,7 @@ function resolveName(value: Record<string, unknown>): string {
   // Judge candidates by their humanized form: a displayName of "---"
   // humanizes to nothing and must fall through to the name.
   for (const candidate of [value.displayName, value.name]) {
-    if (typeof candidate !== "string") continue;
+    if (!Predicate.isString(candidate)) continue;
     const humanized = humanizeThemeName(candidate);
 
     if (humanized.length > 0) return humanized.slice(0, 48);

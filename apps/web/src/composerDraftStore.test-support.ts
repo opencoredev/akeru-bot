@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { scopedThreadKey, scopeThreadRef } from "@akeru/client-runtime/environment";
 import {
   defaultInstanceIdForDriver,
@@ -42,7 +43,7 @@ export function toSelections(
   if (!options) return result;
 
   for (const [id, value] of Object.entries(options)) {
-    if (typeof value === "string" || typeof value === "boolean") {
+    if (Predicate.isString(value) || Predicate.isBoolean(value)) {
       result.push({ id, value });
     }
   }

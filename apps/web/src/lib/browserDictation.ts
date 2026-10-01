@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   createDictationSession,
   type DictationDependencies,
@@ -60,7 +61,7 @@ export function browserDictationCaptureReason(
     return "The browser only opens the microphone on HTTPS pages. Open this page over HTTPS.";
   }
 
-  if (typeof scope.navigator?.mediaDevices?.getUserMedia !== "function" || !scope.MediaRecorder) {
+  if (!Predicate.isFunction(scope.navigator?.mediaDevices?.getUserMedia) || !scope.MediaRecorder) {
     return "This browser can't record audio.";
   }
 

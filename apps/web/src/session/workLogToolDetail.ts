@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   asRecord,
   asTrimmedString,
@@ -11,7 +12,7 @@ export function normalizeCompactToolLabel(value: string): string {
 }
 
 function asNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  return Predicate.isNumber(value) && Number.isFinite(value) ? value : null;
 }
 
 export function extractToolTitle(payload: Record<string, unknown> | null): string | null {

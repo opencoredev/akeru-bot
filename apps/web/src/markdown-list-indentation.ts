@@ -1,3 +1,5 @@
+import * as Predicate from "effect/Predicate";
+
 interface MarkdownPosition {
   readonly start?: {
     readonly line?: number;
@@ -35,7 +37,7 @@ function isSameLineOverIndentedCode(
   if (
     node.type !== "code" ||
     parent?.type !== "listItem" ||
-    typeof node.value !== "string" ||
+    !Predicate.isString(node.value) ||
     !/^[\t ]/.test(node.value)
   ) {
     return false;
@@ -74,7 +76,7 @@ function parseRecoveredMarkdown(value: string, parser: MarkdownParser): Recovere
     !blocks ||
     !children ||
     first?.type !== "text" ||
-    typeof first.value !== "string" ||
+    !Predicate.isString(first.value) ||
     !first.value.startsWith(INLINE_PARSE_PREFIX)
   ) {
     return { blocks: [{ type: "text", value }], source };
@@ -96,7 +98,7 @@ function parseRecoveredMarkdown(value: string, parser: MarkdownParser): Recovere
 }
 
 function blocksFromIndentedCode(node: MarkdownAstNode, parser: MarkdownParser): RecoveredMarkdown {
-  const value = typeof node.value === "string" ? node.value.trim() : "";
+  const value = Predicate.isString(node.value) ? node.value.trim() : "";
   const recovered = parseRecoveredMarkdown(value, parser);
   const first = recovered.blocks[0];
 
@@ -119,7 +121,7 @@ function blocksFromIndentedCode(node: MarkdownAstNode, parser: MarkdownParser): 
  */
 function attachListItemIndentationNormalizer(this: MarkdownParser) {
   return (tree: MarkdownAstNode, file: MarkdownFile) => {
-    if (typeof file.value !== "string") {
+    if (!Predicate.isString(file.value)) {
       return;
     }
 

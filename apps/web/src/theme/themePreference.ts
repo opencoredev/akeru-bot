@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { type ThemeAppearance } from "@akeru/shared/themePalettes";
 import { type ThemePreference, type ThemePreferenceMode, isRecord } from "./themeTypes";
 import {
@@ -99,7 +100,7 @@ export function parseThemeHalves(raw: string | null): ThemeHalves | null {
     for (const appearance of ["light", "dark"] as const) {
       const themeId = value[appearance];
 
-      if (typeof themeId !== "string") continue;
+      if (!Predicate.isString(themeId)) continue;
       const definition = getThemeDefinition(themeId);
 
       if (definition && getThemeColorsForMode(definition, appearance) !== null) {

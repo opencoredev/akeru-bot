@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   PRODUCT_FEEDBACK_TEXT_MAX_CHARS,
   ProductFeedbackReceipt,
@@ -41,13 +42,13 @@ export function readOrRotateProductFeedbackInstallToken(force = false): string {
       const value: unknown = JSON.parse(raw);
 
       if (
-        typeof value === "object" &&
+        (value === null || Predicate.isObjectOrArray(value)) &&
         value !== null &&
         "token" in value &&
         "createdAt" in value &&
-        typeof value.token === "string" &&
+        Predicate.isString(value.token) &&
         INSTALL_TOKEN_PATTERN.test(value.token) &&
-        typeof value.createdAt === "number" &&
+        Predicate.isNumber(value.createdAt) &&
         Number.isSafeInteger(value.createdAt) &&
         value.createdAt >= 0 &&
         value.createdAt <= current

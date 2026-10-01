@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   ConnectionCatalogDocument,
   type ConnectionCatalogDocument as ConnectionCatalogDocumentType,
@@ -74,7 +75,7 @@ export function makeCatalogBackend(database: IDBDatabase): CatalogBackend {
 
   return {
     read: readDatabaseValue(database, CATALOG_STORE_NAME, CATALOG_KEY).pipe(
-      Effect.map((value) => (typeof value === "string" ? value : null)),
+      Effect.map((value) => (Predicate.isString(value) ? value : null)),
     ),
     write: (raw) => writeDatabaseValue(database, CATALOG_STORE_NAME, CATALOG_KEY, raw),
     quarantine: (raw) =>

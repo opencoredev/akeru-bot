@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { createTranslator, type TranslationParams } from "@akeru/client-runtime/i18n";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 
@@ -90,7 +91,7 @@ export function errorMessage(error: unknown): string {
     return error.message;
   }
 
-  if (typeof error === "string" && error.trim().length > 0) {
+  if (Predicate.isString(error) && error.trim().length > 0) {
     return error;
   }
 
@@ -102,7 +103,7 @@ export function errorDetails(error: unknown, t: Translate = english): string {
     return error.stack ?? error.message;
   }
 
-  if (typeof error === "string") {
+  if (Predicate.isString(error)) {
     return error;
   }
 

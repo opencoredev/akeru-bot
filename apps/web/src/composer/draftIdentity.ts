@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_LOCAL_EXECUTION_MODE,
   type EnvironmentId,
@@ -52,7 +53,7 @@ export function logicalProjectDraftKey(logicalProjectKey: string): string {
  * `ScopedThreadRef` so environment identity is always preserved.
  */
 function composerTargetKey(target: ScopedThreadRef | DraftId): string {
-  if (typeof target === "string") {
+  if (Predicate.isString(target)) {
     return target.trim();
   }
 
@@ -96,7 +97,7 @@ function normalizeComposerTarget(
   state: ComposerThreadLookupState,
   target: ComposerThreadTarget,
 ): ComposerThreadTarget | null {
-  if (typeof target === "string") {
+  if (Predicate.isString(target)) {
     const draftId = target.trim();
 
     return draftId.length > 0 ? DraftId.make(draftId) : null;
@@ -115,7 +116,7 @@ export function resolveComposerDraftKey(
     return null;
   }
 
-  if (typeof normalizedTarget !== "string") {
+  if (!Predicate.isString(normalizedTarget)) {
     const scopedKey = composerTargetKey(normalizedTarget);
 
     if (state.draftsByThreadKey[scopedKey]) {
@@ -149,7 +150,7 @@ export function resolveComposerThreadId(
     return null;
   }
 
-  if (typeof normalizedTarget !== "string") {
+  if (!Predicate.isString(normalizedTarget)) {
     return normalizedTarget.threadId;
   }
 

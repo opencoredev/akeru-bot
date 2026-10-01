@@ -40,7 +40,7 @@ function createBrowserLocalApi(): LocalApi {
         position?: { x: number; y: number },
       ): Promise<T | null> => {
         if (window.desktopBridge) {
-          return window.desktopBridge.showContextMenu(items, position) as Promise<T | null>;
+          return window.desktopBridge.showContextMenu(items, position);
         }
 
         return showContextMenuFallback(items, position);

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import {
   type ThemeAppearance,
@@ -383,7 +384,7 @@ export function replaceCustomThemeCollection(
     if (
       !storedThemeHasCollectionId(storedTheme, collectionId) &&
       isRecord(storedTheme) &&
-      typeof storedTheme.id === "string"
+      Predicate.isString(storedTheme.id)
     ) {
       occupiedIds.add(storedTheme.id);
     }
@@ -432,7 +433,7 @@ export function removeCustomThemes(themeIds: ReadonlyArray<string>): void {
     library.storedThemes.filter(
       (storedTheme) =>
         !isRecord(storedTheme) ||
-        typeof storedTheme.id !== "string" ||
+        !Predicate.isString(storedTheme.id) ||
         !removedIds.has(storedTheme.id),
     ),
     nextThemes,

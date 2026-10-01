@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import ghosttyWasmUrl from "./vendor/ghostty-vt.wasm?url";
 import ghosttyWritePtyWasmUrl from "./vendor/ghostty-write-pty.wasm?url&no-inline";
 
@@ -77,7 +78,7 @@ export class GhosttyRuntime {
   call(name: string, ...args: Array<number | bigint>): number {
     const fn = this.exports[name];
 
-    if (typeof fn !== "function") {
+    if (!Predicate.isFunction(fn)) {
       throw new Error(`libghostty-vt export is unavailable: ${name}`);
     }
 
@@ -230,7 +231,7 @@ export class GhosttyRuntime {
     const trampoline = result.instance.exports.ghostty_write_pty;
     const table = this.exports.__indirect_function_table;
 
-    if (typeof trampoline !== "function" || !(table instanceof WebAssembly.Table)) {
+    if (!Predicate.isFunction(trampoline) || !(table instanceof WebAssembly.Table)) {
       throw new Error("libghostty-vt did not expose its callback table");
     }
 

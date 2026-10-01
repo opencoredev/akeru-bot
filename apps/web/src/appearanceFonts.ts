@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * Font preferences from Settings → Appearance, applied as CSS custom
  * properties. The default stacks mirror the `--font-sans` / `--font-mono`
@@ -427,7 +428,7 @@ export async function queryInstalledFontFamilies(): Promise<InstalledFontFamilie
     }
   ).queryLocalFonts;
 
-  if (typeof query !== "function") {
+  if (!Predicate.isFunction(query)) {
     installedFamiliesCache = { families: [], status: "unsupported" };
 
     return installedFamiliesCache;

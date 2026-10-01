@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   classifyTaskAgentKind,
   EventId,
@@ -26,8 +27,8 @@ export function makeActivity(overrides: {
       ? {
           ...rawPayload,
           agentKind: classifyTaskAgentKind({
-            taskType: typeof rawPayload.taskType === "string" ? rawPayload.taskType : undefined,
-            agentId: typeof rawPayload.agentId === "string" ? rawPayload.agentId : undefined,
+            taskType: Predicate.isString(rawPayload.taskType) ? rawPayload.taskType : undefined,
+            agentId: Predicate.isString(rawPayload.agentId) ? rawPayload.agentId : undefined,
           }),
         }
       : rawPayload;

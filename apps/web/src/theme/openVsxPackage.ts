@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import JSZip from "jszip";
 import {
   MAX_VSIX_BYTES,
@@ -75,7 +76,7 @@ function sanitizeThemeObject(value: Record<string, unknown>): Record<string, unk
     for (const [key, color] of Object.entries(value.colors)) {
       if (
         USED_WORKBENCH_COLORS.has(key) &&
-        typeof color === "string" &&
+        Predicate.isString(color) &&
         color.length <= MAX_COLOR_VALUE_LENGTH
       ) {
         colors[key] = color;
@@ -84,7 +85,7 @@ function sanitizeThemeObject(value: Record<string, unknown>): Record<string, unk
   }
 
   return {
-    ...(typeof value.include === "string" ? { include: value.include } : {}),
+    ...(Predicate.isString(value.include) ? { include: value.include } : {}),
     colors,
   };
 }
@@ -242,7 +243,7 @@ export async function readZipText(
 
   if (!file) throw new Error(`${description} is missing from the extension package.`);
 
-  if (typeof file._data?.uncompressedSize !== "number" || !file.internalStream) {
+  if (!Predicate.isNumber(file._data?.uncompressedSize) || !file.internalStream) {
     throw new Error(`${description} has unreadable size metadata.`);
   }
 
@@ -332,7 +333,7 @@ export async function loadThemeObject(
     parseJsoncObject(await readZipText(zip, path, path, signal), path),
   );
 
-  if (typeof value.include !== "string") {
+  if (!Predicate.isString(value.include)) {
     cache.set(path, value);
 
     return value;
