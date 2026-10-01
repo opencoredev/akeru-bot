@@ -79,6 +79,7 @@ export function makeproviderMaintenanceTestSupport() {
     slashCommands: [],
     skills: [],
   };
+
   return {
     driver,
     makeTempDir,

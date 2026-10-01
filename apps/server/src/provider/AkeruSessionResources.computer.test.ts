@@ -26,6 +26,7 @@ describe("AkeruSessionResources", () => {
     for (const directory of directories) {
       NodeFS.rmSync(directory, { recursive: true, force: true });
     }
+
     directories.clear();
   });
 
@@ -33,11 +34,13 @@ describe("AkeruSessionResources", () => {
     const directory = stateDir();
     const project = NodePath.join(directory, "project");
     NodeFS.mkdirSync(project, { recursive: true });
+
     const resources = new AkeruSessionResources({
       stateDir: directory,
       makeBotBrowser: () => browser(),
       toMcpServerConfigs: () => ({}),
     });
+
     const acquired = await resources.acquire({
       threadId: "local-thread",
       resourceScope: "bot-one",
@@ -47,6 +50,7 @@ describe("AkeruSessionResources", () => {
       userComputerCwd: project,
       mcpServers: [],
     });
+
     await acquired.botWorkspace.filesystem?.writeFile("bot.txt", "bot");
     await acquired.workspace.filesystem?.writeFile("user.txt", "user");
     expect(resources.getWorkspace("local-thread")).toBe(acquired.workspace);
@@ -61,6 +65,7 @@ describe("AkeruSessionResources", () => {
   it("allows one Computer Use controller and releases it on stop without a browser attachment", async () => {
     const manager = mcpManager({ connected: true, toolCount: 1 });
     const botBrowser = browser();
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       hostPlatform: "darwin",
@@ -76,6 +81,7 @@ describe("AkeruSessionResources", () => {
         [CODEX_COMPUTER_USE_SERVER_ID]: { command: "sentinel" },
       }),
     });
+
     const input = { ...remoteInput, mcpServers: [computerServer()] };
 
     await resources.acquire({ ...input, threadId: "controller" });
@@ -92,6 +98,7 @@ describe("AkeruSessionResources", () => {
     const execute = vi.fn(async () => ({ screenshot: { url: "https://example.com/frame.png" } }));
     const toolName = `${CODEX_COMPUTER_USE_SERVER_ID}_control`;
     const manager = mcpManager({ connected: true, toolCount: 1 }, { [toolName]: { execute } });
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       hostPlatform: "darwin",
@@ -113,9 +120,11 @@ describe("AkeruSessionResources", () => {
       threadId: "controller",
       mcpServers: [computerServer()],
     });
+
     const tool = Reflect.get(resources.getConnectorTools("controller"), toolName) as {
       execute: () => Promise<unknown>;
     };
+
     await expect(tool.execute()).rejects.toThrow("unknown screenshot");
     expect(execute).toHaveBeenCalledOnce();
     await resources.shutdown();
@@ -124,10 +133,12 @@ describe("AkeruSessionResources", () => {
   it("releases the Computer Use lock when MCP health fails", async () => {
     const failed = mcpManager({ connected: false, toolCount: 0, error: "Accessibility denied" });
     const healthy = mcpManager({ connected: true, toolCount: 1 });
+
     const makeMcpManager = vi
       .fn()
       .mockReturnValueOnce(failed as never)
       .mockReturnValueOnce(healthy as never);
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       hostPlatform: "darwin",
@@ -143,6 +154,7 @@ describe("AkeruSessionResources", () => {
         [CODEX_COMPUTER_USE_SERVER_ID]: { command: "sentinel" },
       }),
     });
+
     const input = { ...remoteInput, mcpServers: [computerServer()] };
 
     await expect(resources.acquire({ ...input, threadId: "failed" })).rejects.toThrow(
@@ -164,6 +176,7 @@ describe("AkeruSessionResources", () => {
       async () => ({ url: "http://127.0.0.1:9222", requestHeaders: {} }),
       async () => "running",
     );
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => ({

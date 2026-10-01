@@ -65,10 +65,12 @@ describe("BotWorkspacePool", () => {
 
   it("does not pause a retained workspace while acquisition is starting", async () => {
     const pool = new BotWorkspacePool();
+
     const sleep = vi
       .fn()
       .mockRejectedValueOnce(new Error("pause failed"))
       .mockResolvedValue(undefined);
+
     const workspace = remoteWorkspace({ sleep });
     const create = vi.fn().mockResolvedValue(workspace);
     const initial = await pool.acquire("acquiring", create);
@@ -114,13 +116,16 @@ describe("BotWorkspacePool", () => {
       const workspace = localWorkspace();
       const wake = Promise.withResolvers<void>();
       const wakeStarted = Promise.withResolvers<void>();
+
       const init = vi
         .spyOn(workspace, "init")
         .mockResolvedValueOnce(undefined)
         .mockImplementationOnce(() => {
           wakeStarted.resolve();
+
           return wake.promise;
         });
+
       const create = vi.fn(async () => workspace);
       const initial = yield* Effect.promise(() => pool.acquire("join", create));
       yield* Effect.promise(() => initial.release());

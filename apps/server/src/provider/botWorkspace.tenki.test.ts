@@ -8,6 +8,7 @@ import { createRemoteBotWorkspace, tenki, tenkiWorkspaceState } from "./botWorks
 import { BotWorkspacePool } from "./botWorkspacePool.ts";
 
 const sdk = vi.hoisted(() => ({ create: vi.fn(), get: vi.fn(), constructor: vi.fn() }));
+
 vi.mock("@tenkicloud/sandbox", () => ({
   TenkiSandbox: class {
     constructor(options: unknown) {
@@ -44,6 +45,7 @@ function mockSession(state: SessionState = "RUNNING") {
       exitCode: 7,
     })),
   };
+
   return { session, adapter: tenki(session as unknown as Session) };
 }
 
@@ -54,6 +56,7 @@ describe("Tenki workspace", () => {
     const { session } = mockSession();
     sdk.create.mockClear().mockResolvedValue(session);
     sdk.get.mockClear().mockResolvedValue(session);
+
     const input = {
       sandbox: "tenki" as const,
       threadId: "thread-tenki",
@@ -61,6 +64,7 @@ describe("Tenki workspace", () => {
       identityFile,
       environment: { TENKI_API_KEY: " test-key " },
     };
+
     try {
       const first = await createRemoteBotWorkspace(input);
       expect(sdk.constructor).toHaveBeenLastCalledWith({ apiKey: "test-key" });
@@ -93,6 +97,7 @@ describe("Tenki workspace", () => {
     sdk.get.mockClear().mockResolvedValue(session);
     session.waitReady.mockRejectedValueOnce(new Error("readiness unavailable"));
     const pool = new BotWorkspacePool();
+
     const create = () =>
       createRemoteBotWorkspace({
         sandbox: "tenki",
@@ -101,6 +106,7 @@ describe("Tenki workspace", () => {
         identityFile,
         environment: { TENKI_API_KEY: "key" },
       });
+
     try {
       await expect(pool.acquire("tenki", create)).rejects.toThrow("readiness unavailable");
       expect(JSON.parse(NodeFS.readFileSync(identityFile, "utf8"))).toEqual({
@@ -123,12 +129,14 @@ describe("Tenki workspace", () => {
   it("fails closed for a missing saved VM and requires credentials", async () => {
     const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-tenki-"));
     const identityFile = NodePath.join(root, "identity.json");
+
     const input = {
       sandbox: "tenki" as const,
       threadId: "thread",
       workspaceId: "bot",
       identityFile,
     };
+
     try {
       await expect(createRemoteBotWorkspace(input)).rejects.toThrow("TENKI_API_KEY");
       NodeFS.writeFileSync(
@@ -153,6 +161,7 @@ describe("Tenki workspace", () => {
       const { adapter, session } = mockSession(state);
       await adapter.wake();
       expect(session.refresh).toHaveBeenCalledOnce();
+
       if (state === "RUNNING") {
         expect(session.waitReady).toHaveBeenCalledOnce();
         expect(session.resume).not.toHaveBeenCalled();
@@ -160,6 +169,7 @@ describe("Tenki workspace", () => {
         expect(session.waitResumed).toHaveBeenCalledOnce();
         expect(session.resume).toHaveBeenCalledTimes(state === "RESUMING" ? 0 : 1);
       }
+
       if (state === "PAUSING") expect(session.waitPaused).toHaveBeenCalledOnce();
     },
   );

@@ -4,6 +4,7 @@ import { LightpandaRpc, createBotBrowserTools } from "./browser/LightpandaRpc.ts
 
 export function createBotBrowser(input: CreateBotBrowserInput): BotBrowser {
   const rpc = input.makeRpc?.(input) ?? new LightpandaRpc(input);
+
   return {
     tools: createBotBrowserTools(rpc),
     attachment: () => rpc.attachment(),

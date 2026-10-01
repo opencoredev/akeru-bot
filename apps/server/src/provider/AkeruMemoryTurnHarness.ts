@@ -68,15 +68,18 @@ export class AkeruMemoryTurn {
 
   wrapMemoryHandler(handler: AkeruMemoryToolHandler): AkeruMemoryToolHandler {
     if (!this.reviewIncluded) return handler;
+
     return async (input) => {
       const result = await handler(input);
       this.successfulMemoryCalls += 1;
+
       return result;
     };
   }
 
   async freshReviewContext(): Promise<string> {
     const snapshot = formatBotMemoryPrompt(await this.store.readPromptSnapshot(this.access));
+
     return [snapshot, this.reviewInstruction()].filter(Boolean).join("\n\n");
   }
 
@@ -90,14 +93,19 @@ export class AkeruMemoryTurn {
           this.foregroundState = "failed";
         }
       }
+
       if (this.foregroundState === "failed") {
         await this.settleReview(false);
+
         return;
       }
+
       if (!this.reviewIncluded) {
         await this.closeScope();
+
         return;
       }
+
       if (mode === "foreground") {
         await this.settleReview(this.reviewCallContractSatisfied);
       }
@@ -131,6 +139,7 @@ export class AkeruMemoryTurn {
 
   private async settleReview(completed: boolean): Promise<void> {
     if (this.reviewSettled) return;
+
     if (this.reviewIncluded) await this.store.settleReviewClaim(this.reservation, completed);
     this.reviewSettled = true;
     await this.closeScope();
@@ -144,6 +153,7 @@ export class AkeruMemoryTurn {
 
   async settleFromScope(): Promise<void> {
     if (this.reviewSettled) return;
+
     if (this.reviewIncluded) await this.store.settleReviewClaim(this.reservation, false);
     this.reviewSettled = true;
   }
@@ -169,16 +179,20 @@ export class AkeruMemoryTurnHarness {
   }: AkeruMemoryTurnAdmission): Promise<AkeruMemoryTurn> {
     const reservation = await this.store.reserveReviewCadence(access.botId, input);
     const scope = await Effect.runPromise(Scope.make());
+
     try {
       const promptSnapshot = await this.store.readPromptSnapshot(access);
+
       const snapshot = formatBotMemoryPrompt(
         privateBotMemory === false
           ? { ...promptSnapshot, memory: { ...promptSnapshot.memory, content: "", charCount: 0 } }
           : promptSnapshot,
       );
+
       const review = reservation.memoryReviewIncluded
         ? formatAutomaticBotMemoryReview(access.groupId !== null, reservation.reviewInputs)
         : "";
+
       const turn = new AkeruMemoryTurn(
         this.store,
         access,
@@ -186,12 +200,14 @@ export class AkeruMemoryTurnHarness {
         [snapshot, review].filter(Boolean).join("\n\n"),
         scope,
       );
+
       const store = this.store;
       await Effect.runPromise(
         Effect.gen(function* () {
           yield* Effect.acquireRelease(Effect.succeed(turn), () =>
             Effect.promise(() => turn.settleFromScope()),
           );
+
           if (turn.reviewIncluded) {
             yield* Effect.promise(() =>
               store.renewReviewClaim(reservation).catch(() => false),
@@ -199,6 +215,7 @@ export class AkeruMemoryTurnHarness {
           }
         }).pipe(Effect.provideService(Scope.Scope, scope)),
       );
+
       return turn;
     } catch (cause) {
       await Effect.runPromise(Scope.close(scope, Exit.void));

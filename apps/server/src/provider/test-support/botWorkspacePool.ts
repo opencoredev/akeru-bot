@@ -22,5 +22,6 @@ export function makebotWorkspacePoolTestSupport() {
       ...overrides,
     };
   }
+
   return { localWorkspace, remoteWorkspace };
 }

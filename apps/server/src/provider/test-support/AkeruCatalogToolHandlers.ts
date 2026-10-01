@@ -43,5 +43,6 @@ export function makeAkeruCatalogToolHandlersTestSupport() {
       updatedAt: now,
     } as never;
   }
+
   return { connectedStatus, healthOptions, now, snapshot };
 }

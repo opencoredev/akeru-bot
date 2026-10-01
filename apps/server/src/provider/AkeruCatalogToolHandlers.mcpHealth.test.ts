@@ -16,15 +16,19 @@ describe("Akeru catalog MCP tool handlers", () => {
       toolNames: ["search_web"],
       transport: "http" as const,
     };
+
     const authenticateServer = vi.fn<McpManager["authenticateServer"]>(
       async (_serverId, options) => {
         options?.onAuthorizationUrl?.("https://example.com/authorize");
+
         return status;
       },
     );
+
     const handlers = createAkeruCatalogToolHandlers({
       authenticateServer,
     } as unknown as McpManager);
+
     const emitProgress = vi.fn();
 
     await expect(
@@ -55,13 +59,16 @@ describe("Akeru catalog MCP tool handlers", () => {
       toolNames: ["search_web"],
       transport: "http" as const,
     };
+
     const reload = vi.fn(async () => undefined);
     const reconnectServer = vi.fn<McpManager["reconnectServer"]>(async () => status);
+
     const manager = {
       reload,
       reconnectServer,
       getServerStatuses: () => [status],
     } as unknown as McpManager;
+
     const handler = createAkeruCatalogToolHandlers(manager).RestartMcpServers!;
     const emitProgress = vi.fn();
 
@@ -85,6 +92,7 @@ describe("Akeru catalog MCP tool handlers", () => {
 
   it("reports real request evidence instead of treating a connection as healthy", async () => {
     const manager = { getServerStatuses: () => [connectedStatus] } as unknown as McpManager;
+
     const handler = createAkeruCatalogToolHandlers(
       manager,
       undefined,
@@ -115,12 +123,15 @@ describe("Akeru catalog MCP tool handlers", () => {
     "%s records the real reconnect result",
     async (toolId) => {
       const reconnectServer = vi.fn(async () => connectedStatus);
+
       const manager = {
         getServerStatuses: () => [connectedStatus],
         reconnectServer,
       } as unknown as McpManager;
+
       const recordSuccess = vi.fn();
       const onRecovery = vi.fn();
+
       const handler = createAkeruCatalogToolHandlers(
         manager,
         undefined,
@@ -138,12 +149,15 @@ describe("Akeru catalog MCP tool handlers", () => {
 
   it("records and escalates a failed health test", async () => {
     const failed = { ...connectedStatus, connected: false, error: "OAuth expired." };
+
     const manager = {
       getServerStatuses: () => [connectedStatus],
       reconnectServer: async () => failed,
     } as unknown as McpManager;
+
     const recordFailure = vi.fn();
     const onFailure = vi.fn();
+
     const handler = createAkeruCatalogToolHandlers(
       manager,
       undefined,

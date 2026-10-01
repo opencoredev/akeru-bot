@@ -14,6 +14,7 @@ export function makeAkeruSessionResourcesTestSupport() {
   function stateDir() {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-resources-"));
     directories.add(directory);
+
     return directory;
   }
 
@@ -93,6 +94,7 @@ export function makeAkeruSessionResourcesTestSupport() {
     createdAt: "2026-08-31T00:00:00.000Z",
     updatedAt: "2026-08-31T00:00:00.000Z",
   };
+
   return {
     directories,
     stateDir,

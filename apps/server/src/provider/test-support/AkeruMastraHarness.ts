@@ -27,12 +27,15 @@ export function makeAkeruMastraHarnessTestSupport() {
     Effect.gen(function* () {
       const testScope = yield* Effect.scope;
       const run = yield* FiberSet.makeRuntimePromise();
+
       const open: OpenHarness = async (options) => {
         const scope = await run(Scope.fork(testScope));
         const harness = await run(makeAkeruMastraHarness(options).pipe(Scope.provide(scope)));
         let closing: Promise<void> | undefined;
+
         return { ...harness, close: () => (closing ??= run(Scope.close(scope, Exit.void))) };
       };
+
       yield* Effect.promise(() => body(open));
     });
 
@@ -56,6 +59,7 @@ export function makeAkeruMastraHarnessTestSupport() {
     const db = new NodeSqlite.DatabaseSync(
       NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
     );
+
     try {
       return db
         .prepare(
@@ -98,24 +102,31 @@ export function makeAkeruMastraHarnessTestSupport() {
   // Wraps the memory store so the test can fail specific inserts.
   const failInserts = (shouldFail: (record: { readonly id: string }) => Error | undefined) => {
     const getStorage = ObservationalMemory.prototype.getStorage;
+
     return vi
       .spyOn(ObservationalMemory.prototype, "getStorage")
       .mockImplementation(function (this: ObservationalMemory) {
         const store = getStorage.call(this);
+
         return new Proxy(store, {
           get(target, property, receiver) {
             if (property === "insertObservationalMemoryRecord") {
               return async (record: { readonly id: string }) => {
                 const failure = shouldFail(record);
+
                 if (failure) throw failure;
+
                 return target.insertObservationalMemoryRecord(record as never);
               };
             }
+
             const value = Reflect.get(target, property, receiver);
+
             return typeof value === "function" ? value.bind(target) : value;
           },
         });
       });
   };
+
   return { harnessTest, makeObservationHarness, queuedObservations, restoreSnapshot, failInserts };
 }

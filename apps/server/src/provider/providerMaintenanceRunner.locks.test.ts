@@ -29,12 +29,15 @@ describe("providerMaintenanceRunner", () => {
   it.effect("prevents concurrent updates for the same provider", () => {
     const startedLatch: { resolve: () => void } = { resolve: () => {} };
     const releaseLatch: { resolve: () => void } = { resolve: () => {} };
+
     const started = new Promise<void>((resolve) => {
       startedLatch.resolve = resolve;
     });
+
     const release = new Promise<void>((resolve) => {
       releaseLatch.resolve = resolve;
     });
+
     return Effect.gen(function* () {
       const { registry } = yield* makeRegistry();
       const updater = yield* makeTestRunner(registry);
@@ -44,9 +47,11 @@ describe("providerMaintenanceRunner", () => {
 
       const second = yield* updater.updateProvider(CODEX_DRIVER).pipe(Effect.exit);
       assert.strictEqual(Exit.isFailure(second), true);
+
       if (Exit.isFailure(second)) {
         const error = Cause.squash(second.cause);
         assert.strictEqual(isServerProviderUpdateError(error), true);
+
         if (isServerProviderUpdateError(error)) {
           assert.include(error.reason, "already running");
         }
@@ -61,6 +66,7 @@ describe("providerMaintenanceRunner", () => {
           latestVersionHttpClient("0.0.0"),
           mockSpawnerLayer(() => {
             startedLatch.resolve();
+
             return {
               stdout: "updated",
               exitCode: Effect.promise(() => release).pipe(
@@ -76,15 +82,20 @@ describe("providerMaintenanceRunner", () => {
   it.effect("serializes different providers that share the same update lock key", () => {
     const firstStartedLatch: { resolve: () => void } = { resolve: () => {} };
     const releaseFirstLatch: { resolve: () => void } = { resolve: () => {} };
+
     const firstStarted = new Promise<void>((resolve) => {
       firstStartedLatch.resolve = resolve;
     });
+
     const releaseFirst = new Promise<void>((resolve) => {
       releaseFirstLatch.resolve = resolve;
     });
+
     const calls: Array<string> = [];
+
     return Effect.gen(function* () {
       const { registry } = yield* makeRegistry([baseProvider, baseOpenCodeProvider]);
+
       const updater = yield* makeTestRunner({
         ...registry,
         getProviderMaintenanceCapabilitiesForInstance: (_instanceId, provider) =>
@@ -107,16 +118,21 @@ describe("providerMaintenanceRunner", () => {
 
       const second = yield* updater.updateProvider(OPENCODE_DRIVER).pipe(Effect.forkScoped);
       let providersWhileQueued: ReadonlyArray<ServerProvider> = [];
+
       for (let attempt = 0; attempt < 20; attempt += 1) {
         providersWhileQueued = yield* registry.getProviders;
+
         const queuedStatus = providersWhileQueued.find(
           (provider) => provider.instanceId === OPENCODE_INSTANCE_ID,
         )?.updateState?.status;
+
         if (queuedStatus === "queued") {
           break;
         }
+
         yield* Effect.yieldNow;
       }
+
       assert.deepStrictEqual(calls, ["install -g @openai/codex@latest"]);
       assert.strictEqual(
         providersWhileQueued.find((provider) => provider.instanceId === OPENCODE_INSTANCE_ID)
@@ -138,8 +154,10 @@ describe("providerMaintenanceRunner", () => {
           latestVersionHttpClient("0.0.0"),
           mockSpawnerLayer((_command, args) => {
             calls.push(args.join(" "));
+
             if (calls.length === 1) {
               firstStartedLatch.resolve();
+
               return {
                 stdout: "updated",
                 exitCode: Effect.promise(() => releaseFirst).pipe(
@@ -147,6 +165,7 @@ describe("providerMaintenanceRunner", () => {
                 ),
               };
             }
+
             return { stdout: "updated" };
           }),
         ),
@@ -156,8 +175,10 @@ describe("providerMaintenanceRunner", () => {
 
   it.effect("accepts arbitrary driver-provided update lock keys", () => {
     const calls: Array<string> = [];
+
     return Effect.gen(function* () {
       const { registry } = yield* makeRegistry(baseProvider);
+
       const updater = yield* makeTestRunner({
         ...registry,
         getProviderMaintenanceCapabilitiesForInstance: (_instanceId, provider) =>
@@ -182,6 +203,7 @@ describe("providerMaintenanceRunner", () => {
           latestVersionHttpClient("0.0.0"),
           mockSpawnerLayer((_command, args) => {
             calls.push(args.join(" "));
+
             return { stdout: "updated" };
           }),
         ),
@@ -197,9 +219,11 @@ describe("providerMaintenanceRunner", () => {
         let blockQueuedState = true;
         const queuedStateWrittenLatch: { resolve: () => void } = { resolve: () => {} };
         const releaseQueuedStateLatch: { resolve: () => void } = { resolve: () => {} };
+
         const queuedStateWritten = new Promise<void>((resolve) => {
           queuedStateWrittenLatch.resolve = resolve;
         });
+
         const releaseQueuedState = new Promise<void>((resolve) => {
           releaseQueuedStateLatch.resolve = resolve;
         });
@@ -210,10 +234,12 @@ describe("providerMaintenanceRunner", () => {
             "providerMaintenanceRunner.test.blockQueuedState",
           )(function* (input) {
             const providers = yield* registry.setProviderMaintenanceActionState(input);
+
             if (input.state?.status === "queued" && blockQueuedState) {
               queuedStateWrittenLatch.resolve();
               yield* Effect.promise(() => releaseQueuedState);
             }
+
             return providers;
           }),
         });
@@ -227,6 +253,7 @@ describe("providerMaintenanceRunner", () => {
 
         const second = yield* updater.updateProvider(CODEX_DRIVER).pipe(Effect.exit);
         assert.strictEqual(Exit.isSuccess(second), true);
+
         if (Exit.isSuccess(second)) {
           assert.strictEqual(second.value.providers[0]?.updateState?.status, "succeeded");
         }

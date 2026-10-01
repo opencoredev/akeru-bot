@@ -260,6 +260,7 @@ export type AgentControllerError =
 const hasReadableIssue = Schema.is(
   Schema.Union([ProviderValidationError, ProviderAdapterValidationError]),
 );
+
 const hasReadableDetail = Schema.is(
   Schema.Union([
     ProviderAdapterRequestError,
@@ -279,12 +280,16 @@ const hasReadableDetail = Schema.is(
  */
 export function readableErrorDetail(error: unknown): string {
   if (hasReadableIssue(error)) return error.issue;
+
   if (hasReadableDetail(error)) return error.detail;
+
   const message =
     error instanceof Error ? error.message : typeof error === "string" ? error : undefined;
+
   const firstLine = message
     ?.split("\n")
     .map((line) => line.trim())
     .find((line) => line.length > 0 && !line.startsWith("at "));
+
   return firstLine ?? "Something went wrong.";
 }

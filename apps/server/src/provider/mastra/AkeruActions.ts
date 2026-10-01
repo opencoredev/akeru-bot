@@ -1,7 +1,10 @@
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { AKERU_CREATE_ROUTINE_TOOL_NAME, classifyAkeruSensitivePath } from "@akeru/contracts";
 import * as Predicate from "effect/Predicate";
-import { AKERU_LIST_ROUTINES_TOOL_NAME, AKERU_DELETE_ROUTINES_TOOL_NAME } from "./AkeruRoutineSchemas.ts";
+import {
+  AKERU_LIST_ROUTINES_TOOL_NAME,
+  AKERU_DELETE_ROUTINES_TOOL_NAME,
+} from "./AkeruRoutineSchemas.ts";
 
 export type AkeruToolCategory = "read" | "edit" | "execute" | "mcp" | "other";
 
@@ -119,16 +122,20 @@ export function textTokens(value: string): ReadonlySet<string> {
 
 export function criticalActionFromText(value: string): AkeruCriticalAction | null {
   const tokens = textTokens(value);
+
   if (tokens.has("restart") && tokens.has("mcp")) return "production";
+
   for (const [action, actionTokens] of CRITICAL_ACTION_TOKENS) {
     if ([...actionTokens].some((token) => tokens.has(token))) return action;
   }
+
   if (
     [...ACCOUNT_SCOPE_TOKENS].some((token) => tokens.has(token)) &&
     [...CHANGE_TOKENS].some((token) => tokens.has(token))
   ) {
     return "account";
   }
+
   return null;
 }
 
@@ -139,16 +146,20 @@ export function criticalActionFromShellCommand(
   for (const [action, pattern] of CRITICAL_SHELL_ACTIONS) {
     if (pattern.test(value)) return action;
   }
+
   if (wrapperDepth < 5) {
     for (const wrapperPattern of SHELL_COMMAND_WRAPPER_PATTERNS) {
       for (const match of value.matchAll(wrapperPattern)) {
         const nestedCommand = match[1] ?? match[2] ?? match[3];
+
         if (!nestedCommand) continue;
         const action = criticalActionFromShellCommand(nestedCommand, wrapperDepth + 1);
+
         if (action) return action;
       }
     }
   }
+
   return criticalActionFromText(value);
 }
 
@@ -159,50 +170,66 @@ export type AkeruActionInspection = {
 
 export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActionInspection {
   const namedAction = criticalActionFromText(toolName);
+
   if (namedAction) return { action: namedAction, hasUnclassifiedIntent: false };
 
   const pending: unknown[] = [args];
   const visited = new WeakSet<object>();
   let inspected = 0;
   let hasUnclassifiedIntent = false;
+
   while (pending.length > 0 && inspected < 100) {
     const value = pending.pop();
     inspected += 1;
+
     if (!Predicate.isObject(value) && !Array.isArray(value)) continue;
+
     if (visited.has(value)) {
       hasUnclassifiedIntent = true;
       continue;
     }
+
     visited.add(value);
+
     if (Array.isArray(value)) {
       for (const entry of value) {
         if (inspected >= 100) return { action: null, hasUnclassifiedIntent: true };
         inspected += 1;
+
         if (typeof entry === "object" && entry !== null) pending.push(entry);
       }
+
       continue;
     }
+
     for (const key in value) {
       if (inspected >= 100) return { action: null, hasUnclassifiedIntent: true };
       inspected += 1;
+
       if (!Object.hasOwn(value, key)) continue;
       const entry: unknown = value[key];
       const normalizedKey = key.toLowerCase();
       const keyedAction = criticalActionFromText(key);
+
       if (keyedAction) return { action: keyedAction, hasUnclassifiedIntent: false };
+
       if (ACTION_TEXT_KEYS.has(normalizedKey) && typeof entry === "string") {
         const action =
           normalizedKey === "command"
             ? criticalActionFromShellCommand(entry)
             : criticalActionFromText(entry);
+
         if (action) return { action, hasUnclassifiedIntent: false };
+
         if (MUTATING_INTENT_KEYS.has(normalizedKey)) {
           const tokens = textTokens(entry);
+
           if (![...tokens].some((token) => READ_ONLY_INTENT_TOKENS.has(token))) {
             hasUnclassifiedIntent = true;
           }
         }
       }
+
       if (
         typeof entry === "string" &&
         (normalizedKey === "path" || normalizedKey.endsWith("path")) &&
@@ -210,9 +237,11 @@ export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActio
       ) {
         return { action: "secrets", hasUnclassifiedIntent: false };
       }
+
       if (typeof entry === "object" && entry !== null) pending.push(entry);
     }
   }
+
   return { action: null, hasUnclassifiedIntent: hasUnclassifiedIntent || pending.length > 0 };
 }
 
@@ -222,14 +251,19 @@ export function criticalAkeruAction(toolName: string, args?: unknown): AkeruCrit
 
 export function akeruActionNeedsApproval(toolName: string, args?: unknown): boolean {
   const inspection = inspectAkeruAction(toolName, args);
+
   return inspection.action !== null || inspection.hasUnclassifiedIntent;
 }
 
 export function akeruToolCategory(toolName: string): AkeruToolCategory {
   if (/read|view|grep|search|find|list|stat/i.test(toolName)) return "read";
+
   if (/edit|write|delete|mkdir|move|rename/i.test(toolName)) return "edit";
+
   if (/execute|command|shell|process|terminal/i.test(toolName)) return "execute";
+
   if (/mcp/i.test(toolName)) return "mcp";
+
   return "other";
 }
 

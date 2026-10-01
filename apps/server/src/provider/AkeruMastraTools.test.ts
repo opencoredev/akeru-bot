@@ -19,14 +19,17 @@ describe("createAkeruMastraTools", () => {
 
   it("passes an exact call identity and approval mode to the runtime", async () => {
     const execute = vi.fn(async () => ({ ok: true }));
+
     const runtime = {
       toolsForThread: () => [AKERU_TOOL_CATALOG[0]!],
       requiresApproval: vi.fn(async () => true),
       execute,
     } as unknown as AkeruToolRuntime;
+
     const shell = createAkeruMastraTools("thread-1", runtime).Shell as {
       readonly execute?: (input: unknown, context: unknown) => Promise<unknown>;
     };
+
     if (!shell?.execute) throw new Error("Shell tool is unavailable.");
 
     await expect(
@@ -54,9 +57,11 @@ describe("createAkeruMastraTools", () => {
         memory: memoryHandler,
       },
     });
+
     const memory = createAkeruMastraTools("thread-memory", runtime).memory as {
       readonly execute?: (input: unknown, context: unknown) => Promise<unknown>;
     };
+
     if (!memory?.execute) throw new Error("Memory tool is unavailable.");
 
     await expect(

@@ -4,14 +4,19 @@ import type { AkeruBrowserEndpoint } from "./botWorkspace.ts";
 const Targets = Schema.Array(
   Schema.Struct({ type: Schema.String, webSocketDebuggerUrl: Schema.optional(Schema.String) }),
 );
+
 const Message = Schema.Struct({
   id: Schema.optional(Schema.Number),
   result: Schema.optional(Schema.Unknown),
   error: Schema.optional(Schema.Unknown),
 });
+
 const Document = Schema.Struct({ root: Schema.Struct({ nodeId: Schema.Number }) });
+
 const Node = Schema.Struct({ nodeId: Schema.Number });
+
 const Box = Schema.Struct({ model: Schema.Struct({ content: Schema.Array(Schema.Number) }) });
+
 const AXTree = Schema.Struct({
   nodes: Schema.Array(
     Schema.Struct({
@@ -22,11 +27,17 @@ const AXTree = Schema.Struct({
     }),
   ),
 });
+
 const decodeTargets = Schema.decodeUnknownSync(Targets);
+
 const decodeMessage = Schema.decodeUnknownSync(Message);
+
 const decodeDocument = Schema.decodeUnknownSync(Document);
+
 const decodeNode = Schema.decodeUnknownSync(Node);
+
 const decodeBox = Schema.decodeUnknownSync(Box);
+
 const decodeAXTree = Schema.decodeUnknownSync(AXTree);
 
 /** Direct CDP connection to the workspace's existing graphical Chromium, never a second browser. */
@@ -42,9 +53,11 @@ export class ComputerCdp {
     socket.addEventListener("message", (event) => {
       try {
         const message = decodeMessage(JSON.parse(String(event.data)));
+
         if (message.id === undefined) return;
         const pending = this.pending.get(message.id);
         this.pending.delete(message.id);
+
         if (message.error !== undefined)
           pending?.reject(new Error("Graphical browser command failed."));
         else pending?.resolve(message.result);
@@ -61,33 +74,40 @@ export class ComputerCdp {
       "json/list",
       endpoint.url.endsWith("/") ? endpoint.url : `${endpoint.url}/`,
     );
+
     // @effect-diagnostics-next-line globalFetch:off
     const response = await fetch(url, {
       headers: endpoint.requestHeaders,
       signal: AbortSignal.timeout(30_000),
     });
+
     if (!response.ok) throw new Error("Graphical browser discovery failed.");
     const targets = decodeTargets(await response.json());
     const target = targets.find((target) => target.type === "page" && target.webSocketDebuggerUrl);
+
     if (!target?.webSocketDebuggerUrl) throw new Error("Graphical browser page is unavailable.");
     const address = new URL(endpoint.url);
     address.protocol = address.protocol === "https:" ? "wss:" : "ws:";
     address.pathname = new URL(target.webSocketDebuggerUrl).pathname;
     const token = endpoint.requestHeaders["x-daytona-preview-token"];
+
     if (token) address.searchParams.set("DAYTONA_SANDBOX_AUTH_KEY", token);
     const socket = new WebSocket(address);
     const client = new ComputerCdp(socket);
     await new Promise<void>((resolve, reject) => {
       const signal = AbortSignal.timeout(30_000);
+
       const settle = (error: Error | null) => {
         signal.removeEventListener("abort", onAbort);
         socket.removeEventListener("open", onOpen);
         socket.removeEventListener("error", onError);
         socket.removeEventListener("close", onClose);
+
         if (error === null) return resolve();
         client.close();
         reject(error);
       };
+
       const onAbort = () => settle(new Error("Graphical browser connection timed out."));
       const onOpen = () => settle(null);
       const onError = () => settle(new Error("Graphical browser connection failed."));
@@ -98,6 +118,7 @@ export class ComputerCdp {
       socket.addEventListener("error", onError, { once: true });
       socket.addEventListener("close", onClose, { once: true });
     });
+
     return client;
   }
 
@@ -123,12 +144,15 @@ export class ComputerCdp {
     if (this.socket.readyState !== WebSocket.OPEN)
       return Promise.reject(new Error("Graphical browser disconnected."));
     const id = this.nextId++;
+
     return new Promise((resolve, reject) => {
       const signal = AbortSignal.timeout(30_000);
+
       const abort = () => {
         this.close();
         reject(new Error("Graphical browser command timed out."));
       };
+
       signal.addEventListener("abort", abort, { once: true });
       this.pending.set(id, {
         resolve: (value) => {
@@ -147,10 +171,13 @@ export class ComputerCdp {
   async call(name: string, input: Readonly<Record<string, unknown>>) {
     if (name === "goto") {
       await this.request("Page.navigate", { url: input.url });
+
       return "Navigated.";
     }
+
     if (name === "tree") {
       const tree = decodeAXTree(await this.request("Accessibility.getFullAXTree"));
+
       return tree.nodes
         .filter((node) => !node.ignored)
         .map(
@@ -160,9 +187,11 @@ export class ComputerCdp {
         .join("\n")
         .slice(0, 50 * 1024);
     }
+
     if (name !== "click" && name !== "fill")
       throw new Error("Unsupported graphical browser operation.");
     let target: { nodeId: number } | { backendNodeId: number };
+
     if (typeof input.selector === "string") {
       const document = decodeDocument(await this.request("DOM.getDocument"));
       target = decodeNode(
@@ -171,14 +200,17 @@ export class ComputerCdp {
           selector: input.selector,
         }),
       );
+
       if (target.nodeId === 0) throw new Error("Graphical browser selector did not match.");
     } else if (typeof input.backendNodeId === "number")
       target = { backendNodeId: input.backendNodeId };
     else throw new Error("Graphical browser target is required.");
     await this.request("DOM.scrollIntoViewIfNeeded", target);
+
     if (name === "click") {
       const box = decodeBox(await this.request("DOM.getBoxModel", target));
       const points = box.model.content;
+
       if (points.length !== 8) throw new Error("Graphical browser target has no bounds.");
       const x = (points[0]! + points[4]!) / 2;
       const y = (points[1]! + points[5]!) / 2;
@@ -214,6 +246,7 @@ export class ComputerCdp {
       });
       await this.request("Input.insertText", { text: input.value });
     }
+
     return "Completed.";
   }
 }

@@ -24,10 +24,12 @@ const {
 describe("providerMaintenanceRunner", () => {
   it.effect("updates a single provider instance without touching sibling instances", () => {
     const calls: Array<{ command: string; args: ReadonlyArray<string> }> = [];
+
     return Effect.gen(function* () {
       const personalInstanceId = ProviderInstanceId.make("codex_personal");
       const workInstanceId = ProviderInstanceId.make("codex_work");
       const refreshedInstanceIds: Array<ProviderInstanceId> = [];
+
       const { registry } = yield* makeRegistry([
         {
           ...baseProvider,
@@ -40,6 +42,7 @@ describe("providerMaintenanceRunner", () => {
           version: "0.124.0-alpha.3",
         },
       ]);
+
       const updater = yield* makeTestRunner({
         ...registry,
         getProviderMaintenanceCapabilitiesForInstance: (instanceId, provider) =>
@@ -87,6 +90,7 @@ describe("providerMaintenanceRunner", () => {
           latestVersionHttpClient("0.124.0-alpha.3"),
           mockSpawnerLayer((command, args) => {
             calls.push({ command, args });
+
             return { stdout: "updated" };
           }),
         ),
@@ -100,6 +104,7 @@ describe("providerMaintenanceRunner", () => {
       readonly args: ReadonlyArray<string>;
       readonly shell: boolean | string | undefined;
     }> = [];
+
     return Effect.gen(function* () {
       const { registry } = yield* makeRegistry(baseProvider);
       const runner = yield* makeTestRunner(registry);
@@ -143,11 +148,13 @@ describe("providerMaintenanceRunner", () => {
                 readonly args: ReadonlyArray<string>;
                 readonly options: { readonly shell?: boolean | string | undefined };
               };
+
               captured.push({
                 command: childProcess.command,
                 args: childProcess.args,
                 shell: childProcess.options.shell,
               });
+
               return Effect.succeed(mockHandle({ stdout: "updated" }));
             }),
           ),

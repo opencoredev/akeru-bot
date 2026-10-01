@@ -35,6 +35,7 @@ export function loadNodeCatalogModules(): CatalogManifestModules {
   // repository catalog from the bundled location, with the packaged desktop
   // resource as a fallback.
   const sourceTree = import.meta.url.includes("/src/provider/");
+
   const candidates = sourceTree
     ? [
         new URL("../../../../../plugins/entries/", import.meta.url),
@@ -45,6 +46,7 @@ export function loadNodeCatalogModules(): CatalogManifestModules {
         new URL("../../../../plugins/entries/", import.meta.url),
         new URL("../../../apps/desktop/prod-resources/plugins/entries/", import.meta.url),
       ];
+
   const entriesUrl = candidates.find((candidate) => {
     try {
       return NodeFS.statSync(candidate).isDirectory();
@@ -52,9 +54,11 @@ export function loadNodeCatalogModules(): CatalogManifestModules {
       return false;
     }
   });
+
   if (!entriesUrl) {
     throw new Error("Akeru plugin catalog directory is unavailable.");
   }
+
   return Object.fromEntries(
     NodeFS.readdirSync(entriesUrl, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -82,9 +86,12 @@ export function pluginConnectionHealth(
   statuses: readonly McpRuntimeStatus[],
 ) {
   if (!server) return { state: "not-installed" as const };
+
   if (!server.enabled) return { state: "disabled" as const };
   const status = statuses.find((candidate) => candidate.name === server.id);
+
   if (!status) return { state: "not-checked" as const };
+
   return status.connected
     ? { state: "healthy" as const, toolCount: status.toolCount, toolNames: status.toolNames }
     : { state: "failed" as const, error: status.error ?? "The MCP server did not connect." };
@@ -97,6 +104,7 @@ export function pluginView(
 ) {
   const serverId = pluginServerId(plugin.id);
   const server = snapshot.mcpServers?.find((candidate) => candidate.id === serverId);
+
   const affectedBots = server?.enabled
     ? snapshot.bots
         .filter(
@@ -105,6 +113,7 @@ export function pluginView(
         )
         .map((bot) => ({ id: bot.id, name: bot.name }))
     : [];
+
   return {
     id: plugin.id,
     name: plugin.name,
@@ -152,10 +161,13 @@ export function recommendationForPlugin(
   const server = snapshot.mcpServers?.find(
     (candidate) => candidate.id === pluginServerId(plugin.id),
   );
+
   const composio =
     plugin.connection.type === "brokered" && plugin.connection.broker.name === "Composio";
+
   const brokeredPending =
     plugin.connection.type === "brokered" && plugin.connection.pendingBlocker !== undefined;
+
   // A brokered plugin whose lifecycle is still pending cannot be connected;
   // surface it as unavailable so the card renders a disabled action.
   const action = server?.enabled
@@ -167,6 +179,7 @@ export function recommendationForPlugin(
         : isInstallableManifest(plugin)
           ? "install"
           : "unavailable";
+
   return {
     id: composio ? `composio:${plugin.id}` : plugin.id,
     source: composio ? "composio" : "directory",
@@ -198,6 +211,7 @@ export function sameRecipe(server: McpServer, plugin: PluginManifest): boolean {
       server.url === plugin.transport.url
     );
   }
+
   if (plugin.transport.type === "stdio") {
     return (
       server.transport === "stdio" &&
@@ -206,6 +220,7 @@ export function sameRecipe(server: McpServer, plugin: PluginManifest): boolean {
       JSON.stringify(server.args ?? []) === JSON.stringify(plugin.transport.args ?? [])
     );
   }
+
   return false;
 }
 
@@ -221,7 +236,9 @@ export function createAkeruPluginRuntime(
 
   const getPlugin = async (pluginId: string, statuses: readonly McpRuntimeStatus[] = []) => {
     const plugin = byId.get(pluginId);
+
     if (!plugin) throw new Error(`Plugin '${pluginId}' was not found in the curated directory.`);
+
     return pluginView(plugin, await options.readSnapshot(), statuses);
   };
 
@@ -233,10 +250,12 @@ export function createAkeruPluginRuntime(
     const matches = catalog.filter((plugin) => pluginMatches(plugin, query));
     const limit = input.limit ?? 20;
     const snapshot = await options.readSnapshot();
+
     let composioSearch: {
       readonly status: "available" | "setup-required" | "unavailable";
       readonly toolkits: readonly ComposioToolkit[];
     } = { status: "unavailable", toolkits: [] };
+
     if (options.searchComposioToolkits) {
       try {
         composioSearch = await options.searchComposioToolkits({
@@ -247,15 +266,18 @@ export function createAkeruPluginRuntime(
         composioSearch = { status: "unavailable", toolkits: [] };
       }
     }
+
     const recommendations = [
       ...matches.map((plugin) => recommendationForPlugin(plugin, snapshot)),
       ...composioSearch.toolkits.map(recommendationForToolkit),
     ];
+
     const uniqueRecommendations = [
       ...new Map(
         recommendations.map((recommendation) => [recommendation.id, recommendation]),
       ).values(),
     ].slice(0, limit);
+
     return {
       kind: "plugin-search-results",
       query,
@@ -268,15 +290,19 @@ export function createAkeruPluginRuntime(
 
   const install = async (pluginId: string) => {
     const plugin = byId.get(pluginId);
+
     if (!plugin) throw new Error(`Plugin '${pluginId}' was not found in the curated directory.`);
+
     if (!isInstallableManifest(plugin)) {
       const blocker =
         plugin.connection.type === "approval-pending" ||
         plugin.connection.type === "verification-pending"
           ? ` ${plugin.connection.blocker}`
           : "";
+
       throw new Error(`Plugin '${pluginId}' is not available for installation.${blocker}`);
     }
+
     if (plugin.authentication === "api-key") {
       throw new Error(
         `Plugin '${pluginId}' needs the shared credential question contract before installation.`,
@@ -286,6 +312,7 @@ export function createAkeruPluginRuntime(
     const snapshot = await options.readSnapshot();
     const mcpServerId = pluginServerId(plugin.id);
     const existing = snapshot.mcpServers?.find((server) => server.id === mcpServerId);
+
     if (!existing) {
       await options.dispatch(
         plugin.transport.type === "url"
@@ -334,6 +361,7 @@ export function createAkeruPluginRuntime(
               },
         );
       }
+
       if (!existing.enabled) {
         await options.dispatch({
           type: "mcp-server.enable",
@@ -359,10 +387,12 @@ export function createAkeruPluginRuntime(
 
   const uninstall = async (pluginId: string, statuses: readonly McpRuntimeStatus[] = []) => {
     const plugin = byId.get(pluginId);
+
     if (!plugin) throw new Error(`Plugin '${pluginId}' was not found in the curated directory.`);
     const snapshot = await options.readSnapshot();
     const mcpServerId = pluginServerId(plugin.id);
     const existing = snapshot.mcpServers?.find((server) => server.id === mcpServerId);
+
     if (!existing) throw new Error(`Plugin '${pluginId}' is not installed.`);
     const before = pluginView(plugin, snapshot, statuses);
     await options.dispatch({
@@ -370,6 +400,7 @@ export function createAkeruPluginRuntime(
       commandId: commandId("delete"),
       mcpServerId,
     });
+
     return { pluginId: plugin.id, mcpServerId, removed: true, before };
   };
 

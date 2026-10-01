@@ -34,12 +34,14 @@ export async function readIdentity(path: string) {
       provider?: unknown;
       providerId?: unknown;
     };
+
     if (
       !REMOTE_BOT_SANDBOXES.includes(value.provider as RemoteBotSandbox) ||
       typeof value.providerId !== "string" ||
       !value.providerId
     )
       throw new Error(`Workspace identity file '${path}' is invalid.`);
+
     return { provider: value.provider as RemoteBotSandbox, providerId: value.providerId };
   } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code === "ENOENT") return undefined;
@@ -64,6 +66,8 @@ export const commandLine = (command: string, args: readonly string[]) =>
 
 export function credential(environment: Readonly<Record<string, string>>, name: string): string {
   const value = environment[name]?.trim();
+
   if (!value) throw new Error(`Remote sandbox credential '${name}' is missing.`);
+
   return value;
 }

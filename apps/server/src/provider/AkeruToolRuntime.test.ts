@@ -13,6 +13,7 @@ const { directories, workspace, workspaceRoot } = makeAkeruToolRuntimeTestSuppor
 
 vi.mock("@mastra/core/workspace", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@mastra/core/workspace")>();
+
   return { ...actual, createWorkspaceTools: vi.fn(actual.createWorkspaceTools) };
 });
 
@@ -21,6 +22,7 @@ describe("AkeruToolRuntime", () => {
     for (const directory of directories) {
       NodeFS.rmSync(directory, { force: true, recursive: true });
     }
+
     directories.clear();
   });
 
@@ -67,6 +69,7 @@ describe("AkeruToolRuntime", () => {
       input: {},
       approvalMode: "require-grant",
     })) as { readonly data: string; readonly text: string };
+
     const frame = PNG.sync.read(Buffer.from(result.data, "base64"));
 
     expect(result.text).toBe("Screenshot captured.");
@@ -104,6 +107,7 @@ describe("AkeruToolRuntime", () => {
           input: { command: "pwd", cwd },
           approvalMode: "require-grant" as const,
         };
+
         if (toolId === "Shell") runtime.grantApproval(execution);
         await expect(runtime.execute(execution)).rejects.toThrow("must stay inside its workspace");
       }
@@ -121,6 +125,7 @@ describe("AkeruToolRuntime", () => {
       workspace: bot,
       userComputerWorkspace: user,
     });
+
     const execution = {
       threadId: "thread-1",
       toolId: "CopyToBox" as const,
@@ -128,6 +133,7 @@ describe("AkeruToolRuntime", () => {
       input: { sourcePath: "report.txt", destinationPath: "inbox/report.txt" },
       approvalMode: "require-grant" as const,
     };
+
     runtime.grantApproval(execution);
     await runtime.execute(execution);
     expect(await bot.filesystem?.readFile("inbox/report.txt", { encoding: "utf-8" })).toBe(
@@ -145,11 +151,13 @@ describe("AkeruToolRuntime", () => {
 
   it("records a human handoff request", async () => {
     const requests: unknown[] = [];
+
     const runtime = createAkeruToolRuntime({
       onUserActionRequired: (request) => {
         requests.push(request);
       },
     });
+
     runtime.registerSession("thread-1", {
       botId: BotId.make("bot-one"),
       botName: "Research bot",
@@ -181,6 +189,7 @@ describe("AkeruToolRuntime", () => {
 
   it("isolates user-message failures from the current thread", async () => {
     const runtime = createAkeruToolRuntime({ now: () => "2026-09-01T00:00:00.000Z" });
+
     const execution = {
       threadId: "thread-1",
       toolId: "SendToUser" as const,
@@ -188,6 +197,7 @@ describe("AkeruToolRuntime", () => {
       input: { message: "The export is ready." },
       approvalMode: "require-grant" as const,
     };
+
     runtime.registerSession("thread-1", {
       botId: BotId.make("parent"),
       runtimeMode: "full-access",
@@ -210,10 +220,12 @@ describe("AkeruToolRuntime", () => {
 
   it("publishes a failure receipt when user messaging returns one", async () => {
     const receipts: AkeruToolReceipt[] = [];
+
     const runtime = createAkeruToolRuntime({
       now: () => "2026-09-01T00:00:00.000Z",
       onReceipt: (receipt) => receipts.push(receipt),
     });
+
     const execution = {
       threadId: "thread-1",
       toolId: "SendToUser" as const,
@@ -221,6 +233,7 @@ describe("AkeruToolRuntime", () => {
       input: { message: "The export is ready." },
       approvalMode: "require-grant" as const,
     };
+
     runtime.registerSession("thread-1", {
       botId: BotId.make("parent"),
       runtimeMode: "full-access",
@@ -250,6 +263,7 @@ describe("AkeruToolRuntime", () => {
       workspaceType: "cloud",
       workspace: workspace("await"),
     });
+
     const started = await runtime.execute({
       threadId: "thread-1",
       toolId: "Shell",
@@ -257,7 +271,9 @@ describe("AkeruToolRuntime", () => {
       input: { command: "printf done", background: true },
       approvalMode: "require-grant",
     });
+
     const handleId = String(started).match(/PID: ([^)]+)/)?.[1];
+
     if (!handleId) throw new Error("Background command did not return a process id.");
     await expect(
       runtime.execute({

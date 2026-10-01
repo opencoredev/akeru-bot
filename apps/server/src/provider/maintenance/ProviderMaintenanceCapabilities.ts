@@ -80,6 +80,7 @@ export function makeProviderMaintenanceCapabilities(input: {
           args: input.updateArgs,
           lockKey: input.updateLockKey,
         };
+
   return {
     provider: input.provider,
     packageName: input.packageName,
@@ -211,6 +212,7 @@ export function isVitePlusGlobalCommandPath(commandPath: string): boolean {
 
 export function isPnpmGlobalCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
+
   return (
     normalized.includes("/.local/share/pnpm/") ||
     normalized.includes("/library/pnpm/") ||
@@ -222,6 +224,7 @@ export function isPnpmGlobalCommandPath(commandPath: string): boolean {
 
 export function isNpmGlobalCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
+
   return (
     normalized.includes("/node_modules/.bin/") ||
     normalized.includes("/lib/node_modules/") ||
@@ -231,6 +234,7 @@ export function isNpmGlobalCommandPath(commandPath: string): boolean {
 
 export function isHomebrewCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
+
   return (
     normalized.includes("/opt/homebrew/cellar/") ||
     normalized.includes("/usr/local/cellar/") ||
@@ -248,6 +252,7 @@ export function resolvePackageManagedProviderMaintenance(
   options?: ProviderMaintenanceCapabilityResolutionOptions,
 ): ProviderMaintenanceCapabilities {
   const binaryPath = nonEmptyString(options?.binaryPath);
+
   if (!binaryPath) {
     return makeNpmGlobalProviderMaintenanceCapabilities(definition);
   }
@@ -262,6 +267,7 @@ export function resolvePackageManagedProviderMaintenance(
     ];
 
     const nativeUpdate = definition.nativeUpdate;
+
     if (
       nativeUpdate &&
       commandPaths.some((commandPath) => nativeUpdate.isCommandPath(commandPath))
@@ -271,18 +277,23 @@ export function resolvePackageManagedProviderMaintenance(
         makeNpmGlobalProviderMaintenanceCapabilities(definition)
       );
     }
+
     if (commandPaths.some(isVitePlusGlobalCommandPath)) {
       return makeVitePlusGlobalProviderMaintenanceCapabilities(definition);
     }
+
     if (commandPaths.some(isBunGlobalCommandPath)) {
       return makeBunGlobalProviderMaintenanceCapabilities(definition);
     }
+
     if (commandPaths.some(isPnpmGlobalCommandPath)) {
       return makePnpmGlobalProviderMaintenanceCapabilities(definition);
     }
+
     if (commandPaths.some(isNpmGlobalCommandPath)) {
       return makeNpmGlobalProviderMaintenanceCapabilities(definition);
     }
+
     if (commandPaths.some(isHomebrewCommandPath)) {
       return makeHomebrewProviderMaintenanceCapabilities(definition);
     }
@@ -330,23 +341,28 @@ export const resolveProviderMaintenanceCapabilitiesEffect = Effect.fn(
   options?: Omit<ProviderMaintenanceCapabilityResolutionOptions, "realCommandPath">,
 ) {
   const binaryPath = nonEmptyString(options?.binaryPath);
+
   if (!binaryPath) {
     return resolver.resolve(options);
   }
 
   const env = options?.env ?? (yield* readCommandLookupEnv);
+
   const resolvedCommandPath =
     (yield* resolveCommandPath(binaryPath, { env }).pipe(
       Effect.catchTag("CommandResolutionError", () => Effect.succeed(null)),
     )) ?? (hasPathSeparator(binaryPath) ? binaryPath : null);
+
   if (!resolvedCommandPath) {
     return resolver.resolve(options);
   }
 
   const fileSystem = yield* FileSystem.FileSystem;
+
   const realCommandPath = yield* fileSystem
     .realPath(resolvedCommandPath)
     .pipe(Effect.orElseSucceed(() => resolvedCommandPath));
+
   return resolver.resolve({
     ...options,
     env,

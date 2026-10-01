@@ -19,16 +19,19 @@ import { AKERU_RECENT_TURN_LIMIT } from "./RecentConversation.ts";
 describe("AkeruMastraHarness", () => {
   it("restores a bounded recent message window after reopening", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-message-store-"));
+
     const options = {
       authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
       memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
     };
+
     try {
       const first = await createAkeruMastraMemory(options);
       await first.memory.createThread({
         threadId: "thread-history",
         resourceId: "thread-history",
       });
+
       const messages = Array.from({ length: (AKERU_RECENT_TURN_LIMIT + 2) * 2 }, (_, index) => ({
         id: `message-${index}`,
         role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
@@ -39,10 +42,12 @@ describe("AkeruMastraHarness", () => {
         threadId: "thread-history",
         resourceId: "thread-history",
       }));
+
       await first.memory.persistMessages(messages);
       await first.close();
 
       const reopened = await createAkeruMastraMemory(options);
+
       const engine = {
         getThreadContext: vi.fn(() => ({
           threadId: "thread-history",
@@ -52,11 +57,14 @@ describe("AkeruMastraHarness", () => {
         getOrCreateRecord: vi.fn(async () => ({ activeObservations: "Older observations." })),
         buildContextSystemMessages: vi.fn(async () => ["Older context from observations."]),
       } as unknown as ObservationalMemory;
+
       const processor = new AkeruPassiveObservationalMemoryProcessor(engine, reopened.memory);
+
       const messageList = new MessageList({
         threadId: "thread-history",
         resourceId: "thread-history",
       });
+
       messageList.add(
         {
           id: "current-message",
@@ -97,14 +105,17 @@ describe("AkeruMastraHarness", () => {
       })),
       buildContextSystemMessages: vi.fn(async () => ["Older context: short replies."]),
     } as unknown as ObservationalMemory;
+
     const processor = new AkeruPassiveObservationalMemoryProcessor(engine, {
       recall: vi.fn(async () => ({ messages: [] })),
       persistMessages: vi.fn(async () => undefined),
     } as unknown as Memory);
+
     const messageList = new MessageList({
       threadId: "thread-context",
       resourceId: "thread-context",
     });
+
     messageList.add(
       {
         id: "recent-message",
@@ -129,19 +140,23 @@ describe("AkeruMastraHarness", () => {
 
   it("persists only messages created by the current turn", async () => {
     const persistMessages = vi.fn(async () => undefined);
+
     const engine = {
       getThreadContext: vi.fn(() => ({ threadId: "thread-passive", resourceId: "thread-passive" })),
       loadUnobservedMessages: vi.fn(async () => []),
       getOrCreateRecord: vi.fn(async () => ({ activeObservations: "" })),
       buildContextSystemMessages: vi.fn(async () => []),
     } as unknown as ObservationalMemory;
+
     const processor = new AkeruPassiveObservationalMemoryProcessor(engine, {
       persistMessages,
     } as unknown as Memory);
+
     const messageList = new MessageList({
       threadId: "thread-passive",
       resourceId: "thread-passive",
     });
+
     messageList.add(
       {
         id: "user-history",
@@ -153,6 +168,7 @@ describe("AkeruMastraHarness", () => {
       },
       "memory",
     );
+
     for (const message of [
       {
         id: "user-current",

@@ -1,10 +1,17 @@
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
-import { isBadRequestError, PrefillErrorHandler, ProviderHistoryCompat, StreamErrorRetryProcessor } from "@mastra/core/processors";
+import {
+  isBadRequestError,
+  PrefillErrorHandler,
+  ProviderHistoryCompat,
+  StreamErrorRetryProcessor,
+} from "@mastra/core/processors";
 
 export function isConnectionReset(error: unknown): boolean {
   if (!error) return false;
   const code = typeof error === "object" && "code" in error ? error.code : undefined;
+
   if (typeof code === "string" && code.toUpperCase() === "ECONNRESET") return true;
+
   return error instanceof Error && /econnreset|socket hang up/i.test(error.message);
 }
 

@@ -17,6 +17,7 @@ function inputSchema(toolId: AkeruRuntimeToolId) {
 
 function omitNullValues(input: unknown): unknown {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null));
 }
 
@@ -25,8 +26,10 @@ export function createAkeruMastraTools(threadId: string, runtime: AkeruToolRunti
     runtime.toolsForThread(threadId).map((definition) => {
       const schema = inputSchema(definition.id);
       const standardSchema = Schema.toStandardJSONSchemaV1(schema);
+
       const approval = (input: unknown) =>
         runtime.requiresApproval(threadId, definition.id, omitNullValues(input));
+
       const tool = createTool({
         id: definition.id,
         description: definition.description,
@@ -37,9 +40,11 @@ export function createAkeruMastraTools(threadId: string, runtime: AkeruToolRunti
         requireApproval: approval,
         execute: (input, context) => {
           const toolCallId = context.agent?.toolCallId;
+
           if (!toolCallId) {
             throw new Error(`Tool '${definition.id}' has no call identity.`);
           }
+
           return runtime.execute({
             threadId,
             toolId: definition.id,
@@ -49,7 +54,9 @@ export function createAkeruMastraTools(threadId: string, runtime: AkeruToolRunti
           });
         },
       });
+
       tool.needsApprovalFn = approval;
+
       return [definition.id, tool] as const;
     }),
   );

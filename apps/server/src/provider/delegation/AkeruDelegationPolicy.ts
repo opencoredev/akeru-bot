@@ -1,5 +1,20 @@
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
-import { AKERU_TOOL_CATALOG, BotId, DelegationId, MessageId, ProviderInstanceId, ThreadId, type AkeruDelegationAccessGrant, AkeruDelegationPhase, type AkeruDelegationRecord, type OrchestrationBot, type OrchestrationCommand, type OrchestrationReadModel, TurnId, isGroupBotMember } from "@akeru/contracts";
+import {
+  AKERU_TOOL_CATALOG,
+  BotId,
+  DelegationId,
+  MessageId,
+  ProviderInstanceId,
+  ThreadId,
+  type AkeruDelegationAccessGrant,
+  AkeruDelegationPhase,
+  type AkeruDelegationRecord,
+  type OrchestrationBot,
+  type OrchestrationCommand,
+  type OrchestrationReadModel,
+  TurnId,
+  isGroupBotMember,
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { PendingWaiterTimeoutError } from "../PendingWaiters.ts";
 
@@ -166,6 +181,7 @@ export function isReachableFromThread(
 ): boolean {
   if (parentThread.groupId === null) return true;
   const group = snapshot.groups.find((candidate) => candidate.id === parentThread.groupId);
+
   return (
     group !== undefined &&
     group.members.some((member) => isGroupBotMember(member) && member.botId === bot.id)

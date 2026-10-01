@@ -22,6 +22,7 @@ const {
 describe("providerMaintenanceRunner", () => {
   it.effect("runs the allowlisted provider update command and records success", () => {
     const calls: Array<{ command: string; args: ReadonlyArray<string> }> = [];
+
     return Effect.gen(function* () {
       const { registry, updateStatesRef } = yield* makeRegistry(baseCursorProvider);
       const updater = yield* makeTestRunner(registry);
@@ -45,6 +46,7 @@ describe("providerMaintenanceRunner", () => {
           latestVersionHttpClient("0.0.0"),
           mockSpawnerLayer((command, args) => {
             calls.push({ command, args });
+
             return { stdout: "updated" };
           }),
         ),
@@ -54,6 +56,7 @@ describe("providerMaintenanceRunner", () => {
 
   it.effect("uses the resolved provider capabilities when choosing the update executable", () => {
     const calls: Array<{ command: string; args: ReadonlyArray<string> }> = [];
+
     return Effect.gen(function* () {
       const { registry } = yield* makeRegistry({
         ...baseProvider,
@@ -67,6 +70,7 @@ describe("providerMaintenanceRunner", () => {
           message: "Update available.",
         },
       });
+
       const updater = yield* makeTestRunner({
         ...registry,
         getProviderMaintenanceCapabilitiesForInstance: () =>
@@ -95,6 +99,7 @@ describe("providerMaintenanceRunner", () => {
           latestVersionHttpClient("0.0.0"),
           mockSpawnerLayer((command, args) => {
             calls.push({ command, args });
+
             return { stdout: "updated" };
           }),
         ),
@@ -106,6 +111,7 @@ describe("providerMaintenanceRunner", () => {
     "runs update commands through Effect ChildProcess when no test runner is injected",
     () => {
       const calls: Array<{ command: string; args: ReadonlyArray<string> }> = [];
+
       return Effect.gen(function* () {
         const { registry } = yield* makeRegistry(baseProvider);
         const runner = yield* makeTestRunner(registry);
@@ -126,6 +132,7 @@ describe("providerMaintenanceRunner", () => {
             latestVersionHttpClient("0.0.0"),
             mockSpawnerLayer((command, args) => {
               calls.push({ command, args });
+
               return { stdout: "updated" };
             }),
           ),
@@ -165,6 +172,7 @@ describe("providerMaintenanceRunner", () => {
           installed: true,
           version: "0.1.0",
         });
+
         const updater = yield* makeTestRunner(registry);
 
         const result = yield* updater.updateProvider(CODEX_DRIVER);

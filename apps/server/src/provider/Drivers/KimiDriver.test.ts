@@ -16,6 +16,7 @@ describe("KimiDriver", () => {
   it.effect("registers one Mastra-native Kimi provider with offline model metadata", () => {
     expect(BUILT_IN_DRIVERS.map((driver) => String(driver.driverKind))).toContain("kimi");
     expect(BUILT_IN_DRIVERS.map((driver) => String(driver.driverKind))).not.toContain("cursor");
+
     const program = Effect.scoped(
       Effect.gen(function* () {
         const instance = yield* KimiDriver.create({
@@ -25,10 +26,13 @@ describe("KimiDriver", () => {
           enabled: true,
           config: KimiDriver.defaultConfig(),
         });
+
         const snapshot = yield* instance.snapshot.getSnapshot;
+
         return { instance, snapshot };
       }),
     );
+
     return program.pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-driver-test-" }).pipe(
@@ -62,6 +66,7 @@ describe("KimiDriver", () => {
     const program = Effect.scoped(
       Effect.gen(function* () {
         const config = yield* ServerConfig;
+
         const instance = yield* KimiDriver.create({
           instanceId: ProviderInstanceId.make("kimi"),
           displayName: undefined,
@@ -69,6 +74,7 @@ describe("KimiDriver", () => {
           enabled: true,
           config: KimiDriver.defaultConfig(),
         });
+
         const before = yield* instance.snapshot.getSnapshot;
         NodeFS.mkdirSync(config.secretsDir, { recursive: true });
         NodeFS.writeFileSync(
@@ -84,9 +90,11 @@ describe("KimiDriver", () => {
           }),
         );
         const after = yield* instance.snapshot.refresh;
+
         return { before, after, continuationIdentity: instance.continuationIdentity };
       }),
     );
+
     return program.pipe(
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-refresh-test-" }).pipe(

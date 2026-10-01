@@ -5,6 +5,7 @@ import { getKimiCodingDeviceHeaders } from "../subscription-auth/providers/kimi.
 import { subscriptionRequestUrl } from "../subscription-auth/runtime.ts";
 
 const KIMI_CODING_BASE_URL = "https://api.kimi.com/coding/v1";
+
 type AkeruKimiFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export interface AkeruKimiAccess {
@@ -19,19 +20,24 @@ export function buildAkeruKimiFetch(
 ): AkeruKimiFetch {
   return async (input, init) => {
     const access = await getAccess();
+
     if (!access) throw new Error("Kimi For Coding is not connected. Reconnect the account.");
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
+
     if (init?.headers) {
       new Headers(init.headers).forEach((value, key) => headers.set(key, value));
     }
+
     headers.delete("authorization");
     headers.delete("x-api-key");
     headers.set("Authorization", `Bearer ${access.accessToken}`);
+
     if (access.deviceId !== undefined) {
       for (const [key, value] of Object.entries(getKimiCodingDeviceHeaders(access.deviceId))) {
         headers.set(key, value);
       }
     }
+
     return request(subscriptionRequestUrl(input, KIMI_CODING_BASE_URL, access.baseUrl), {
       ...init,
       headers,

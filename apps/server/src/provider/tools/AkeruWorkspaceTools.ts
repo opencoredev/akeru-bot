@@ -61,6 +61,7 @@ export function workspaceForTool(toolId: AkeruToolId, session: AkeruToolSession)
 
 export async function toolsForWorkspace(workspace: Workspace | undefined) {
   if (!workspace) return {};
+
   return createWorkspaceTools(workspace, {
     requestContext: {},
     workspace,

@@ -61,6 +61,7 @@ export const ClaudeExecutableFileCheck = Context.Reference<ExecutableFileCheck>(
 export const resolveClaudeSdkExecutablePath = Effect.fn("resolveClaudeSdkExecutablePath")(
   function* (binaryPath: string, environment: NodeJS.ProcessEnv): Effect.fn.Return<string> {
     const platform = yield* HostProcessPlatform;
+
     if (platform !== "win32") {
       return binaryPath;
     }
@@ -69,13 +70,16 @@ export const resolveClaudeSdkExecutablePath = Effect.fn("resolveClaudeSdkExecuta
     const isFile = yield* ClaudeExecutableFileCheck;
     const resolved = resolveExecutable(binaryPath, platform, environment) ?? binaryPath;
     const extension = NodePath.win32.extname(resolved).toLowerCase();
+
     if (!WINDOWS_SHIM_EXTENSIONS.has(extension)) {
       return resolved;
     }
 
     const shimDirectory = NodePath.win32.dirname(resolved);
+
     for (const entrySegments of NPM_PACKAGE_ENTRY_CANDIDATES) {
       const candidate = NodePath.win32.join(shimDirectory, ...entrySegments);
+
       if (isFile(candidate)) {
         return candidate;
       }
@@ -85,6 +89,7 @@ export const resolveClaudeSdkExecutablePath = Effect.fn("resolveClaudeSdkExecuta
       "Claude launcher shim resolved but no known package entry was found next to it; the Claude Agent SDK cannot spawn launcher scripts directly.",
       { binaryPath, resolvedShimPath: resolved },
     );
+
     return binaryPath;
   },
 );

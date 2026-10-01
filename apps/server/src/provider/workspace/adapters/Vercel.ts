@@ -6,7 +6,9 @@ export function vercelWorkspaceState(
   status: import("@vercel/sandbox").Sandbox["status"],
 ): AkeruWorkspaceState {
   if (status === "running") return "running";
+
   if (status === "failed" || status === "aborted") return "missing";
+
   return "sleeping";
 }
 
@@ -15,6 +17,7 @@ export function vercel(
   environment: Readonly<Record<string, string>> = {},
 ): AkeruRemoteSession {
   let sandbox = initial;
+
   return {
     providerId: sandbox.name,
     inspect: async () => {
@@ -26,6 +29,7 @@ export function vercel(
         teamId: credential(environment, "VERCEL_TEAM_ID"),
         projectId: credential(environment, "VERCEL_PROJECT_ID"),
       });
+
       return vercelWorkspaceState(sandbox.status);
     },
     run: async (command, args, options) => {
@@ -36,6 +40,7 @@ export function vercel(
         ...(options?.env ? { env: options.env } : {}),
         ...(options?.timeout ? { timeoutMs: options.timeout } : {}),
       });
+
       return {
         exitCode: result.exitCode,
         stdout: await result.stdout(),
@@ -46,6 +51,7 @@ export function vercel(
       if (!sandbox.routes.some((route) => route.port === port)) {
         await sandbox.update({ ports: [...sandbox.routes.map((route) => route.port), port] });
       }
+
       return { url: sandbox.domain(port), requestHeaders: {} };
     },
     wake: async () => {

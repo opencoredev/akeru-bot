@@ -51,6 +51,7 @@ export const makeAkeruRuntimeSeam: Effect.Effect<AkeruRuntimeSeam, never, Scope.
   function* () {
     const fibers = yield* FiberSet.make<unknown, unknown>();
     const runFork = yield* FiberSet.runtime(fibers)<never>();
+
     // Resolves exactly like Effect.runPromiseWith (exit observer, then one
     // `then` hop) so callers keep the same microtask ordering.
     const runPromise = <A, E>(effect: Effect.Effect<A, E>) =>
@@ -58,6 +59,7 @@ export const makeAkeruRuntimeSeam: Effect.Effect<AkeruRuntimeSeam, never, Scope.
         runFork(effect).addObserver(resolve);
       }).then((exit) => {
         if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+
         return exit.value;
       });
 

@@ -16,11 +16,13 @@ describe("AkeruSessionResources", () => {
     for (const directory of directories) {
       NodeFS.rmSync(directory, { recursive: true, force: true });
     }
+
     directories.clear();
   });
 
   it("retries failed workspace sleeps after releasing sessions during shutdown", async () => {
     const remote = workspace();
+
     const botWorkspace = {
       ...localBotWorkspace(remote),
       provider: "vercel" as const,
@@ -29,6 +31,7 @@ describe("AkeruSessionResources", () => {
         .mockRejectedValueOnce(new Error("pause unavailable"))
         .mockResolvedValue(undefined),
     };
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => botWorkspace,
@@ -44,6 +47,7 @@ describe("AkeruSessionResources", () => {
 
   it("retries a failed workspace sleep with no active session", async () => {
     const remote = workspace();
+
     const botWorkspace = {
       ...localBotWorkspace(remote),
       provider: "vercel" as const,
@@ -52,6 +56,7 @@ describe("AkeruSessionResources", () => {
         .mockRejectedValueOnce(new Error("pause unavailable"))
         .mockResolvedValue(undefined),
     };
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => botWorkspace,
@@ -69,15 +74,18 @@ describe("AkeruSessionResources", () => {
   it("retains attribution while another chat for the same bot is active", async () => {
     const browserFailure = vi.fn();
     let onFailure!: (error: unknown) => void;
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeBotBrowser: (input) => {
         onFailure = input.onFailure!;
+
         return browser();
       },
       onBrowserFailure: browserFailure,
       toMcpServerConfigs: () => ({}),
     });
+
     const botId = BotId.make("bot-same");
     const first = { ...remoteInput, botSandbox: null, threadId: "chat-a", botId };
     const second = { ...remoteInput, botSandbox: null, threadId: "chat-b", botId };
@@ -95,10 +103,13 @@ describe("AkeruSessionResources", () => {
     const stop = vi.spyOn(remote, "stop");
     let finishCreate!: () => void;
     const created = new Promise<void>((resolve) => (finishCreate = resolve));
+
     const makeRemoteWorkspace = vi.fn(async () => {
       await created;
+
       return remote;
     });
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace,
@@ -120,6 +131,7 @@ describe("AkeruSessionResources", () => {
   it("exposes the authenticated product preview tools without a plugin connection", async () => {
     const previewStatus = { execute: vi.fn(async () => ({ attached: true })) };
     const previewSnapshot = { execute: vi.fn(async () => ({ url: "https://example.com" })) };
+
     const manager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
@@ -136,15 +148,19 @@ describe("AkeruSessionResources", () => {
         },
       ]),
     };
+
     const makeMcpManager = vi.fn(
       (_projectDir: string, _configDirName?: string, _servers?: Record<string, unknown>) =>
         manager as never,
     );
+
     const getPreviewMcpServerConfig = vi.fn(() => ({
       url: "http://127.0.0.1:4000/mcp",
       headers: { Authorization: "Bearer preview-token" },
     }));
+
     const botBrowser = browser();
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => workspace(),
@@ -177,6 +193,7 @@ describe("AkeruSessionResources", () => {
     const directory = stateDir();
     const sleep = vi.fn(async () => undefined);
     const destroy = vi.fn(async () => undefined);
+
     const openSession = vi.fn(
       async (providerId?: string): Promise<AkeruRemoteSession> => ({
         providerId: providerId ?? "provider-1",
@@ -188,6 +205,7 @@ describe("AkeruSessionResources", () => {
         destroy,
       }),
     );
+
     const options = {
       stateDir: directory,
       makeRemoteWorkspace: (input: Parameters<typeof createRemoteBotWorkspace>[0]) =>
@@ -201,12 +219,14 @@ describe("AkeruSessionResources", () => {
 
     expect(sleep).toHaveBeenCalledOnce();
     expect(destroy).not.toHaveBeenCalled();
+
     const identityFile = NodePath.join(
       directory,
       "bot-workspaces",
       remoteInput.workspaceId,
       "provider.json",
     );
+
     expect(NodeFS.existsSync(identityFile)).toBe(true);
 
     const second = new AkeruSessionResources(options);

@@ -29,7 +29,6 @@ import {
   snapshot,
 } from "./testUtils/delegationHarness.ts";
 
-
 const isProviderUnsupported = Schema.is(AkeruDelegationProviderUnsupportedError);
 
 describe("AkeruDelegationRuntime", () => {
@@ -39,6 +38,7 @@ describe("AkeruDelegationRuntime", () => {
       let nextId = 0;
       const started = Promise.withResolvers<void>();
       const test = harness();
+
       const runtime = createAkeruDelegationRuntime({
         readSnapshot: async () => test.state,
         dispatch: async (command) => {
@@ -72,8 +72,10 @@ describe("AkeruDelegationRuntime", () => {
                         },
                       })
                       .catch(() => undefined);
+
               void assignTurn.then(() => resolve(outcome));
             };
+
             started.resolve();
           }),
         interruptChild: async (threadId, turnId) => {
@@ -83,6 +85,7 @@ describe("AkeruDelegationRuntime", () => {
         now: () => NOW,
         id: () => String(++nextId),
       });
+
       await runtime.send(parent(), request() as never);
       await started.promise;
       const id = test.state.delegations[0]!.delegationId;
@@ -92,13 +95,16 @@ describe("AkeruDelegationRuntime", () => {
         failed: mode === "fail",
         ...(mode === "keep" ? { keep: new Set([id]) } : {}),
       });
+
       if (mode === "keep") {
         expect(test.interrupts).toEqual([]);
         release({ state: "completed", turnId: CHILD_TURN_ID, summary: "Kept result." });
       } else if (mode === "cancel") {
         release({ state: "failed", turnId: CHILD_TURN_ID, error: "Interrupted." });
       }
+
       await runtime.drain();
+
       return test;
     };
 
@@ -117,9 +123,11 @@ describe("AkeruDelegationRuntime", () => {
 
   it("persists child cancellation for the reactor after the runtime restarts", async () => {
     const childThreadId = ThreadId.make("persisted-child");
+
     const active = delegation(DelegationId.make("persisted-delegation"), {
       phase: { _tag: "Running", childThreadId, childTurnId: null, startedAt: NOW, progress: null },
     });
+
     const test = harness(snapshot({ delegations: [active] }));
 
     await test.runtime.parentFinished({
@@ -141,6 +149,7 @@ describe("AkeruDelegationRuntime", () => {
     const test = harness();
     const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
     const watchErrors: unknown[] = [];
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => test.state,
       dispatch: test.dispatch,
@@ -150,6 +159,7 @@ describe("AkeruDelegationRuntime", () => {
       now: () => NOW,
       id: (() => {
         let value = 0;
+
         return () => String(++value);
       })(),
     });
@@ -175,6 +185,7 @@ describe("AkeruDelegationRuntime", () => {
         ],
       }),
     );
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => test.state as OrchestrationReadModel,
       dispatch: test.dispatch,
@@ -183,6 +194,7 @@ describe("AkeruDelegationRuntime", () => {
       providerDriverKind: async (instanceId) => String(instanceId),
       now: () => NOW,
     });
+
     const refused = await runtime.send(parent(), request() as never).catch((cause) => cause);
     expect(isProviderUnsupported(refused)).toBe(true);
     expect(refused.message).toBe(

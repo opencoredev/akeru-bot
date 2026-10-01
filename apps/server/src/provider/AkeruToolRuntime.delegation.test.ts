@@ -16,6 +16,7 @@ const { directories, workspace } = makeAkeruToolRuntimeTestSupport();
 
 vi.mock("@mastra/core/workspace", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@mastra/core/workspace")>();
+
   return { ...actual, createWorkspaceTools: vi.fn(actual.createWorkspaceTools) };
 });
 
@@ -24,6 +25,7 @@ describe("AkeruToolRuntime", () => {
     for (const directory of directories) {
       NodeFS.rmSync(directory, { force: true, recursive: true });
     }
+
     directories.clear();
   });
 
@@ -53,6 +55,7 @@ describe("AkeruToolRuntime", () => {
     expect(runtime.toolsForThread("thread-delegated").map((tool) => tool.id)).toEqual([
       "SendToAgent",
     ]);
+
     const execution = {
       threadId: "thread-delegated",
       toolId: "SendToAgent" as const,
@@ -64,6 +67,7 @@ describe("AkeruToolRuntime", () => {
       },
       approvalMode: "require-grant" as const,
     };
+
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
     runtime.grantApproval(execution);
     await expect(runtime.execute(execution)).resolves.toEqual({ delivered: true });
@@ -72,6 +76,7 @@ describe("AkeruToolRuntime", () => {
 
   describe("temporary workers", () => {
     const WORKER_TOOLS = ["Task", "CheckSubagent", "MessageSubagent", "StopSubagent"];
+
     const status: AkeruWorkerStatus = {
       workerId: AkeruWorkerId.make("worker-1"),
       task: "Summarize",
@@ -83,6 +88,7 @@ describe("AkeruToolRuntime", () => {
         canceledBy: "stop",
       },
     };
+
     const workers = (depth: number): NonNullable<AkeruToolSession["workers"]> => ({
       depth,
       spawn: vi.fn(async () => status),
@@ -90,6 +96,7 @@ describe("AkeruToolRuntime", () => {
       message: vi.fn(async () => status),
       stop: vi.fn(async () => status),
     });
+
     const toolIds = (runtime: ReturnType<typeof createAkeruToolRuntime>, threadId: string) =>
       runtime.toolsForThread(threadId).map((tool) => tool.id);
 
@@ -137,6 +144,7 @@ describe("AkeruToolRuntime", () => {
 
     it("returns worker limit errors as failure receipts", async () => {
       const receipts: AkeruToolReceipt[] = [];
+
       const backend: NonNullable<AkeruToolSession["workers"]> = {
         ...workers(0),
         spawn: () =>
@@ -147,10 +155,12 @@ describe("AkeruToolRuntime", () => {
             }),
           ),
       };
+
       const runtime = createAkeruToolRuntime({
         onReceipt: (receipt) => receipts.push(receipt),
         now: () => "2026-09-25T00:00:00.000Z",
       });
+
       runtime.registerSession("bot-turn", {
         botId: BotId.make("bot-1"),
         runtimeMode: "approval-required",
@@ -214,6 +224,7 @@ describe("AkeruToolRuntime", () => {
         input,
         approvalMode: "require-grant",
       });
+
     await expect(execute("CreateAgent", { name: "Research" })).resolves.toEqual({
       botId: "bot-research",
     });
@@ -245,6 +256,7 @@ describe("AkeruToolRuntime", () => {
       runtime.grantApproval(execution);
       await expect(runtime.execute(execution)).resolves.toBeDefined();
     }
+
     expect(send).toHaveBeenCalledOnce();
     expect(stop).toHaveBeenCalledOnce();
   });
@@ -253,6 +265,7 @@ describe("AkeruToolRuntime", () => {
     const fail = vi.fn(async () => {
       throw new Error("Bot backend unavailable.");
     });
+
     const receipts: AkeruToolReceipt[] = [];
     const runtime = createAkeruToolRuntime({ onReceipt: (receipt) => receipts.push(receipt) });
     runtime.registerSession("thread-control-failures", {
@@ -320,6 +333,7 @@ describe("AkeruToolRuntime", () => {
 
   it("isolates delegation failures from the parent thread", async () => {
     const runtime = createAkeruToolRuntime();
+
     const execution = {
       threadId: "thread-1",
       toolId: "SendToAgent" as const,
@@ -331,6 +345,7 @@ describe("AkeruToolRuntime", () => {
       },
       approvalMode: "require-grant" as const,
     };
+
     runtime.registerSession("thread-1", {
       botId: BotId.make("parent"),
       runtimeMode: "full-access",

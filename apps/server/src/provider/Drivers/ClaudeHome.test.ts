@@ -59,16 +59,21 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
     it.effect("marks CLAUDE_CONFIG_DIR explicit so saved API keys do not replace the account", () =>
       Effect.gen(function* () {
         const secretsDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-claude-home-"));
+
         try {
           const auth = yield* SubscriptionAuthService.forSecretsDir(secretsDir);
+
           const login = yield* Effect.promise(() =>
             auth.startLogin("anthropic", { authMode: "api-key" }),
           );
+
           yield* Effect.promise(() => auth.completeLogin(login.loginId, "provider-wide-key"));
+
           const environment = yield* makeClaudeEnvironment(
             { homePath: "~/.claude-work" },
             { CLAUDE_CODE_OAUTH_TOKEN: "native-oauth" },
           );
+
           expect(yield* subscriptionRuntimeEnvironment(secretsDir, "anthropic", environment)).toBe(
             environment,
           );

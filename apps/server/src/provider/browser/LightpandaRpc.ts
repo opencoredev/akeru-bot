@@ -32,11 +32,15 @@ export function rpcResultText(value: unknown): string {
   if (typeof value !== "object" || value === null || !("content" in value)) {
     return JSON.stringify(value);
   }
+
   const content = value.content;
+
   if (!Array.isArray(content)) return JSON.stringify(value);
+
   return content
     .flatMap((item) => {
       if (typeof item !== "object" || item === null || !("text" in item)) return [];
+
       return typeof item.text === "string" ? [item.text] : [];
     })
     .join("\n");
@@ -60,10 +64,13 @@ export class LightpandaRpc implements BotBrowserRpc {
   async call(name: string, arguments_: Readonly<Record<string, unknown>>): Promise<string> {
     try {
       const result = await this.request("tools/call", { name, arguments: arguments_ });
+
       if (name === "goto" || name === "click" || name === "fill") {
         await this.rememberCurrentUrl().catch(() => undefined);
       }
+
       this.input.onReady?.();
+
       return rpcResultText(result);
     } catch (error) {
       this.input.onFailure?.(error);
@@ -74,6 +81,7 @@ export class LightpandaRpc implements BotBrowserRpc {
   async attachment(): Promise<BotBrowserAttachment | undefined> {
     try {
       await this.ensureStarted();
+
       return this.attachmentValue;
     } catch (error) {
       this.input.onFailure?.(error);
@@ -83,6 +91,7 @@ export class LightpandaRpc implements BotBrowserRpc {
 
   async reconnect(): Promise<void> {
     if (this.closed) throw new Error(`Sandbox browser for '${this.input.threadId}' is closed.`);
+
     try {
       await this.stopProcesses();
     } catch (error) {
@@ -103,38 +112,51 @@ export class LightpandaRpc implements BotBrowserRpc {
       this.startPromise = undefined;
       throw cause;
     });
+
     return this.startPromise;
   }
 
   private async start(): Promise<void> {
     const sandbox = this.input.workspace.sandbox;
+
     if (!sandbox?.executeCommand) {
       throw new Error(`Workspace '${this.input.workspace.id}' cannot host a sandbox browser.`);
     }
+
     const local = sandbox.provider === "local";
+
     if (local && !sandbox.processes) {
       throw new Error(`Workspace '${this.input.workspace.id}' cannot host a sandbox browser.`);
     }
+
     if (!local && !this.input.browserEndpoint) {
       throw new Error(`Sandbox '${sandbox.provider}' has no Akeru browser adapter.`);
     }
+
     const binaryPath = await installLightpanda(sandbox, this.input.cacheDir);
+
     if (this.closed) throw new Error(`Sandbox browser for '${this.input.threadId}' is closed.`);
     const browserPort = local ? await availableLocalPort() : REMOTE_BROWSER_PORT;
+
     const endpoint = local
       ? { url: `http://127.0.0.1:${browserPort}`, requestHeaders: {} }
       : await this.input.browserEndpoint!(browserPort);
+
     const browserHandle = local
       ? await sandbox.processes!.spawn(lightpandaMcpCommand(binaryPath, browserPort, "127.0.0.1"), {
           maxRetainedBytes: 64 * 1_024,
         })
       : await spawnRemoteBrowser(sandbox, binaryPath, browserPort);
+
     const processes = [browserHandle];
+
     if (this.closed) {
       await Promise.all(processes.map((process) => process.kill().catch(() => false)));
       throw new Error(`Sandbox browser for '${this.input.threadId}' is closed.`);
     }
+
     this.processes = processes;
+
     try {
       this.requestTransport = browserRequestTransport(endpoint.url, endpoint.requestHeaders);
       await this.initialize();
@@ -147,6 +169,7 @@ export class LightpandaRpc implements BotBrowserRpc {
         availableToHostedPlugins: !local,
       };
       this.input.onReady?.();
+
       if (browserHandle.wait)
         void browserHandle.wait().then(
           () => this.processStopped(browserHandle),
@@ -187,9 +210,11 @@ export class LightpandaRpc implements BotBrowserRpc {
     this.attachmentValue = undefined;
     this.sessionId = undefined;
     this.startPromise = undefined;
+
     if (transport && sessionId) {
       await transport({ method: "DELETE", sessionId }).catch(() => undefined);
     }
+
     await Promise.all(processes.map((process) => process.kill().catch(() => false)));
   }
 
@@ -198,6 +223,7 @@ export class LightpandaRpc implements BotBrowserRpc {
     const text = rpcResultText(result.result);
     const sessions = JSON.parse(text) as ReadonlyArray<{ readonly url?: unknown }>;
     const current = sessions.find((session) => typeof session.url === "string");
+
     if (typeof current?.url === "string" && current.url.length > 0) this.resumeUrl = current.url;
   }
 
@@ -208,6 +234,7 @@ export class LightpandaRpc implements BotBrowserRpc {
 
   private async initialize(): Promise<void> {
     let lastCause: unknown;
+
     for (let attempt = 0; attempt < 30; attempt++) {
       try {
         const response = await this.send("initialize", {
@@ -215,15 +242,18 @@ export class LightpandaRpc implements BotBrowserRpc {
           capabilities: {},
           clientInfo: { name: "akeru", version: "1.0.0" },
         });
+
         if (!response.sessionId) throw new Error("Sandbox browser did not create an MCP session.");
         this.sessionId = response.sessionId;
         await this.sendNotification("notifications/initialized");
+
         return;
       } catch (cause) {
         lastCause = cause;
         await NodeTimersPromises.setTimeout(100);
       }
     }
+
     throw lastCause instanceof Error
       ? lastCause
       : new Error("Sandbox browser did not become ready.");
@@ -231,6 +261,7 @@ export class LightpandaRpc implements BotBrowserRpc {
 
   private async request(method: string, params: unknown): Promise<unknown> {
     await this.ensureStarted();
+
     return (await this.send(method, params)).result;
   }
 
@@ -239,20 +270,26 @@ export class LightpandaRpc implements BotBrowserRpc {
     params: unknown,
   ): Promise<{ readonly result: unknown; readonly sessionId?: string }> {
     const transport = this.requestTransport;
+
     if (!transport) throw new Error("Sandbox browser HTTP transport is not ready.");
     const id = this.nextId++;
+
     const response = await transport({
       method: "POST",
       body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
       ...(this.sessionId ? { sessionId: this.sessionId } : {}),
     });
+
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`Sandbox browser HTTP request failed with status ${response.status}.`);
     }
+
     const parsed = JSON.parse(response.body) as JsonRpcResponse;
+
     if (parsed.error) {
       throw new Error(browserRpcErrorMessage(parsed.error));
     }
+
     return {
       result: parsed.result,
       ...(response.sessionId ? { sessionId: response.sessionId } : {}),
@@ -261,12 +298,15 @@ export class LightpandaRpc implements BotBrowserRpc {
 
   private async sendNotification(method: string): Promise<void> {
     const transport = this.requestTransport;
+
     if (!transport) throw new Error("Sandbox browser HTTP transport is not ready.");
+
     const response = await transport({
       method: "POST",
       body: JSON.stringify({ jsonrpc: "2.0", method }),
       ...(this.sessionId ? { sessionId: this.sessionId } : {}),
     });
+
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`Sandbox browser notification failed with status ${response.status}.`);
     }
@@ -300,6 +340,7 @@ export function createBotBrowserTools(rpc: BotBrowserRpc): ToolsInput {
       inputSchema: z.object({}),
       execute: async () => {
         const snapshot = await call("tree", {});
+
         return {
           snapshot: snapshot.slice(0, MAX_SNAPSHOT_LENGTH),
           truncated: snapshot.length > MAX_SNAPSHOT_LENGTH,

@@ -20,9 +20,11 @@ describe("AkeruMastraHarness", () => {
   it("emits observer and reflector metering callbacks", async () => {
     const started: unknown[] = [];
     const finished: unknown[] = [];
+
     const hooks = createAkeruObserveHooks({
       startMemoryCall: async (input) => {
         started.push(input);
+
         return `${input.category}-call`;
       },
       finishMemoryCall: async (input) => {
@@ -63,6 +65,7 @@ describe("AkeruMastraHarness", () => {
         throw new Error("Metering rejected");
       },
     });
+
     await expect(blocked.onObservationStart?.({ threadId: "thread-1" })).rejects.toThrow(
       "Metering rejected",
     );
@@ -70,10 +73,12 @@ describe("AkeruMastraHarness", () => {
 
   it("stores observational memory by thread and restores it after reopening", async () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-store-"));
+
     const options = {
       authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
       memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
     };
+
     try {
       const first = await createAkeruMastraMemory(options);
       assert.equal(first.engine.scope, "thread");
@@ -99,12 +104,14 @@ describe("AkeruMastraHarness", () => {
   it.effect("keeps /new thread observational memory isolated", () =>
     harnessTest(async (open) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-new-"));
+
       const harness = await open({
         authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
         memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
         getThreadTools: () => ({}),
         toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
       });
+
       try {
         await harness.restoreObservationalMemory!("prior-thread", {
           current: {
@@ -138,12 +145,14 @@ describe("AkeruMastraHarness", () => {
   it.effect("restores exported observational memory instead of treating import as a no-op", () =>
     harnessTest(async (open) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-restore-"));
+
       const harness = await open({
         authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
         memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
         getThreadTools: () => ({}),
         toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
       });
+
       try {
         await harness.restoreObservationalMemory!("thread-restored", {
           current: {
@@ -195,6 +204,7 @@ describe("AkeruMastraHarness", () => {
           (await harness.readObservationalMemory!("other-thread")).current?.id,
           "occupied-observation",
         );
+
         const newer = {
           current: {
             ...restored.current!,
@@ -202,13 +212,16 @@ describe("AkeruMastraHarness", () => {
           },
           history: [],
         };
+
         const priorRestore = harness.restoreObservationalMemory!("thread-restored", newer);
+
         const staleRestore = harness.restoreObservationalMemory!(
           "thread-restored",
           restored,
           "thread-restored",
           restored,
         );
+
         await expect(staleRestore).rejects.toThrow("Observations changed after the import preview");
         await priorRestore;
         assert.equal(
@@ -226,6 +239,7 @@ describe("AkeruMastraHarness", () => {
     harnessTest(async (open) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-restart-"));
       const before = await makeObservationHarness(open, directory);
+
       try {
         await before.restoreObservationalMemory!("thread-idle", {
           current: {
@@ -245,7 +259,9 @@ describe("AkeruMastraHarness", () => {
       } finally {
         await before.close();
       }
+
       const after = await makeObservationHarness(open, directory);
+
       try {
         await invalidateEntityMemoryObservations([["thread-idle", "thread-idle"]]);
         assert.isNull((await after.readObservationalMemory!("thread-idle")).current);
@@ -260,6 +276,7 @@ describe("AkeruMastraHarness", () => {
     harnessTest(async (open) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-tombstone-"));
       const harness = await makeObservationHarness(open, directory);
+
       try {
         await harness.restoreObservationalMemory!("thread-tombstone", {
           current: {
@@ -291,14 +308,19 @@ describe("AkeruMastraHarness", () => {
     harnessTest(async (open) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-failure-"));
       const calls: string[] = [];
+
       const observe = vi
         .spyOn(ObservationalMemory.prototype, "observe")
         .mockImplementation(async (input: { threadId: string }) => {
           calls.push(input.threadId);
+
           if (calls.length === 1) throw new Error("observer exploded");
+
           return { observed: false, reflected: false, record: {} } as never;
         });
+
       const harness = await makeObservationHarness(open, directory);
+
       try {
         // observeAfterTurn returns the drain promise; a failed attempt releases
         // the row with a backoff so the turn never sees the failure.
@@ -320,6 +342,7 @@ describe("AkeruMastraHarness", () => {
         const db = new NodeSqlite.DatabaseSync(
           NodePath.join(directory, "observational-memory.sqlite.queue.sqlite"),
         );
+
         db.prepare("UPDATE akeru_observation_queue SET next_attempt_at = ?").run(
           "2000-01-01T00:00:00.000Z",
         );
@@ -339,13 +362,16 @@ describe("AkeruMastraHarness", () => {
     harnessTest(async (open) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-clear-"));
       const calls: string[] = [];
+
       const observe = vi
         .spyOn(ObservationalMemory.prototype, "observe")
         .mockImplementation(async (input: { threadId: string }) => {
           calls.push(input.threadId);
           throw new Error("observer exploded");
         });
+
       const harness = await makeObservationHarness(open, directory);
+
       try {
         await harness.observeAfterTurn!({ threadId: "thread-a", modelId: "openai/gpt-5.6-sol" });
         assert.equal(queuedObservations(directory).length, 1);
@@ -367,6 +393,7 @@ describe("AkeruMastraHarness", () => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-external-"));
       const started: ReadonlyArray<unknown>[] = [];
       const finished: ReadonlyArray<unknown>[] = [];
+
       const observe = vi
         .spyOn(ObservationalMemory.prototype, "observe")
         .mockImplementation(async (input: { threadId: string; hooks?: ObserveHooks }) => {
@@ -375,17 +402,21 @@ describe("AkeruMastraHarness", () => {
             threadId: input.threadId,
             usage: { inputTokens: 9, outputTokens: 3 },
           });
+
           return { observed: true, reflected: false, record: {} } as never;
         });
+
       const harness = await makeObservationHarness(open, directory, {
         startMemoryCall: async (input) => {
           started.push([input.threadId, input.category]);
+
           return `${input.category}-call`;
         },
         finishMemoryCall: async (input) => {
           finished.push([input.callId, input.category, input.usage]);
         },
       });
+
       try {
         await harness.observeExternalTurn!({
           threadId: "thread-external",
@@ -410,6 +441,7 @@ describe("AkeruMastraHarness", () => {
 
   it("awaits observational-memory hooks", async () => {
     const finished: unknown[] = [];
+
     const hooks = createAkeruObserveHooks({
       startMemoryCall: async ({ category }) => `${category}-call`,
       finishMemoryCall: async (input) => {
@@ -446,12 +478,15 @@ describe("AkeruMastraHarness", () => {
         throw new Error("Hook rejected");
       },
     });
+
     let blockedError: unknown;
+
     try {
       await blocked.onObservationStart?.({ threadId: "thread-1" });
     } catch (error) {
       blockedError = error;
     }
+
     assert.instanceOf(blockedError, Error);
     assert.equal(blockedError.message, "Hook rejected");
   });

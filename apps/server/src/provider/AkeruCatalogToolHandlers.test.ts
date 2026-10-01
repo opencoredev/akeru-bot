@@ -20,40 +20,50 @@ describe("Akeru catalog MCP tool handlers", () => {
 
   it("runs the M2-T6 backends and aliases image generation", async () => {
     const calls: string[] = [];
+
     const handlers = createAkeruCatalogToolHandlers(undefined, undefined, undefined, {
       webSearch: async (input) => {
         calls.push(`search:${input.query}`);
+
         return { results: [] };
       },
       webFetch: async (input) => {
         calls.push(`fetch:${input.url}`);
+
         return { text: "page" };
       },
       generateImage: async (input) => {
         calls.push(`image:${(input as { prompt: string }).prompt}`);
+
         return { url: "https://img" };
       },
       addMcpServer: async (input) => {
         calls.push(`add:${String((input as { serverId: string }).serverId)}`);
+
         return { added: true };
       },
       uninstallMcpServer: async (id) => {
         calls.push(`uninstall:${id}`);
+
         return { removed: true };
       },
       removeMcpAccount: async (id) => {
         calls.push(`remove:${id}`);
+
         return { removed: true };
       },
       renameMcpAccount: async () => {
         calls.push("rename");
+
         return { renamed: true };
       },
       setMcpInstructions: async () => {
         calls.push("instructions");
+
         return { saved: true };
       },
     });
+
     await handlers.WebSearch!({ input: { query: "akeru" }, emitProgress: vi.fn() });
     await handlers.WebFetch!({ input: { url: "https://example.com" }, emitProgress: vi.fn() });
     await handlers.GenerateImage!({

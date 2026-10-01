@@ -56,6 +56,7 @@ export function makeproviderMaintenanceRunnerTestSupport() {
         updateLockKey: "cursor-agent",
       });
     }
+
     return makeProviderMaintenanceCapabilities({
       provider,
       packageName: provider === OPENCODE_DRIVER ? "opencode-ai" : "@openai/codex",
@@ -146,6 +147,7 @@ export function makeproviderMaintenanceRunnerTestSupport() {
           readonly command: string;
           readonly args: ReadonlyArray<string>;
         };
+
         return Effect.succeed(mockHandle(handler(childProcess.command, childProcess.args)));
       }),
     );
@@ -158,6 +160,7 @@ export function makeproviderMaintenanceRunnerTestSupport() {
       const providersRef = yield* Ref.make<ReadonlyArray<ServerProvider>>(
         Array.isArray(initialProviders) ? initialProviders : [initialProviders],
       );
+
       const updateStatesRef = yield* Ref.make<ReadonlyArray<ServerProviderUpdateState>>([]);
 
       const setProviderMaintenanceActionState = Effect.fn(
@@ -168,18 +171,23 @@ export function makeproviderMaintenanceRunnerTestSupport() {
         readonly state: ServerProviderUpdateState | null;
       }) {
         const updateState = input.state;
+
         if (updateState) {
           yield* Ref.update(updateStatesRef, (states) => [...states, updateState]);
         }
+
         return yield* Ref.updateAndGet(providersRef, (providers) =>
           providers.map((candidate) => {
             if (candidate.instanceId !== input.instanceId) {
               return candidate;
             }
+
             if (!updateState) {
               const { updateState: _updateState, ...providerWithoutUpdateState } = candidate;
+
               return providerWithoutUpdateState;
             }
+
             return {
               ...candidate,
               updateState,
@@ -218,6 +226,7 @@ export function makeproviderMaintenanceRunnerTestSupport() {
         ),
       ),
     );
+
   return {
     isServerProviderUpdateError,
     CODEX_DRIVER,

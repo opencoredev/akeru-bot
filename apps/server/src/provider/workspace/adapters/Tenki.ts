@@ -6,6 +6,7 @@ export function tenki(session: import("@tenkicloud/sandbox").Session): AkeruRemo
     providerId: session.id,
     inspect: async () => {
       await session.refresh();
+
       return tenkiWorkspaceState(session.state);
     },
     run: async (command, args, options) => {
@@ -14,6 +15,7 @@ export function tenki(session: import("@tenkicloud/sandbox").Session): AkeruRemo
         ...(options?.env ? { env: options.env } : {}),
         ...(options?.timeout !== undefined ? { timeoutMs: options.timeout } : {}),
       });
+
       return {
         stdout: new TextDecoder().decode(result.stdout),
         stderr: new TextDecoder().decode(result.stderr),
@@ -28,7 +30,9 @@ export function tenki(session: import("@tenkicloud/sandbox").Session): AkeruRemo
     },
     wake: async () => {
       await session.refresh();
+
       if (session.state === "PAUSING") await session.waitPaused();
+
       if (session.state === "PAUSED" || session.state === "USER_SHUTDOWN") {
         await session.resume();
         await session.waitResumed();

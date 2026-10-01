@@ -14,6 +14,7 @@ describe("AkeruSessionResources", () => {
     for (const directory of directories) {
       NodeFS.rmSync(directory, { recursive: true, force: true });
     }
+
     directories.clear();
   });
 
@@ -22,6 +23,7 @@ describe("AkeruSessionResources", () => {
     const makeRemoteWorkspace = vi.fn(async () => localBotWorkspace(remote));
     const sharedBrowser = browser();
     const makeBotBrowser = vi.fn(() => sharedBrowser);
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace,
@@ -49,17 +51,20 @@ describe("AkeruSessionResources", () => {
     let onFailure!: (error: unknown) => void;
     let onReady!: () => void;
     const sharedBrowser = browser();
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeBotBrowser: (input) => {
         onFailure = input.onFailure!;
         onReady = input.onReady!;
+
         return sharedBrowser;
       },
       onBrowserFailure: browserFailure,
       onBrowserReady: browserReady,
       toMcpServerConfigs: () => ({}),
     });
+
     const first = {
       ...remoteInput,
       botSandbox: null,
@@ -68,6 +73,7 @@ describe("AkeruSessionResources", () => {
       botName: "A",
       taskOrRoutine: "Task A",
     };
+
     const second = {
       ...remoteInput,
       botSandbox: null,
@@ -76,6 +82,7 @@ describe("AkeruSessionResources", () => {
       botName: "B",
       taskOrRoutine: "Task B",
     };
+
     await resources.acquire(first);
     await resources.acquire(second);
     onFailure(new Error("browser exited"));
@@ -93,29 +100,34 @@ describe("AkeruSessionResources", () => {
     const browserReady = vi.fn();
     let onFailure!: (error: unknown) => void;
     let onReady!: () => void;
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeBotBrowser: (input) => {
         onFailure = input.onFailure!;
         onReady = input.onReady!;
+
         return browser();
       },
       onBrowserFailure: browserFailure,
       onBrowserReady: browserReady,
       toMcpServerConfigs: () => ({}),
     });
+
     const first = {
       ...remoteInput,
       botSandbox: null,
       threadId: "late-share-first",
       botId: BotId.make("late-share-first"),
     };
+
     const second = {
       ...remoteInput,
       botSandbox: null,
       threadId: "late-share-second",
       botId: BotId.make("late-share-second"),
     };
+
     await resources.acquire(first);
     onFailure(new Error("browser exited"));
     expect(browserFailure).toHaveBeenCalledOnce();
@@ -132,22 +144,27 @@ describe("AkeruSessionResources", () => {
   it("does not pass a discarded browser failure to a replacement browser's bot", async () => {
     const browserFailure = vi.fn();
     const callbacks: Array<(error: unknown) => void> = [];
+
     const makeBotBrowser = vi.fn((input: { onFailure?: (error: unknown) => void }) => {
       callbacks.push(input.onFailure!);
+
       return browser();
     });
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeBotBrowser,
       onBrowserFailure: browserFailure,
       toMcpServerConfigs: () => ({}),
     });
+
     const first = {
       ...remoteInput,
       botSandbox: null,
       threadId: "discarded-browser",
       botId: BotId.make("bot-a"),
     };
+
     const second = {
       ...first,
       threadId: "replacement-browser",
@@ -170,11 +187,14 @@ describe("AkeruSessionResources", () => {
     const firstBrowser = browser({
       reconnect: async () => Promise.reject(new Error("reconnect failed")),
     });
+
     const replacementBrowser = browser();
+
     const makeBotBrowser = vi
       .fn()
       .mockReturnValueOnce(firstBrowser)
       .mockReturnValueOnce(replacementBrowser);
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => localBotWorkspace(workspace()),
@@ -200,16 +220,20 @@ describe("AkeruSessionResources", () => {
     const failed = workspace();
     vi.spyOn(failed, "stop").mockRejectedValueOnce(new Error("sleep failed"));
     const replacement = workspace();
+
     const makeRemoteWorkspace = vi
       .fn()
       .mockResolvedValueOnce(localBotWorkspace(failed))
       .mockResolvedValueOnce(localBotWorkspace(replacement));
+
     const staleBrowser = browser();
     const replacementBrowser = browser();
+
     const makeBotBrowser = vi
       .fn()
       .mockReturnValueOnce(staleBrowser)
       .mockReturnValueOnce(replacementBrowser);
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace,
@@ -232,17 +256,21 @@ describe("AkeruSessionResources", () => {
     const staleBrowser = browser({
       reconnect: async () => Promise.reject(new Error("shared reconnect failed")),
     });
+
     const replacementBrowser = browser();
+
     const makeBotBrowser = vi
       .fn()
       .mockReturnValueOnce(staleBrowser)
       .mockReturnValueOnce(replacementBrowser);
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => localBotWorkspace(workspace()),
       makeBotBrowser,
       toMcpServerConfigs: () => ({}),
     });
+
     await resources.acquire({ ...remoteInput, threadId: "initial-shared" });
     await resources.release("initial-shared");
 
@@ -250,6 +278,7 @@ describe("AkeruSessionResources", () => {
       resources.acquire({ ...remoteInput, threadId: "shared-one" }),
       resources.acquire({ ...remoteInput, threadId: "shared-two" }),
     ];
+
     await Promise.all(
       reconnects.map((acquire) => expect(acquire).rejects.toThrow("shared reconnect failed")),
     );
@@ -264,12 +293,14 @@ describe("AkeruSessionResources", () => {
     const remote = workspace();
     const destroy = vi.spyOn(remote, "destroy");
     const sharedBrowser = browser();
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => localBotWorkspace(remote),
       makeBotBrowser: () => sharedBrowser,
       toMcpServerConfigs: () => ({}),
     });
+
     await resources.acquire({ ...remoteInput, threadId: "first" });
     await resources.acquire({ ...remoteInput, threadId: "second" });
 
@@ -287,12 +318,14 @@ describe("AkeruSessionResources", () => {
     const stop = vi.spyOn(remote, "stop");
     const destroy = vi.spyOn(remote, "destroy");
     const sharedBrowser = browser();
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => localBotWorkspace(remote),
       makeBotBrowser: () => sharedBrowser,
       toMcpServerConfigs: () => ({}),
     });
+
     await resources.acquire({ ...remoteInput, threadId: "shutdown" });
     await resources.release("shutdown");
     expect(stop).toHaveBeenCalledOnce();

@@ -21,12 +21,15 @@ describe("AkeruMastraHarness", () => {
       const gates = new Map<string, PromiseWithResolvers<void>>();
       const entered = new Map<string, PromiseWithResolvers<void>>();
       const order: string[] = [];
+
       const gate = (label: string) => {
         gates.set(label, Promise.withResolvers<void>());
         entered.set(label, Promise.withResolvers<void>());
       };
+
       for (const label of ["a1", "a2", "b1"]) gate(label);
       const pending = ["a1", "a2"];
+
       const clear = vi
         .spyOn(ObservationalMemory.prototype, "clear")
         .mockImplementation(async (threadId: string) => {
@@ -36,7 +39,9 @@ describe("AkeruMastraHarness", () => {
           await gates.get(label)!.promise;
           order.push(`end:${label}`);
         });
+
       const harness = await makeObservationHarness(open, directory);
+
       try {
         const a1 = harness.clearObservationalMemory!("thread-a");
         const a2 = harness.clearObservationalMemory!("thread-a");
@@ -66,29 +71,37 @@ describe("AkeruMastraHarness", () => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-close-"));
       const inFlightEntered = Promise.withResolvers<void>();
       const inFlightGate = Promise.withResolvers<void>();
+
       const clear = vi
         .spyOn(ObservationalMemory.prototype, "clear")
         .mockImplementation(async () => {
           inFlightEntered.resolve();
           await inFlightGate.promise;
         });
+
       const harness = await makeObservationHarness(open, directory);
+
       try {
         const inFlight = harness.clearObservationalMemory!("thread-close");
         await inFlightEntered.promise;
         let closed = false;
+
         const close = harness.close().then(() => {
           closed = true;
         });
+
         const late = await harness.clearObservationalMemory!("thread-close").then(
           () => undefined,
           (cause: unknown) => cause,
         );
+
         assert.instanceOf(late, AkeruObservationQueueClosedError);
+
         const lateOtherThread = await harness.clearObservationalMemory!("thread-other").then(
           () => undefined,
           (cause: unknown) => cause,
         );
+
         assert.instanceOf(lateOtherThread, AkeruObservationQueueClosedError);
         expect(clear).toHaveBeenCalledOnce();
         assert.isFalse(closed);
@@ -112,15 +125,20 @@ describe("AkeruMastraHarness", () => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-ext-close-"));
       const persisting = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
+
       const observe = vi
         .spyOn(ObservationalMemory.prototype, "observe")
         .mockResolvedValue({ observed: true, reflected: false, record: {} } as never);
+
       const persist = vi.spyOn(Memory.prototype, "persistMessages").mockImplementation(async () => {
         persisting.resolve();
         await release.promise;
+
         return [] as never;
       });
+
       const harness = await makeObservationHarness(open, directory);
+
       const turn = {
         threadId: "thread-external-close",
         turnId: "turn-external-close",
@@ -129,13 +147,16 @@ describe("AkeruMastraHarness", () => {
         assistant: "Noted.",
         createdAt: "2026-09-20T12:00:00.000Z",
       };
+
       try {
         const observed = harness.observeExternalTurn!(turn).catch((cause: unknown) => cause);
         await persisting.promise;
         let closedStore = false;
+
         const closing = harness.close().then(() => {
           closedStore = true;
         });
+
         await Promise.resolve();
         assert.isFalse(closedStore);
         release.resolve();

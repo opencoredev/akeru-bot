@@ -37,6 +37,7 @@ describe("provider MCP configuration", () => {
     for (const transport of ["stdio", "url"] as const) {
       for (const hosted of [false, true]) {
         const base = servers.find((server) => server.transport === transport)!;
+
         for (const id of ["builtin-executor", "builtin-tinyfish"]) {
           const server = { ...base, id: McpServerId.make(id) };
           expect(mcpServerNeedsBrowserAttachment(server, hosted)).toBe(
@@ -46,6 +47,7 @@ describe("provider MCP configuration", () => {
             false,
           );
         }
+
         for (const id of ["builtin-exa", "composio-session", "raw-mcp", "builtin-computer-use"]) {
           expect(
             mcpServerNeedsBrowserAttachment({ ...base, id: McpServerId.make(id) }, hosted),
@@ -91,10 +93,12 @@ describe("provider MCP configuration", () => {
 
   it("detects a changed transient URL or header for the same server id", () => {
     const original = withMcpRuntimeHeaders({ ...servers[0]! }, { "x-api-key": "first" });
+
     const changedUrl = withMcpRuntimeHeaders(
       { ...servers[0]!, url: "https://mcp.example.com/new-session" },
       { "x-api-key": "first" },
     );
+
     const changedHeader = withMcpRuntimeHeaders({ ...servers[0]! }, { "x-api-key": "second" });
 
     expect(sameMcpServerConfigurations([original], [original])).toBe(true);

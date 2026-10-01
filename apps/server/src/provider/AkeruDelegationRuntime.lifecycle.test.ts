@@ -39,6 +39,7 @@ describe("AkeruDelegationRuntime", () => {
         usage: { inputTokens: 12, outputTokens: 8 },
       },
     );
+
     const handle = await test.runtime.send(parent(), request() as never);
     expect(handle).toMatchObject({ childBotId: CHILD_BOT_ID, phase: "running" });
     expect(handle.childThreadId).not.toBe(ThreadId.make("child"));
@@ -101,15 +102,18 @@ describe("AkeruDelegationRuntime", () => {
       [{ state: "blocked", turnId: CHILD_TURN_ID, error: "Access denied." }, "blocked", "info"],
       [{ state: "failed", turnId: CHILD_TURN_ID, error: "Provider failed." }, "failed", "error"],
     ];
+
     for (const [outcome, state, tone] of outcomes) {
       const test = harness(snapshot(), outcome);
       await test.runtime.send(parent(), request() as never);
       await test.runtime.drain();
+
       const activities = test.commands.flatMap((command) =>
         command.type === "thread.activity.append" && command.activity.kind.startsWith("delegation.")
           ? [command.activity]
           : [],
       );
+
       expect(activities.at(-1)).toMatchObject({
         kind: `delegation.${state}`,
         tone,
@@ -120,6 +124,7 @@ describe("AkeruDelegationRuntime", () => {
 
   it("enforces timeout and interrupts the child", async () => {
     const test = harness();
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => test.state,
       dispatch: async (command) => test.dispatch(command),
@@ -132,9 +137,11 @@ describe("AkeruDelegationRuntime", () => {
       now: () => NOW,
       id: (() => {
         let value = 0;
+
         return () => String(++value);
       })(),
     });
+
     await runtime.send(parent(), request({ deadline: "2020-01-01T00:00:00.000Z" }) as never);
     await runtime.drain();
     expect(test.state.delegations.at(-1)).toMatchObject({
@@ -145,6 +152,7 @@ describe("AkeruDelegationRuntime", () => {
 
   it("treats a waiter timeout without a deadline as a timeout and interrupts the child", async () => {
     const test = harness();
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => test.state,
       dispatch: async (command) => test.dispatch(command),
@@ -160,9 +168,11 @@ describe("AkeruDelegationRuntime", () => {
       now: () => NOW,
       id: (() => {
         let value = 0;
+
         return () => String(++value);
       })(),
     });
+
     await runtime.send(parent(), request() as never);
     await runtime.drain();
     expect(test.state.delegations.at(-1)).toMatchObject({
@@ -185,9 +195,11 @@ describe("AkeruDelegationRuntime", () => {
     const watchErrors: unknown[] = [];
     const firstCompleted = Promise.withResolvers<void>();
     let raceArmed = false;
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => {
         const current = test.state;
+
         if (!raceArmed) return current;
         raceArmed = false;
         // Hand the caller a copy taken while both records were still Running,
@@ -201,15 +213,18 @@ describe("AkeruDelegationRuntime", () => {
           summary: "Finished first.",
         });
         await firstCompleted.promise;
+
         return stale as OrchestrationReadModel;
       },
       dispatch: async (command) => {
         await test.dispatch(command);
+
         if (test.state.delegations[0]?.phase._tag === "Completed") firstCompleted.resolve();
       },
       awaitChild: () => {
         const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
         children.push(child);
+
         return child.promise;
       },
       interruptChild: async (threadId, turnId) => {
@@ -249,6 +264,7 @@ describe("AkeruDelegationRuntime", () => {
     const test = harness();
     const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
     const watchErrors: unknown[] = [];
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => test.state,
       dispatch: test.dispatch,
@@ -258,6 +274,7 @@ describe("AkeruDelegationRuntime", () => {
       now: () => NOW,
       id: (() => {
         let value = 0;
+
         return () => String(++value);
       })(),
     });
@@ -310,6 +327,7 @@ describe("AkeruDelegationRuntime", () => {
 
   it("leaves another parent bot's pending result for that bot", async () => {
     const childThreadId = ThreadId.make("other-parent-child");
+
     const otherResult = delegation(DelegationId.make("other-parent-delegation"), {
       parentBotId: OTHER_BOT_ID,
       phase: {
@@ -322,6 +340,7 @@ describe("AkeruDelegationRuntime", () => {
         acknowledgedAt: null,
       },
     });
+
     const test = harness(snapshot({ delegations: [otherResult] }));
 
     await expect(test.runtime.check(parent(), { botId: CHILD_BOT_ID })).resolves.toMatchObject({
@@ -333,6 +352,7 @@ describe("AkeruDelegationRuntime", () => {
   it("waits for the child before its turn starts", async () => {
     const test = harness();
     const order: string[] = [];
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => test.state,
       dispatch: async (command) => {
@@ -341,12 +361,14 @@ describe("AkeruDelegationRuntime", () => {
       },
       awaitChild: async () => {
         order.push("awaitChild");
+
         return { state: "completed", turnId: CHILD_TURN_ID, summary: "Fast answer." };
       },
       interruptChild: async () => undefined,
       now: () => NOW,
       id: (() => {
         let value = 0;
+
         return () => String(++value);
       })(),
     });

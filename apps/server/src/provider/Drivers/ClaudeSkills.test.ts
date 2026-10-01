@@ -249,9 +249,11 @@ it.layer(NodeServices.layer)("discoverClaudeSkills", (it) => {
         "explicit-skill",
         ["---", "name: explicit-skill", "---"].join("\n"),
       );
+
       const explicitSkills = yield* discoverClaudeSkills({ homePath: explicitHome }, undefined, {
         CLAUDE_CONFIG_DIR: environmentConfigDir,
       });
+
       assert.deepEqual(
         explicitSkills.map((skill) => skill.name),
         ["explicit-skill"],

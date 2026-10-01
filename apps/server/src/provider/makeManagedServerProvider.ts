@@ -48,16 +48,20 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
   const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
   const serverSettings = yield* ServerSettingsService;
   const refreshSemaphore = yield* Semaphore.make(1);
+
   const changesPubSub = yield* Effect.acquireRelease(
     PubSub.unbounded<ServerProvider>(),
     PubSub.shutdown,
   );
+
   const initialSettings = yield* input.getSettings;
   const initialSnapshot = yield* input.initialSnapshot(initialSettings);
+
   const snapshotStateRef = yield* Ref.make<ProviderSnapshotState>({
     snapshot: initialSnapshot,
     enrichmentGeneration: 0,
   });
+
   const settingsRef = yield* Ref.make(initialSettings);
   const enrichmentFiberRef = yield* Ref.make<Fiber.Fiber<void, unknown> | null>(null);
   const scope = yield* Effect.scope;
@@ -70,6 +74,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
       if (state.enrichmentGeneration !== generation || Equal.equals(state.snapshot, nextSnapshot)) {
         return [null, state] as const;
       }
+
       return [
         nextSnapshot,
         {
@@ -78,9 +83,11 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
         },
       ] as const;
     });
+
     if (snapshotToPublish === null) {
       return;
     }
+
     yield* PubSub.publish(changesPubSub, snapshotToPublish);
   });
 
@@ -90,6 +97,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     generation: number,
   ) {
     const previousFiber = yield* Ref.getAndSet(enrichmentFiberRef, null);
+
     if (previousFiber) {
       yield* Fiber.interrupt(previousFiber).pipe(Effect.ignore);
     }
@@ -116,16 +124,20 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
   ) {
     const forceRefresh = options?.forceRefresh === true;
     const previousSettings = yield* Ref.get(settingsRef);
+
     if (!forceRefresh && !input.haveSettingsChanged(previousSettings, nextSettings)) {
       yield* Ref.set(settingsRef, nextSettings);
+
       return yield* Ref.get(snapshotStateRef).pipe(Effect.map((state) => state.snapshot));
     }
 
     const nextSnapshot = yield* input.checkProvider;
+
     const nextGeneration = yield* Ref.modify(snapshotStateRef, (state) => {
       const generation = input.enrichSnapshot
         ? state.enrichmentGeneration + 1
         : state.enrichmentGeneration;
+
       return [
         generation,
         {
@@ -134,26 +146,32 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
         },
       ] as const;
     });
+
     yield* Ref.set(settingsRef, nextSettings);
     yield* PubSub.publish(changesPubSub, nextSnapshot);
     yield* restartSnapshotEnrichment(nextSettings, nextSnapshot, nextGeneration);
+
     return nextSnapshot;
   });
+
   const applySnapshot = (nextSettings: Settings, options?: { readonly forceRefresh?: boolean }) =>
     refreshSemaphore.withPermits(1)(applySnapshotBase(nextSettings, options));
 
   const refreshSnapshot = Effect.fn("refreshSnapshot")(function* () {
     const nextSettings = yield* input.getSettings;
+
     return yield* applySnapshot(nextSettings, { forceRefresh: true });
   });
 
   const hasProviderStatusDemand = Effect.gen(function* () {
     const state = yield* Ref.get(snapshotStateRef);
     const instanceId = state.snapshot.instanceId;
+
     const [genericDemand, instanceDemand] = yield* Effect.all([
       backgroundPolicy.shouldRunScopeWork({ type: "provider-status" }),
       backgroundPolicy.shouldRunScopeWork({ type: "provider-status", instanceId }),
     ]);
+
     return genericDemand || instanceDemand;
   });
 
@@ -169,6 +187,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
         );
 
   const refreshIntervalChanges = yield* Queue.sliding<void>(1);
+
   if (input.refreshInterval === undefined) {
     const serverSettingsChanges = yield* serverSettings.subscribeChanges;
     yield* serverSettingsChanges.pipe(

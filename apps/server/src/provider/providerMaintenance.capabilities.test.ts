@@ -278,6 +278,7 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
     Effect.gen(function* () {
       const tempDir = yield* makeTempDir("t3-npm-capabilities");
       const binDir = NodePath.join(tempDir, "bin");
+
       const packageBinDir = NodePath.join(
         tempDir,
         "lib",
@@ -286,6 +287,7 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
         "package-tool",
         "bin",
       );
+
       NodeFS.mkdirSync(binDir, { recursive: true });
       NodeFS.mkdirSync(packageBinDir, { recursive: true });
       const packageBinPath = NodePath.join(packageBinDir, "package-tool.js");
@@ -327,6 +329,7 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
     Effect.gen(function* () {
       const tempDir = yield* makeTempDir("t3-pnpm-realpath-capabilities");
       const binDir = NodePath.join(tempDir, "bin");
+
       const packageBinDir = NodePath.join(
         tempDir,
         ".local",
@@ -339,6 +342,7 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
         "package-tool",
         "bin",
       );
+
       NodeFS.mkdirSync(binDir, { recursive: true });
       NodeFS.mkdirSync(packageBinDir, { recursive: true });
       const packageBinPath = NodePath.join(packageBinDir, "package-tool.js");

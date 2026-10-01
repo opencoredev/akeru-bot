@@ -25,14 +25,16 @@ export function delegationResultsContext(
   const lines = delegations.flatMap((delegation) => {
     const name =
       bots.find((bot) => bot.id === delegation.childBotId)?.name ?? delegation.childBotId;
+
     if (options.channel) {
-      const outcome =
-        Predicate.isTagged(delegation.phase, "Completed")
-          ? { _tag: "Completed" as const, summary: delegation.phase.result.summary }
-          : Predicate.isTagged(delegation.phase, "Failed")
-            ? { _tag: "Failed" as const, message: delegation.phase.failure.message }
-            : null;
+      const outcome = Predicate.isTagged(delegation.phase, "Completed")
+        ? { _tag: "Completed" as const, summary: delegation.phase.result.summary }
+        : Predicate.isTagged(delegation.phase, "Failed")
+          ? { _tag: "Failed" as const, message: delegation.phase.failure.message }
+          : null;
+
       if (outcome === null) return [];
+
       return [
         `- ${delegationSummaryText({
           botName: name,
@@ -42,20 +44,25 @@ export function delegationResultsContext(
         })}`,
       ];
     }
-    const detail =
-      Predicate.isTagged(delegation.phase, "Completed")
-        ? `completed: ${delegation.phase.result.summary}`
-        : Predicate.isTagged(delegation.phase, "Failed")
-          ? `failed (${delegation.phase.failure.failureCode}): ${delegation.phase.failure.message}`
-          : null;
+
+    const detail = Predicate.isTagged(delegation.phase, "Completed")
+      ? `completed: ${delegation.phase.result.summary}`
+      : Predicate.isTagged(delegation.phase, "Failed")
+        ? `failed (${delegation.phase.failure.failureCode}): ${delegation.phase.failure.message}`
+        : null;
+
     if (detail === null) return [];
+
     const bounded =
       detail.length > DELEGATION_RESULT_MAX_CHARS
         ? `${detail.slice(0, DELEGATION_RESULT_MAX_CHARS)}… (shortened; the full result is on the work card)`
         : detail;
+
     return [`- ${name} (${delegation.delegationId}) for "${delegation.task}" ${bounded}`];
   });
+
   if (lines.length === 0) return "";
+
   return [
     "<delegated-work-results>",
     options.channel

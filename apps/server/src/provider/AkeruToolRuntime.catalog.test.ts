@@ -10,6 +10,7 @@ const { directories } = makeAkeruToolRuntimeTestSupport();
 
 vi.mock("@mastra/core/workspace", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@mastra/core/workspace")>();
+
   return { ...actual, createWorkspaceTools: vi.fn(actual.createWorkspaceTools) };
 });
 
@@ -18,6 +19,7 @@ describe("AkeruToolRuntime", () => {
     for (const directory of directories) {
       NodeFS.rmSync(directory, { force: true, recursive: true });
     }
+
     directories.clear();
   });
 
@@ -31,6 +33,7 @@ describe("AkeruToolRuntime", () => {
       fatalToThread: false as const,
       createdAt: "2026-09-01T02:00:00.000Z",
     }));
+
     const runtime = createAkeruToolRuntime();
     runtime.registerSession("thread-no-bot", {
       runtimeMode: "full-access",

@@ -8,19 +8,23 @@ import {
 
 export function field(value: unknown, key: string): unknown {
   if (typeof value !== "object" || value === null) return undefined;
+
   return Object.getOwnPropertyDescriptor(value, key)?.value;
 }
 
 export function requiredString(value: unknown, key: string): string {
   const candidate = field(value, key);
+
   if (typeof candidate !== "string" || candidate.length === 0) {
     throw new Error(`Tool input field '${key}' is required.`);
   }
+
   return candidate;
 }
 
 export function canonicalInput(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalInput).join(",")}]`;
+
   if (typeof value === "object" && value !== null) {
     return `{${Object.keys(value)
       .filter((key) => field(value, key) !== undefined)
@@ -28,14 +32,18 @@ export function canonicalInput(value: unknown): string {
       .map((key) => `${JSON.stringify(key)}:${canonicalInput(field(value, key))}`)
       .join(",")}}`;
   }
+
   return JSON.stringify(value) ?? "undefined";
 }
 
 export function ensureWorkspaceCwd(toolId: AkeruToolId, input: unknown): void {
   if (toolId !== "Shell" && toolId !== "ExternalShell") return;
   const cwd = field(input, "cwd");
+
   if (cwd === undefined) return;
+
   if (typeof cwd !== "string") throw new Error(`Tool '${toolId}' cwd must be a relative path.`);
+
   if (
     cwd.startsWith("/") ||
     cwd.startsWith("\\") ||
@@ -71,6 +79,7 @@ export function requestedSubset<T>(
   if (requested?.some((value) => !ceiling.includes(value))) {
     throw new Error(`Delegation requested ${label} outside the parent turn grant.`);
   }
+
   return requested ?? ceiling;
 }
 
@@ -84,26 +93,33 @@ export function intersectDelegationAccess(input: {
     input.parent.allowedToolIds,
     "tools",
   );
+
   const requestedMemory = requestedSubset<AkeruMemoryTargetScope>(
     input.requested.memoryScopes,
     input.parent.memoryScopes,
     "memory scopes",
   );
+
   const requestedMcpServers = requestedSubset(
     input.requested.mcpServerIds,
     input.parent.enabledMcpServerIds,
     "MCP servers",
   );
+
   const requestedRuntime = input.requested.runtimeMode ?? input.parent.runtimeMode;
+
   if (RUNTIME_RANK.indexOf(requestedRuntime) > RUNTIME_RANK.indexOf(input.parent.runtimeMode)) {
     throw new Error("Delegation requested a runtime mode above the parent turn grant.");
   }
+
   const requestedApproval = input.requested.approvalCeiling ?? input.parent.approvalCeiling;
+
   if (
     APPROVAL_RANK.indexOf(requestedApproval) > APPROVAL_RANK.indexOf(input.parent.approvalCeiling)
   ) {
     throw new Error("Delegation requested approvals above the parent turn grant.");
   }
+
   if (
     input.requested.sandbox !== undefined &&
     input.requested.sandbox !== null &&
@@ -111,8 +127,10 @@ export function intersectDelegationAccess(input: {
   ) {
     throw new Error("Delegation requested a sandbox outside the parent turn grant.");
   }
+
   const sandbox =
     input.requested.sandbox === undefined ? input.parent.sandbox : input.requested.sandbox;
+
   return {
     allowedToolIds: requestedTools.filter((toolId) => input.child.allowedToolIds.includes(toolId)),
     memoryScopes: requestedMemory.filter((scope) => input.child.memoryScopes.includes(scope)),

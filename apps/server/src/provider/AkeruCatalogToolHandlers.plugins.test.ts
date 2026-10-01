@@ -49,6 +49,7 @@ describe("Akeru catalog MCP tool handlers", () => {
         ),
       dispatch: async () => undefined,
     });
+
     const statuses = [
       {
         name: "builtin-exa",
@@ -139,6 +140,7 @@ describe("Akeru catalog MCP tool handlers", () => {
 
   it("installs catalog-owned recipes and enables an existing disabled plugin", async () => {
     const dispatch = vi.fn<(command: OrchestrationCommand) => Promise<void>>(async () => undefined);
+
     // The pending catalog refuses installation until each vendor lifecycle is
     // verified; the runtime test exercises the same path through an injected
     // manifest that declares itself ready.
@@ -156,6 +158,7 @@ describe("Akeru catalog MCP tool handlers", () => {
         catalogStatus: "available",
       },
     });
+
     const runtime = createAkeruPluginRuntime(
       {
         readSnapshot: async () =>
@@ -199,6 +202,7 @@ describe("Akeru catalog MCP tool handlers", () => {
 
   it("creates enabled plugins and rejects unavailable directory entries", async () => {
     const dispatch = vi.fn<(command: OrchestrationCommand) => Promise<void>>(async () => undefined);
+
     const runtime = createAkeruPluginRuntime(
       {
         readSnapshot: async () => snapshot(),
@@ -244,6 +248,7 @@ describe("Akeru catalog MCP tool handlers", () => {
 
   it("removes installed plugins with the pre-change dependent view", async () => {
     const dispatch = vi.fn<(command: OrchestrationCommand) => Promise<void>>(async () => undefined);
+
     const runtime = createAkeruPluginRuntime({
       readSnapshot: async () =>
         snapshot(
@@ -283,6 +288,7 @@ describe("Akeru catalog MCP tool handlers", () => {
       readSnapshot: async () => snapshot(),
       dispatch,
     });
+
     await expect(absent.uninstall("exa")).rejects.toThrow("is not installed");
   });
 
@@ -291,6 +297,7 @@ describe("Akeru catalog MCP tool handlers", () => {
       readSnapshot: async () => snapshot(),
       dispatch: async () => undefined,
     });
+
     expect(Object.keys(createAkeruCatalogToolHandlers(undefined, runtime))).toEqual([
       "SearchPlugins",
       "GetPlugin",

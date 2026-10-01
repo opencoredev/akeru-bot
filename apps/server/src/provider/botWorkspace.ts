@@ -44,11 +44,15 @@ export async function createBotWorkspace(
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
       ...(input.environment ? { environment: input.environment } : {}),
     });
+
     return remote instanceof Workspace ? wrap(remote, input.sandbox) : remote;
   }
+
   const root = input.localRoot ?? input.cwd;
+
   if (!root) return undefined;
   await NodeFS.promises.mkdir(root, { recursive: true, mode: 0o700 });
+
   const workspace = new Workspace({
     id: input.workspaceId ?? `akeru-${input.threadId}`,
     name: `Akeru ${input.threadId}`,
@@ -56,6 +60,7 @@ export async function createBotWorkspace(
     sandbox: new LocalSandbox({ workingDirectory: root }),
     tools: TOOL_NAME_OVERRIDES,
   });
+
   return wrap(workspace, "local");
 }
 
@@ -66,11 +71,13 @@ export async function createRemoteBotWorkspace(
     throw new Error(`Remote sandbox '${input.sandbox}' needs a stable workspace identity.`);
   const identityFile = input.identityFile;
   const persisted = await readIdentity(identityFile);
+
   if (persisted && persisted.provider !== input.sandbox)
     throw new Error(
       `Workspace '${input.workspaceId}' belongs to '${persisted.provider}', not '${input.sandbox}'.`,
     );
   let session: AkeruRemoteSession;
+
   try {
     session = input.openSession
       ? await input.openSession(persisted?.providerId)
@@ -84,6 +91,7 @@ export async function createRemoteBotWorkspace(
       { cause },
     );
   }
+
   if (!persisted || persisted.providerId !== session.providerId) {
     try {
       await writeIdentity(identityFile, {
@@ -95,6 +103,7 @@ export async function createRemoteBotWorkspace(
       throw cause;
     }
   }
+
   const workspace = new Workspace({
     id: input.workspaceId,
     name: `Akeru ${input.workspaceId}`,
@@ -102,6 +111,7 @@ export async function createRemoteBotWorkspace(
     sandbox: new RemoteSandbox(input.workspaceId, input.sandbox, session),
     tools: TOOL_NAME_OVERRIDES,
   });
+
   return {
     id: input.workspaceId,
     provider: input.sandbox,
@@ -130,15 +140,20 @@ async function create(
 ): Promise<AkeruRemoteSession> {
   if (provider === "ascii") {
     const { BoxApi, Configuration } = await import("@asciidev/box-sdk");
+
     const client = new BoxApi(
       new Configuration({ accessToken: credential(environment, "BOX_API_KEY") }),
     );
+
     const { box } = await client.create({ createBoxRequest: { ttlSeconds: null, noEnv: true } });
+
     return ascii(client, box.id);
   }
+
   if (provider === "e2b") {
     const { Sandbox } = await import("e2b");
     const apiKey = credential(environment, "E2B_API_KEY");
+
     return e2b(
       await Sandbox.create({
         apiKey,
@@ -148,13 +163,17 @@ async function create(
       apiKey,
     );
   }
+
   if (provider === "daytona") {
     const { Daytona } = await import("@daytona/sdk");
     const client = new Daytona({ apiKey: credential(environment, "DAYTONA_API_KEY") });
+
     return daytona(client, await client.create({ name: id }));
   }
+
   if (provider === "vercel") {
     const { Sandbox } = await import("@vercel/sandbox");
+
     return vercel(
       await Sandbox.create({
         name: id,
@@ -166,17 +185,23 @@ async function create(
       environment,
     );
   }
+
   if (provider === "railway") {
     const { Sandbox } = await import("railway");
+
     return railway(await Sandbox.create(railwayCredentials(environment)));
   }
+
   if (provider === "tenki") {
     const { TenkiSandbox } = await import("@tenkicloud/sandbox");
     const client = new TenkiSandbox({ apiKey: credential(environment, "TENKI_API_KEY") });
+
     // Persist the VM identity before wake waits for readiness, which can fail transiently.
     return tenki(await client.create({ name: id, sticky: true, waitReady: false }));
   }
+
   const { Box } = await import("@upstash/box");
+
   return upstash(await Box.create({ apiKey: credential(environment, "UPSTASH_BOX_API_KEY") }));
 }
 
@@ -187,31 +212,41 @@ async function open(
 ): Promise<AkeruRemoteSession> {
   if (provider === "ascii") {
     const { BoxApi, Configuration, ResponseError } = await import("@asciidev/box-sdk");
+
     const client = new BoxApi(
       new Configuration({ accessToken: credential(environment, "BOX_API_KEY") }),
     );
+
     try {
       await client.get({ boxId: id });
     } catch (cause) {
       if (!(cause instanceof ResponseError) || cause.response.status !== 404) throw cause;
       // A timed-out deletion can finish later; only confirmed absence permits replacement.
       const { box } = await client.create({ createBoxRequest: { ttlSeconds: null, noEnv: true } });
+
       return ascii(client, box.id);
     }
+
     return ascii(client, id);
   }
+
   if (provider === "e2b") {
     const { Sandbox } = await import("e2b");
     const apiKey = credential(environment, "E2B_API_KEY");
+
     return e2b(await Sandbox.connect(id, { apiKey }), apiKey);
   }
+
   if (provider === "daytona") {
     const { Daytona } = await import("@daytona/sdk");
     const client = new Daytona({ apiKey: credential(environment, "DAYTONA_API_KEY") });
+
     return daytona(client, await client.get(id));
   }
+
   if (provider === "vercel") {
     const { Sandbox } = await import("@vercel/sandbox");
+
     return vercel(
       await Sandbox.get({
         name: id,
@@ -223,18 +258,24 @@ async function open(
       environment,
     );
   }
+
   if (provider === "railway") {
     const { Sandbox } = await import("railway");
     const session = railway(await Sandbox.connect(id, railwayCredentials(environment)));
     await session.wake();
+
     return session;
   }
+
   if (provider === "tenki") {
     const { TenkiSandbox } = await import("@tenkicloud/sandbox");
     const client = new TenkiSandbox({ apiKey: credential(environment, "TENKI_API_KEY") });
+
     return tenki(await client.get(id));
   }
+
   const { Box } = await import("@upstash/box");
+
   return upstash(await Box.get(id, { apiKey: credential(environment, "UPSTASH_BOX_API_KEY") }));
 }
 

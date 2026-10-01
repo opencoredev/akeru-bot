@@ -11,6 +11,7 @@ const { directories, workspace, workspaceRoot } = makeAkeruToolRuntimeTestSuppor
 
 vi.mock("@mastra/core/workspace", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@mastra/core/workspace")>();
+
   return { ...actual, createWorkspaceTools: vi.fn(actual.createWorkspaceTools) };
 });
 
@@ -19,6 +20,7 @@ describe("AkeruToolRuntime", () => {
     for (const directory of directories) {
       NodeFS.rmSync(directory, { force: true, recursive: true });
     }
+
     directories.clear();
   });
 
@@ -34,6 +36,7 @@ describe("AkeruToolRuntime", () => {
     });
 
     expect(runtime.toolsForThread("thread-memory").map((tool) => tool.id)).toEqual(["memory"]);
+
     const write = {
       threadId: "thread-memory",
       toolId: "memory" as const,
@@ -44,6 +47,7 @@ describe("AkeruToolRuntime", () => {
       },
       approvalMode: "require-grant" as const,
     };
+
     await expect(runtime.requiresApproval("thread-memory", "memory", write.input)).resolves.toBe(
       false,
     );
@@ -59,6 +63,7 @@ describe("AkeruToolRuntime", () => {
       workspaceType: "local",
       workspace: workspace("shell"),
     });
+
     const execution = {
       threadId: "thread-1",
       toolId: "Shell" as const,
@@ -66,6 +71,7 @@ describe("AkeruToolRuntime", () => {
       input: { command: "pwd" },
       approvalMode: "require-grant" as const,
     };
+
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
     expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "failure"]);
     expect(receipts[1]).toMatchObject({ failureCode: "denied", fatalToThread: false });
@@ -112,6 +118,7 @@ describe("AkeruToolRuntime", () => {
       workspaceType: "local",
       workspace: workspace("nullable-shell"),
     });
+
     const execution = {
       threadId: "nullable-shell",
       toolId: "Shell" as const,
@@ -120,7 +127,9 @@ describe("AkeruToolRuntime", () => {
       approvalMode: "require-grant" as const,
     };
 
-    await expect(runtime.requiresApproval(execution.threadId, execution.toolId, execution.input)).resolves.toBe(true);
+    await expect(
+      runtime.requiresApproval(execution.threadId, execution.toolId, execution.input),
+    ).resolves.toBe(true);
     runtime.grantApproval(execution);
     await expect(runtime.execute(execution)).resolves.toBeDefined();
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
@@ -135,33 +144,41 @@ describe("AkeruToolRuntime", () => {
       memoryHandlers: { memory },
     });
 
-    await expect(runtime.execute({
-      threadId: "memory-boundary",
-      toolId: "memory",
-      toolCallId: "invalid-memory",
-      approvalMode: "require-grant",
-      input: { target: null, operations: [{ action: "add", content: "Remember this." }] },
-    })).rejects.toThrow();
+    await expect(
+      runtime.execute({
+        threadId: "memory-boundary",
+        toolId: "memory",
+        toolCallId: "invalid-memory",
+        approvalMode: "require-grant",
+        input: { target: null, operations: [{ action: "add", content: "Remember this." }] },
+      }),
+    ).rejects.toThrow();
     expect(memory).not.toHaveBeenCalled();
-    expect(() => runtime.grantApproval({
-      threadId: "memory-boundary",
-      toolId: "Shell",
-      toolCallId: "extra-command",
-      input: { command: "pwd", extra: null },
-    })).not.toThrow();
-    expect(() => runtime.grantApproval({
-      threadId: "memory-boundary",
-      toolId: "Shell",
-      toolCallId: "extra-command",
-      input: { command: "pwd", extra: "unexpected" },
-    })).toThrow();
+    expect(() =>
+      runtime.grantApproval({
+        threadId: "memory-boundary",
+        toolId: "Shell",
+        toolCallId: "extra-command",
+        input: { command: "pwd", extra: null },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      runtime.grantApproval({
+        threadId: "memory-boundary",
+        toolId: "Shell",
+        toolCallId: "extra-command",
+        input: { command: "pwd", extra: "unexpected" },
+      }),
+    ).toThrow();
   });
 
   it("requires approval before catalog MCP handlers run and forwards progress", async () => {
     const handler = vi.fn(async ({ emitProgress }) => {
       await emitProgress("Restarting MCP server 'search'.");
+
       return { servers: [{ name: "search", connected: true }] };
     });
+
     const onProgress = vi.fn();
     const runtime = createAkeruToolRuntime({ onProgress });
     runtime.registerSession("thread-mcp", {
@@ -169,6 +186,7 @@ describe("AkeruToolRuntime", () => {
       workspaceType: "none",
       catalogHandlers: { RestartMcpServers: handler },
     });
+
     const execution = {
       threadId: "thread-mcp",
       toolId: "RestartMcpServers" as const,
@@ -198,6 +216,7 @@ describe("AkeruToolRuntime", () => {
       workspaceType: "none",
       catalogHandlers: { TestMcpServer: testConnection },
     });
+
     const execution = {
       threadId: "thread-mcp-test",
       toolId: "TestMcpServer" as const,
@@ -278,6 +297,7 @@ describe("AkeruToolRuntime", () => {
         input: { pluginId: "exa" },
         approvalMode: "require-grant" as const,
       };
+
       await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
       runtime.grantApproval(execution);
       await expect(runtime.execute(execution)).resolves.toBeDefined();
@@ -297,6 +317,7 @@ describe("AkeruToolRuntime", () => {
       workspace: original,
       userComputerWorkspace: user,
     });
+
     const execution = {
       threadId: "thread-1",
       toolId: "CopyToBox" as const,
@@ -304,6 +325,7 @@ describe("AkeruToolRuntime", () => {
       input: { sourcePath: ".env", destinationPath: ".env" },
       approvalMode: "require-grant" as const,
     };
+
     runtime.grantApproval(execution);
     runtime.registerSession("thread-1", {
       runtimeMode: "full-access",
@@ -325,6 +347,7 @@ describe("AkeruToolRuntime", () => {
       workspaceType: "none",
       reactToMessage,
     });
+
     const execution = {
       threadId: "thread-reaction",
       toolId: "ReactToMessage" as const,
@@ -332,6 +355,7 @@ describe("AkeruToolRuntime", () => {
       input: { messageId: "message-1", emoji: "👍", action: "add" as const },
       approvalMode: "require-grant" as const,
     };
+
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
     runtime.grantApproval(execution);
     await expect(runtime.execute(execution)).resolves.toMatchObject({ status: "applied" });

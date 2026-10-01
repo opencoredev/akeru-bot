@@ -20,13 +20,16 @@ describe("AkeruMastraHarness", () => {
   it.effect("restores original history when rebuilding a conversation fails", () =>
     harnessTest(async (open) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-rebuild-"));
+
       const harness = await open({
         authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
         memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
         getThreadTools: () => ({}),
         toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
       });
+
       const threadId = "rebuild-history";
+
       const messages = [1, 2].map((count) => ({
         id: `message-${count}`,
         role: "user" as const,
@@ -35,6 +38,7 @@ describe("AkeruMastraHarness", () => {
         threadId,
         resourceId: threadId,
       }));
+
       const snapshot = {
         current: {
           id: "original-observations",
@@ -50,7 +54,9 @@ describe("AkeruMastraHarness", () => {
         },
         history: [],
       };
+
       let persist: ReturnType<typeof vi.spyOn> | undefined;
+
       try {
         await harness.controller.init();
         await harness.rebuildConversation!(threadId, messages);
@@ -82,6 +88,7 @@ describe("AkeruMastraHarness", () => {
       const harness = await makeObservationHarness(open, directory);
       const insertFailure = new Error("disk full while restoring");
       let spy: ReturnType<typeof failInserts> | undefined;
+
       try {
         await harness.restoreObservationalMemory!(
           "thread-rollback",
@@ -90,6 +97,7 @@ describe("AkeruMastraHarness", () => {
         spy = failInserts((record) =>
           record.id === "incoming-observation" ? insertFailure : undefined,
         );
+
         const failure = await harness.restoreObservationalMemory!(
           "thread-rollback",
           restoreSnapshot("incoming-observation", "Replace me."),
@@ -97,6 +105,7 @@ describe("AkeruMastraHarness", () => {
           () => undefined,
           (cause: unknown) => cause,
         );
+
         assert.instanceOf(failure, AkeruObservationRestoreError);
         const restoreError = failure as AkeruObservationRestoreError;
         assert.isTrue(restoreError.rolledBack);
@@ -122,6 +131,7 @@ describe("AkeruMastraHarness", () => {
       const insertFailure = new Error("restore insert failed");
       const rollbackFailure = new Error("rollback insert failed");
       let spy: ReturnType<typeof failInserts> | undefined;
+
       try {
         await harness.restoreObservationalMemory!(
           "thread-rollback",
@@ -130,6 +140,7 @@ describe("AkeruMastraHarness", () => {
         spy = failInserts((record) =>
           record.id === "incoming-observation" ? insertFailure : rollbackFailure,
         );
+
         const failure = await harness.restoreObservationalMemory!(
           "thread-rollback",
           restoreSnapshot("incoming-observation", "Incoming."),
@@ -137,6 +148,7 @@ describe("AkeruMastraHarness", () => {
           () => undefined,
           (cause: unknown) => cause,
         );
+
         assert.instanceOf(failure, AkeruObservationRestoreError);
         const restoreError = failure as AkeruObservationRestoreError;
         assert.isFalse(restoreError.rolledBack);
@@ -156,11 +168,14 @@ describe("AkeruMastraHarness", () => {
       const firstDirectory = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "akeru-om-owner-a-"),
       );
+
       const secondDirectory = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "akeru-om-owner-b-"),
       );
+
       const first = await makeObservationHarness(open, firstDirectory);
       const second = await makeObservationHarness(open, secondDirectory);
+
       const snapshot = {
         current: {
           id: "owned-observation",
@@ -176,6 +191,7 @@ describe("AkeruMastraHarness", () => {
         },
         history: [],
       } as const;
+
       try {
         await first.restoreObservationalMemory!("thread-a", snapshot);
         await second.restoreObservationalMemory!("thread-b", snapshot);

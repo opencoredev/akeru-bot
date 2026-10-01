@@ -33,12 +33,14 @@ describe("AkeruMastraHarness", () => {
     () =>
       harnessTest(async (open) => {
         const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-no-tasks-"));
+
         const harness = await open({
           authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
           memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
           getThreadTools: () => ({}),
           toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
         });
+
         try {
           // The controller keeps its agent private; the tool list is what the model sees.
           const { agent } = (harness.controller as unknown as { config: { agent: Agent } }).config;
@@ -46,6 +48,7 @@ describe("AkeruMastraHarness", () => {
           requestContext.setRaw("controller", { resourceId: "thread-tools" });
           const toolIds = Object.keys(await agent.listTools({ requestContext }));
           assert.isNotEmpty(toolIds);
+
           for (const id of ["task_write", "task_update", "task_complete", "task_check"]) {
             assert.notInclude(toolIds, id);
           }
@@ -63,14 +66,17 @@ describe("AkeruMastraHarness", () => {
       session: { modelId: "openai/gpt-5.6-sol" },
     });
     const approvalInputs: unknown[] = [];
+
     const runtime = {
       toolsForThread: () => AKERU_TOOL_CATALOG.filter((tool) => tool.id === "Shell"),
       requiresApproval: async (_threadId: string, _toolId: string, input: unknown) => {
         approvalInputs.push(input);
+
         return true;
       },
       execute: async () => undefined,
     } as unknown as AkeruToolRuntime;
+
     const pluginTool = { id: "plugin", execute: async () => undefined, requireApproval: false };
     const approvalPolicies: boolean[] = [];
 
@@ -95,15 +101,19 @@ describe("AkeruMastraHarness", () => {
     ]);
     assert.notProperty(tools, "Read");
     assert.notProperty(tools, "execute_command");
+
     const shell = tools.Shell as unknown as {
       readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
     };
+
     const restart = tools.RestartMcpServers as unknown as {
       readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
     };
+
     const search = tools.exa_search as unknown as {
       readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
     };
+
     assert.isTrue(await restart.needsApprovalFn({}));
     assert.isTrue(await search.needsApprovalFn({ operation: "send" }));
     assert.isTrue(await search.needsApprovalFn({ command: "git push origin main" }));
@@ -121,24 +131,29 @@ describe("AkeruMastraHarness", () => {
     const valid = await productFeedbackToolInputSchema["~standard"].validate({
       feedback: "The button is unresponsive.",
     });
+
     const forbidden = await productFeedbackToolInputSchema["~standard"].validate({
       feedback: "Private payload",
       conversation: "full thread",
     });
+
     assert.isUndefined(valid.issues);
     assert.isDefined(forbidden.issues);
 
     const requestContext = new RequestContext();
     requestContext.setRaw("controller", { resourceId: "thread-1" });
+
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
       toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
     });
+
     const tool = tools[AKERU_PRODUCT_FEEDBACK_TOOL_NAME] as {
       requireApproval?: boolean;
       execute?: (input: unknown, context: unknown) => Promise<unknown>;
     };
+
     assert.isTrue(tool.requireApproval);
     assert.deepEqual(await tool.execute?.({ feedback: "The button is unresponsive." }, {}), {
       status: "draft-opened",
@@ -174,15 +189,18 @@ describe("AkeruMastraHarness", () => {
     const calls: unknown[] = [];
     const requestContext = new RequestContext();
     requestContext.setRaw("controller", { resourceId: "thread-1" });
+
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
       toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
       createRoutine: async (threadId, input) => {
         calls.push({ threadId, input });
+
         return { status: "approved" };
       },
     });
+
     const tool = tools[AKERU_CREATE_ROUTINE_TOOL_NAME] as {
       requireApproval?: boolean;
       execute?: (input: unknown, context: unknown) => Promise<unknown>;
@@ -219,6 +237,7 @@ describe("AkeruMastraHarness", () => {
     const calls: string[] = [];
     const requestContext = new RequestContext();
     requestContext.setRaw("controller", { resourceId: "thread-1" });
+
     const result = {
       routines: [
         { id: "routine-1", name: "Morning brief", enabled: true, lifecycle: "enabled" as const },
@@ -236,15 +255,18 @@ describe("AkeruMastraHarness", () => {
         },
       ],
     };
+
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
       toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
       listRoutines: async (threadId) => {
         calls.push(threadId);
+
         return result;
       },
     });
+
     const tool = tools[AKERU_LIST_ROUTINES_TOOL_NAME] as {
       requireApproval?: boolean;
       execute?: (input: unknown, context: unknown) => Promise<unknown>;
@@ -261,6 +283,7 @@ describe("AkeruMastraHarness", () => {
     const suspended: unknown[] = [];
     const requestContext = new RequestContext();
     requestContext.setRaw("controller", { resourceId: "thread-1" });
+
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
@@ -273,13 +296,16 @@ describe("AkeruMastraHarness", () => {
       }),
       deleteRoutines: async (threadId, routineIds) => {
         deleted.push({ threadId, routineIds });
+
         return { status: "deleted", deletedRoutineIds: [...routineIds] };
       },
     });
+
     const tool = tools[AKERU_DELETE_ROUTINES_TOOL_NAME] as {
       requireApproval?: boolean;
       execute?: (input: unknown, context: unknown) => Promise<unknown>;
     };
+
     const input = { routineIds: ["routine-1", "routine-2"] };
 
     assert.isFalse(tool.requireApproval);
@@ -320,6 +346,7 @@ describe("AkeruMastraHarness", () => {
     let deleted = false;
     const requestContext = new RequestContext();
     requestContext.setRaw("controller", { resourceId: "thread-1" });
+
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
@@ -327,9 +354,11 @@ describe("AkeruMastraHarness", () => {
       listRoutines: async () => ({ routines: [] }),
       deleteRoutines: async () => {
         deleted = true;
+
         return { status: "deleted", deletedRoutineIds: [] };
       },
     });
+
     const tool = tools[AKERU_DELETE_ROUTINES_TOOL_NAME] as {
       execute?: (input: unknown, context: unknown) => Promise<unknown>;
     };

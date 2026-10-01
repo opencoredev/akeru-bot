@@ -8,6 +8,7 @@ const decodeMemoryInput = Schema.decodeUnknownSync(AkeruMemoryToolInputSchema);
 
 export function normalizeAkeruToolInput(input: unknown): unknown {
   if (!Predicate.isObject(input) || Array.isArray(input)) return input;
+
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null));
 }
 
@@ -15,6 +16,7 @@ export function decodeAkeruRuntimeToolInput(toolId: AkeruRuntimeToolId, input: u
   if (toolId === "memory")
     return { toolId, input: decodeMemoryInput(input, { onExcessProperty: "error" }) };
   const normalized = normalizeAkeruToolInput(input);
+
   switch (toolId) {
     case "Shell":
       return { toolId, input: decodeAkeruToolInput(toolId, normalized) };

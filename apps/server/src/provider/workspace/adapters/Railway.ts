@@ -12,14 +12,17 @@ export function railwayCredentials(environment: Readonly<Record<string, string>>
 export function railway(sandbox: import("railway").Sandbox): AkeruRemoteSession {
   const inspect = async (): Promise<AkeruWorkspaceState> => {
     const { SandboxNotFoundError } = await import("railway");
+
     try {
       await sandbox.refresh();
     } catch (cause) {
       if (cause instanceof SandboxNotFoundError) return "missing";
       throw cause;
     }
+
     return railwayWorkspaceState(sandbox.status);
   };
+
   return {
     providerId: sandbox.id,
     inspect,
@@ -29,6 +32,7 @@ export function railway(sandbox: import("railway").Sandbox): AkeruRemoteSession 
         ...(options?.env ? { env: options.env } : {}),
         ...(options?.timeout ? { timeoutSec: Math.ceil(options.timeout / 1000) } : {}),
       });
+
       return { exitCode: result.exitCode ?? 1, stdout: result.stdout, stderr: result.stderr };
     },
     browserEndpoint: async () => {
@@ -50,6 +54,8 @@ export function railwayWorkspaceState(
   status: import("railway").SandboxStatus,
 ): AkeruWorkspaceState {
   if (status === "RUNNING") return "running";
+
   if (status === "CREATING") return "sleeping";
+
   return "missing";
 }

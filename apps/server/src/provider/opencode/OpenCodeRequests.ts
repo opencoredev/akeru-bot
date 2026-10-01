@@ -16,6 +16,7 @@ export function openCodeQuestionId(
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, "-");
+
   return header.length > 0 ? `question-${index}-${header}` : `question-${index}`;
 }
 
@@ -27,6 +28,7 @@ export function toOpenCodeFileParts(input: {
 
   for (const attachment of input.attachments ?? []) {
     const attachmentPath = input.resolveAttachmentPath(attachment);
+
     if (!attachmentPath) {
       continue;
     }
@@ -90,12 +92,15 @@ export function toOpenCodeQuestionAnswers(
       answers[openCodeQuestionId(index, question)] ??
       answers[question.header] ??
       answers[question.question];
+
     if (Array.isArray(raw)) {
       return raw.filter((value): value is string => typeof value === "string");
     }
+
     if (typeof raw === "string") {
       return raw.trim().length > 0 ? [raw] : [];
     }
+
     return [];
   });
 }

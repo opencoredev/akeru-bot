@@ -57,6 +57,7 @@ describe("Akeru action classifier", () => {
 
   it("requires approval when nested input exceeds the inspection limit", () => {
     let args: unknown = { action: "send" };
+
     for (let depth = 0; depth < 101; depth += 1) args = { nested: args };
 
     expect(criticalAkeruAction("custom_tool", args)).toBeNull();

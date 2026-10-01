@@ -11,8 +11,10 @@ export function daytona(
   const inspect = async (): Promise<AkeruWorkspaceState> => {
     await sandbox.refreshData();
     const current = String(sandbox.state);
+
     return current === "destroyed" ? "missing" : current === "started" ? "running" : "sleeping";
   };
+
   const computer = new WorkspaceComputer(
     sandbox.id,
     new DaytonaComputer(sandbox),
@@ -24,16 +26,20 @@ export function daytona(
         undefined,
         { DISPLAY: ":1" },
       );
+
       if (result.exitCode !== 0) throw new Error("Daytona graphical Chromium is unavailable.");
     },
     async () => {
       const preview = await sandbox.getPreviewLink(9222);
+
       if (!preview.url || !preview.token)
         throw new Error("Daytona browser endpoint is unavailable.");
+
       return { url: preview.url, requestHeaders: { "x-daytona-preview-token": preview.token } };
     },
     inspect,
   );
+
   return {
     providerId: sandbox.id,
     computer,
@@ -45,16 +51,20 @@ export function daytona(
         options?.env,
         options?.timeout ? Math.ceil(options.timeout / 1000) : undefined,
       );
+
       return { exitCode: result.exitCode, stdout: result.result, stderr: "" };
     },
     browserEndpoint: async (port) => {
       const preview = await sandbox.getPreviewLink(port);
       const token = preview.token?.trim();
+
       if (!preview.url || !token) {
         throw new Error(`Daytona workspace '${sandbox.id}' has no authenticated preview URL.`);
       }
+
       const url = new URL(preview.url);
       url.searchParams.set("DAYTONA_SANDBOX_AUTH_KEY", token);
+
       return { url: url.toString(), requestHeaders: {} };
     },
     wake: async () => {

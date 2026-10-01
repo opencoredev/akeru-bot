@@ -13,6 +13,7 @@ const directories = new Set<string>();
 function attachmentsDir() {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-preview-attachment-"));
   directories.add(directory);
+
   return directory;
 }
 
@@ -21,12 +22,14 @@ describe("persistAkeruPreviewSnapshot", () => {
     for (const directory of directories) {
       NodeFS.rmSync(directory, { force: true, recursive: true });
     }
+
     directories.clear();
   });
 
   it("persists a PNG image block and removes its bytes from the activity result", () => {
     const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
     const directory = attachmentsDir();
+
     const persisted = persistAkeruPreviewSnapshot({
       attachmentsDir: directory,
       threadId: "thread-1",

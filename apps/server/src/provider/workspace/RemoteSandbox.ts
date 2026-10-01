@@ -22,6 +22,7 @@ export class RemoteSandbox extends MastraSandbox {
   }
   override async start() {
     await this.session.wake();
+
     return { outcome: "connected" as const };
   }
   override stop() {
@@ -36,6 +37,7 @@ export class RemoteSandbox extends MastraSandbox {
     options?: ExecuteCommandOptions,
   ): Promise<CommandResult> {
     const startedAt = performance.now();
+
     const env = options?.env
       ? Object.fromEntries(
           Object.entries(options.env).filter(
@@ -43,11 +45,13 @@ export class RemoteSandbox extends MastraSandbox {
           ),
         )
       : undefined;
+
     const result = await this.session.run(command, args, {
       ...(options?.cwd ? { cwd: options.cwd } : {}),
       ...(env ? { env } : {}),
       ...(options?.timeout !== undefined ? { timeout: options.timeout } : {}),
     });
+
     return {
       ...result,
       success: result.exitCode === 0,

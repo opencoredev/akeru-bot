@@ -34,16 +34,20 @@ export function platformFromUname(system: string, machine: string): LightpandaPl
   const os = system.trim().toLowerCase();
   const arch = machine.trim().toLowerCase();
   const normalizedOs = os === "darwin" ? "darwin" : os === "linux" ? "linux" : null;
+
   const normalizedArch =
     arch === "arm64" || arch === "aarch64"
       ? "arm64"
       : arch === "x86_64" || arch === "amd64"
         ? "x64"
         : null;
+
   const key = normalizedOs && normalizedArch ? `${normalizedOs}-${normalizedArch}` : null;
+
   if (!key || !(key in LIGHTPANDA_RELEASES)) {
     throw new Error(`The sandbox browser does not support ${system.trim()} ${machine.trim()}.`);
   }
+
   return key as LightpandaPlatform;
 }
 
@@ -56,17 +60,21 @@ export async function execute(
   if (!sandbox.executeCommand) {
     throw new Error(`Sandbox '${sandbox.provider}' cannot run browser commands.`);
   }
+
   const result = await sandbox.executeCommand(command, args, { timeout });
+
   if (!result.success) {
     const detail = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode}`;
     throw new Error(`Sandbox browser command '${command}' failed: ${detail}`);
   }
+
   return result.stdout;
 }
 
 export async function isExecutable(sandbox: WorkspaceSandbox, path: string): Promise<boolean> {
   if (!sandbox.executeCommand) return false;
   const result = await sandbox.executeCommand("test", ["-x", path], { timeout: 5_000 });
+
   return result.success;
 }
 
@@ -84,6 +92,7 @@ export async function installLightpanda(
   const binaryPath = NodePath.posix.join(root, "lightpanda");
   const installKey = sandbox.provider === "local" ? binaryPath : `${sandbox.id}:${binaryPath}`;
   const activeInstall = lightpandaInstalls.get(installKey);
+
   if (activeInstall) return activeInstall;
 
   const install = (async () => {
@@ -97,19 +106,26 @@ export async function installLightpanda(
       300_000,
     );
     const hashCommand = platform.startsWith("darwin-") ? "shasum" : "sha256sum";
+
     const hashArgs = platform.startsWith("darwin-")
       ? ["-a", "256", temporaryPath]
       : [temporaryPath];
+
     const actualHash = (await execute(sandbox, hashCommand, hashArgs)).trim().split(/\s+/)[0];
+
     if (actualHash !== release.sha256) {
       await sandbox.executeCommand?.("rm", ["-f", temporaryPath], { timeout: 5_000 });
       throw new Error(`Sandbox browser download failed integrity verification for ${platform}.`);
     }
+
     await execute(sandbox, "chmod", ["700", temporaryPath]);
     await execute(sandbox, "mv", [temporaryPath, binaryPath]);
+
     return binaryPath;
   })();
+
   lightpandaInstalls.set(installKey, install);
+
   try {
     return await install;
   } finally {

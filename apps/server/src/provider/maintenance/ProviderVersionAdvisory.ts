@@ -50,15 +50,18 @@ export function deriveVersionAdvisory(input: {
   if (!input.currentVersion) {
     return { status: "unknown", message: null };
   }
+
   if (!input.latestVersion) {
     return { status: "unknown", message: null };
   }
+
   if (compareSemverVersions(input.currentVersion, input.latestVersion) < 0) {
     return {
       status: "behind_latest",
       message: PROVIDER_UPDATE_ACTION_TOAST_MESSAGE,
     };
   }
+
   return { status: "current", message: null };
 }
 
@@ -71,7 +74,9 @@ export function createProviderVersionAdvisory(input: {
 }): ServerProviderVersionAdvisory {
   const capabilities =
     input.maintenanceCapabilities ?? makeManualProviderMaintenanceCapabilities(input.driver);
+
   const latestVersion = input.latestVersion ?? null;
+
   const advisory = deriveVersionAdvisory({
     currentVersion: input.currentVersion,
     latestVersion,
@@ -92,24 +97,31 @@ export const fetchNpmLatestVersion = Effect.fn("fetchNpmLatestVersion")(function
   packageName: string,
 ) {
   const client = yield* HttpClient.HttpClient;
+
   const request = HttpClientRequest.get(
     `https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`,
   ).pipe(HttpClientRequest.setHeader("accept", "application/json"));
+
   const response = yield* client.execute(request).pipe(
     Effect.timeoutOption(LATEST_VERSION_TIMEOUT_MS),
     Effect.orElseSucceed(() => Option.none()),
   );
+
   if (Option.isNone(response)) {
     return null;
   }
+
   const httpResponse = response.value;
+
   if (httpResponse.status < 200 || httpResponse.status >= 300) {
     return null;
   }
+
   const payload = yield* httpResponse.json.pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(NpmLatestVersionResponse)),
     Effect.orElseSucceed(() => null),
   );
+
   return payload ? nonEmptyString(payload.version) : null;
 });
 
@@ -117,6 +129,7 @@ export const resolveLatestProviderVersion = Effect.fn("resolveLatestProviderVers
   maintenanceCapabilities: ProviderMaintenanceCapabilities,
 ) {
   const packageName = maintenanceCapabilities.packageName;
+
   if (!packageName) {
     return null;
   }
@@ -124,6 +137,7 @@ export const resolveLatestProviderVersion = Effect.fn("resolveLatestProviderVers
   const latestVersionCache = yield* ProviderVersionCache;
   const cached = latestVersionCache.get(packageName);
   const now = DateTime.toEpochMillis(yield* DateTime.now);
+
   if (cached && cached.expiresAt > now) {
     return cached.version;
   }
@@ -133,6 +147,7 @@ export const resolveLatestProviderVersion = Effect.fn("resolveLatestProviderVers
     expiresAt: now + LATEST_VERSION_CACHE_TTL_MS,
     version,
   });
+
   return version;
 });
 
@@ -147,11 +162,13 @@ export const enrichProviderSnapshotWithVersionAdvisory = Effect.fn(
 ) {
   const capabilities =
     maintenanceCapabilities ?? makeManualProviderMaintenanceCapabilities(snapshot.driver);
+
   const shouldResolveLatestVersion =
     options?.enableProviderUpdateChecks !== false &&
     snapshot.enabled &&
     snapshot.installed &&
     Boolean(snapshot.version);
+
   if (!shouldResolveLatestVersion) {
     return {
       ...snapshot,
@@ -165,6 +182,7 @@ export const enrichProviderSnapshotWithVersionAdvisory = Effect.fn(
   }
 
   const latestVersion = yield* resolveLatestProviderVersion(capabilities);
+
   return {
     ...snapshot,
     versionAdvisory: createProviderVersionAdvisory({

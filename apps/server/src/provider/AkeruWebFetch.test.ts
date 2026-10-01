@@ -26,6 +26,7 @@ async function listen(handler: NodeHttp.RequestListener): Promise<number> {
   const server = NodeHttp.createServer(handler);
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
   return (server.address() as NodeNet.AddressInfo).port;
 }
 
@@ -77,6 +78,7 @@ describe("Akeru WebFetch", () => {
     const webFetch = createAkeruWebFetch({
       lookup: async () => [{ address: "10.0.0.2", family: 4 }],
     });
+
     await expect(webFetch({ url: "https://example.com/" })).rejects.toThrow("private");
   });
 
@@ -84,6 +86,7 @@ describe("Akeru WebFetch", () => {
     const webFetch = createAkeruWebFetch({
       lookup: async () => [{ address: "not-an-address", family: 4 }],
     });
+
     await expect(webFetch({ url: "https://example.com/" })).rejects.toThrow("valid address");
   });
 
@@ -92,6 +95,7 @@ describe("Akeru WebFetch", () => {
       lookup: () => new Promise(() => undefined),
       timeoutMs: 20,
     });
+
     await expect(webFetch({ url: "https://stalled.example/" })).rejects.toThrow("timed out");
   });
 
@@ -99,9 +103,11 @@ describe("Akeru WebFetch", () => {
     const port = await listen((_request, response) => response.end("pinned page"));
     const answers = [[{ address: "127.0.0.1", family: 4 }], [{ address: "10.0.0.9", family: 4 }]];
     const lookups: string[] = [];
+
     const webFetch = createAkeruWebFetch({
       lookup: async (hostname) => {
         lookups.push(hostname);
+
         return answers.shift() ?? [];
       },
       allowAddress: allowLoopbackOnly,
@@ -120,10 +126,13 @@ describe("Akeru WebFetch", () => {
       if (request.url === "/start") {
         response.writeHead(302, { location: `http://evil.example:${port}/secret` });
         response.end();
+
         return;
       }
+
       response.end("secret");
     });
+
     const webFetch = createAkeruWebFetch({
       lookup: async (hostname) =>
         hostname === "evil.example"
@@ -131,18 +140,23 @@ describe("Akeru WebFetch", () => {
           : [{ address: "127.0.0.1", family: 4 }],
       allowAddress: allowLoopbackOnly,
     });
+
     await expect(webFetch({ url: `http://ok.example:${port}/start` })).rejects.toThrow("private");
   });
 
   it("truncates an oversized response at the byte cap with a marker", async () => {
     const chunk = "a".repeat(64 * 1024);
+
     const port = await listen((_request, response) => {
       response.writeHead(200, { "content-type": "text/plain" });
+
       // 1 MB against a 100 KB cap. The server keeps writing; the client stops reading.
       for (let index = 0; index < 16; index += 1) response.write(chunk);
       response.end();
     });
+
     const maxBytes = 100 * 1024;
+
     const webFetch = createAkeruWebFetch({
       lookup: async () => [{ address: "127.0.0.1", family: 4 }],
       allowAddress: allowLoopbackOnly,

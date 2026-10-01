@@ -2,8 +2,15 @@
 import { createMcpManager, type McpServerConfig } from "@mastra/code-sdk/mcp/index";
 import type { Workspace } from "@mastra/core/workspace";
 import type { BotId, BotSandbox, McpServer } from "@akeru/contracts";
-import { type BotBrowser, type BotBrowserAttachment, type CreateBotBrowserInput } from "../browser/BotBrowserTypes.ts";
-import { type AkeruBotWorkspace, type CreateRemoteBotWorkspaceInput } from "../workspace/BotWorkspaceTypes.ts";
+import {
+  type BotBrowser,
+  type BotBrowserAttachment,
+  type CreateBotBrowserInput,
+} from "../browser/BotBrowserTypes.ts";
+import {
+  type AkeruBotWorkspace,
+  type CreateRemoteBotWorkspaceInput,
+} from "../workspace/BotWorkspaceTypes.ts";
 import { resolveCodexComputerUseServer } from "../CodexComputerUse.ts";
 
 export interface AkeruSessionResourceInput {

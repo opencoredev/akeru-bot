@@ -4,7 +4,6 @@ import * as NodeCrypto from "node:crypto";
 import { ComputerError, COMPUTER_SESSION_TTL_MS } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
-
 const isComputerError = Schema.is(ComputerError);
 
 /** One gate per native workspace. Raw MCP attachments must not coexist with this gate. */
@@ -31,6 +30,7 @@ export class ComputerGate {
 
   subscribe(listener: () => void) {
     this.listeners.add(listener);
+
     return () => {
       this.listeners.delete(listener);
     };
@@ -42,6 +42,7 @@ export class ComputerGate {
 
   get status(): "stopped" | "human" | "ready" {
     this.checkExpiry();
+
     return this.stopped ? "stopped" : this.owner ? "human" : "ready";
   }
 
@@ -51,6 +52,7 @@ export class ComputerGate {
 
   private scheduleOwnerExpiry(owner: { readonly expiresAt: number }) {
     this.cancelExpiry?.();
+
     const fiber = Effect.runFork(
       this.clock
         .sleep(Duration.millis(Math.max(0, owner.expiresAt - this.clock.currentTimeMillisUnsafe())))
@@ -58,11 +60,13 @@ export class ComputerGate {
           Effect.andThen(
             Effect.sync(() => {
               this.cancelExpiry = undefined;
+
               if (this.owner === owner) this.stop();
             }),
           ),
         ),
     );
+
     this.cancelExpiry = () => {
       Effect.runFork(Fiber.interrupt(fiber));
     };
@@ -71,32 +75,42 @@ export class ComputerGate {
   private ordered<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.tail.then(operation);
     this.tail = result.catch(() => undefined);
+
     return result;
   }
 
   bot<T>(operation: () => Promise<T>): Promise<T> {
     this.checkExpiry();
+
     if (this.stopped)
       return Promise.reject(new ComputerError({ code: "closed", message: "Computer is stopped." }));
+
     if (this.owner)
       return Promise.reject(
         new ComputerError({ code: "busy", message: "Human control is active." }),
       );
     const epoch = this.epoch;
+
     return this.ordered(async () => {
       this.checkExpiry();
+
       if (this.stopped || epoch !== this.epoch || this.owner) this.fail("revoked");
+
       return operation();
     });
   }
 
   async acquire(clientId: string) {
     this.checkExpiry();
+
     if (this.stopped) this.fail("closed");
+
     if (this.owner) this.fail("busy");
+
     const revoked = new Promise<void>((resolve) => {
       this.revokeInput = resolve;
     });
+
     const owner = {
       revoked,
       clientId,
@@ -104,43 +118,56 @@ export class ComputerGate {
       expiresAt: this.clock.currentTimeMillisUnsafe() + COMPUTER_SESSION_TTL_MS,
       sequence: 0,
     };
+
     this.owner = owner;
     this.scheduleOwnerExpiry(owner);
     this.epoch++;
     await this.tail;
     this.checkExpiry();
+
     if (this.owner !== owner || this.stopped) this.fail("revoked");
+
     return { sessionId: owner.sessionId, expiresAt: owner.expiresAt };
   }
 
   input<T>(clientId: string, sessionId: string, sequence: number, operation: () => Promise<T>) {
     this.checkExpiry();
     const owner = this.owner;
+
     if (this.stopped || !owner || owner.clientId !== clientId || owner.sessionId !== sessionId)
       this.fail("revoked");
+
     if (!Number.isSafeInteger(sequence) || sequence !== owner.sequence + 1) this.fail("sequence");
     owner.sequence = sequence;
+
     // Keep the physical operation in the queue even when its caller is revoked.
     const operationResult = this.ordered(async () => {
       this.checkExpiry();
+
       if (this.stopped || this.owner !== owner) this.fail("revoked");
+
       try {
         const result = await operation();
         this.checkExpiry();
+
         if (this.stopped || this.owner !== owner) this.fail("revoked");
+
         return result;
       } catch (cause) {
         if (isComputerError(cause)) throw cause;
         this.revokeInput = undefined;
         this.stop();
+
         return this.fail("adapter");
       }
     });
+
     return Promise.race([operationResult, owner.revoked.then(() => this.fail("revoked"))]);
   }
 
   async release(clientId: string, sessionId: string) {
     this.checkExpiry();
+
     if (!this.owner || this.owner.clientId !== clientId || this.owner.sessionId !== sessionId)
       this.fail("revoked");
     // Queued and running input report revocation now; the physical queue still drains below.
@@ -175,6 +202,7 @@ export class ComputerGate {
     this.owner = undefined;
 
     this.epoch++;
+
     for (const listener of this.listeners) listener();
   }
 
@@ -186,6 +214,7 @@ export class ComputerGate {
     if (!this.stopped) return;
     const epoch = this.epoch;
     await this.tail;
+
     if (epoch !== this.epoch) this.fail("revoked");
     this.stopped = false;
   }

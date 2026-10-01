@@ -11,6 +11,7 @@ describe("BotWorkspaceFilesystem", () => {
         : "",
       stderr: "",
     }));
+
     const filesystem = new BotWorkspaceFilesystem("workspace", "e2b", { run });
 
     await expect(filesystem.readFile("file.txt", { encoding: "utf8" })).resolves.toBe(

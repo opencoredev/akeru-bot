@@ -138,6 +138,7 @@ export function workerInstructions(input: (typeof AkeruToolInputSchemas.Task)["T
 
 export function workerTitle(task: string): string {
   const firstLine = task.split("\n", 1)[0]!.trim();
+
   return `Worker: ${firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine}`;
 }
 

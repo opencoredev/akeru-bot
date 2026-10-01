@@ -45,6 +45,7 @@ export function parseModelsCliOutput(stdout: string): {
     string,
     { id: string; name: string; models: { [key: string]: Model } }
   >();
+
   const lines = stdout.split("\n");
   let currentSlug: string | null = null;
   const jsonLines: Array<string> = [];
@@ -52,18 +53,22 @@ export function parseModelsCliOutput(stdout: string): {
   const flushModel = () => {
     if (currentSlug !== null && jsonLines.length > 0) {
       const jsonStr = jsonLines.join("\n").trim();
+
       if (jsonStr.length > 0) {
         try {
           const model = JSON.parse(jsonStr) as Model;
           const separator = currentSlug.indexOf("/");
+
           if (separator > 0) {
             const providerID = currentSlug.slice(0, separator);
             const modelID = currentSlug.slice(separator + 1);
             let provider = providers.get(providerID);
+
             if (!provider) {
               provider = { id: providerID, name: providerID, models: {} };
               providers.set(providerID, provider);
             }
+
             provider.models[modelID] = model;
           }
         } catch {
@@ -71,6 +76,7 @@ export function parseModelsCliOutput(stdout: string): {
         }
       }
     }
+
     currentSlug = null;
     jsonLines.length = 0;
   };
@@ -83,6 +89,7 @@ export function parseModelsCliOutput(stdout: string): {
     // `id` is `vendor/model`) matches SLUG_LINE_RE, so flushModel runs against
     // an empty body and the model is silently dropped.
     const slugMatch = line.trimStart().startsWith("{") ? null : SLUG_LINE_RE.exec(line);
+
     if (slugMatch) {
       flushModel();
       currentSlug = slugMatch[1]!;
@@ -90,6 +97,7 @@ export function parseModelsCliOutput(stdout: string): {
       jsonLines.push(line);
     }
   }
+
   flushModel();
 
   return { providers, connected: [...providers.keys()] };
@@ -105,6 +113,7 @@ export function parseAgentListCliOutput(stdout: string): ReadonlyArray<Agent> {
   const flushAgent = () => {
     if (currentHeader !== null) {
       const jsonStr = blockLines.join("\n").trim();
+
       if (jsonStr.length > 0) {
         try {
           const permission = JSON.parse(jsonStr);
@@ -120,12 +129,14 @@ export function parseAgentListCliOutput(stdout: string): ReadonlyArray<Agent> {
         }
       }
     }
+
     currentHeader = null;
     blockLines.length = 0;
   };
 
   for (const line of lines) {
     const match = AGENT_HEADER_RE.exec(line);
+
     if (match) {
       flushAgent();
       currentHeader = { name: match[1]!, mode: match[2]! };
@@ -133,6 +144,7 @@ export function parseAgentListCliOutput(stdout: string): ReadonlyArray<Agent> {
       blockLines.push(line);
     }
   }
+
   flushAgent();
 
   return agents;
@@ -141,6 +153,7 @@ export function parseAgentListCliOutput(stdout: string): ReadonlyArray<Agent> {
 /** @internal */
 export function parseSkillsCliOutput(stdout: string): ReadonlyArray<OpenCodeSkill> {
   const result = decodeOpenCodeSkillsCliOutputExit(stdout);
+
   return Exit.isSuccess(result) ? result.value : [];
 }
 
@@ -153,6 +166,7 @@ export function parseOpenCodeModelSlug(
 
   const trimmed = slug.trim();
   const separator = trimmed.indexOf("/");
+
   if (separator <= 0 || separator === trimmed.length - 1) {
     return null;
   }

@@ -124,6 +124,7 @@ describe("AkeruDelegationRuntime", () => {
     const children: Array<PromiseWithResolvers<AkeruDelegationChildOutcome>> = [];
     const watchErrors: unknown[] = [];
     let rejectNextStateSet = false;
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => test.state,
       dispatch: async (command) => {
@@ -131,11 +132,13 @@ describe("AkeruDelegationRuntime", () => {
           rejectNextStateSet = false;
           throw new Error("state.set rejected");
         }
+
         await test.dispatch(command);
       },
       awaitChild: () => {
         const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
         children.push(child);
+
         return child.promise;
       },
       interruptChild: async (threadId, turnId) => {
@@ -187,6 +190,7 @@ describe("AkeruDelegationRuntime", () => {
       undefined,
       { providerDriverKind: async () => null },
     );
+
     await expect(test.runtime.send(parent(), request() as never)).rejects.toThrow(
       "The target bot is not available in this workspace.",
     );

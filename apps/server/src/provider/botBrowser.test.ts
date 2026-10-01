@@ -19,6 +19,7 @@ function rpc() {
   const call = vi.fn(async (name: string) =>
     name === "tree" ? "semantic tree" : `${name} complete`,
   );
+
   const attachment = vi.fn(async () => ({
     browserUrl: "http://127.0.0.1:9222",
     mcpSessionId: "browser-session-1",
@@ -26,8 +27,10 @@ function rpc() {
     localRequestHeaders: {},
     availableToHostedPlugins: false,
   }));
+
   const close = vi.fn(async () => undefined);
   const reconnect = vi.fn(async () => undefined);
+
   return { call, attachment, reconnect, close } satisfies BotBrowserRpc;
 }
 
@@ -37,7 +40,9 @@ async function executeTool(
 ): Promise<unknown> {
   const execute = (tool as { execute?: (input: Readonly<Record<string, unknown>>) => unknown })
     .execute;
+
   if (!execute) throw new Error("expected executable tool");
+
   return execute(input);
 }
 
@@ -122,11 +127,14 @@ describe("sandbox bot browser", () => {
 
   it("uses the same browser session for tools, MCP attachment, and cleanup", async () => {
     const browserRpc = rpc();
+
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
+
     const makeRpc = vi.fn(() => browserRpc);
+
     const browser = createBotBrowser({
       threadId: "thread-1",
       workspace,
@@ -157,6 +165,7 @@ describe("sandbox bot browser", () => {
     const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
       if (command === "sh" && args[1]?.includes("while kill"))
         return await new Promise<never>(() => {});
+
       return {
         exitCode: 0,
         stdout:
@@ -172,6 +181,7 @@ describe("sandbox bot browser", () => {
         executionTimeMs: 1,
       };
     });
+
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
       sandbox: {
@@ -180,31 +190,41 @@ describe("sandbox bot browser", () => {
         executeCommand,
       } as unknown as WorkspaceSandbox,
     });
+
     const browserEndpoint = vi.fn(async () => ({
       url: "https://9223-e2b.example",
       requestHeaders: { "e2b-traffic-access-token": "traffic-token" },
     }));
+
     const messages: Array<{ method?: string; params?: { name?: string } }> = [];
     let session = 0;
+
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       if (init?.method === "DELETE") return new Response("", { status: 204 });
+
       const message = JSON.parse(String(init?.body)) as {
         method?: string;
         params?: { name?: string };
       };
+
       messages.push(message);
+
       const sessionId =
         message.method === "initialize" ? `browser-session-${++session}` : undefined;
+
       const text =
         message.params?.name === "session_list"
           ? JSON.stringify([{ url: "https://example.com/bottom-edge" }])
           : "ok";
+
       return new Response(JSON.stringify({ result: { content: [{ text }] } }), {
         status: 200,
         headers: sessionId ? { "mcp-session-id": sessionId } : {},
       });
     });
+
     vi.stubGlobal("fetch", fetchMock);
+
     const browser = createBotBrowser({
       threadId: "remote-browser",
       workspace,
@@ -239,6 +259,7 @@ describe("sandbox bot browser", () => {
           params: expect.objectContaining({ name: "goto" }),
         }),
       );
+
       for (const [, init] of fetchMock.mock.calls) {
         expect(init?.headers).toMatchObject({
           "e2b-traffic-access-token": "traffic-token",
@@ -270,6 +291,7 @@ describe("sandbox bot browser", () => {
 
   it("reports a browser startup failure exactly once", async () => {
     const onFailure = vi.fn();
+
     const browser = createBotBrowser({
       threadId: "startup-failure",
       workspace: new Workspace({
@@ -295,6 +317,7 @@ describe("sandbox bot browser", () => {
     let failureReceipt!: () => void;
     const failureObserved = new Promise<void>((resolve) => (failureReceipt = resolve));
     const onFailure = vi.fn(() => failureReceipt());
+
     const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
       if (command === "uname") {
         return {
@@ -305,16 +328,21 @@ describe("sandbox bot browser", () => {
           executionTimeMs: 1,
         };
       }
+
       if (command === "sh" && args[1]?.includes("while kill")) {
         await monitor;
+
         return { exitCode: 0, stdout: "dead", stderr: "", success: true, executionTimeMs: 1 };
       }
+
       return { exitCode: 0, stdout: "4242\n", stderr: "", success: true, executionTimeMs: 1 };
     });
+
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
       sandbox: { id: "remote", provider: "e2b", executeCommand } as unknown as WorkspaceSandbox,
     });
+
     vi.stubGlobal(
       "fetch",
       async (_url: string | URL, init?: RequestInit) =>
@@ -323,6 +351,7 @@ describe("sandbox bot browser", () => {
           headers: init?.method === "POST" ? { "mcp-session-id": "session" } : {},
         }),
     );
+
     const browser = createBotBrowser({
       threadId: "remote-exit",
       workspace,
@@ -330,6 +359,7 @@ describe("sandbox bot browser", () => {
       browserEndpoint: async () => ({ url: "https://remote.example", requestHeaders: {} }),
       onFailure,
     });
+
     try {
       await executeTool(browser.tools.browser_snapshot, {});
       finishMonitor();
@@ -355,6 +385,7 @@ describe("sandbox bot browser", () => {
       const onFailure = vi.fn((_error: unknown) => failureReceipt());
       const onReady = vi.fn();
       let monitorCalls = 0;
+
       const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
         if (command === "uname") {
           return {
@@ -365,11 +396,15 @@ describe("sandbox bot browser", () => {
             executionTimeMs: 1,
           };
         }
+
         if (command === "sh" && args[1]?.includes("while kill")) {
           monitorCalls += 1;
+
           if (monitorCalls === 1) {
             await monitor;
+
             if (failure === "rejected") throw new Error("monitor connection lost");
+
             return {
               exitCode: 124,
               stdout: "",
@@ -378,16 +413,21 @@ describe("sandbox bot browser", () => {
               executionTimeMs: 30_000,
             };
           }
+
           secondMonitorReceipt();
           await secondMonitor;
+
           return { exitCode: 0, stdout: "dead", stderr: "", success: true, executionTimeMs: 1 };
         }
+
         return { exitCode: 0, stdout: "4242\n", stderr: "", success: true, executionTimeMs: 1 };
       });
+
       const workspace = new Workspace({
         filesystem: new LocalFilesystem({ basePath: process.cwd() }),
         sandbox: { id: "remote", provider: "e2b", executeCommand } as unknown as WorkspaceSandbox,
       });
+
       vi.stubGlobal(
         "fetch",
         async (_url: string | URL, init?: RequestInit) =>
@@ -396,6 +436,7 @@ describe("sandbox bot browser", () => {
             headers: init?.method === "POST" ? { "mcp-session-id": "session" } : {},
           }),
       );
+
       const browser = createBotBrowser({
         threadId: "remote-monitor-failure",
         workspace,
@@ -404,6 +445,7 @@ describe("sandbox bot browser", () => {
         onFailure,
         onReady,
       });
+
       try {
         const attachment = await browser.attachment();
         finishMonitor();

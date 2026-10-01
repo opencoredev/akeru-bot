@@ -20,11 +20,13 @@ import {
 describe("AkeruMastraHarness", () => {
   it("routes Codex API keys through OpenAI Responses instead of the OAuth transport", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-api-key-auth.json");
+
     const getCredential = vi.fn(() => ({
       type: "api-key" as const,
       access: "key",
       baseUrl: "https://proxy.example/v1",
     }));
+
     expect(
       resolveAkeruMastraModel(
         "openai/gpt-5.6",
@@ -40,10 +42,12 @@ describe("AkeruMastraHarness", () => {
 
   it("uses the selected instance key without reading the provider-wide credential", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-instance-auth.json");
+
     const getCredential = vi.fn(() => ({
       type: "api-key" as const,
       access: "provider-wide-key",
     }));
+
     expect(
       resolveAkeruMastraModel(
         "xai/grok-code-fast-1",
@@ -70,9 +74,11 @@ describe("AkeruMastraHarness", () => {
 
   it("resolves a saved API key for the selected account instance", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-bound-auth.json");
+
     const getCredential = vi.fn((_provider: string, instanceId?: string) =>
       instanceId === "grok_work" ? { type: "api-key" as const, access: "work-key" } : undefined,
     );
+
     expect(
       resolveAkeruMastraModel(
         "xai/grok-code-fast-1",
@@ -94,10 +100,12 @@ describe("AkeruMastraHarness", () => {
 
   it("does not leak provider-wide credentials into an isolated instance", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-isolated-auth.json");
+
     const getCredential = vi.fn(() => ({
       type: "api-key" as const,
       access: "provider-wide-key",
     }));
+
     assert.throws(
       () =>
         resolveAkeruMastraModel(
@@ -156,10 +164,12 @@ describe("AkeruMastraHarness", () => {
 
   it("uses an isolated OpenCode Go inline connection", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-inline-opencode-auth.json");
+
     const getCredential = vi.fn(() => ({
       type: "api-key" as const,
       access: "provider-wide-key",
     }));
+
     const environment = {
       OPENCODE_CONFIG_CONTENT: JSON.stringify({
         provider: {
@@ -169,6 +179,7 @@ describe("AkeruMastraHarness", () => {
         },
       }),
     };
+
     assert.deepInclude(
       resolveAkeruMastraModel(
         "opencode-go/gpt-5.6-luna",
@@ -186,6 +197,7 @@ describe("AkeruMastraHarness", () => {
 
   it("routes Claude and Grok models through their subscription transports", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-legacy-observer-auth.json");
+
     const getCredential = vi.fn((provider: string) =>
       provider === "anthropic"
         ? { type: "api-key" as const, access: "claude-key" }

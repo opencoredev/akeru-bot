@@ -1,45 +1,38 @@
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 
-
-
-
 import type { ObservationalMemoryRecord } from "@mastra/core/storage";
 import { type AkeruConversationMemorySnapshot } from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
-
-
-
-
-
-
 
 import { type AkeruMastraHarness } from "./AkeruHarnessTypes.ts";
 import { createAkeruMastraMemory } from "./AkeruMemory.ts";
 import { AkeruObservationRestoreError } from "./AkeruHarnessErrors.ts";
 
-
-
-
-
-
-
-export function createAkeruConversation(observationalMemory: Awaited<ReturnType<typeof createAkeruMastraMemory>>,
- registerResource: (threadId: string, resourceId?: string) => void,
- queueObservation: <Result>(threadId: string, resourceId: string, work: () => Promise<Result>) => Promise<Result>,
- discardQueuedObservations: { readonly run: (threadId: string, resourceId: string) => void },) {
-const persistExternalTurn = async (
+export function createAkeruConversation(
+  observationalMemory: Awaited<ReturnType<typeof createAkeruMastraMemory>>,
+  registerResource: (threadId: string, resourceId?: string) => void,
+  queueObservation: <Result>(
+    threadId: string,
+    resourceId: string,
+    work: () => Promise<Result>,
+  ) => Promise<Result>,
+  discardQueuedObservations: { readonly run: (threadId: string, resourceId: string) => void },
+) {
+  const persistExternalTurn = async (
     input: Parameters<NonNullable<AkeruMastraHarness["observeExternalTurn"]>>[0],
   ) => {
     const existingThread = await observationalMemory.memory.getThreadById({
       threadId: input.threadId,
       resourceId: input.threadId,
     });
+
     if (!existingThread) {
       await observationalMemory.memory.createThread({
         threadId: input.threadId,
         resourceId: input.threadId,
       });
     }
+
     const createdAt = DateTime.toDate(DateTime.makeUnsafe(input.createdAt));
     await observationalMemory.memory.persistMessages([
       ...input.userMessages.map((message) => ({
@@ -61,12 +54,14 @@ const persistExternalTurn = async (
     ]);
   };
 
-const readObservationalMemory = async (threadId: string, resourceId?: string) => {
+  const readObservationalMemory = async (threadId: string, resourceId?: string) => {
     registerResource(threadId, resourceId ?? threadId);
+
     const normalize = (
       record: Awaited<ReturnType<typeof observationalMemory.engine.getRecord>>,
     ) => {
       if (!record) return null;
+
       return {
         id: record.id,
         generationCount: record.generationCount,
@@ -83,20 +78,23 @@ const readObservationalMemory = async (threadId: string, resourceId?: string) =>
         updatedAt: record.updatedAt.toISOString(),
       };
     };
+
     const [current, history] = await Promise.all([
       observationalMemory.engine.getRecord(threadId, resourceId),
       observationalMemory.engine.getHistory(threadId, resourceId, 50),
     ]);
+
     return { current: normalize(current), history: history.map((record) => normalize(record)!) };
   };
 
-const restoreRecords = async (
+  const restoreRecords = async (
     threadId: string,
     snapshot: AkeruConversationMemorySnapshot,
     resourceId: string,
     expectedSnapshot: AkeruConversationMemorySnapshot | undefined,
   ) => {
     const store = observationalMemory.engine.getStorage();
+
     if (
       expectedSnapshot &&
       JSON.stringify(await readObservationalMemory(threadId, resourceId)) !==
@@ -104,16 +102,20 @@ const restoreRecords = async (
     ) {
       throw new Error("Observations changed after the import preview. Preview the archive again.");
     }
+
     discardQueuedObservations.run(threadId, resourceId);
+
     const originals = await store.getObservationalMemoryHistory(
       threadId,
       resourceId,
       Number.MAX_SAFE_INTEGER,
     );
+
     const replace = async () => {
       await store.clearObservationalMemory(threadId, resourceId);
       const records = [...snapshot.history, ...(snapshot.current ? [snapshot.current] : [])];
       const seen = new Set<string>();
+
       for (const record of records) {
         if (seen.has(record.id)) continue;
         seen.add(record.id);
@@ -146,10 +148,13 @@ const restoreRecords = async (
         } satisfies ObservationalMemoryRecord);
       }
     };
+
     const rollback = async () => {
       await store.clearObservationalMemory(threadId, resourceId);
+
       for (const original of originals) await store.insertObservationalMemoryRecord(original);
     };
+
     try {
       await replace();
     } catch (cause) {
@@ -169,12 +174,14 @@ const restoreRecords = async (
     }
   };
 
-// Clear and restore discard pending observations for the chat, so a retry
+  // Clear and restore discard pending observations for the chat, so a retry
   // cannot write observations back over the user's change.
   const clearObservationalMemory = (threadId: string, resourceId = threadId) =>
     queueObservation(threadId, resourceId, () => {
       discardQueuedObservations.run(threadId, resourceId);
+
       return observationalMemory.engine.clear(threadId, resourceId);
     });
-return { readObservationalMemory, restoreRecords, clearObservationalMemory, persistExternalTurn };
+
+  return { readObservationalMemory, restoreRecords, clearObservationalMemory, persistExternalTurn };
 }

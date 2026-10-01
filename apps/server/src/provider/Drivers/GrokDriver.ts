@@ -40,9 +40,11 @@ import {
   makeProviderSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
+
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("grok");
+
 const UPDATE = makeStaticProviderMaintenanceResolver(
   makeManualOnlyProviderMaintenanceCapabilities({
     provider: DRIVER_KIND,
@@ -94,17 +96,21 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
       const { secretsDir } = yield* ServerConfig;
       const eventLoggers = yield* ProviderEventLoggers;
       const processEnv = mergeSubscriptionInstanceEnvironment(environment);
+
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
       });
+
       const stampIdentity = withInstanceIdentity({
         instanceId,
         displayName,
         accentColor,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
+
       const effectiveConfig = { ...config, enabled } satisfies GrokSettings;
+
       const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
@@ -115,6 +121,7 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
         instanceId,
       });
+
       const textGeneration = yield* makeGrokTextGeneration(
         effectiveConfig,
         processEnv,
@@ -129,6 +136,7 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
       );
 
       const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
+
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<GrokSettings>>({
         maintenanceCapabilities,
         getSettings: snapshotSettings.getSettings,

@@ -4,17 +4,54 @@ import { createAkeruDelegationDelivery } from "./delegation/AkeruDelegationDeliv
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 import * as DateTime from "effect/DateTime";
-import { AKERU_DELEGATION_CONTEXT_MAX_CHARS, AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH, AKERU_TOOL_CATALOG, CommandId, DelegationId, MessageId, ProviderInstanceId, ThreadId, type AkeruDelegationAccessGrant, type AkeruDelegationFailureCode, type AkeruDelegationRecord, akeruDelegationStateOf, type AkeruToolInputSchemas, AkeruDelegationContextTooLongError, AkeruDelegationProviderUnsupportedError, type OrchestrationCommand, TurnId } from "@akeru/contracts";
+import {
+  AKERU_DELEGATION_CONTEXT_MAX_CHARS,
+  AKERU_DELEGATION_MAX_CONCURRENCY,
+  AKERU_DELEGATION_MAX_DEPTH,
+  AKERU_TOOL_CATALOG,
+  CommandId,
+  DelegationId,
+  MessageId,
+  ProviderInstanceId,
+  ThreadId,
+  type AkeruDelegationAccessGrant,
+  type AkeruDelegationFailureCode,
+  type AkeruDelegationRecord,
+  akeruDelegationStateOf,
+  type AkeruToolInputSchemas,
+  AkeruDelegationContextTooLongError,
+  AkeruDelegationProviderUnsupportedError,
+  type OrchestrationCommand,
+  TurnId,
+} from "@akeru/contracts";
 import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
 import { withoutErrorStack } from "@akeru/shared/errorText";
 import { intersectDelegationAccess } from "./tools/AkeruToolAuthorization.ts";
-import { type AkeruDelegationRuntimeOptions, type AkeruDelegationParent, phaseChildThreadId, phaseChildTurnId, isReachableFromThread, TERMINAL_PHASES, phaseStartedAt, type AkeruDelegationOrigin, childAccess, parentTurnRequestMessageId, type AkeruDelegationChildOutcome, childInstructions, isPendingWaiterTimeout, type AkeruDelegationHandle, type AkeruDelegationDispatch, isDispatchedDelegation } from "./delegation/AkeruDelegationPolicy.ts";
+import {
+  type AkeruDelegationRuntimeOptions,
+  type AkeruDelegationParent,
+  phaseChildThreadId,
+  phaseChildTurnId,
+  isReachableFromThread,
+  TERMINAL_PHASES,
+  phaseStartedAt,
+  type AkeruDelegationOrigin,
+  childAccess,
+  parentTurnRequestMessageId,
+  type AkeruDelegationChildOutcome,
+  childInstructions,
+  isPendingWaiterTimeout,
+  type AkeruDelegationHandle,
+  type AkeruDelegationDispatch,
+  isDispatchedDelegation,
+} from "./delegation/AkeruDelegationPolicy.ts";
 
 export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOptions) {
   const now = options.now ?? (() => DateTime.formatIso(DateTime.nowUnsafe()));
   const id = options.id ?? (() => NodeCrypto.randomUUID());
   const accessByThread = new Map<ThreadId, AkeruDelegationAccessGrant>();
   const watchers = new Set<Promise<void>>();
+
   const activeByParent = new Map<
     ThreadId,
     Map<DelegationId, { threadId: ThreadId; turnId: TurnId | null }>
@@ -22,9 +59,15 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
 
   const dispatch = (command: OrchestrationCommand) =>
     options.dispatch(command).then(() => undefined);
-  const commandId = (label: string) => CommandId.make(`delegation:${label}:${id()}`);
-  const { sendToUser, deliver, postGroupResult } = createAkeruDelegationDelivery(options, now, id, commandId, dispatch);
 
+  const commandId = (label: string) => CommandId.make(`delegation:${label}:${id()}`);
+  const { sendToUser, deliver, postGroupResult } = createAkeruDelegationDelivery(
+    options,
+    now,
+    id,
+    commandId,
+    dispatch,
+  );
 
   const setState = async (delegation: AkeruDelegationRecord) => {
     await dispatch({
@@ -33,8 +76,15 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       delegation,
     });
   };
-  const { create, check, stop } = createAkeruDelegationControls(options, now, id, commandId, dispatch, setState);
 
+  const { create, check, stop } = createAkeruDelegationControls(
+    options,
+    now,
+    id,
+    commandId,
+    dispatch,
+    setState,
+  );
 
   // Every failure lands here, so the card and the parent's activity get one
   // readable line whatever error produced it. A stack never reaches the
@@ -46,6 +96,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
   ) => {
     const message = withoutErrorStack(detail) || "The bot work failed.";
     const completedAt = now();
+
     const failed: AkeruDelegationRecord = {
       ...delegation,
       phase: {
@@ -59,8 +110,10 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       },
       updatedAt: completedAt,
     };
+
     await setState(failed);
     await deliver(failed, message);
+
     return failed;
   };
 
@@ -72,25 +125,31 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     const snapshot = await options.readSnapshot();
     const parentThread = snapshot.threads.find((thread) => thread.id === parent.threadId);
     const bot = snapshot.bots.find((candidate) => candidate.id === request.botId);
+
     if (!parentThread || !bot || bot.archivedAt !== null) {
       throw new Error("The target bot is not available in this workspace.");
     }
+
     if (bot.id === parent.botId || parent.ancestorBotIds.includes(bot.id)) {
       throw new Error("Bot work would create a self-call or cycle.");
     }
+
     if (parent.depth >= AKERU_DELEGATION_MAX_DEPTH) {
       throw new Error(`Bot work depth cannot exceed ${AKERU_DELEGATION_MAX_DEPTH}.`);
     }
+
     const active = snapshot.delegations.filter(
       (delegation) =>
         delegation.parentThreadId === parent.threadId &&
         !TERMINAL_PHASES.has(delegation.phase._tag),
     );
+
     if (active.length >= AKERU_DELEGATION_MAX_CONCURRENCY) {
       throw new Error(
         `A turn cannot run more than ${AKERU_DELEGATION_MAX_CONCURRENCY} bot work items.`,
       );
     }
+
     if (
       request.context !== undefined &&
       request.context.length > AKERU_DELEGATION_CONTEXT_MAX_CHARS
@@ -104,6 +163,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     if (!isReachableFromThread(snapshot, parentThread, bot)) {
       throw new Error("The target bot is not available in the current group.");
     }
+
     const modelSelection =
       bot.engine === null
         ? parentThread.modelSelection
@@ -112,11 +172,14 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
             model: bot.engine.model,
             ...(bot.engine.options ? { options: bot.engine.options } : {}),
           };
+
     if (options.providerDriverKind) {
       const driverKind = await options.providerDriverKind(modelSelection.instanceId);
+
       if (driverKind === null) {
         throw new Error("The target bot is not available in this workspace.");
       }
+
       if (!driverSupportsDelegation(driverKind)) {
         throw new AkeruDelegationProviderUnsupportedError({ botName: bot.name, driverKind });
       }
@@ -127,6 +190,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       child: childAccess(bot, parent.access.enabledMcpServerIds, request.memoryScopes),
       requested: request,
     });
+
     const delegationId = DelegationId.make(`delegation-${id()}`);
     const childThreadId = ThreadId.make(`delegation-thread-${id()}`);
     const createdAt = now();
@@ -174,6 +238,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       updatedAt: createdAt,
       phase: { _tag: "Queued" },
     };
+
     try {
       await dispatch({
         type: "delegation.create",
@@ -196,12 +261,16 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       updatedAt: startedAt,
     };
     const byParent = activeByParent.get(parent.threadId) ?? new Map();
+
     const forget = () => {
       accessByThread.delete(childThreadId);
       byParent.delete(delegationId);
+
       if (byParent.size === 0) activeByParent.delete(parent.threadId);
     };
+
     let childOutcome: Promise<AkeruDelegationChildOutcome> | undefined;
+
     try {
       await setState(delegation);
       accessByThread.set(childThreadId, grant);
@@ -234,9 +303,11 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     } catch (cause) {
       // The record exists but nothing watches it, so it fails now and stays retryable.
       forget();
+
       const latest = (await options.readSnapshot()).delegations.find(
         (entry) => entry.delegationId === delegationId,
       );
+
       if (latest !== undefined && !TERMINAL_PHASES.has(latest.phase._tag)) {
         await fail(
           latest,
@@ -244,6 +315,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           cause instanceof Error ? cause.message : String(cause),
         ).catch(() => undefined);
       }
+
       throw cause;
     }
 
@@ -257,16 +329,21 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         const latest = (await options.readSnapshot()).delegations.find(
           (entry) => entry.delegationId === delegationId,
         );
+
         return latest !== undefined && !TERMINAL_PHASES.has(latest.phase._tag) ? latest : undefined;
       };
+
       try {
         const outcome = await (childOutcome ??
           options.awaitChild(childThreadId, request.deadline ?? null));
+
         const current = activeByParent.get(parent.threadId)?.get(delegationId);
         const latest = await latestRecord();
+
         if (!current || latest === undefined) return;
         const record = latest;
         current.turnId = outcome.turnId;
+
         if (outcome.state !== "completed" || !outcome.summary?.trim()) {
           if (outcome.state === "blocked") {
             const blocked: AkeruDelegationRecord = {
@@ -280,10 +357,13 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
               },
               updatedAt: now(),
             };
+
             await setState(blocked);
             await deliver(blocked, outcome.error ?? "The bot is blocked.");
+
             return;
           }
+
           await fail(
             {
               ...record,
@@ -298,14 +378,18 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
             "child_failed",
             outcome.error ?? "The bot did not return a result.",
           );
+
           return;
         }
+
         const completedAt = now();
+
         const result = {
           summary: outcome.summary.trim(),
           childThreadId,
           childTurnId: outcome.turnId,
         };
+
         const completed: AkeruDelegationRecord = {
           ...record,
           phase: {
@@ -319,6 +403,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           },
           updatedAt: completedAt,
         };
+
         await setState(completed);
         // The result is recorded, so a failed usage write must not keep it
         // from reaching the chat.
@@ -335,6 +420,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           )
           .catch((cause) => options.onWatchError?.(delegationId, cause));
         await deliver(completed, result.summary);
+
         if (parentThread.groupId !== null) {
           // The result is already recorded; a group that cannot take the
           // message (deleted, bot removed) must not turn it into a failure.
@@ -349,11 +435,14 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         }
       } catch (cause) {
         const latest = await latestRecord();
+
         if (latest === undefined) return;
+
         // The waiter also times out a silent child that has no deadline.
         const timeout =
           isPendingWaiterTimeout(cause) ||
           (request.deadline !== undefined && Date.parse(request.deadline) <= Date.parse(now()));
+
         if (timeout) await options.interruptChild(childThreadId, null);
         await fail(
           latest,
@@ -364,9 +453,11 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         forget();
       }
     };
+
     const watching = watch()
       .catch((cause) => options.onWatchError?.(delegationId, cause))
       .finally(() => watchers.delete(watching));
+
     watchers.add(watching);
 
     const handle: AkeruDelegationHandle = {
@@ -376,6 +467,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       name: bot.name,
       phase: "running",
     };
+
     return handle;
   };
 
@@ -387,14 +479,21 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
    */
   const dispatchDelegation = async (input: AkeruDelegationDispatch) => {
     const snapshot = await options.readSnapshot();
+
     if (Predicate.isTagged(input, "Retry")) {
       const original = snapshot.delegations.find(
         (delegation) => delegation.delegationId === input.delegationId,
       );
+
       if (!original) throw new Error("The bot work to retry no longer exists.");
-      if (!Predicate.isTagged(original.phase, "Failed") && !Predicate.isTagged(original.phase, "Canceled")) {
+
+      if (
+        !Predicate.isTagged(original.phase, "Failed") &&
+        !Predicate.isTagged(original.phase, "Canceled")
+      ) {
         throw new Error("Only failed or canceled bot work can be retried.");
       }
+
       // Two retries accepted before either started must not both start work.
       if (
         snapshot.delegations.some(
@@ -403,10 +502,12 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       ) {
         throw new Error("This bot work was already retried. Use the newer card instead.");
       }
+
       const deadline =
         original.deadline !== null && Date.parse(original.deadline) > Date.parse(now())
           ? original.deadline
           : undefined;
+
       return send(
         {
           threadId: original.parentThreadId,
@@ -440,9 +541,11 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
 
     const parentThread = snapshot.threads.find((thread) => thread.id === input.parentThreadId);
     const owner = snapshot.bots.find((bot) => bot.id === input.parentBotId);
+
     if (!parentThread || !owner || owner.archivedAt !== null) {
       throw new Error("The routine's chat or bot is not available.");
     }
+
     // The owner's default grant, the same one an ordinary turn in this chat gets.
     const access: AkeruDelegationAccessGrant = {
       allowedToolIds: AKERU_TOOL_CATALOG.map((tool) => tool.id),
@@ -456,6 +559,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       disabledMcpServerIds: owner.disabledMcpServerIds,
       approvalCeiling: "secrets",
     };
+
     return send(
       {
         threadId: parentThread.id,
@@ -487,6 +591,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     readonly keep?: ReadonlySet<DelegationId>;
   }) => {
     const snapshot = await options.readSnapshot();
+
     const records = snapshot.delegations.filter(
       (delegation) =>
         delegation.parentThreadId === input.threadId &&
@@ -494,11 +599,14 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         !isDispatchedDelegation(delegation) &&
         !TERMINAL_PHASES.has(delegation.phase._tag),
     );
+
     const children = activeByParent.get(input.threadId);
+
     for (const record of records) {
       const keep = record.keep || input.keep?.has(record.delegationId) === true;
       const child = children?.get(record.delegationId);
       const childThreadId = child?.threadId ?? phaseChildThreadId(record);
+
       // A failed parent turn must record Failed straight from the open phase:
       // canceling first would land the record in the terminal Canceled phase
       // and the follow-up state.set would hit the rejected Canceled -> Failed
@@ -513,9 +621,12 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           createdAt: now(),
         });
       }
+
       if (keep) continue;
       children?.delete(record.delegationId);
+
       if (childThreadId) accessByThread.delete(childThreadId);
+
       if (input.failed) {
         // A child that finished between the snapshot read and this write must
         // not be sent back to Failed, and a rejected write must not stop the
@@ -524,12 +635,15 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           const latest = (await options.readSnapshot()).delegations.find(
             (entry) => entry.delegationId === record.delegationId,
           );
+
           if (latest === undefined || TERMINAL_PHASES.has(latest.phase._tag)) continue;
+
           // The child stops even when its Failed record cannot be written.
           try {
             await fail(latest, "parent_failed", "The parent turn failed.");
           } finally {
             const latestChildThreadId = phaseChildThreadId(latest) ?? childThreadId;
+
             if (latestChildThreadId) {
               await options.interruptChild(
                 latestChildThreadId,
@@ -542,6 +656,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
         }
       }
     }
+
     if (children?.size === 0) activeByParent.delete(input.threadId);
   };
 

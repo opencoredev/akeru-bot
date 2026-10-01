@@ -1,38 +1,60 @@
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 
+import {
+  BotId,
+  CommandId,
+  type AkeruDelegationRecord,
+  akeruDelegationStateOf,
+  type AkeruToolInputSchemas,
+  acknowledgeAkeruDelegation,
+  isAkeruDelegationResultPending,
+  type OrchestrationCommand,
+  type OrchestrationReadModel,
+} from "@akeru/contracts";
 
+import {
+  type AkeruDelegationRuntimeOptions,
+  type AkeruDelegationParent,
+  phaseChildThreadId,
+  isReachableFromThread,
+  TERMINAL_PHASES,
+} from "./AkeruDelegationPolicy.ts";
 
-import { BotId, CommandId, type AkeruDelegationRecord, akeruDelegationStateOf, type AkeruToolInputSchemas, acknowledgeAkeruDelegation, isAkeruDelegationResultPending, type OrchestrationCommand, type OrchestrationReadModel } from "@akeru/contracts";
-
-
-
-import { type AkeruDelegationRuntimeOptions, type AkeruDelegationParent, phaseChildThreadId, isReachableFromThread, TERMINAL_PHASES } from "./AkeruDelegationPolicy.ts";
-
-export function createAkeruDelegationControls(options: AkeruDelegationRuntimeOptions,
- now: () => string, id: () => string, commandId: (label: string) => CommandId, dispatch: (command: OrchestrationCommand) => Promise<void>, setState: (delegation: AkeruDelegationRecord) => Promise<void>) {
-const availableBot = (
+export function createAkeruDelegationControls(
+  options: AkeruDelegationRuntimeOptions,
+  now: () => string,
+  id: () => string,
+  commandId: (label: string) => CommandId,
+  dispatch: (command: OrchestrationCommand) => Promise<void>,
+  setState: (delegation: AkeruDelegationRecord) => Promise<void>,
+) {
+  const availableBot = (
     snapshot: OrchestrationReadModel,
     parent: AkeruDelegationParent,
     botId: BotId,
   ) => {
     const parentThread = snapshot.threads.find((thread) => thread.id === parent.threadId);
     const bot = snapshot.bots.find((candidate) => candidate.id === botId);
+
     if (!parentThread || !bot || bot.archivedAt !== null) {
       throw new Error("The target bot is not available in this workspace.");
     }
+
     if (!isReachableFromThread(snapshot, parentThread, bot)) {
       throw new Error("The target bot is not available in the current group.");
     }
+
     return { parentThread, bot };
   };
 
-const create = async (
+  const create = async (
     parent: AkeruDelegationParent,
     request: (typeof AkeruToolInputSchemas.CreateAgent)["Type"],
   ) => {
     const snapshot = await options.readSnapshot();
     const { parentThread, bot: parentBot } = availableBot(snapshot, parent, parent.botId);
+
     if (
       snapshot.bots.some(
         (candidate) =>
@@ -42,6 +64,7 @@ const create = async (
     ) {
       throw new Error(`A bot named '${request.name}' already exists.`);
     }
+
     const botId = BotId.make(`bot-${id()}`);
     await dispatch({
       type: "bot.create",
@@ -62,15 +85,17 @@ const create = async (
       groupId: parentThread.groupId ?? null,
       createdAt: now(),
     });
+
     return { botId, name: request.name };
   };
 
-const check = async (
+  const check = async (
     parent: AkeruDelegationParent,
     request: (typeof AkeruToolInputSchemas.CheckAgent)["Type"],
   ) => {
     const snapshot = await options.readSnapshot();
     const { bot } = availableBot(snapshot, parent, request.botId);
+
     // A group thread holds work from several parent bots; each bot reads and
     // acknowledges only its own results.
     const delegations = snapshot.delegations.filter(
@@ -79,6 +104,7 @@ const check = async (
         delegation.parentBotId === parent.botId &&
         delegation.childBotId === bot.id,
     );
+
     // Reading a finished result here is its delivery, so the next parent turn
     // does not receive it again.
     for (const delegation of delegations) {
@@ -86,6 +112,7 @@ const check = async (
         await setState(acknowledgeAkeruDelegation(delegation, now()));
       }
     }
+
     return {
       botId: bot.id,
       name: bot.name,
@@ -94,31 +121,33 @@ const check = async (
         delegationId: delegation.delegationId,
         state: akeruDelegationStateOf(delegation.phase),
         childThreadId: phaseChildThreadId(delegation),
-        summary:
-          Predicate.isTagged(delegation.phase, "Completed")
-            ? delegation.phase.result.summary
-            : Predicate.isTagged(delegation.phase, "Failed")
-              ? delegation.phase.failure.message
-              : null,
+        summary: Predicate.isTagged(delegation.phase, "Completed")
+          ? delegation.phase.result.summary
+          : Predicate.isTagged(delegation.phase, "Failed")
+            ? delegation.phase.failure.message
+            : null,
         result: Predicate.isTagged(delegation.phase, "Completed") ? delegation.phase.result : null,
         failure: Predicate.isTagged(delegation.phase, "Failed") ? delegation.phase.failure : null,
       })),
     };
   };
 
-const stop = async (
+  const stop = async (
     parent: AkeruDelegationParent,
     request: (typeof AkeruToolInputSchemas.StopAgent)["Type"],
   ) => {
     const snapshot = await options.readSnapshot();
     availableBot(snapshot, parent, request.botId);
+
     const active = snapshot.delegations.filter(
       (delegation) =>
         delegation.parentThreadId === parent.threadId &&
         delegation.childBotId === request.botId &&
         !TERMINAL_PHASES.has(delegation.phase._tag),
     );
+
     if (active.length === 0) throw new Error("The target bot has no active delegated work.");
+
     for (const delegation of active) {
       await dispatch({
         type: "delegation.cancel",
@@ -128,7 +157,9 @@ const stop = async (
         createdAt: now(),
       });
     }
+
     return { botId: request.botId, stopped: active.map((entry) => entry.delegationId) };
   };
-return { availableBot, create, check, stop };
+
+  return { availableBot, create, check, stop };
 }

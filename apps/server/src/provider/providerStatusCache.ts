@@ -20,6 +20,7 @@ const mergeProviderModels = (
   cachedModels: ReadonlyArray<ServerProvider["models"][number]>,
 ): ReadonlyArray<ServerProvider["models"][number]> => {
   const fallbackSlugs = new Set(fallbackModels.map((model) => model.slug));
+
   return [...fallbackModels, ...cachedModels.filter((model) => !fallbackSlugs.has(model.slug))];
 };
 
@@ -56,6 +57,7 @@ export const hydrateCachedProvider = (input: {
   }
 
   const { message: _fallbackMessage, ...fallbackWithoutMessage } = input.fallbackProvider;
+
   const hydratedProvider: ServerProvider = {
     ...fallbackWithoutMessage,
     models: mergeProviderModels(input.fallbackProvider.models, input.cachedProvider.models),
@@ -93,6 +95,7 @@ export const resolveProviderStatusCachePath = Effect.fn("resolveProviderStatusCa
     readonly instanceId: ProviderInstanceId;
   }): Effect.fn.Return<string, never, Path.Path> {
     const path = yield* Path.Path;
+
     return path.join(input.cacheDir, `${input.instanceId}.json`);
   },
 );
@@ -101,12 +104,14 @@ export const readProviderStatusCache = (filePath: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const exists = yield* fs.exists(filePath).pipe(Effect.orElseSucceed(() => false));
+
     if (!exists) {
       return undefined;
     }
 
     const raw = yield* fs.readFileString(filePath).pipe(Effect.orElseSucceed(() => ""));
     const trimmed = raw.trim();
+
     if (trimmed.length === 0) {
       return undefined;
     }
@@ -128,6 +133,7 @@ export const writeProviderStatusCache = (input: {
   readonly provider: ServerProvider;
 }) => {
   const { updateState: _updateState, ...cacheableProvider } = input.provider;
+
   return writeFileStringAtomically({
     filePath: input.filePath,
     contents: `${JSON.stringify(cacheableProvider, null, 2)}\n`,

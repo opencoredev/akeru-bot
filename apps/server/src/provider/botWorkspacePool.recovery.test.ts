@@ -15,10 +15,12 @@ const { localWorkspace, remoteWorkspace } = makebotWorkspacePoolTestSupport();
 describe("BotWorkspacePool", () => {
   it("retries failed creation", async () => {
     const pool = new BotWorkspacePool();
+
     const create = vi
       .fn<() => Promise<Workspace>>()
       .mockRejectedValueOnce(new Error("unavailable"))
       .mockResolvedValueOnce(localWorkspace());
+
     await expect(pool.acquire("retry", create)).rejects.toThrow("unavailable");
     const lease = await pool.acquire("retry", create);
     await lease.release({ destroy: true });
@@ -28,6 +30,7 @@ describe("BotWorkspacePool", () => {
   it("preserves a remote workspace after a failed initial wake and retries it", async () => {
     const pool = new BotWorkspacePool();
     const local = localWorkspace();
+
     const remote = {
       id: local.id,
       provider: "ascii" as const,
@@ -37,6 +40,7 @@ describe("BotWorkspacePool", () => {
       sleep: () => local.stop(),
       destroy: () => local.destroy(),
     };
+
     vi.spyOn(local, "init").mockRejectedValueOnce(new Error("wake failed"));
     const destroy = vi.spyOn(local, "destroy");
     const create = vi.fn(async () => remote);
@@ -52,6 +56,7 @@ describe("BotWorkspacePool", () => {
   it("preserves and reattaches a remote workspace after idle sleep fails", async () => {
     const pool = new BotWorkspacePool();
     const local = localWorkspace();
+
     const remote = {
       id: local.id,
       provider: "ascii" as const,
@@ -61,6 +66,7 @@ describe("BotWorkspacePool", () => {
       sleep: () => local.stop(),
       destroy: () => local.destroy(),
     };
+
     vi.spyOn(local, "stop").mockRejectedValueOnce(new Error("sleep failed"));
     const destroy = vi.spyOn(local, "destroy");
     const create = vi.fn(async () => remote);
@@ -79,6 +85,7 @@ describe("BotWorkspacePool", () => {
     const local = localWorkspace();
     const wake = vi.fn(async () => local.init());
     const destroy = vi.fn(async () => local.destroy());
+
     const create = vi.fn(async () => ({
       id: local.id,
       provider: "ascii" as const,
@@ -88,6 +95,7 @@ describe("BotWorkspacePool", () => {
       sleep: () => local.stop(),
       destroy,
     }));
+
     const lease = await pool.acquire("remote-idle-wake", create);
     await lease.release();
     wake.mockRejectedValueOnce(new Error("resume timed out"));
@@ -101,9 +109,11 @@ describe("BotWorkspacePool", () => {
 
   it("pauses and reuses a remote workspace after initial wake failure", async () => {
     const pool = new BotWorkspacePool();
+
     const failed = remoteWorkspace({
       wake: vi.fn().mockRejectedValueOnce(new Error("wake failed")).mockResolvedValue(undefined),
     });
+
     const reattached = remoteWorkspace();
     const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
 
@@ -120,6 +130,7 @@ describe("BotWorkspacePool", () => {
 
   it("preserves a remote workspace after cached wake failure and retries cleanup", async () => {
     const pool = new BotWorkspacePool();
+
     const failed = remoteWorkspace({
       wake: vi
         .fn()
@@ -127,6 +138,7 @@ describe("BotWorkspacePool", () => {
         .mockRejectedValueOnce(new Error("wake failed"))
         .mockResolvedValue(undefined),
     });
+
     const reattached = remoteWorkspace();
     const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
 
@@ -143,9 +155,11 @@ describe("BotWorkspacePool", () => {
 
   it("preserves and reuses a remote workspace after sleep failure", async () => {
     const pool = new BotWorkspacePool();
+
     const failed = remoteWorkspace({
       sleep: vi.fn().mockRejectedValueOnce(new Error("sleep failed")),
     });
+
     const reattached = remoteWorkspace();
     const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
 
@@ -161,11 +175,13 @@ describe("BotWorkspacePool", () => {
 
   it("retries failed remote pauses without another acquisition and retains repeated failures", async () => {
     const pool = new BotWorkspacePool();
+
     const sleep = vi
       .fn()
       .mockRejectedValueOnce(new Error("pause failed"))
       .mockRejectedValueOnce(new Error("pause still unavailable"))
       .mockResolvedValue(undefined);
+
     const workspace = remoteWorkspace({ sleep });
     const lease = await pool.acquire("idle-retry", async () => workspace);
     await expect(lease.release()).rejects.toThrow("pause failed");
@@ -181,10 +197,12 @@ describe("BotWorkspacePool", () => {
 
   it("does not retry pause while a recovered workspace is leased", async () => {
     const pool = new BotWorkspacePool();
+
     const sleep = vi
       .fn()
       .mockRejectedValueOnce(new Error("pause failed"))
       .mockResolvedValue(undefined);
+
     const workspace = remoteWorkspace({ sleep });
     const create = vi.fn(async () => workspace);
     const lease = await pool.acquire("active-retry", create);
@@ -200,9 +218,11 @@ describe("BotWorkspacePool", () => {
     const pool = new BotWorkspacePool();
     let finishPause!: () => void;
     let markStarted!: () => void;
+
     const started = new Promise<void>((resolve) => {
       markStarted = resolve;
     });
+
     const sleep = vi
       .fn()
       .mockRejectedValueOnce(new Error("pause failed"))
@@ -213,6 +233,7 @@ describe("BotWorkspacePool", () => {
             markStarted();
           }),
       );
+
     const workspace = remoteWorkspace({ sleep });
     const create = vi.fn(async () => workspace);
     const lease = await pool.acquire("concurrent-retry", create);
@@ -235,6 +256,7 @@ describe("BotWorkspacePool", () => {
       const events: Array<string> = [];
       const finishDestroy = Promise.withResolvers<void>();
       const destroyStarted = Promise.withResolvers<void>();
+
       const remote = (id: string): AkeruBotWorkspace => ({
         id,
         provider: "e2b",
@@ -249,12 +271,16 @@ describe("BotWorkspacePool", () => {
           events.push(`destroy ${id} finished`);
         },
       });
+
       const first = yield* Effect.promise(() => pool.acquire("remote", async () => remote("old")));
       const releasing = first.release({ destroy: true });
+
       const replacement = pool.acquire("remote", async () => {
         events.push("create new");
+
         return remote("new");
       });
+
       // Let the replacement acquire run as far as it can while the destroy is still pending.
       yield* Effect.promise(() => destroyStarted.promise);
       yield* Effect.promise(() => new Promise<void>((resolve) => setImmediate(resolve)));
@@ -272,6 +298,7 @@ describe("BotWorkspacePool", () => {
       const clock = yield* Clock.Clock;
       const pool = new BotWorkspacePool({ clock });
       const workspace = localWorkspace();
+
       const remote: AkeruBotWorkspace = {
         id: "remote-1",
         provider: "e2b",
@@ -281,6 +308,7 @@ describe("BotWorkspacePool", () => {
         sleep: vi.fn(async () => {}),
         destroy: vi.fn(async () => {}),
       };
+
       const create = vi.fn(async () => remote);
       const first = yield* Effect.promise(() => pool.acquire("remote", create));
       yield* Effect.promise(() => first.release());
@@ -317,10 +345,12 @@ describe("BotWorkspacePool", () => {
       const pool = new BotWorkspacePool({ idleTimeToLive: "1 hour", clock });
       const firstWorkspace = localWorkspace();
       const secondWorkspace = localWorkspace();
+
       const create = vi
         .fn<() => Promise<Workspace>>()
         .mockResolvedValueOnce(firstWorkspace)
         .mockResolvedValueOnce(secondWorkspace);
+
       const first = yield* Effect.promise(() => pool.acquire("replace", create));
       yield* Effect.promise(() => first.release({ destroy: true }));
       const second = yield* Effect.promise(() => pool.acquire("replace", create));
@@ -358,12 +388,14 @@ describe("BotWorkspacePool", () => {
       const pool = new BotWorkspacePool({ idleTimeToLive: "1 hour", clock });
       yield* Effect.promise(() => pool.destroyAll());
       const create = vi.fn(async () => localWorkspace());
+
       const error = yield* Effect.promise(() =>
         pool.acquire("late", create).then(
           () => undefined,
           (cause: unknown) => cause,
         ),
       );
+
       expect(error).toMatchObject({
         _tag: "BotWorkspacePoolError",
         message: "Bot workspaces are shutting down.",
@@ -379,12 +411,14 @@ describe("BotWorkspacePool", () => {
       const workspace = localWorkspace();
       vi.spyOn(workspace, "destroy").mockRejectedValueOnce(new Error("destroy failed"));
       yield* Effect.promise(() => pool.acquire("failing", async () => workspace));
+
       const error = yield* Effect.promise(() =>
         pool.destroyAll().then(
           () => undefined,
           (cause: unknown) => cause,
         ),
       );
+
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toBe("destroy failed");
     }).pipe(Effect.provide(TestClock.layer())),
@@ -398,11 +432,13 @@ describe("BotWorkspacePool", () => {
       const healthy = localWorkspace();
       vi.spyOn(failed, "init").mockRejectedValueOnce(new Error("wake failed"));
       const failedDestroy = vi.spyOn(failed, "destroy");
+
       const create = vi
         .fn<() => Promise<Workspace>>()
         .mockRejectedValueOnce(new Error("unavailable"))
         .mockResolvedValueOnce(failed)
         .mockResolvedValueOnce(healthy);
+
       const rejection = (promise: Promise<unknown>) =>
         Effect.promise(() =>
           promise.then(
@@ -410,6 +446,7 @@ describe("BotWorkspacePool", () => {
             (cause: unknown) => cause,
           ),
         );
+
       expect(yield* rejection(pool.acquire("retry", create))).toMatchObject({
         message: "unavailable",
       });
@@ -432,17 +469,21 @@ describe("BotWorkspacePool", () => {
       const replacement = localWorkspace();
       vi.spyOn(failed, "stop").mockRejectedValueOnce(new Error("sleep failed"));
       const failedDestroy = vi.spyOn(failed, "destroy");
+
       const create = vi
         .fn<() => Promise<Workspace>>()
         .mockResolvedValueOnce(failed)
         .mockResolvedValueOnce(replacement);
+
       const first = yield* Effect.promise(() => pool.acquire("sleep", create));
+
       const error = yield* Effect.promise(() =>
         first.release().then(
           () => undefined,
           (cause: unknown) => cause,
         ),
       );
+
       expect(error).toMatchObject({ message: "sleep failed" });
       const second = yield* Effect.promise(() => pool.acquire("sleep", create));
       expect(failedDestroy).toHaveBeenCalledOnce();

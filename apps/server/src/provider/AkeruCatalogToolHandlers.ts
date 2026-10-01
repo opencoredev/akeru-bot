@@ -22,6 +22,7 @@ export function createAkeruCatalogToolHandlers(
   backends: AkeruCatalogBackendOptions = {},
 ): Partial<Record<AkeruToolId, AkeruCatalogToolHandler>> {
   const statuses = () => mcpManager?.getServerStatuses() ?? [];
+
   return {
     ...(backends.webSearch
       ? { WebSearch: async ({ input }) => backends.webSearch!(input as never) }
@@ -30,6 +31,7 @@ export function createAkeruCatalogToolHandlers(
       ? {
           WebFetch: async ({ input }) => {
             const url = parseAkeruPublicUrl(requiredString(input, "url"));
+
             return backends.webFetch!({ url: url.toString() });
           },
         }
@@ -70,11 +72,13 @@ export function createAkeruCatalogToolHandlers(
           InstallPlugin: async ({ input, emitProgress }) => {
             const pluginId = requiredString(input, "pluginId");
             await emitProgress(`Installing plugin '${pluginId}'.`);
+
             return pluginRuntime.install(pluginId);
           },
           UninstallPlugin: async ({ input, emitProgress }) => {
             const pluginId = requiredString(input, "pluginId");
             await emitProgress(`Removing plugin '${pluginId}'.`);
+
             return pluginRuntime.uninstall(pluginId, statuses());
           },
         }
@@ -106,6 +110,7 @@ export function createAkeruCatalogToolHandlers(
           AuthenticateMcpServer: async ({ input, emitProgress }) => {
             const serverId = requiredString(input, "serverId");
             let authorizationUrl: string | undefined;
+
             const status = await mcpManager.authenticateServer(serverId, {
               onAuthorizationUrl: (url) => {
                 authorizationUrl = url;
@@ -114,30 +119,40 @@ export function createAkeruCatalogToolHandlers(
                 });
               },
             });
+
             if (!status.connected) {
               throw new Error(status.error ?? `MCP server '${serverId}' was not authenticated.`);
             }
+
             return { ...status, authorizationUrl: authorizationUrl ?? null };
           },
           RestartMcpServers: async ({ input, emitProgress }) => {
             const requested = field(input, "serverIds");
+
             const serverIds = Array.isArray(requested)
               ? requested.filter((value): value is string => typeof value === "string")
               : [];
+
             if (serverIds.length === 0) {
               await emitProgress("Restarting MCP servers.");
               await mcpManager.reload();
+
               return { servers: mcpManager.getServerStatuses() };
             }
+
             const servers = [];
+
             for (const serverId of new Set(serverIds)) {
               await emitProgress(`Restarting MCP server '${serverId}'.`);
               const status = await mcpManager.reconnectServer(serverId);
+
               if (!status.connected) {
                 throw new Error(status.error ?? `MCP server '${serverId}' did not reconnect.`);
               }
+
               servers.push(status);
             }
+
             return { servers };
           },
         }

@@ -27,6 +27,7 @@ import {
 describe("AkeruDelegationRuntime", () => {
   it("runs group work in a direct child chat and posts the attributed result to the group", async () => {
     const groupId = GroupId.make("group-1");
+
     const group = {
       id: groupId,
       name: "Research",
@@ -38,6 +39,7 @@ describe("AkeruDelegationRuntime", () => {
       createdAt: NOW,
       updatedAt: NOW,
     };
+
     const grouped = snapshot({
       bots: [
         bot(PARENT_BOT_ID, { groupId, name: "Boss" }),
@@ -46,6 +48,7 @@ describe("AkeruDelegationRuntime", () => {
       groups: [group],
       threads: [thread(PARENT_THREAD_ID, null, { groupId, respondingBotId: PARENT_BOT_ID })],
     });
+
     const test = harness(grouped);
     const handle = await test.runtime.send(parent(), request() as never);
     await test.runtime.drain();
@@ -78,6 +81,7 @@ describe("AkeruDelegationRuntime", () => {
 
   describe("group result after the child finishes", () => {
     const groupId = GroupId.make("group-1");
+
     const grouped = () =>
       snapshot({
         bots: [
@@ -99,6 +103,7 @@ describe("AkeruDelegationRuntime", () => {
         ],
         threads: [thread(PARENT_THREAD_ID, null, { groupId, respondingBotId: PARENT_BOT_ID })],
       });
+
     const removeChildFromGroup = (state: OrchestrationReadModel) => {
       Object.assign(state, {
         groups: state.groups.map((group) => ({
@@ -109,6 +114,7 @@ describe("AkeruDelegationRuntime", () => {
         })),
       });
     };
+
     const groupMessages = (state: OrchestrationReadModel) =>
       state.threads
         .find((entry) => entry.id === PARENT_THREAD_ID)
@@ -118,11 +124,13 @@ describe("AkeruDelegationRuntime", () => {
       const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
       const skipped: Array<[DelegationId, string]> = [];
       const watchErrors: unknown[] = [];
+
       const test = harness(grouped(), undefined, {
         awaitChild: () => child.promise,
         onGroupResultSkipped: (delegationId, reason) => skipped.push([delegationId, reason]),
         onWatchError: (_, cause) => watchErrors.push(cause),
       });
+
       const handle = await test.runtime.send(parent(), request() as never);
       removeChildFromGroup(test.state);
       child.resolve({ state: "completed", turnId: CHILD_TURN_ID, summary: "Done." });
@@ -138,6 +146,7 @@ describe("AkeruDelegationRuntime", () => {
       const skipped: string[] = [];
       const watchErrors: unknown[] = [];
       let inner: ((command: OrchestrationCommand) => Promise<void>) | undefined;
+
       const test = harness(grouped(), undefined, {
         dispatch: async (command) => {
           if (command.type === "thread.message.assistant.delta") removeChildFromGroup(test.state);
@@ -146,6 +155,7 @@ describe("AkeruDelegationRuntime", () => {
         onGroupResultSkipped: (_, reason) => skipped.push(reason),
         onWatchError: (_, cause) => watchErrors.push(cause),
       });
+
       inner = test.dispatch;
       await test.runtime.send(parent(), request() as never);
       await test.runtime.drain();
@@ -185,6 +195,7 @@ describe("AkeruDelegationRuntime", () => {
   it("delegates to a bot in two groups from either group and from a direct chat", async () => {
     const firstGroupId = GroupId.make("group-1");
     const secondGroupId = GroupId.make("group-2");
+
     const groupOf = (id: GroupId, boss: BotId) => ({
       id,
       name: String(id),
@@ -196,7 +207,9 @@ describe("AkeruDelegationRuntime", () => {
       createdAt: NOW,
       updatedAt: NOW,
     });
+
     const secondThreadId = ThreadId.make("thread-second-group");
+
     const test = harness(
       snapshot({
         // The legacy exclusive field names only the first group.
@@ -212,6 +225,7 @@ describe("AkeruDelegationRuntime", () => {
         ],
       }),
     );
+
     await test.runtime.send(parent(), request() as never);
     await test.runtime.send(
       parent({ threadId: secondThreadId, botId: OTHER_BOT_ID }),
@@ -238,6 +252,7 @@ describe("AkeruDelegationRuntime", () => {
 
   it("requires authoritative group membership for an associated bot", async () => {
     const groupId = GroupId.make("group-1");
+
     const group = {
       id: groupId,
       name: "Research",

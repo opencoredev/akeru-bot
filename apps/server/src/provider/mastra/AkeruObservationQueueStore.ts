@@ -9,15 +9,19 @@ export const OBSERVATION_QUEUE_SCHEMA_VERSION = 2;
 // versions itself with PRAGMA user_version instead.
 export function openObservationQueueDb(memoryDbPath: string): NodeSqlite.DatabaseSync {
   const db = new NodeSqlite.DatabaseSync(`${memoryDbPath}.queue.sqlite`);
+
   try {
     db.exec("PRAGMA busy_timeout = 5000");
+
     const version = (db.prepare("PRAGMA user_version").get() as { user_version: number })
       .user_version;
+
     if (version > OBSERVATION_QUEUE_SCHEMA_VERSION) {
       throw new Error(
         `Akeru observation queue schema version ${version} is newer than supported version ${OBSERVATION_QUEUE_SCHEMA_VERSION}.`,
       );
     }
+
     if (version === 0) {
       db.exec(`
         CREATE TABLE IF NOT EXISTS akeru_observation_queue (
@@ -42,6 +46,7 @@ export function openObservationQueueDb(memoryDbPath: string): NodeSqlite.Databas
       db.exec("ALTER TABLE akeru_observation_queue ADD COLUMN provider_instance_id TEXT");
       db.exec(`PRAGMA user_version = ${OBSERVATION_QUEUE_SCHEMA_VERSION}`);
     }
+
     return db;
   } catch (cause) {
     db.close();

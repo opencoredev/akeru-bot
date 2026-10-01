@@ -20,9 +20,13 @@ import {
 } from "./providerStatusCache.ts";
 
 const emptyCapabilities = createModelCapabilities({ optionDescriptors: [] });
+
 const CODEX_DRIVER = ProviderDriverKind.make("codex");
+
 const CLAUDE_AGENT_DRIVER = ProviderDriverKind.make("claudeAgent");
+
 const OPENCODE_DRIVER = ProviderDriverKind.make("opencode");
+
 const GROK_DRIVER = ProviderDriverKind.make("grok");
 
 const makeProvider = (
@@ -46,6 +50,7 @@ const makeProvider = (
 it.layer(NodeServices.layer)("providerStatusCache", (it) => {
   it.effect("logs structural diagnostics without retaining invalid cache contents", () => {
     const messages: Array<unknown> = [];
+
     const logger = Logger.make<unknown, void>((options) => {
       if (Array.isArray(options.message)) {
         messages.push(...options.message);
@@ -64,10 +69,12 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       const result = yield* readProviderStatusCache(cachePath);
 
       assert.strictEqual(result, undefined);
+
       const failure = messages.find(
         (message): message is Record<string, unknown> =>
           typeof message === "object" && message !== null && "path" in message,
       );
+
       assert.exists(failure);
       assert.strictEqual(failure.path, cachePath);
       assert.strictEqual(typeof failure.errorTag, "string");
@@ -82,22 +89,27 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       const fs = yield* FileSystem.FileSystem;
       const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-provider-cache-" });
       const codexProvider = makeProvider(CODEX_DRIVER);
+
       const claudeProvider = makeProvider(CLAUDE_AGENT_DRIVER, {
         status: "warning",
         auth: { status: "unknown" },
       });
+
       const openCodeProvider = makeProvider(OPENCODE_DRIVER, {
         status: "warning",
         auth: { status: "unknown", type: "opencode" },
       });
+
       const codexPath = yield* resolveProviderStatusCachePath({
         cacheDir: tempDir,
         instanceId: defaultInstanceIdForDriver(ProviderDriverKind.make("codex")),
       });
+
       const claudePath = yield* resolveProviderStatusCachePath({
         cacheDir: tempDir,
         instanceId: defaultInstanceIdForDriver(ProviderDriverKind.make("claudeAgent")),
       });
+
       const openCodePath = yield* resolveProviderStatusCachePath({
         cacheDir: tempDir,
         instanceId: defaultInstanceIdForDriver(ProviderDriverKind.make("opencode")),
@@ -143,6 +155,7 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
         },
       ],
     });
+
     const fallbackCodex = makeProvider(CODEX_DRIVER, {
       models: [
         {
@@ -190,6 +203,7 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
         { slug: "grok-code", name: "Grok Code", isCustom: false, capabilities: null },
       ],
     });
+
     const fallbackGrok = makeProvider(GROK_DRIVER, {
       status: "warning",
       auth: { status: "unknown" },
@@ -213,6 +227,7 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       checkedAt: "2026-04-10T12:00:00.000Z",
       message: "Cached ready status",
     });
+
     const disabledFallback = makeProvider(CODEX_DRIVER, {
       enabled: false,
       installed: false,
@@ -242,6 +257,7 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
         },
       ],
     });
+
     const legacyCachedCodex = {
       provider: ProviderDriverKind.make("codex"),
       enabled: true,
@@ -261,6 +277,7 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       slashCommands: [],
       skills: [],
     } as unknown as ServerProvider;
+
     const mismatchedCachedCodex = makeProvider(CODEX_DRIVER, {
       instanceId: ProviderInstanceId.make("codex_personal"),
     });

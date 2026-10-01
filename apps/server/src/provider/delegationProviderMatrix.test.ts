@@ -24,12 +24,12 @@ import {
   thread,
 } from "./testUtils/delegationHarness.ts";
 
-
 const isProviderUnsupported = Schema.is(AkeruDelegationProviderUnsupportedError);
 
 // Every provider instance in this matrix is named after its driver kind.
 const onDriver = (driverKind: string) => {
   const engine = { provider: ProviderInstanceId.make(driverKind), model: `${driverKind}-model` };
+
   return harnessFor(
     snapshot({
       bots: [bot(PARENT_BOT_ID, { engine }), bot(CHILD_BOT_ID, { name: "Scout", engine })],
@@ -44,10 +44,12 @@ const onDriver = (driverKind: string) => {
 
 function harnessFor(initial: ReturnType<typeof snapshot>) {
   const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
+
   const test = harness(initial, undefined, {
     awaitChild: () => child.promise,
     providerDriverKind: async (instanceId) => String(instanceId),
   });
+
   return { ...test, child };
 }
 
@@ -67,6 +69,7 @@ describe("delegation provider matrix", () => {
 
     it("starts the child, applies the access grant, returns the result, and bills the child", async () => {
       const test = onDriver(driverKind);
+
       const handle = await test.runtime.send(
         parent(),
         request({ allowedToolIds: ["Read"], memoryScopes: ["project"] }) as never,
@@ -143,6 +146,7 @@ describe("delegation provider matrix", () => {
 
     it("refuses handed-off work with a readable reason before creating a child", async () => {
       const test = onDriver("opencode");
+
       const refused = await test.runtime
         .send(parent(), request() as never)
         .catch((cause: unknown) => cause);

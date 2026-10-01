@@ -33,9 +33,10 @@ import {
   thread,
 } from "./testUtils/delegationHarness.ts";
 
-
 const encodeDelegationRecord = Schema.encodeUnknownSync(AkeruDelegationRecord);
+
 const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
+
 const decodeSendToAgent = Schema.decodeUnknownSync(AkeruToolInputSchemas.SendToAgent);
 
 describe("delegation access", () => {
@@ -61,6 +62,7 @@ describe("delegation access", () => {
         mcpServerIds: [McpServerId.make("web"), McpServerId.make("email")],
       }) as never,
     });
+
     expect(grant).toMatchObject({
       allowedToolIds: ["Read", "ExternalRead"],
       memoryScopes: ["project"],
@@ -138,6 +140,7 @@ describe("AkeruDelegationRuntime", () => {
       assistantMessageId: null,
       requestMessageId: MessageId.make("message-user"),
     });
+
     const anchored = harness(
       snapshot({
         threads: [
@@ -145,6 +148,7 @@ describe("AkeruDelegationRuntime", () => {
         ],
       }),
     );
+
     await anchored.runtime.send(parent(), request() as never);
     expect(anchored.state.delegations.at(-1)).toMatchObject({
       anchorMessageId: "message-user",
@@ -161,6 +165,7 @@ describe("AkeruDelegationRuntime", () => {
         ],
       }),
     );
+
     await otherTurn.runtime.send(parent(), request() as never);
     expect(otherTurn.state.delegations.at(-1)?.anchorMessageId).toBeNull();
   });
@@ -168,6 +173,7 @@ describe("AkeruDelegationRuntime", () => {
   it("keeps work a bot sent with keep running after its turn ends", async () => {
     const test = harness();
     const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => test.state,
       dispatch: test.dispatch,
@@ -176,12 +182,13 @@ describe("AkeruDelegationRuntime", () => {
       now: () => NOW,
       id: (() => {
         let next = 100;
+
         return () => String(++next);
       })(),
     });
-    const input = decodeSendToAgent(
-      request({ keep: true }),
-    );
+
+    const input = decodeSendToAgent(request({ keep: true }));
+
     const handle = await runtime.send(parent(), input);
     expect(test.state.delegations.at(-1)).toMatchObject({ keep: true });
 
@@ -214,12 +221,14 @@ describe("AkeruDelegationRuntime", () => {
         acknowledgedAt: null,
       },
     });
+
     const test = harness(snapshot({ delegations: [original] }));
 
     const handle = await test.runtime.dispatchDelegation({
       _tag: "Retry",
       delegationId: original.delegationId,
     });
+
     await test.runtime.drain();
 
     expect(test.state.delegations[0]).toEqual(original);
@@ -230,9 +239,11 @@ describe("AkeruDelegationRuntime", () => {
           command.delegation.delegationId === original.delegationId,
       ),
     ).toEqual([]);
+
     const retried = test.state.delegations.find(
       (entry) => entry.delegationId === handle.delegationId,
     );
+
     expect(retried).toMatchObject({
       retryOfDelegationId: original.delegationId,
       anchorMessageId: "message-user",
@@ -257,6 +268,7 @@ describe("AkeruDelegationRuntime", () => {
 
   it("fails new bot work whose child turn cannot start, so it stays retryable", async () => {
     const base = harness();
+
     const test = harness(snapshot(), undefined, {
       dispatch: async (command) => {
         if (command.type === "thread.turn.start") throw new Error("provider unavailable");
@@ -303,7 +315,9 @@ describe("AkeruDelegationRuntime", () => {
         ],
       }),
     );
+
     const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => test.state,
       dispatch: test.dispatch,
@@ -312,6 +326,7 @@ describe("AkeruDelegationRuntime", () => {
       now: () => NOW,
       id: (() => {
         let next = 200;
+
         return () => String(++next);
       })(),
     });
@@ -351,10 +366,12 @@ describe("AkeruDelegationRuntime", () => {
 
   it("deletes the child thread when authoritative delegation admission fails", async () => {
     const commands: OrchestrationCommand[] = [];
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => snapshot(),
       dispatch: async (command) => {
         commands.push(command);
+
         if (command.type === "delegation.create") throw new Error("Delegation limit reached.");
       },
       awaitChild: async () => ({ state: "completed", turnId: CHILD_TURN_ID, summary: "Done." }),
@@ -393,6 +410,7 @@ describe("AkeruDelegationRuntime", () => {
       turnId: CHILD_TURN_ID,
       error: "Access denied.",
     });
+
     await blocked.runtime.send(parent(), request() as never);
     await blocked.runtime.drain();
     expect(blocked.state.delegations.at(-1)).toMatchObject({
@@ -405,6 +423,7 @@ describe("AkeruDelegationRuntime", () => {
       turnId: CHILD_TURN_ID,
       error: "Provider failed.",
     });
+
     await failed.runtime.send(parent(), request() as never);
     await failed.runtime.drain();
     expect(failed.state.delegations.at(-1)).toMatchObject({
@@ -423,35 +442,41 @@ describe("AkeruDelegationRuntime", () => {
         "    at ensureSessionForThread (file:///srv/akeru/apps/server/src/orchestration/Layers/ProviderCommandReactor.ts:1282:28)",
       ].join("\n"),
     });
+
     await failed.runtime.send(parent(), request() as never);
     await failed.runtime.drain();
     const message = "Provider instance 'codex' is disabled in Akeru Bot settings.";
     expect(failed.state.delegations.at(-1)).toMatchObject({
       phase: { _tag: "Failed", failure: { failureCode: "child_failed", message } },
     });
+
     const delivered = failed.commands.flatMap((command) =>
       command.type === "thread.activity.append" && command.activity.kind === "delegation.failed"
         ? [command.activity.summary]
         : [],
     );
+
     expect(delivered).toEqual([message]);
   });
 
   it("runs a second delegation to a busy child bot in its own child chat", async () => {
     const test = harness();
     const children: Array<PromiseWithResolvers<AkeruDelegationChildOutcome>> = [];
+
     const runtime = createAkeruDelegationRuntime({
       readSnapshot: async () => test.state,
       dispatch: test.dispatch,
       awaitChild: () => {
         const child = Promise.withResolvers<AkeruDelegationChildOutcome>();
         children.push(child);
+
         return child.promise;
       },
       interruptChild: async () => undefined,
       now: () => NOW,
       id: (() => {
         let value = 0;
+
         return () => String(++value);
       })(),
     });
@@ -474,10 +499,12 @@ describe("AkeruDelegationRuntime", () => {
 
   it("keeps children from an earlier completed turn when a later turn is interrupted", async () => {
     const childThreadId = ThreadId.make("earlier-child");
+
     const earlier = delegation(DelegationId.make("earlier"), {
       parentTurnId: TurnId.make("turn-earlier"),
       phase: { _tag: "Running", childThreadId, childTurnId: null, startedAt: NOW, progress: null },
     });
+
     const test = harness(snapshot({ delegations: [earlier] }));
 
     await test.runtime.parentFinished({

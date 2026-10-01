@@ -17,21 +17,28 @@ const { remoteSession, deleted, setup } = makebotWorkspaceTestSupport();
 describe("Ascii Box", () => {
   it("waits for pending VM deletion to complete", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+
     try {
       const { client, session } = await setup();
+
       const pending = {
         ...deleted,
         operation: { ...deleted.operation, status: "pending" as const },
       };
+
       vi.spyOn(client, "deleteBox").mockResolvedValue(pending);
+
       const poll = vi
         .spyOn(client, "getDeletionOperation")
         .mockResolvedValueOnce(pending)
         .mockResolvedValue(deleted);
+
       let complete = false;
+
       const operation = session.destroy().then(() => {
         complete = true;
       });
+
       await vi.advanceTimersByTimeAsync(2_000);
       expect(complete).toBe(false);
       await vi.advanceTimersByTimeAsync(2_000);
@@ -45,12 +52,15 @@ describe("Ascii Box", () => {
 
   it("bounds pending deletion waits", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+
     try {
       const { client, session } = await setup();
+
       const pending = {
         ...deleted,
         operation: { ...deleted.operation, status: "pending" as const },
       };
+
       vi.spyOn(client, "deleteBox").mockResolvedValue(pending);
       vi.spyOn(client, "getDeletionOperation").mockResolvedValue(pending);
       const failure = expect(session.destroy()).rejects.toThrow("deletion timed out");
@@ -63,12 +73,15 @@ describe("Ascii Box", () => {
 
   it("stops with a native snapshot, resumes, and deletes with confirmation", async () => {
     const { client, get, session } = await setup();
+
     const stop = vi
       .spyOn(client, "stop")
       .mockResolvedValue({ ok: true, type: "box.stopped", id: "ascii-id", status: "archived" });
+
     const resume = vi
       .spyOn(client, "resume")
       .mockResolvedValue({ ok: true, type: "box.resumed", id: "ascii-id", status: "ready" });
+
     const remove = vi.spyOn(client, "deleteBox").mockResolvedValue(deleted);
     const current = await client.get({ boxId: "ascii-id" });
     get.mockResolvedValueOnce({ ...current, box: { ...current.box, state: "archived" } });
@@ -86,31 +99,38 @@ describe("Ascii Box", () => {
     "waits for native snapshot completion during %s",
     async (action) => {
       vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+
       try {
         const { client, get, session } = await setup();
         const current = await client.get({ boxId: "ascii-id" });
         const archiving = { ...current, box: { ...current.box, state: "archiving" as const } };
         const archived = { ...current, box: { ...current.box, state: "archived" as const } };
+
         const stop = vi.spyOn(client, "stop").mockResolvedValue({
           ok: true,
           type: "box.stopped",
           id: "ascii-id",
           status: "archiving",
         });
+
         const resume = vi
           .spyOn(client, "resume")
           .mockResolvedValue({ ok: true, type: "box.resumed", id: "ascii-id", status: "ready" });
+
         if (action === "wake") get.mockResolvedValueOnce(archiving);
         get.mockResolvedValueOnce(archiving).mockResolvedValueOnce(archived);
         let completed = false;
+
         const operation = session[action]().then(() => {
           completed = true;
         });
+
         await vi.advanceTimersByTimeAsync(0);
         expect(completed).toBe(false);
         expect(resume).not.toHaveBeenCalled();
         await vi.advanceTimersByTimeAsync(2_000);
         await operation;
+
         if (action === "wake")
           expect(resume).toHaveBeenCalledWith({
             boxId: "ascii-id",
@@ -127,9 +147,11 @@ describe("Ascii Box", () => {
     const { client, get, session } = await setup();
     const current = await client.get({ boxId: "ascii-id" });
     get.mockResolvedValue({ ...current, box: { ...current.box, state: "error" } });
+
     const stop = vi
       .spyOn(client, "stop")
       .mockResolvedValue({ ok: true, type: "box.stopped", id: "ascii-id", status: "archiving" });
+
     const remove = vi.spyOn(client, "deleteBox");
     await expect(session.sleep()).rejects.toThrow("snapshot archival failed");
     expect(stop).toHaveBeenCalledWith({ boxId: "ascii-id" });
@@ -138,6 +160,7 @@ describe("Ascii Box", () => {
 
   it("bounds snapshot waits without deleting the VM", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+
     try {
       const { client, get, session } = await setup();
       const current = await client.get({ boxId: "ascii-id" });
@@ -180,6 +203,7 @@ describe("Ascii Box", () => {
 
   it("quotes commands, absolute working directories and environment values", async () => {
     const { client, session } = await setup();
+
     const command = vi.spyOn(client, "command").mockResolvedValue({
       ok: true,
       type: "command.finished",
@@ -189,6 +213,7 @@ describe("Ascii Box", () => {
       stderr: "err",
       timedOut: false,
     });
+
     expect(
       await session.run("printf", ["a'b"], {
         cwd: "/workspace/my files",
@@ -243,6 +268,7 @@ describe("Ascii Box", () => {
     get.mockResolvedValue({ ...current, box: { ...current.box, state: "provisioning" } });
     const deleteBox = vi.spyOn(client, "deleteBox");
     const clock = vi.spyOn(Date, "now").mockReturnValueOnce(0).mockReturnValue(300_001);
+
     try {
       await expect(session.wake()).rejects.toThrow("Timed out waiting for Box state");
       expect(deleteBox).not.toHaveBeenCalled();
@@ -253,12 +279,14 @@ describe("Ascii Box", () => {
 
   it("protects browser control without forwarding the API credential", async () => {
     const { client, session } = await setup();
+
     const hostPort = vi.spyOn(client, "hostPort").mockResolvedValue({
       ok: true,
       type: "host_port",
       url: "https://preview.example/?_token=browser-token",
       isProtected: true,
     });
+
     expect(await session.browserEndpoint(9223)).toEqual({
       url: "https://preview.example/?_token=browser-token",
       requestHeaders: {},
@@ -288,6 +316,7 @@ describe("Ascii Box", () => {
   it("creates once with the configured credential and reattaches by saved VM identity", async () => {
     const { BoxApi } = await import("@asciidev/box-sdk");
     const root = await NodeFS.promises.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-ascii-"));
+
     const box = {
       id: "ascii-id",
       name: "test",
@@ -295,6 +324,7 @@ describe("Ascii Box", () => {
       desktopAvailable: false,
       snapshotAvailable: true,
     };
+
     const create = vi.spyOn(BoxApi.prototype, "create").mockResolvedValue({
       ok: true,
       type: "box.created",
@@ -302,10 +332,13 @@ describe("Ascii Box", () => {
       ttlSeconds: null,
       box,
     });
+
     const get = vi
       .spyOn(BoxApi.prototype, "get")
       .mockResolvedValue({ ok: true, type: "box.info", box });
+
     const remove = vi.spyOn(BoxApi.prototype, "deleteBox").mockResolvedValue(deleted);
+
     const command = vi.spyOn(BoxApi.prototype, "command").mockResolvedValue({
       ok: true,
       type: "command.finished",
@@ -315,6 +348,7 @@ describe("Ascii Box", () => {
       stderr: "",
       timedOut: false,
     });
+
     try {
       const input = {
         threadId: "thread",
@@ -323,6 +357,7 @@ describe("Ascii Box", () => {
         identityFile: NodePath.join(root, "identity.json"),
         environment: { BOX_API_KEY: "configured-key" },
       };
+
       const first = await createRemoteBotWorkspace(input);
       expect(create).toHaveBeenCalledWith({ createBoxRequest: { ttlSeconds: null, noEnv: true } });
       const client = create.mock.contexts[0] as import("@asciidev/box-sdk").BoxApi;
@@ -367,9 +402,11 @@ describe("Ascii Box", () => {
       const root = await NodeFS.promises.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-ascii-"));
       const identityFile = NodePath.join(root, "identity.json");
       const previous = { provider: "ascii", providerId: "deleted-id" };
+
       const get = vi
         .spyOn(BoxApi.prototype, "get")
         .mockRejectedValue(new ResponseError(new Response(null, { status })));
+
       const create = vi.spyOn(BoxApi.prototype, "create").mockResolvedValue({
         ok: true,
         type: "box.created",
@@ -383,8 +420,10 @@ describe("Ascii Box", () => {
           snapshotAvailable: false,
         },
       });
+
       try {
         await NodeFS.promises.writeFile(identityFile, JSON.stringify(previous));
+
         const input = {
           threadId: "thread",
           sandbox: "ascii" as const,
@@ -392,6 +431,7 @@ describe("Ascii Box", () => {
           identityFile,
           environment: { BOX_API_KEY: "configured-key" },
         };
+
         if (status === 404) {
           create.mockRejectedValueOnce(new Error("creation unavailable"));
           await expect(createRemoteBotWorkspace(input)).rejects.toThrow("missing or unavailable");
@@ -426,6 +466,7 @@ describe("Ascii Box", () => {
     const { BoxApi } = await import("@asciidev/box-sdk");
     const create = vi.spyOn(BoxApi.prototype, "create");
     const root = await NodeFS.promises.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-ascii-"));
+
     try {
       await expect(
         createRemoteBotWorkspace({
@@ -447,6 +488,7 @@ describe("Ascii Box", () => {
 describe("createBotWorkspace", () => {
   it("classifies every managed provider", () => {
     expect(isRemoteBotSandbox("local")).toBe(false);
+
     for (const sandbox of ["e2b", "daytona", "vercel", "upstash", "ascii", "railway"] as const) {
       expect(isRemoteBotSandbox(sandbox)).toBe(true);
     }
@@ -457,6 +499,7 @@ describe("createBotWorkspace", () => {
     const projectDir = NodePath.join(baseDir, "project");
     const botRoot = NodePath.join(baseDir, "state", "akeru-bot-one");
     NodeFS.mkdirSync(projectDir, { recursive: true });
+
     const workspace = await createBotWorkspace({
       threadId: "bot-one",
       cwd: projectDir,
@@ -464,6 +507,7 @@ describe("createBotWorkspace", () => {
       workspaceId: "akeru-bot-one",
       sandbox: "local",
     });
+
     assert.isDefined(workspace);
     expect(workspace.workspace.sandbox).toBeInstanceOf(LocalSandbox);
     expect(workspace.workspace.filesystem).toBeInstanceOf(LocalFilesystem);
@@ -479,6 +523,7 @@ describe("createBotWorkspace", () => {
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
       sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
     });
+
     const makeRemoteWorkspace = vi.fn(async () => remote);
     await createBotWorkspace({
       threadId: "thread-vercel",
@@ -513,9 +558,11 @@ describe("createBotWorkspace", () => {
   it("persists the provider identity and uses it to reattach", async () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-identity-"));
     const identityFile = NodePath.join(baseDir, "provider.json");
+
     const openSession = vi.fn(async (providerId?: string) =>
       remoteSession(providerId ?? "native-workspace-id"),
     );
+
     const input = {
       threadId: "thread-remote",
       sandbox: "e2b" as const,

@@ -6,11 +6,13 @@ export function e2b(initial: import("e2b").Sandbox, apiKey?: string): AkeruRemot
   let sandbox = initial;
   const providerId = sandbox.sandboxId;
   const options = apiKey ? { apiKey } : {};
+
   return {
     providerId,
     inspect: async () => {
       const { Sandbox } = await import("e2b");
       const info = await Sandbox.getInfo(providerId, options);
+
       return info.state === "paused" ? "sleeping" : "running";
     },
     run: async (command, args, options) => {
@@ -19,11 +21,14 @@ export function e2b(initial: import("e2b").Sandbox, apiKey?: string): AkeruRemot
         ...(options?.env ? { envs: options.env } : {}),
         ...(options?.timeout ? { timeoutMs: options.timeout } : {}),
       });
+
       return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
     },
     browserEndpoint: async (port) => {
       const token = sandbox.trafficAccessToken?.trim();
+
       if (!token) throw new Error(`E2B workspace '${providerId}' has no traffic access token.`);
+
       return {
         url: `https://${sandbox.getHost(port)}`,
         requestHeaders: { "e2b-traffic-access-token": token },

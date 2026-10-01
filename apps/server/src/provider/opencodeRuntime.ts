@@ -82,22 +82,27 @@ export class OpenCodeRuntimeError extends Data.TaggedError(OPENCODE_RUNTIME_ERRO
 
 function encodeJsonStringForDiagnostics(input: unknown): string | undefined {
   const result = encodeUnknownJsonStringExit(input);
+
   return Exit.isSuccess(result) ? result.value : undefined;
 }
 
 export function openCodeRuntimeErrorDetail(cause: unknown): string {
   if (OpenCodeRuntimeError.is(cause)) return cause.detail;
+
   if (cause instanceof Error && cause.message.trim().length > 0) return cause.message.trim();
+
   if (cause && typeof cause === "object") {
     // SDK v2 throws { response, request, error? } shapes — extract what's useful
     const anyCause = cause as Record<string, unknown>;
     const status = (anyCause.response as { status?: number } | undefined)?.status;
     const body = anyCause.error ?? anyCause.data ?? anyCause.body;
     const encodedBody = encodeJsonStringForDiagnostics(body ?? cause);
+
     if (encodedBody) {
       return `status=${status ?? "?"} body=${encodedBody}`;
     }
   }
+
   return String(cause);
 }
 
@@ -177,9 +182,12 @@ function parseServerUrlFromOutput(output: string): string | null {
     if (!line.startsWith(OPENCODE_SERVER_READY_PREFIX)) {
       continue;
     }
+
     const match = line.match(/on\s+(https?:\/\/[^\s]+)/);
+
     return match?.[1] ?? null;
   }
+
   return null;
 }
 
@@ -202,12 +210,14 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const netService = yield* NetService.NetService;
   const hostPlatform = yield* HostProcessPlatform;
+
   const resolveCommand = (command: string, args: ReadonlyArray<string>, env?: NodeJS.ProcessEnv) =>
     resolveSpawnCommand(command, args, env ? { env } : {});
 
   const runOpenCodeCommand: OpenCodeRuntimeShape["runOpenCodeCommand"] = (input) =>
     Effect.gen(function* () {
       const spawnCommand = yield* resolveCommand(input.binaryPath, input.args, input.environment);
+
       const child = yield* spawner.spawn(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
           detached: hostPlatform !== "win32",
@@ -216,6 +226,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
           ...(input.environment ? { env: input.environment } : { extendEnv: true }),
         }),
       );
+
       const terminateCommandGroup =
         hostPlatform === "win32"
           ? child.kill({ killSignal: "SIGKILL" }).pipe(Effect.asVoid)
@@ -226,9 +237,12 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
                 // The command and its process group may already have exited.
               }
             });
+
       yield* Effect.addFinalizer(() => terminateCommandGroup.pipe(Effect.ignore));
+
       const collectOptions =
         input.maxOutputBytes === undefined ? undefined : { maxBytes: input.maxOutputBytes };
+
       const [stdout, stderr, code] = yield* Effect.all(
         [
           collectStreamAsString(child.stdout, collectOptions),
@@ -237,13 +251,16 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         ],
         { concurrency: "unbounded" },
       );
+
       const exitCode = Number(code);
+
       if (yield* isWindowsCommandNotFound(exitCode, stderr)) {
         return yield* new OpenCodeRuntimeError({
           operation: "runOpenCodeCommand",
           detail: `spawn ${input.binaryPath} ENOENT`,
         });
       }
+
       return {
         stdout,
         stderr,
@@ -268,6 +285,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       const runtimeScope = yield* Scope.Scope;
 
       const hostname = input.hostname ?? DEFAULT_HOSTNAME;
+
       const port =
         input.port ??
         (yield* netService.findAvailablePort(0).pipe(
@@ -280,6 +298,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
               }),
           ),
         ));
+
       const timeoutMs = input.timeoutMs ?? DEFAULT_OPENCODE_SERVER_TIMEOUT_MS;
       const args = ["serve", `--hostname=${hostname}`, `--port=${port}`];
       const spawnCommand = yield* resolveCommand(input.binaryPath, args, input.environment);
@@ -327,11 +346,13 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
                 // any serve process left in that group.
               }
             });
+
       const terminateChild = killOpenCodeProcessGroup("SIGTERM").pipe(
         Effect.andThen(Effect.sleep("1 second")),
         Effect.andThen(killOpenCodeProcessGroup("SIGKILL")),
         Effect.ignore,
       );
+
       yield* Scope.addFinalizer(runtimeScope, terminateChild);
 
       const stdoutRef = yield* Ref.make("");
@@ -342,6 +363,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         Ref.updateAndGet(stdoutRef, (stdout) => `${stdout}${chunk}`).pipe(
           Effect.flatMap((nextStdout) => {
             const parsed = parseServerUrlFromOutput(nextStdout);
+
             return parsed
               ? Deferred.succeed(readyDeferred, parsed).pipe(Effect.ignore)
               : Effect.void;
@@ -354,6 +376,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         Effect.ignore,
         Effect.forkIn(runtimeScope),
       );
+
       const stderrFiber = yield* child.stderr.pipe(
         Stream.decodeText(),
         Stream.runForEach((chunk) => Ref.update(stderrRef, (stderr) => `${stderr}${chunk}`)),
@@ -400,6 +423,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       if (Exit.isFailure(readyExit)) {
         yield* Fiber.interrupt(exitFiber).pipe(Effect.ignore);
         const squashed = Cause.squash(readyExit.cause);
+
         return yield* ensureRuntimeError(
           "startOpenCodeServerProcess",
           `Failed while waiting for OpenCode server startup: ${openCodeRuntimeErrorDetail(squashed)}`,
@@ -408,8 +432,10 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       }
 
       const readyOption = readyExit.value;
+
       if (Option.isNone(readyOption)) {
         yield* Fiber.interrupt(exitFiber).pipe(Effect.ignore);
+
         return yield* new OpenCodeRuntimeError({
           operation: "startOpenCodeServerProcess",
           detail: `Timed out waiting for OpenCode server start after ${timeoutMs}ms.`,
@@ -427,6 +453,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
 
   const connectToOpenCodeServer: OpenCodeRuntimeShape["connectToOpenCodeServer"] = (input) => {
     const serverUrl = input.serverUrl?.trim();
+
     if (serverUrl) {
       // We don't own externally-configured servers — no scope interaction.
       return Effect.succeed({
@@ -514,12 +541,14 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
           args: ["models", "--verbose"],
           ...commandContext,
         }).pipe(Effect.exit);
+
       const runAgentsCli = () =>
         runOpenCodeCommand({
           binaryPath: input.binaryPath,
           args: ["agent", "list"],
           ...commandContext,
         }).pipe(Effect.exit);
+
       const runSkillsCli = () =>
         runOpenCodeCommand({
           binaryPath: input.binaryPath,
@@ -534,16 +563,22 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         [runModelsCli(), runAgentsCli(), runSkillsCli()],
         { concurrency: 1 },
       );
+
       let modelsResult = initialModelsResult;
       let agentsResult = initialAgentsResult;
       let skillsResult = initialSkillsResult;
 
       // Retry once after 1s on transient failures (e.g. SQLite "database is locked")
-      const needsModelsRetry = Predicate.isTagged(modelsResult, "Failure") || modelsResult.value.code !== 0;
-      const needsAgentsRetry = Predicate.isTagged(agentsResult, "Failure") || agentsResult.value.code !== 0;
-      const needsSkillsRetry = Predicate.isTagged(skillsResult, "Failure") || skillsResult.value.code !== 0;
+      const needsModelsRetry =
+        Predicate.isTagged(modelsResult, "Failure") || modelsResult.value.code !== 0;
+      const needsAgentsRetry =
+        Predicate.isTagged(agentsResult, "Failure") || agentsResult.value.code !== 0;
+      const needsSkillsRetry =
+        Predicate.isTagged(skillsResult, "Failure") || skillsResult.value.code !== 0;
+
       if (needsModelsRetry || needsAgentsRetry || needsSkillsRetry) {
         yield* Effect.sleep("1 second");
+
         const [m2, a2, s2] = yield* Effect.all(
           [
             needsModelsRetry ? runModelsCli() : Effect.succeed(modelsResult),
@@ -552,6 +587,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
           ],
           { concurrency: 1 },
         );
+
         modelsResult = m2;
         agentsResult = a2;
         skillsResult = s2;
@@ -559,12 +595,14 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
 
       if (Predicate.isTagged(modelsResult, "Failure")) {
         const cause = Cause.squash(modelsResult.cause);
+
         return yield* ensureRuntimeError(
           "loadInventoryFromCli",
           `Failed to load OpenCode models: ${openCodeRuntimeErrorDetail(cause)}`,
           cause,
         );
       }
+
       if (modelsResult.value.code !== 0) {
         return yield* new OpenCodeRuntimeError({
           operation: "loadInventoryFromCli",
@@ -574,6 +612,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
 
       const parsed = parseModelsCliOutput(modelsResult.value.stdout);
       const connected = [...parsed.connected];
+
       const allProviders: ProviderListResponse["all"] = [...parsed.providers.values()].map(
         (provider) => ({
           id: provider.id,
@@ -588,10 +627,13 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       // Agent and skill metadata enrich the provider snapshot but are not required
       // for an authoritative model inventory, so either may degrade to an empty list.
       let agents: ReadonlyArray<Agent> = [];
+
       if (Predicate.isTagged(agentsResult, "Success") && agentsResult.value.code === 0) {
         agents = parseAgentListCliOutput(agentsResult.value.stdout);
       }
+
       let skills: ReadonlyArray<OpenCodeSkill> = [];
+
       if (Predicate.isTagged(skillsResult, "Success") && skillsResult.value.code === 0) {
         skills = parseSkillsCliOutput(skillsResult.value.stdout);
       }

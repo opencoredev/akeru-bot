@@ -15,10 +15,12 @@ interface LoggedLine {
 const captureLogs = () => {
   const lines: LoggedLine[] = [];
   const logged = Promise.withResolvers<void>();
+
   const logger = Logger.make(({ logLevel, message }) => {
     lines.push({ level: logLevel, message: Array.isArray(message) ? message : [message] });
     logged.resolve();
   });
+
   return {
     lines,
     logged: logged.promise,
@@ -29,6 +31,7 @@ const captureLogs = () => {
 describe("AkeruRuntimeSeam", () => {
   it.effect("logs a failed background effect with its annotations", () => {
     const logs = captureLogs();
+
     return Effect.gen(function* () {
       const seam = yield* makeAkeruRuntimeSeam;
       seam.fork("Background work failed.", Effect.fail("boom"), { threadId: "thread-1" });
@@ -44,6 +47,7 @@ describe("AkeruRuntimeSeam", () => {
 
   it.effect("hands a rejected background promise to onFailure and logs it", () => {
     const logs = captureLogs();
+
     return Effect.gen(function* () {
       const seam = yield* makeAkeruRuntimeSeam;
       const failures: unknown[] = [];
@@ -65,12 +69,14 @@ describe("AkeruRuntimeSeam", () => {
   it.effect("rejects runPromise callers with the effect's failure", () =>
     Effect.gen(function* () {
       const seam = yield* makeAkeruRuntimeSeam;
+
       const error = yield* Effect.promise(() =>
         seam.runPromise(Effect.fail("denied")).then(
           () => undefined,
           (cause: unknown) => cause,
         ),
       );
+
       assert.strictEqual(error, "denied");
       assert.strictEqual(yield* Effect.promise(() => seam.runPromise(Effect.succeed(7))), 7);
     }).pipe(Effect.scoped),
@@ -78,6 +84,7 @@ describe("AkeruRuntimeSeam", () => {
 
   it.effect("interrupts in-flight forked work when its scope closes, without logging", () => {
     const logs = captureLogs();
+
     return Effect.gen(function* () {
       const scope = yield* Scope.make();
       const seam = yield* makeAkeruRuntimeSeam.pipe(Scope.provide(scope));

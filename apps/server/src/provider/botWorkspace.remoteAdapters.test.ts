@@ -22,14 +22,17 @@ describe("createBotWorkspace", () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-railway-"));
     const identityFile = NodePath.join(baseDir, "identity.json");
     const destroy = vi.fn(async () => undefined);
+
     const sandbox = {
       id: "railway-id",
       status: "RUNNING",
       refresh: vi.fn(async () => undefined),
       destroy,
     } as unknown as import("railway").Sandbox;
+
     const create = vi.spyOn(Sandbox, "create").mockResolvedValue(sandbox);
     const connect = vi.spyOn(Sandbox, "connect").mockResolvedValue(sandbox);
+
     const input = {
       threadId: "railway-thread",
       workspaceId: "akeru-railway",
@@ -37,6 +40,7 @@ describe("createBotWorkspace", () => {
       sandbox: "railway" as const,
       environment: { RAILWAY_API_TOKEN: " token ", RAILWAY_ENVIRONMENT_ID: " env " },
     };
+
     try {
       const first = await createRemoteBotWorkspace(input);
       await first.wake();
@@ -53,11 +57,13 @@ describe("createBotWorkspace", () => {
       await second.destroy();
       expect(destroy).toHaveBeenCalledOnce();
       expect(NodeFS.existsSync(identityFile)).toBe(false);
+
       for (const environment of [{}, { RAILWAY_API_TOKEN: "token" }]) {
         await expect(createRemoteBotWorkspace({ ...input, environment })).rejects.toThrow(
           "Remote sandbox credential",
         );
       }
+
       expect(create).toHaveBeenCalledTimes(1);
     } finally {
       create.mockRestore();
@@ -74,6 +80,7 @@ describe("createBotWorkspace", () => {
         stderr: "error",
       }),
     );
+
     const refresh = vi.fn(async () => undefined);
     const sandbox = { id: "railway-id", status: "RUNNING", exec, refresh };
     const session = railway(sandbox as unknown as import("railway").Sandbox);
@@ -107,6 +114,7 @@ describe("createBotWorkspace", () => {
     refresh.mockRejectedValueOnce(new Error("unauthorized"));
     await expect(session.inspect()).rejects.toThrow("unauthorized");
     expect(railwayWorkspaceState("CREATING")).toBe("sleeping");
+
     for (const status of ["DESTROYING", "DESTROYED", "FAILED"] as const) {
       expect(railwayWorkspaceState(status)).toBe("missing");
     }
@@ -114,12 +122,15 @@ describe("createBotWorkspace", () => {
 
   it("pauses and restarts Daytona workspaces", async () => {
     let state = "started";
+
     const pause = vi.fn(async () => {
       state = "paused";
     });
+
     const start = vi.fn(async () => {
       state = "started";
     });
+
     const sandbox = {
       id: "daytona-id",
       get state() {
@@ -135,9 +146,11 @@ describe("createBotWorkspace", () => {
       })),
       process: { executeCommand: vi.fn() },
     } as unknown as import("@daytona/sdk").Sandbox;
+
     const client = {
       [Symbol.asyncDispose]: vi.fn(async () => undefined),
     } as unknown as import("@daytona/sdk").Daytona;
+
     const session = daytona(client, sandbox);
 
     await session.sleep();
@@ -171,6 +184,7 @@ describe("createBotWorkspace", () => {
 
   it("adds the Vercel browser port without removing existing routes", async () => {
     const update = vi.fn(async () => undefined);
+
     const session = vercel({
       name: "vercel-id",
       status: "running",
@@ -191,9 +205,11 @@ describe("createBotWorkspace", () => {
 
   it("resumes a paused Upstash workspace after reattach", async () => {
     let status = "paused";
+
     const resume = vi.fn(async () => {
       status = "running";
     });
+
     const box = {
       id: "upstash-id",
       getStatus: vi.fn(async () => ({ status })),
@@ -207,6 +223,7 @@ describe("createBotWorkspace", () => {
       })),
       exec: { command: vi.fn() },
     } as unknown as import("@upstash/box").Box;
+
     const session = upstash(box);
 
     await session.wake();
@@ -227,10 +244,12 @@ describe("createBotWorkspace", () => {
       pause: vi.fn(),
       kill: vi.fn(),
     } as unknown as import("e2b").Sandbox);
+
     const upstashSession = upstash({
       id: "upstash-id",
       getPublicURL: vi.fn(async () => ({ url: "https://upstash.example", port: 9223 })),
     } as unknown as import("@upstash/box").Box);
+
     const daytonaSession = daytona(
       {} as import("@daytona/sdk").Daytona,
       {

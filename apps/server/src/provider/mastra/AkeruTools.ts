@@ -3,7 +3,13 @@ import { type ToolsInput } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
 import type { StandardSchemaWithJSON } from "@mastra/core/schema";
 import { createTool, type NeedsApprovalFn } from "@mastra/core/tools";
-import { AKERU_PRODUCT_FEEDBACK_TOOL_NAME, AKERU_CREATE_ROUTINE_TOOL_NAME, AkeruCreateRoutineInput, ProductFeedbackToolDraft, type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue } from "@akeru/contracts";
+import {
+  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
+  AKERU_CREATE_ROUTINE_TOOL_NAME,
+  AkeruCreateRoutineInput,
+  ProductFeedbackToolDraft,
+  type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
+} from "@akeru/contracts";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import { z } from "zod";
@@ -12,7 +18,13 @@ import { isCodexComputerUseTool } from "../CodexComputerUse.ts";
 import { type AkeruMastraToolOptions } from "./AkeruHarnessTypes.ts";
 import { controllerResourceId } from "./AkeruMemory.ts";
 import { akeruActionNeedsApproval } from "./AkeruActions.ts";
-import { routineToolInputSchema, AKERU_LIST_ROUTINES_TOOL_NAME, routineListOutputSchema, AKERU_DELETE_ROUTINES_TOOL_NAME, routineDeleteResultSchema } from "./AkeruRoutineSchemas.ts";
+import {
+  routineToolInputSchema,
+  AKERU_LIST_ROUTINES_TOOL_NAME,
+  routineListOutputSchema,
+  AKERU_DELETE_ROUTINES_TOOL_NAME,
+  routineDeleteResultSchema,
+} from "./AkeruRoutineSchemas.ts";
 
 export const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
   onExcessProperty: "error",
@@ -36,6 +48,7 @@ export const productFeedbackToolInputSchema: StandardSchemaWithJSON<ProductFeedb
       vendor: "akeru-effect",
       validate: (value) => {
         const decoded = decodeProductFeedbackToolDraft(value);
+
         return Exit.isSuccess(decoded)
           ? { value: decoded.value }
           : { issues: [{ message: "Invalid product feedback draft." }] };
@@ -61,7 +74,9 @@ export async function resolveAkeruTools(
   options: AkeruMastraToolOptions,
 ): Promise<ToolsInput> {
   const threadId = controllerResourceId(requestContext);
+
   if (!threadId) return {};
+
   const routineTool = options.createRoutine
     ? createTool({
         id: AKERU_CREATE_ROUTINE_TOOL_NAME,
@@ -85,6 +100,7 @@ export async function resolveAkeruTools(
           ),
       })
     : undefined;
+
   const listRoutinesTool = options.listRoutines
     ? createTool({
         id: AKERU_LIST_ROUTINES_TOOL_NAME,
@@ -97,6 +113,7 @@ export async function resolveAkeruTools(
         execute: async () => options.listRoutines!(threadId),
       })
     : undefined;
+
   const deleteRoutinesTool =
     options.listRoutines && options.deleteRoutines
       ? createTool({
@@ -123,15 +140,20 @@ export async function resolveAkeruTools(
           execute: async ({ routineIds }, context) => {
             const uniqueIds = [...new Set(routineIds)];
             const available = await options.listRoutines!(threadId);
+
             const requested = available.routines.filter((routine) =>
               uniqueIds.includes(routine.id),
             );
+
             if (requested.length !== uniqueIds.length) {
               return { status: "not-found" as const, deletedRoutineIds: [] };
             }
+
             const answer = context?.agent?.resumeData;
+
             if (answer === undefined) {
               const suspend = context?.agent?.suspend;
+
               if (!suspend) return { status: "cancelled" as const, deletedRoutineIds: [] };
               const names = requested.map((routine) => `"${routine.name}"`).join(", ");
               await suspend({
@@ -148,15 +170,19 @@ export async function resolveAkeruTools(
                 ],
                 selectionMode: "single_select",
               });
+
               return;
             }
+
             if (answer !== "Delete routines") {
               return { status: "cancelled" as const, deletedRoutineIds: [] };
             }
+
             return options.deleteRoutines!(threadId, uniqueIds);
           },
         })
       : undefined;
+
   return {
     ...approvalAwareTools(threadId, options.getThreadTools(threadId), options),
     ...createAkeruMastraTools(threadId, options.toolRuntime),
@@ -174,21 +200,37 @@ export function approvalAwareTools(
 ): ToolsInput {
   return Object.fromEntries(
     Object.entries(tools).map(([name, tool]) => {
-      const existing = "needsApprovalFn" in tool
-        ? tool.needsApprovalFn ?? tool.requireApproval
-        : "requireApproval" in tool ? tool.requireApproval : undefined;
+      const existing =
+        "needsApprovalFn" in tool
+          ? (tool.needsApprovalFn ?? tool.requireApproval)
+          : "requireApproval" in tool
+            ? tool.requireApproval
+            : undefined;
+
       const needsApproval: NeedsApprovalFn = async (input, context) => {
         const protectedAction =
           isCodexComputerUseTool(name) || akeruActionNeedsApproval(name, input);
+
         await options.syncThreadToolApproval?.(threadId, name, protectedAction);
+
         return (
           protectedAction ||
           (typeof existing === "function" ? await existing(input, context) : existing === true)
         );
       };
+
       return [name, { ...tool, requireApproval: needsApproval, needsApprovalFn: needsApproval }];
     }),
   );
 }
 
-export { routineTime, AKERU_LIST_ROUTINES_TOOL_NAME, AKERU_DELETE_ROUTINES_TOOL_NAME, routineToolInputSchema, routineListOutputSchema, type AkeruRoutineListResult, routineDeleteResultSchema, type AkeruRoutineDeleteResult } from "./AkeruRoutineSchemas.ts";
+export {
+  routineTime,
+  AKERU_LIST_ROUTINES_TOOL_NAME,
+  AKERU_DELETE_ROUTINES_TOOL_NAME,
+  routineToolInputSchema,
+  routineListOutputSchema,
+  type AkeruRoutineListResult,
+  routineDeleteResultSchema,
+  type AkeruRoutineDeleteResult,
+} from "./AkeruRoutineSchemas.ts";

@@ -28,12 +28,19 @@ import {
 } from "../AkeruDelegationRuntime.ts";
 
 export const NOW = "2026-08-31T12:00:00.000Z";
+
 export const PROJECT_ID = ProjectId.make("project-1");
+
 export const PARENT_BOT_ID = BotId.make("bot-parent");
+
 export const CHILD_BOT_ID = BotId.make("bot-child");
+
 export const OTHER_BOT_ID = BotId.make("bot-other");
+
 export const PARENT_THREAD_ID = ThreadId.make("thread-parent");
+
 export const PARENT_TURN_ID = TurnId.make("turn-parent");
+
 export const CHILD_TURN_ID = TurnId.make("turn-child");
 
 export const access = (overrides: Partial<AkeruDelegationAccessGrant> = {}) => ({
@@ -194,10 +201,12 @@ export function harness(
     delegations: [...initial.delegations],
     threads: [...initial.threads],
   };
+
   const commands: OrchestrationCommand[] = [];
   const interrupts: Array<{ threadId: ThreadId; turnId: TurnId | null }> = [];
   const usage: Array<Record<string, unknown>> = [];
   let nextId = 0;
+
   // Runs every command through the real decider and projects its events back
   // into `state`, so illegal phase transitions (for example Canceled -> Failed)
   // surface as OrchestrationCommandInvariantError instead of passing silently.
@@ -216,21 +225,26 @@ export function harness(
               : command,
           readModel: state as OrchestrationReadModel,
         });
+
         const events = Array.isArray(decided) ? decided : [decided];
         let model = state as OrchestrationReadModel;
+
         for (const event of events) {
           model = yield* projectEvent(model, {
             ...event,
             sequence: model.snapshotSequence + 1,
           });
         }
+
         Object.assign(state, model);
       }).pipe(Effect.provide(NodeServices.layer)),
     );
   });
+
   const recordUsage = vi.fn(async (entry: Record<string, unknown>) => {
     usage.push(entry);
   });
+
   const runtime = createAkeruDelegationRuntime({
     readSnapshot: async () => state as OrchestrationReadModel,
     dispatch,
@@ -243,5 +257,6 @@ export function harness(
     id: () => String(++nextId),
     ...options,
   });
+
   return { runtime, state, commands, interrupts, usage, recordUsage, dispatch };
 }

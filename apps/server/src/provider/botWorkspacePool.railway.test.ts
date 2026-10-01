@@ -19,6 +19,7 @@ describe("BotWorkspacePool", () => {
       const pool = new BotWorkspacePool();
       const destroy = vi.fn(async () => undefined);
       const wake = vi.fn(async () => undefined);
+
       const create = async () => ({
         id: "shared-railway",
         provider: "railway" as const,
@@ -28,6 +29,7 @@ describe("BotWorkspacePool", () => {
         sleep: async () => undefined,
         destroy,
       });
+
       const active = await pool.acquire("old-credentials", create);
       wake.mockRejectedValueOnce(new Error("new credentials unavailable"));
       await expect(pool.acquire("new-credentials", create)).rejects.toThrow(
@@ -51,6 +53,7 @@ describe("BotWorkspacePool", () => {
             sandbox: "railway",
             credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
           });
+
         expect(key("old")).not.toBe(key("new"));
         expect(botWorkspaceIdentity(key("old"))).toBe(botWorkspaceIdentity(key("new")));
         expect(botWorkspaceIdentity(key("old"))).not.toBe(
@@ -61,25 +64,31 @@ describe("BotWorkspacePool", () => {
 
   it("serializes Railway creation across credential-scoped keys with one identity", async () => {
     const pool = new BotWorkspacePool();
+
     const key = (token: string) =>
       botWorkspaceResourceKey({
         resourceScope: "bot-one",
         sandbox: "railway",
         credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
       });
+
     let vmCreated = false;
     let creates = 0;
     let activeCreates = 0;
     let maxActiveCreates = 0;
+
     const create = async () => {
       creates++;
       activeCreates++;
       maxActiveCreates = Math.max(maxActiveCreates, activeCreates);
+
       if (!vmCreated) {
         await Promise.resolve();
         vmCreated = true;
       }
+
       activeCreates--;
+
       return remoteWorkspace({ provider: "railway" });
     };
 
@@ -87,6 +96,7 @@ describe("BotWorkspacePool", () => {
       pool.acquire(key("old"), create),
       pool.acquire(key("new"), create),
     ]);
+
     expect(creates).toBe(2);
     expect(maxActiveCreates).toBe(1);
     expect(vmCreated).toBe(true);
@@ -97,12 +107,14 @@ describe("BotWorkspacePool", () => {
 
   it("defers Railway destruction until every credential-scoped lease releases", async () => {
     const pool = new BotWorkspacePool();
+
     const key = (token: string) =>
       botWorkspaceResourceKey({
         resourceScope: "bot-one",
         sandbox: "railway",
         credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
       });
+
     const destroy = vi.fn(async () => undefined);
     const create = async () => remoteWorkspace({ provider: "railway", destroy });
     const oldCredentials = await pool.acquire(key("old"), create);
@@ -117,30 +129,37 @@ describe("BotWorkspacePool", () => {
 
   it("invalidates sleeping credential keys before deleting their shared Railway VM", async () => {
     const pool = new BotWorkspacePool();
+
     const key = (token: string) =>
       botWorkspaceResourceKey({
         resourceScope: "bot-one",
         sandbox: "railway",
         credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
       });
+
     const oldDestroy = vi.fn(async () => undefined);
     const freshDestroy = vi.fn(async () => undefined);
+
     const oldLease = await pool.acquire(key("old"), async () =>
       remoteWorkspace({ provider: "railway", destroy: oldDestroy }),
     );
+
     await oldLease.release();
 
     const newLease = await pool.acquire(key("new"), async () =>
       remoteWorkspace({ provider: "railway", destroy: freshDestroy }),
     );
+
     await newLease.release({ destroy: true });
     expect(oldDestroy).toHaveBeenCalledTimes(1);
     expect(freshDestroy).not.toHaveBeenCalled();
 
     const replacementDestroy = vi.fn(async () => undefined);
+
     const replacement = await pool.acquire(key("old"), async () =>
       remoteWorkspace({ provider: "railway", destroy: replacementDestroy }),
     );
+
     expect(replacement.workspace.destroy).not.toBe(oldLease.workspace.destroy);
     await replacement.release();
     await pool.destroyAll();
@@ -148,27 +167,35 @@ describe("BotWorkspacePool", () => {
 
   it("starts a clean deletion generation after recreating a deleted Railway VM", async () => {
     const pool = new BotWorkspacePool();
+
     const key = (token: string) =>
       botWorkspaceResourceKey({
         resourceScope: "bot-one",
         sandbox: "railway",
         credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
       });
+
     const oldDestroy = vi.fn(async () => undefined);
+
     const old = await pool.acquire(key("old"), async () =>
       remoteWorkspace({ provider: "railway", destroy: oldDestroy }),
     );
+
     await old.release();
+
     const other = await pool.acquire(key("new"), async () =>
       remoteWorkspace({ provider: "railway", destroy: oldDestroy }),
     );
+
     await other.release({ destroy: true });
     expect(oldDestroy).toHaveBeenCalledTimes(1);
 
     const freshDestroy = vi.fn(async () => undefined);
+
     const createFresh = vi.fn(async () =>
       remoteWorkspace({ provider: "railway", destroy: freshDestroy }),
     );
+
     const recreated = await pool.acquire(key("old"), createFresh);
     expect(createFresh).toHaveBeenCalledTimes(1);
     await recreated.release();
@@ -183,20 +210,26 @@ describe("BotWorkspacePool", () => {
 
   it("accepts successful Railway deletion after an idle credential client fails", async () => {
     const pool = new BotWorkspacePool();
+
     const key = (token: string) =>
       botWorkspaceResourceKey({
         resourceScope: "bot-one",
         sandbox: "railway",
         credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
       });
+
     const revokedDestroy = vi.fn(async () => {
       throw new Error("token revoked");
     });
+
     const currentDestroy = vi.fn(async () => undefined);
+
     const first = await pool.acquire(key("old"), async () =>
       remoteWorkspace({ provider: "railway", destroy: revokedDestroy }),
     );
+
     await first.release();
+
     const second = await pool.acquire(key("new"), async () =>
       remoteWorkspace({ provider: "railway", destroy: currentDestroy }),
     );
@@ -209,22 +242,28 @@ describe("BotWorkspacePool", () => {
 
   it("closes the releasing Railway lease when identity cleanup throws", async () => {
     const pool = new BotWorkspacePool();
+
     const key = (token: string) =>
       botWorkspaceResourceKey({
         resourceScope: "bot-one",
         sandbox: "railway",
         credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
       });
+
     const failingDestroy = vi.fn(async () => {
       throw new Error("delete failed");
     });
+
     const first = await pool.acquire(key("old"), async () =>
       remoteWorkspace({ provider: "railway", destroy: failingDestroy }),
     );
+
     await first.release();
+
     const second = await pool.acquire(key("new"), async () =>
       remoteWorkspace({ provider: "railway", destroy: failingDestroy }),
     );
+
     await expect(second.release({ destroy: true })).rejects.toThrow("delete failed");
 
     const createRetry = vi.fn(async () => remoteWorkspace({ provider: "railway" }));
@@ -236,25 +275,32 @@ describe("BotWorkspacePool", () => {
 
   it("counts a Railway acquisition waiting in creation before honoring deletion", async () => {
     const pool = new BotWorkspacePool();
+
     const key = (token: string) =>
       botWorkspaceResourceKey({
         resourceScope: "bot-one",
         sandbox: "railway",
         credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
       });
+
     const destroy = vi.fn(async () => undefined);
+
     const old = await pool.acquire(key("old"), async () =>
       remoteWorkspace({ provider: "railway", destroy }),
     );
+
     let markCreating!: () => void;
     let finishCreating!: () => void;
     const creating = new Promise<void>((resolve) => (markCreating = resolve));
     const finish = new Promise<void>((resolve) => (finishCreating = resolve));
+
     const pending = pool.acquire(key("new"), async () => {
       markCreating();
       await finish;
+
       return remoteWorkspace({ provider: "railway", destroy });
     });
+
     await creating;
     const releaseOld = old.release({ destroy: true });
     finishCreating();
@@ -268,12 +314,14 @@ describe("BotWorkspacePool", () => {
 
   it("deduplicates Railway VM deletion during destroyAll across credential keys", async () => {
     const pool = new BotWorkspacePool();
+
     const key = (token: string) =>
       botWorkspaceResourceKey({
         resourceScope: "bot-one",
         sandbox: "railway",
         credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
       });
+
     const destroy = vi.fn(async () => undefined);
     const create = async () => remoteWorkspace({ provider: "railway", destroy });
     const first = await pool.acquire(key("old"), create);
@@ -287,21 +335,26 @@ describe("BotWorkspacePool", () => {
 
   it("destroys a Railway VM created while destroyAll is waiting for acquisition", async () => {
     const pool = new BotWorkspacePool();
+
     const key = botWorkspaceResourceKey({
       resourceScope: "bot-one",
       sandbox: "railway",
       credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: "token" }),
     });
+
     let markCreating!: () => void;
     let finishCreating!: () => void;
     const creating = new Promise<void>((resolve) => (markCreating = resolve));
     const finish = new Promise<void>((resolve) => (finishCreating = resolve));
     const destroy = vi.fn(async () => undefined);
+
     const acquisition = pool.acquire(key, async () => {
       markCreating();
       await finish;
+
       return remoteWorkspace({ provider: "railway", destroy });
     });
+
     await creating;
 
     const shutdown = pool.destroyAll();

@@ -37,6 +37,7 @@ describe("AkeruSessionResources", () => {
     for (const directory of directories) {
       NodeFS.rmSync(directory, { recursive: true, force: true });
     }
+
     directories.clear();
   });
 
@@ -46,6 +47,7 @@ describe("AkeruSessionResources", () => {
       for (const transport of ["stdio", "url"] as const) {
         for (const id of ["builtin-executor", "builtin-tinyfish", "builtin-exa", "raw-mcp"]) {
           const botBrowser = browser();
+
           const attachment = {
             browserUrl: "https://sandbox.example/browser",
             mcpSessionId: "session",
@@ -53,9 +55,11 @@ describe("AkeruSessionResources", () => {
             localRequestHeaders: {},
             availableToHostedPlugins: botSandbox !== "local",
           };
+
           const acquireAttachment = vi.fn(async () => attachment);
           const manager = mcpManager({ connected: true, toolCount: 1 });
           const toMcpServerConfigs = vi.fn(() => ({}));
+
           const resources = new AkeruSessionResources({
             stateDir: stateDir(),
             makeRemoteWorkspace: async () => workspace(),
@@ -63,17 +67,20 @@ describe("AkeruSessionResources", () => {
             makeMcpManager: () => manager as never,
             toMcpServerConfigs,
           });
+
           const server = {
             ...exaServer,
             id: McpServerId.make(id),
             transport,
             command: "connector",
           };
+
           try {
             const requiresBrowser =
               botSandbox !== "tenki" &&
               (id === "builtin-executor" || id === "builtin-tinyfish") &&
               (transport === "stdio" || botSandbox !== "local");
+
             if (botSandbox === "railway" && requiresBrowser) {
               await expect(
                 resources.acquire({
@@ -87,6 +94,7 @@ describe("AkeruSessionResources", () => {
               expect(manager.init).not.toHaveBeenCalled();
               continue;
             }
+
             await resources.acquire({
               ...remoteInput,
               botSandbox,
@@ -111,6 +119,7 @@ describe("AkeruSessionResources", () => {
     const attachment = vi.fn(async () => undefined);
     const call = vi.fn(async () => "page tree");
     const close = vi.fn(async () => undefined);
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => workspace(),
@@ -122,19 +131,23 @@ describe("AkeruSessionResources", () => {
       makeMcpManager: () => mcpManager({ connected: true, toolCount: 1 }) as never,
       toMcpServerConfigs: () => ({}),
     });
+
     try {
       await resources.acquire({ ...remoteInput, threadId: "lazy", mcpServers: [exaServer] });
       expect(attachment).not.toHaveBeenCalled();
       expect(call).not.toHaveBeenCalled();
+
       const tool = resources.getConnectorTools("lazy").browser_snapshot as {
         execute: (input: Record<string, unknown>) => Promise<unknown>;
       };
+
       await tool.execute({});
       expect(call).toHaveBeenCalledExactlyOnceWith("tree", {});
       expect(attachment).not.toHaveBeenCalled();
     } finally {
       await resources.shutdown();
     }
+
     expect(close).toHaveBeenCalledOnce();
   });
 
@@ -155,6 +168,7 @@ describe("AkeruSessionResources", () => {
         mcpManager({ connected: true, toolCount: 1 }, { exa_search: {}, other_tool: {} }) as never,
       toMcpServerConfigs: () => ({}),
     });
+
     try {
       await resources.acquire({
         ...remoteInput,
@@ -177,6 +191,7 @@ describe("AkeruSessionResources", () => {
     const sleep = vi.spyOn(remote, "sleep");
     const manager = mcpManager({ connected: true, toolCount: 1 });
     manager.init.mockRejectedValueOnce(new Error("connector failed"));
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => remote,
@@ -195,12 +210,14 @@ describe("AkeruSessionResources", () => {
     expect(destroy).not.toHaveBeenCalled();
     expect(sleep).toHaveBeenCalledOnce();
     expect(manager.disconnect).toHaveBeenCalledOnce();
+
     const recovered = await resources.acquire({
       ...remoteInput,
       botSandbox: "tenki",
       threadId: "tenki-init-failure",
       mcpServers: [exaServer],
     });
+
     expect(recovered.botWorkspace).toBe(remote.workspace);
     await resources.shutdown();
     expect(destroy).not.toHaveBeenCalled();
@@ -212,6 +229,7 @@ describe("AkeruSessionResources", () => {
     const sleep = vi.spyOn(remote, "sleep");
     const manager = mcpManager({ connected: true, toolCount: 1 });
     manager.init.mockRejectedValueOnce(new Error("connector failed"));
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => remote,
@@ -230,12 +248,14 @@ describe("AkeruSessionResources", () => {
     expect(destroy).not.toHaveBeenCalled();
     expect(sleep).toHaveBeenCalledOnce();
     expect(manager.disconnect).toHaveBeenCalledOnce();
+
     const recovered = await resources.acquire({
       ...remoteInput,
       botSandbox: "ascii",
       threadId: "ascii-init-failure",
       mcpServers: [exaServer],
     });
+
     expect(recovered.botWorkspace).toBe(remote.workspace);
     await resources.shutdown();
     expect(destroy).not.toHaveBeenCalled();
@@ -243,12 +263,14 @@ describe("AkeruSessionResources", () => {
 
   it("reports MCP connection failures at the resource boundary", async () => {
     const onMcpServerConnectionFailure = vi.fn();
+
     const manager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({})),
       getServerStatuses: vi.fn(() => [{ name: String(exaServer.id), connected: false }]),
     };
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => workspace(),
@@ -265,12 +287,14 @@ describe("AkeruSessionResources", () => {
 
   it("reports every configured MCP server when manager initialization fails", async () => {
     const onMcpServerConnectionFailure = vi.fn();
+
     const manager = {
       init: vi.fn(async () => Promise.reject(new Error("MCP init failed"))),
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({})),
       getServerStatuses: vi.fn(() => []),
     };
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => workspace(),
@@ -290,6 +314,7 @@ describe("AkeruSessionResources", () => {
   it("reattaches Railway after credential rotation and rejects browser connectors without touching the VM", async () => {
     const directory = stateDir();
     const destroy = vi.fn(async () => undefined);
+
     const openSession = vi.fn(
       async (providerId?: string): Promise<AkeruRemoteSession> => ({
         providerId: providerId ?? "railway-vm",
@@ -303,27 +328,33 @@ describe("AkeruSessionResources", () => {
         destroy,
       }),
     );
+
     const makeRemoteWorkspace = vi.fn((input: Parameters<typeof createRemoteBotWorkspace>[0]) =>
       createRemoteBotWorkspace({ ...input, openSession }),
     );
+
     const failedManager = mcpManager({ connected: true, toolCount: 0 });
     failedManager.init.mockRejectedValueOnce(new Error("MCP init failed after rotation"));
+
     const resources = new AkeruSessionResources({
       stateDir: directory,
       makeRemoteWorkspace,
       makeMcpManager: () => failedManager as never,
       toMcpServerConfigs: () => ({}),
     });
+
     const input = (token: string) => {
       const sandboxEnvironment = {
         RAILWAY_API_TOKEN: token,
         RAILWAY_ENVIRONMENT_ID: "environment",
       };
+
       const workspaceResourceKey = botWorkspaceResourceKey({
         sandbox: "railway",
         resourceScope: "bot-one",
         credentialFingerprint: botWorkspaceCredentialFingerprint(sandboxEnvironment),
       });
+
       return {
         ...remoteInput,
         botSandbox: "railway" as const,
@@ -334,6 +365,7 @@ describe("AkeruSessionResources", () => {
         mcpServers: [],
       };
     };
+
     const first = input("old-token");
     const second = input("new-token");
     await resources.acquire(first);
@@ -341,12 +373,14 @@ describe("AkeruSessionResources", () => {
     expect(openSession).toHaveBeenNthCalledWith(1, undefined);
     expect(openSession).toHaveBeenNthCalledWith(2, "railway-vm");
     await resources.release(second.threadId);
+
     const identityFile = NodePath.join(
       directory,
       "bot-workspaces",
       first.workspaceId,
       "provider.json",
     );
+
     const identity = NodeFS.readFileSync(identityFile, "utf8");
     await expect(
       resources.acquire({
@@ -372,11 +406,13 @@ describe("AkeruSessionResources", () => {
     expect(resources.getWorkspace(first.threadId)).toBeDefined();
     expect(NodeFS.readFileSync(identityFile, "utf8")).toBe(identity);
     await resources.shutdown();
+
     const restarted = new AkeruSessionResources({
       stateDir: directory,
       makeRemoteWorkspace,
       toMcpServerConfigs: () => ({}),
     });
+
     openSession.mockRejectedValueOnce(new Error("credentials revoked"));
     await expect(restarted.acquire(input("revoked-token"))).rejects.toThrow(
       "missing or unavailable",
@@ -392,6 +428,7 @@ describe("AkeruSessionResources", () => {
       url: "https://browser.example",
       requestHeaders: { authorization: "Bearer token" },
     }));
+
     const remote: AkeruBotWorkspace = {
       id: "akeru-shared",
       provider: "vercel",
@@ -403,15 +440,18 @@ describe("AkeruSessionResources", () => {
       sleep: vi.fn(async () => undefined),
       destroy: vi.fn(async () => undefined),
     };
+
     const manager = {
       init: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       getTools: vi.fn(() => ({ exa_search: {} })),
       getServerStatuses: vi.fn(() => []),
     };
+
     const remoteBrowser = browser();
     const makeBotBrowser = vi.fn(() => remoteBrowser);
     const toMcpServerConfigs = vi.fn(() => ({}));
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => remote,
@@ -451,6 +491,7 @@ describe("AkeruSessionResources", () => {
       toolCount: 0,
       error: "Failed at /private/tester/Secret App",
     });
+
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
       hostPlatform: "darwin",

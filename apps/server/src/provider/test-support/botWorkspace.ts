@@ -34,6 +34,7 @@ export function makebotWorkspaceTestSupport() {
   async function setup() {
     const { BoxApi, Configuration } = await import("@asciidev/box-sdk");
     const client = new BoxApi(new Configuration({ accessToken: "test-key" }));
+
     const get = vi.spyOn(client, "get").mockResolvedValue({
       type: "box.info",
       box: {
@@ -45,7 +46,9 @@ export function makebotWorkspaceTestSupport() {
       },
       ok: true,
     });
+
     return { client, get, session: ascii(client, "ascii-id") };
   }
+
   return { remoteSession, deleted, setup };
 }
