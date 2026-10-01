@@ -4,4 +4,4 @@
 
 Add Railway bot workspaces with durable identity reattachment and saved credentials. Railway VMs remain running while idle; previews require a CLI tunnel and automatic bot browser routing is unavailable.
 
-Block deletion of Railway and inherited-default bots with manual VM-retirement instructions. Switching to Local allows deletion but does not verify or perform cloud cleanup.
+Deleting a bot leaves its Railway VM running; the Railway guide explains how to retire it.

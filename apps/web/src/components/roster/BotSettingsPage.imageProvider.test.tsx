@@ -261,17 +261,6 @@ describe("bot settings image provider", () => {
     expect(saveButton(tree).disabled).toBe(true);
   });
 
-  it("can persist the displayed Local sandbox for an inherited bot", async () => {
-    state.bots = [makeBot({ sandbox: null })];
-    const tree = renderForm();
-    expect(saveButton(tree).disabled).toBe(false);
-    saveButton(tree).onClick();
-    await flushPromises();
-    expect(state.updateBot).toHaveBeenCalledWith(
-      expectedUpdate(state.bots[0]!, { sandbox: "local" }),
-    );
-  });
-
   it("keeps a removed saved provider visible while editing another field", async () => {
     const missingId = ProviderInstanceId.make("removed_claude");
     state.bots = [makeBot({ engine: { provider: missingId, model: "sonnet" } })];

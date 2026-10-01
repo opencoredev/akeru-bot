@@ -818,16 +818,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "bot.delete": {
       const bot = yield* requireBot({ readModel, command, botId: command.botId });
-      // Inherited defaults can select Railway; the pure decider cannot resolve server settings.
-      if (bot.sandbox === "railway" || bot.sandbox === null) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail:
-              "This bot uses Railway or inherits the default sandbox. If it has used Railway, retire its VM in the Railway dashboard first; it can keep running and accruing charges. Stop its sessions, delete any unneeded VM, then switch the bot's sandbox to Local and retry. Akeru does not verify VM retirement, and deleting a bot does not delete its Railway VM.",
-          }),
-        );
-      }
       const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
       if (bossGroup) {
         return yield* Effect.fail(
