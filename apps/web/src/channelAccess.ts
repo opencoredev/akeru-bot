@@ -20,6 +20,7 @@ export function resolveChannelSettingsAccess(input: {
   readonly session: Pick<AuthSessionState, "authenticated" | "scopes"> | null;
 }): "pending" | "allowed" | "denied" {
   if (input.session === null && input.isPending) return "pending";
+
   return canManageChannels(input.session) ? "allowed" : "denied";
 }
 
@@ -44,8 +45,10 @@ export function isChannelIdentityConflict(result: {
 }): boolean {
   if (!result.cause) return false;
   const error = Cause.squash(result.cause);
+
   const message =
     typeof error === "object" && error !== null && "message" in error ? error.message : error;
+
   return typeof message === "string" && CHANNEL_IDENTITY_CONFLICT.test(message);
 }
 
@@ -57,9 +60,11 @@ export function channelFailureCategoryOf(result: {
 }): ChannelFailureCategory | undefined {
   if (!result.cause) return undefined;
   const error = Cause.squash(result.cause);
+
   const category =
     typeof error === "object" && error !== null && "channelFailureCategory" in error
       ? error.channelFailureCategory
       : undefined;
+
   return isChannelFailureCategory(category) ? category : undefined;
 }

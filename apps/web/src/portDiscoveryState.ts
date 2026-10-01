@@ -23,23 +23,30 @@ export function boundConfiguredLocalServerUrls(
 ): ReadonlyArray<string> {
   const bounded: string[] = [];
   const seen = new Set<string>();
+
   for (const raw of urls ?? []) {
     if (raw.length === 0 || raw.length > PREVIEW_URL_MAX_LENGTH || raw.trim().length !== raw.length)
       continue;
+
     try {
       const url = new URL(raw);
+
       if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+
       if (!isLoopbackHost(url.hostname) || url.href.length > PREVIEW_URL_MAX_LENGTH) continue;
       const resourceUrl = new URL(url.href);
       resourceUrl.hash = "";
+
       if (seen.has(resourceUrl.href)) continue;
       seen.add(resourceUrl.href);
       bounded.push(url.href);
+
       if (bounded.length >= CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS) break;
     } catch {
       // Invalid and non-local project preview URLs are not discovery candidates.
     }
   }
+
   return bounded;
 }
 
@@ -55,6 +62,7 @@ export function useDiscoveredPortsState(
   configuredUrls?: ReadonlyArray<string>,
 ): DiscoveredPortsState {
   const boundedConfiguredUrls = boundConfiguredLocalServerUrls(configuredUrls);
+
   const query = useEnvironmentQuery(
     environmentId === null
       ? null
@@ -63,6 +71,7 @@ export function useDiscoveredPortsState(
           input: boundedConfiguredUrls.length ? { configuredUrls: boundedConfiguredUrls } : {},
         }),
   );
+
   return useMemo(
     () => ({
       servers: query.data?.servers ?? EMPTY_PORTS,
@@ -77,6 +86,7 @@ export function useThreadDiscoveredPorts(input: {
   readonly threadId: ThreadId | null;
 }): ReadonlyArray<DiscoveredLocalServer> {
   const ports = useDiscoveredPorts(input.environmentId);
+
   return useMemo(
     () =>
       input.threadId
@@ -92,6 +102,7 @@ export function useTerminalDiscoveredPorts(input: {
   readonly terminalId: string | null;
 }): ReadonlyArray<DiscoveredLocalServer> {
   const ports = useDiscoveredPorts(input.environmentId);
+
   return useMemo(
     () =>
       input.threadId && input.terminalId

@@ -30,6 +30,7 @@ describe("previewRuntimeTabId", () => {
       environmentId: EnvironmentId.make("environment-a"),
       threadId: ThreadId.make("thread-a"),
     };
+
     expect(previewRuntimeTabId(ref, null, "tab_1")).toBe(previewRuntimeTabId(ref, null, "tab_1"));
   });
 
@@ -38,6 +39,7 @@ describe("previewRuntimeTabId", () => {
       environmentId: EnvironmentId.make("environment-a"),
       threadId: ThreadId.make("thread-a"),
     };
+
     const runtimeTabId = previewRuntimeTabId(ref, "epoch-a", "tab_1");
 
     expect(isCurrentPreviewRuntimeTab(ref, "epoch-a", "tab_1", runtimeTabId)).toBe(true);

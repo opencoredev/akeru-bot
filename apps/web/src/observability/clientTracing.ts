@@ -14,6 +14,7 @@ import { isElectron } from "../env";
 import { APP_VERSION } from "~/branding";
 
 const DEFAULT_EXPORT_INTERVAL_MS = 1_000;
+
 const CLIENT_TRACING_RESOURCE = {
   serviceName: "t3-web",
   attributes: {
@@ -31,10 +32,15 @@ const delegateRuntimeLayer = Layer.mergeAll(
 );
 
 let activeDelegate: Tracer.Tracer | null = null;
+
 let activeRuntime: ManagedRuntime.ManagedRuntime<never, never> | null = null;
+
 let activeScope: Scope.Closeable | null = null;
+
 let activeConfigKey: string | null = null;
+
 let configurationGeneration = 0;
+
 let pendingConfiguration = Promise.resolve();
 
 export interface ClientTracingConfig {
@@ -54,7 +60,9 @@ export function configureClientTracing(config: ClientTracingConfig = {}): Promis
   if (config.exportIntervalMs === undefined && activeConfigKey !== null) {
     return pendingConfiguration;
   }
+
   pendingConfiguration = pendingConfiguration.finally(() => applyClientTracingConfig(config));
+
   return pendingConfiguration;
 }
 
@@ -93,6 +101,7 @@ async function applyClientTracingConfig(config: ClientTracingConfig): Promise<vo
       ),
     ),
   );
+
   if (delegateResult._tag === "Failure") {
     await disposeTracerRuntime(runtime, scope);
 
@@ -107,11 +116,13 @@ async function applyClientTracingConfig(config: ClientTracingConfig): Promise<vo
         ...safeErrorLogAttributes(error),
       });
     }
+
     return;
   }
 
   if (generation !== configurationGeneration) {
     await disposeTracerRuntime(runtime, scope);
+
     return;
   }
 

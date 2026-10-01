@@ -44,6 +44,7 @@ describe("measureGhosttyCell", () => {
       text === "M"
         ? { width: 7.2, actualBoundingBoxAscent: 9, actualBoundingBoxDescent: 0 }
         : { width: 14.4, actualBoundingBoxAscent: 9, actualBoundingBoxDescent: 3 };
+
     const context = {
       font: "",
       measureText,
@@ -66,6 +67,7 @@ describe("ghosttyTextRunEnd", () => {
       cell("", GHOSTTY_CELL_WIDE.spacerTail),
       cell(""),
     ];
+
     expect(ghosttyTextRunEnd(cells, 0, () => true)).toBe(4);
   });
 });
@@ -73,6 +75,7 @@ describe("ghosttyTextRunEnd", () => {
 describe("renderGhosttySnapshot", () => {
   it("underlines every cell in a hovered wrapped link", () => {
     const fillRectCalls: number[][] = [];
+
     const context = {
       canvas: { width: 200, height: 80 },
       beginPath: () => {},
@@ -87,6 +90,7 @@ describe("renderGhosttySnapshot", () => {
       set font(_value: string) {},
       set textBaseline(_value: string) {},
     } as unknown as CanvasRenderingContext2D;
+
     const snapshot: GhosttySnapshot = {
       cols: 4,
       rows: 2,
@@ -129,6 +133,7 @@ describe("renderGhosttySnapshot", () => {
 
   it("constrains text runs and cursor glyphs to their terminal cells", () => {
     const fillTextCalls: unknown[][] = [];
+
     const context = {
       canvas: { width: 200, height: 40 },
       beginPath: () => {},
@@ -143,7 +148,9 @@ describe("renderGhosttySnapshot", () => {
       set font(_value: string) {},
       set textBaseline(_value: string) {},
     } as unknown as CanvasRenderingContext2D;
+
     const cells = [cell("a"), cell("b"), cell("x")];
+
     const snapshot: GhosttySnapshot = {
       cols: 3,
       rows: 1,
@@ -178,6 +185,7 @@ describe("renderGhosttySnapshot", () => {
 
   it("repaints the cell without an overlay during the blink off phase", () => {
     const fillTextCalls: unknown[][] = [];
+
     const context = {
       canvas: { width: 200, height: 40 },
       beginPath: () => {},
@@ -192,6 +200,7 @@ describe("renderGhosttySnapshot", () => {
       set font(_value: string) {},
       set textBaseline(_value: string) {},
     } as unknown as CanvasRenderingContext2D;
+
     const snapshot: GhosttySnapshot = {
       cols: 3,
       rows: 1,
@@ -232,6 +241,7 @@ describe("renderGhosttySnapshot", () => {
 
   it("repaints the previous cursor row after the cursor moves", () => {
     const clearedRows: number[] = [];
+
     const context = {
       canvas: { width: 200, height: 80 },
       beginPath: () => {},
@@ -248,6 +258,7 @@ describe("renderGhosttySnapshot", () => {
       set font(_value: string) {},
       set textBaseline(_value: string) {},
     } as unknown as CanvasRenderingContext2D;
+
     const snapshot: GhosttySnapshot = {
       cols: 1,
       rows: 3,

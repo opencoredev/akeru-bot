@@ -72,21 +72,28 @@ export function productFeedbackDraftFromToolArgs(
   args: unknown,
 ): Partial<ProductFeedbackDraft> | null {
   const decoded = decodeProductFeedbackToolDraft(args);
+
   if (Exit.isFailure(decoded)) return null;
+
   return { feedback: decoded.value.feedback };
 }
 
 function appendBounded(current: string, proposed: string, maxLength: number): string {
   const left = current.trim();
   const right = proposed.trim();
+
   if (!left) return right.slice(0, maxLength);
+
   if (!right || left === right) return left.slice(0, maxLength);
+
   return `${left}\n\n${right}`.slice(0, maxLength);
 }
 
 export function openProductFeedbackFromToolArgs(args: unknown): boolean {
   const proposed = productFeedbackDraftFromToolArgs(args);
+
   if (!proposed?.feedback) return false;
   openProductFeedbackWithPrefill(proposed.feedback);
+
   return true;
 }

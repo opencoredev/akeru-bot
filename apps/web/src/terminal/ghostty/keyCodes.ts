@@ -220,6 +220,7 @@ let keyboardLayoutMapPromise: Promise<GhosttyKeyboardLayoutMap | undefined> | un
 
 export function loadGhosttyKeyboardLayoutMap(): Promise<GhosttyKeyboardLayoutMap | undefined> {
   if (keyboardLayoutMapPromise) return keyboardLayoutMapPromise;
+
   const browserNavigator = globalThis.navigator as
     | (Navigator & {
         readonly keyboard?: {
@@ -227,9 +228,11 @@ export function loadGhosttyKeyboardLayoutMap(): Promise<GhosttyKeyboardLayoutMap
         };
       })
     | undefined;
+
   const keyboard = browserNavigator?.keyboard;
   const promise = keyboard?.getLayoutMap().catch(() => undefined) ?? Promise.resolve(undefined);
   keyboardLayoutMapPromise = promise;
+
   return promise;
 }
 
@@ -239,6 +242,7 @@ export function ghosttyConsumedMods(
   event: Pick<KeyboardEvent, "altKey" | "ctrlKey" | "key" | "metaKey" | "shiftKey">,
 ): number {
   if (!event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return 0;
+
   return [...event.key].length === 1 ? 1 : 0;
 }
 
@@ -248,20 +252,27 @@ export function ghosttyUnshiftedCodepoint(
 ): number {
   if ([...event.key].length !== 1) return 0;
   const layoutCharacter = layoutMap?.get(event.code);
+
   if (layoutCharacter && [...layoutCharacter].length === 1) {
     return layoutCharacter.codePointAt(0) ?? 0;
   }
+
   if (/^[A-Z]$/u.test(event.key)) return event.key.charCodeAt(0) + 32;
+
   if (event.shiftKey) {
     const unshiftedCharacter = shiftedToUnshiftedCharacter.get(event.key);
+
     if (unshiftedCharacter) return unshiftedCharacter.codePointAt(0) ?? 0;
     const lowercase = event.key.toLowerCase();
+
     if (lowercase !== event.key && [...lowercase].length === 1) {
       return lowercase.codePointAt(0) ?? 0;
     }
+
     // Without layout data the unshifted form of a shifted key is unknowable;
     // reporting the shifted character as unshifted corrupts Kitty alternate keys.
     return 0;
   }
+
   return event.key.codePointAt(0) ?? 0;
 }

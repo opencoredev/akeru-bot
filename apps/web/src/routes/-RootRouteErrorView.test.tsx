@@ -13,6 +13,7 @@ interface ActionElementProps {
 function findButtons(node: ReactNode): ReactElement<ActionElementProps>[] {
   if (!isValidElement<ActionElementProps>(node)) return [];
   const match = node.type === Button ? [node] : [];
+
   return [...match, ...Children.toArray(node.props.children).flatMap(findButtons)];
 }
 

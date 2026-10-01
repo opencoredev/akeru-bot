@@ -19,21 +19,27 @@ import type { PairingPanelStatus } from "./components/auth/PairingPanel";
  */
 export function isHostedPairingLink(href: string): boolean {
   const url = new URL(href);
+
   if (url.pathname !== "/pair" || !url.searchParams.has("host")) return false;
+
   return url.searchParams.has("token") || !namesPageOrigin(url);
 }
 
 function namesPageOrigin(url: URL): boolean {
   const host = url.searchParams.get("host")?.trim() ?? "";
+
   if (!host) return false;
+
   try {
     // A scheme-free host would default to HTTPS; on an HTTP LAN origin it
     // still names this page, so resolve it against the page's protocol.
     const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(host) ? host : `${url.protocol}//${host}`;
+
     const { httpBaseUrl } = resolveRemotePairingTarget({
       host: withScheme,
       pairingCode: "origin-check",
     });
+
     return new URL(httpBaseUrl).origin === url.origin;
   } catch {
     return false;
@@ -47,8 +53,10 @@ function namesPageOrigin(url: URL): boolean {
  */
 export function readHostedPairingLink(href: string): HostedPairingRequest | null {
   const url = new URL(href);
+
   if (url.pathname !== "/pair" || url.searchParams.has("token")) return null;
   const request = readHostedPairingRequest(url);
+
   return request && readHashParams(url).get("token")?.trim() === request.token ? request : null;
 }
 
@@ -67,6 +75,7 @@ export interface PairingHashOptions<T> {
  */
 export function takePairingHash<T>(options: PairingHashOptions<T>): void {
   const value = options.read();
+
   if (value === null || options.isBusy()) return;
   options.strip();
   options.submit(value);
@@ -83,6 +92,7 @@ export function listenForPairingHash<T>(
 ): () => void {
   const onHashChange = () => takePairingHash(options);
   target.addEventListener("hashchange", onHashChange);
+
   return () => target.removeEventListener("hashchange", onHashChange);
 }
 
@@ -103,5 +113,6 @@ export async function runHostedPairing(
 ): Promise<PairingPanelStatus> {
   if (!request) return { kind: "incomplete" };
   const outcome = await connect({ host: request.host, pairingCode: request.token });
+
   return outcome.ok ? { kind: "paired" } : { kind: "failed", message: outcome.message };
 }

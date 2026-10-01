@@ -18,22 +18,28 @@ export interface ResourceTelemetryState {
 export function useResourceTelemetry(): ResourceTelemetryState {
   const primaryEnvironment = usePrimaryEnvironment();
   const environmentId = primaryEnvironment?.environmentId ?? null;
+
   const query = useEnvironmentQuery(
     environmentId === null
       ? null
       : serverEnvironment.resourceTelemetry({ environmentId, input: {} }),
   );
+
   const retryCommand = useAtomCommand(serverEnvironment.retryResourceTelemetry, {
     reportFailure: false,
   });
+
   const retry = useCallback(async () => {
     if (environmentId === null) {
       throw new Error("No environment is selected.");
     }
+
     const result = await retryCommand({ environmentId, input: {} });
+
     if (result._tag === "Failure") {
       throw Cause.squash(result.cause);
     }
+
     return result.value.snapshot;
   }, [environmentId, retryCommand]);
 
@@ -43,6 +49,7 @@ export function useResourceTelemetry(): ResourceTelemetryState {
 export function useResourceTelemetryHistory(input: ResourceTelemetryHistoryInput) {
   const primaryEnvironment = usePrimaryEnvironment();
   const environmentId = primaryEnvironment?.environmentId ?? null;
+
   return useEnvironmentQuery(
     environmentId === null
       ? null

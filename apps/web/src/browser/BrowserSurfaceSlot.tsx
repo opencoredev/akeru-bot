@@ -22,17 +22,21 @@ export function BrowserSurfaceSlot(props: {
     className,
     fitSourceContent = false,
   } = props;
+
   const elementRef = useRef<HTMLDivElement | null>(null);
   const presentationRef = useRef({ visible, interactive, cornerRadius });
   const updateRef = useRef<(() => void) | null>(null);
 
   useLayoutEffect(() => {
     const element = elementRef.current;
+
     if (!element) return;
     let lease = acquireBrowserSurface(tabId, fitSourceContent);
+
     const update = () => {
       const rect = element.getBoundingClientRect();
       const presentation = presentationRef.current;
+
       const presented = lease.present(
         {
           x: Math.round(rect.x),
@@ -44,6 +48,7 @@ export function BrowserSurfaceSlot(props: {
         presentation.interactive,
         presentation.cornerRadius,
       );
+
       if (presentation.visible && !presented) {
         lease.release();
         lease = acquireBrowserSurface(tabId, fitSourceContent);
@@ -60,16 +65,19 @@ export function BrowserSurfaceSlot(props: {
         );
       }
     };
+
     updateRef.current = update;
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
+
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
+
       if (updateRef.current === update) updateRef.current = null;
       lease.release();
     };

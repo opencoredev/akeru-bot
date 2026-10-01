@@ -69,16 +69,19 @@ function writeTextWithExecCommand(value: string): boolean {
 
   const previouslyFocused = document.activeElement;
   document.body.appendChild(textarea);
+
   try {
     textarea.focus({ preventScroll: true });
     textarea.select();
     textarea.setSelectionRange(0, value.length);
+
     return document.execCommand("copy");
   } catch {
     return false;
   } finally {
     textarea.remove();
     const restoreFocus = (previouslyFocused as { focus?: unknown } | null)?.focus;
+
     if (typeof restoreFocus === "function") {
       restoreFocus.call(previouslyFocused);
     }
@@ -103,6 +106,7 @@ export async function writeTextToClipboard(value: string, target = "text") {
 
   try {
     await navigator.clipboard.writeText(value);
+
     return true;
   } catch (cause) {
     throw new ClipboardWriteError({
@@ -160,9 +164,11 @@ export function useCopyToClipboard<TContext = void>({
     void writeTextToClipboard(value, targetRef.current).then(
       (didCopy) => {
         if (!didCopy) return;
+
         if (timeoutIdRef.current) {
           clearTimeout(timeoutIdRef.current);
         }
+
         setIsCopied(true);
 
         onCopyRef.current?.(ctx);

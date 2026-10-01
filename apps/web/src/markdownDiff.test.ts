@@ -49,6 +49,7 @@ describe("parseMarkdownDiff", () => {
     const parsed = parseMarkdownDiff(
       "--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-c\n+d\n",
     );
+
     expect(parsed.files).toEqual(["a.ts", "b.ts"]);
     expect(parsed).toMatchObject({ additions: 2, deletions: 2 });
   });
@@ -62,6 +63,7 @@ describe("parseMarkdownDiff", () => {
     const parsed = parseMarkdownDiff(
       "@@ -1,2 +1,2 @@\n--- old implementation\n+++ new implementation\n",
     );
+
     expect(parsed.lines.map((line) => line.kind)).toEqual(["hunk", "remove", "add"]);
     expect(parsed).toMatchObject({ additions: 1, deletions: 1, files: [] });
   });
@@ -70,6 +72,7 @@ describe("parseMarkdownDiff", () => {
     const parsed = parseMarkdownDiff(
       "--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n--- a\n+++ b\n--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-c\n+d\n",
     );
+
     expect(parsed.lines.map((line) => line.kind)).toEqual([
       "meta",
       "meta",
@@ -100,6 +103,7 @@ describe("parseMarkdownDiff", () => {
   it("classifies every complete line of a streaming prefix like the settled diff", () => {
     const settled = parseMarkdownDiff(GIT_DIFF);
     const rawLines = GIT_DIFF.split("\n");
+
     for (let count = 1; count < rawLines.length; count += 1) {
       const prefix = `${rawLines.slice(0, count).join("\n")}\n`;
       const partial = parseMarkdownDiff(prefix);

@@ -10,6 +10,7 @@ class TestAudio extends EventTarget {
   load = vi.fn();
   removeAttribute = vi.fn();
 }
+
 function setup() {
   const audio = new TestAudio();
   const browser = new EventTarget();
@@ -23,6 +24,7 @@ function setup() {
   vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:fixture");
   vi.spyOn(URL, "revokeObjectURL").mockImplementation(revoke);
   const events = { onEnded: vi.fn(), onError: vi.fn(), onInterrupted: vi.fn() };
+
   return { audio, browser, document, revoke, events };
 }
 

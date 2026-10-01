@@ -20,6 +20,7 @@ export const useBrowserPointerStore = create<BrowserPointerStoreState>()((set) =
     set((state) => {
       if (!(tabId in state.byTabId)) return state;
       const { [tabId]: _removed, ...byTabId } = state.byTabId;
+
       return { byTabId };
     }),
 }));

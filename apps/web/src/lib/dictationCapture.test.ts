@@ -24,11 +24,14 @@ class Recorder extends EventTarget {
 function fixture() {
   const track = Object.assign(new EventTarget(), { readyState: "live", stop: vi.fn() });
   const stream = { getTracks: () => [track] } as unknown as MediaStream;
+
   const mediaDevices = Object.assign(new EventTarget(), {
     getUserMedia: vi.fn(async () => stream),
   });
+
   const document = Object.assign(new EventTarget(), { hidden: false });
   const recorder = new Recorder();
+
   const deps: DictationCaptureDependencies = {
     mediaDevices,
     document,
@@ -36,6 +39,7 @@ function fixture() {
     setTimeout: (callback, ms) => setTimeout(callback, ms),
     clearTimeout: (timer) => clearTimeout(timer),
   };
+
   return { track, stream, mediaDevices, document, recorder, deps };
 }
 
@@ -107,14 +111,20 @@ describe("startDictationCapture", () => {
       const f = fixture();
       const controller = new AbortController();
       const capture = await startDictationCapture({ signal: controller.signal }, f.deps);
+
       if (reason === "cancel") capture.cancel();
+
       if (reason === "abort") controller.abort();
+
       if (reason === "devicechange") f.mediaDevices.dispatchEvent(new Event(reason));
+
       if (reason === "ended") f.track.dispatchEvent(new Event(reason));
+
       if (reason === "hidden") {
         f.document.hidden = true;
         f.document.dispatchEvent(new Event("visibilitychange"));
       }
+
       if (reason === "error" || reason === "stop") f.recorder.dispatchEvent(new Event(reason));
       await expect(capture.result).rejects.toBeInstanceOf(Error);
       expect(f.track.stop).toHaveBeenCalledTimes(1);
@@ -140,6 +150,7 @@ describe("startDictationCapture", () => {
       const f = fixture();
       const capture = await startDictationCapture({ maxBytes: 4 }, f.deps);
       f.recorder.data("1234");
+
       if (releasing) void capture.release();
       f.recorder.data("5");
       f.recorder.finish();
@@ -150,18 +161,24 @@ describe("startDictationCapture", () => {
 
   it.each(["construct", "start", "stop"])("stops tracks when recorder %s throws", async (phase) => {
     const f = fixture();
+
     const fail = () => {
       throw new Error("recorder failure");
     };
+
     if (phase === "construct") f.deps.createRecorder = fail;
+
     if (phase === "start") f.recorder.start.mockImplementation(fail);
+
     if (phase === "stop") f.recorder.stop.mockImplementation(fail);
+
     if (phase === "stop") {
       const capture = await startDictationCapture({}, f.deps);
       await expect(capture.release()).rejects.toThrow("recorder failure");
     } else {
       await expect(startDictationCapture({}, f.deps)).rejects.toThrow("recorder failure");
     }
+
     expect(f.track.stop).toHaveBeenCalled();
   });
 
@@ -181,12 +198,14 @@ describe("startDictationCapture", () => {
       }),
     );
     const pending = startDictationCapture({}, f.deps);
+
     if (reason === "hidden") {
       f.document.hidden = true;
       f.document.dispatchEvent(new Event("visibilitychange"));
     } else {
       f.mediaDevices.dispatchEvent(new Event("devicechange"));
     }
+
     await expect(pending).rejects.toBeInstanceOf(Error);
     grant(f.stream);
     await Promise.resolve();
@@ -204,14 +223,17 @@ describe("startDictationCapture", () => {
   it("removes every event listener after release", async () => {
     const f = fixture();
     const targets = [f.mediaDevices, f.document, f.track, f.recorder];
+
     const listeners = targets.map((target) => ({
       add: vi.spyOn(target, "addEventListener"),
       remove: vi.spyOn(target, "removeEventListener"),
     }));
+
     const capture = await startDictationCapture({}, f.deps);
     const result = capture.release();
     f.recorder.finish();
     await result;
+
     for (const { add, remove } of listeners) {
       expect(add.mock.calls.length).toBeGreaterThan(0);
       expect(remove.mock.calls).toEqual(add.mock.calls);

@@ -8,5 +8,6 @@ export const primaryEnvironmentIdAtom = Atom.make((get) => {
       return environmentId;
     }
   }
+
   return null;
 }).pipe(Atom.withLabel("web-primary-environment-id"));

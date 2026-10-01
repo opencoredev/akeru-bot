@@ -17,12 +17,17 @@ import type {
 } from "@akeru/client-runtime/state/shell";
 
 export type SessionPhase = "disconnected" | "connecting" | "ready" | "running";
+
 export const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
 
 export const DEFAULT_INTERACTION_MODE: ProviderInteractionMode = "default";
+
 export const DEFAULT_THREAD_TERMINAL_HEIGHT = 280;
+
 export const DEFAULT_THREAD_TERMINAL_ID = "term-1";
+
 export const MAX_TERMINALS_PER_GROUP = 4;
+
 export type ProjectScript = ContractProjectScript;
 
 export interface ThreadTerminalGroup {
@@ -42,10 +47,13 @@ export interface ChatMessage extends Omit<OrchestrationMessage, "attachments"> {
 }
 
 export type TurnDiffFileChange = OrchestrationCheckpointFile;
+
 export type TurnDiffSummary = OrchestrationCheckpointSummary;
 
 export type Project = EnvironmentProject;
+
 export type Thread = EnvironmentThread;
+
 export type ThreadShell = EnvironmentThreadShell;
 
 export interface ThreadTurnState {
@@ -53,4 +61,5 @@ export interface ThreadTurnState {
 }
 
 export type SidebarThreadSummary = EnvironmentThreadShell;
+
 export type ThreadSession = OrchestrationSession;

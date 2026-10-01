@@ -41,22 +41,28 @@ export function ghosttyTextRunEnd(
   sameStyle: (cell: GhosttyCell) => boolean,
 ): number {
   let end = start + 1;
+
   while (end < cells.length) {
     const next = cells[end];
+
     if (!next) break;
+
     if (next.wide === GHOSTTY_CELL_WIDE.spacerTail) {
       end += 1;
       continue;
     }
+
     if (next.text.length === 0 || !sameStyle(next)) break;
     end += 1;
   }
+
   return end;
 }
 
 function fontForCell(cell: GhosttyCell, fontSize: number, fontFamily: string): string {
   const style = cell.italic ? "italic" : "normal";
   const weight = cell.bold ? "700" : "400";
+
   return `${style} ${weight} ${fontSize}px ${fontFamily}`;
 }
 
@@ -72,6 +78,7 @@ export function measureGhosttyCell(
   const descent = verticalMeasurement.actualBoundingBoxDescent;
   const glyphHeight = ascent + descent;
   const height = Math.max(1, Math.round(fontSize * 1.35), Math.ceil(glyphHeight));
+
   return {
     width: Math.max(1, widthMeasurement.width),
     height,
@@ -118,13 +125,16 @@ export function renderGhosttySnapshot(options: {
     cursorOn,
     previousCursorY,
   } = options;
+
   const focused = options.focused ?? true;
   const selectionBackground = options.selectionBackground ?? DEFAULT_SELECTION_BACKGROUND;
   const hoveredLinkRange = options.hoveredLinkRange ?? null;
   const originY = options.originY ?? padding;
+
   const rowsToDraw = forceFull
     ? Array.from({ length: snapshot.rows }, (_, index) => index)
     : [...snapshot.dirtyRows];
+
   if (
     previousCursorY !== null &&
     previousCursorY !== undefined &&
@@ -133,6 +143,7 @@ export function renderGhosttySnapshot(options: {
   ) {
     rowsToDraw.push(previousCursorY);
   }
+
   if (snapshot.cursorVisible && snapshot.cursorY >= 0 && !rowsToDraw.includes(snapshot.cursorY)) {
     rowsToDraw.push(snapshot.cursorY);
   }
@@ -146,8 +157,10 @@ export function renderGhosttySnapshot(options: {
   }
 
   context.textBaseline = "alphabetic";
+
   for (const rowIndex of rowsToDraw) {
     const row = snapshot.rowData[rowIndex];
+
     if (!row) continue;
     const top = originY + rowIndex * metrics.height;
 
@@ -155,12 +168,16 @@ export function renderGhosttySnapshot(options: {
     context.fillRect(padding, top, snapshot.cols * metrics.width, metrics.height);
 
     let backgroundStart = 0;
+
     while (backgroundStart < row.cells.length) {
       const first = row.cells[backgroundStart];
+
       if (!first) break;
       let backgroundEnd = backgroundStart + 1;
+
       while (backgroundEnd < row.cells.length) {
         const next = row.cells[backgroundEnd];
+
         if (
           !next ||
           next.selected !== first.selected ||
@@ -168,36 +185,47 @@ export function renderGhosttySnapshot(options: {
         ) {
           break;
         }
+
         backgroundEnd += 1;
       }
+
       if (first.selected || !ghosttyColorsEqual(first.background, snapshot.background)) {
         const left = padding + backgroundStart * metrics.width;
         const width = (backgroundEnd - backgroundStart) * metrics.width;
+
         if (!ghosttyColorsEqual(first.background, snapshot.background)) {
           context.fillStyle = cssColor(first.background);
           context.fillRect(left, top, width, metrics.height);
         }
+
         if (first.selected) {
           context.fillStyle = selectionBackground;
           context.fillRect(left, top, width, metrics.height);
         }
       }
+
       backgroundStart = backgroundEnd;
     }
 
     let runStart = 0;
+
     while (runStart < row.cells.length) {
       const first = row.cells[runStart];
+
       if (!first) break;
+
       if (first.text.length === 0) {
         runStart += 1;
         continue;
       }
+
       const runEnd = ghosttyTextRunEnd(row.cells, runStart, (cell) => sameTextStyle(cell, first));
+
       const text = row.cells
         .slice(runStart, runEnd)
         .map((cell) => cell.text)
         .join("");
+
       if (!first.invisible && text.trim().length > 0) {
         context.save();
         context.beginPath();
@@ -218,28 +246,35 @@ export function renderGhosttySnapshot(options: {
         );
         context.restore();
       }
+
       runStart = runEnd;
     }
 
     for (let column = 0; column < row.cells.length; column += 1) {
       const cell = row.cells[column];
+
       const hoveredLink =
         hoveredLinkRange !== null &&
         rowIndex >= hoveredLinkRange.start.y &&
         rowIndex <= hoveredLinkRange.end.y &&
         (rowIndex > hoveredLinkRange.start.y || column >= hoveredLinkRange.start.x) &&
         (rowIndex < hoveredLinkRange.end.y || column <= hoveredLinkRange.end.x);
+
       if (!cell || (!cell.underline && !cell.strikethrough && !cell.overline && !hoveredLink)) {
         continue;
       }
+
       context.fillStyle = cssColor(cell.foreground);
       const left = padding + column * metrics.width;
+
       if (cell.underline || hoveredLink) {
         context.fillRect(left, top + metrics.height - 2, metrics.width, 1);
       }
+
       if (cell.strikethrough) {
         context.fillRect(left, top + Math.floor(metrics.height * 0.55), metrics.width, 1);
       }
+
       if (cell.overline) context.fillRect(left, top + 1, metrics.width, 1);
     }
   }
@@ -248,6 +283,7 @@ export function renderGhosttySnapshot(options: {
     const left = padding + snapshot.cursorX * metrics.width;
     const top = originY + snapshot.cursorY * metrics.height;
     context.fillStyle = cssColor(snapshot.cursor);
+
     if (!focused) {
       // An unfocused terminal draws a hollow cursor so the active pane is obvious.
       context.strokeStyle = cssColor(snapshot.cursor);
@@ -262,6 +298,7 @@ export function renderGhosttySnapshot(options: {
     } else {
       context.fillRect(left, top, metrics.width, metrics.height);
       const cell = snapshot.rowData[snapshot.cursorY]?.cells[snapshot.cursorX];
+
       if (cell?.text) {
         context.font = fontForCell(cell, fontSize, fontFamily);
         context.fillStyle = cssColor(snapshot.background);

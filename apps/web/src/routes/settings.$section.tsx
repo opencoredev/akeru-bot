@@ -14,10 +14,12 @@ function isSettingsSection(value: string): value is SettingsSection {
 export const Route = createFileRoute("/settings/$section")({
   beforeLoad: ({ params }) => {
     if (isSettingsSection(params.section)) return;
+
     // Plugins moved out of Settings into their own page.
     if (params.section === "plugins") {
       throw redirect({ to: "/plugins", replace: true });
     }
+
     const legacy = LEGACY_SETTINGS_SECTIONS[params.section];
     throw redirect({
       to: "/settings/$section",
@@ -31,6 +33,8 @@ export const Route = createFileRoute("/settings/$section")({
 
 function SettingsSectionPage() {
   const { section } = Route.useParams();
+
   if (!isSettingsSection(section)) return null;
+
   return <SettingsPanelForSection section={section} />;
 }

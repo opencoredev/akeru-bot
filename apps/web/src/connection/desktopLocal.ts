@@ -66,14 +66,18 @@ export function createDesktopSecondaryBootstrapsReader(
 
   const readResult = (): DesktopSecondaryBootstrapsRead => {
     const bridge = resolveBridge();
+
     if (bridge === undefined) {
       snapshot = [];
+
       return { _tag: "Success", bootstraps: snapshot };
     }
+
     try {
       snapshot = bridge
         .getLocalEnvironmentBootstraps()
         .filter((entry) => entry.id !== PRIMARY_LOCAL_ENVIRONMENT_ID);
+
       return { _tag: "Success", bootstraps: snapshot };
     } catch (cause) {
       return { _tag: "Failure", cause };
@@ -84,6 +88,7 @@ export function createDesktopSecondaryBootstrapsReader(
     readResult,
     readSnapshot: () => {
       const result = readResult();
+
       return result._tag === "Success" ? result.bootstraps : snapshot;
     },
   };

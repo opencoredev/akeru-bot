@@ -1,7 +1,9 @@
 import { isWindowsPlatform } from "./utils";
 
 const WCO_CLASS_NAME = "wco";
+
 const ELECTRON_CLASS_NAME = "electron";
+
 const ELECTRON_WINDOWS_CLASS_NAME = "electron-windows";
 
 interface WindowControlsOverlayLike {
@@ -28,16 +30,19 @@ export function syncDocumentWindowControlsOverlayClass(): () => void {
   }
 
   const overlay = getWindowControlsOverlay();
+
   const update = () => {
     document.documentElement.classList.toggle(WCO_CLASS_NAME, overlay !== null && overlay.visible);
   };
 
   update();
+
   if (!overlay) {
     return () => {};
   }
 
   overlay.addEventListener("geometrychange", update);
+
   return () => {
     overlay.removeEventListener("geometrychange", update);
   };
@@ -60,6 +65,7 @@ export function syncDocumentElectronPlatformClasses(platform: string): () => voi
 
   const classNames = getElectronPlatformClassNames(platform);
   document.documentElement.classList.add(...classNames);
+
   return () => {
     document.documentElement.classList.remove(...classNames);
   };

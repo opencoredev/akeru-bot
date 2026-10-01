@@ -57,6 +57,7 @@ export function getBrowserDefaults(): BrowserDefaults {
  */
 export async function resolveBrowserDefaults(): Promise<BrowserDefaults> {
   await ensureClientSettingsHydrated();
+
   return getBrowserDefaults();
 }
 
@@ -103,9 +104,12 @@ export function browserResponsiveViewportForToggle(input: {
   readonly zoomFactor: number | undefined;
 }): PreviewViewportSetting {
   const defaults = input.defaults ?? getBrowserDefaults();
+
   if (defaults.viewport._tag !== "fill") return defaults.viewport;
+
   const size = input.panelRect
     ? resolveResponsiveBrowserViewportSize(input.panelRect, input.zoomFactor)
     : FALLBACK_RESPONSIVE_VIEWPORT_SIZE;
+
   return { _tag: "freeform", ...size };
 }

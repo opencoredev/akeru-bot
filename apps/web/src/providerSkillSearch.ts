@@ -85,6 +85,7 @@ export function searchProviderSkills(
 
   for (const skill of enabledSkills) {
     const score = scoreProviderSkill(skill, normalizedQuery);
+
     if (score === null) {
       continue;
     }

@@ -67,15 +67,20 @@ export function filterTerminalContextsWithText<T extends { text: string }>(
 
 function previewTerminalContextText(text: string): string {
   const normalized = normalizeTerminalContextText(text);
+
   if (normalized.length === 0) {
     return "";
   }
+
   const lines = normalized.split("\n");
   const visibleLines = lines.slice(0, 3);
+
   if (lines.length > 3) {
     visibleLines.push("...");
   }
+
   const preview = visibleLines.join("\n");
+
   return preview.length > 180 ? `${preview.slice(0, 177)}...` : preview;
 }
 
@@ -85,11 +90,14 @@ export function normalizeTerminalContextSelection(
   const text = normalizeTerminalContextText(selection.text);
   const terminalId = selection.terminalId.trim();
   const terminalLabel = selection.terminalLabel.trim();
+
   if (text.length === 0 || terminalId.length === 0 || terminalLabel.length === 0) {
     return null;
   }
+
   const lineStart = Math.max(1, Math.floor(selection.lineStart));
   const lineEnd = Math.max(lineStart, Math.floor(selection.lineEnd));
+
   return {
     terminalId,
     terminalLabel,
@@ -122,10 +130,12 @@ export function formatInlineTerminalContextLabel(selection: {
   lineEnd: number;
 }): string {
   const terminalLabel = selection.terminalLabel.trim().toLowerCase().replace(/\s+/g, "-");
+
   const range =
     selection.lineStart === selection.lineEnd
       ? `${selection.lineStart}`
       : `${selection.lineStart}-${selection.lineEnd}`;
+
   return `@${terminalLabel}:${range}`;
 }
 
@@ -135,9 +145,12 @@ export function buildTerminalContextPreviewTitle(
   if (contexts.length === 0) {
     return null;
   }
+
   const previewParts: string[] = [];
+
   for (const context of contexts) {
     const normalized = normalizeTerminalContextSelection(context);
+
     if (!normalized) continue;
     const preview = previewTerminalContextText(normalized.text);
     previewParts.push(
@@ -146,7 +159,9 @@ export function buildTerminalContextPreviewTitle(
         : formatTerminalContextLabel(normalized),
     );
   }
+
   const previews = previewParts.join("\n\n");
+
   return previews.length > 0 ? previews : null;
 }
 
@@ -160,24 +175,31 @@ export function buildTerminalContextBlock(
   contexts: ReadonlyArray<TerminalContextSelection>,
 ): string {
   const normalizedContexts: TerminalContextSelection[] = [];
+
   for (const context of contexts) {
     const normalized = normalizeTerminalContextSelection(context);
+
     if (normalized !== null) {
       normalizedContexts.push(normalized);
     }
   }
+
   if (normalizedContexts.length === 0) {
     return "";
   }
+
   const lines: string[] = [];
+
   for (let index = 0; index < normalizedContexts.length; index += 1) {
     const context = normalizedContexts[index]!;
     lines.push(`- ${formatTerminalContextLabel(context)}:`);
     lines.push(...buildTerminalContextBodyLines(context));
+
     if (index < normalizedContexts.length - 1) {
       lines.push("");
     }
   }
+
   return ["<terminal_context>", ...lines, "</terminal_context>"].join("\n");
 }
 
@@ -197,11 +219,14 @@ export function materializeInlineTerminalContextPrompt(
       result += char;
       continue;
     }
+
     const context = contexts[nextContextIndex] ?? null;
     nextContextIndex += 1;
+
     if (!context) {
       continue;
     }
+
     result += formatInlineTerminalContextLabel(context);
   }
 
@@ -214,14 +239,17 @@ export function appendTerminalContextsToPrompt(
 ): string {
   const trimmedPrompt = materializeInlineTerminalContextPrompt(prompt, contexts).trim();
   const contextBlock = buildTerminalContextBlock(contexts);
+
   if (contextBlock.length === 0) {
     return trimmedPrompt;
   }
+
   return trimmedPrompt.length > 0 ? `${trimmedPrompt}\n\n${contextBlock}` : contextBlock;
 }
 
 export function extractTrailingTerminalContexts(prompt: string): ExtractedTerminalContexts {
   const match = TRAILING_TERMINAL_CONTEXT_BLOCK_PATTERN.exec(prompt);
+
   if (!match) {
     return {
       promptText: prompt,
@@ -230,8 +258,10 @@ export function extractTrailingTerminalContexts(prompt: string): ExtractedTermin
       contexts: [],
     };
   }
+
   const promptText = prompt.slice(0, match.index).replace(/\n+$/, "");
   const parsedContexts = parseTerminalContextEntries(match[1] ?? "");
+
   return {
     promptText,
     contextCount: parsedContexts.length,
@@ -251,6 +281,7 @@ export function deriveDisplayedUserMessageState(prompt: string): DisplayedUserMe
   // terminal block can be matched by `extractTrailingTerminalContexts`.
   const extractedElement = extractTrailingElementContexts(prompt);
   const extractedTerminal = extractTrailingTerminalContexts(extractedElement.promptText);
+
   return {
     visibleText: extractedTerminal.promptText,
     copyText: prompt,
@@ -269,6 +300,7 @@ function parseTerminalContextEntries(block: string): ParsedTerminalContextEntry[
     if (!current) {
       return;
     }
+
     entries.push({
       header: current.header,
       body: current.bodyLines.join("\n").trimEnd(),
@@ -278,6 +310,7 @@ function parseTerminalContextEntries(block: string): ParsedTerminalContextEntry[
 
   for (const rawLine of block.split("\n")) {
     const headerMatch = /^- (.+):$/.exec(rawLine);
+
     if (headerMatch) {
       commitCurrent();
       current = {
@@ -286,29 +319,35 @@ function parseTerminalContextEntries(block: string): ParsedTerminalContextEntry[
       };
       continue;
     }
+
     if (!current) {
       continue;
     }
+
     if (rawLine.startsWith("  ")) {
       current.bodyLines.push(rawLine.slice(2));
       continue;
     }
+
     if (rawLine.length === 0) {
       current.bodyLines.push("");
     }
   }
 
   commitCurrent();
+
   return entries;
 }
 
 export function countInlineTerminalContextPlaceholders(prompt: string): number {
   let count = 0;
+
   for (const char of prompt) {
     if (char === INLINE_TERMINAL_CONTEXT_PLACEHOLDER) {
       count += 1;
     }
   }
+
   return count;
 }
 
@@ -317,9 +356,11 @@ export function ensureInlineTerminalContextPlaceholders(
   terminalContextCount: number,
 ): string {
   const missingCount = terminalContextCount - countInlineTerminalContextPlaceholders(prompt);
+
   if (missingCount <= 0) {
     return prompt;
   }
+
   return `${INLINE_TERMINAL_CONTEXT_PLACEHOLDER.repeat(missingCount)}${prompt}`;
 }
 
@@ -335,6 +376,7 @@ export function insertInlineTerminalContextPlaceholder(
   const needsLeadingSpace = !isInlineTerminalContextBoundaryWhitespace(prompt[cursor - 1]);
   const replacement = `${needsLeadingSpace ? " " : ""}${INLINE_TERMINAL_CONTEXT_PLACEHOLDER} `;
   const rangeEnd = prompt[cursor] === " " ? cursor + 1 : cursor;
+
   return {
     prompt: `${prompt.slice(0, cursor)}${replacement}${prompt.slice(rangeEnd)}`,
     cursor: cursor + replacement.length,
@@ -355,16 +397,19 @@ export function removeInlineTerminalContextPlaceholder(
   }
 
   let placeholderIndex = 0;
+
   for (let index = 0; index < prompt.length; index += 1) {
     if (prompt[index] !== INLINE_TERMINAL_CONTEXT_PLACEHOLDER) {
       continue;
     }
+
     if (placeholderIndex === contextIndex) {
       return {
         prompt: prompt.slice(0, index) + prompt.slice(index + 1),
         cursor: index,
       };
     }
+
     placeholderIndex += 1;
   }
 

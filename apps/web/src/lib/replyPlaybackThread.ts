@@ -11,8 +11,11 @@ import { voiceEnvironmentConnectionLost } from "../components/voice/VoiceCall";
 import { useOptionalReplyPlayback } from "../components/chat/ReplyPlaybackProvider";
 
 const unavailableSynthesis = storedReplySynthesisCapability(undefined);
+
 const subscribeNothing = () => () => {};
+
 const getUnavailableSynthesis = () => unavailableSynthesis;
+
 const STORED_REPLY_SPEECH_AVAILABLE = false;
 
 export function replyPlaybackControlProps(
@@ -23,7 +26,9 @@ export function replyPlaybackControlProps(
   // be a disabled button plus a disclaimer. Hide it until speech is wired up.
   if (!STORED_REPLY_SPEECH_AVAILABLE) return undefined;
   const action = session?.actionFor(message);
+
   if (!session || !action) return undefined;
+
   return {
     controller: session.controller,
     request: action.request,
@@ -45,13 +50,16 @@ export function useReplyPlaybackThread(options: {
 }) {
   const session = useOptionalReplyPlayback();
   const connection = useEnvironmentConnectionState(options.environmentId ?? null);
+
   const synthesis = useSyncExternalStore(
     session?.subscribeSynthesis ?? subscribeNothing,
     session?.getSynthesisSnapshot ?? getUnavailableSynthesis,
   );
+
   const [contextKey, setContextKey] = useState<string | null>(null);
   const messagesRef = useRef(options.messages);
   messagesRef.current = options.messages;
+
   const signature = useMemo(
     () =>
       options.messages
@@ -59,16 +67,21 @@ export function useReplyPlaybackThread(options: {
         .join("|"),
     [options.messages],
   );
+
   // Clearing the context stops playback, so only a chat change or unmount clears it.
   useEffect(() => {
     if (!session) return;
+
     if (!options.environmentId || !options.threadId) {
       session.setContext(null);
       setContextKey(null);
+
       return;
     }
+
     const environmentId = options.environmentId;
     const threadId = options.threadId;
+
     return () => {
       session.clearContextIf(environmentId, threadId);
     };
@@ -103,5 +116,6 @@ export function useReplyPlaybackThread(options: {
   useEffect(() => {
     session?.observe(messagesRef.current);
   }, [session, signature]);
+
   return contextKey;
 }

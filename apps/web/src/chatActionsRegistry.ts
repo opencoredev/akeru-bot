@@ -16,12 +16,16 @@ export interface ChatPaletteAction {
 }
 
 const NO_ACTIONS: ReadonlyArray<ChatPaletteAction> = [];
+
 let activeActions: ReadonlyArray<ChatPaletteAction> = NO_ACTIONS;
+
 let activeOwner: object | null = null;
+
 const listeners = new Set<() => void>();
 
 function publish(actions: ReadonlyArray<ChatPaletteAction>): void {
   activeActions = actions;
+
   for (const listener of listeners) listener();
 }
 
@@ -32,6 +36,7 @@ export function registerChatPaletteActions(
 ): () => void {
   activeOwner = owner;
   publish(actions);
+
   return () => {
     if (activeOwner !== owner) return;
     activeOwner = null;
@@ -45,6 +50,7 @@ export function activeChatPaletteActions(): ReadonlyArray<ChatPaletteAction> {
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
+
   return () => listeners.delete(listener);
 }
 

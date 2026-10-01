@@ -27,6 +27,7 @@ describe("browser favicon logic", () => {
     expect(faviconKey("env:project", "http://127.0.0.1:3000/", null)).toBe(
       faviconKey("env:project", "http://0.0.0.0:3000/", null),
     );
+
     const keys = [
       faviconKey("env:a", "http://localhost:3000/", null),
       faviconKey("env:b", "http://localhost:3000/", null),
@@ -34,6 +35,7 @@ describe("browser favicon logic", () => {
       faviconKey("env:a", "https://localhost:3000/", null),
       faviconKey("env:a", "http://192.168.1.50:3000/", "192.168.64.2"),
     ];
+
     expect(new Set(keys).size).toBe(keys.length);
     expect(faviconKey("env:a", "not a url", null)).toBeNull();
     expect(faviconKey("env:a", "ftp://example.com/", null)).toBeNull();
@@ -48,6 +50,7 @@ describe("browser favicon logic", () => {
       aliases: ["192.168.64.2"],
       key: "env:project http://localhost:3000",
     };
+
     expect(
       faviconStorageLocation("env:project", "http://localhost:3000/app", "192.168.64.2"),
     ).toEqual(expected);
@@ -81,6 +84,7 @@ describe("browser favicon logic", () => {
         entry(index),
       ]),
     );
+
     const result = evictExcessFavicons(byKey);
     expect(Object.keys(result)).toHaveLength(BROWSER_FAVICON_MAX_ENTRIES);
     expect(result["key-0"]).toBeUndefined();

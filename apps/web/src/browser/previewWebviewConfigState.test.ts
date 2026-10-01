@@ -25,6 +25,7 @@ describe("loadPreviewWebviewConfig", () => {
   it.effect("preserves the bridge rejection as the load failure cause", () =>
     Effect.gen(function* () {
       const cause = new Error("ipc unavailable");
+
       const error = yield* loadPreviewWebviewConfig(environmentId, {
         getPreviewConfig: () => Promise.reject(cause),
       }).pipe(Effect.flip);
@@ -39,14 +40,17 @@ describe("loadPreviewWebviewConfig", () => {
   it.effect("forwards the environment id to the bridge", () =>
     Effect.gen(function* () {
       let requestedEnvironmentId: EnvironmentId | null = null;
+
       const config = {
         partition: "persist:test-preview",
         webPreferences: "sandbox=yes",
         preloadUrl: null,
       };
+
       const result = yield* loadPreviewWebviewConfig(environmentId, {
         getPreviewConfig: (input) => {
           requestedEnvironmentId = input;
+
           return Promise.resolve(config);
         },
       });

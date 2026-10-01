@@ -4,6 +4,7 @@ import { applyAppearanceContrast } from "./appearanceContrast";
 
 function makeRoot() {
   const setProperty = vi.fn();
+
   return {
     root: { style: { setProperty } } as unknown as HTMLElement,
     setProperty,

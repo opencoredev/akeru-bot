@@ -12,6 +12,7 @@ import {
 } from "./rightPanelStore";
 
 const refA = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-A"));
+
 const refB = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-B"));
 
 beforeEach(() => {
@@ -78,6 +79,7 @@ describe("rightPanelStore", () => {
       repository: "pingdotgg/t3code",
       number: 4909,
     };
+
     expect(
       migratePersistedRightPanelState({
         byThreadKey: {

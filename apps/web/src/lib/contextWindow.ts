@@ -28,6 +28,7 @@ export type ContextWindowSnapshot = NullableContextWindowUsage & {
 /** Map a provider driver kind to a user-facing display name. */
 export function formatProviderDisplayName(provider: string | null | undefined): string {
   if (!provider) return "This agent";
+
   switch (provider) {
     case "claudeAgent":
     case "claude":
@@ -41,7 +42,9 @@ export function formatProviderDisplayName(provider: string | null | undefined): 
     default: {
       // Title-case unknown driver kinds so they read reasonably.
       const trimmed = provider.replace(/Agent$/i, "").trim();
+
       if (trimmed.length === 0) return provider;
+
       return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
     }
   }
@@ -52,21 +55,26 @@ export function deriveLatestContextWindowSnapshot(
 ): ContextWindowSnapshot | null {
   for (let index = activities.length - 1; index >= 0; index -= 1) {
     const activity = activities[index];
+
     if (!activity || activity.kind !== "context-window.updated") {
       continue;
     }
 
     const payload = asRecord(activity.payload);
     const usedTokens = asFiniteNumber(payload?.usedTokens);
+
     if (usedTokens === null || usedTokens < 0) {
       continue;
     }
 
     const maxTokens = asFiniteNumber(payload?.maxTokens);
+
     const usedPercentage =
       maxTokens !== null && maxTokens > 0 ? Math.min(100, (usedTokens / maxTokens) * 100) : null;
+
     const remainingTokens =
       maxTokens !== null ? Math.max(0, Math.round(maxTokens - usedTokens)) : null;
+
     const remainingPercentage = usedPercentage !== null ? Math.max(0, 100 - usedPercentage) : null;
 
     return {
@@ -100,14 +108,18 @@ export function formatContextWindowTokens(value: number | null): string {
   if (value === null || !Number.isFinite(value)) {
     return "0";
   }
+
   if (value < 1_000) {
     return `${Math.round(value)}`;
   }
+
   if (value < 10_000) {
     return `${(value / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
   }
+
   if (value < 1_000_000) {
     return `${Math.round(value / 1_000)}k`;
   }
+
   return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}m`;
 }

@@ -22,6 +22,7 @@ function provider(input: {
     (input.instanceId.startsWith("claude_")
       ? ProviderDriverKind.make("claudeAgent")
       : ProviderDriverKind.make("codex"));
+
   return {
     instanceId: ProviderInstanceId.make(input.instanceId),
     driver,
@@ -84,12 +85,14 @@ describe("instance-scoped model selection", () => {
       instanceId: "claudeAgent",
       models: ["claude-opus-4-8"],
     });
+
     const providers = [
       {
         ...baseProvider,
         models: [{ ...baseProvider.models[0]!, isLegacy: true }],
       },
     ];
+
     const stock = deriveProviderInstanceEntries(providers)[0]!;
 
     expect(getAppModelOptionsForInstance(settingsWithProviderInstances(), stock)[0]?.isLegacy).toBe(
@@ -108,6 +111,7 @@ describe("instance-scoped model selection", () => {
         models: ["claude-sonnet-4-6"],
       }),
     ];
+
     const entries = deriveProviderInstanceEntries(providers);
     const stock = entries.find((entry) => entry.instanceId === "claudeAgent")!;
     const openrouter = entries.find((entry) => entry.instanceId === "claude_openrouter")!;
@@ -151,6 +155,7 @@ describe("instance-scoped model selection", () => {
         models: ["claude-opus-4-8"],
       }),
     ];
+
     const settings: UnifiedSettings = {
       ...settingsWithProviderInstances(),
       providerInstances: {
@@ -161,6 +166,7 @@ describe("instance-scoped model selection", () => {
         },
       },
     };
+
     const openrouter = deriveProviderInstanceEntries(providers)[0]!;
 
     expect(
@@ -184,7 +190,9 @@ describe("instance-scoped model selection", () => {
         models: ["grok-4.6", "grok-4.5"],
       }),
     ];
+
     const settings = settingsWithGrokCustomModel();
+
     const grok = deriveProviderInstanceEntries(providers).find(
       (entry) => entry.instanceId === "grok",
     )!;
@@ -204,6 +212,7 @@ describe("instance-scoped model selection", () => {
         models: ["grok-4.6"],
       }),
     ];
+
     const options = getCustomModelOptionsByInstance(
       settingsWithGrokCustomModel(),
       providers,
@@ -226,6 +235,7 @@ describe("instance-scoped model selection", () => {
         models: ["grok-4.6"],
       }),
     ];
+
     const options = getCustomModelOptionsByInstance(
       settingsWithGrokCustomModel(),
       providers,
@@ -247,6 +257,7 @@ describe("instance-scoped model selection", () => {
         models: ["claude-sonnet-4-6"],
       }),
     ];
+
     const stock = deriveProviderInstanceEntries(providers).find(
       (entry) => entry.instanceId === "claudeAgent",
     )!;
@@ -265,6 +276,7 @@ describe("instance-scoped model selection", () => {
         models: ["claude-opus-4-6", "claude-sonnet-4-6"],
       }),
     ];
+
     const settings: UnifiedSettings = {
       ...settingsWithProviderInstances(),
       providerModelPreferences: {
@@ -274,6 +286,7 @@ describe("instance-scoped model selection", () => {
         },
       },
     };
+
     const stock = deriveProviderInstanceEntries(providers).find(
       (entry) => entry.instanceId === "claudeAgent",
     )!;
@@ -290,6 +303,7 @@ describe("instance-scoped model selection", () => {
         models: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"],
       }),
     ];
+
     const settings: UnifiedSettings = {
       ...settingsWithProviderInstances(),
       providerModelPreferences: {
@@ -299,6 +313,7 @@ describe("instance-scoped model selection", () => {
         },
       },
     };
+
     const stock = deriveProviderInstanceEntries(providers).find(
       (entry) => entry.instanceId === "claudeAgent",
     )!;
@@ -317,6 +332,7 @@ describe("instance-scoped model selection", () => {
         models: ["claude-opus-4-6", "claude-sonnet-4-6"],
       }),
     ];
+
     const settings: UnifiedSettings = {
       ...settingsWithProviderInstances(),
       providerModelPreferences: {
@@ -370,6 +386,7 @@ describe("instance-scoped model selection", () => {
         models: ["claude-sonnet-4-6"],
       }),
     ];
+
     const settings: UnifiedSettings = {
       ...settingsWithProviderInstances(),
       textGenerationModelSelection: {
@@ -393,6 +410,7 @@ describe("instance-scoped model selection", () => {
       },
       provider({ instanceId: "codex", models: ["gpt-5.5"] }),
     ];
+
     const settings: UnifiedSettings = {
       ...DEFAULT_UNIFIED_SETTINGS,
       textGenerationModelSelection: {
@@ -414,6 +432,7 @@ describe("instance-scoped model selection", () => {
       },
       provider({ instanceId: "codex", models: ["gpt-5.5"] }),
     ];
+
     const settings: UnifiedSettings = {
       ...DEFAULT_UNIFIED_SETTINGS,
       textGenerationModelSelection: {
@@ -438,6 +457,7 @@ describe("withoutPlanAgentSelection", () => {
       { id: "variant", value: "high" },
       { id: "agent", value: "plan" },
     ]);
+
     expect(withoutPlanAgentSelection(selection)).toEqual(
       createModelSelection(instance, model, [{ id: "variant", value: "high" }]),
     );
@@ -463,10 +483,12 @@ describe("resolvePlanAgentHealPatch", () => {
   const instance = ProviderInstanceId.make("opencode");
   const model = "opencode/gpt-5.4";
   const healed = createModelSelection(instance, model, [{ id: "variant", value: "high" }]);
+
   const storedPlan = createModelSelection(instance, model, [
     { id: "variant", value: "high" },
     { id: "agent", value: "plan" },
   ]);
+
   it("returns null when nothing needs healing", () => {
     expect(
       resolvePlanAgentHealPatch({

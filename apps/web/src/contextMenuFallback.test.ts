@@ -36,15 +36,18 @@ class FakeElement {
 
   get isConnected() {
     let current: FakeElement | null = this;
+
     while (current?.parent) {
       current = current.parent;
     }
+
     return current?.tagName === "body";
   }
 
   appendChild(child: FakeElement) {
     child.parent = this;
     this.children.push(child);
+
     return child;
   }
 
@@ -52,10 +55,13 @@ class FakeElement {
     if (!this.parent) {
       return;
     }
+
     const index = this.parent.children.indexOf(this);
+
     if (index >= 0) {
       this.parent.children.splice(index, 1);
     }
+
     this.parent = null;
   }
 
@@ -73,14 +79,17 @@ class FakeElement {
     for (const listener of this.listeners.get(event.type) ?? []) {
       listener(event);
     }
+
     return true;
   }
 
   focus() {
     const fakeDocument = document as unknown as FakeDocument;
+
     if (fakeDocument.activeElement === this) {
       return;
     }
+
     fakeDocument.activeElement?.blur();
     fakeDocument.activeElement = this;
     this.focused = true;
@@ -89,9 +98,11 @@ class FakeElement {
 
   blur() {
     const fakeDocument = document as unknown as FakeDocument;
+
     if (fakeDocument.activeElement === this) {
       fakeDocument.activeElement = null;
     }
+
     this.focused = false;
     this.dispatchEvent(new FakeDomEvent("blur"));
   }
@@ -106,12 +117,15 @@ class FakeElement {
 
   querySelectorAll(tagName: string): FakeElement[] {
     const matches: FakeElement[] = [];
+
     if (this.tagName === tagName) {
       matches.push(this);
     }
+
     for (const child of this.children) {
       matches.push(...child.querySelectorAll(tagName));
     }
+
     return matches;
   }
 
@@ -120,6 +134,7 @@ class FakeElement {
     const top = Number.parseInt(this.style.top ?? "0", 10) || 0;
     const width = this.tagName === "div" ? 180 : 140;
     const height = this.tagName === "div" ? 120 : 28;
+
     return {
       left,
       top,
@@ -165,10 +180,13 @@ class FakeDocument {
 
   removeEventListener(type: string, listener: FakeListener) {
     const existing = this.listeners.get(type);
+
     if (!existing) {
       return;
     }
+
     const index = existing.indexOf(listener);
+
     if (index >= 0) {
       existing.splice(index, 1);
     }
@@ -194,6 +212,7 @@ beforeEach(() => {
   });
   vi.stubGlobal("requestAnimationFrame", (callback: (time: number) => void) => {
     callback(0);
+
     return 0;
   });
   vi.stubGlobal(
@@ -224,6 +243,7 @@ describe("showContextMenuFallback", () => {
       { id: "rename", label: "Rename" },
       { id: "archive", label: "Archive", separatorBefore: true },
     ]);
+
     const separators = (document as unknown as FakeDocument)
       .querySelectorAll("div")
       .filter((element) => element.dataset.contextMenuSeparator === "true");
@@ -251,6 +271,7 @@ describe("showContextMenuFallback", () => {
     let enablePointerSelection: ((time: number) => void) | undefined;
     vi.stubGlobal("requestAnimationFrame", (callback: (time: number) => void) => {
       enablePointerSelection = callback;
+
       return 0;
     });
 
@@ -291,6 +312,7 @@ describe("showContextMenuFallback", () => {
     const invoker = (document as unknown as FakeDocument).createElement("button");
     (document as unknown as FakeDocument).body.appendChild(invoker);
     invoker.focus();
+
     const selectionPromise = showContextMenuFallback([
       {
         id: "copy:submenu",
@@ -334,6 +356,7 @@ describe("dismissContextMenu", () => {
       { id: "rename", label: "Rename" },
       { id: "delete", label: "Delete" },
     ]);
+
     expect(findButton("Rename")).toBeTruthy();
 
     dismissContextMenu();

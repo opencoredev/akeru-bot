@@ -33,6 +33,7 @@ function makeBridge(
   return {
     ensureSshEnvironment: async (target: DesktopSshEnvironmentTarget) => {
       calls.push("ensure");
+
       return {
         target,
         httpBaseUrl: "http://127.0.0.1:3201/",
@@ -42,9 +43,11 @@ function makeBridge(
     },
     fetchSshEnvironmentDescriptor: async () => {
       calls.push("descriptor");
+
       if (options?.failDescriptor === true) {
         throw new Error("descriptor unavailable");
       }
+
       return {
         environmentId: EnvironmentId.make("environment-ssh"),
         label: "SSH environment",
@@ -60,6 +63,7 @@ function makeBridge(
     },
     bootstrapSshBearerSession: async () => {
       calls.push("token");
+
       return {
         access_token: "bearer-token",
         issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
@@ -104,6 +108,7 @@ describe("desktop-local bearer cache", () => {
     const issuedAtEpochMs = 10_000;
     const refreshAtEpochMs = secondaryBearerRefreshAtEpochMs(issuedAtEpochMs, 60);
     const expiresAtEpochMs = secondaryBearerExpiresAtEpochMs(issuedAtEpochMs, 60);
+
     const cached = {
       expiresAtEpochMs,
       signature: "secondary-signature",
@@ -124,6 +129,7 @@ describe("desktop-local bearer cache", () => {
 
   it("does not cache credentials whose lifetime is shorter than the refresh skew", () => {
     const refreshAtEpochMs = secondaryBearerRefreshAtEpochMs(10_000, 3);
+
     const cached = {
       expiresAtEpochMs: secondaryBearerExpiresAtEpochMs(10_000, 3),
       signature: "secondary-signature",
@@ -142,6 +148,7 @@ describe("desktop-local bearer cache", () => {
       registration,
       refreshAtEpochMs: 15_000,
     };
+
     const previous = new Map([
       ["valid-secondary", valid],
       [
@@ -189,10 +196,12 @@ describe("desktop-local bearer cache", () => {
 
 describe("primary topology cache", () => {
   const registration = {} as never;
+
   const cached = {
     signature: "primary|http://127.0.0.1:3773/|ws://127.0.0.1:3773/",
     registration,
   };
+
   const previous = new Map([[PRIMARY_LOCAL_ENVIRONMENT_ID, cached]]);
 
   it("captures synchronous primary target read failures", () => {

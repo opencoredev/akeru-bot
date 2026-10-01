@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 function createStorage(overrides: Partial<Storage> = {}): Storage {
   const store = new Map<string, string>();
+
   return {
     clear: () => store.clear(),
     getItem: (key) => store.get(key) ?? null,
@@ -23,6 +24,7 @@ function createStorage(overrides: Partial<Storage> = {}): Storage {
 async function loadWithStorage(storage: Storage) {
   vi.stubGlobal("window", { localStorage: storage });
   vi.stubGlobal("localStorage", storage);
+
   return import("./useLocalStorage");
 }
 
@@ -34,6 +36,7 @@ afterEach(() => {
 describe("local storage errors", () => {
   it("preserves read failure context", async () => {
     const cause = new Error("storage unavailable");
+
     const { getLocalStorageItem, LocalStorageOperationError } = await loadWithStorage(
       createStorage({
         getItem: () => {
@@ -75,6 +78,7 @@ describe("local storage errors", () => {
 
   it("preserves write failure context", async () => {
     const cause = new Error("storage quota exceeded");
+
     const { LocalStorageOperationError, setLocalStorageItem } = await loadWithStorage(
       createStorage({
         setItem: () => {
@@ -98,6 +102,7 @@ describe("local storage errors", () => {
 
   it("preserves removal failure context", async () => {
     const cause = new Error("storage unavailable");
+
     const { LocalStorageOperationError, removeLocalStorageItem } = await loadWithStorage(
       createStorage({
         removeItem: () => {

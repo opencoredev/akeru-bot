@@ -1,0 +1,128 @@
+html[data-theme-id] [data-chat-header] {
+  background-color: var(--toolbar-background);
+  color: var(--contrast-toolbar-foreground);
+}
+
+html[data-theme-id] [data-chat-header] [data-slot="button"],
+html[data-theme-id] [data-chat-header] [data-slot="menu-trigger"],
+html[data-theme-id] [data-chat-header] [data-toolbar-control] {
+  --control-icon-color: var(--contrast-toolbar-control-foreground);
+  background-color: var(--toolbar-control);
+  border-color: var(--contrast-toolbar-border);
+  color: var(--contrast-toolbar-control-foreground);
+}
+
+/* The panel layout toggles stay ghost: they render both inside the header and
+   in the titlebar strip, so filling them would make them change appearance as
+   the panel opens. They only take the themed foreground; hover and pressed
+   keep the base ghost accent. The tooltip trigger's data-slot wins over the
+   toggle's when the trigger renders the toggle, so match both. */
+
+html[data-theme-id] [data-panel-layout-controls] [data-slot="toggle"],
+html[data-theme-id] [data-panel-layout-controls] [data-slot="tooltip-trigger"],
+html[data-theme-id] [data-workspace-titlebar-controls] [data-slot="toggle"],
+html[data-theme-id] [data-workspace-titlebar-controls] [data-slot="tooltip-trigger"] {
+  --control-icon-color: var(--contrast-toolbar-foreground);
+  color: var(--contrast-toolbar-foreground);
+}
+
+html[data-theme-id] [data-chat-header] [data-slot="button"]:hover,
+html[data-theme-id] [data-chat-header] [data-slot="button"][data-pressed],
+html[data-theme-id] [data-chat-header] [data-slot="menu-trigger"]:hover,
+html[data-theme-id] [data-chat-header] [data-slot="menu-trigger"][data-pressed],
+html[data-theme-id] [data-chat-header] [data-toolbar-control]:hover,
+html[data-theme-id] [data-chat-header] [data-toolbar-control][data-pressed] {
+  background-color: var(--toolbar-control-hover);
+}
+
+html[data-theme-id] [data-chat-header] [data-slot="separator"] {
+  background-color: var(--contrast-toolbar-border);
+}
+
+/* Chat code blocks join the other code surfaces on the code tokens. The
+   default look keeps its secondary/input tints; themed palettes tint those
+   surfaces with the accent, which fights syntax highlighting. */
+
+html[data-theme-id] .chat-markdown .chat-markdown-codeblock {
+  background-color: var(--code-background);
+  border-color: var(--contrast-border);
+  color: var(--code-foreground);
+}
+
+html[data-theme-id] .chat-markdown pre {
+  background-color: var(--code-background);
+  color: var(--code-foreground);
+}
+
+html[data-theme-id] .chat-markdown .chat-markdown-codeblock pre {
+  background-color: transparent;
+}
+
+html[data-theme-id] .chat-markdown .chat-markdown-codeblock-header,
+html[data-theme-id] .chat-markdown .chat-markdown-chrome-action {
+  color: color-mix(in srgb, var(--code-foreground) 72%, transparent);
+}
+
+/* T3 Chat renders inline code and compact chat artifacts with its translucent
+   secondary surface flattened over the light chat canvas. The raw muted and
+   secondary tokens are substantially darker than those visible pixels. */
+
+html[data-theme-id="akeru-chat"] {
+  @variant light {
+    & .chat-markdown :not(pre) > code,
+    & [data-changed-files-state],
+    & [data-changed-files-header] {
+      background-color: var(--message-surface);
+    }
+
+    & .chat-markdown :not(pre) > code,
+    & [data-changed-files-state] {
+      border-color: transparent;
+    }
+
+    & .chat-markdown :not(pre) > code {
+      color: var(--contrast-message-foreground);
+    }
+  }
+}
+
+html[data-theme-id] .chat-markdown .chat-markdown-chrome-action:hover,
+html[data-theme-id] .chat-markdown .chat-markdown-chrome-action[aria-pressed="true"] {
+  color: var(--code-foreground);
+}
+
+html[data-theme-id] [data-app-sidebar] {
+  --background: var(--app-theme-canvas);
+  --foreground: var(--app-theme-text);
+  --card: var(--app-theme-surface);
+  --card-foreground: var(--app-theme-text);
+  --accent: var(--app-theme-accent-surface);
+  --accent-foreground: var(--app-theme-accent-surface-foreground);
+  --muted: var(--app-theme-muted);
+  --muted-foreground: var(--app-theme-muted-foreground);
+  --border: var(--app-theme-border);
+  --input: var(--app-theme-input);
+  --sidebar: var(--app-theme-sidebar);
+  --sidebar-foreground: var(--app-theme-sidebar-foreground);
+  --sidebar-muted-foreground: var(--app-theme-sidebar-muted-foreground);
+  --sidebar-control-surface: var(--app-theme-sidebar-control-surface);
+  --sidebar-row-hover: var(--app-theme-sidebar-row-hover);
+  --sidebar-row-active: var(--app-theme-sidebar-row-active);
+  --sidebar-row-selected: var(--app-theme-sidebar-row-selected);
+  --sidebar-border: var(--app-theme-sidebar-border);
+  --sidebar-stage-fade: var(--app-theme-sidebar);
+  border-color: color-mix(in srgb, var(--contrast-sidebar-foreground) 10%, transparent);
+
+  @variant dark {
+    border-color: color-mix(in srgb, var(--contrast-sidebar-foreground) 8%, transparent);
+  }
+}
+
+/* T3 Chat's panel divider is deliberately pink, and its resize affordance
+   keeps that color while hovered. Do not neutralize this branded edge. */
+
+html[data-theme-id="akeru-chat"] [data-app-sidebar] {
+  @variant dark {
+    border-color: var(--contrast-sidebar-border);
+  }
+}

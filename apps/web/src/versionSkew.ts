@@ -12,6 +12,7 @@ export interface VersionMismatch {
 }
 
 export const VERSION_MISMATCH_DISMISSALS_STORAGE_KEY = "akeru:version-mismatch-dismissals:v1";
+
 // Pre-rebrand key, read as a fallback so dismissed banners stay dismissed.
 const LEGACY_VERSION_MISMATCH_DISMISSALS_STORAGE_KEY = "t3code:version-mismatch-dismissals:v1";
 
@@ -23,6 +24,7 @@ type VersionMismatchDismissals = typeof VersionMismatchDismissalsSchema.Type;
 
 function normalizeVersion(version: string | null | undefined): string | null {
   const trimmed = version?.trim();
+
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
@@ -44,16 +46,19 @@ export function resolveVersionMismatch(
 ): VersionMismatch | null {
   const normalizedClientVersion = normalizeVersion(APP_VERSION);
   const normalizedServerVersion = normalizeVersion(serverVersion);
+
   if (!normalizedClientVersion || !normalizedServerVersion) {
     return null;
   }
 
   const clientCore = versionCore(normalizedClientVersion);
   const serverCore = versionCore(normalizedServerVersion);
+
   const serverIsBehind =
     parseSemver(clientCore) && parseSemver(serverCore)
       ? compareSemverVersions(serverCore, clientCore) < 0
       : normalizedServerVersion !== normalizedClientVersion;
+
   if (!serverIsBehind) {
     return null;
   }
@@ -125,6 +130,7 @@ function writeVersionMismatchDismissals(document: VersionMismatchDismissals): vo
       document,
       VersionMismatchDismissalsSchema,
     );
+
     try {
       window.localStorage.removeItem(LEGACY_VERSION_MISMATCH_DISMISSALS_STORAGE_KEY);
     } catch {
@@ -139,6 +145,7 @@ export function isVersionMismatchDismissed(dismissalKey: string | null | undefin
   if (!dismissalKey) {
     return false;
   }
+
   return readVersionMismatchDismissals().keys.includes(dismissalKey);
 }
 
@@ -146,10 +153,13 @@ export function dismissVersionMismatch(dismissalKey: string | null | undefined):
   if (!dismissalKey) {
     return;
   }
+
   const document = readVersionMismatchDismissals();
+
   if (document.keys.includes(dismissalKey)) {
     return;
   }
+
   writeVersionMismatchDismissals({
     keys: [...document.keys, dismissalKey],
   });
@@ -160,11 +170,14 @@ export function appendVersionMismatchHint(
   mismatch: VersionMismatch | null | undefined,
 ): string | null {
   const normalizedMessage = normalizeVersion(message);
+
   if (!normalizedMessage) {
     return mismatch?.hint ?? null;
   }
+
   if (!mismatch) {
     return normalizedMessage;
   }
+
   return `${normalizedMessage} Hint: ${mismatch.hint}`;
 }

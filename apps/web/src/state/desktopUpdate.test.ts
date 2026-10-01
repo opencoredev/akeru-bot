@@ -32,10 +32,13 @@ describe("desktopUpdateStateAtom", () => {
     let listener: ((state: DesktopUpdateState) => void) | undefined;
     const unsubscribe = vi.fn();
     const getUpdateState = vi.fn(async () => baseState);
+
     const onUpdateState = vi.fn((nextListener: (state: DesktopUpdateState) => void) => {
       listener = nextListener;
+
       return unsubscribe;
     });
+
     const atom = createDesktopUpdateStateAtom(() => ({ getUpdateState, onUpdateState }));
     const registry = AtomRegistry.make();
 
@@ -50,6 +53,7 @@ describe("desktopUpdateStateAtom", () => {
       availableVersion: "1.1.0",
       downloadedVersion: "1.1.0",
     };
+
     listener?.(downloadedState);
 
     await vi.waitFor(() => {
@@ -70,6 +74,7 @@ describe("desktopUpdateStateAtom", () => {
   it("does not let a slower initial read overwrite a newer update event", async () => {
     let resolveInitial: ((state: DesktopUpdateState) => void) | undefined;
     let listener: ((state: DesktopUpdateState) => void) | undefined;
+
     const atom = createDesktopUpdateStateAtom(() => ({
       getUpdateState: () =>
         new Promise<DesktopUpdateState>((resolve) => {
@@ -77,9 +82,11 @@ describe("desktopUpdateStateAtom", () => {
         }),
       onUpdateState: (nextListener) => {
         listener = nextListener;
+
         return () => undefined;
       },
     }));
+
     const registry = AtomRegistry.make();
     registry.mount(atom);
 
@@ -99,13 +106,16 @@ describe("desktopUpdateStateAtom", () => {
     const cause = new Error("IPC unavailable");
     const reportError = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const getUpdateState = vi.fn(async () => Promise.reject(cause));
+
     const atom = createDesktopUpdateStateAtom(() => ({
       getUpdateState,
       onUpdateState: (nextListener) => {
         listener = nextListener;
+
         return () => undefined;
       },
     }));
+
     const registry = AtomRegistry.make();
     registry.mount(atom);
 

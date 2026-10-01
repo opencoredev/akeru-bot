@@ -16,10 +16,12 @@ import { previewRuntimeTabId } from "./previewRuntimeTabId";
 export function ElectronBrowserHost() {
   const { resolvedTheme } = useTheme();
   const previewByThreadKey = useActivePreviewSessions();
+
   const sessions = useMemo(
     () =>
       Object.entries(previewByThreadKey).flatMap(([threadKey, previewState]) => {
         const threadRef = parseScopedThreadKey(threadKey);
+
         return threadRef
           ? Object.values(previewState.sessions).map((snapshot) => ({
               threadRef,
@@ -40,18 +42,22 @@ export function ElectronBrowserHost() {
 
   useEffect(() => {
     const preview = window.desktopBridge?.preview;
+
     if (!preview) return;
 
     let lastSerializedTheme = "";
+
     const syncTheme = () => {
       const theme = readPreviewAnnotationTheme();
       const serializedTheme = JSON.stringify(theme);
+
       if (serializedTheme === lastSerializedTheme) return;
       lastSerializedTheme = serializedTheme;
       void preview.setAnnotationTheme(theme).catch(() => {
         lastSerializedTheme = "";
       });
     };
+
     const frameId = window.requestAnimationFrame(syncTheme);
     const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, {
@@ -64,6 +70,7 @@ export function ElectronBrowserHost() {
       subtree: true,
       characterData: true,
     });
+
     return () => {
       window.cancelAnimationFrame(frameId);
       observer.disconnect();
@@ -73,17 +80,21 @@ export function ElectronBrowserHost() {
 
   useEffect(() => {
     const preview = window.desktopBridge?.preview;
+
     if (!preview) return;
+
     return preview.onPointerEvent((event) => {
       useBrowserPointerStore.getState().apply(event);
     });
   }, []);
 
   if (!isElectron) return null;
+
   return (
     <div className="contents" data-electron-browser-host>
       {sessions.map(({ threadRef, snapshot, runtimeTabId, pictureInPicture, zoomFactor }) => {
         const url = snapshot.navStatus._tag === "Idle" ? null : snapshot.navStatus.url;
+
         return (
           <HostedBrowserWebview
             key={runtimeTabId}

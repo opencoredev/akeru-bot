@@ -12,6 +12,7 @@ const OTHER_ENVIRONMENT_SPEECH_UNAVAILABLE =
   "Reading replies aloud is only available for this device's primary environment.";
 
 let operationSequence = 0;
+
 const operationId = () => `voice-${Date.now()}-${operationSequence++}`;
 
 export function useWebReplyPlaybackSession() {
@@ -21,6 +22,7 @@ export function useWebReplyPlaybackSession() {
   const cancel = useAtomCommand(serverEnvironment.cancelVoice, { reportFailure: false });
   const voice = settings.voice;
   const voiceRef = useRef(voice);
+
   const session = useMemo(
     () =>
       createWebReplyPlaybackSession({
@@ -30,12 +32,14 @@ export function useWebReplyPlaybackSession() {
       }),
     [cancel, environmentId, synthesize],
   );
+
   // Voice setting changes update the live session, so playback and automatic readout survive them.
   // The per-environment check still applies, so other environments' replies stay unavailable.
   useEffect(() => {
     voiceRef.current = voice;
     session.refreshSynthesis();
   }, [session, voice]);
+
   return session;
 }
 
@@ -57,6 +61,7 @@ export function createWebReplyPlaybackSession(
 ) {
   const environmentId = options.environmentId ?? null;
   const readVoice = () => (typeof options.voice === "function" ? options.voice() : options.voice);
+
   return createReplyPlaybackSession({
     storage: {
       getItem: async (key) =>
@@ -80,16 +85,21 @@ export function createWebReplyPlaybackSession(
     prepare: async (request, signal, events) => {
       if (!environmentId || !options.synthesize || !options.cancel)
         throw new Error("Voice synthesis is unavailable.");
+
       if (request.identity.environmentId !== environmentId)
         throw new Error(OTHER_ENVIRONMENT_SPEECH_UNAVAILABLE);
       const id = operationId();
+
       const abort = () => {
         void options.cancel?.({ environmentId, input: { operationId: id } });
       };
+
       signal.addEventListener("abort", abort, { once: true });
+
       try {
         const parts: BlobPart[] = [];
         let mimeType = "audio/mpeg";
+
         for (const result of await synthesizeVoiceChunks(request.text, signal, (text) =>
           options.synthesize!({ environmentId, input: { operationId: id, text } }),
         )) {
@@ -100,6 +110,7 @@ export function createWebReplyPlaybackSession(
           parts.push(Uint8Array.from(binary, (value) => value.charCodeAt(0)));
           mimeType = result.value.mimeType;
         }
+
         return createBrowserReplyAudio(new Blob(parts, { type: mimeType }), events);
       } finally {
         signal.removeEventListener("abort", abort);

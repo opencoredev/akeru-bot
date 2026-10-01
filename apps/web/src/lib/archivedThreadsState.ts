@@ -35,5 +35,6 @@ export function useArchivedThreadSnapshots(environmentIds: ReadonlyArray<Environ
     () => makeArchivedThreadsEnvironmentKey(environmentIds),
     [environmentIds],
   );
+
   return useAtomValue(archivedSnapshotsAtom(environmentKey));
 }
