@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { AuthAdministrativeScopes } from "@akeru/contracts";
 import { expect, it } from "@effect/vitest";
@@ -104,7 +105,7 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
 
       expect(error._tag).toBe("ServerAuthBootstrapCredentialValidationError");
       expect(error.message).toBe("Failed to validate bootstrap credential.");
-      if (error._tag === "ServerAuthBootstrapCredentialValidationError") {
+      if (Predicate.isTagged(error, "ServerAuthBootstrapCredentialValidationError")) {
         expect(error.cause).toBe(cause);
       }
     }),
@@ -202,7 +203,9 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
         { concurrency: "unbounded" },
       );
 
-      expect([browser, token].filter((result) => result._tag === "Success")).toHaveLength(1);
+      expect(
+        [browser, token].filter((result) => Predicate.isTagged(result, "Success")),
+      ).toHaveLength(1);
       expect(yield* serverAuth.listPairingLinks()).toHaveLength(0);
     }).pipe(Effect.provide(makeInterleavingEnvironmentAuthLayer())),
   );

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EnvironmentId } from "@akeru/contracts";
 import { expect, it } from "@effect/vitest";
@@ -142,10 +143,10 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
       expect(websocketError._tag).toBe("WebSocketTokenVerificationError");
       expect(sessionError.cause).toBe(repositoryFailure);
       expect(websocketError.cause).toBe(repositoryFailure);
-      if (sessionError._tag === "SessionCredentialVerificationError") {
+      if (Predicate.isTagged(sessionError, "SessionCredentialVerificationError")) {
         expect(sessionError.sessionId).toBe(issued.sessionId);
       }
-      if (websocketError._tag === "WebSocketTokenVerificationError") {
+      if (Predicate.isTagged(websocketError, "WebSocketTokenVerificationError")) {
         expect(websocketError.sessionId).toBe(issued.sessionId);
       }
       expect(revokeError).toMatchObject({
@@ -189,7 +190,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
 
       const error = yield* Effect.flip(sessions.verifyWebSocketToken(websocket.token));
       expect(error._tag).toBe("WebSocketSessionExpiredError");
-      if (error._tag === "WebSocketSessionExpiredError") {
+      if (Predicate.isTagged(error, "WebSocketSessionExpiredError")) {
         expect(error.sessionId).toBe(issued.sessionId);
         expect(error.expiresAt.epochMilliseconds).toBe(issued.expiresAt.epochMilliseconds);
         expect(error.observedAt.epochMilliseconds).toBeGreaterThan(
@@ -217,7 +218,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
       const websocketError = yield* Effect.flip(sessions.verifyWebSocketToken(websocket.token));
 
       expect(sessionError._tag).toBe("SessionTokenExpiredError");
-      if (sessionError._tag === "SessionTokenExpiredError") {
+      if (Predicate.isTagged(sessionError, "SessionTokenExpiredError")) {
         expect(sessionError.sessionId).toBe(issued.sessionId);
         expect(sessionError.expiresAt.epochMilliseconds).toBe(issued.expiresAt.epochMilliseconds);
         expect(sessionError.observedAt.epochMilliseconds).toBeGreaterThan(
@@ -225,7 +226,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
         );
       }
       expect(websocketError._tag).toBe("WebSocketTokenExpiredError");
-      if (websocketError._tag === "WebSocketTokenExpiredError") {
+      if (Predicate.isTagged(websocketError, "WebSocketTokenExpiredError")) {
         expect(websocketError.sessionId).toBe(issued.sessionId);
         expect(websocketError.expiresAt.epochMilliseconds).toBe(
           websocket.expiresAt.epochMilliseconds,
@@ -287,12 +288,12 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
       expect(afterRevoke).toHaveLength(1);
       expect(afterRevoke[0]?.sessionId).toBe(administrative.sessionId);
       expect(revokedClient._tag).toBe("SessionTokenRevokedError");
-      if (revokedClient._tag === "SessionTokenRevokedError") {
+      if (Predicate.isTagged(revokedClient, "SessionTokenRevokedError")) {
         expect(revokedClient.sessionId).toBe(client.sessionId);
         expect(revokedClient.revokedAt.epochMilliseconds).toBeGreaterThanOrEqual(0);
       }
       expect(revokedClientWebSocket._tag).toBe("WebSocketSessionRevokedError");
-      if (revokedClientWebSocket._tag === "WebSocketSessionRevokedError") {
+      if (Predicate.isTagged(revokedClientWebSocket, "WebSocketSessionRevokedError")) {
         expect(revokedClientWebSocket.sessionId).toBe(client.sessionId);
         expect(revokedClientWebSocket.revokedAt.epochMilliseconds).toBeGreaterThanOrEqual(0);
       }

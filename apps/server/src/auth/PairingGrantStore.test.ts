@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
@@ -5,7 +6,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as TestClock from "effect/testing/TestClock";
-
 import * as ServerConfig from "../config.ts";
 import * as AuthPairingLinks from "../persistence/AuthPairingLinks.ts";
 import { PersistenceSqlError } from "../persistence/Errors.ts";
@@ -96,8 +96,8 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
         },
       );
 
-      const successes = results.filter((result) => result._tag === "Success");
-      const failures = results.filter((result) => result._tag === "Failure");
+      const successes = results.filter((result) => Predicate.isTagged(result, "Success"));
+      const failures = results.filter((result) => Predicate.isTagged(result, "Failure"));
 
       expect(successes).toHaveLength(1);
       expect(failures).toHaveLength(7);
@@ -196,7 +196,7 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
       const pairingGrants = yield* PairingGrantStore.PairingGrantStore;
       const error = yield* Effect.flip(pairingGrants.consume("credential"));
 
-      if (error._tag !== "BootstrapCredentialConsumeAvailableError") {
+      if (!Predicate.isTagged(error, "BootstrapCredentialConsumeAvailableError")) {
         return yield* Effect.die(error);
       }
       expect(error.cause).toBe(repositoryFailure);

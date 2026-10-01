@@ -133,7 +133,9 @@ const isPlatformError = (value: unknown): value is PlatformError.PlatformError =
   Predicate.isTagged(value, "PlatformError");
 
 export const isSecretAlreadyExistsError = (error: SecretStoreError): boolean =>
-  "cause" in error && isPlatformError(error.cause) && error.cause.reason._tag === "AlreadyExists";
+  "cause" in error &&
+  isPlatformError(error.cause) &&
+  Predicate.isTagged(error.cause.reason, "AlreadyExists");
 
 export class ServerSecretStore extends Context.Service<
   ServerSecretStore,
@@ -172,7 +174,7 @@ export const make = Effect.gen(function* () {
     fileSystem.readFile(resolveSecretPath(name)).pipe(
       Effect.map((bytes) => Option.some(Uint8Array.from(bytes))),
       Effect.catch((cause) =>
-        cause.reason._tag === "NotFound"
+        Predicate.isTagged(cause.reason, "NotFound")
           ? Effect.succeed(Option.none())
           : Effect.fail(
               new SecretStoreReadError({
@@ -289,7 +291,7 @@ export const make = Effect.gen(function* () {
   const remove: ServerSecretStore["Service"]["remove"] = (name) =>
     fileSystem.remove(resolveSecretPath(name)).pipe(
       Effect.catch((cause) =>
-        cause.reason._tag === "NotFound"
+        Predicate.isTagged(cause.reason, "NotFound")
           ? Effect.void
           : Effect.fail(
               new SecretStoreRemoveError({

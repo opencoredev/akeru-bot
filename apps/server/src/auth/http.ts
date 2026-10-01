@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   AuthAccessReadScope,
   AuthAccessWriteScope,
@@ -56,7 +57,7 @@ export function annotateEnvironmentRequest(endpoint: string) {
     const traceId = yield* currentEnvironmentTraceId;
 
     yield* Effect.addFinalizer((exit) =>
-      exit._tag === "Failure"
+      Predicate.isTagged(exit, "Failure")
         ? Effect.logWarning("environment api request failed", {
             endpoint,
             traceId,
@@ -69,7 +70,7 @@ export function annotateEnvironmentRequest(endpoint: string) {
     yield* Effect.annotateCurrentSpan({
       "environment.endpoint": endpoint,
       "http.request.method": request.method,
-      "url.path": url._tag === "Some" ? url.value.pathname : "unknown",
+      "url.path": Predicate.isTagged(url, "Some") ? url.value.pathname : "unknown",
     });
   });
 }
