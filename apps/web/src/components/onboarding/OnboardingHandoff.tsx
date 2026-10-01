@@ -110,7 +110,7 @@ export function OnboardingHandoff({
   return (
     <div className="w-full max-w-2xl space-y-8" data-testid="onboarding-handoff">
       <motion.div
-        className="ml-auto max-w-[78%] rounded-2xl rounded-br-md bg-foreground px-4 py-3 text-sm text-background shadow-sm"
+        className="ml-auto max-w-39/50 rounded-2xl rounded-br-md bg-foreground px-4 py-3 text-sm text-background shadow-sm"
         initial={reducedMotion ? false : { opacity: 0, y: 16, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: reducedMotion ? 0 : LAUNCH_DURATION, ease: SMOOTH_OUT }}

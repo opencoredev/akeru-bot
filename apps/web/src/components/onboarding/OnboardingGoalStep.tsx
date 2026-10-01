@@ -18,6 +18,7 @@ import {
   desktopOnboardingGoalThinkingStatus,
   type GoalTopicId,
 } from "./goalPlan.logic";
+import { ONBOARDING_HEADING_CLASS } from "./onboardingStyles";
 
 /** The step headline: the question while it asks, the plan once it has one. */
 const GOAL_HEADING_ID = "onboarding-goal-heading";
@@ -139,10 +140,7 @@ function GoalPlanView({
         </div>
       </div>
       <div className="space-y-3">
-        <h1
-          id={GOAL_HEADING_ID}
-          className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]"
-        >
+        <h1 id={GOAL_HEADING_ID} className={ONBOARDING_HEADING_CLASS}>
           {t("I'll start by…")}
         </h1>
         <ol className="space-y-2.5" data-testid="onboarding-goal-plan-steps">
@@ -291,10 +289,7 @@ export function OnboardingGoalStep({
           ) : (
             <>
               <div className="space-y-2">
-                <h1
-                  id={GOAL_HEADING_ID}
-                  className="text-balance text-[1.75rem] font-medium leading-[1.1] tracking-[-0.035em] lg:text-[2rem] lg:leading-[1.08]"
-                >
+                <h1 id={GOAL_HEADING_ID} className={ONBOARDING_HEADING_CLASS}>
                   {t("What do you want help with?")}
                 </h1>
                 <p className="text-pretty text-sm leading-6 text-muted-foreground">
@@ -330,7 +325,8 @@ export function OnboardingGoalStep({
           <ArrowLeftIcon className="size-4" />
         </Button>
         <Button
-          className="h-10 min-w-40 flex-1 rounded-xl"
+          size="onboarding"
+          className="min-w-40 flex-1"
           disabled={thinking || !answered}
           onClick={phase === "plan" ? onContinue : workOutPlan}
         >

@@ -224,9 +224,8 @@ export function OnboardingPreview({
           )}
         </div>
         <motion.div
-          className="shrink-0"
+          className={handoff ? "pointer-events-none shrink-0" : "shrink-0"}
           animate={handoff ? { opacity: 0, y: 8 } : { opacity: 1, y: 0 }}
-          style={{ pointerEvents: handoff ? "none" : "auto" }}
           transition={{ duration: reducedMotion ? 0 : 0.25, ease: EASE }}
         >
           {messageStep && draft.botId && createdBotReady ? (

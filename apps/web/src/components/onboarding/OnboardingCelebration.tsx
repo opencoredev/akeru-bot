@@ -33,7 +33,8 @@ export function OnboardingCelebration({
           {pieces.map((piece) => (
             <motion.span
               key={piece.id}
-              className={`absolute size-1.5 ${piece.square ? "rounded-[2px]" : "rounded-full"}`}
+              className={`absolute size-1.5 ${piece.square ? "rounded-xs" : "rounded-full"}`}
+              // oxlint-disable-next-line shadcn/no-inline-styles -- Seeded confetti color derived from the user's bot avatar.
               style={{ backgroundColor: piece.color }}
               initial={{ opacity: 0, x: 0, y: 0, scale: 0.4, rotate: 0 }}
               animate={{
