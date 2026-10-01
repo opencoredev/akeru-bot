@@ -17,7 +17,6 @@ import {
   isGroupBotMember,
   MessageId,
   ProviderInstanceId,
-  type SandboxProvider,
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationReadModel,
@@ -386,12 +385,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
   command,
   readModel,
   actor,
-  defaultSandboxProvider = "local",
 }: {
   readonly command: OrchestrationCommand;
   readonly readModel: OrchestrationReadModel;
   readonly actor?: OrchestrationDispatchActor;
-  readonly defaultSandboxProvider?: SandboxProvider;
 }): Effect.fn.Return<
   DecideOrchestrationCommandResult,
   OrchestrationCommandInvariantError | PlatformError.PlatformError,
@@ -821,15 +818,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
     case "bot.delete": {
       const bot = yield* requireBot({ readModel, command, botId: command.botId });
-      if ((bot.sandbox ?? defaultSandboxProvider) === "railway") {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail:
-              "This bot uses Railway. If it has used Railway, retire its VM in the Railway dashboard first; it can keep running and accruing charges. Stop its sessions, delete any unneeded VM, then switch the bot's sandbox to Local and retry. Akeru does not verify VM retirement, and deleting a bot does not delete its Railway VM.",
-          }),
-        );
-      }
       const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
       if (bossGroup) {
         return yield* Effect.fail(

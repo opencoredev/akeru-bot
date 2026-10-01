@@ -31,7 +31,6 @@ import { toPersistenceSqlError } from "../../persistence/Errors.ts";
 import { tryAdmitTurnStart, type TurnStartAdmission } from "../../remote/updateGate.ts";
 import { OrchestrationEventStore } from "../../persistence/Services/OrchestrationEventStore.ts";
 import { OrchestrationCommandReceiptRepository } from "../../persistence/Services/OrchestrationCommandReceipts.ts";
-import { ServerSettingsService } from "../../serverSettings.ts";
 import {
   OrchestrationCommandIdConflictError,
   OrchestrationCommandInvariantError,
@@ -157,7 +156,6 @@ const makeOrchestrationEngine = Effect.gen(function* () {
   const commandReceiptRepository = yield* OrchestrationCommandReceiptRepository;
   const projectionPipeline = yield* OrchestrationProjectionPipeline;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
-  const serverSettings = yield* ServerSettingsService;
   const crypto = yield* Crypto.Crypto;
 
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -241,14 +239,9 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           });
         }
 
-        const defaultSandboxProvider =
-          envelope.command.type === "bot.delete"
-            ? (yield* serverSettings.getSettings).sandbox.defaultProvider
-            : undefined;
         const eventBase = yield* decideOrchestrationCommand({
           command: envelope.command,
           readModel: commandReadModel,
-          ...(defaultSandboxProvider !== undefined ? { defaultSandboxProvider } : {}),
           ...(envelope.actor !== undefined ? { actor: envelope.actor } : {}),
         }).pipe(
           Effect.provideService(Crypto.Crypto, crypto),

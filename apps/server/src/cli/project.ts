@@ -25,8 +25,6 @@ import * as HttpApiClient from "effect/unstable/httpapi/HttpApiClient";
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 
 import * as ServerConfig from "../config.ts";
-import * as ServerSettings from "../serverSettings.ts";
-import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { OrchestrationLayerLive } from "../orchestration/runtimeLayer.ts";
@@ -200,18 +198,13 @@ const projectCommandUuid = Crypto.Crypto.pipe(
   ),
 );
 
-const ProjectSettingsLayerLive = ServerSettings.layer.pipe(
-  Layer.provide(ServerSecretStore.layer),
-  Layer.provideMerge(SqlitePersistenceLayerLive),
+const ProjectCliRuntimeLive = Layer.mergeAll(
+  WorkspacePaths.layer,
+  OrchestrationLayerLive.pipe(
+    Layer.provideMerge(RepositoryIdentityResolver.layer),
+    Layer.provideMerge(SqlitePersistenceLayerLive),
+  ),
 );
-
-const ProjectOrchestrationLayerLive = OrchestrationLayerLive.pipe(
-  Layer.provideMerge(ProjectSettingsLayerLive),
-  Layer.provideMerge(RepositoryIdentityResolver.layer),
-  Layer.provideMerge(SqlitePersistenceLayerLive),
-);
-
-const ProjectCliRuntimeLive = Layer.mergeAll(WorkspacePaths.layer, ProjectOrchestrationLayerLive);
 
 const PROJECT_CLI_LIVE_SERVER_TIMEOUT = Duration.seconds(1);
 const withProjectCliSessionToken = <A, E, R>(

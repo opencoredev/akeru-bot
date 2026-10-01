@@ -7,7 +7,6 @@ import * as ChannelDeliveryStore from "../channels/ChannelDeliveryStore.ts";
 import * as ServerConfig from "../config.ts";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
-import { ServerSettingsService } from "../serverSettings.ts";
 import { OrchestrationLayerLive } from "./runtimeLayer.ts";
 
 it.effect("provides channel delivery storage to the server runtime", () =>
@@ -24,7 +23,6 @@ it.effect("provides channel delivery storage to the server runtime", () =>
           ServerConfig.layerTest(process.cwd(), { prefix: "runtime-layer-test-" }),
         ),
         Layer.provideMerge(NodeServices.layer),
-        Layer.provide(ServerSettingsService.layerTest()),
       ),
     ),
   ),

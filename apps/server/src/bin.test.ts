@@ -27,7 +27,6 @@ import { Command } from "effect/unstable/cli";
 
 import { cli } from "./bin.ts";
 import * as ServerConfig from "./config.ts";
-import { ServerSettingsService } from "./serverSettings.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
@@ -102,11 +101,7 @@ const makeProjectPersistenceLayer = (config: ServerConfig.ServerConfig["Service"
       Layer.provideMerge(SqlitePersistenceLayerLive),
     ),
     WorkspacePaths.layer,
-  ).pipe(
-    Layer.provideMerge(NodeServices.layer),
-    Layer.provide(ServerSettingsService.layerTest()),
-    Layer.provide(ServerConfig.layer(config)),
-  );
+  ).pipe(Layer.provideMerge(NodeServices.layer), Layer.provide(ServerConfig.layer(config)));
 
 const readPersistedSnapshot = (baseDir: string) =>
   Effect.gen(function* () {
