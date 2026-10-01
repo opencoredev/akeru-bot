@@ -241,6 +241,8 @@
 
 @import "./styles/stage-art.css";
 
+@import "./styles/theme-wireframe.css";
+
 @import "./styles/settings-highlight.css";
 
 @import "./styles/composer.css";
