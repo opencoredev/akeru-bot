@@ -1,12 +1,19 @@
-import { EnvironmentId, type ServerSelfUpdateProgressEvent, WS_METHODS } from "@akeru/contracts";
-import { describe, expect, it } from "@effect/vitest";
+import {
+  BackgroundPolicySnapshot,
+  EnvironmentId,
+  type ServerSelfUpdateProgressEvent,
+  WS_METHODS,
+} from "@akeru/contracts";
+import { describe, expect, expectTypeOf, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as TestClock from "effect/testing/TestClock";
@@ -21,7 +28,15 @@ import {
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as RpcSession from "../rpc/session.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
-import { EnvironmentRpcRequestObserver, request, runStream, subscribe } from "./client.ts";
+import {
+  EnvironmentRpcRequestObserver,
+  request,
+  runStream,
+  subscribe,
+  type EnvironmentStreamRpcTag,
+  type EnvironmentSubscriptionRpcTag,
+  type EnvironmentUnaryRpcTag,
+} from "./client.ts";
 
 const TARGET = new PrimaryConnectionTarget({
   environmentId: EnvironmentId.make("environment-1"),
@@ -74,6 +89,95 @@ const makeHarness = Effect.fn("TestEnvironmentRpc.makeHarness")(function* () {
 });
 
 describe("environment RPC", () => {
+  it("classifies every stream RPC separately from unary calls", () => {
+    type StreamTags = {
+      [Tag in keyof WsRpcProtocolClient]: Extract<
+        ReturnType<WsRpcProtocolClient[Tag]>,
+        Stream.Stream<unknown, unknown, unknown>
+      > extends never
+        ? never
+        : Tag;
+    }[keyof WsRpcProtocolClient];
+    expectTypeOf<EnvironmentStreamRpcTag>().toEqualTypeOf<StreamTags>();
+    expectTypeOf<
+      typeof WS_METHODS.subscribeBackgroundPolicy
+    >().toExtend<EnvironmentSubscriptionRpcTag>();
+    expectTypeOf<
+      Extract<EnvironmentUnaryRpcTag, typeof WS_METHODS.subscribeBackgroundPolicy>
+    >().toEqualTypeOf<never>();
+  });
+
+  it.effect(
+    "delivers background policy snapshots across a failed transport and replacement session",
+    () =>
+      Effect.gen(function* () {
+        const snapshot = yield* Schema.decodeUnknownEffect(BackgroundPolicySnapshot)({
+          hostPower: {
+            source: "unknown",
+            idle: "unknown",
+            idleSeconds: null,
+            locked: "unknown",
+            suspended: false,
+            onBattery: "unknown",
+            lowPowerMode: "unknown",
+            thermalState: "unknown",
+            stale: false,
+            updatedAt: DateTime.makeUnsafe("2026-01-01T00:00:00.000Z"),
+          },
+          leases: [],
+          activeForegroundLeaseCount: 0,
+          activeScopeKeys: [],
+          shouldRunOpportunisticWork: true,
+          updatedAt: DateTime.makeUnsafe("2026-01-01T00:00:00.000Z"),
+        });
+        const deliveries = yield* Queue.unbounded<BackgroundPolicySnapshot>();
+        const failureObserved = yield* Queue.unbounded<void>();
+        const { activeSession, supervisor } = yield* makeHarness();
+        const mockClient = (
+          method: () => Stream.Stream<BackgroundPolicySnapshot, RpcClientError.RpcClientError>,
+        ) => {
+          // SAFETY: This isolated client only subscribes to background policy; all other RPC access fails immediately.
+          return new Proxy(
+            {},
+            {
+              get: (_target, tag) => {
+                if (tag === WS_METHODS.subscribeBackgroundPolicy) return method;
+                throw new Error("Unexpected RPC in background policy test");
+              },
+            },
+          ) as WsRpcProtocolClient;
+        };
+        const firstClient = mockClient(() =>
+          Stream.concat(
+            Stream.make(snapshot),
+            Stream.fail(
+              new RpcClientError.RpcClientError({
+                reason: new RpcClientError.RpcClientDefect({
+                  message: "socket closed",
+                  cause: new Error("socket closed"),
+                }),
+              }),
+            ),
+          ).pipe(Stream.ensuring(Queue.offer(failureObserved, undefined).pipe(Effect.asVoid))),
+        );
+        const secondSnapshot = { ...snapshot, activeForegroundLeaseCount: 1 };
+        const secondClient = mockClient(() =>
+          Stream.concat(Stream.make(secondSnapshot), Stream.never),
+        );
+        const subscriptionFiber = yield* subscribe(WS_METHODS.subscribeBackgroundPolicy, {}).pipe(
+          Stream.runForEach((value) => Queue.offer(deliveries, value)),
+          Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+          Effect.forkChild,
+        );
+        yield* SubscriptionRef.set(activeSession, Option.some(session(firstClient)));
+        expect(yield* Queue.take(deliveries)).toEqual(snapshot);
+        yield* Queue.take(failureObserved);
+        yield* SubscriptionRef.set(activeSession, Option.none());
+        yield* SubscriptionRef.set(activeSession, Option.some(session(secondClient)));
+        expect(yield* Queue.take(deliveries)).toEqual(secondSnapshot);
+        yield* Fiber.interrupt(subscriptionFiber);
+      }),
+  );
   it.effect("observes unary requests until they complete", () =>
     Effect.gen(function* () {
       const observations: string[] = [];
