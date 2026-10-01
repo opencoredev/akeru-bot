@@ -42,24 +42,6 @@ import * as DesktopWindow from "../DesktopWindow.ts";
 
 import * as PreviewManager from "../../preview/Manager.ts";
 
-vi.mock("electron", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("electron")>()),
-  session: {
-    fromPartition: vi.fn(() => ({
-      getUserAgent: vi.fn(() => "Mozilla/5.0 Electron/41.5.0 t3code/1.2.3"),
-      setPermissionRequestHandler: vi.fn(),
-      setUserAgent: vi.fn(),
-    })),
-  },
-  screen: {
-    getAllDisplays: vi.fn(() => [
-      {
-        bounds: { x: 0, y: 0, width: 1920, height: 1080 },
-      },
-    ]),
-  },
-}));
-
 export function failDisplayLookupOnce(error: Error) {
   vi.mocked(Electron.screen.getAllDisplays).mockImplementationOnce(() => {
     throw error;
