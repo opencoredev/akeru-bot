@@ -16,12 +16,6 @@ vi.mock("./expoReplyAudio", () => ({
 
 import { createMobileReplyPlaybackSession } from "./mobileReplyPlaybackSession";
 
-const events = {
-  onEnded: () => {},
-  onError: () => {},
-  onInterrupted: () => {},
-};
-
 const request = (environmentId: string) => ({
   identity: {
     environmentId,

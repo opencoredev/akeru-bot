@@ -43,7 +43,6 @@ import {
   appendComposerDraftAttachments,
   appendComposerDraftText,
   clearComposerDraftContent,
-  composerDraftsAtom,
   ensureComposerDraftsLoaded,
   getComposerDraftSnapshot,
   mergeComposerDraftContent,

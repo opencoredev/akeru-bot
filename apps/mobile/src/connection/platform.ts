@@ -7,7 +7,6 @@ import {
 } from "@akeru/client-runtime/platform";
 import {
   ConnectionBlockedError,
-  ConnectionTransientError,
   Connectivity,
   Wakeups,
 } from "@akeru/client-runtime/connection";

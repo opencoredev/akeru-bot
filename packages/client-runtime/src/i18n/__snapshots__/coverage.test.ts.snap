@@ -2,13 +2,10 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1852,
+  "directMessageCount": 1839,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
-    ],
-    "apps/mobile/src/features/connection/EnvironmentConnectionNotice.tsx": [
-      "connectionFailureMessage(connection.errorCode)) : null;",
     ],
     "apps/mobile/src/features/home/HomeScreen.tsx": [
       "'No chats matching "{query}".', { query: props.searchQuery })}",
@@ -311,7 +308,6 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/connection/ConnectionEnvironmentRow.tsx",
     "apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx",
     "apps/mobile/src/features/connection/ConnectionsRouteScreen.tsx",
-    "apps/mobile/src/features/connection/EnvironmentConnectionNotice.tsx",
     "apps/mobile/src/features/home/AndroidHomeFab.tsx",
     "apps/mobile/src/features/home/HomeHeader.tsx",
     "apps/mobile/src/features/home/HomeRouteScreen.tsx",
