@@ -83,11 +83,14 @@ function assistantMessage(threadId: ThreadId, index: number, text: string): Mast
   } as MastraDBMessage;
 }
 
-function payloadString(raw: Record<string, unknown>, key: string): string | undefined {
-  const direct = raw[key];
+function payloadString(
+  raw: TestTurnResponse["events"][number],
+  key: "delta" | "detail" | "state" | "status" | "message" | "title",
+): string | undefined {
+  const direct = key in raw ? Reflect.get(raw, key) : undefined;
   if (typeof direct === "string") return direct;
-  const payload = raw.payload as Record<string, unknown> | undefined;
-  const nested = payload?.[key];
+  const payload = "payload" in raw ? raw.payload : undefined;
+  const nested = payload && key in payload ? Reflect.get(payload, key) : undefined;
   return typeof nested === "string" ? nested : undefined;
 }
 
@@ -106,12 +109,12 @@ export function makeTestMastraHarness(): TestMastraHarness {
   };
 
   const publish = (state: SessionState, event: AgentControllerEvent) => {
-    for (const listener of [...state.listeners]) listener(event);
+    for (const listener of state.listeners.values().toArray()) listener(event);
   };
 
   // Translates legacy adapter fixture events into the Mastra controller events
   // AgentController consumes. Events without a Mastra equivalent are dropped.
-  const emitFixtureEvent = (state: SessionState, raw: Record<string, unknown>) => {
+  const emitFixtureEvent = (state: SessionState, raw: TestTurnResponse["events"][number]) => {
     switch (raw.type) {
       case "message.delta":
       case "content.delta":
@@ -120,11 +123,11 @@ export function makeTestMastraHarness(): TestMastraHarness {
       case "tool.started":
       case "item.started": {
         const toolCallId = nextToolCallId();
-        const detail = typeof raw.detail === "string" ? raw.detail : undefined;
+        const detail = payloadString(raw, "detail");
         publish(state, {
           type: "tool_start",
           toolCallId,
-          toolName: typeof raw.title === "string" ? raw.title : "tool",
+          toolName: payloadString(raw, "title") ?? "tool",
           args: detail ? { path: detail } : {},
         });
         publish(state, { type: "tool_end", toolCallId, result: {}, isError: false });
@@ -205,8 +208,9 @@ export function makeTestMastraHarness(): TestMastraHarness {
     for (const raw of terminal) emitFixtureEvent(state, raw);
   };
 
-  const makeSession = (state: SessionState) =>
-    ({
+  const createSession = (state: SessionState) =>
+    // SAFETY: The controller test harness invokes only the session methods implemented below.
+    Object.assign({} as Session<Record<string, unknown>>, {
       stream: {
         isActive: () => state.activeTurnId !== undefined,
         waitForTeardown: async () => undefined,
@@ -275,7 +279,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
         resolve?.();
       },
       respondToToolSuspension: async () => undefined,
-    }) as unknown as Session<Record<string, unknown>>;
+    });
 
   const factory: TestMastraHarness["factory"] = () =>
     Effect.succeed({
@@ -315,7 +319,7 @@ export function makeTestMastraHarness(): TestMastraHarness {
           modelSwitchesByThread.set(String(threadId), state.modelSwitches);
           sessionStartCount += 1;
           sessions.set(String(threadId), state);
-          return makeSession(state);
+          return createSession(state);
         },
         deleteSession: async ({ resourceId }: { readonly resourceId?: string }) =>
           sessions.delete(String(resourceId)),

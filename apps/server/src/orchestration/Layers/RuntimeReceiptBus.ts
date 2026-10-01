@@ -29,6 +29,7 @@ const makeRuntimeReceiptBusTest = Effect.gen(function* () {
 
   return {
     publish: (receipt) => PubSub.publish(pubSub, receipt).pipe(Effect.asVoid),
+    subscribeEventsForTest: PubSub.subscribe(pubSub).pipe(Effect.map(Stream.fromSubscription)),
     get streamEventsForTest() {
       return Stream.fromPubSub(pubSub);
     },

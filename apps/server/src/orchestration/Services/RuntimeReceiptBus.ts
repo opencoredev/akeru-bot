@@ -19,6 +19,7 @@ import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
+import type * as Scope from "effect/Scope";
 
 export const CheckpointBaselineCapturedReceipt = Schema.Struct({
   type: Schema.Literal("checkpoint.baseline.captured"),
@@ -59,6 +60,11 @@ export type OrchestrationRuntimeReceipt = typeof OrchestrationRuntimeReceipt.Typ
 export interface RuntimeReceiptBusShape {
   readonly publish: (receipt: OrchestrationRuntimeReceipt) => Effect.Effect<void>;
   readonly streamEventsForTest: Stream.Stream<OrchestrationRuntimeReceipt>;
+  readonly subscribeEventsForTest?: Effect.Effect<
+    Stream.Stream<OrchestrationRuntimeReceipt>,
+    never,
+    Scope.Scope
+  >;
 }
 
 export class RuntimeReceiptBus extends Context.Service<RuntimeReceiptBus, RuntimeReceiptBusShape>()(
