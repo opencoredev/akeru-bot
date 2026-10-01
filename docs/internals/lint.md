@@ -190,11 +190,28 @@ Effect services, and flag Effect anti-patterns. Severities live in `tsconfig.bas
 `compilerOptions.plugins[0].diagnosticSeverity`, all at `error`.
 
 Exceptions apply to whole categories of code through `overrides` in the same file, each with
-its reason beside it. Today they cover tests and test harnesses, build and release scripts, and
-the feedback Worker. Two quirks of the override matcher: globs match absolute paths, so each
-needs a leading `**/`, and a glob must end in a file pattern such as `**/scripts/**/*.ts`
-because a bare directory glob matches nothing. Overrides are also ignored in a project with
-`composite: true`, which is why no app tsconfig sets it.
+its reason beside it and only the rules that category needs:
+
+- Tests and test harnesses.
+- Build, release, and dev scripts.
+- The feedback Worker, a plain Cloudflare fetch handler.
+- Code with no Effect runtime: Electron preload bundles, pre-ready desktop startup, the quit-key
+  watchdog, the standalone service launcher, and the server entry detection.
+- Native filesystem features that `FileSystem` lacks: `lstat`, descriptor `fstat` and
+  duplication, ctime and nanosecond mtime, inode identity, `X_OK` access checks, and `statfs`.
+- Adapters behind Promise-based third-party interfaces such as Mastra callbacks, sandbox SDKs,
+  CDP, and the realtime voice API, where the SDK owns lifetimes and deadlines.
+- A migration backlog of synchronous subsystems whose callers must move together. This list
+  should only shrink; remove a file from it once it is migrated.
+
+A new file does not join a category because it is convenient. Fix the code first, and add a
+category entry only when the file shares that category's real constraint.
+
+Quirks of the override matcher: globs match absolute paths, so each needs a leading `**/`. A glob
+must end in a file pattern such as `**/scripts/**/*.ts` because a bare directory glob matches
+nothing. Brace alternatives such as `*.{ts,tsx}` match nothing either, so list each pattern
+separately. Overrides are also ignored in a project with `composite: true`, which is why no app
+tsconfig sets it.
 
 To find diagnostics, run `tsgo --noEmit -p <package>` and look for lines ending in
 `effect(<rule>)`. Suggestion-level findings print without failing the exit code; fix them too.
