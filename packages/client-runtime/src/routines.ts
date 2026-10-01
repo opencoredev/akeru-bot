@@ -1,3 +1,5 @@
+import * as DateTime from "effect/DateTime";
+import * as Option from "effect/Option";
 import { asRecord } from "./work-log-command.ts";
 import type { PendingApproval } from "./pendingRequests.ts";
 import * as Match from "effect/Match";
@@ -339,11 +341,11 @@ export function runStatusTone(status: RoutineAdapterRunStatus) {
 
 /** The absolute wall-clock label a relative time is paired with. */
 export function absoluteRunTime(value: string, i18n: RoutineTranslator = englishTranslator) {
-  const date = new Date(value);
+  const date = DateTime.make(Date.parse(value));
 
-  if (Number.isNaN(date.getTime())) return "";
+  if (Option.isNone(date)) return "";
 
-  return i18n.formatDate(date, {
+  return i18n.formatDate(DateTime.toDateUtc(date.value), {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -364,10 +366,13 @@ export function routineDateLabel(value: string | null, i18n: RoutineTranslator) 
  */
 export function relativeRunTime(
   value: string,
-  nowMs: number = Date.now(),
+  nowMs: number = DateTime.toEpochMillis(DateTime.nowUnsafe()),
   i18n: RoutineTranslator = englishTranslator,
 ) {
-  const target = new Date(value).getTime();
+  const target = Option.match(DateTime.make(Date.parse(value)), {
+    onNone: () => Number.NaN,
+    onSome: DateTime.toEpochMillis,
+  });
 
   if (Number.isNaN(target)) return "";
   const diffMs = target - nowMs;
