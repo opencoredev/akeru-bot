@@ -5,8 +5,7 @@ import { validateManifest } from "./validateManifest.ts";
 
 export { PLUGIN_SCHEMA_VERSION, type PluginManifest, type PluginSkill } from "./manifestTypes.ts";
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Public catalog parser receives untrusted module values and validates the JSON tree at this boundary.
-export function parsePluginManifest(input: unknown, source = "plugin manifest"): PluginManifest {
+export function parsePluginManifest<T>(input: T, source = "plugin manifest"): PluginManifest {
   try {
     if (!isJsonValue(input)) throw new TypeError("plugin manifest must contain JSON values.");
 

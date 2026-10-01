@@ -1,7 +1,6 @@
 import { parsePluginManifest, type PluginManifest } from "./schema.ts";
 
-// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Imported JSON modules are raw input; loadManifestCatalog validates each entry with parsePluginManifest before returning domain values.
-export type CatalogManifestModules = Readonly<Record<string, unknown>>;
+export type CatalogManifestModules<T> = Readonly<Record<string, T>>;
 
 type PluginManifestInstallability = Pick<
   PluginManifest,
@@ -32,7 +31,9 @@ function comparePluginOrder(left: PluginManifest, right: PluginManifest): number
   );
 }
 
-export function loadManifestCatalog(modules: CatalogManifestModules): readonly PluginManifest[] {
+export function loadManifestCatalog<T>(
+  modules: CatalogManifestModules<T>,
+): readonly PluginManifest[] {
   const ids = new Set<string>();
 
   const plugins = Object.entries(modules).map(([path, input]) => {

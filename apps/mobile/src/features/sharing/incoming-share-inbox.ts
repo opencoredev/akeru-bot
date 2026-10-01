@@ -24,10 +24,8 @@ export interface IncomingShareInboxDependencies {
   readonly cleanupReplayedPayloads?: (payloads: ReadonlyArray<SharePayload>) => Promise<void>;
   readonly idForPayloads: (payloads: ReadonlyArray<SharePayload>) => Promise<string>;
   readonly now: () => string;
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Reports the original thrown native sharing error without interpreting or replacing it.
-  readonly onClearError?: (error: unknown) => void;
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Reports the original thrown file cleanup error without interpreting or replacing it.
-  readonly onCleanupError?: (error: unknown) => void;
+  readonly onClearError?: (cause: unknown) => void;
+  readonly onCleanupError?: (cause: unknown) => void;
 }
 
 export function sortAndDedupeIncomingShares(

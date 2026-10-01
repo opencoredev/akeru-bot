@@ -42,8 +42,7 @@ const decodeEvaluationEnvelope = Schema.decodeUnknownEffect(
 
 export const decodeEvaluationValue =
   <A>(tabId: string, decode: ReturnType<typeof Schema.decodeUnknownEffect<Schema.Codec<A>>>) =>
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- CDP evaluation values are arbitrary JavaScript values; the supplied decoder validates typed expressions.
-  (value: unknown) =>
+  <Input>(value: Input) =>
     decode(value).pipe(
       Effect.mapError(
         (cause) =>

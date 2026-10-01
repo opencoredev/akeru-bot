@@ -34,8 +34,7 @@ import * as Persistence from "../platform/persistence.ts";
 import * as RpcSession from "../rpc/session.ts";
 import type { ThreadSnapshotWindow } from "./threadSnapshotHttp.ts";
 import {
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition builds isolated runtime fixtures.
-  makeEnvironmentThreadState,
+  environmentThreadState,
   ThreadSnapshotLoader,
   type EnvironmentThreadState,
 } from "./threads.ts";
@@ -222,7 +221,7 @@ export const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(functio
     clear: () => Effect.void,
   });
 
-  const threadState = yield* makeEnvironmentThreadState(THREAD_ID).pipe(
+  const threadState = yield* environmentThreadState(THREAD_ID).pipe(
     Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
     Effect.provideService(Persistence.EnvironmentCacheStore, cache),
     Effect.provideService(ThreadSnapshotLoader, snapshotLoader),

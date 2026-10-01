@@ -58,8 +58,7 @@ function normalizeScreenOptions(
   } as NativeStackNavigationOptions;
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Serializes heterogeneous navigation options, including refs and callbacks, without imposing a JSON contract.
-function optionsSignature(value: unknown, seen = new WeakSet<object>()): string {
+function optionsSignature<T>(value: T, seen = new WeakSet<object>()): string {
   if (value === null) return "null";
 
   if (Predicate.isBoolean(value) || Predicate.isNumber(value) || Predicate.isString(value))
@@ -91,8 +90,11 @@ function optionsSignature(value: unknown, seen = new WeakSet<object>()): string 
   return String(value);
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-returns -- Header factories have different arguments and results; the wrapper forwards each invocation unchanged.
-type OptionFunction = (...args: ReadonlyArray<unknown>) => unknown;
+type OptionFunction = (
+  ...args: ReadonlyArray<unknown>
+) => ReturnType<
+  Extract<NativeStackNavigationOptions[keyof NativeStackNavigationOptions], Function>
+>;
 
 function stabilizeOptionFunctions<T>(
   value: T,

@@ -3,16 +3,15 @@ import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { TrimmedString } from "../baseSchemas.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This module composes provider setting schemas, not an Effect service.
-import { makeBinaryPathSetting, makeProviderSettingsSchema } from "./providerForms.ts";
+import { binaryPathSetting, providerSettingsSchema } from "./providerForms.ts";
 
-export const CodexSettings = makeProviderSettingsSchema(
+export const CodexSettings = providerSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
-    binaryPath: makeBinaryPathSetting("codex").pipe(
+    binaryPath: binaryPathSetting("codex").pipe(
       Schema.annotateKey({
         title: "Binary path",
         description: "Path to the Codex binary used by this instance.",
@@ -66,13 +65,13 @@ export type CodexSettings = typeof CodexSettings.Type;
 // the update that introduced it.
 const CLAUDE_AUTO_COMPACT_WINDOW_PATTERN = /^(?:|[1-9]\d{5}|1000000)$/;
 
-export const ClaudeSettings = makeProviderSettingsSchema(
+export const ClaudeSettings = providerSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
-    binaryPath: makeBinaryPathSetting("claude").pipe(
+    binaryPath: binaryPathSetting("claude").pipe(
       Schema.annotateKey({
         title: "Binary path",
         description: "Path to the Claude binary used by this instance.",
@@ -125,7 +124,7 @@ export const ClaudeSettings = makeProviderSettingsSchema(
 
 export type ClaudeSettings = typeof ClaudeSettings.Type;
 
-export const GrokSettings = makeProviderSettingsSchema(
+export const GrokSettings = providerSettingsSchema(
   {
     // Off by default: the binding is not yet
     // stable enough to probe on every install. Users opt in from Settings.
@@ -133,7 +132,7 @@ export const GrokSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed(false)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
-    binaryPath: makeBinaryPathSetting("grok").pipe(
+    binaryPath: binaryPathSetting("grok").pipe(
       Schema.annotateKey({
         title: "Binary path",
         description: "Path to the Grok CLI binary.",
@@ -160,7 +159,7 @@ export const GrokSettings = makeProviderSettingsSchema(
 
 export type GrokSettings = typeof GrokSettings.Type;
 
-export const KimiSettings = makeProviderSettingsSchema({
+export const KimiSettings = providerSettingsSchema({
   enabled: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
     Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
@@ -173,7 +172,7 @@ export const KimiSettings = makeProviderSettingsSchema({
 
 export type KimiSettings = typeof KimiSettings.Type;
 
-export const OpenCodeGoSettings = makeProviderSettingsSchema({
+export const OpenCodeGoSettings = providerSettingsSchema({
   enabled: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
     Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
@@ -186,7 +185,7 @@ export const OpenCodeGoSettings = makeProviderSettingsSchema({
 
 export type OpenCodeGoSettings = typeof OpenCodeGoSettings.Type;
 
-export const OpenCodeSettings = makeProviderSettingsSchema(
+export const OpenCodeSettings = providerSettingsSchema(
   {
     // Off by default: the binding is not yet stable
     // enough to probe on every install. Users opt in from Settings.
@@ -194,7 +193,7 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed(false)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
-    binaryPath: makeBinaryPathSetting("opencode").pipe(
+    binaryPath: binaryPathSetting("opencode").pipe(
       Schema.annotateKey({
         title: "Binary path",
         description: "Path to the OpenCode binary.",

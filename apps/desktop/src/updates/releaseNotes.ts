@@ -131,9 +131,8 @@ const decodeReleaseNotes = Schema.decodeUnknownOption(
   Schema.Union([Schema.String, Schema.Array(Schema.Unknown)]),
 );
 
-export function normalizeDesktopUpdateReleaseNotes(
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Release notes come from external updater metadata and are decoded before normalization.
-  releaseNotes: unknown,
+export function normalizeDesktopUpdateReleaseNotes<Input>(
+  releaseNotes: Input,
   fallbackVersion: string,
 ): ReadonlyArray<DesktopUpdateReleaseNote> {
   const parsed = decodeReleaseNotes(releaseNotes);

@@ -1,3 +1,4 @@
+import { runtimeValueType } from "@akeru/shared/observability";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off - Extracts Playwright's installed Node bundle for browser injection.
 import * as NodeFSP from "node:fs/promises";
@@ -171,8 +172,7 @@ export const extractPlaywrightInjectedRuntimeSource = Effect.fn(
   if (!Predicate.isString(source) || source.length < PLAYWRIGHT_SOURCE_MINIMUM_LENGTH) {
     return yield* new PlaywrightSourceValidationError({
       bundlePath,
-      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This validation error reports the exact JavaScript type of the evaluated source.
-      actualType: typeof source,
+      actualType: runtimeValueType(source),
       actualLength: Predicate.isString(source) ? source.length : null,
       minimumLength: PLAYWRIGHT_SOURCE_MINIMUM_LENGTH,
     });

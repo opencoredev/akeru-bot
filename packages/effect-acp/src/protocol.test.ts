@@ -7,7 +7,11 @@ import { it, assert } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as AcpProtocol from "./protocol.ts";
 import { encodeJsonl } from "./_internal/shared.ts";
-import { makeInMemoryStdio, makeTerminationError, makeChildStdio } from "./_internal/stdio.ts";
+import {
+  makeInMemoryStdio,
+  terminationErrorFromHandle,
+  makeChildStdio,
+} from "./_internal/stdio.ts";
 import {
   RequestPermissionRequest,
   ExtRequest,
@@ -233,7 +237,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
 
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio: makeChildStdio(handle),
-        terminationError: makeTerminationError(handle),
+        terminationError: terminationErrorFromHandle(handle),
         serverRequestMethods: new Set(),
         onTermination: (error) => Deferred.succeed(termination, error).pipe(Effect.asVoid),
       });

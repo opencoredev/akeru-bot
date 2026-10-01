@@ -22,8 +22,7 @@ import {
   decodeExtRequestRegistration,
   runHandler,
 } from "./_internal/shared.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The client composition root owns the child-process transport.
-import { makeChildStdio, makeTerminationError } from "./_internal/stdio.ts";
+import { childStdioLayer, terminationErrorFromHandle } from "./_internal/stdio.ts";
 
 export interface AcpClientOptions extends Pick<
   AcpProtocol.AcpPatchedProtocolOptions,
@@ -640,8 +639,10 @@ export const layerChildProcess = (
   handle: ChildProcessSpawner.ChildProcessHandle,
   options: AcpClientOptions = {},
 ): Layer.Layer<AcpClient> => {
-  const stdio = makeChildStdio(handle);
-  const terminationError = makeTerminationError(handle);
+  const terminationError = terminationErrorFromHandle(handle);
 
-  return Layer.effect(AcpClient, make(stdio, options, terminationError));
+  return Layer.effect(
+    AcpClient,
+    Effect.flatMap(Stdio.Stdio, (stdio) => make(stdio, options, terminationError)),
+  ).pipe(Layer.provide(childStdioLayer(handle)));
 };

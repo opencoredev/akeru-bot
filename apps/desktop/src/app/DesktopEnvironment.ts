@@ -85,10 +85,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly legacyUserDataDirName: string;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
     readonly runtimeInfo: DesktopRuntimeInfo;
-    readonly resolvePickFolderDefaultPath: (
-      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Folder picker options arrive from Electron IPC and are decoded before resolving a path.
-      rawOptions: unknown,
-    ) => Option.Option<string>;
+    readonly resolvePickFolderDefaultPath: <Input>(rawOptions: Input) => Option.Option<string>;
     readonly resolveResourcePathCandidates: (fileName: string) => readonly string[];
   }
 >()("@akeru/desktop/app/DesktopEnvironment") {}

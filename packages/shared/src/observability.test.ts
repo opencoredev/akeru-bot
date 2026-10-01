@@ -4,8 +4,28 @@ import {
   causeErrorTag,
   compactTraceAttributes,
   errorTag,
+  runtimeValueType,
   truncateTraceAttributes,
 } from "./observability.ts";
+
+describe("runtimeValueType", () => {
+  it.each([
+    [undefined, "undefined"],
+    [null, "object"],
+    ["text", "string"],
+    [1, "number"],
+    [Number.NaN, "number"],
+    [true, "boolean"],
+    [1n, "bigint"],
+    [Symbol("value"), "symbol"],
+    [() => undefined, "function"],
+    [[], "object"],
+    [{ _tag: "TaggedError" }, "object"],
+    [new TypeError("message"), "object"],
+  ])("reports the JavaScript category of %s", (value, expected) => {
+    assert.equal(runtimeValueType(value), expected);
+  });
+});
 
 describe("errorTag", () => {
   it("reports structural tags without retaining arbitrary values", () => {

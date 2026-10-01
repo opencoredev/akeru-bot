@@ -96,8 +96,21 @@ const payloadKind = (cause: unknown): CodexAppServerPayloadKind => {
 
   if (Array.isArray(cause)) return "array";
 
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Protocol diagnostics report all JavaScript categories, including malformed non-JSON payloads.
-  return typeof cause;
+  if (Predicate.isUndefined(cause)) return "undefined";
+
+  if (Predicate.isString(cause)) return "string";
+
+  if (Predicate.isNumber(cause)) return "number";
+
+  if (Predicate.isBoolean(cause)) return "boolean";
+
+  if (Predicate.isBigInt(cause)) return "bigint";
+
+  if (Predicate.isSymbol(cause)) return "symbol";
+
+  if (Predicate.isFunction(cause)) return "function";
+
+  return "object";
 };
 
 const protocolMessageFields = ["id", "method", "params", "result", "error"] as const;

@@ -131,6 +131,11 @@ own scoped runtime by calling `make*` constructors, so there is no singleton ser
 Grok text generation is on the same list because each request owns a scoped ACP process. The
 file list lives in `vite.config.ts`; add a file only when it owns per-instance construction.
 
+Standalone scripts (`apps/desktop/scripts/`, the `.mjs` and `.cjs` files in `scripts/`, and the
+Codex mock peer fixture) and the plugin catalog in `plugins/` turn off `no-global-process-runtime`
+and `no-runtime-typeof`. They run without the Effect runtime or any application dependency, so
+there is no `HostProcessPlatform` to inject and no `Predicate` to import.
+
 There are no inline exceptions. `akeru/no-lint-suppressions` reports every `oxlint-disable`,
 `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, and `@ts-nocheck` comment, and
 `typescript/no-explicit-any` reports `any`. A file-wide `oxlint-disable` would also silence that

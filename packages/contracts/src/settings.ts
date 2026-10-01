@@ -79,7 +79,7 @@ export {
   type ProviderSettingsFormAnnotation,
   type ProviderSettingsFormSchemaAnnotation,
   type ProviderSettingsOrder,
-  makeProviderSettingsSchema,
+  providerSettingsSchema,
 } from "./settings/providerForms.ts";
 
 export {

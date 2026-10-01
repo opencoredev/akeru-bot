@@ -10,8 +10,7 @@ import * as Effect from "effect/Effect";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";
 import {
   executeEnvironmentHttpRequest,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This client boundary creates an HTTP or RPC transport for its environment.
-  makeEnvironmentHttpApiClient,
+  environmentHttpApiClient,
   type RemoteEnvironmentRequestError,
 } from "../rpc/http.ts";
 
@@ -72,7 +71,7 @@ export const bootstrapRemoteBearerSession = Effect.fn(
   readonly clientMetadata?: AuthClientPresentationMetadata;
   readonly timeoutMs?: number;
 }) {
-  const client = yield* makeEnvironmentHttpApiClient(input.httpBaseUrl);
+  const client = yield* environmentHttpApiClient(input.httpBaseUrl);
 
   return yield* executeEnvironmentHttpRequest(
     environmentEndpointUrl(input.httpBaseUrl, "/oauth/token"),
@@ -98,7 +97,7 @@ export const fetchRemoteSessionState = Effect.fn(
   readonly bearerToken: string;
   readonly timeoutMs?: number;
 }) {
-  const client = yield* makeEnvironmentHttpApiClient(input.httpBaseUrl);
+  const client = yield* environmentHttpApiClient(input.httpBaseUrl);
 
   return yield* executeEnvironmentHttpRequest(
     environmentEndpointUrl(input.httpBaseUrl, "/api/auth/session"),
@@ -118,7 +117,7 @@ export const issueRemoteWebSocketTicket = Effect.fn(
   readonly bearerToken: string;
   readonly timeoutMs?: number;
 }) {
-  const client = yield* makeEnvironmentHttpApiClient(input.httpBaseUrl);
+  const client = yield* environmentHttpApiClient(input.httpBaseUrl);
 
   return yield* executeEnvironmentHttpRequest(
     environmentEndpointUrl(input.httpBaseUrl, "/api/auth/websocket-ticket"),

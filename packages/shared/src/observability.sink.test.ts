@@ -11,7 +11,7 @@ import * as Ref from "effect/Ref";
 import * as Tracer from "effect/Tracer";
 import {
   makeLocalFileTracer,
-  makeTraceSink,
+  traceSink,
   type TraceRecord,
   type TraceSinkFlushStats,
 } from "./observability.ts";
@@ -32,7 +32,7 @@ describe("observability", () => {
           const tempDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-trace-sink-" });
           const tracePath = path.join(tempDir, "shared.trace.ndjson");
 
-          const sink = yield* makeTraceSink({
+          const sink = yield* traceSink({
             filePath: tracePath,
             maxBytes: 1024,
             maxFiles: 2,
@@ -66,7 +66,7 @@ describe("observability", () => {
           const ready = yield* Deferred.make<void>();
 
           const owner = yield* Effect.gen(function* () {
-            const sink = yield* makeTraceSink({
+            const sink = yield* traceSink({
               filePath: tracePath,
               maxBytes: 1024 * 1024,
               maxFiles: 2,
@@ -101,7 +101,7 @@ describe("observability", () => {
           });
 
           yield* Effect.gen(function* () {
-            const sink = yield* makeTraceSink({
+            const sink = yield* traceSink({
               filePath: tracePath,
               maxBytes: 1024,
               maxFiles: 2,
@@ -142,7 +142,7 @@ describe("observability", () => {
             });
 
             yield* Effect.gen(function* () {
-              const sink = yield* makeTraceSink({
+              const sink = yield* traceSink({
                 filePath: tracePath,
                 maxBytes: 1024 * 1024,
                 maxFiles: 2,
@@ -206,7 +206,7 @@ describe("observability", () => {
           const tracePath = path.join(tempDir, "shared.trace.ndjson");
           const reported = yield* Ref.make<ReadonlyArray<TraceSinkFlushStats>>([]);
 
-          const sink = yield* makeTraceSink({
+          const sink = yield* traceSink({
             filePath: tracePath,
             maxBytes: 1024,
             maxFiles: 2,
@@ -233,7 +233,7 @@ describe("observability", () => {
           const tempDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-trace-sink-" });
           const tracePath = path.join(tempDir, "shared.trace.ndjson");
 
-          const sink = yield* makeTraceSink({
+          const sink = yield* traceSink({
             filePath: tracePath,
             maxBytes: 500,
             maxFiles: 2,
@@ -276,7 +276,7 @@ describe("observability", () => {
           const tracePath = path.join(tempDir, "shared.trace.ndjson");
           const maxBytes = 1_024;
 
-          const sink = yield* makeTraceSink({
+          const sink = yield* traceSink({
             filePath: tracePath,
             maxBytes,
             maxFiles: 2,
@@ -312,7 +312,7 @@ describe("observability", () => {
           const tracePath = path.join(tempDir, "shared.trace.ndjson");
           const maxBytes = 1_024;
 
-          const sink = yield* makeTraceSink({
+          const sink = yield* traceSink({
             filePath: tracePath,
             maxBytes,
             maxFiles: 2,
@@ -342,7 +342,7 @@ describe("observability", () => {
           const tempDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-trace-sink-" });
           const tracePath = path.join(tempDir, "shared.trace.ndjson");
 
-          const sink = yield* makeTraceSink({
+          const sink = yield* traceSink({
             filePath: tracePath,
             maxBytes: 1024,
             maxFiles: 2,

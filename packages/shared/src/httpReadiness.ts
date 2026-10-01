@@ -40,13 +40,28 @@ export type HttpReadinessFailure = HttpReadinessFailureCause & {
  * message/cause) shape for Effect tagged errors while recursing through nested
  * `cause`/`reason` chains.
  */
-// oxlint-disable-next-line anti-slop/no-unknown-returns -- Diagnostic normalization preserves arbitrary primitive causes, including functions and symbols.
-export function describeReadinessCause(cause: unknown): unknown {
+type ReadinessDiagnostic =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined
+  | Function
+  | {
+      readonly _tag?: string;
+      readonly name?: string;
+      readonly message?: string;
+      readonly cause?: ReadinessDiagnostic;
+      readonly reason?: ReadinessDiagnostic;
+    };
+
+export function describeReadinessCause(cause: unknown): ReadinessDiagnostic {
   if (cause instanceof Error) {
     const tag = "_tag" in cause ? cause._tag : undefined;
     const nested = cause.cause;
 
-    // oxlint-disable-next-line anti-slop/no-known-value-widening -- Structured error details share the return contract with unchanged arbitrary primitive causes.
     return {
       ...(Predicate.isString(tag) ? { _tag: tag } : { name: cause.name }),
       message: cause.message,
@@ -54,13 +69,21 @@ export function describeReadinessCause(cause: unknown): unknown {
     };
   }
 
-  if (!Predicate.isObjectOrArray(cause)) {
+  if (
+    cause === null ||
+    Predicate.isUndefined(cause) ||
+    Predicate.isString(cause) ||
+    Predicate.isNumber(cause) ||
+    Predicate.isBoolean(cause) ||
+    Predicate.isBigInt(cause) ||
+    Predicate.isSymbol(cause) ||
+    Predicate.isFunction(cause)
+  ) {
     return cause;
   }
 
   const record = cause;
 
-  // oxlint-disable-next-line anti-slop/no-known-value-widening -- Recursive diagnostic records may contain unchanged arbitrary primitive causes.
   return {
     ...(Predicate.hasProperty(record, "_tag") && Predicate.isString(record._tag)
       ? { _tag: record._tag }

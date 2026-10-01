@@ -19,6 +19,24 @@ function isStructuralTag(value: unknown): value is string {
   );
 }
 
+export function runtimeValueType<T>(value: T): string {
+  if (Predicate.isUndefined(value)) return "undefined";
+
+  if (Predicate.isString(value)) return "string";
+
+  if (Predicate.isNumber(value)) return "number";
+
+  if (Predicate.isBoolean(value)) return "boolean";
+
+  if (Predicate.isBigInt(value)) return "bigint";
+
+  if (Predicate.isSymbol(value)) return "symbol";
+
+  if (Predicate.isFunction(value)) return "function";
+
+  return "object";
+}
+
 export function errorTag(cause: unknown): string {
   try {
     if (Predicate.isObjectOrArray(cause) && "_tag" in cause) {
@@ -32,8 +50,7 @@ export function errorTag(cause: unknown): string {
     return "UnknownError";
   }
 
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Diagnostic labels preserve JavaScript primitive categories, including symbol and function.
-  return typeof cause;
+  return runtimeValueType(cause);
 }
 
 export function causeErrorTag(cause: Cause.Cause<unknown>): string {
@@ -58,8 +75,7 @@ function markSeen<T extends object>(value: T, seen: WeakSet<object>): boolean {
   return false;
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Trace serialization accepts arbitrary runtime values and normalizes them to JSON.
-function normalizeJsonValue(value: unknown, seen: WeakSet<object> = new WeakSet()): Schema.Json {
+function normalizeJsonValue<T>(value: T, seen: WeakSet<object> = new WeakSet()): Schema.Json {
   if (
     value === null ||
     value === undefined ||

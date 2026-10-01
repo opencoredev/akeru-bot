@@ -8,9 +8,7 @@ import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
-import * as Tracer from "effect/Tracer";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition builds isolated runtime fixtures.
-import { makeLocalFileTracer, type TraceRecord } from "./observability.ts";
+import { localFileTracerLayer, type TraceRecord } from "./observability.ts";
 
 const TraceRecordLine = Schema.Struct({
   name: Schema.String,
@@ -64,15 +62,12 @@ export const readTraceRecords = Effect.fn("readTraceRecords")(function* (tracePa
 
 export const makeTestLayer = (tracePath: string) =>
   Layer.mergeAll(
-    Layer.effect(
-      Tracer.Tracer,
-      makeLocalFileTracer({
-        filePath: tracePath,
-        maxBytes: 1024 * 1024,
-        maxFiles: 2,
-        batchWindowMs: 10_000,
-      }),
-    ),
+    localFileTracerLayer({
+      filePath: tracePath,
+      maxBytes: 1024 * 1024,
+      maxFiles: 2,
+      batchWindowMs: 10_000,
+    }),
     Logger.layer([Logger.tracerLogger], { mergeWithExisting: false }),
     Layer.succeed(References.MinimumLogLevel, "Info"),
   );

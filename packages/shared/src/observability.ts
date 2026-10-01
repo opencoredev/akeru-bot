@@ -1,10 +1,10 @@
+import * as Layer from "effect/Layer";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Tracer from "effect/Tracer";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Tracer composition owns its sink and lifecycle.
-import { makeTraceSink } from "./observability/traceSink.ts";
+import { traceSink } from "./observability/traceSink.ts";
 import {
   type EffectTraceRecord,
   type LocalFileTracerOptions,
@@ -121,7 +121,7 @@ export const makeLocalFileTracer = Effect.fn("makeLocalFileTracer")(function* (
 ) {
   const sink =
     options.sink ??
-    (yield* makeTraceSink({
+    (yield* traceSink({
       filePath: options.filePath,
       maxBytes: options.maxBytes,
       maxFiles: options.maxFiles,
@@ -150,7 +150,7 @@ export {
   type TraceSinkOptions,
   type TraceSinkFlushStats,
   type TraceSink,
-  makeTraceSink,
+  traceSink,
 } from "./observability/traceSink.ts";
 
 export {
@@ -165,9 +165,13 @@ export {
 
 export {
   errorTag,
+  runtimeValueType,
   causeErrorTag,
   compactTraceAttributes,
   truncateTraceAttributes,
 } from "./observability/attributes.ts";
 
 export { decodeOtlpTraceRecords } from "./observability/otlp.ts";
+
+export const localFileTracerLayer = (options: LocalFileTracerOptions) =>
+  Layer.effect(Tracer.Tracer, makeLocalFileTracer(options));

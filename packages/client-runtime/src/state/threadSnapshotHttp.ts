@@ -10,8 +10,7 @@ import type { PreparedConnection } from "../connection/model.ts";
 import { environmentEndpointUrl } from "../environment/endpoint.ts";
 import {
   executeEnvironmentHttpRequest,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This client boundary creates an HTTP or RPC transport for its environment.
-  makeEnvironmentHttpApiClient,
+  environmentHttpApiClient,
   type RemoteEnvironmentRequestError,
 } from "../rpc/http.ts";
 import { buildEnvironmentAuthHeaders, withEnvironmentCredentials } from "./environmentHttpAuth.ts";
@@ -49,7 +48,7 @@ export const fetchEnvironmentThreadSnapshot = Effect.fn(
     `/api/orchestration/threads/${input.threadId}`,
   );
 
-  const client = yield* makeEnvironmentHttpApiClient(input.prepared.httpBaseUrl);
+  const client = yield* environmentHttpApiClient(input.prepared.httpBaseUrl);
   const headers = yield* buildEnvironmentAuthHeaders(input.prepared.httpAuthorization);
 
   return yield* executeEnvironmentHttpRequest(

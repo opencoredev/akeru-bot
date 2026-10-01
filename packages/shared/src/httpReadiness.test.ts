@@ -6,7 +6,11 @@ import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/unstable/http";
 
-import { type HttpReadinessFailure, waitForHttpReady } from "./httpReadiness.ts";
+import {
+  type HttpReadinessFailure,
+  waitForHttpReady,
+  describeReadinessCause,
+} from "./httpReadiness.ts";
 
 class ReadinessTestError extends Schema.TaggedErrorClass<ReadinessTestError>()(
   "ReadinessTestError",
@@ -84,4 +88,27 @@ describe("HTTP readiness failure classification", () => {
       expect(failure?.cause).toBeInstanceOf(HttpClientError.HttpClientError);
     }).pipe(Effect.provide(TestClock.layer())),
   );
+});
+
+describe("describeReadinessCause", () => {
+  it("preserves arbitrary primitive failures and normalizes nested errors", () => {
+    const primitives = [
+      undefined,
+      null,
+      "failure",
+      1,
+      Number.POSITIVE_INFINITY,
+      true,
+      1n,
+      Symbol("failure"),
+      () => undefined,
+    ];
+
+    for (const cause of primitives) expect(describeReadinessCause(cause)).toBe(cause);
+    expect(describeReadinessCause(new Error("outer", { cause: new TypeError("inner") }))).toEqual({
+      name: "Error",
+      message: "outer",
+      cause: { name: "TypeError", message: "inner" },
+    });
+  });
 });

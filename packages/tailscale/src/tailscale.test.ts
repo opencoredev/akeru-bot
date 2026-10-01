@@ -39,19 +39,14 @@ const encoder = new TextEncoder();
 function assertCarriesNoSecret<T extends object>(error: T, secret: string): void {
   const seen = new WeakSet<object>();
 
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Secret-leak assertions inspect arbitrary nested error fields, including cycles and getters.
-  const walk = (value: unknown, path: string): void => {
+  const walk = <V>(value: V, path: string): void => {
     if (Predicate.isString(value)) {
       assert.notInclude(value, secret, `${path} leaked stderr`);
 
       return;
     }
 
-    if (
-      !(Predicate.isObjectOrArray(value) || value === null) ||
-      value === null ||
-      seen.has(value)
-    ) {
+    if (!Predicate.isObjectOrArray(value) || value === null || seen.has(value)) {
       return;
     }
 

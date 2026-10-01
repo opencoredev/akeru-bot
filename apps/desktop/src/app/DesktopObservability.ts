@@ -20,8 +20,7 @@ export { appendBoundedOutputChunk } from "./BackendOutputLogging.ts";
 
 export { DesktopTraceShutdown } from "./DesktopOtlp.ts";
 
-// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Effect log annotations intentionally retain arbitrary errors, causes, and runtime objects for structured diagnostic serialization.
-export type DesktopLogAnnotations = Record<string, unknown>;
+export type DesktopLogAnnotations = Parameters<typeof Effect.annotateLogs>[1];
 
 export interface DesktopComponentLogger {
   readonly annotate: <A, E, R>(

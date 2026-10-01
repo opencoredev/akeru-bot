@@ -53,7 +53,6 @@ const handleMethod = (message: MockMessage) => {
 
   switch (method) {
     case "initialize": {
-      // oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone mock peer process has no Effect runtime.
       const platform = NodeOS.platform();
       const stderrBytes = Number(process.env.CODEX_APP_SERVER_TEST_STDERR_BYTES ?? 0);
 

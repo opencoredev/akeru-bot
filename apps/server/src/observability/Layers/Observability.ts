@@ -1,4 +1,4 @@
-import { makeLocalFileTracer, makeTraceSink } from "@akeru/shared/observability";
+import { makeLocalFileTracer, traceSink } from "@akeru/shared/observability";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as References from "effect/References";
@@ -27,7 +27,7 @@ export const ObservabilityLive = Layer.unwrap(
 
     const tracerLayer = Layer.unwrap(
       Effect.gen(function* () {
-        const sink = yield* makeTraceSink({
+        const sink = yield* traceSink({
           filePath: config.serverTracePath,
           maxBytes: config.traceMaxBytes,
           maxFiles: config.traceMaxFiles,

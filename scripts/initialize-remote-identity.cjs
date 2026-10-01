@@ -48,7 +48,6 @@ const readId = () => (fs.existsSync(idPath) ? fs.readFileSync(idPath, "utf8").tr
 const readIdentity = () => {
   const identity = JSON.parse(fs.readFileSync(identityPath, "utf8"));
 
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- The copied Windows initializer validates the persisted environment ID and runs before application dependencies are installed.
   if (!(typeof identity.environmentId === "string") || !identity.environmentId)
     throw new Error("invalid remote identity");
 

@@ -9,8 +9,6 @@ import * as FileSystem from "effect/FileSystem";
 
 import * as Layer from "effect/Layer";
 
-import * as ManagedRuntime from "effect/ManagedRuntime";
-
 import * as Option from "effect/Option";
 
 import * as Path from "effect/Path";
@@ -24,6 +22,8 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
 
 import * as DesktopWslServerTree from "../wsl/DesktopWslServerTree.ts";
+
+import * as DesktopIpc from "../ipc/DesktopIpc.ts";
 
 import {
   serverExposureLayer,
@@ -394,46 +394,58 @@ describe("DesktopBackendConfiguration", () => {
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it("resolvePrimaryLabel is runSync-safe against the real WSL availability probe", async () => {
-    // getLocalEnvironmentBootstraps is a sync IPC method: it resolves the
-    // primary instance's lazy label through Effect.runSync. The label chains
-    // to wslEnvironment.isAvailable, whose real layer probes the filesystem.
-    // That probe must run once at layer build and expose a resolved value, not
-    // a live async effect — otherwise runSync throws in the handler. Build the
-    // real WSL layer (not the sync test stub) and resolve the label with a
-    // top-level runSync, exactly as the handler does.
-    // oxlint-disable-next-line akeru/no-manual-effect-runtime-in-tests -- This test intentionally replicates the sync IPC handler's runSync path to catch a regression to async-only resolution; it.effect would mask it.
-    const runtime = ManagedRuntime.make(
-      DesktopBackendConfiguration.layer.pipe(
-        Layer.provideMerge(serverExposureLayer),
-        Layer.provideMerge(DesktopAppSettings.layerTest()),
-        Layer.provideMerge(DesktopWslServerTree.layerTest()),
-        Layer.provideMerge(DesktopWslEnvironment.layer),
-        // isAvailable on win32 only touches the filesystem, never the spawner,
-        // so a die-stub is enough to satisfy the layer's deps.
-        Layer.provideMerge(
-          Layer.succeed(
-            ChildProcessSpawner.ChildProcessSpawner,
-            ChildProcessSpawner.make(() =>
-              Effect.die("spawner should not be used while probing WSL availability"),
+  it.effect("resolvePrimaryLabel is runSync-safe against the real WSL availability probe", () =>
+    Effect.gen(function* () {
+      // getLocalEnvironmentBootstraps is a sync IPC method: DesktopIpc.handleSync
+      // resolves the primary instance's lazy label through Effect.runSyncWith.
+      // The label chains to wslEnvironment.isAvailable, whose real layer probes
+      // the filesystem. That probe must run once at layer build and expose a
+      // resolved value, not a live async effect, otherwise runSync throws in the
+      // handler. Build the real WSL layer (not the sync test stub) and call the
+      // label through the real sync IPC registration.
+      const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+
+      const listeners = new Map<string, DesktopIpc.DesktopIpcSyncListener>();
+
+      const ipc = DesktopIpc.make({
+        removeHandler: () => undefined,
+        handle: () => undefined,
+        removeAllListeners: (channel) => listeners.delete(channel),
+        on: (channel, listener) => listeners.set(channel, listener),
+      });
+
+      yield* ipc.handleSync({
+        channel: "desktop.test.primaryLabel",
+        handler: () => configuration.resolvePrimaryLabel,
+      });
+
+      const event: DesktopIpc.DesktopIpcSyncEvent = { returnValue: undefined };
+      listeners.get("desktop.test.primaryLabel")?.(event);
+      assert.equal(Predicate.isString(event.returnValue), true);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        DesktopBackendConfiguration.layer.pipe(
+          Layer.provideMerge(serverExposureLayer),
+          Layer.provideMerge(DesktopAppSettings.layerTest()),
+          Layer.provideMerge(DesktopWslServerTree.layerTest()),
+          Layer.provideMerge(DesktopWslEnvironment.layer),
+          // isAvailable on win32 only touches the filesystem, never the spawner,
+          // so a die-stub is enough to satisfy the layer's deps.
+          Layer.provideMerge(
+            Layer.succeed(
+              ChildProcessSpawner.ChildProcessSpawner,
+              ChildProcessSpawner.make(() =>
+                Effect.die("spawner should not be used while probing WSL availability"),
+              ),
             ),
           ),
+          Layer.provideMerge(
+            makeEnvironmentLayer("/tmp/t3-wsl-isavailable", { platform: "win32" }),
+          ),
+          Layer.provide(NodeServices.layer),
         ),
-        Layer.provideMerge(makeEnvironmentLayer("/tmp/t3-wsl-isavailable", { platform: "win32" })),
-        Layer.provide(NodeServices.layer),
       ),
-    );
-
-    try {
-      const configuration = await runtime.runPromise(
-        DesktopBackendConfiguration.DesktopBackendConfiguration,
-      );
-
-      // oxlint-disable-next-line akeru/no-manual-effect-runtime-in-tests -- Same reason: this is the synchronous resolution the IPC handler performs.
-      const label = Effect.runSync(configuration.resolvePrimaryLabel);
-      assert.equal(Predicate.isString(label), true);
-    } finally {
-      await runtime.dispose();
-    }
-  });
+    ),
+  );
 });

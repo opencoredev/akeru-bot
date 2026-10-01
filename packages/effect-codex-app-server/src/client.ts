@@ -16,8 +16,7 @@ import {
   encodeOptionalPayload,
   runHandler,
 } from "./_internal/shared.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The client composition root owns the child-process transport.
-import { makeChildStdio, makeTerminationError } from "./_internal/stdio.ts";
+import { childStdioLayer, terminationErrorFromHandle } from "./_internal/stdio.ts";
 
 export interface CodexAppServerClientOptions extends Pick<
   CodexProtocol.CodexAppServerPatchedProtocolOptions,
@@ -299,5 +298,7 @@ const makeChildProcessClient = Effect.fn(
 )(function* (handle: ChildProcessSpawner.ChildProcessHandle, options: CodexAppServerClientOptions) {
   yield* Stream.runDrain(handle.stderr).pipe(Effect.ignore, Effect.forkScoped);
 
-  return yield* make(makeChildStdio(handle), options, makeTerminationError(handle));
+  return yield* Effect.flatMap(Stdio.Stdio, (stdio) =>
+    make(stdio, options, terminationErrorFromHandle(handle)),
+  ).pipe(Effect.provide(childStdioLayer(handle)));
 });
