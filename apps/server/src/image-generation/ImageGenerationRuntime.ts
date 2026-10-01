@@ -104,6 +104,7 @@ const persistImage = Effect.fn("persistImage")(function* (
     readonly bytes: Uint8Array;
     readonly mimeType: keyof typeof EXTENSION_BY_MIME;
     readonly index: number;
+    readonly unpostedPaths: Set<string>;
   },
 ): Effect.fn.Return<ChatImageAttachment | null> {
   const attachmentId = createAttachmentId(input.threadId);
@@ -112,6 +113,8 @@ const persistImage = Effect.fn("persistImage")(function* (
   const extension = EXTENSION_BY_MIME[input.mimeType];
   const finalPath = path.join(input.attachmentsDir, `${attachmentId}${extension}`);
   const temporaryPath = `${finalPath}.part`;
+  input.unpostedPaths.add(temporaryPath);
+  input.unpostedPaths.add(finalPath);
 
   const saved = yield* Effect.gen(function* () {
     yield* fs.makeDirectory(input.attachmentsDir, { recursive: true });
@@ -283,12 +286,13 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
     readonly turnId: TurnId | null;
     readonly generationId: string;
     readonly attachments: ReadonlyArray<ChatImageAttachment>;
+    readonly unpostedPaths: Set<string>;
   }) =>
     Effect.gen(function* () {
       const createdAt = DateTime.formatIso(yield* DateTime.now);
       const messageId = MessageId.make(`image-generation-${input.generationId}`);
-      yield* engine
-        .dispatch({
+      yield* Effect.gen(function* () {
+        yield* engine.dispatch({
           type: "thread.message.assistant.delta",
           commandId: CommandId.make(`server:image-generation:${input.generationId}`),
           threadId: input.threadId,
@@ -297,22 +301,9 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
           attachments: [...input.attachments],
           ...(input.turnId ? { turnId: input.turnId } : {}),
           createdAt,
-        })
-        .pipe(
-          // No message references the files when this post fails, so nothing else would remove them.
-          Effect.onError(() =>
-            Effect.gen(function* () {
-              for (const attachment of input.attachments) {
-                const path = resolveAttachmentPath({
-                  attachmentsDir: config.attachmentsDir,
-                  attachment,
-                });
-
-                if (path) yield* fs.remove(path, { force: true }).pipe(Effect.orDie);
-              }
-            }),
-          ),
-        );
+        });
+        input.unpostedPaths.clear();
+      }).pipe(Effect.uninterruptible);
       yield* engine.dispatch({
         type: "thread.message.assistant.complete",
         commandId: CommandId.make(`server:image-generation-complete:${input.generationId}`),
@@ -412,37 +403,51 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
       const artifacts: ImageArtifact[] = [];
       const attachments: ChatImageAttachment[] = [];
 
-      for (const part of routed.parts) {
-        for (const bytes of part.output.images) {
-          const sniffed = sniffImage(bytes);
+      const unpostedPaths = new Set<string>();
+      yield* Effect.gen(function* () {
+        for (const part of routed.parts) {
+          for (const bytes of part.output.images) {
+            const sniffed = sniffImage(bytes);
 
-          if (!sniffed || bytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) continue;
+            if (!sniffed || bytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) continue;
 
-          const attachment = yield* persistImage(fs, path, {
-            attachmentsDir: config.attachmentsDir,
-            threadId,
-            bytes,
-            mimeType: sniffed.mimeType,
-            index: attachments.length,
-          });
+            const attachment = yield* persistImage(fs, path, {
+              attachmentsDir: config.attachmentsDir,
+              threadId,
+              bytes,
+              mimeType: sniffed.mimeType,
+              index: attachments.length,
+              unpostedPaths,
+            });
 
-          if (!attachment) continue;
-          attachments.push(attachment);
-          artifacts.push({
-            attachmentId: attachment.id,
-            mimeType: sniffed.mimeType,
-            width: sniffed.width,
-            height: sniffed.height,
-            sizeBytes: bytes.byteLength,
-            provider: part.provider,
-            ...(part.output.model ? { model: part.output.model } : {}),
-          });
+            if (!attachment) continue;
+            attachments.push(attachment);
+            artifacts.push({
+              attachmentId: attachment.id,
+              mimeType: sniffed.mimeType,
+              width: sniffed.width,
+              height: sniffed.height,
+              sizeBytes: bytes.byteLength,
+              provider: part.provider,
+              ...(part.output.model ? { model: part.output.model } : {}),
+            });
+          }
         }
-      }
 
-      if (attachments.length > 0) {
-        yield* postAttachments({ threadId, turnId, generationId, attachments });
-      }
+        if (attachments.length > 0) {
+          yield* postAttachments({ threadId, turnId, generationId, attachments, unpostedPaths });
+        }
+      }).pipe(
+        Effect.ensuring(
+          Effect.suspend(() =>
+            Effect.forEach(
+              unpostedPaths,
+              (filePath) => fs.remove(filePath, { force: true }).pipe(Effect.orDie),
+              { discard: true },
+            ),
+          ),
+        ),
+      );
 
       if (routed.status !== "completed") {
         const { parts: _parts, ...result } = routed;
