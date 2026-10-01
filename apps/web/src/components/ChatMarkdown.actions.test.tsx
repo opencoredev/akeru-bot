@@ -1,4 +1,3 @@
-
 import { EnvironmentId } from "@akeru/contracts";
 
 import { describe, expect, it, vi } from "vite-plus/test";

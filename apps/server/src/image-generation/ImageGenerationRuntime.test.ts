@@ -1,4 +1,3 @@
-
 import {
   PROMPT,
   fakeAdapter,

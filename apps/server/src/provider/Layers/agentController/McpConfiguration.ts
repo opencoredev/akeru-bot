@@ -1,4 +1,3 @@
-
 import { type McpServerConfig } from "@mastra/code-sdk/mcp/index";
 import { type McpServer, type OrchestrationReadModel } from "@akeru/contracts";
 import { getMcpRuntimeHeaders, mcpServerNeedsBrowserAttachment } from "../../McpServerConfig.ts";

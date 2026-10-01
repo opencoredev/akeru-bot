@@ -1,4 +1,3 @@
-
 import type { ThreadId } from "@akeru/contracts";
 import { RotatingFileSink } from "@akeru/shared/logging";
 import * as Effect from "effect/Effect";

@@ -1,6 +1,5 @@
 import { sessionFixture } from "./test-support/partialFixtures.ts";
 
-
 import { ProviderDriverKind, ThreadId } from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";

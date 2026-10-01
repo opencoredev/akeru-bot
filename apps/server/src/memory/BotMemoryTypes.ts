@@ -1,4 +1,3 @@
-
 import * as NodeFSP from "node:fs/promises";
 import { type AkeruMemoryDocumentTarget, type BotId, type GroupId } from "@akeru/contracts";
 import * as Schema from "effect/Schema";

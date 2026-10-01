@@ -1,6 +1,4 @@
-
 import type { AgentControllerLiveOptions } from "./Options.ts";
-
 
 import { ThreadId } from "@akeru/contracts";
 

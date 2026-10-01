@@ -1,4 +1,3 @@
-
 import type { QuitConfirmationMode, QuitShortcutHintEvent } from "@akeru/contracts";
 
 // The quit accelerator is intercepted in before-input-event, which runs
