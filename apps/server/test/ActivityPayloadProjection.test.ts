@@ -204,6 +204,7 @@ describe("projectActivityPayload", () => {
   it("keeps current web and mobile derived output identical for every tool item type", () => {
     for (const activity of fixtures) {
       const projected = projectActivityPayload(activity);
+
       if (activity === fixtures[4]) {
         // MCP is the one deliberate difference: the expanded row's toolData
         // loses result bulk but keeps the rendered identity fields.
@@ -215,6 +216,7 @@ describe("projectActivityPayload", () => {
         });
         continue;
       }
+
       expect(deriveWorkLogEntries([projected])).toEqual(deriveWorkLogEntries([activity]));
       expect(comparableThreadFeed([projected])).toEqual(comparableThreadFeed([activity]));
     }
@@ -248,6 +250,7 @@ describe("projectActivityPayload", () => {
 
       const [mobileGroup] = buildThreadFeed(makeThread([projected]));
       expect(mobileGroup).toMatchObject({ type: "activity-group" });
+
       if (mobileGroup?.type === "activity-group") {
         expect(mobileGroup.activities[0]?.status).toBe("failure");
       }
@@ -303,6 +306,7 @@ describe("superseded tool.updated snapshot dedup", () => {
     } = {},
   ): OrchestrationThreadActivity {
     const { turn = "turn-a", title = "File change", detail, toolCallId } = options;
+
     return {
       id: EventId.make(id),
       tone: "tool",
@@ -342,7 +346,9 @@ describe("superseded tool.updated snapshot dedup", () => {
     const otherCall = makeToolLifecycleActivity("upd-other", "tool.updated", {
       toolCallId: "call-b",
     });
+
     const update = makeToolLifecycleActivity("upd-a", "tool.updated", { toolCallId: "call-a" });
+
     const completed = makeToolLifecycleActivity("done-a", "tool.completed", {
       toolCallId: "call-a",
     });
@@ -354,6 +360,7 @@ describe("superseded tool.updated snapshot dedup", () => {
   it("keeps updates with no matching completion", () => {
     const inFlight = makeToolLifecycleActivity("upd-live", "tool.updated", { title: "Running" });
     const other = makeToolLifecycleActivity("upd-other", "tool.updated", { title: "Reading" });
+
     const completed = makeToolLifecycleActivity("done-other", "tool.completed", {
       title: "Reading",
     });
@@ -370,9 +377,11 @@ describe("superseded tool.updated snapshot dedup", () => {
     // comment).
     const updateA = makeToolLifecycleActivity("upd-a", "tool.updated", { toolCallId: "call-a" });
     const updateB = makeToolLifecycleActivity("upd-b", "tool.updated", { toolCallId: "call-b" });
+
     const completedA = makeToolLifecycleActivity("done-a", "tool.completed", {
       toolCallId: "call-a",
     });
+
     const completedB = makeToolLifecycleActivity("done-b", "tool.completed", {
       toolCallId: "call-b",
     });
@@ -387,6 +396,7 @@ describe("superseded tool.updated snapshot dedup", () => {
     // A live thread.reverted can discard the completing turn while keeping
     // the updating one, which would leave the call unrepresented.
     const update = makeToolLifecycleActivity("upd-kept", "tool.updated", { turn: "turn-kept" });
+
     const completed = makeToolLifecycleActivity("done-later", "tool.completed", {
       turn: "turn-reverted",
     });
@@ -412,6 +422,7 @@ describe("superseded tool.updated snapshot dedup", () => {
       turnId: TurnId.make("turn-a"),
       createdAt: "2026-07-27T00:00:00.000Z",
     };
+
     const completed: OrchestrationThreadActivity = {
       ...anonymous,
       id: EventId.make("done-anon"),
@@ -427,6 +438,7 @@ describe("superseded tool.updated snapshot dedup", () => {
       makeToolLifecycleActivity("upd-2", "tool.updated", { detail: "writing" }),
       makeToolLifecycleActivity("done-1", "tool.completed", { detail: "writing" }),
     ];
+
     const projected = projectThreadDetailSnapshot({
       snapshotSequence: 7,
       thread: makeThread(activities),
@@ -487,6 +499,7 @@ describe("context-window snapshot dedup", () => {
       snapshotSequence: 7,
       thread: makeThread([olderTurn, revertedTurn]),
     });
+
     const afterRevert = projected.thread.activities.filter(
       (activity) => activity.turnId === TurnId.make("turn-kept"),
     );
@@ -501,6 +514,7 @@ describe("context-window snapshot dedup", () => {
       makeContextWindowActivity("ctx-1", 1_000),
       makeContextWindowActivity("ctx-2", 2_000),
     ];
+
     const projected = projectThreadDetailSnapshot({
       snapshotSequence: 7,
       thread: makeThread(activities),
@@ -513,6 +527,7 @@ describe("context-window snapshot dedup", () => {
 
   it("does not let a malformed row shadow an earlier valid row in the same turn", () => {
     const valid = makeContextWindowActivity("ctx-valid", 5_000, "turn-a");
+
     const malformed: OrchestrationThreadActivity = {
       ...makeContextWindowActivity("ctx-broken", 0, "turn-a"),
       payload: { usedTokens: null },
@@ -539,6 +554,7 @@ describe("context-window snapshot dedup", () => {
       snapshotSequence: 7,
       thread: makeThread([fixtures[4]!]),
     });
+
     expect(projected.thread.activities).toEqual([projectActivityPayload(fixtures[4]!)]);
   });
 });

@@ -19,6 +19,7 @@ import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { stageReleaseLegalFiles } from "../../scripts/lib/release-legal";
 
 const reactGrabEntry = NodeURL.fileURLToPath(import.meta.resolve("react-grab"));
+
 const repoRoot = NodeURL.fileURLToPath(new URL("../..", import.meta.url));
 
 function releaseLegalFilesPlugin(): Plugin {
@@ -37,6 +38,7 @@ function releaseLegalFilesPlugin(): Plugin {
 }
 
 const repoEnv = loadRepoEnv();
+
 Object.assign(process.env, repoEnv);
 
 // Single-origin dev is signalled positively, because it cannot be inferred
@@ -49,12 +51,19 @@ Object.assign(process.env, repoEnv);
 const isSingleOriginDev = process.env.T3CODE_SINGLE_ORIGIN_DEV === "1";
 
 const port = Number(process.env.PORT ?? 5733);
+
 const explicitHost = process.env.HOST?.trim();
+
 const host = explicitHost || "localhost";
+
 const configuredWsUrl = isSingleOriginDev ? undefined : process.env.VITE_WS_URL?.trim();
+
 const configuredHttpUrl = isSingleOriginDev ? undefined : process.env.VITE_HTTP_URL?.trim();
+
 const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() || "";
+
 const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
+
 const sourcemapEnv = process.env.T3CODE_WEB_SOURCEMAP?.trim().toLowerCase();
 
 // Vite 8.1's experimental bundled dev mode: serves rolldown-bundled chunks in
@@ -63,6 +72,7 @@ const sourcemapEnv = process.env.T3CODE_WEB_SOURCEMAP?.trim().toLowerCase();
 // The dev runner defaults this on for --share runs (remote browsers pay a
 // round trip per import level in unbundled dev); T3CODE_BUNDLED_DEV=0 opts out.
 const bundledDevEnv = process.env.T3CODE_BUNDLED_DEV?.trim().toLowerCase();
+
 const bundledDev = bundledDevEnv === "1" || bundledDevEnv === "true";
 
 const buildSourcemap: boolean | "hidden" =
@@ -93,6 +103,7 @@ function resolveDevProxyTarget(
   // server so the app works from any origin (localhost, tailnet, LAN, phone).
   // T3CODE_PORT is set by scripts/dev-runner.ts for every non-desktop mode.
   const port = Number(backendPort?.trim());
+
   if (Number.isInteger(port) && port > 0) {
     return `http://localhost:${port}/`;
   }
@@ -105,14 +116,17 @@ function resolveDevProxyTarget(
 
   try {
     const url = new URL(wsUrl);
+
     if (url.protocol === "ws:") {
       url.protocol = "http:";
     } else if (url.protocol === "wss:") {
       url.protocol = "https:";
     }
+
     url.pathname = "";
     url.search = "";
     url.hash = "";
+
     return url.toString();
   } catch {
     return undefined;
@@ -151,6 +165,7 @@ const configuredAllowedHosts = (process.env.T3CODE_DEV_ALLOWED_HOSTS ?? "")
   .split(",")
   .map((entry) => entry.trim())
   .filter((entry) => entry.length > 0);
+
 const allowedHosts = [".ts.net", ...configuredAllowedHosts];
 
 export default defineConfig(() => {

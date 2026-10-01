@@ -21,9 +21,11 @@ function tone() {
   const frames = rate * 60;
   const bytes = new ArrayBuffer(44 + frames * 2);
   const view = new DataView(bytes);
+
   const label = (offset: number, value: string) => {
     for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
   };
+
   label(0, "RIFF");
   view.setUint32(4, bytes.byteLength - 8, true);
   label(8, "WAVEfmt ");
@@ -36,34 +38,51 @@ function tone() {
   view.setUint16(34, 16, true);
   label(36, "data");
   view.setUint32(40, frames * 2, true);
+
   for (let i = 0; i < frames; i++)
     view.setInt16(44 + i * 2, Math.sin((i * 2 * Math.PI * 440) / rate) * 4096, true);
+
   return new Blob([bytes], { type: "audio/wav" });
 }
+
 let preparations = 0;
+
 let fail = false;
+
 let hold = false;
+
 let release: (() => void) | undefined;
+
 const controller = createReplyPlaybackController(async (_request, signal, events) => {
   preparations++;
+
   if (hold)
     await new Promise<void>((resolve) => {
       release = resolve;
     });
+
   if (signal.aborted) throw new Error("Cancelled fixture");
+
   if (fail) throw new Error("Fixture failure");
+
   return createBrowserReplyAudio(tone(), events);
 });
+
 const base = {
   environmentId: "remote-fixture",
   threadId: "chat",
   provider: "fixture-only",
   voice: "tone",
 };
+
 controller.setContext({ ...base, connected: true, mediaBlocked: false });
+
 const tracker = createAutomaticReadoutTracker();
+
 tracker.reset("chat", 0);
+
 let sequence = 0;
+
 const preference = createReplyReadoutPreference(
   {
     getItem: async (key) => localStorage.getItem(key),
@@ -73,11 +92,16 @@ const preference = createReplyReadoutPreference(
   },
   controller.disableAutomaticReadout,
 );
+
 preference.subscribe(() => tracker.setEnabled(preference.getSnapshot().enabled));
+
 void preference.load();
+
 const markdown =
   "# Stored reply\n\nRead **this answer** and [the guide](https://example.com).\n\n```ts\nsecretToolTrace();\n```";
+
 const spoken = replyMarkdownToSpokenText(markdown);
+
 const disclosure = `${spoken.skipped.codeBlocks} code block skipped.`;
 
 function Fixture() {
@@ -86,11 +110,13 @@ function Fixture() {
   const [quote, setQuote] = useState("");
   const [otherChat, setOtherChat] = useState(false);
   const [version, setVersion] = useState("1");
+
   const request = (messageId: string) => ({
     identity: { ...base, messageId, contentVersion: version },
     text: spoken.text,
     automatic: false,
   });
+
   return (
     <TooltipProvider>
       <main className="mx-auto max-w-2xl space-y-6 p-4">
@@ -187,11 +213,13 @@ function Fixture() {
           <button
             onClick={() => {
               sequence++;
+
               const next = tracker.completed("chat", sequence, {
                 ...request(`auto-${sequence}`).identity,
                 text: spoken.text,
                 successful: true,
               });
+
               if (next) void controller.start({ ...request(next.messageId), automatic: true });
             }}
           >
