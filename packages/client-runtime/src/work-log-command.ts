@@ -6,10 +6,8 @@ import * as Predicate from "effect/Predicate";
 import { isToolLifecycleItemType } from "@akeru/contracts";
 import { requestKindFromRequestType } from "./pendingRequests.ts";
 
-const RuntimeRecord = Schema.declare(
-  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Tool data is an opaque provider object; each presentation field is decoded separately.
-  (value: unknown): value is Record<string, unknown> => Predicate.isObjectOrArray(value),
-);
+// Tool data is an opaque provider object; each presentation field is decoded separately.
+const RuntimeRecord = Schema.declare(Predicate.isObject);
 
 type RuntimeRecord = typeof RuntimeRecord.Type;
 
@@ -374,7 +372,7 @@ function collectChangedFiles(
 export function extractChangedFiles(payload: RuntimeRecord | null): string[] {
   const changedFiles: string[] = [];
   const seen = new Set<string>();
-  collectChangedFiles(asRecord(payload?.data), changedFiles, seen, 0);
+  collectChangedFiles(payload?.data, changedFiles, seen, 0);
 
   return changedFiles;
 }

@@ -5,10 +5,8 @@ import { TrimmedNonEmptyString } from "@akeru/contracts";
 import * as Predicate from "effect/Predicate";
 import type { ToolLifecycleItemType } from "@akeru/contracts";
 
-const RuntimeRecord = Schema.declare(
-  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Tool data is an opaque provider object; each presentation field is decoded separately.
-  (value: unknown): value is Record<string, unknown> => Predicate.isObject(value),
-);
+// Tool data is an opaque provider object; each presentation field is decoded separately.
+const RuntimeRecord = Schema.declare(Predicate.isObject);
 
 type RuntimeRecord = typeof RuntimeRecord.Type;
 

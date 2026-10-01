@@ -4,11 +4,11 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import { afterEach, expect, it } from "vite-plus/test";
 
 // The helper harness spawns bash with shebang stubs; skip those cases on Windows.
-// oxlint-disable-next-line akeru/no-global-process-runtime -- Host-platform test guard, not Effect code.
-const posixIt = it.skipIf(process.platform === "win32");
+const posixIt = it.skipIf(HostProcessPlatform.defaultValue() === "win32");
 
 const root = NodeURL.fileURLToPath(new URL("../../", import.meta.url));
 
