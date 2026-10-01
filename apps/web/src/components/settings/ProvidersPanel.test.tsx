@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { SubscriptionProviderStatus } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { LanguageProvider } from "../../i18n";
 import { ProviderAccountRows, ProviderApiKeyForm, SUBSCRIPTION_PROVIDERS } from "./ProvidersPanel";
 import { accountConnectionState } from "./providerStatus";
 

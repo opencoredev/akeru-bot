@@ -1,4 +1,3 @@
-import type { MessageKey } from "@akeru/client-runtime/i18n";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import type {
   AkeruMemoryDocument,
