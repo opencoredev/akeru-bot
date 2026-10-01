@@ -178,7 +178,7 @@ export function ChannelConnectionRow({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                className="size-7 shrink-0 text-muted-foreground hover:text-foreground sm:size-7"
+                presentation="channel-disclosure"
                 aria-label={t("Actions for {name}", { name: connection.name })}
               />
             }

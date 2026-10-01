@@ -1,13 +1,15 @@
-import {
-  BotId,
-  ChannelConnectionId,
-  EnvironmentId,
-  OrchestrationDispatchCommandError,
-  ProjectId,
-} from "@akeru/contracts";
+import { BotId, ChannelConnectionId, OrchestrationDispatchCommandError } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { act, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { ChannelSetupDialog } from "./ChannelSetupDialog";
+import {
+  TestNode,
+  firstProject,
+  botProject,
+  createChannelSetupActions,
+  createChannelSetupProps,
+} from "./channelSetupDialog.test-support";
 
 const mocks = vi.hoisted(() => ({
   save: vi.fn<
@@ -49,7 +51,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => mocks.snapshot }));
+
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => "snapshot" }));
+
 vi.mock("./ChannelProjectSelect", () => ({
   ChannelProjectSelect: (props: NonNullable<typeof mocks.projectSelect>) => {
     mocks.projectSelect = props;
@@ -68,18 +72,23 @@ vi.mock("../../state/bots", () => ({
     },
   },
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (command: "save" | "attach" | "detach" | "disconnect" | "deleteConnection") =>
     mocks[command],
 }));
+
 vi.mock("./BotChannelsSettings", () => ({ parsePhotonHostedCredentials: vi.fn() }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
+
 vi.mock("../ui/button", () => ({
   Button: (props: { children: ReactNode; onClick?: () => void; disabled?: boolean }) => {
     if (typeof props.children === "string") mocks.buttons.set(props.children, props);
     return null;
   },
 }));
+
 vi.mock("../ui/input", () => ({
   Input: (props: {
     "aria-label": string;
@@ -89,6 +98,7 @@ vi.mock("../ui/input", () => ({
     return null;
   },
 }));
+
 vi.mock("../ui/dialog", () => ({
   Dialog: (props: {
     children: ReactNode;
@@ -102,6 +112,7 @@ vi.mock("../ui/dialog", () => ({
   DialogHeader: ({ children }: { children: ReactNode }) => children,
   DialogTitle: ({ children }: { children: ReactNode }) => children,
 }));
+
 vi.mock("../ui/select", () => ({
   Select: () => null,
   SelectItem: () => null,
@@ -110,102 +121,16 @@ vi.mock("../ui/select", () => ({
   SelectValue: () => null,
 }));
 
-import { ChannelSetupDialog } from "./ChannelSetupDialog";
-
-// This node-only suite gives ReactDOM a host without a browser DOM dependency.
-class TestNode {
-  parentNode: TestNode | null = null;
-  childNodes: TestNode[] = [];
-  readonly namespaceURI = "http://www.w3.org/1999/xhtml";
-  readonly style = {};
-  readonly tagName: string;
-  readonly nodeName: string;
-  private text = "";
-
-  constructor(
-    name: string,
-    readonly ownerDocument: TestNode | null = null,
-    readonly nodeType = 1,
-  ) {
-    this.tagName = name.toUpperCase();
-    this.nodeName = this.tagName;
-  }
-  get textContent(): string {
-    return this.text + this.childNodes.map((node) => node.textContent).join("");
-  }
-  set textContent(value: string) {
-    this.text = value;
-    this.childNodes = [];
-  }
-  appendChild(child: TestNode) {
-    child.parentNode = this;
-    this.childNodes.push(child);
-    return child;
-  }
-  insertBefore(child: TestNode, before: TestNode) {
-    child.parentNode = this;
-    this.childNodes.splice(this.childNodes.indexOf(before), 0, child);
-    return child;
-  }
-  removeChild(child: TestNode) {
-    this.childNodes.splice(this.childNodes.indexOf(child), 1);
-    child.parentNode = null;
-    return child;
-  }
-  createElement(name: string) {
-    return new TestNode(name, this);
-  }
-  createElementNS(_namespace: string, name: string) {
-    return new TestNode(name, this);
-  }
-  createTextNode(text: string) {
-    const node = new TestNode("#text", this, 3);
-    node.textContent = text;
-    return node;
-  }
-  addEventListener() {}
-  removeEventListener() {}
-  setAttribute() {}
-  removeAttribute() {}
-}
-
 let root: import("react-dom/client").Root;
+
 let container: TestNode;
+
 const onSaved = vi.fn();
+
 const onOpenChange = vi.fn();
-const props = {
-  environmentId: EnvironmentId.make("test-environment"),
-  provider: "telegram" as const,
-  bots: [{ id: BotId.make("test-bot"), name: "Test bot" }],
-  open: true,
-  onSaved,
-  onOpenChange,
-};
 
-async function click(label: string) {
-  const button = mocks.buttons.get(label);
-  expect(button).toBeDefined();
-  expect(button?.disabled).not.toBe(true);
-  await act(async () => {
-    button?.onClick?.();
-  });
-}
-
-async function fill(label: string, value: string) {
-  const input = mocks.inputs.get(label);
-  expect(input).toBeDefined();
-  await act(() => input?.onChange({ currentTarget: { value } }));
-}
-
-async function completeSetup() {
-  await click("Continue");
-  await fill("Telegram Bot token", "test-token");
-  await click("Continue");
-  await fill("Connection name", "Test line");
-}
-
-const firstProject = ProjectId.make("project-first");
-const botProject = ProjectId.make("project-bot");
+const props = createChannelSetupProps(onSaved, onOpenChange);
+const { click, fill, completeSetup } = createChannelSetupActions(mocks);
 
 beforeEach(async () => {
   mocks.snapshot = {
@@ -351,57 +276,6 @@ describe("ChannelSetupDialog recovery", () => {
     await completeSetup();
     await click("Connect");
     expect(mocks.save.mock.calls[1]![0].input.connectionId).not.toBe(firstId);
-  });
-});
-
-describe("ChannelSetupDialog project selection", () => {
-  it("preselects the bot's recent project and attaches to the project the user picks", async () => {
-    await completeSetup();
-    expect(mocks.projectSelect?.value).toBe(botProject);
-    await act(() => mocks.projectSelect?.onChange(firstProject));
-    expect(mocks.projectSelect?.value).toBe(firstProject);
-    await click("Connect");
-    expect(mocks.attach.mock.calls[0]![0].input.projectId).toBe(firstProject);
-  });
-
-  it("keeps Connect disabled when no project is live", async () => {
-    mocks.snapshot = { projects: [], threads: [] };
-    await act(() => root.render(<ChannelSetupDialog {...props} open={false} />));
-    await act(() => root.render(<ChannelSetupDialog {...props} />));
-    await completeSetup();
-    expect(mocks.projectSelect?.projects).toEqual([]);
-    expect(mocks.projectSelect?.value).toBeNull();
-    expect(mocks.buttons.get("Connect")?.disabled).toBe(true);
-    expect(mocks.attach).not.toHaveBeenCalled();
-  });
-});
-
-const conflict = {
-  _tag: "Failure" as const,
-  cause: Cause.fail(new Error("This channel connection is already connected to another bot.")),
-};
-
-describe("ChannelSetupDialog access and conflicts", () => {
-  it("warns who can reach the project before Connect", async () => {
-    await click("Continue");
-    expect(container.textContent).not.toContain("Anyone who can message this bot");
-    await fill("Telegram Bot token", "test-token");
-    await click("Continue");
-    expect(container.textContent).toContain(
-      "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.",
-    );
-    expect(mocks.buttons.has("Connect")).toBe(true);
-  });
-
-  it("explains an identity conflict in plain words", async () => {
-    mocks.attach.mockResolvedValueOnce(conflict);
-    await completeSetup();
-    await click("Connect");
-    expect(container.textContent).toContain(
-      "Another bot already uses this account. Unassign it there, then connect again.",
-    );
-    expect(container.textContent).not.toContain("channel connection is already connected");
-    expect(onOpenChange).not.toHaveBeenCalled();
   });
 });
 
