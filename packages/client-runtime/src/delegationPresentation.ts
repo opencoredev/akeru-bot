@@ -90,13 +90,15 @@ export function delegationElapsedMs(delegation: AkeruDelegationRecord, now: numb
 }
 
 /** Delegations a chat started, oldest first, and whether any are still working. */
+type ThreadDelegationsResult = {
+  readonly delegations: ReadonlyArray<AkeruDelegationRecord>;
+  readonly waitingOnChildren: boolean;
+};
+
 export function threadDelegations(
   delegations: ReadonlyArray<AkeruDelegationRecord>,
   threadId: ThreadId,
-): {
-  readonly delegations: ReadonlyArray<AkeruDelegationRecord>;
-  readonly waitingOnChildren: boolean;
-} {
+): ThreadDelegationsResult {
   return {
     delegations: delegations.filter((delegation) => delegation.parentThreadId === threadId),
     waitingOnChildren: isThreadWaitingOnChildren(delegations, threadId),

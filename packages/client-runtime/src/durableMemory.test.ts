@@ -1,10 +1,14 @@
+import * as Schema from "effect/Schema";
+
+const decodeArchive = Schema.decodeUnknownSync(AkeruMemoryArchiveV2);
+
 import {
   AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
   AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY,
   AkeruMemoryCandidateId,
   BotId,
   ThreadId,
-  type AkeruMemoryArchiveV2,
+  AkeruMemoryArchiveV2,
   type AkeruMemoryImportPreview,
   type AkeruMemoryRevision,
 } from "@akeru/contracts";
@@ -158,9 +162,18 @@ describe("import conflict choices", () => {
   });
 
   it("groups preview items conflicts first with archive and local text", () => {
-    const archive = {
+    const archive = decodeArchive({
+      schemaVersion: 2,
+      anchorThreadId: "thread-1",
+      target: "thread",
+      complete: true,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      files: [],
+      conversations: [],
+      manifestSha256: "0".repeat(64),
       revisions: [
         {
+          sha256: "0".repeat(64),
           revision: revision({
             id: "a1" as never,
             rootId: "m1" as never,
@@ -169,7 +182,7 @@ describe("import conflict choices", () => {
           }),
         },
       ],
-    } as unknown as AkeruMemoryArchiveV2;
+    });
 
     const groups = groupImportPreview({
       preview: items,

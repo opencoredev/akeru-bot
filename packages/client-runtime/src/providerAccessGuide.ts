@@ -210,7 +210,7 @@ export function providerAccessModelNames(
 ): ReadonlyArray<string> {
   const instance = providers?.find(
     (candidate) =>
-      SUBSCRIPTION_PROVIDER_BY_DRIVER[String(candidate.driver)] === provider &&
+      SUBSCRIPTION_PROVIDER_BY_DRIVER.get(String(candidate.driver)) === provider &&
       candidate.instanceId === defaultInstanceIdForDriver(candidate.driver),
   );
 

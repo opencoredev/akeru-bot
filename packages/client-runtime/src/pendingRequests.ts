@@ -1,3 +1,5 @@
+import { flow } from "effect/Function";
+import * as Option from "effect/Option";
 import {
   ApprovalRequestId,
   type OrchestrationThreadActivity,
@@ -32,7 +34,7 @@ const isProviderRequestKind = Schema.is(ProviderRequestKind);
 const isProviderApprovalOption = Schema.is(ProviderApprovalOption);
 
 /** Older activities use native request types instead of a request kind. */
-export function requestKindFromRequestType(requestType: unknown): ProviderRequestKind | null {
+function requestKindFromNativeType(requestType: string): ProviderRequestKind | null {
   switch (requestType) {
     case "command_execution_approval":
     case "exec_command_approval":
@@ -50,8 +52,16 @@ export function requestKindFromRequestType(requestType: unknown): ProviderReques
   }
 }
 
-function parseQuestions(value: unknown): UserInputQuestion[] {
-  if (!Array.isArray(value)) return [];
+const decodeNativeRequestType = Schema.decodeUnknownOption(Schema.String);
+
+export const requestKindFromRequestType = flow(
+  decodeNativeRequestType,
+  Option.match({ onNone: () => null, onSome: requestKindFromNativeType }),
+);
+
+const decodeQuestionsArray = Schema.decodeUnknownOption(Schema.Array(Schema.Unknown));
+
+function parseQuestionArray(value: ReadonlyArray<Schema.Unknown["Type"]>): UserInputQuestion[] {
   const parsed: UserInputQuestion[] = [];
 
   for (const question of value) {
@@ -86,6 +96,11 @@ function parseQuestions(value: unknown): UserInputQuestion[] {
   return parsed;
 }
 
+const parseQuestions = flow(
+  decodeQuestionsArray,
+  Option.match({ onNone: () => [], onSome: parseQuestionArray }),
+);
+
 const requestActivityKinds = new Set([
   "approval.requested",
   "approval.resolved",
@@ -113,9 +128,9 @@ const staleRequestFailureDetails = {
 
 function isStaleRequestFailure(
   kind: keyof typeof staleRequestFailureDetails,
-  payload: Record<string, unknown>,
+  detailValue: OrchestrationThreadActivity["payload"],
 ): boolean {
-  const detail = Predicate.isString(payload.detail) ? payload.detail.toLowerCase() : "";
+  const detail = Predicate.isString(detailValue) ? detailValue.toLowerCase() : "";
 
   return staleRequestFailureDetails[kind].some((fragment) => detail.includes(fragment));
 }
@@ -200,14 +215,14 @@ export function derivePendingRequests(activities: ReadonlyArray<OrchestrationThr
     } else if (
       activity.kind === "approval.resolved" ||
       (activity.kind === "provider.approval.respond.failed" &&
-        isStaleRequestFailure(activity.kind, payload))
+        isStaleRequestFailure(activity.kind, payload.detail))
     ) {
       closedApprovals.add(requestId);
       approvals.delete(requestId);
     } else if (
       activity.kind === "user-input.resolved" ||
       (activity.kind === "provider.user-input.respond.failed" &&
-        isStaleRequestFailure(activity.kind, payload))
+        isStaleRequestFailure(activity.kind, payload.detail))
     ) {
       closedUserInputs.add(requestId);
       userInputs.delete(requestId);

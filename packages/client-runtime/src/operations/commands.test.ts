@@ -1,3 +1,4 @@
+import { testRpcClient } from "../test-support/services.ts";
 import {
   BotId,
   CommandId,
@@ -25,7 +26,7 @@ import {
 } from "../connection/model.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as RpcSession from "../rpc/session.ts";
-import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
+
 import {
   archiveThread,
   assignGroupMember,
@@ -67,14 +68,14 @@ const TARGET = new PrimaryConnectionTarget({
 const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(function* (
   dispatched: ClientOrchestrationCommand[],
 ) {
-  const client = {
+  const client = testRpcClient({
     [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command: ClientOrchestrationCommand) =>
       Effect.sync(() => {
         dispatched.push(command);
 
         return { sequence: dispatched.length };
       }),
-  } as unknown as WsRpcProtocolClient;
+  });
 
   const session: RpcSession.RpcSession = {
     client,

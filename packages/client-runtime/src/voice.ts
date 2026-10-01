@@ -1,3 +1,4 @@
+import { asRecord } from "./work-log-command.ts";
 import * as Predicate from "effect/Predicate";
 import type { OrchestrationLatestTurn, OrchestrationMessage } from "@akeru/contracts";
 
@@ -59,10 +60,10 @@ export async function synthesizeVoiceChunks<T>(
 }
 
 /** Shared by call-bound audio and standalone dictation/read-aloud adapters. */
-export async function runVoiceOperation<T>(
+export async function runVoiceOperation<T, CancelResult>(
   signal: AbortSignal,
   execute: (operationId: string) => Promise<T>,
-  cancel: (operationId: string) => Promise<unknown>,
+  cancel: (operationId: string) => Promise<CancelResult>,
   operationId: string,
 ): Promise<T> {
   signal.throwIfAborted();
@@ -144,13 +145,13 @@ export function waitForVoiceReply(
 
     let settled = false;
 
-    const finish = (text: string | null, error?: unknown) => {
+    const finish = (text: string | null, cause?: unknown) => {
       if (settled) return;
       settled = true;
       unsubscribe();
       signal.removeEventListener("abort", aborted);
 
-      if (error !== undefined) reject(error);
+      if (cause !== undefined) reject(cause);
       else resolve(text ?? "");
     };
 
@@ -286,9 +287,9 @@ function invokeVoiceHandler<T>(execute: () => T | Promise<T>): Promise<T> {
   }
 }
 
-function stringField(value: unknown, field: string): string | null {
-  if (typeof value !== "object" || value === null) return null;
-  const candidate = (value as Record<string, unknown>)[field];
+function stringField(value: Parameters<typeof asRecord>[0], field: string): string | null {
+  if (!Predicate.isObjectOrArray(value)) return null;
+  const candidate = Predicate.hasProperty(value, field) ? value[field] : undefined;
 
   return Predicate.isString(candidate) ? candidate : null;
 }
@@ -357,10 +358,11 @@ export function handleVoiceChannelMessage(
   }
 
   if (type === "response.done") {
-    const response =
-      typeof event === "object" && event !== null
-        ? (event as Record<string, unknown>).response
-        : null;
+    const response = Predicate.isObjectOrArray(event)
+      ? Predicate.hasProperty(event, "response")
+        ? event.response
+        : null
+      : null;
 
     const status = stringField(response, "status");
 
@@ -380,7 +382,11 @@ export function handleVoiceChannelMessage(
     if (callId === null || state.functionCallIds.has(callId)) return;
     state.functionCallIds.add(callId);
 
-    const finish = (output: Record<string, unknown>) => {
+    const finish = (
+      output:
+        | { readonly ok: true; readonly delivered: "chat" }
+        | { readonly ok: false; readonly error: string },
+    ) => {
       if (callId === null) return;
       reply(
         JSON.stringify({

@@ -1,3 +1,5 @@
+import { flow } from "effect/Function";
+import { asRecord } from "../work-log-command.ts";
 import * as Predicate from "effect/Predicate";
 import {
   type AkeruMemoryArchiveV2,
@@ -99,11 +101,9 @@ export function resolveImportConflicts(
 }
 
 /** Durable archives are schema version 2; bot-note archives are version 3. */
-export function memoryArchiveSchemaVersion(value: unknown): number | null {
-  if (typeof value !== "object" || value === null || !("schemaVersion" in value)) return null;
-
-  return Predicate.isNumber(value.schemaVersion) ? value.schemaVersion : null;
-}
+export const memoryArchiveSchemaVersion = flow(asRecord, (record) =>
+  Predicate.isNumber(record?.schemaVersion) ? record.schemaVersion : null,
+);
 
 export function durableMemoryExportFileName(scope: DurableMemoryExportScope, threadId: string) {
   return `akeru-durable-memory-${scope}-${threadId}.json`;

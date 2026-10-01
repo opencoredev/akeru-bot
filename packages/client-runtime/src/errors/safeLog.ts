@@ -1,3 +1,6 @@
+import { flow } from "effect/Function";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 
 const SAFE_ERROR_LABEL =
@@ -15,9 +18,11 @@ export interface SafeErrorLogAttributes {
   readonly stack?: string;
 }
 
-function readSafeLabel(value: unknown): string | undefined {
-  return Predicate.isString(value) && SAFE_ERROR_LABEL.test(value) ? value : undefined;
-}
+const decodeSafeLabel = Schema.decodeUnknownOption(
+  Schema.String.check(Schema.isPattern(SAFE_ERROR_LABEL)),
+);
+
+const readSafeLabel = flow(decodeSafeLabel, Option.getOrUndefined);
 
 function sanitizeStackUrl(value: string): string {
   try {
@@ -51,32 +56,36 @@ function readSafeStack(error: Error): string | undefined {
   }
 }
 
-function readErrorTag(error: unknown): string | undefined {
+function readErrorTag(cause: unknown): string | undefined {
   try {
-    if (typeof error !== "object" || error === null) {
+    if (!Predicate.isObjectOrArray(cause)) {
       return undefined;
     }
 
-    return readSafeLabel((error as { readonly _tag?: unknown })._tag);
+    return readSafeLabel(Predicate.hasProperty(cause, "_tag") ? cause._tag : undefined);
   } catch {
     return undefined;
   }
 }
 
-function readTraceId(error: unknown): string | undefined {
+function readTraceId(cause: unknown): string | undefined {
   try {
     const seen = new Set<object>();
-    let current: unknown = error;
+    let current: unknown = cause;
 
-    while (typeof current === "object" && current !== null && !seen.has(current)) {
+    while (Predicate.isObjectOrArray(current) && !seen.has(current)) {
       seen.add(current);
-      const record = current as { readonly cause?: unknown; readonly traceId?: unknown };
+      const record = current;
 
-      if (Predicate.isString(record.traceId) && SAFE_TRACE_ID.test(record.traceId)) {
+      if (
+        Predicate.hasProperty(record, "traceId") &&
+        Predicate.isString(record.traceId) &&
+        SAFE_TRACE_ID.test(record.traceId)
+      ) {
         return record.traceId;
       }
 
-      current = record.cause;
+      current = Predicate.hasProperty(record, "cause") ? record.cause : undefined;
     }
 
     return undefined;
@@ -85,13 +94,13 @@ function readTraceId(error: unknown): string | undefined {
   }
 }
 
-export function safeErrorLogAttributes(error: unknown): SafeErrorLogAttributes {
-  const errorTag = readErrorTag(error);
-  const traceId = readTraceId(error);
+export function safeErrorLogAttributes(cause: unknown): SafeErrorLogAttributes {
+  const errorTag = readErrorTag(cause);
+  const traceId = readTraceId(cause);
 
-  if (error instanceof Error) {
-    const errorName = readSafeLabel(error.name);
-    const stack = readSafeStack(error);
+  if (cause instanceof Error) {
+    const errorName = readSafeLabel(cause.name);
+    const stack = readSafeStack(cause);
 
     return {
       errorType: "error",
@@ -104,11 +113,11 @@ export function safeErrorLogAttributes(error: unknown): SafeErrorLogAttributes {
 
   return {
     errorType:
-      error === null
+      cause === null
         ? "null"
-        : Array.isArray(error)
+        : Array.isArray(cause)
           ? "array"
-          : typeof error === "object"
+          : Predicate.isObjectOrArray(cause) || cause === null
             ? "object"
             : "primitive",
     ...(errorTag !== undefined ? { errorTag } : {}),

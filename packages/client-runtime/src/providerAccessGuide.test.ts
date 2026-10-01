@@ -1,3 +1,4 @@
+import { ProviderInstanceId, ProviderDriverKind } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createTranslator } from "./i18n/index.ts";
@@ -129,9 +130,17 @@ describe("providerAccessGuide", () => {
     });
 
     const providers = [
-      { instanceId: "grok", driver: "grok", models: [model("Grok 4"), model("mine", true)] },
-      { instanceId: "grok-work", driver: "grok", models: [model("Other")] },
-    ] as unknown as Parameters<typeof providerAccessModelNames>[0];
+      {
+        instanceId: ProviderInstanceId.make("grok"),
+        driver: ProviderDriverKind.make("grok"),
+        models: [model("Grok 4"), model("mine", true)],
+      },
+      {
+        instanceId: ProviderInstanceId.make("grok-work"),
+        driver: ProviderDriverKind.make("grok"),
+        models: [model("Other")],
+      },
+    ] satisfies Parameters<typeof providerAccessModelNames>[0];
 
     expect(providerAccessModelNames(providers, "xai")).toEqual(["Grok 4"]);
     expect(providerAccessModelNames(providers, "anthropic")).toEqual([]);

@@ -34,6 +34,8 @@ export interface DictationCapture {
   dispose(): void;
 }
 
+export type DictationTimer = ReturnType<typeof setTimeout> | number;
+
 export interface DictationDependencies {
   /** Capture on this client, enforce limits while recording, and release resources on abort. */
   capture(input: {
@@ -49,8 +51,8 @@ export interface DictationDependencies {
   }): Promise<string>;
   /** Synchronously and atomically update the latest draft; never defer the updater or send a message. */
   updateDraft(update: (current: DictationDraft) => DictationDraft): void;
-  schedule(callback: () => void, milliseconds: number): unknown;
-  cancelSchedule(timer: unknown): void;
+  schedule(callback: () => void, milliseconds: number): DictationTimer;
+  cancelSchedule(timer: DictationTimer | undefined): void;
 }
 
 export type DictationStatus =
@@ -114,7 +116,7 @@ export function createDictationSession(
         original: DictationDraft;
         controller: AbortController;
         capture?: DictationCapture;
-        timer?: unknown;
+        timer?: DictationTimer;
       }
     | undefined;
 
@@ -124,19 +126,19 @@ export function createDictationSession(
     capture?.dispose();
   }
 
-  function releaseActive(reason?: unknown) {
+  function releaseActive(cause?: unknown) {
     const run = active;
     active = undefined;
 
     if (!run) return;
     dependencies.cancelSchedule(run.timer);
-    run.controller.abort(reason);
+    run.controller.abort(cause);
     releaseCapture(run);
   }
 
-  function terminate(next: DictationStatus, reason?: unknown) {
-    releaseActive(reason);
-    transition(next, reason);
+  function terminate(next: DictationStatus, cause?: unknown) {
+    releaseActive(cause);
+    transition(next, cause);
   }
 
   function deadline(run: NonNullable<typeof active>, milliseconds: number) {

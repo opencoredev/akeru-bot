@@ -1,3 +1,7 @@
+import * as Data from "effect/Data";
+
+const ImageSource = Data.taggedEnum<MarkdownImageSource>();
+
 const DIRECT_IMAGE_SOURCE_PATTERN = /^(?:https?:|data:|blob:|\/\/)/i;
 
 const URI_SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/;
@@ -80,37 +84,37 @@ export function classifyMarkdownImageSource(
   value: string | null | undefined,
   workspaceRoot?: string | null,
 ): MarkdownImageSource {
-  if (value === null || value === undefined) return { _tag: "Blocked" };
+  if (value === null || value === undefined) return ImageSource.Blocked();
 
   const source = normalizeSource(value);
 
   if (source.length === 0 || source.startsWith("#") || source.startsWith("?")) {
-    return { _tag: "Blocked" };
+    return ImageSource.Blocked();
   }
 
   if (DIRECT_IMAGE_SOURCE_PATTERN.test(source)) {
-    return { _tag: "Direct", uri: source };
+    return ImageSource.Direct({ uri: source });
   }
 
   if (/^file:/i.test(source)) {
     const path = parseFileUrl(source);
 
-    return path === null ? { _tag: "Blocked" } : { _tag: "WorkspaceFile", path };
+    return path === null ? ImageSource.Blocked() : ImageSource.WorkspaceFile({ path });
   }
 
   const path = normalizeWindowsDrivePath(safeDecode(stripSearchAndHash(source)));
 
-  if (path.length === 0) return { _tag: "Blocked" };
+  if (path.length === 0) return ImageSource.Blocked();
 
   if (path.startsWith("/") || WINDOWS_DRIVE_PATH_PATTERN.test(path) || path.startsWith("\\\\")) {
-    return { _tag: "WorkspaceFile", path };
+    return ImageSource.WorkspaceFile({ path });
   }
 
   if (URI_SCHEME_PATTERN.test(path) || path.startsWith("~/") || path.startsWith("~\\")) {
-    return { _tag: "Blocked" };
+    return ImageSource.Blocked();
   }
 
-  if (!workspaceRoot) return { _tag: "Blocked" };
+  if (!workspaceRoot) return ImageSource.Blocked();
 
-  return { _tag: "WorkspaceFile", path: joinWorkspacePath(workspaceRoot, path) };
+  return ImageSource.WorkspaceFile({ path: joinWorkspacePath(workspaceRoot, path) });
 }

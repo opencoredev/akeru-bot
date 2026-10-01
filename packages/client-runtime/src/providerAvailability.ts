@@ -1,3 +1,4 @@
+import { asRecord } from "./work-log-command.ts";
 import * as Predicate from "effect/Predicate";
 import type {
   OrchestrationThreadActivity,
@@ -231,10 +232,7 @@ export function latestTurnFailure(
 
     if (!TURN_FAILURE_KINDS.has(activity.kind)) continue;
 
-    const payload =
-      activity.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
-        : {};
+    const payload = asRecord(activity.payload) ?? {};
 
     const detail = Predicate.isString(payload.detail)
       ? payload.detail

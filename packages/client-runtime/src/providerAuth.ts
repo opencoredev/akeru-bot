@@ -70,13 +70,13 @@ export function providerConnectionLabel(status: SubscriptionProviderStatus): Mes
 }
 
 /** Subscription connection that backs each built-in driver's default instance. */
-export const SUBSCRIPTION_PROVIDER_BY_DRIVER: Readonly<Record<string, SubscriptionProviderId>> = {
-  codex: "openai-codex",
-  claudeAgent: "anthropic",
-  grok: "xai",
-  kimi: "kimi-for-coding",
-  opencodeGo: "opencode-go",
-};
+export const SUBSCRIPTION_PROVIDER_BY_DRIVER = new Map<string, SubscriptionProviderId>([
+  ["codex", "openai-codex"],
+  ["claudeAgent", "anthropic"],
+  ["grok", "xai"],
+  ["kimi", "kimi-for-coding"],
+  ["opencodeGo", "opencode-go"],
+]);
 
 /**
  * Keep default built-in provider instances aligned with the connections the
@@ -95,7 +95,7 @@ export function filterProvidersBySubscriptionConnection(
   );
 
   return providers.filter((provider) => {
-    const subscriptionProvider = SUBSCRIPTION_PROVIDER_BY_DRIVER[String(provider.driver)];
+    const subscriptionProvider = SUBSCRIPTION_PROVIDER_BY_DRIVER.get(String(provider.driver));
 
     if (!subscriptionProvider) return true;
 
@@ -116,7 +116,7 @@ export function withRefreshableSubscriptionLogin(
   statuses: ReadonlyArray<SubscriptionProviderStatus> | undefined,
   providerInstances?: Readonly<Record<string, ProviderInstanceConfig>>,
 ): ServerProvider {
-  const subscriptionProvider = SUBSCRIPTION_PROVIDER_BY_DRIVER[String(provider.driver)];
+  const subscriptionProvider = SUBSCRIPTION_PROVIDER_BY_DRIVER.get(String(provider.driver));
 
   if (!subscriptionProvider) return provider;
 

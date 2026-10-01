@@ -3,32 +3,36 @@ import * as Cause from "effect/Cause";
 
 const MAX_ERROR_TRACE_NODES = 128;
 
-export function findErrorTraceId(error: unknown): string | null {
+export function findErrorTraceId(cause: unknown): string | null {
   const seen = new Set<object>();
-  const pending: Array<unknown> = [error];
+  const pending: Array<unknown> = [cause];
   let inspectedNodeCount = 0;
 
   while (pending.length > 0 && inspectedNodeCount < MAX_ERROR_TRACE_NODES) {
     const current = pending.pop();
     inspectedNodeCount += 1;
 
-    if (typeof current !== "object" || current === null || seen.has(current)) {
+    if (
+      !(Predicate.isObjectOrArray(current) || current === null) ||
+      current === null ||
+      seen.has(current)
+    ) {
       continue;
     }
 
     seen.add(current);
 
-    const record = current as {
-      readonly cause?: unknown;
-      readonly errors?: unknown;
-      readonly traceId?: unknown;
-    };
+    const record = current;
 
-    if (Predicate.isString(record.traceId) && record.traceId.trim().length > 0) {
+    if (
+      Predicate.hasProperty(record, "traceId") &&
+      Predicate.isString(record.traceId) &&
+      record.traceId.trim().length > 0
+    ) {
       return record.traceId;
     }
 
-    if (Array.isArray(record.errors)) {
+    if (Predicate.hasProperty(record, "errors") && Array.isArray(record.errors)) {
       for (let index = record.errors.length - 1; index >= 0; index -= 1) {
         pending.push(record.errors[index]);
       }

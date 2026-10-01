@@ -1,6 +1,6 @@
 import {
   PROVIDER_DISPLAY_NAMES,
-  type ProviderDriverKind,
+  isProviderDriverKind,
   type ServerProviderUnavailability,
 } from "@akeru/contracts";
 
@@ -27,7 +27,9 @@ export interface ThreadErrorContext {
 }
 
 function providerName(id: string): string {
-  return PROVIDER_DISPLAY_NAMES[id.toLowerCase() as ProviderDriverKind] ?? id;
+  const provider = id.toLowerCase();
+
+  return isProviderDriverKind(provider) ? (PROVIDER_DISPLAY_NAMES[provider] ?? id) : id;
 }
 
 function boundedTechnicalDetails(error: string): string {
