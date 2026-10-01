@@ -8,17 +8,12 @@ import {
 import {
   createNativeStackNavigator,
   createNativeStackScreen,
-  type NativeStackNavigationOptions,
 } from "@react-navigation/native-stack";
-import { useEffect, useRef, type ReactNode } from "react";
-import { useMobileI18n } from "./lib/i18n";
-import { NativeStackScreenOptions } from "./native/StackHeader";
+import { useEffect, useRef } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useResolveClassNames } from "uniwind";
-
 import { AppText as Text } from "./components/AppText";
 import { getCompactBrandHeaderOptions } from "./components/CompactBrandTitle";
-import { ArchivedThreadsRouteScreen } from "./features/archive/ArchivedThreadsRouteScreen";
 import { useAgentNotificationNavigation } from "./features/agent-awareness/notificationNavigation";
 import { AdaptiveWorkspaceLayout } from "./features/layout/AdaptiveWorkspaceLayout";
 import { HardwareKeyboardCommandProvider } from "./features/keyboard/HardwareKeyboardCommandProvider";
@@ -26,227 +21,24 @@ import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
 import { HomeRouteScreen } from "./features/home/HomeRouteScreen";
-import { NewTaskDraftRouteScreen } from "./features/threads/NewTaskDraftRouteScreen";
-import { NewTaskEnvironmentPickerRouteScreen } from "./features/threads/NewTaskContextPickerScreens";
 import {
   ExistingThreadSettingsRouteProvider,
   ExistingThreadSettingsRouteScreen,
-  NewTaskThreadSettingsRouteScreen,
 } from "./features/threads/ThreadSettingsSheet";
 import { NewTaskFlowProvider } from "./features/threads/new-task-flow-provider";
-import { NewTaskRouteScreen } from "./features/threads/NewTaskRouteScreen";
-import { SettingsAppearanceRouteScreen } from "./features/settings/SettingsAppearanceRouteScreen";
-import { SettingsClientStorageRouteScreen } from "./features/settings/SettingsClientStorageRouteScreen";
-import { SettingsEnvironmentsRouteScreen } from "./features/settings/SettingsEnvironmentsRouteScreen";
 import { SettingsLegalRouteScreen } from "./features/settings/SettingsLegalRouteScreen";
-import { SettingsProjectGroupingRouteScreen } from "./features/settings/SettingsProjectGroupingRouteScreen";
-import { BotUsageRouteScreen } from "./features/usage/BotUsageRouteScreen";
-import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
-import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
-import { SettingsProviderHealthRouteScreen } from "./features/settings/SettingsProviderHealthRouteScreen";
 import { ShowcaseCaptureCoordinator } from "./features/showcase/ShowcaseCaptureCoordinator";
-import {
-  SettingsLegalDocumentCloseHeaderButton,
-  SettingsLegalDocumentExternalHeaderButton,
-} from "./features/settings/components/SettingsLegalDocumentRouteScreen";
 import { useAppShortcuts } from "./features/shortcuts/useAppShortcuts";
 import { useIncomingShare } from "./features/sharing/IncomingShareProvider";
 import {
   EMPTY_INCOMING_SHARE_PRESENTATION_STATE,
   transitionIncomingSharePresentation,
 } from "./features/sharing/incoming-share-presentation";
-import { NATIVE_LIQUID_GLASS_SUPPORTED } from "./native/native-glass";
-import { nativeHeaderScrollEdgeEffects } from "./native/StackHeader";
 import { FORM_SHEET_PRESENTATION_OPTIONS } from "./native/sheet-surface";
 import { useThreadOutboxDrain } from "./state/use-thread-outbox-drain";
-
-const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
-
-type AppScreenOptions = NativeStackNavigationOptions & {
-  readonly unstable_navigationItemStyle?: "editor";
-};
-
-// Shared header presets. Screens only override genuinely dynamic values (titles,
-// subtitles, toolbar items, search callbacks) via NativeStackScreenOptions.
-//
-// GLASS: transparent header over the screen's primary scroll view on supported
-// iOS versions. Pre-glass iOS gets the same solid material as internal-scroll
-// surfaces so content is laid out below the bar instead of underlapping it.
-const GLASS_HEADER_OPTIONS: AppScreenOptions = {
-  headerBackButtonDisplayMode: "minimal",
-  headerBackTitle: "",
-  headerLargeTitle: false,
-  headerShadowVisible: false,
-  headerShown: true,
-  headerStyle: NATIVE_LIQUID_GLASS_SUPPORTED ? { backgroundColor: "transparent" } : undefined,
-  headerTitleStyle: { fontSize: 18, fontWeight: "800" },
-  headerTransparent: NATIVE_LIQUID_GLASS_SUPPORTED,
-  scrollEdgeEffects: NATIVE_LIQUID_GLASS_SUPPORTED ? HEADER_SCROLL_EDGE_EFFECTS : undefined,
-  unstable_navigationItemStyle: NATIVE_LIQUID_GLASS_SUPPORTED ? "editor" : undefined,
-};
-
-// SOLID: opaque sheet-colored header for surfaces whose content scrolls internally
-// — there is nothing for glass to sample there.
-const SOLID_HEADER_OPTIONS: AppScreenOptions = {
-  headerBackButtonDisplayMode: "minimal",
-  headerBackTitle: "",
-  headerLargeTitle: false,
-  headerShadowVisible: false,
-  headerShown: true,
-  headerTitleStyle: { fontSize: 18, fontWeight: "800" },
-  headerTransparent: false,
-  unstable_navigationItemStyle: Platform.OS === "ios" ? "editor" : undefined,
-};
-
-// Solid header variant for screens inside sheets (centered title, no editor style).
-const SHEET_SOLID_HEADER_OPTIONS: AppScreenOptions = {
-  ...SOLID_HEADER_OPTIONS,
-  unstable_navigationItemStyle: undefined,
-};
-
-// A native glass header for a sheet screen whose primary child is a scroll
-// view. The centered sheet title stays stable while UIKit supplies scroll-edge
-// fading from that child.
-const SHEET_GLASS_HEADER_OPTIONS: AppScreenOptions = {
-  ...GLASS_HEADER_OPTIONS,
-  unstable_navigationItemStyle: undefined,
-};
-
-const LEGAL_DOCUMENT_HEADER_OPTIONS: AppScreenOptions = {
-  ...SHEET_SOLID_HEADER_OPTIONS,
-  headerBackVisible: false,
-  headerLeft: SettingsLegalDocumentCloseHeaderButton,
-  headerRight: () => <SettingsLegalDocumentExternalHeaderButton />,
-  presentation: "fullScreenModal",
-};
-
-function SettingsNavigationLayout({
-  children,
-  routeName,
-}: {
-  readonly children: ReactNode;
-  readonly routeName: string;
-}) {
-  const { t } = useMobileI18n();
-  const titles: Readonly<Record<string, string | undefined>> = {
-    Settings: t("Settings"),
-    SettingsEnvironments: t("Environments"),
-    SettingsEnvironmentNew: t("Add Environment"),
-    SettingsArchive: t("Archived chats"),
-    SettingsAppearance: t("Appearance"),
-    SettingsProjectGrouping: t("Project Grouping"),
-    SettingsClientStorage: t("Client Storage"),
-    SettingsUsage: t("Usage"),
-    SettingsBotUsage: t("Bot usage"),
-    SettingsProviderHealth: undefined,
-  };
-  const title = titles[routeName];
-  return (
-    <>
-      {title === undefined ? null : <NativeStackScreenOptions options={{ title }} />}
-      {children}
-    </>
-  );
-}
-
-const SettingsContentStack = createNativeStackNavigator({
-  initialRouteName: "Settings",
-  screenLayout: ({ children, route }) => (
-    <SettingsNavigationLayout routeName={route.name}>{children}</SettingsNavigationLayout>
-  ),
-  screenOptions: {
-    ...GLASS_HEADER_OPTIONS,
-    // Sheets read better with the iOS-default centered title (no editor style).
-    unstable_navigationItemStyle: undefined,
-  },
-  screens: {
-    Settings: createNativeStackScreen({
-      screen: SettingsRouteScreen,
-      linking: "",
-      options: {
-        title: "Settings",
-      },
-    }),
-    SettingsEnvironments: createNativeStackScreen({
-      screen: SettingsEnvironmentsRouteScreen,
-      linking: "environments",
-      options: {
-        title: "Environments",
-      },
-    }),
-    SettingsEnvironmentNew: createNativeStackScreen({
-      screen: ConnectionsNewRouteScreen,
-      linking: "environment-new",
-      options: {
-        title: "Add Environment",
-      },
-    }),
-    SettingsArchive: createNativeStackScreen({
-      screen: ArchivedThreadsRouteScreen,
-      linking: "archive",
-      options: {
-        title: "Archived chats",
-      },
-    }),
-    SettingsAppearance: createNativeStackScreen({
-      screen: SettingsAppearanceRouteScreen,
-      linking: "appearance",
-      options: {
-        title: "Appearance",
-      },
-    }),
-    SettingsProjectGrouping: createNativeStackScreen({
-      screen: SettingsProjectGroupingRouteScreen,
-      linking: "project-grouping",
-      options: {
-        title: "Project Grouping",
-      },
-    }),
-    SettingsClientStorage: createNativeStackScreen({
-      screen: SettingsClientStorageRouteScreen,
-      linking: "client-storage",
-      options: {
-        title: "Client Storage",
-      },
-    }),
-    SettingsUsage: createNativeStackScreen({
-      screen: UsageRouteScreen,
-      linking: "usage",
-      options: {
-        title: "Usage",
-      },
-    }),
-    SettingsBotUsage: createNativeStackScreen({
-      screen: BotUsageRouteScreen,
-      linking: "usage/bot",
-      options: {
-        title: "Bot usage",
-      },
-    }),
-    SettingsProviderHealth: createNativeStackScreen({
-      screen: SettingsProviderHealthRouteScreen,
-      linking: "provider-health",
-      options: {
-        title: "Settings",
-      },
-    }),
-  },
-});
-
-// The outer stack never owns visible chrome. Settings routes render inside a
-// nested stack whose native header remains mounted.
-const SettingsSheetStack = createNativeStackNavigator({
-  initialRouteName: "SettingsContent",
-  screenOptions: {
-    headerShown: false,
-  },
-  screens: {
-    SettingsContent: createNativeStackScreen({
-      screen: SettingsContentStack,
-      linking: "",
-    }),
-  },
-});
+import { GLASS_HEADER_OPTIONS, LEGAL_DOCUMENT_HEADER_OPTIONS } from "./stack-header-options";
+import { SettingsSheetStack } from "./settings-stack";
+import { NewTaskSheetStack } from "./new-task-stack";
 
 // Thread routes live FLAT in the root stack (not in a nested navigator). A nested
 // stack means a second UINavigationController with its own UINavigationBar, which
@@ -254,64 +46,6 @@ const SettingsSheetStack = createNativeStackNavigator({
 // one bar morphs; across two bars the whole screen slides). Flat linking paths keep
 // the same deep-link URLs the nested config produced.
 const THREAD_LINKING_PREFIX = "threads/:environmentId/:threadId";
-
-// New-task flow: nested navigator inside the formSheet (Settings-sheet
-// pattern — a plain formSheet screen cannot render a stack header; the header and
-// in-sheet pushes come from this nested stack).
-const NewTaskSheetStack = createNativeStackNavigator({
-  initialRouteName: "NewTask",
-  screenOptions: {
-    ...SHEET_GLASS_HEADER_OPTIONS,
-    // The form-sheet host owns the one opaque adaptive surface. Child screens
-    // and the navigation bar stay transparent over it, avoiding visible color
-    // slabs as view controllers move horizontally.
-    contentStyle: Platform.OS === "ios" ? { backgroundColor: "transparent" } : undefined,
-    // UIKit's default push adds a dimming shadow and independently transitions
-    // the navigation bar. Both read as mismatched sheet backgrounds here.
-    // simple_push retains native push/pop gestures without either artifact.
-    animation: Platform.OS === "ios" ? "simple_push" : undefined,
-    animationDuration: Platform.OS === "ios" ? 350 : undefined,
-  },
-  screens: {
-    NewTask: createNativeStackScreen({
-      screen: NewTaskRouteScreen,
-      linking: "",
-      options: {
-        title: "Choose project",
-      },
-    }),
-    NewTaskDraft: createNativeStackScreen({
-      screen: NewTaskDraftRouteScreen,
-      linking: "draft",
-      options: {
-        headerBackVisible: false,
-        title: "",
-      },
-    }),
-    NewTaskEnvironment: createNativeStackScreen({
-      screen: NewTaskEnvironmentPickerRouteScreen,
-      linking: "draft/environment",
-      options: {
-        title: "Environment",
-      },
-    }),
-    ThreadSettings: createNativeStackScreen({
-      screen: NewTaskThreadSettingsRouteScreen,
-      linking: "draft/settings",
-      options: {
-        gestureEnabled: true,
-        headerShown: false,
-        ...(Platform.OS === "android"
-          ? { presentation: "card" as const }
-          : {
-              ...FORM_SHEET_PRESENTATION_OPTIONS,
-              sheetAllowedDetents: [1],
-              sheetGrabberVisible: true,
-            }),
-      },
-    }),
-  },
-});
 
 // Routes presented as sheets/overlays ON TOP of the workspace. They must not
 // influence the adaptive workspace layout: opening Settings over Home should
