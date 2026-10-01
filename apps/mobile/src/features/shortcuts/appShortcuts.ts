@@ -1,8 +1,15 @@
+import { Predicate, Schema } from "effect";
 import type { Action } from "expo-quick-actions";
 import type { NavigationState } from "@react-navigation/native";
 import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@akeru/contracts";
-
 import type { RecentThreadShortcut } from "../../persistence/imperative";
+
+const decodeThreadRouteParams = Schema.decodeUnknownSync(
+  Schema.Struct({
+    environmentId: Schema.optional(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
+    threadId: Schema.optional(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
+  }),
+);
 
 // Launchers cap visible shortcuts around 4; one slot is the static
 // bot-session entry, the rest rotate through recently opened threads.
@@ -24,8 +31,8 @@ function threadShortcutHref(thread: RecentThreadShortcut): string {
   return `/threads/${encodeURIComponent(thread.environmentId)}/${encodeURIComponent(thread.threadId)}`;
 }
 
-function firstRouteParam(value: string | string[] | undefined): string | null {
-  if (Array.isArray(value)) {
+function firstRouteParam(value: string | readonly string[] | undefined): string | null {
+  if (value !== undefined && !Predicate.isString(value)) {
     return value[0] ?? null;
   }
 
@@ -47,12 +54,7 @@ export function activeThreadRef(state: NavigationState): ScopedThreadRef | null 
   }
 
   try {
-    const params = route.params as
-      | {
-          readonly environmentId?: string | string[];
-          readonly threadId?: string | string[];
-        }
-      | undefined;
+    const params = decodeThreadRouteParams(route.params);
 
     const environmentId = firstRouteParam(params?.environmentId)?.trim();
     const threadId = firstRouteParam(params?.threadId)?.trim();
@@ -86,7 +88,7 @@ function threadShortcutLabel(thread: RecentThreadShortcut): string {
 export function shortcutHref(action: Action): string | null {
   const href = action.params?.href;
 
-  if (typeof href !== "string") {
+  if (!Predicate.isString(href)) {
     return null;
   }
 

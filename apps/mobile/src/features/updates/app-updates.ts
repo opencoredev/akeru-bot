@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import * as Updates from "expo-updates";
 import { settlePromise } from "@akeru/client-runtime/state/runtime";
 import {
@@ -14,6 +15,11 @@ import {
   installPendingAppUpdate,
   reportUpdateFailure,
 } from "./app-update-install";
+
+type HiddenUpdateTap = {
+  readonly nextCount: number;
+  readonly shouldCheck: boolean;
+};
 
 export { createAppUpdateDeferral } from "./app-update-types";
 
@@ -50,17 +56,14 @@ let appUpdateCheckInFlight: AppUpdateCheckInFlight | undefined;
 
 /** Expo's development launcher reports updates as enabled even though its OTA APIs reject. */
 export function isAppUpdateCheckAvailable(client: Pick<AppUpdateClient, "isEnabled"> = Updates) {
-  return client.isEnabled && !(typeof __DEV__ !== "undefined" && __DEV__);
+  return client.isEnabled && !("__DEV__" in globalThis && __DEV__);
 }
 
 /**
  * Keeps the manual update affordance discoverable only to someone deliberately
  * tapping the version row five times.
  */
-export function registerHiddenUpdateTap(count: number): {
-  readonly nextCount: number;
-  readonly shouldCheck: boolean;
-} {
+export function registerHiddenUpdateTap(count: number): HiddenUpdateTap {
   const nextCount = count + 1;
 
   if (nextCount >= HIDDEN_UPDATE_TAP_COUNT) {
@@ -214,7 +217,7 @@ async function performAppUpdateCheck(
   setState("checking");
   const check = await settlePromise(() => client.checkForUpdateAsync());
 
-  if (check._tag === "Failure") {
+  if (Predicate.isTagged(check, "Failure")) {
     reportUpdateFailure(check, "Could not check for updates.", options.onFailure);
     setState("idle");
 
@@ -232,7 +235,7 @@ async function performAppUpdateCheck(
   setState("downloading");
   const fetched = await settlePromise(() => client.fetchUpdateAsync());
 
-  if (fetched._tag === "Failure") {
+  if (Predicate.isTagged(fetched, "Failure")) {
     reportUpdateFailure(fetched, "Could not download the update.", options.onFailure);
     setState("idle");
 

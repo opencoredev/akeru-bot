@@ -27,6 +27,12 @@ import {
   writeComposerDraftsNow,
 } from "./composer-draft-persistence";
 
+type ComposerDraftSettings = {
+  readonly modelSelection: ModelSelection | undefined;
+  readonly runtimeMode: RuntimeMode | undefined;
+  readonly interactionMode: ProviderInteractionMode | undefined;
+};
+
 export { decodePersistedComposerDrafts, isComposerDraftEmpty } from "./composer-draft-schema";
 
 export type {
@@ -198,7 +204,7 @@ export function clearComposerDraftContentState(
   current: Record<string, ComposerDraft>,
   draftKey: string,
   options?: { readonly clearWorkspaceSelection?: boolean },
-): Record<string, ComposerDraft> {
+) {
   const existing = current[draftKey];
 
   if (!existing) {
@@ -233,7 +239,7 @@ export function restoreComposerDraftSnapshotState(
   current: Record<string, ComposerDraft>,
   draftKey: string,
   snapshot: ComposerDraft,
-): Record<string, ComposerDraft> {
+) {
   const next = { ...current };
 
   if (isEmptyDraft(snapshot)) {
@@ -249,7 +255,7 @@ export function copyComposerDraftContentState(
   current: Record<string, ComposerDraft>,
   sourceDraftKey: string,
   targetDraftKey: string,
-): Record<string, ComposerDraft> {
+) {
   if (sourceDraftKey === targetDraftKey) {
     return current;
   }
@@ -314,7 +320,7 @@ export function mergeComposerDraftContentState(
   current: Record<string, ComposerDraft>,
   draftKey: string,
   content: ComposerDraftContent,
-): Record<string, ComposerDraft> {
+) {
   const existing = normalizeDraft(current[draftKey]);
 
   if (content.sourceShareId && existing.importedShareIds?.includes(content.sourceShareId)) {
@@ -477,11 +483,7 @@ export function useComposerDraft(draftKey: string | null): ComposerDraft {
 }
 
 /** Reads a draft's settings without subscribing to its text or attachments. */
-export function useComposerDraftSettings(draftKey: string | null): {
-  readonly modelSelection: ModelSelection | undefined;
-  readonly runtimeMode: RuntimeMode | undefined;
-  readonly interactionMode: ProviderInteractionMode | undefined;
-} {
+export function useComposerDraftSettings(draftKey: string | null): ComposerDraftSettings {
   const key = draftKey ?? "";
   const modelSelection = useAtomValue(composerDraftModelSelectionAtom(key));
   const runtimeMode = useAtomValue(composerDraftRuntimeModeAtom(key));

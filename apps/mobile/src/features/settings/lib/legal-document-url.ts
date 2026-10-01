@@ -54,9 +54,11 @@ function webDocumentIdentity(value: string): string | null {
 }
 
 const ALLOWED_LEGAL_DOCUMENT_IDENTITIES = new Set(
-  ALLOWED_LEGAL_DOCUMENT_URLS.map(webDocumentIdentity).filter(
-    (value): value is string => value !== null,
-  ),
+  ALLOWED_LEGAL_DOCUMENT_URLS.flatMap((url) => {
+    const value = webDocumentIdentity(url);
+
+    return value === null ? [] : [value];
+  }),
 );
 
 export function isLegalDocumentUrl(value: string): boolean {

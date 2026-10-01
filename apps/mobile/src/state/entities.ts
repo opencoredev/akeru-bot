@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { useMemo } from "react";
 import type { EnvironmentProject, EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
@@ -8,10 +9,13 @@ import type {
   ServerConfig,
 } from "@akeru/contracts";
 import { Atom } from "effect/unstable/reactivity";
-
 import { environmentProjects } from "./projects";
 import { environmentServerConfigsAtom, serverEnvironment } from "./server";
 import { environmentThreadShells } from "./threads";
+
+const decodeTitlePairs = Schema.decodeUnknownSync(
+  Schema.Array(Schema.Tuple([Schema.String, Schema.NullOr(Schema.String)])),
+);
 
 const EMPTY_PROJECT_ATOM = Atom.make<EnvironmentProject | null>(null).pipe(
   Atom.withLabel("mobile-project:empty"),
@@ -81,7 +85,7 @@ export function useThreadTitles(threadIds: ReadonlyArray<string>): ReadonlyMap<s
   return useMemo(() => {
     const titles = new Map<string, string>();
 
-    for (const [threadId, title] of JSON.parse(json) as Array<[string, string | null]>) {
+    for (const [threadId, title] of decodeTitlePairs(JSON.parse(json))) {
       if (title !== null) titles.set(threadId, title);
     }
 

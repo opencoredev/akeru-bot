@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   ModelCapabilities,
   ProviderOptionDescriptor,
@@ -58,22 +59,27 @@ export function applyProviderOptionSelection(
   }
 
   if (
-    (descriptor.type === "boolean" && typeof change.value !== "boolean") ||
+    (descriptor.type === "boolean" && !Predicate.isBoolean(change.value)) ||
     (descriptor.type === "select" &&
-      (typeof change.value !== "string" ||
+      (!Predicate.isString(change.value) ||
         !descriptor.options.some((option) => option.id === change.value)))
   ) {
     return null;
   }
 
   const nextDescriptors = descriptors.map((candidate) =>
-    candidate.id === descriptor.id
-      ? {
-          ...candidate,
-          currentValue: change.value,
-        }
-      : candidate,
-  ) as ReadonlyArray<ProviderOptionDescriptor>;
+    candidate.id !== descriptor.id
+      ? candidate
+      : candidate.type === "boolean"
+        ? {
+            ...candidate,
+            currentValue: Predicate.isBoolean(change.value) ? change.value : candidate.currentValue,
+          }
+        : {
+            ...candidate,
+            currentValue: Predicate.isString(change.value) ? change.value : candidate.currentValue,
+          },
+  );
 
   return buildProviderOptionSelectionsFromDescriptors(nextDescriptors) ?? [];
 }

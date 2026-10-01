@@ -65,6 +65,7 @@ export function createMobilePreferencesState(runtime: Atom.AtomRuntime<MobilePre
         const current = get(optimisticPatchAtom);
         const versions = { ...current.versions };
 
+        // SAFETY: Preference patches are owned objects whose keys are Preferences fields.
         for (const key of Object.keys(patch) as Array<keyof Preferences>) {
           versions[key] = version;
         }
@@ -80,9 +81,10 @@ export function createMobilePreferencesState(runtime: Atom.AtomRuntime<MobilePre
             Effect.sync(() => {
               get.set(confirmedPreferencesAtom, saved);
               const optimistic = get(optimisticPatchAtom);
-              const values = { ...optimistic.values } as Record<string, unknown>;
-              const currentVersions = { ...optimistic.versions } as Record<string, unknown>;
+              const values = { ...optimistic.values };
+              const currentVersions = { ...optimistic.versions };
 
+              // SAFETY: Preference patches are owned objects whose keys are Preferences fields.
               for (const key of Object.keys(patch) as Array<keyof Preferences>) {
                 if (optimistic.versions[key] === version) {
                   delete values[key];
@@ -91,17 +93,18 @@ export function createMobilePreferencesState(runtime: Atom.AtomRuntime<MobilePre
               }
 
               get.set(optimisticPatchAtom, {
-                values: values as Partial<Preferences>,
-                versions: currentVersions as Partial<Record<keyof Preferences, number>>,
+                values: values,
+                versions: currentVersions,
               });
             }),
           ),
           Effect.tapError(() =>
             Effect.sync(() => {
               const optimistic = get(optimisticPatchAtom);
-              const values = { ...optimistic.values } as Record<string, unknown>;
-              const currentVersions = { ...optimistic.versions } as Record<string, unknown>;
+              const values = { ...optimistic.values };
+              const currentVersions = { ...optimistic.versions };
 
+              // SAFETY: Preference patches are owned objects whose keys are Preferences fields.
               for (const key of Object.keys(patch) as Array<keyof Preferences>) {
                 if (optimistic.versions[key] === version) {
                   delete values[key];
@@ -110,8 +113,8 @@ export function createMobilePreferencesState(runtime: Atom.AtomRuntime<MobilePre
               }
 
               get.set(optimisticPatchAtom, {
-                values: values as Partial<Preferences>,
-                versions: currentVersions as Partial<Record<keyof Preferences, number>>,
+                values: values,
+                versions: currentVersions,
               });
             }),
           ),

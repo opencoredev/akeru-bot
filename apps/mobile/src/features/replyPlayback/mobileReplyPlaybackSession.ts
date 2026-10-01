@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { createReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
 import { EnvironmentId } from "@akeru/contracts";
 import { storedReplySynthesisCapability } from "@akeru/client-runtime/reply-playback";
@@ -21,7 +22,7 @@ export function createMobileReplyPlaybackSession(options: {
   readonly cancel: (target: {
     environmentId: EnvironmentId;
     input: { operationId: string };
-  }) => Promise<unknown>;
+  }) => Promise<void | { readonly _tag: string }>;
   readonly voiceSettings: (environmentId: string) => VoiceSettings;
 }) {
   return createReplyPlaybackSession({
@@ -52,10 +53,12 @@ export function createMobileReplyPlaybackSession(options: {
         );
 
         for (const result of results) {
-          if (result._tag !== "Success" || !result.value)
+          const value = result.value;
+
+          if (!Predicate.isTagged(result, "Success") || !value)
             throw new Error("Voice synthesis failed.");
-          segments.push(decodeReplyAudioBase64(result.value.audioBase64));
-          mimeType = result.value.mimeType;
+          segments.push(decodeReplyAudioBase64(value.audioBase64));
+          mimeType = value.mimeType;
         }
 
         const bytes = new Uint8Array(

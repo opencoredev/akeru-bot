@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   IconAdjustmentsHorizontal,
   IconAlertCircle,
@@ -169,28 +170,30 @@ const ANDROID_ICON_BY_SF_SYMBOL: Partial<Record<SFSymbol, Icon>> = {
 // icon name (the raw expo-symbols contract). Resolve those here too so the
 // android key keeps working through this wrapper — it wins over the SF map
 // when both match (e.g. folder vs folder_open for expanded project groups).
-const ANDROID_ICON_BY_MATERIAL_NAME: Record<string, Icon> = {
-  auto_awesome: IconSparkles,
-  bolt: IconBolt,
-  build: IconTool,
-  chat_bubble: IconMessage,
-  check: IconCheck,
-  close: IconX,
-  construction: IconHammer,
-  content_copy: IconCopy,
-  edit: IconEdit,
-  error: IconAlertCircle,
-  folder: IconFolder,
-  folder_open: IconFolderOpen,
-  keyboard: IconKeyboard,
-  keyboard_arrow_down: IconChevronDown,
-  keyboard_arrow_up: IconChevronUp,
-  keyboard_hide: IconKeyboardHide,
-  public: IconWorld,
-  remove: IconMinus,
-  terminal: IconTerminal2,
-  visibility: IconEye,
-};
+const ANDROID_ICON_BY_MATERIAL_NAME = new Map(
+  Object.entries({
+    auto_awesome: IconSparkles,
+    bolt: IconBolt,
+    build: IconTool,
+    chat_bubble: IconMessage,
+    check: IconCheck,
+    close: IconX,
+    construction: IconHammer,
+    content_copy: IconCopy,
+    edit: IconEdit,
+    error: IconAlertCircle,
+    folder: IconFolder,
+    folder_open: IconFolderOpen,
+    keyboard: IconKeyboard,
+    keyboard_arrow_down: IconChevronDown,
+    keyboard_arrow_up: IconChevronUp,
+    keyboard_hide: IconKeyboardHide,
+    public: IconWorld,
+    remove: IconMinus,
+    terminal: IconTerminal2,
+    visibility: IconEye,
+  } as const),
+);
 
 export type { SFSymbol } from "expo-symbols";
 
@@ -201,11 +204,11 @@ export function SymbolView(props: SymbolViewProps) {
     return <ExpoSymbolView {...props} />;
   }
 
-  const materialName = typeof props.name === "string" ? undefined : props.name.android;
-  const sfSymbol = typeof props.name === "string" ? props.name : props.name.ios;
+  const materialName = Predicate.isString(props.name) ? undefined : props.name.android;
+  const sfSymbol = Predicate.isString(props.name) ? props.name : props.name.ios;
 
   const AndroidIcon =
-    (materialName ? ANDROID_ICON_BY_MATERIAL_NAME[materialName] : undefined) ??
+    (materialName ? ANDROID_ICON_BY_MATERIAL_NAME.get(materialName) : undefined) ??
     (sfSymbol ? ANDROID_ICON_BY_SF_SYMBOL[sfSymbol] : undefined);
 
   if (!AndroidIcon) {

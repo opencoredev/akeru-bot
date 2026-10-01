@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { requireOptionalNativeModule } from "expo";
 
 import { MOBILE_THEME_IDS, type MobileThemeId } from "../../lib/mobileTheme";
@@ -43,7 +44,7 @@ export function getNativeShowcasePairingUrls(): ReadonlyArray<string> {
       if (Array.isArray(parsed)) {
         return parsed.filter(
           (candidate): candidate is string =>
-            typeof candidate === "string" && candidate.trim().length > 0,
+            Predicate.isString(candidate) && candidate.trim().length > 0,
         );
       }
     } catch {

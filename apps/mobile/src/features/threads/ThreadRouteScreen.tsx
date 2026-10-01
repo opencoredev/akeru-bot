@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { threadSilentRun } from "@akeru/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
 import {
@@ -51,7 +52,16 @@ import { projectThreadContentPresentation } from "./threadContentPresentation";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
 
-type NativeHeaderItems = ReadonlyArray<Record<string, unknown>>;
+type NativeHeaderItems = ReadonlyArray<
+  | {
+      readonly type: "button";
+      readonly accessibilityLabel: string;
+      readonly icon: { readonly type: "sfSymbol"; readonly name: string };
+      readonly identifier: string;
+      readonly onPress: () => void;
+    }
+  | { readonly type: "spacing"; readonly spacing: number }
+>;
 
 function firstRouteParam(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) {
@@ -192,7 +202,7 @@ function ThreadRouteContent(
 
     return {
       loading:
-        selectedThreadDetailState.page._tag === "Some" &&
+        Predicate.isTagged(selectedThreadDetailState.page, "Some") &&
         selectedThreadDetailState.page.value.loadingOlder,
       onLoadEarlier: () => {
         requestOlderThreadTurns(selectedThread.environmentId, selectedThread.id);

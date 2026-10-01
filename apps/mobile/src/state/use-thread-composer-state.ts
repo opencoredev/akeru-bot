@@ -1,17 +1,17 @@
+import { Schema } from "effect";
+import { AkeruDelegationRecord, EnvironmentId, ThreadId } from "@akeru/contracts";
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 import * as Cause from "effect/Cause";
-
 import {
   CommandId,
   MessageId,
-  type EnvironmentId,
   type ModelSelection,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   type RuntimeMode,
-  type ThreadId,
 } from "@akeru/contracts";
 import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
 import {
@@ -22,8 +22,7 @@ import {
 } from "@akeru/client-runtime/state/threads";
 import { isAtomCommandInterrupted } from "@akeru/client-runtime/state/runtime";
 import { deriveActiveWorkStartedAt } from "@akeru/shared/orchestrationTiming";
-
-import { makeQueuedMessageMetadata } from "../lib/commandMetadata";
+import { createQueuedMessageMetadata } from "../lib/commandMetadata";
 import {
   convertPastedImagesToAttachments,
   pasteComposerClipboard,
@@ -36,7 +35,6 @@ import {
   createThreadFeedBuilder,
   deriveThreadFeedDelegations,
   unchangedPrefixLength,
-  type ThreadFeedDelegations,
 } from "../lib/threadActivity";
 import { tryOpenExternalUrl } from "../lib/openExternalUrl";
 import {
@@ -61,6 +59,13 @@ import { useThreadOutboxMessages } from "./use-thread-outbox";
 import { threadEnvironment } from "./threads";
 import { useAtomCommand } from "./use-atom-command";
 
+const decodeFeedDelegations = Schema.decodeUnknownSync(
+  Schema.Struct({
+    delegations: Schema.Array(AkeruDelegationRecord),
+    waitingOnChildren: Schema.Boolean,
+  }),
+);
+
 export function useThreadDraftForThread(input: {
   readonly environmentId?: EnvironmentId;
   readonly threadId?: ThreadId;
@@ -81,10 +86,9 @@ export function useThreadDraftForThread(input: {
 const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = Object.freeze([]);
 
 const feedDelegationsAtom = Atom.family((key: string) => {
-  const [environmentId, threadId] = key.split("\n") as [
-    EnvironmentId | undefined,
-    ThreadId | undefined,
-  ];
+  const [environmentKey, threadKey] = key.split("\n");
+  const environmentId = environmentKey ? EnvironmentId.make(environmentKey) : undefined;
+  const threadId = threadKey ? ThreadId.make(threadKey) : undefined;
 
   return Atom.make((get) =>
     deriveThreadFeedDelegations(
@@ -130,10 +134,10 @@ export function useThreadComposerState() {
 
       if (openedAuthorizationActivitiesRef.current.has(activity.id)) continue;
 
-      if (!activity.payload || typeof activity.payload !== "object") continue;
-      const authorizationUrl = (activity.payload as Record<string, unknown>).authorizationUrl;
+      if (!activity.payload || !Predicate.isObject(activity.payload)) continue;
+      const authorizationUrl = activity.payload.authorizationUrl;
 
-      if (typeof authorizationUrl !== "string") continue;
+      if (!Predicate.isString(authorizationUrl)) continue;
 
       try {
         if (new URL(authorizationUrl).protocol !== "https:") continue;
@@ -168,7 +172,7 @@ export function useThreadComposerState() {
   );
 
   const selectedThreadFeedDelegations = useMemo(
-    () => JSON.parse(selectedThreadDelegations) as ThreadFeedDelegations,
+    () => decodeFeedDelegations(JSON.parse(selectedThreadDelegations)),
     [selectedThreadDelegations],
   );
 
@@ -274,7 +278,7 @@ export function useThreadComposerState() {
         return null;
       }
 
-      const metadata = makeQueuedMessageMetadata();
+      const metadata = createQueuedMessageMetadata();
 
       const result = await submitCodexFeedback({
         submission: {
@@ -306,7 +310,7 @@ export function useThreadComposerState() {
           }),
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         if (isAtomCommandInterrupted(result)) {
           return null;
         }
@@ -332,7 +336,7 @@ export function useThreadComposerState() {
       return null;
     }
 
-    const metadata = makeQueuedMessageMetadata();
+    const metadata = createQueuedMessageMetadata();
     const messageId = MessageId.make(metadata.messageId);
 
     // Enqueue publishes the queued atom synchronously (the durable write
@@ -354,7 +358,7 @@ export function useThreadComposerState() {
     });
 
     clearComposerDraftContent(threadKey);
-    enqueuePromise.catch((error: unknown) => {
+    enqueuePromise.catch((error) => {
       // Restore text via merge (idempotent) but attachments via the uncapped
       // append: the merge path slots existing attachments first and truncates
       // at the send limit, which would silently drop this message's images if

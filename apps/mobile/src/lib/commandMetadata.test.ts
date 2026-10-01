@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { makeQueuedMessageMetadata, makeTurnCommandMetadata } from "./commandMetadata";
+import { createQueuedMessageMetadata, createTurnCommandMetadata } from "./commandMetadata";
 
 vi.mock("expo-crypto", () => ({
   randomUUID: () => crypto.randomUUID(),
@@ -8,7 +8,7 @@ vi.mock("expo-crypto", () => ({
 
 describe("mobile command metadata", () => {
   it("creates ids and timestamps for thread starts", () => {
-    const metadata = makeTurnCommandMetadata();
+    const metadata = createTurnCommandMetadata();
 
     expect(metadata.commandId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
@@ -23,7 +23,7 @@ describe("mobile command metadata", () => {
   });
 
   it("creates ids and timestamps for queued messages", () => {
-    const metadata = makeQueuedMessageMetadata();
+    const metadata = createQueuedMessageMetadata();
 
     expect(metadata.commandId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,

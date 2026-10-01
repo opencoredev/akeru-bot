@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { MOBILE_TYPOGRAPHY } from "./typography";
 
 export const DEFAULT_BASE_FONT_SIZE = MOBILE_TYPOGRAPHY.body.fontSize;
@@ -39,7 +40,7 @@ export interface NativeMarkdownTypography {
 }
 
 export function normalizeBaseFontSize(value: number | null | undefined): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+  if (!Predicate.isNumber(value) || !Number.isFinite(value)) {
     return DEFAULT_BASE_FONT_SIZE;
   }
 
@@ -105,7 +106,7 @@ const TEXT_SCALE_VARIABLE_ROLES = {
  * pass to `Uniwind.updateCSSVariables`. All className-based text (`text-sm`,
  * `text-base`, ...) re-resolves live when these are injected.
  */
-export function resolveTextScaleVariables(baseFontSize: number): Record<string, number> {
+export function resolveTextScaleVariables(baseFontSize: number) {
   const scale = normalizeBaseFontSize(baseFontSize) / DEFAULT_BASE_FONT_SIZE;
   const variables: Record<string, number> = {};
 

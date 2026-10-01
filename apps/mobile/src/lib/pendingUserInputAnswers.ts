@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { UserInputQuestion } from "@akeru/contracts";
 
 export interface PendingUserInputDraftAnswer {
@@ -6,7 +7,7 @@ export interface PendingUserInputDraftAnswer {
 }
 
 function normalizeDraftAnswer(value: string | undefined): string | null {
-  if (typeof value !== "string") {
+  if (!Predicate.isString(value)) {
     return null;
   }
 

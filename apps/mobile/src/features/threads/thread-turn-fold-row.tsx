@@ -9,7 +9,7 @@ import type { ThreadFeedEntry } from "../../lib/threadActivityTypes";
 export function ThreadTurnFoldRow(props: {
   readonly entry: Extract<ThreadFeedEntry, { readonly type: "turn-fold" }>;
   readonly onToggle: (turnId: TurnId) => void;
-  readonly iconColor: string | ColorValue;
+  readonly iconColor: ColorValue | undefined;
 }) {
   const { t } = useMobileI18n();
   const { entry } = props;

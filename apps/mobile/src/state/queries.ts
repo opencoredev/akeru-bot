@@ -8,12 +8,16 @@ import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { Atom } from "effect/unstable/reactivity";
 import { useEffect, useMemo, useState } from "react";
-
 import { orchestrationEnvironment } from "./orchestration";
 import { projectEnvironment } from "./projects";
 import { useEnvironmentQuery } from "./query";
 import { useEnvironmentThread } from "./threads";
 import { normalizeComposerPathSearchQuery } from "./queryTargets";
+
+type ThreadSearchState = {
+  readonly matches: ReadonlyArray<EnvironmentThreadSearchMatch>;
+  readonly isPending: boolean;
+};
 
 const COMPOSER_PATH_SEARCH_DEBOUNCE_MS = 200;
 
@@ -69,10 +73,7 @@ export function useDebouncedValue<A>(value: A, delayMs: number): A {
 export function useThreadSearch(
   environmentIds: ReadonlyArray<EnvironmentId>,
   query: string,
-): {
-  readonly matches: ReadonlyArray<EnvironmentThreadSearchMatch>;
-  readonly isPending: boolean;
-} {
+): ThreadSearchState {
   const normalizedQuery = query.trim();
   const debouncedQuery = useDebouncedValue(normalizedQuery, THREAD_SEARCH_DEBOUNCE_MS);
   const canSearch = environmentIds.length > 0 && normalizedQuery.length >= 2;

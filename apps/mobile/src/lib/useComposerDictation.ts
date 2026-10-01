@@ -63,6 +63,7 @@ export function useComposerDictation(
     () =>
       (input.createSession ?? nativeSession)({
         schedule: (callback, milliseconds) => globalThis.setTimeout(callback, milliseconds),
+        // SAFETY: The session returns the exact handle allocated by this schedule callback.
         cancelSchedule: (timer) => globalThis.clearTimeout(timer as ReturnType<typeof setTimeout>),
         transcribe: (request) => {
           const operation = transcribe.current;
@@ -112,6 +113,7 @@ export function useComposerDictation(
   };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Provider dictation can reject with any thrown value; this helper only extracts an Error message.
 function describeDictationFailure(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
 

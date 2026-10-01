@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 import { botChatTimeline } from "@akeru/client-runtime/state/bot-chat-timeline";
 import {
@@ -416,7 +417,7 @@ describe("delegation cards in the feed", () => {
     let previousMessageId: string | null = null;
 
     for (const entry of timeline) {
-      if (entry._tag === "Message") {
+      if (Predicate.isTagged(entry, "Message")) {
         if (feedIdSet.has(entry.message.id)) {
           previousMessageId = entry.message.id;
         }
@@ -424,7 +425,7 @@ describe("delegation cards in the feed", () => {
         continue;
       }
 
-      if (entry._tag !== "Delegation") continue;
+      if (!Predicate.isTagged(entry, "Delegation")) continue;
       const cardId = `delegation:${entry.delegation.delegationId}`;
       expect(feedIds).toContain(cardId);
       const cardIndex = feedIds.indexOf(cardId);

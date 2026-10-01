@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 import { Linking } from "react-native";
 
+type ExternalUrlMetadata = { readonly scheme: string; readonly host?: string };
+
 const ExternalUrlTarget = Schema.Literals([
   "file-preview",
   "markdown-link",
@@ -24,7 +26,7 @@ export class ExternalUrlOpenError extends Schema.TaggedErrorClass<ExternalUrlOpe
   }
 }
 
-function externalUrlMetadata(url: string): { readonly scheme: string; readonly host?: string } {
+function externalUrlMetadata(url: string): ExternalUrlMetadata {
   try {
     const parsed = new URL(url);
 

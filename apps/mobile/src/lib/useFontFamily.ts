@@ -1,4 +1,7 @@
+import { Schema } from "effect";
 import { useCSSVariable } from "uniwind";
+
+const decodeFontFamily = Schema.decodeUnknownSync(Schema.String);
 
 const FONT_FAMILY_VARIABLES = {
   regular: "--font-sans",
@@ -11,5 +14,5 @@ const FONT_FAMILY_VARIABLES = {
  * Prefer Uniwind font classes when the target component accepts `className`.
  */
 export function useFontFamily(weight: keyof typeof FONT_FAMILY_VARIABLES): string {
-  return useCSSVariable(FONT_FAMILY_VARIABLES[weight]) as string;
+  return decodeFontFamily(useCSSVariable(FONT_FAMILY_VARIABLES[weight]));
 }

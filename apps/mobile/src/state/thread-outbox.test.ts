@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { EnvironmentNotRegisteredError } from "@akeru/client-runtime/connection";
 import { isTransportConnectionErrorMessage } from "@akeru/client-runtime/errors";
@@ -297,7 +298,8 @@ describe("thread outbox", () => {
     for (const reason of socketReasons) {
       const error = new RpcClientError.RpcClientError({ reason });
       expect(isTransportConnectionErrorMessage(error.message)).toBe(
-        reason._tag === "SocketCloseError" || reason._tag === "SocketOpenError",
+        Predicate.isTagged(reason, "SocketCloseError") ||
+          Predicate.isTagged(reason, "SocketOpenError"),
       );
       expect(shouldRetryThreadOutboxDelivery(error)).toBe(true);
     }

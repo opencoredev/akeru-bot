@@ -1,8 +1,13 @@
+import { makeMobileBot } from "../../lib/mobile-fixtures.test-support";
 import { BotId, DelegationId, ThreadId, TurnId } from "@akeru/contracts";
 import type { AkeruDelegationRecord, OrchestrationBot } from "@akeru/contracts";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { delegationActions } from "@akeru/client-runtime/delegation-presentation";
+import { ThreadDelegationCard } from "./ThreadDelegationCard";
+
+type PhasesTable = Record<string, AkeruDelegationRecord["phase"]>;
 
 vi.mock("react-native", () => ({
   Text: "span",
@@ -25,10 +30,6 @@ vi.mock("../../lib/i18n", async () => {
 
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
-
-import { delegationActions } from "@akeru/client-runtime/delegation-presentation";
-
-import { ThreadDelegationCard } from "./ThreadDelegationCard";
 
 const delegation = (phase: AkeruDelegationRecord["phase"]): AkeruDelegationRecord => ({
   delegationId: DelegationId.make("d-1"),
@@ -63,7 +64,7 @@ const delegation = (phase: AkeruDelegationRecord["phase"]): AkeruDelegationRecor
 });
 
 const bot = (id: string, name: string): OrchestrationBot =>
-  ({ id: BotId.make(id), name, archivedAt: null, avatar: null }) as unknown as OrchestrationBot;
+  makeMobileBot({ id: BotId.make(id), name, archivedAt: null });
 
 const markup = (element: Parameters<typeof renderToStaticMarkup>[0]) =>
   renderToStaticMarkup(element);
@@ -138,7 +139,7 @@ describe("ThreadDelegationCard", () => {
   });
 
   describe("actions", () => {
-    const phases: Record<string, AkeruDelegationRecord["phase"]> = {
+    const phases = {
       queued: { _tag: "Queued" },
       running: {
         _tag: "Running",
@@ -177,7 +178,7 @@ describe("ThreadDelegationCard", () => {
         },
         acknowledgedAt: null,
       },
-    };
+    } satisfies PhasesTable;
 
     const labels = ["Let it finish", "Cancel", "Try again"] as const;
 

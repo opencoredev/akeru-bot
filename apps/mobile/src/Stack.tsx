@@ -68,7 +68,7 @@ function workspacePathFromState(state: NavigationState): string {
 
   const effectiveState =
     routes.length > 0 && routes.length !== state.routes.length
-      ? ({ ...state, routes, index: routes.length - 1 } as NavigationState)
+      ? { ...state, routes, index: routes.length - 1 }
       : state;
 
   const path = getPathFromState(effectiveState, navigationPathConfig);

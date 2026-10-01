@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
+import {
+  AgentActivity,
+  type AgentActivityProps,
+  type AgentActivityRowProps,
+} from "./AgentActivity";
 
 vi.mock("@expo/ui/swift-ui", () => ({
   HStack: "HStack",
@@ -10,25 +15,32 @@ vi.mock("@expo/ui/swift-ui", () => ({
 }));
 
 vi.mock("@expo/ui/swift-ui/modifiers", () => ({
-  font: (value: unknown) => value,
-  foregroundStyle: (value: unknown) => value,
-  frame: (value: unknown) => value,
-  layoutPriority: (value: unknown) => value,
-  lineLimit: (value: unknown) => value,
-  padding: (value: unknown) => value,
-  resizable: (value: unknown) => value,
-  widgetURL: (value: unknown) => ({ widgetURL: value }),
+  font: (value: Parameters<typeof import("@expo/ui/swift-ui/modifiers").font>[0]) => value,
+  foregroundStyle: (
+    value: Parameters<typeof import("@expo/ui/swift-ui/modifiers").foregroundStyle>[0],
+  ) => value,
+  frame: (value: Parameters<typeof import("@expo/ui/swift-ui/modifiers").frame>[0]) => value,
+  layoutPriority: (
+    value: Parameters<typeof import("@expo/ui/swift-ui/modifiers").layoutPriority>[0],
+  ) => value,
+  lineLimit: (value: Parameters<typeof import("@expo/ui/swift-ui/modifiers").lineLimit>[0]) =>
+    value,
+  padding: (value: Parameters<typeof import("@expo/ui/swift-ui/modifiers").padding>[0]) => value,
+  resizable: (value: Parameters<typeof import("@expo/ui/swift-ui/modifiers").resizable>[0]) =>
+    value,
+  widgetURL: (value: Parameters<typeof import("@expo/ui/swift-ui/modifiers").widgetURL>[0]) => ({
+    widgetURL: value,
+  }),
 }));
 
 vi.mock("expo-widgets", () => ({
-  createLiveActivity: vi.fn((name: string, layout: unknown) => ({ layout, name })),
+  createLiveActivity: vi.fn(
+    (name: string, layout: Parameters<typeof import("expo-widgets").createLiveActivity>[1]) => ({
+      layout,
+      name,
+    }),
+  ),
 }));
-
-import {
-  AgentActivity,
-  type AgentActivityProps,
-  type AgentActivityRowProps,
-} from "./AgentActivity";
 
 function makeRow(overrides: Partial<AgentActivityRowProps>): AgentActivityRowProps {
   return {

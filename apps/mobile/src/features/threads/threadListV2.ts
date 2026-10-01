@@ -1,3 +1,4 @@
+import { Data } from "effect";
 import {
   effectiveSettled,
   effectiveSnoozed,
@@ -14,8 +15,12 @@ import {
   sortPinnedThreadsByOrderKey,
 } from "@akeru/client-runtime/state/thread-sort";
 import type { EnvironmentId, ProjectId } from "@akeru/contracts";
-
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
+
+type ThreadListV2SwipeActions = {
+  readonly primary: Exclude<ThreadListV2SwipeAction, "snooze">;
+  readonly secondary: "snooze" | null;
+};
 
 export { snoozeWakeLabel };
 
@@ -31,31 +36,35 @@ export type ThreadListV2Status = "approval" | "input" | "working" | "failed" | "
 
 export type ThreadListV2SwipeAction = "archive" | "settle" | "unsettle" | "snooze" | "unsnooze";
 
+type SnoozeMenuSelection =
+  | { readonly _tag: "selected"; readonly preset: SnoozePreset }
+  | { readonly _tag: "expired" }
+  | { readonly _tag: "not-snooze" };
+
+const snoozeMenuSelection = Data.taggedEnum<SnoozeMenuSelection>();
+
 export function resolveThreadListV2SnoozeMenuSelection(input: {
   readonly event: string;
   readonly displayedPresets: ReadonlyArray<SnoozePreset>;
   readonly now: Date;
-}):
-  | { readonly _tag: "selected"; readonly preset: SnoozePreset }
-  | { readonly _tag: "expired" }
-  | { readonly _tag: "not-snooze" } {
-  if (!input.event.startsWith("snooze:")) return { _tag: "not-snooze" };
+}): SnoozeMenuSelection {
+  if (!input.event.startsWith("snooze:")) return snoozeMenuSelection["not-snooze"]();
 
   const currentPreset = resolveSnoozePresets(input.now).find(
     (candidate) => input.event === `snooze:${candidate.id}`,
   );
 
-  if (currentPreset) return { _tag: "selected", preset: currentPreset };
+  if (currentPreset) return snoozeMenuSelection["selected"]({ preset: currentPreset });
 
   const displayedPreset = input.displayedPresets.find(
     (candidate) => input.event === `snooze:${candidate.id}`,
   );
 
   if (displayedPreset && Date.parse(displayedPreset.snoozedUntil) > input.now.getTime()) {
-    return { _tag: "selected", preset: displayedPreset };
+    return snoozeMenuSelection["selected"]({ preset: displayedPreset });
   }
 
-  return { _tag: "expired" };
+  return snoozeMenuSelection["expired"]();
 }
 
 export function resolveThreadListV2SwipeActions(input: {
@@ -65,10 +74,7 @@ export function resolveThreadListV2SwipeActions(input: {
   readonly snoozable: boolean;
   /** Row is on the snoozed shelf. */
   readonly snoozed?: boolean;
-}): {
-  readonly primary: Exclude<ThreadListV2SwipeAction, "snooze">;
-  readonly secondary: "snooze" | null;
-} {
+}): ThreadListV2SwipeActions {
   if (input.snoozed === true) {
     return { primary: "unsnooze", secondary: null };
   }

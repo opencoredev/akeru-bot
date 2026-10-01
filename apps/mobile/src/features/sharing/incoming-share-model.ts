@@ -42,9 +42,7 @@ export const IncomingShareDraftSchema = Schema.Struct({
 
 const decodeIncomingShareDraftSync = Schema.decodeUnknownSync(IncomingShareDraftSchema);
 
-export function decodeIncomingShareDraft(value: unknown): IncomingShareDraft {
-  return decodeIncomingShareDraftSync(value);
-}
+export const decodeIncomingShareDraft = decodeIncomingShareDraftSync;
 
 export interface IncomingShareFileReader {
   readonly readBase64: (uri: string) => Promise<string>;

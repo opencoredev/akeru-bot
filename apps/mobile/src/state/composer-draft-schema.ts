@@ -6,6 +6,7 @@ import {
   type ProviderInteractionMode,
   type RuntimeMode,
 } from "@akeru/contracts";
+import { flow } from "effect";
 import * as Schema from "effect/Schema";
 import { DraftComposerImageAttachmentSchema } from "../lib/composer-image-schema";
 import type { DraftComposerImageAttachment } from "../lib/composerImages";
@@ -98,10 +99,6 @@ export function isEmptyDraft(draft: ComposerDraft): boolean {
   );
 }
 
-export function decodePersistedComposerDrafts(value: unknown): Record<string, ComposerDraft> {
-  const parsed = decodePersistedComposerDraftsDocument(value);
-
-  return Object.fromEntries(
-    Object.entries(parsed.drafts).filter(([, draft]) => !isEmptyDraft(draft)),
-  );
-}
+export const decodePersistedComposerDrafts = flow(decodePersistedComposerDraftsDocument, (parsed) =>
+  Object.fromEntries(Object.entries(parsed.drafts).filter(([, draft]) => !isEmptyDraft(draft))),
+);

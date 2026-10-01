@@ -251,7 +251,8 @@ export function useThreadSettingsSheetRoute(input: {
     () =>
       // UIKit's completion callback for the sheet dismissal, surfaced by the
       // native-stack patch. This is when the queued keyboard restore runs.
-      (navigation as unknown as NavigationWithFinishTransitioning).addListener(
+      // SAFETY: The bundled native-stack patch emits finishTransitioning with this listener signature.
+      (navigation as NavigationWithFinishTransitioning).addListener(
         "finishTransitioning",
         presentation.onStackTransitionsFinished,
       ),

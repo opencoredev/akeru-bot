@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   asRecord,
   asTrimmedString,
@@ -38,13 +39,11 @@ function isTerminalBypassUpdate(activity: OrchestrationThreadActivity): boolean 
   }
 
   const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+    activity.payload && Predicate.isObject(activity.payload) ? activity.payload : null;
 
   return (
     payload?.timelineBypass === true &&
-    typeof payload.status === "string" &&
+    Predicate.isString(payload.status) &&
     MOBILE_TERMINAL_UPDATE_STATUSES.has(payload.status)
   );
 }
@@ -59,9 +58,7 @@ function isTerminalBypassUpdate(activity: OrchestrationThreadActivity): boolean 
  */
 function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean {
   const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+    activity.payload && Predicate.isObject(activity.payload) ? activity.payload : null;
 
   if (!payload) {
     return false;
@@ -78,7 +75,7 @@ function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean
   // agent's own background work (stamped "background") is internal — same
   // rule as web (review finding: hiding on agentId alone dropped nested
   // completions with no replacement UI).
-  const ownedByAgent = typeof payload.agentId === "string" && payload.agentId.trim().length > 0;
+  const ownedByAgent = Predicate.isString(payload.agentId) && payload.agentId.trim().length > 0;
 
   if (!ownedByAgent) {
     return false;
@@ -144,18 +141,14 @@ function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): bool
   }
 
   const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+    activity.payload && Predicate.isObject(activity.payload) ? activity.payload : null;
 
-  return typeof payload?.detail === "string" && payload.detail.startsWith("ExitPlanMode:");
+  return Predicate.isString(payload?.detail) && payload.detail.startsWith("ExitPlanMode:");
 }
 
 function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWorkLogEntry {
   const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+    activity.payload && Predicate.isObject(activity.payload) ? activity.payload : null;
 
   const commandPreview = extractToolCommand(payload);
   const changedFiles = extractChangedFiles(payload);
@@ -170,14 +163,14 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     activity.kind === "task.updated";
 
   const taskSummary =
-    isTaskActivity && typeof payload?.summary === "string" && payload.summary.length > 0
+    isTaskActivity && Predicate.isString(payload?.summary) && payload.summary.length > 0
       ? payload.summary
       : null;
 
   const taskDetailAsLabel =
     isTaskActivity &&
     !taskSummary &&
-    typeof payload?.detail === "string" &&
+    Predicate.isString(payload?.detail) &&
     payload.detail.length > 0
       ? payload.detail
       : null;
@@ -185,7 +178,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   const taskLabel = taskSummary || taskDetailAsLabel;
 
   const taskId =
-    isTaskActivity && typeof payload?.taskId === "string" && payload.taskId.length > 0
+    isTaskActivity && Predicate.isString(payload?.taskId) && payload.taskId.length > 0
       ? payload.taskId
       : undefined;
 
@@ -210,7 +203,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   if (
     !taskDetailAsLabel &&
     payload &&
-    typeof payload.detail === "string" &&
+    Predicate.isString(payload.detail) &&
     payload.detail.length > 0
   ) {
     const detail = stripTrailingExitCode(payload.detail).output;
@@ -608,12 +601,14 @@ export function workEntryHeading(workEntry: WorkLogEntry): string {
   return capitalizePhrase(normalizeCompactToolLabel(workEntry.toolTitle));
 }
 
-function extractToolTitle(payload: Record<string, unknown> | null): string | null {
+function extractToolTitle(
+  payload: { readonly title?: unknown; readonly status?: unknown } | null,
+): string | null {
   return asTrimmedString(payload?.title);
 }
 
 function extractWorkLogToolLifecycleStatus(
-  payload: Record<string, unknown> | null,
+  payload: { readonly title?: unknown; readonly status?: unknown } | null,
 ): WorkLogToolLifecycleStatus | undefined {
   const status = payload?.status;
 

@@ -11,9 +11,7 @@ export function groupChatBots(
   group: OrchestrationGroup,
   bots: ReadonlyArray<OrchestrationBot>,
 ): ReadonlyArray<OrchestrationBot> {
-  const memberIds = new Set(
-    group.members.filter(isGroupBotMember).map((member) => member.botId as string),
-  );
+  const memberIds = new Set(group.members.filter(isGroupBotMember).map((member) => member.botId));
 
   return bots
     .filter((bot) => bot.archivedAt === null && memberIds.has(bot.id))

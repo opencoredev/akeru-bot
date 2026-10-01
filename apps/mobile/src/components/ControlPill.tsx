@@ -1,13 +1,7 @@
+import { Match } from "effect";
 import { MenuView } from "@react-native-menu/menu";
 import * as Haptics from "expo-haptics";
-import {
-  cloneElement,
-  isValidElement,
-  type ComponentProps,
-  type ReactElement,
-  type ReactNode,
-  useRef,
-} from "react";
+import { cloneElement, isValidElement, type ComponentProps, type ReactNode, useRef } from "react";
 import { Platform, Pressable, View } from "react-native";
 import { useThemeColor } from "../lib/useThemeColor";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
@@ -58,14 +52,11 @@ export function ControlPill(props: {
   const primaryFg = useThemeColor("--color-primary-foreground");
   const dangerFg = useThemeColor("--color-danger-foreground");
 
-  const iconTintColor =
-    variant === "primary"
-      ? props.disabled
-        ? iconSubtle
-        : primaryFg
-      : variant === "danger"
-        ? dangerFg
-        : iconColor;
+  const iconTintColor = Match.value(variant).pipe(
+    Match.when("primary", () => (props.disabled ? iconSubtle : primaryFg)),
+    Match.when("danger", () => dangerFg),
+    Match.orElse(() => iconColor),
+  );
 
   const isCircle =
     variant === "circle" || variant === "danger" || (variant === "primary" && !props.label);
@@ -76,13 +67,11 @@ export function ControlPill(props: {
       : variant === "primary"
         ? "h-11 flex-row items-center justify-center gap-2 rounded-full px-5"
         : "h-11 flex-row items-center justify-center gap-2 rounded-full px-3.5",
-    variant === "primary"
-      ? props.disabled
-        ? "bg-subtle-strong"
-        : "bg-primary"
-      : variant === "danger"
-        ? "bg-danger"
-        : "bg-subtle",
+    Match.value(variant).pipe(
+      Match.when("primary", () => (props.disabled ? "bg-subtle-strong" : "bg-primary")),
+      Match.when("danger", () => "bg-danger"),
+      Match.orElse(() => "bg-subtle"),
+    ),
     props.className,
   );
 
@@ -134,8 +123,11 @@ export function ControlPillMenu(
     // Long-press menus keep their child interactive: the child element gets
     // an injected onLongPress (mirroring the iOS context-menu interaction)
     // so its own tap handling still works.
-    if (props.shouldOpenOnLongPress && isValidElement(props.children)) {
-      const child = props.children as ReactElement<{ onLongPress?: () => void }>;
+    if (
+      props.shouldOpenOnLongPress &&
+      isValidElement<{ onLongPress?: () => void }>(props.children)
+    ) {
+      const child = props.children;
 
       return (
         <AndroidAnchoredMenu
@@ -181,8 +173,11 @@ export function ControlPillMenu(
   // onLongPress makes Pressability swallow the release, so holds past 350ms
   // (below the ~500ms context-menu threshold) can only open the menu, never
   // tap through.
-  if (props.shouldOpenOnLongPress && isValidElement(children)) {
-    const child = children as ReactElement<{ onLongPress?: () => void; delayLongPress?: number }>;
+  if (
+    props.shouldOpenOnLongPress &&
+    isValidElement<{ onLongPress?: () => void; delayLongPress?: number }>(children)
+  ) {
+    const child = children;
     children = cloneElement(child, {
       onLongPress: child.props.onLongPress ?? (() => undefined),
       delayLongPress: child.props.delayLongPress ?? 350,

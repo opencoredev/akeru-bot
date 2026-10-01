@@ -1,6 +1,7 @@
+import { Predicate } from "effect";
 import { requireNativeView } from "expo";
 import type { Ref } from "react";
-import type { StyleProp, ViewProps, ViewStyle } from "react-native";
+import type { ViewProps } from "react-native";
 import { StyleSheet } from "react-native";
 import { useFontFamily } from "../lib/useFontFamily";
 import { useScaledTextRole } from "../features/settings/appearance/useScaledTextRole";
@@ -73,15 +74,15 @@ export function ComposerEditor({
       themeJson={editorDocument.themeJson}
       placeholder={props.placeholder ?? ""}
       fontFamily={
-        typeof resolvedTextStyle.fontFamily === "string" ? resolvedTextStyle.fontFamily : fontFamily
+        Predicate.isString(resolvedTextStyle.fontFamily) ? resolvedTextStyle.fontFamily : fontFamily
       }
       fontSize={
-        typeof resolvedTextStyle.fontSize === "number"
+        Predicate.isNumber(resolvedTextStyle.fontSize)
           ? resolvedTextStyle.fontSize
           : bodyText.fontSize
       }
       lineHeight={
-        typeof resolvedTextStyle.lineHeight === "number"
+        Predicate.isNumber(resolvedTextStyle.lineHeight)
           ? resolvedTextStyle.lineHeight
           : bodyText.lineHeight
       }
@@ -91,7 +92,7 @@ export function ComposerEditor({
       autoFocus={props.autoFocus ?? false}
       autoCorrect={props.autoCorrect ?? true}
       spellCheck={props.spellCheck ?? true}
-      style={style as StyleProp<ViewStyle>}
+      style={style}
       onComposerChange={editorDocument.onComposerChange}
       onComposerSelectionChange={editorDocument.onComposerSelectionChange}
       onComposerPasteImages={(event) => onPasteImages?.(event.nativeEvent.uris)}

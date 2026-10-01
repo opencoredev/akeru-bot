@@ -30,5 +30,5 @@ export function withNativeGlassHeaderItem<T extends NativeGlassHeaderItem>(
     sharesBackground,
     variant: item.variant ?? "plain",
     width: options.width ?? item.width,
-  } as T;
+  };
 }

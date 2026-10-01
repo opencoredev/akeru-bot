@@ -83,7 +83,7 @@ export const migrateLegacyConnectionCatalog = Effect.fn(
   "mobile.connectionMigration.migrateCatalog",
 )(function* (raw: string) {
   const parsed = yield* Effect.try({
-    try: () => JSON.parse(raw) as unknown,
+    try: () => JSON.parse(raw),
     catch: (cause) =>
       new LegacyConnectionMigrationError({
         message: `Could not parse the legacy mobile connection catalog: ${String(cause)}`,

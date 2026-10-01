@@ -13,7 +13,6 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, View } from 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "../../lib/useThemeColor";
 import { cn } from "../../lib/cn";
-
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { AppText as Text } from "../../components/AppText";
 import { useProjects } from "../../state/entities";
@@ -24,15 +23,17 @@ import { useIncomingShare } from "../sharing/IncomingShareProvider";
 import { useNewTaskFlow } from "./new-task-flow-provider";
 import { getProjectScopeSelectionTarget } from "./new-task-project-selection";
 
+type ProjectEmptyState = {
+  readonly title: string;
+  readonly detail: string;
+  readonly loading: boolean;
+};
+
 type NewTaskRouteParams = {
   readonly incomingShareId?: string | string[];
 };
 
-function deriveProjectEmptyState(catalogState: WorkspaceState): {
-  readonly title: string;
-  readonly detail: string;
-  readonly loading: boolean;
-} {
+function deriveProjectEmptyState(catalogState: WorkspaceState): ProjectEmptyState {
   if (catalogState.isLoadingConnections) {
     return {
       title: "Loading environments",

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import { canSnooze } from "@akeru/client-runtime/state/thread-settled";
 import * as Cause from "effect/Cause";
@@ -21,7 +22,7 @@ import {
 } from "./use-thread-action-executor";
 import { environmentSupportsThreadCapability } from "./environment-thread-capabilities";
 
-export function useThreadListActions(): {
+type ThreadListActions = {
   readonly archiveThread: (thread: EnvironmentThreadShell) => void;
   readonly confirmDeleteThread: (thread: EnvironmentThreadShell) => void;
   readonly settleThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
@@ -35,7 +36,14 @@ export function useThreadListActions(): {
     direction: "up" | "down",
   ) => Promise<boolean>;
   readonly regenerateThreadTitle: (thread: EnvironmentThreadShell) => Promise<boolean>;
-} {
+};
+
+type ArchivedThreadListActions = {
+  readonly unarchiveThread: (thread: EnvironmentThreadShell) => void;
+  readonly confirmDeleteThread: (thread: EnvironmentThreadShell) => void;
+};
+
+export function useThreadListActions(): ThreadListActions {
   const { t } = useMobileI18n();
   const executeAction = useThreadActionExecutor();
   const snoozeMutation = useAtomCommand(threadEnvironment.snooze, { reportFailure: false });
@@ -105,7 +113,7 @@ export function useThreadListActions(): {
           },
         });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           const error = Cause.squash(result.cause);
           Alert.alert(
             t("Could not snooze chat"),
@@ -154,7 +162,7 @@ export function useThreadListActions(): {
           input: { threadId: thread.id, reason: "user" },
         });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           const error = Cause.squash(result.cause);
           Alert.alert(
             t("Could not wake chat"),
@@ -215,7 +223,7 @@ export function useThreadListActions(): {
         input: { threadId: thread.id, ...(orderKey !== undefined ? { orderKey } : {}) },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         const error = Cause.squash(result.cause);
         Alert.alert(
           t("Could not pin chat"),
@@ -252,7 +260,7 @@ export function useThreadListActions(): {
         input: { threadId: thread.id },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         const error = Cause.squash(result.cause);
         Alert.alert(
           t("Could not unpin chat"),
@@ -300,7 +308,7 @@ export function useThreadListActions(): {
           input: { threadId: thread.id, regenerateTitle: true },
         });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           const error = Cause.squash(result.cause);
           Alert.alert(
             t("Could not regenerate title"),
@@ -394,7 +402,7 @@ export function useThreadListActions(): {
             input: { threadId: target.id, orderKey: assignment.orderKey },
           });
 
-          if (result._tag === "Failure") {
+          if (Predicate.isTagged(result, "Failure")) {
             const error = Cause.squash(result.cause);
             Alert.alert(
               t("Could not move chat"),
@@ -436,10 +444,7 @@ export function useThreadListActions(): {
 
 export function useArchivedThreadListActions(
   onCompleted: (thread: EnvironmentThreadShell) => void,
-): {
-  readonly unarchiveThread: (thread: EnvironmentThreadShell) => void;
-  readonly confirmDeleteThread: (thread: EnvironmentThreadShell) => void;
-} {
+): ArchivedThreadListActions {
   const handleCompleted = useCallback(
     (_action: ThreadListAction, thread: EnvironmentThreadShell) => {
       onCompleted(thread);

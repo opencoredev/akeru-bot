@@ -4,7 +4,7 @@ import type {
   ServerConfig as T3ServerConfig,
   SubscriptionProviderStatus,
 } from "@akeru/contracts";
-import { PROVIDER_DISPLAY_NAMES, type ProviderDriverKind } from "@akeru/contracts";
+import { PROVIDER_DISPLAY_NAMES, ProviderDriverKind } from "@akeru/contracts";
 import {
   filterProvidersBySubscriptionConnection,
   withRefreshableSubscriptionLogin,
@@ -50,7 +50,7 @@ function providerDisplayLabel(provider: {
 }): string {
   if (provider.displayName) return provider.displayName;
 
-  return PROVIDER_DISPLAY_NAMES[provider.driver as ProviderDriverKind] ?? provider.instanceId;
+  return PROVIDER_DISPLAY_NAMES[ProviderDriverKind.make(provider.driver)] ?? provider.instanceId;
 }
 
 /**

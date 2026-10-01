@@ -1,6 +1,8 @@
+import { makeMobileBot } from "../../lib/mobile-fixtures.test-support";
+import { BotId, GroupId, ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
+import { makeMobileGroup } from "../../lib/mobile-fixtures.test-support";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { OrchestrationBot, OrchestrationGroup } from "@akeru/contracts";
 import { resolveComposerBotMention } from "@akeru/shared/composerBotMentions";
 
 import {
@@ -72,7 +74,7 @@ describe("buildComposerMentionItems", () => {
 
 describe("bot mentions", () => {
   const bot = (id: string, name: string, title: string, archivedAt: string | null = null) =>
-    ({ id, name, title, archivedAt }) as unknown as OrchestrationBot;
+    makeMobileBot({ id: BotId.make(id), name, title, archivedAt });
 
   const bots = [
     bot("bot-claude-1", "Mika", "Designer"),
@@ -82,13 +84,14 @@ describe("bot mentions", () => {
     bot("bot-5", "Mika", "Outsider"),
   ];
 
-  const group = {
-    id: "group-1",
+  const group = makeMobileGroup({
+    id: GroupId.make("group-1"),
     members: ["bot-claude-1", "bot-grok-2", "bot-3", "bot-4"].map((botId) => ({
       kind: "bot",
-      botId,
+      role: "specialist",
+      botId: BotId.make(botId),
     })),
-  } as unknown as OrchestrationGroup;
+  });
 
   const members = groupMentionBots(group, bots);
 
@@ -127,13 +130,13 @@ describe("bot mentions", () => {
 
   it("marks a bot whose provider cannot take handed-off work", () => {
     const withEngine = (id: string, name: string, provider: string) =>
-      ({
-        id,
+      makeMobileBot({
+        id: BotId.make(id),
         name,
         title: "",
         archivedAt: null,
-        engine: { provider, model: "m" },
-      }) as unknown as OrchestrationBot;
+        engine: { provider: ProviderInstanceId.make(provider), model: "m" },
+      });
 
     const engineBots = [
       withEngine("bot-claude-1", "Nova", "opencode"),
@@ -142,9 +145,15 @@ describe("bot mentions", () => {
     ];
 
     const providers = [
-      { instanceId: "opencode", driver: "opencode" },
-      { instanceId: "opencode_go", driver: "opencodeGo" },
-    ] as unknown as Parameters<typeof groupMentionBots>[2];
+      {
+        instanceId: ProviderInstanceId.make("opencode"),
+        driver: ProviderDriverKind.make("opencode"),
+      },
+      {
+        instanceId: ProviderInstanceId.make("opencode_go"),
+        driver: ProviderDriverKind.make("opencodeGo"),
+      },
+    ] satisfies Parameters<typeof groupMentionBots>[2];
 
     const marked = groupMentionBots(group, engineBots, providers);
     expect(marked.map((member) => member.canTakeWork)).toEqual([false, true, true]);

@@ -1,3 +1,4 @@
+import { Match, Predicate } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -53,12 +54,11 @@ export function SettingsRouteScreen({ route }: StaticScreenProps<SettingsRoutePa
   const navigation = useNavigation();
   const rawEnvironmentId = route.params?.environmentId;
 
-  const environmentId =
-    typeof rawEnvironmentId === "string"
-      ? EnvironmentId.make(rawEnvironmentId)
-      : rawEnvironmentId?.[0] === undefined
-        ? null
-        : EnvironmentId.make(rawEnvironmentId[0]);
+  const environmentId = Predicate.isString(rawEnvironmentId)
+    ? EnvironmentId.make(rawEnvironmentId)
+    : rawEnvironmentId?.[0] === undefined
+      ? null
+      : EnvironmentId.make(rawEnvironmentId[0]);
 
   return (
     <>
@@ -384,7 +384,7 @@ function AppSettingsSection() {
   const version = Constants.expoConfig?.version ?? "0.0.0";
   // Fall back to "production" to match resolveAppVariant in app.config.ts, so a
   // missing variant never mislabels a production build as development.
-  const variant = (Constants.expoConfig?.extra?.appVariant as string | undefined) ?? "production";
+  const variant = Constants.expoConfig?.extra?.appVariant ?? "production";
   const variantLabel = variant === "production" ? "" : capitalize(variant);
   const versionLabel = variantLabel ? `${version} · ${variantLabel}` : version;
   const updateCheckAvailable = isAppUpdateCheckAvailable();
@@ -430,20 +430,14 @@ function AppSettingsSection() {
     }
   }, [checkForUpdate, updateCheckAvailable]);
 
-  const statusLabel =
-    updateState === "checking"
-      ? t("Checking…")
-      : updateState === "downloading"
-        ? t("Downloading…")
-        : // "ready" appears only when this check joined an in-flight background-mode
-          // check; that download installs at the next backgrounding.
-          updateState === "ready"
-          ? t("Update ready")
-          : updateState === "restarting"
-            ? t("Restarting…")
-            : updateState === "current"
-              ? t("Up to date")
-              : null;
+  const statusLabel = Match.value(updateState).pipe(
+    Match.when("checking", () => t("Checking…")),
+    Match.when("downloading", () => t("Downloading…")),
+    Match.when("ready", () => t("Update ready")),
+    Match.when("restarting", () => t("Restarting…")),
+    Match.when("current", () => t("Up to date")),
+    Match.orElse(() => null),
+  );
 
   const versionRow = (
     <View className="flex-row items-center gap-4 p-4">

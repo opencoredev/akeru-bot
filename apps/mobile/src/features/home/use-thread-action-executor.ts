@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+import { Match } from "effect";
 import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import { canSettle } from "@akeru/client-runtime/state/thread-settled";
 import * as Cause from "effect/Cause";
@@ -125,20 +127,17 @@ export function useThreadActionExecutor(
                 environmentId: thread.environmentId,
                 input: { threadId: thread.id, reason: "user" },
               })
-            : await (
-                action === "settle"
-                  ? settleMutation
-                  : action === "archive"
-                    ? archiveMutation
-                    : action === "unarchive"
-                      ? unarchiveMutation
-                      : deleteMutation
+            : await Match.value(action).pipe(
+                Match.when("settle", () => settleMutation),
+                Match.when("archive", () => archiveMutation),
+                Match.when("unarchive", () => unarchiveMutation),
+                Match.orElse(() => deleteMutation),
               )({
                 environmentId: thread.environmentId,
                 input: { threadId: thread.id },
               });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           Alert.alert(actionFailureTitle(action, t), actionFailureMessage(action, result.cause, t));
 
           return false;

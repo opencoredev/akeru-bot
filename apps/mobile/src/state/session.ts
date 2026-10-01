@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   type OperateAccess,
@@ -34,6 +35,6 @@ export function useEnvironmentOperateAccess(environmentId: EnvironmentId): Opera
   return resolveRemoteOperateAccess({
     session: Option.getOrNull(AsyncResult.value(result)),
     isPending: result.waiting,
-    hasError: result._tag === "Failure",
+    hasError: Predicate.isTagged(result, "Failure"),
   });
 }

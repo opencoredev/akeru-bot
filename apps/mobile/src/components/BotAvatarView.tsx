@@ -1,8 +1,14 @@
+import { Predicate } from "effect";
 import type { BotAvatar } from "@akeru/contracts";
 import { Image } from "expo-image";
 import { useState } from "react";
 import { View } from "react-native";
 import Svg, { Mask, Path, Rect } from "react-native-svg";
+
+type BlobRendering = {
+  shape: BotBlobShape;
+  color: string;
+};
 
 /**
  * Native port of the web roster's flat bot avatars (BotAvatarView.tsx in
@@ -58,17 +64,19 @@ const BLOB_COLORS: readonly string[] = [
 ];
 
 /** The muted presets bots were saved with before the palette went vivid. */
-const LEGACY_BLOB_COLORS: Record<string, string> = {
-  "#E0645C": "#FF4A5A",
-  "#E8883A": "#FF7A1F",
-  "#D9A833": "#FFA826",
-  "#5BA97B": "#16C47A",
-  "#4E9BB8": "#1FBFAE",
-  "#5B7FD4": "#2E8EFF",
-  "#8B6FC9": "#9A68FF",
-  "#C96FA8": "#FF4FA8",
-  "#7A8699": "#8E8E93",
-};
+const LEGACY_BLOB_COLORS = new Map(
+  Object.entries({
+    "#E0645C": "#FF4A5A",
+    "#E8883A": "#FF7A1F",
+    "#D9A833": "#FFA826",
+    "#5BA97B": "#16C47A",
+    "#4E9BB8": "#1FBFAE",
+    "#5B7FD4": "#2E8EFF",
+    "#8B6FC9": "#9A68FF",
+    "#C96FA8": "#FF4FA8",
+    "#7A8699": "#8E8E93",
+  } as const),
+);
 
 /**
  * Where the face sits on the 100×100 viewBox. It looks up and to the right;
@@ -113,11 +121,11 @@ const EYE_HEIGHT: Record<BotAvatarState, number> = {
 };
 
 function isBotBlobShape(value: string): value is BotBlobShape {
-  return (BLOB_SHAPES as readonly string[]).includes(value);
+  return BLOB_SHAPES.some((shape) => shape === value);
 }
 
-function isBotAvatarColor(value: unknown): value is string {
-  return typeof value === "string" && /^#[\da-f]{6}$/i.test(value);
+function isBotAvatarColor(value: string): boolean {
+  return Predicate.isString(value) && /^#[\da-f]{6}$/i.test(value);
 }
 
 function relativeLuminance(hexColor: string): number | null {
@@ -128,26 +136,28 @@ function relativeLuminance(hexColor: string): number | null {
 
   if (!channels || channels.length !== 3 || channels.some(Number.isNaN)) return null;
 
-  const [red, green, blue] = channels.map((channel) =>
+  const [red = 0, green = 0, blue = 0] = channels.map((channel) =>
     channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
-  ) as [number, number, number];
+  );
 
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
 /** Normalizes a stored body color, moving retired presets onto the current palette. */
-function resolveBlobColor(value: unknown): string {
+function resolveBlobColor(value: string): string {
   if (!isBotAvatarColor(value)) return DEFAULT_BLOB_COLOR;
   const color = value.toUpperCase();
 
-  return LEGACY_BLOB_COLORS[color] ?? color;
+  return LEGACY_BLOB_COLORS.get(color) ?? color;
 }
 
 /**
  * How the eyes are drawn. Most bodies cut their eyes out so the surface shows
  * through; near-white and near-black bodies paint them in a contrasting ink.
  */
-function resolveBlobEyes(color: string): { kind: "cutout" } | { kind: "ink"; ink: string } {
+type BlobEyes = { kind: "cutout" } | { kind: "ink"; ink: string };
+
+function resolveBlobEyes(color: string): BlobEyes {
   const luminance = isBotAvatarColor(color) ? relativeLuminance(color) : null;
 
   if (luminance === null) return { kind: "cutout" };
@@ -177,10 +187,7 @@ function hashSeed(seed: string): number {
 }
 
 /** Every avatar kind resolves to a paintable blob (dither/image fall back). */
-export function resolveBlobRendering(avatar: BotAvatar | null | undefined): {
-  shape: BotBlobShape;
-  color: string;
-} {
+export function resolveBlobRendering(avatar: BotAvatar | null | undefined): BlobRendering {
   if (avatar?.kind === "dither") {
     const hash = Math.abs(hashSeed(avatar.seed));
 

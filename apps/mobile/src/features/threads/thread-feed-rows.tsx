@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { ThreadTurnFoldRow } from "./thread-turn-fold-row";
 import type { ThreadSilentRun } from "@akeru/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
@@ -86,8 +87,8 @@ type ThreadFeedRenderContext = {
   readonly onPressImage: (uri: string, headers?: Record<string, string>) => void;
   readonly onMarkdownLinkPress: (href: string) => void;
   readonly renderMarkdownImage: MarkdownImageRenderer;
-  readonly iconSubtleColor: string | ColorValue;
-  readonly userBubbleColor: string | ColorValue;
+  readonly iconSubtleColor: ColorValue | undefined;
+  readonly userBubbleColor: ColorValue | undefined;
   readonly markdownStyles: MarkdownStyleSets;
   readonly userBubbleMaxWidth: number;
   readonly replyPlayback: ReturnType<typeof useOptionalReplyPlayback>;
@@ -315,11 +316,11 @@ export function renderFeedEntry(
                 <NativeText
                   className={cn(
                     "mt-1 text-[11px]",
-                    delivery.tone === "error"
-                      ? "text-red-600 dark:text-red-400"
-                      : delivery.tone === "warning"
-                        ? "text-amber-700 dark:text-amber-400"
-                        : "text-neutral-600 dark:text-neutral-400",
+                    Match.value(delivery.tone).pipe(
+                      Match.when("error", () => "text-red-600 dark:text-red-400"),
+                      Match.when("warning", () => "text-amber-700 dark:text-amber-400"),
+                      Match.orElse(() => "text-neutral-600 dark:text-neutral-400"),
+                    ),
                   )}
                 >
                   {delivery.message}

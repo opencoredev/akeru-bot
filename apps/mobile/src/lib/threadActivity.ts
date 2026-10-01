@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   delegationActions,
   threadDelegations,
@@ -165,13 +166,11 @@ function withoutCardedDelegationActivities(
     if (!activity.kind.startsWith("delegation.")) return true;
 
     const payload =
-      activity.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
-        : null;
+      activity.payload && Predicate.isObject(activity.payload) ? activity.payload : null;
 
     const delegationId = payload?.delegationId;
 
-    return typeof delegationId !== "string" || !cardIds.has(delegationId);
+    return !Predicate.isString(delegationId) || !cardIds.has(delegationId);
   });
 }
 
@@ -583,12 +582,12 @@ function mergeDelegationCards(
     | undefined;
 
   for (const timelineEntry of timelineEntries) {
-    if (timelineEntry._tag === "Message") {
+    if (Predicate.isTagged(timelineEntry, "Message")) {
       previousTimelineMessage = timelineEntry;
       continue;
     }
 
-    if (timelineEntry._tag !== "Delegation") continue;
+    if (!Predicate.isTagged(timelineEntry, "Delegation")) continue;
 
     const card: ThreadFeedEntry & { type: "delegation" } = {
       type: "delegation",

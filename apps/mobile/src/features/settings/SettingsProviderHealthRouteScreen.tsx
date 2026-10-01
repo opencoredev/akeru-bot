@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+import { Match } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
@@ -30,7 +32,7 @@ import type { MobileSettingsHealthTarget } from "./settingsDeepLink";
 export type SettingsProviderHealthParams = {
   readonly environmentId: EnvironmentId;
   readonly target: MobileSettingsHealthTarget;
-} & Record<string, unknown>;
+};
 
 function Field(props: { readonly label: string; readonly value: string }) {
   return (
@@ -87,7 +89,7 @@ function BotInboxRow({
         },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         return t(describeDurableFactFailure(squashAtomCommandFailure(result)).message);
       }
 
@@ -101,7 +103,7 @@ function BotInboxRow({
     run(async () => {
       const result = await resolveIncident({ environmentId, input: { id: item.id } });
 
-      return result._tag === "Failure" ? t("Could not resolve this item") : null;
+      return Predicate.isTagged(result, "Failure") ? t("Could not resolve this item") : null;
     });
 
   return (
@@ -287,14 +289,12 @@ export function SettingsProviderHealthRouteScreen({
         }),
   );
 
-  const title =
-    route.params.target === "bot-inbox"
-      ? t("Bot inbox")
-      : route.params.target === "providers"
-        ? t("Provider connections")
-        : route.params.target === "image-generation"
-          ? t("Image generation")
-          : t("Local execution");
+  const title = Match.value(route.params.target).pipe(
+    Match.when("bot-inbox", () => t("Bot inbox")),
+    Match.when("providers", () => t("Provider connections")),
+    Match.when("image-generation", () => t("Image generation")),
+    Match.orElse(() => t("Local execution")),
+  );
 
   const inboxView =
     route.params.target === "bot-inbox"
@@ -334,26 +334,33 @@ export function SettingsProviderHealthRouteScreen({
           ) : undefined
         }
       >
-        {route.params.target === "providers" ? (
-          <ProviderConnections
-            key={route.params.environmentId}
-            environmentId={route.params.environmentId}
-          />
-        ) : route.params.target === "image-generation" ? (
-          <ImageGenerationSummary
-            key={route.params.environmentId}
-            environmentId={route.params.environmentId}
-          />
-        ) : route.params.target === "local-execution" ? (
-          section
-        ) : inboxView?.kind === "error" ? (
-          <Text className="py-16 text-center text-sm text-danger">{inboxView.message}</Text>
-        ) : inboxView?.kind === "loading" ? (
-          <Text className="py-16 text-center text-sm text-foreground-muted">
-            {t("Loading bot inbox…")}
-          </Text>
-        ) : (
-          section
+        {Match.value(route.params.target).pipe(
+          Match.when("providers", () => (
+            <ProviderConnections
+              key={route.params.environmentId}
+              environmentId={route.params.environmentId}
+            />
+          )),
+          Match.when("image-generation", () => (
+            <ImageGenerationSummary
+              key={route.params.environmentId}
+              environmentId={route.params.environmentId}
+            />
+          )),
+          Match.when("local-execution", () => section),
+          Match.orElse(() =>
+            Match.value(inboxView).pipe(
+              Match.when({ kind: "error" }, (view) => (
+                <Text className="py-16 text-center text-sm text-danger">{view.message}</Text>
+              )),
+              Match.when({ kind: "loading" }, () => (
+                <Text className="py-16 text-center text-sm text-foreground-muted">
+                  {t("Loading bot inbox…")}
+                </Text>
+              )),
+              Match.orElse(() => section),
+            ),
+          ),
         )}
       </ScrollView>
     </View>

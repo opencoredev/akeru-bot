@@ -26,20 +26,22 @@ function SettingsNavigationLayout({
 }) {
   const { t } = useMobileI18n();
 
-  const titles: Readonly<Record<string, string | undefined>> = {
-    Settings: t("Settings"),
-    SettingsEnvironments: t("Environments"),
-    SettingsEnvironmentNew: t("Add Environment"),
-    SettingsArchive: t("Archived chats"),
-    SettingsAppearance: t("Appearance"),
-    SettingsProjectGrouping: t("Project Grouping"),
-    SettingsClientStorage: t("Client Storage"),
-    SettingsUsage: t("Usage"),
-    SettingsBotUsage: t("Bot usage"),
-    SettingsProviderHealth: undefined,
-  };
+  const titles = new Map(
+    Object.entries({
+      Settings: t("Settings"),
+      SettingsEnvironments: t("Environments"),
+      SettingsEnvironmentNew: t("Add Environment"),
+      SettingsArchive: t("Archived chats"),
+      SettingsAppearance: t("Appearance"),
+      SettingsProjectGrouping: t("Project Grouping"),
+      SettingsClientStorage: t("Client Storage"),
+      SettingsUsage: t("Usage"),
+      SettingsBotUsage: t("Bot usage"),
+      SettingsProviderHealth: undefined,
+    } as const),
+  );
 
-  const title = titles[routeName];
+  const title = titles.get(routeName);
 
   return (
     <>

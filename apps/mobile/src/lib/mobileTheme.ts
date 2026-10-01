@@ -1,3 +1,4 @@
+import { flow, Option, Predicate, Schema } from "effect";
 import {
   BUILT_IN_THEMES,
   getThemeColorsForAppearance,
@@ -27,7 +28,7 @@ export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
   readonly label: string;
 }> = [
   { id: DEFAULT_MOBILE_THEME_ID, label: "Akeru Classic" },
-  ...BUILT_IN_THEMES.map((theme) => ({ id: theme.id as MobileThemeId, label: theme.label })),
+  ...BUILT_IN_THEMES.map((theme) => ({ id: themeIdFromString(theme.id), label: theme.label })),
 ];
 
 type MobileThemeVariable = `--color-${string}`;
@@ -35,18 +36,20 @@ type MobileThemeVariable = `--color-${string}`;
 export type MobileThemeVariables = Readonly<Record<MobileThemeVariable, string>>;
 
 // Theme ids before the rebrand; mapped so stored preferences keep resolving.
-const LEGACY_MOBILE_THEME_IDS: Readonly<Record<string, MobileThemeId>> = {
-  "t3-code": DEFAULT_MOBILE_THEME_ID,
-  "t3-chat": "akeru-chat",
-};
+const LEGACY_MOBILE_THEME_IDS = new Map(
+  Object.entries({
+    "t3-code": DEFAULT_MOBILE_THEME_ID,
+    "t3-chat": "akeru-chat",
+  } as const),
+);
 
-export function normalizeMobileThemeId(value: unknown): MobileThemeId {
-  if (typeof value === "string") {
-    if ((MOBILE_THEME_IDS as readonly string[]).includes(value)) {
-      return value as MobileThemeId;
-    }
+function themeIdFromString(value: string | null): MobileThemeId {
+  if (Predicate.isString(value)) {
+    const themeId = MOBILE_THEME_IDS.find((id) => id === value);
 
-    const aliased = LEGACY_MOBILE_THEME_IDS[value];
+    if (themeId !== undefined) return themeId;
+
+    const aliased = LEGACY_MOBILE_THEME_IDS.get(value);
 
     if (aliased !== undefined) return aliased;
   }
@@ -54,9 +57,16 @@ export function normalizeMobileThemeId(value: unknown): MobileThemeId {
   return DEFAULT_MOBILE_THEME_ID;
 }
 
-export function normalizeMobileThemeMode(value: unknown): MobileThemeMode {
-  return value === "light" || value === "dark" || value === "system" ? value : "system";
-}
+export const normalizeMobileThemeId = flow(
+  Schema.decodeUnknownOption(Schema.String),
+  Option.getOrNull,
+  themeIdFromString,
+);
+
+export const normalizeMobileThemeMode = flow(
+  Schema.decodeUnknownOption(Schema.Literals(["light", "dark", "system"])),
+  Option.getOrElse(() => "system" as const),
+);
 
 export function resolveMobileThemeIds(preferences: {
   readonly themeId?: unknown;
@@ -140,6 +150,7 @@ export function themeColorToNativeColor(value: string): string {
 }
 
 function nativeColors(colors: ThemeColors): ThemeColors {
+  // SAFETY: Every ThemeColors key is retained, and the mapper returns a color string for each value.
   return Object.fromEntries(
     Object.entries(colors).map(([role, color]) => [role, themeColorToNativeColor(color)]),
   ) as ThemeColors;
@@ -338,6 +349,7 @@ export function getMobileThemeVariables(
   })();
 
   // The complete base record guarantees that optional overrides cannot leave a token undefined.
+  // SAFETY: Overrides are palette strings; the full base record supplies every theme variable.
   return overrides ? ({ ...baseVariables, ...overrides } as MobileThemeVariables) : baseVariables;
 }
 

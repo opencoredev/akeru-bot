@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
-  useRef: (initialValue: unknown) => {
+  useRef: <T,>(initialValue: T) => {
     const index = state.cursor++;
 
     if (!state.refs[index]) state.refs[index] = { current: initialValue };
@@ -45,7 +45,17 @@ vi.mock("../lib/i18n", async () => {
   return { useMobileI18n: () => ({ t: translators[state.locale].translate }) };
 });
 
-function find(node: ReactNode, key: string, value: unknown): Record<string, unknown> | undefined {
+type ControlElementProps = ComponentProps<typeof View> &
+  ComponentProps<typeof Pressable> & {
+    name?: string;
+    tintColor?: import("react-native").ColorValue;
+  };
+
+function find(
+  node: ReactNode,
+  key: keyof ControlElementProps,
+  value: string,
+): ControlElementProps | undefined {
   if (Array.isArray(node)) {
     for (const child of node) {
       const result = find(child, key, value);
@@ -54,11 +64,11 @@ function find(node: ReactNode, key: string, value: unknown): Record<string, unkn
     }
   }
 
-  if (!isValidElement<Record<string, unknown>>(node)) return;
+  if (!isValidElement<ControlElementProps>(node)) return;
 
   if (node.props[key] === value) return node.props;
 
-  return find(node.props.children as ReactNode, key, value);
+  return find(node.props.children, key, value);
 }
 
 const HINT =

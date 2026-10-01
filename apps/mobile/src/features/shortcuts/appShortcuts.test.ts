@@ -12,7 +12,21 @@ import {
 } from "./appShortcuts";
 
 function navState(route: { name: string; params?: unknown }): NavigationState {
-  return { index: 0, routes: [route] } as unknown as NavigationState;
+  return {
+    key: "test-stack",
+    type: "stack",
+    stale: false,
+    index: 0,
+    routeNames: [route.name],
+    routes: [
+      {
+        key: "test-route",
+        name: route.name,
+        // Negative tests deliberately supply malformed params to the route parser.
+        ...(route.params === undefined ? {} : { params: route.params as object }),
+      },
+    ],
+  };
 }
 
 function thread(suffix: string, title = `Thread ${suffix}`): RecentThreadShortcut {

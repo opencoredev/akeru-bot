@@ -1,13 +1,15 @@
+import { Predicate } from "effect";
 import type { SharePayload } from "expo-sharing";
 
 const IOS_APP_GROUP_UNAVAILABLE_ERROR_CODE = "ERR_FAILED_TO_RESOLVE_APP_GROUP_ID";
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Expo native loading can throw arbitrary values; this probe reads only a string error code.
 function errorCode(error: unknown): string | null {
-  if (typeof error !== "object" || error === null || !("code" in error)) {
+  if (!Predicate.isObjectOrArray(error) || error === null || !("code" in error)) {
     return null;
   }
 
-  return typeof error.code === "string" ? error.code : null;
+  return Predicate.isString(error.code) ? error.code : null;
 }
 
 /**

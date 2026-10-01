@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { EnvironmentId } from "@akeru/contracts";
+import { createMobileReplyPlaybackSession } from "./mobileReplyPlaybackSession";
 
 vi.mock("expo-secure-store", () => ({
   getItemAsync: vi.fn(async () => null),
@@ -14,8 +15,6 @@ vi.mock("./expoReplyAudio", () => ({
     dispose: vi.fn(),
   })),
 }));
-
-import { createMobileReplyPlaybackSession } from "./mobileReplyPlaybackSession";
 
 const request = (environmentId: string) => ({
   identity: {
@@ -64,7 +63,7 @@ describe("mobile reply playback session", () => {
       },
     }));
 
-    const cancel = vi.fn(async () => ({}));
+    const cancel = vi.fn(async () => ({ _tag: "Success" }));
 
     const session = createMobileReplyPlaybackSession({
       synthesize,

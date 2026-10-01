@@ -1,6 +1,23 @@
 import { afterEach, describe, expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId } from "@akeru/contracts";
 import { vi } from "vite-plus/test";
+import { appAtomRegistry } from "./atom-registry";
+import {
+  clearComposerDraftContentState,
+  ComposerDraftPersistenceError,
+  composerDraftsAtom,
+  copyComposerDraftContentIfEmpty,
+  copyComposerDraftContentState,
+  decodePersistedComposerDrafts,
+  type ComposerDraft,
+  flushComposerDrafts,
+  getComposerDraftSnapshot,
+  mergeComposerDraftContentState,
+  removeComposerDraftsForEnvironment,
+  resetComposerDraftsLoadState,
+  restoreComposerDraftSnapshotState,
+  setComposerDraftText,
+} from "./use-composer-drafts";
 
 const composerDraftFileMocks = vi.hoisted(() => {
   let document = JSON.stringify({ schemaVersion: 1, drafts: {} });
@@ -22,7 +39,10 @@ const composerDraftFileMocks = vi.hoisted(() => {
     getDocument() {
       return document;
     },
-    setDocument(value: unknown) {
+    setDocument(value: {
+      readonly schemaVersion: number;
+      readonly drafts: Record<string, ComposerDraft>;
+    }) {
       document = JSON.stringify(value);
     },
     setReadError(error: Error | null) {
@@ -66,24 +86,6 @@ vi.mock("expo-file-system", () => ({
   File: composerDraftFileMocks.File,
   Paths: { document: "/documents" },
 }));
-
-import { appAtomRegistry } from "./atom-registry";
-import {
-  clearComposerDraftContentState,
-  ComposerDraftPersistenceError,
-  composerDraftsAtom,
-  copyComposerDraftContentIfEmpty,
-  copyComposerDraftContentState,
-  decodePersistedComposerDrafts,
-  type ComposerDraft,
-  flushComposerDrafts,
-  getComposerDraftSnapshot,
-  mergeComposerDraftContentState,
-  removeComposerDraftsForEnvironment,
-  resetComposerDraftsLoadState,
-  restoreComposerDraftSnapshotState,
-  setComposerDraftText,
-} from "./use-composer-drafts";
 
 const DRAFT: ComposerDraft = {
   text: "hello",
@@ -288,7 +290,7 @@ describe("mobile composer drafts", () => {
     const sourceKey = "new-task:environment-1:project-1";
     const targetKey = "new-task:environment-1:project-2";
 
-    const drafts: Record<string, ComposerDraft> = {
+    const drafts = {
       [sourceKey]: { text: "Source task", attachments: [] },
       [targetKey]: { text: "Target task", attachments: [] },
     };
@@ -309,7 +311,7 @@ describe("mobile composer drafts", () => {
       previewUri: "data:image/png;base64,YWJj",
     };
 
-    const existing: Record<string, ComposerDraft> = {
+    const existing = {
       [draftKey]: { text: "Existing context", attachments: [] },
     };
 

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   ConnectionCatalogDocument,
   type ConnectionCatalogDocument as ConnectionCatalogDocumentType,
@@ -77,7 +78,7 @@ export const make = Effect.fn("mobile.connectionStorage.makeCatalogStore")(funct
     if (rebrandedRaw !== null && rebrandedRaw.trim() !== "") {
       const decoded = yield* Effect.result(decodeCatalog(rebrandedRaw));
 
-      if (decoded._tag === "Success") {
+      if (Predicate.isTagged(decoded, "Success")) {
         yield* setItem(CONNECTION_CATALOG_KEY, rebrandedRaw);
         yield* deleteItem(LEGACY_CATALOG_KEY).pipe(Effect.ignore);
 

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -40,7 +41,7 @@ export async function installAppUpdate(
   setState("restarting");
   const flushed = await settlePromise(() => environment.flushPendingWrites());
 
-  if (flushed._tag === "Failure") {
+  if (Predicate.isTagged(flushed, "Failure")) {
     reportUpdateFailure(flushed, "Could not save pending state.", undefined);
 
     if (!userRequested) {
@@ -52,7 +53,7 @@ export async function installAppUpdate(
 
   const reloaded = await settlePromise(() => client.reloadAsync());
 
-  if (reloaded._tag === "Failure") {
+  if (Predicate.isTagged(reloaded, "Failure")) {
     reportUpdateFailure(reloaded, "Downloaded, but could not restart the app.", options.onFailure);
     setState("idle");
     deferral.installInProgress = false;
@@ -105,7 +106,7 @@ async function promptDeferredAppUpdateInstall(
   if (!deferral.pendingInstall || deferral.installInProgress) return;
   const installNow = await settlePromise(() => environment.confirmInstallNow());
 
-  if (installNow._tag !== "Success" || !installNow.value) return;
+  if (!Predicate.isTagged(installNow, "Success") || !installNow.value) return;
 
   // A backgrounding while the alert was up may have started the deferred
   // restart already; the stale accept must not start a second one.
@@ -134,8 +135,12 @@ async function applyDeferredAppUpdateInstall(
   const flushed = await settlePromise(() => environment.flushPendingWrites());
   const safe = await settlePromise(() => environment.isSafeToRestartInBackground());
 
-  if (flushed._tag === "Failure" || safe._tag !== "Success" || !safe.value) {
-    if (flushed._tag === "Failure") {
+  if (
+    Predicate.isTagged(flushed, "Failure") ||
+    !Predicate.isTagged(safe, "Success") ||
+    !safe.value
+  ) {
+    if (Predicate.isTagged(flushed, "Failure")) {
       // Nothing is lost yet: keep the state-bearing runtime alive and retry
       // the flush at the next backgrounding instead of restarting over it.
       reportUpdateFailure(flushed, "Could not save pending state.", undefined);
@@ -151,7 +156,7 @@ async function applyDeferredAppUpdateInstall(
 
   const reloaded = await settlePromise(() => client.reloadAsync());
 
-  if (reloaded._tag === "Failure") {
+  if (Predicate.isTagged(reloaded, "Failure")) {
     reportUpdateFailure(reloaded, "Downloaded, but could not restart the app.", undefined);
     deferral.installInProgress = false;
     // Let later checks re-arm the install; the downloaded update still
@@ -165,7 +170,7 @@ export function reportUpdateFailure(
   fallback: string,
   onFailure: AppUpdateCheckOptions["onFailure"],
 ): void {
-  if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+  if (!Predicate.isTagged(result, "Failure") || isAtomCommandInterrupted(result)) return;
   const error = squashAtomCommandFailure(result);
 
   if (isAppUpdateUnavailableError(error)) return;
@@ -174,9 +179,10 @@ export function reportUpdateFailure(
   onFailure?.(error instanceof Error ? error.message : fallback);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Expo updates can throw arbitrary values; this probe recognizes only its unavailable update codes.
 function isAppUpdateUnavailableError(error: unknown): boolean {
-  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  if (!Predicate.isObjectOrArray(error) || error === null || !("code" in error)) return false;
   const code = error.code;
 
-  return typeof code === "string" && UPDATE_CHECK_UNAVAILABLE_ERROR_CODES.has(code);
+  return Predicate.isString(code) && UPDATE_CHECK_UNAVAILABLE_ERROR_CODES.has(code);
 }

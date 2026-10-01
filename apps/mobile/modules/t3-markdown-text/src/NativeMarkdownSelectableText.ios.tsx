@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { Image, Linking, type TextStyle, useColorScheme } from "react-native";
 
 import { MarkdownTextPrimitive } from "./MarkdownTextPrimitive";
@@ -44,7 +45,7 @@ function resolveHeadingFontSize(textStyle: NativeMarkdownTextStyle, headingLevel
   const index = Math.max(0, Math.min(5, headingLevel - 1));
   const configured = textStyle.headingFontSizes?.[index];
 
-  if (typeof configured === "number" && Number.isFinite(configured)) {
+  if (Predicate.isNumber(configured) && Number.isFinite(configured)) {
     return configured;
   }
 

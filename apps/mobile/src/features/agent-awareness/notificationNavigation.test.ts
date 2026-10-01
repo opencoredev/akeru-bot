@@ -8,7 +8,10 @@ import {
   routeAgentNotificationResponseOnce,
 } from "./notificationPayload";
 
-function responseWithData(data: Record<string, unknown>, identifier = "notification-1") {
+function responseWithData(
+  data: { readonly deepLink?: string; readonly environmentId?: string; readonly threadId?: string },
+  identifier = "notification-1",
+) {
   return {
     notification: {
       request: {

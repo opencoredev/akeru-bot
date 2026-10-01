@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+import { Match } from "effect";
 /**
  * The feed's delegation card wired to the environment: Let it finish and Cancel
  * send the same cancel command the web card sends (keep true or false), and Try
@@ -45,15 +47,14 @@ export function ThreadDelegationFeedCard(props: {
               input: { delegationId, keep: action === "keep" },
             });
 
-      if (result._tag !== "Failure") return;
+      if (!Predicate.isTagged(result, "Failure")) return;
       const error = squashAtomCommandFailure(result);
 
-      const title =
-        action === "keep"
-          ? t("Could not let the work finish")
-          : action === "cancel"
-            ? t("Could not cancel delegation")
-            : t("Could not retry the work");
+      const title = Match.value(action).pipe(
+        Match.when("keep", () => t("Could not let the work finish")),
+        Match.when("cancel", () => t("Could not cancel delegation")),
+        Match.orElse(() => t("Could not retry the work")),
+      );
 
       Alert.alert(title, error instanceof Error ? error.message : undefined);
     },

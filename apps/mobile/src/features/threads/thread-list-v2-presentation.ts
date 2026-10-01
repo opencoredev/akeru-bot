@@ -10,14 +10,16 @@ import { relativeTime } from "../../lib/time";
  */
 
 /** Bot-style display name for rows whose thread has no configured bot. */
-const PROVIDER_BOT_NAMES: Record<string, string> = {
-  claude: "Claude",
-  codex: "Codex",
-  grok: "Grok",
-  kimi: "Kimi",
-  opencode: "OpenCode",
-  opencodeGo: "OpenCode",
-};
+const PROVIDER_BOT_NAMES = new Map(
+  Object.entries({
+    claude: "Claude",
+    codex: "Codex",
+    grok: "Grok",
+    kimi: "Kimi",
+    opencode: "OpenCode",
+    opencodeGo: "OpenCode",
+  } as const),
+);
 
 /**
  * Display name for a thread that has no configured bot. Returns null until the
@@ -27,7 +29,7 @@ const PROVIDER_BOT_NAMES: Record<string, string> = {
 export function providerBotName(driver: string | null): string | null {
   if (!driver) return null;
 
-  return PROVIDER_BOT_NAMES[driver] ?? driver.charAt(0).toUpperCase() + driver.slice(1);
+  return PROVIDER_BOT_NAMES.get(driver) ?? driver.charAt(0).toUpperCase() + driver.slice(1);
 }
 
 export const MONO_FONT = Platform.select({

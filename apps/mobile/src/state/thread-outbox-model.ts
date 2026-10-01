@@ -1,3 +1,4 @@
+import { flow, Match, Predicate } from "effect";
 import { isTransportConnectionErrorMessage } from "@akeru/client-runtime/errors";
 import type { EnvironmentShellStatus } from "@akeru/client-runtime/state/shell";
 import {
@@ -107,22 +108,19 @@ export function modelSelectionsEqual(left: ModelSelectionType, right: ModelSelec
   );
 }
 
-export function encodeQueuedThreadMessage(message: QueuedThreadMessage): unknown {
+export function encodeQueuedThreadMessage(message: QueuedThreadMessage) {
   return encodeStoredQueuedThreadMessage({
     schemaVersion: THREAD_OUTBOX_SCHEMA_VERSION,
     ...message,
   });
 }
 
-export function decodeQueuedThreadMessage(value: unknown): QueuedThreadMessage {
-  const { schemaVersion: _, ...message } = decodeStoredQueuedThreadMessage(value);
+export const decodeQueuedThreadMessage = flow(
+  decodeStoredQueuedThreadMessage,
+  ({ schemaVersion: _, ...message }): QueuedThreadMessage => message,
+);
 
-  return message;
-}
-
-export function groupQueuedThreadMessages(
-  messages: ReadonlyArray<QueuedThreadMessage>,
-): Record<string, ReadonlyArray<QueuedThreadMessage>> {
+export function groupQueuedThreadMessages(messages: ReadonlyArray<QueuedThreadMessage>) {
   const deduplicated = new Map<MessageId, QueuedThreadMessage>();
 
   for (const message of messages) {
@@ -198,16 +196,17 @@ export function isQueuedThreadCreationSendable(message: QueuedThreadMessage): bo
   return message.creation.workspaceMode !== "worktree" || Boolean(message.creation.branch);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Transport and storage rejections can be arbitrary thrown values; only string messages are retained.
 function errorMessage(error: unknown): string | null {
   if (error instanceof Error) {
     return error.message;
   }
 
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return typeof error.message === "string" ? error.message : null;
+  if (Predicate.isObjectOrArray(error) && error !== null && "message" in error) {
+    return Predicate.isString(error.message) ? error.message : null;
   }
 
-  return typeof error === "string" ? error : null;
+  return Predicate.isString(error) ? error : null;
 }
 
 /**
@@ -220,20 +219,27 @@ function errorMessage(error: unknown): string | null {
  * is just "An error occurred during Read". A wrong answer here restores the
  * pending task into a draft and it disappears from the list.
  */
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Classifies arbitrary thrown provider and transport values at the delivery failure boundary.
 export function shouldRetryThreadOutboxDelivery(error: unknown): boolean {
-  if (typeof error === "object" && error !== null && "_tag" in error) {
-    switch (error._tag) {
-      case "OrchestrationDispatchCommandError":
-      case "EnvironmentAuthorizationError":
-        return false;
-      case "ConnectionTransientError":
-      case "RpcClientError":
-      case "EnvironmentRpcUnavailableError":
-      case "EnvironmentNotRegisteredError":
-        return true;
-      default:
-        break;
-    }
+  if (Predicate.isObjectOrArray(error) && error !== null && "_tag" in error) {
+    const taggedDecision = Match.value(error._tag).pipe(
+      Match.when(
+        Match.is("OrchestrationDispatchCommandError", "EnvironmentAuthorizationError"),
+        () => false,
+      ),
+      Match.when(
+        Match.is(
+          "ConnectionTransientError",
+          "RpcClientError",
+          "EnvironmentRpcUnavailableError",
+          "EnvironmentNotRegisteredError",
+        ),
+        () => true,
+      ),
+      Match.orElse(() => null),
+    );
+
+    if (taggedDecision !== null) return taggedDecision;
   }
 
   return isTransportConnectionErrorMessage(errorMessage(error));

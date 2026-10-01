@@ -1,51 +1,46 @@
-function dataFromNotificationResponse(response: unknown): Record<string, unknown> | null {
-  if (typeof response !== "object" || response === null) {
-    return null;
-  }
+import { flow, Option, Predicate, Schema } from "effect";
 
-  const notification = (response as { readonly notification?: unknown }).notification;
+const decodeNotificationResponse = Schema.decodeUnknownOption(
+  Schema.Struct({
+    notification: Schema.Struct({
+      request: Schema.Struct({
+        identifier: Schema.optional(Schema.Unknown),
+        content: Schema.optional(Schema.Unknown),
+      }),
+    }),
+  }),
+);
 
-  if (typeof notification !== "object" || notification === null) {
-    return null;
-  }
+const decodeNotificationContent = Schema.decodeUnknownOption(
+  Schema.Struct({
+    data: Schema.Struct({
+      deepLink: Schema.optional(Schema.Unknown),
+      environmentId: Schema.optional(Schema.Unknown),
+      threadId: Schema.optional(Schema.Unknown),
+    }),
+  }),
+);
 
-  const request = (notification as { readonly request?: unknown }).request;
+type NotificationResponse = typeof decodeNotificationResponse extends (
+  value: infer _Input,
+) => Option.Option<infer Response>
+  ? Response
+  : never;
 
-  if (typeof request !== "object" || request === null) {
-    return null;
-  }
+function dataFromNotificationResponse(response: NotificationResponse | null) {
+  if (response === null) return null;
 
-  const content = (request as { readonly content?: unknown }).content;
+  const content = Option.getOrNull(
+    decodeNotificationContent(response.notification.request.content),
+  );
 
-  if (typeof content !== "object" || content === null) {
-    return null;
-  }
-
-  const data = (content as { readonly data?: unknown }).data;
-
-  return typeof data === "object" && data !== null ? (data as Record<string, unknown>) : null;
+  return content?.data ?? null;
 }
 
-function identifierFromNotificationResponse(response: unknown): string | null {
-  if (typeof response !== "object" || response === null) {
-    return null;
-  }
+function identifierFromNotificationResponse(response: NotificationResponse | null): string | null {
+  const identifier = response?.notification.request.identifier;
 
-  const notification = (response as { readonly notification?: unknown }).notification;
-
-  if (typeof notification !== "object" || notification === null) {
-    return null;
-  }
-
-  const request = (notification as { readonly request?: unknown }).request;
-
-  if (typeof request !== "object" || request === null) {
-    return null;
-  }
-
-  const identifier = (request as { readonly identifier?: unknown }).identifier;
-
-  return typeof identifier === "string" ? identifier : null;
+  return Predicate.isString(identifier) ? identifier : null;
 }
 
 function encodeThreadDeepLink(input: {
@@ -85,11 +80,11 @@ function normalizeThreadDeepLink(value: string): string | null {
   }
 }
 
-export function extractAgentNotificationDeepLink(response: unknown): string | null {
+function deepLinkFromResponse(response: NotificationResponse | null): string | null {
   const data = dataFromNotificationResponse(response);
   const deepLink = data?.deepLink;
 
-  if (typeof deepLink === "string") {
+  if (Predicate.isString(deepLink)) {
     const normalizedDeepLink = normalizeThreadDeepLink(deepLink);
 
     if (normalizedDeepLink) {
@@ -100,19 +95,26 @@ export function extractAgentNotificationDeepLink(response: unknown): string | nu
   const environmentId = data?.environmentId;
   const threadId = data?.threadId;
 
-  if (typeof environmentId === "string" && typeof threadId === "string") {
+  if (Predicate.isString(environmentId) && Predicate.isString(threadId)) {
     return encodeThreadDeepLink({ environmentId, threadId });
   }
 
   return null;
 }
 
+export const extractAgentNotificationDeepLink = flow(
+  decodeNotificationResponse,
+  Option.getOrNull,
+  deepLinkFromResponse,
+);
+
 export function routeAgentNotificationResponseOnce(input: {
   readonly handledResponseIds: Set<string>;
   readonly response: unknown;
   readonly navigate: (deepLink: string) => void;
 }): void {
-  const responseId = identifierFromNotificationResponse(input.response);
+  const response = Option.getOrNull(decodeNotificationResponse(input.response));
+  const responseId = identifierFromNotificationResponse(response);
 
   if (responseId && input.handledResponseIds.has(responseId)) {
     return;
@@ -122,7 +124,7 @@ export function routeAgentNotificationResponseOnce(input: {
     input.handledResponseIds.add(responseId);
   }
 
-  const deepLink = extractAgentNotificationDeepLink(input.response);
+  const deepLink = deepLinkFromResponse(response);
 
   if (deepLink) {
     input.navigate(deepLink);
