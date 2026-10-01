@@ -150,6 +150,7 @@ export function __resetServerAuthBootstrapForTests() {
   bootstrapPromise = null;
   resolvedAuthenticatedGateState = null;
 }
+
 export {
   PrimaryEnvironmentRequestError,
   isPrimaryEnvironmentRequestError,

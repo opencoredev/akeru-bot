@@ -19,6 +19,7 @@ import {
   stopBrowserRecording,
 } from "./browserRecording";
 import { previewRuntimeTabId } from "./previewRuntimeTabId";
+
 describe("browser recording", () => {
   beforeEach(setupRecordingTest);
   afterEach(cleanupRecordingTest);

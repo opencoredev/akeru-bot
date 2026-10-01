@@ -20,6 +20,7 @@ import {
 } from "./previewStateStore.test-support";
 
 beforeEach(resetPreviewTestFixtures);
+
 describe("previewStateStore (single-tab)", () => {
   it("retains multiple tabs and switches active desktop state", () => {
     const first = makeSnapshot();

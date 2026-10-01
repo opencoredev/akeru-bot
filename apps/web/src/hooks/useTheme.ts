@@ -472,6 +472,7 @@ export function useTheme() {
     themeHalves: snapshot.themeHalves,
   } as const;
 }
+
 export {
   readThemeHalves,
   ThemeStorageError,

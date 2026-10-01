@@ -16,6 +16,7 @@ import {
 } from "./previewStateStore.test-support";
 
 beforeEach(resetPreviewTestFixtures);
+
 describe("previewStateStore (single-tab)", () => {
   it("opened event seeds the snapshot and remembers the URL", () => {
     const snapshot = makeSnapshot();

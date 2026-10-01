@@ -3,10 +3,12 @@ import { SurfaceKeyboardController } from "./surfaceKeyboard";
 
 function makeKeyboard() {
   const input = { value: "", select: vi.fn() };
+
   const core = {
     encodePaste: vi.fn((text: string) => `paste:${text}`),
     encodeKey: vi.fn(() => "key-data"),
   };
+
   const host = {
     input,
     core,
@@ -18,12 +20,14 @@ function makeKeyboard() {
     clearSelection: vi.fn(),
     updateLinkModifier: vi.fn(),
   };
+
   return { host, keyboard: new SurfaceKeyboardController(host) };
 }
 
 function keyEvent() {
   // SAFETY: The fixture supplies every keyboard property read by the handlers and encoders.
   const event = new Event("keydown", { cancelable: true }) as KeyboardEvent;
+
   return Object.assign(event, {
     key: "a",
     code: "KeyA",
@@ -40,14 +44,17 @@ function pasteEvent(text: string) {
   // SAFETY: The handler uses only the real Event methods and this clipboard data accessor.
   const event = new Event("paste", { cancelable: true }) as ClipboardEvent;
   Object.defineProperty(event, "clipboardData", { value: { getData: () => text } });
+
   return event;
 }
 
 function deferredText() {
   let resolve = (_text: string) => {};
+
   const promise = new Promise<string>((complete) => {
     resolve = complete;
   });
+
   return { promise, resolve };
 }
 

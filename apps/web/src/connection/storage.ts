@@ -340,6 +340,7 @@ export const connectionStorageLayer = Layer.effectContext(
     );
   }),
 );
+
 export { migrateLegacyConnectionDatabase } from "./legacyDatabaseMigration";
 
 export { type CatalogBackend, makeCatalogBackend, makeCatalogStore } from "./catalogStorage";

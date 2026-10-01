@@ -219,6 +219,7 @@ export async function importOpenVsxThemeExtension(
 
   return themes.map((theme) => ({ ...theme, collection }));
 }
+
 export {
   type OpenVsxThemeSort,
   type OpenVsxThemeExtension,

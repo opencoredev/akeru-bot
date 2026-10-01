@@ -18,6 +18,7 @@ import {
 } from "./previewStateStore.test-support";
 
 beforeEach(resetPreviewTestFixtures);
+
 describe("previewStateStore (single-tab)", () => {
   it("optimistically removes a session before the server close event arrives", () => {
     const first = makeSnapshot({ tabId: "tab_a" });

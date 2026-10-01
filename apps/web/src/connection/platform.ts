@@ -59,6 +59,7 @@ export const connectionPlatformLayer: Layer.Layer<
   environmentOwnedDataCleanupLayer,
   rpcRequestObserverLayer,
 );
+
 export { provisionDesktopSshEnvironment } from "./desktopCapabilities";
 
 export {

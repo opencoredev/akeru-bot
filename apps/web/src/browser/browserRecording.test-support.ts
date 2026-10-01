@@ -128,6 +128,7 @@ export const emitRecordingFrame = () => {
     receivedAt: "2026-06-26T00:00:00.000Z",
   });
 };
+
 export function setupRecordingTest() {
   events.length = 0;
   frameSubscription.listener = null;
@@ -167,6 +168,7 @@ export function setupRecordingTest() {
     }),
   });
 }
+
 export function cleanupRecordingTest() {
   vi.useRealTimers();
   vi.unstubAllGlobals();

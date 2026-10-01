@@ -8,6 +8,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+
 describe("Open VSX themes", () => {
   it("searches theme extensions and keeps only supported open-source licenses", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

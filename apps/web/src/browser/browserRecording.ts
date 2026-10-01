@@ -87,6 +87,7 @@ export function findActiveBrowserRecordingRuntimeTabId(
 
 const drawFrame = (frame: DesktopPreviewRecordingFrame): void => {
   const recording = activeRecordings.get(frame.tabId);
+
   if (!recording) return;
   drawRecordingFrame(recording, frame, () => activeRecordings.get(frame.tabId) === recording);
 };
@@ -504,6 +505,7 @@ export function stopBrowserRecording(
 
   return stopPromise;
 }
+
 export {
   BrowserRecordingUnavailableError,
   BrowserRecordingConflictError,
