@@ -190,6 +190,9 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       const { service, fs, statePath, commands, timeouts } = yield* makeHarness();
       const plan = yield* service.install;
 
+      expect(yield* fs.readFileString(statePath)).toBe(
+        `${JSON.stringify({ protocol: SERVICE_LAUNCHER_PROTOCOL, activeVersion: "1.2.3" }, null, 2)}\n`,
+      );
       expect(parseServiceState(yield* fs.readFileString(statePath))).toEqual({
         protocol: SERVICE_LAUNCHER_PROTOCOL,
         activeVersion: "1.2.3",

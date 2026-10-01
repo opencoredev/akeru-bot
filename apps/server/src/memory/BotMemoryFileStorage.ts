@@ -190,7 +190,7 @@ export const acquireBotMemoryFileLock = Effect.fn("acquireBotMemoryFileLock")(fu
 
       try {
         await handle.writeFile(
-          JSON.stringify(record(DateTime.toEpochMillis(DateTime.nowUnsafe()))),
+          encodeLockRecord(record(DateTime.toEpochMillis(DateTime.nowUnsafe()))),
           "utf8",
         );
         await handle.sync();
@@ -269,7 +269,7 @@ export const acquireBotMemoryFileLock = Effect.fn("acquireBotMemoryFileLock")(fu
       // record that makes verifyOwnership report a lost lock. Records never shrink.
       yield* Effect.promise(() =>
         handle
-          .write(JSON.stringify(record(now)), 0, "utf8")
+          .write(encodeLockRecord(record(now)), 0, "utf8")
           .then(({ bytesWritten }) => handle.truncate(bytesWritten))
           .then(() => handle.sync())
           .catch(() => undefined),
@@ -337,3 +337,5 @@ const decodeLockRecord = Schema.decodeUnknownSync(
     }),
   ),
 );
+
+const encodeLockRecord = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));

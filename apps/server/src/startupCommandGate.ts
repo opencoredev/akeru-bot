@@ -30,7 +30,7 @@ export class ServerRuntimeStartup extends Context.Service<
       effect: Effect.Effect<A, E>,
     ) => Effect.Effect<A, E | ServerRuntimeStartupError>;
   }
->()("akeru-bot/serverRuntimeStartup") {}
+>()("akeru-bot/startupCommandGate/ServerRuntimeStartup") {}
 
 export interface QueuedCommand {
   readonly run: Effect.Effect<void, never>;
