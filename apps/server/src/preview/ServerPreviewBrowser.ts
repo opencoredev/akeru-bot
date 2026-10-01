@@ -1,4 +1,9 @@
 import {
+  DEFAULT_VIEWPORT,
+  makeBrowserbaseContexts,
+  requireBrowserbaseApiKey,
+} from "./BrowserbaseContext.ts";
+import {
   FILL_PREVIEW_VIEWPORT,
   type PreviewAutomationClickInput,
   type PreviewAutomationEvaluateInput,
@@ -20,29 +25,20 @@ import {
 import { normalizePreviewUrl } from "@akeru/shared/preview";
 import { resolvePreviewViewport } from "@akeru/shared/previewViewport";
 import * as Context from "effect/Context";
-import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as RcMap from "effect/RcMap";
 import * as Scope from "effect/Scope";
-import { HttpBody, HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { chromium, type BrowserContext, type Page } from "playwright-core";
-
+import { HttpClient } from "effect/unstable/http";
+import { type BrowserContext, type Page } from "playwright-core";
 import * as ServerSettings from "../serverSettings.ts";
 import * as PreviewManager from "./Manager.ts";
-
-const DEFAULT_VIEWPORT = { width: 1280, height: 800 } as const;
 
 interface BrowserTab {
   readonly threadId: ThreadId;
   readonly page: Page;
   loading: boolean;
-}
-
-interface BrowserbaseSession {
-  readonly id: string;
-  readonly connectUrl: string;
 }
 
 const requestedUrl = (input: PreviewAutomationNavigateInput): string => {
@@ -63,10 +59,7 @@ const selectorFor = (input: {
   readonly selector?: string | undefined;
 }) => input.locator ?? input.selector ?? null;
 
-export class BrowserConfigurationError extends Schema.TaggedErrorClass<BrowserConfigurationError>()(
-  "BrowserConfigurationError",
-  { message: Schema.String },
-) {}
+export { BrowserConfigurationError } from "./BrowserbaseContext.ts";
 
 const errorMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : "Browser operation failed.";
@@ -83,68 +76,11 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
   const previewManager = yield* PreviewManager.PreviewManager;
   const httpClient = yield* HttpClient.HttpClient;
   const settingsService = yield* ServerSettings.ServerSettingsService;
+  const requireApiKey = requireBrowserbaseApiKey(settingsService);
   const tabs = new Map<PreviewTabId, BrowserTab>();
   const activeByThread = new Map<string, PreviewTabId>();
 
-  const requireApiKey = Effect.gen(function* () {
-    const settings = yield* settingsService.getSettings;
-    if (!settings.browserProvider.enabled) {
-      return yield* Effect.fail(
-        new BrowserConfigurationError({
-          message: "Browserbase is disabled. Enable it in Settings > Browser.",
-        }),
-      );
-    }
-    const apiKey = settings.browserProvider.browserbaseApiKey || process.env.BROWSERBASE_API_KEY;
-    if (!apiKey)
-      return yield* Effect.fail(
-        new BrowserConfigurationError({ message: "Browserbase is not configured." }),
-      );
-    return apiKey;
-  });
-
-  const contexts = yield* RcMap.make({
-    lookup: (_key: string) =>
-      Effect.acquireRelease(
-        requireApiKey.pipe(
-          Effect.flatMap((apiKey) =>
-            httpClient
-              .post("https://api.browserbase.com/v1/sessions", {
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-BB-API-Key": apiKey,
-                },
-                body: HttpBody.jsonUnsafe({
-                  browserSettings: { viewport: DEFAULT_VIEWPORT, recordSession: true },
-                }),
-              })
-              .pipe(
-                Effect.flatMap(HttpClientResponse.filterStatusOk),
-                Effect.flatMap((response) => response.json),
-                Effect.map((value) => value as unknown as BrowserbaseSession),
-              ),
-          ),
-          Effect.flatMap((session) =>
-            Effect.tryPromise(() => chromium.connectOverCDP(session.connectUrl)),
-          ),
-          Effect.flatMap((browser) => {
-            const context = browser.contexts()[0];
-            return context
-              ? Effect.succeed({ browser, context })
-              : Effect.tryPromise(() => browser.close()).pipe(
-                  Effect.andThen(
-                    Effect.fail(
-                      new BrowserConfigurationError({
-                        message: "Browserbase returned no browser context.",
-                      }),
-                    ),
-                  ),
-                );
-          }),
-        ),
-        ({ browser }) => Effect.promise(() => browser.close()).pipe(Effect.orDie),
-      ),
-  });
+  const contexts = yield* makeBrowserbaseContexts(httpClient, settingsService);
 
   // One lease holds the shared browser open. close() releases it, which closes the
   // Browserbase session; the next getContext() opens a fresh one.
