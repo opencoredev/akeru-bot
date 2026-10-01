@@ -142,7 +142,10 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const resolvedArtifactDirectory = path.resolve(artifactDirectory);
 
   const playwrightInstallExpression = yield* Effect.cached(
-    playwrightInjectedRuntimeInstallExpression(),
+    playwrightInjectedRuntimeInstallExpression().pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+    ),
   );
 
   const annotationThemeRef = yield* Ref.make(DEFAULT_ANNOTATION_THEME);

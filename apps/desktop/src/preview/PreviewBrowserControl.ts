@@ -24,7 +24,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Scope from "effect/Scope";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import { type playwrightInjectedRuntimeInstallExpression } from "./PlaywrightInjectedRuntime.ts";
+import type { PlaywrightInjectedRuntimeError } from "./PlaywrightInjectedRuntime.ts";
 
 import {
   PreviewOperationError,
@@ -110,9 +110,7 @@ export const createPreviewBrowserControl = ({
   readonly controlEpochRef: Ref.Ref<ReadonlyMap<string, number>>;
   readonly update: ReturnType<typeof createPreviewState>["update"];
   readonly tabsRef: SynchronizedRef.SynchronizedRef<ReadonlyMap<string, PreviewTabState>>;
-  readonly playwrightInstallExpression: ReturnType<
-    typeof playwrightInjectedRuntimeInstallExpression
-  >;
+  readonly playwrightInstallExpression: Effect.Effect<string, PlaywrightInjectedRuntimeError>;
   readonly expectedAgentInputsRef: Ref.Ref<ReadonlyMap<string, readonly ExpectedAgentInput[]>>;
 }) => {
   const pushBounded = <A>(buffer: ReadonlyArray<A>, entry: A): ReadonlyArray<A> =>

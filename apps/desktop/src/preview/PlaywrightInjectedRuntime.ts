@@ -1,8 +1,8 @@
 import { runtimeValueType } from "@akeru/shared/observability";
 import * as Predicate from "effect/Predicate";
-import * as NodeFSP from "node:fs/promises";
+import * as FileSystem from "effect/FileSystem";
 import * as NodeModule from "node:module";
-import * as NodePath from "node:path";
+import * as Path from "effect/Path";
 import * as NodeVM from "node:vm";
 
 import * as Effect from "effect/Effect";
@@ -182,6 +182,9 @@ export const extractPlaywrightInjectedRuntimeSource = Effect.fn(
 
 export const playwrightInjectedRuntimeSource = Effect.fn("PlaywrightInjectedRuntime.source")(
   function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+
     const packageJsonPath = yield* Effect.try({
       try: () => require.resolve(PLAYWRIGHT_PACKAGE_SPECIFIER),
       catch: (cause) =>
@@ -191,12 +194,15 @@ export const playwrightInjectedRuntimeSource = Effect.fn("PlaywrightInjectedRunt
         }),
     });
 
-    const bundlePath = NodePath.join(NodePath.dirname(packageJsonPath), "lib/coreBundle.js");
+    const bundlePath = path.join(path.dirname(packageJsonPath), "lib/coreBundle.js");
 
-    const coreBundle = yield* Effect.tryPromise({
-      try: () => NodeFSP.readFile(bundlePath, "utf8"),
-      catch: (cause) => new PlaywrightCoreBundleReadError({ bundlePath, cause }),
-    });
+    const coreBundle = yield* fileSystem
+      .readFileString(bundlePath, "utf8")
+      .pipe(
+        Effect.mapError(
+          (error) => new PlaywrightCoreBundleReadError({ bundlePath, cause: error.cause ?? error }),
+        ),
+      );
 
     return yield* extractPlaywrightInjectedRuntimeSource(coreBundle, bundlePath);
   },
