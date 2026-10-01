@@ -515,3 +515,108 @@
     }
   }
 }
+
+/* Composer banner surface colors. Themes supply a raised surface. */
+@utility composer-banner-surface-colors {
+  --chat-composer-attached-surface: var(--chat-composer-glass-surface, var(--card));
+
+  @variant dark {
+    --chat-composer-attached-surface: var(
+      --chat-composer-glass-surface,
+      color-mix(in srgb, var(--background) 96%, var(--color-white))
+    );
+  }
+
+  html[data-theme-id] & {
+    --chat-composer-attached-surface: var(--app-theme-surface-raised);
+  }
+}
+
+/* Quiet composer banner outline for calm severities. */
+@utility composer-banner-outline-neutral {
+  --chat-composer-attached-outline: var(
+    --chat-composer-outline,
+    color-mix(in srgb, var(--contrast-foreground) 8%, transparent)
+  );
+
+  @variant dark {
+    --chat-composer-attached-outline: var(
+      --chat-composer-outline,
+      color-mix(in srgb, var(--color-white) 5%, transparent)
+    );
+
+    html[data-theme-id="akeru-chat"] & {
+      --chat-composer-attached-outline: #241e28;
+    }
+  }
+
+  html[data-theme-id] & {
+    --chat-composer-attached-outline: var(--chat-composer-outline, var(--app-theme-toolbar-border));
+  }
+
+  @variant dark {
+    html[data-theme-id]:not([data-theme-id="akeru-chat"]) & {
+      --chat-composer-attached-outline: var(
+        --chat-composer-outline,
+        color-mix(in srgb, var(--app-theme-input) 30%, var(--background))
+      );
+    }
+  }
+}
+
+@utility composer-banner-outline-error {
+  --chat-composer-attached-outline: color-mix(in srgb, var(--error) 32%, transparent);
+}
+
+@utility composer-banner-outline-warning {
+  --chat-composer-attached-outline: color-mix(in srgb, var(--warning) 28%, transparent);
+}
+
+@utility composer-banner-overlap-attached {
+  --chat-composer-attachment-overlap: calc(1rem + 1px);
+}
+
+@utility composer-banner-overlap-none {
+  --chat-composer-attachment-overlap: 0px;
+}
+
+/* Glass layer drawn on ::before, masked open at the attachment seam. */
+@utility composer-banner-glass {
+  --chat-composer-attached-tint: transparent;
+
+  &::before {
+    background-image: linear-gradient(
+      var(--chat-composer-attached-tint),
+      var(--chat-composer-attached-tint)
+    );
+    mask-image: linear-gradient(
+      to top,
+      transparent 0 var(--chat-composer-attachment-overlap),
+      black var(--chat-composer-attachment-overlap)
+    );
+  }
+
+  @variant dark {
+    @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+      &::before {
+        background-image:
+          linear-gradient(var(--chat-composer-attached-tint), var(--chat-composer-attached-tint)),
+          linear-gradient(
+            to top,
+            transparent 0 var(--chat-composer-attachment-overlap),
+            rgb(0 0 0 / 18%) var(--chat-composer-attachment-overlap),
+            transparent calc(var(--chat-composer-attachment-overlap) + 10px)
+          );
+      }
+    }
+  }
+}
+
+/* Banner icon column: wider on touch-sized layouts. */
+@utility composer-banner-icon-column {
+  --composer-banner-icon-column: --spacing(7);
+
+  @variant sm {
+    --composer-banner-icon-column: --spacing(6);
+  }
+}

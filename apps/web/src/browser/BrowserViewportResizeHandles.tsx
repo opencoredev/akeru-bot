@@ -30,7 +30,7 @@ interface Props {
 type HandleKind = "horizontal" | "vertical" | "corner";
 
 const EDGE_BUTTON_CLASS =
-  "group absolute z-20 touch-none border-0 bg-transparent p-0 outline-none before:absolute before:-inset-1 before:content-[''] focus-visible:bg-foreground/[0.04]";
+  "group absolute z-20 touch-none border-0 bg-transparent p-0 outline-none before:absolute before:-inset-1 focus-visible:bg-foreground/[0.04]";
 
 const EDGE_GRIP_CLASS =
   "pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center text-muted-foreground/55 transition-colors duration-150 group-hover:text-foreground/85 group-focus-visible:text-foreground group-active:text-foreground";

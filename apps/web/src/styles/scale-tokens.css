@@ -90,6 +90,17 @@
   /* Spacer that lines the sidebar up with a topbar's vertical center. */
   --spacing-topbar-spacer: calc(0.5rem + var(--workspace-topbar-height) / 2 - 1.25rem);
   --spacing-composer-overlap-1\.5: calc(var(--chat-composer-attachment-overlap) + 0.375rem);
+  --spacing-composer-overlap-1: calc(
+    var(--chat-composer-attachment-overlap) + calc(var(--spacing) * 1)
+  );
+  /* Composer drawer seam and width: the attachment overlap and the form's side insets. */
+  --spacing-composer-seam: calc(1rem + 1px);
+  --spacing-composer-drawer: calc(100% - 2 * var(--chat-composer-drawer-inset));
+  /* Composer banner rows indent by their icon column. */
+  --spacing-banner-indent: calc(var(--composer-banner-icon-column) + calc(var(--spacing) * 1));
+  --spacing-banner-actions-wrapped: calc(
+    100% - var(--composer-banner-icon-column) - calc(var(--spacing) * 1)
+  );
 
   --radius-1px: 1px;
   --radius-5px: 5px;
@@ -97,6 +108,9 @@
   --radius-0\.45em: 0.45em;
   --radius-1\.65rem: 1.65rem;
   --radius-2rem: 2rem;
+  --radius-0\.5rem: 0.5rem;
+  --radius-1rem: 1rem;
+  --radius-16px: 16px;
 
   --shadow-hairline: 0 1px 1px rgb(0 0 0 / 0.03);
   --shadow-hairline-lifted: 0 1px 1px rgb(0 0 0 / 0.03), 0 8px 30px rgb(0 0 0 / 0.035);
@@ -104,6 +118,8 @@
   --shadow-card-hover: 0 1px 2px rgb(0 0 0 / 4%), 0 6px 16px -8px rgb(0 0 0 / 12%);
   --shadow-peek: 0 6px 18px rgb(0 0 0 / 6%);
   --shadow-composer-float: 0 12px 36px -24px rgb(0 0 0 / 80%);
+  --shadow-composer-banner: 0 12px 28px -18px rgb(0 0 0/40%);
+  --shadow-composer-banner-dark: 0 14px 32px -18px rgb(0 0 0/75%);
   --shadow-preview-frame: 0 24px 70px -36px rgba(0, 0, 0, 0.45);
   --shadow-inset-highlight: inset 0 1px 0 rgb(255 255 255 / 0.08);
 
@@ -111,6 +127,8 @@
   --blur-2px: 2px;
 
   --grid-template-columns-1fr-auto: minmax(0, 1fr) auto;
+  --grid-template-columns-banner-row: var(--composer-banner-icon-column) minmax(0, 1fr) auto;
+  --grid-template-columns-banner-row-plain: var(--composer-banner-icon-column) minmax(0, 1fr);
   --grid-template-columns-1fr-2fr: minmax(0, 1fr) minmax(0, 2fr);
   --grid-template-columns-1fr-7rem: minmax(0, 1fr) 7rem;
   --grid-template-columns-1fr-10rem: minmax(0, 1fr) 10rem;
@@ -150,4 +168,10 @@
 
   --color-popover-highlight: color-mix(in srgb, var(--popover) 90%, var(--contrast-foreground));
   --color-sidebar-wash: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
+  /* Translucent composer banner glass over the attached surface color. */
+  --color-composer-glass: color-mix(
+    in srgb,
+    var(--chat-composer-attached-surface) var(--glass-opacity),
+    transparent
+  );
 }

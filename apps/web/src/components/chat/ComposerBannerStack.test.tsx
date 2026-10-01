@@ -55,7 +55,7 @@ describe("ComposerBannerStack", () => {
     const successRoot = renderToStaticMarkup(<ComposerBanner.Root variant="success" />);
 
     for (const markup of [infoRoot, successRoot]) {
-      expect(markup).toContain("--chat-composer-attached-outline:var(--chat-composer-outline");
+      expect(markup).toContain("composer-banner-outline-neutral");
       expect(markup).not.toContain("--chat-composer-attached-tint:color-mix");
     }
 

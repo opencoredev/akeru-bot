@@ -290,7 +290,7 @@ export function SettingsPageContainer({
   return (
     <SettingsSearchTargetProvider targetId={targetId} onTargetHandled={clearTargetHash}>
       <div
-        className="topbar-scroll-fade scrollbar-gutter-both flex-1 overflow-y-auto [--topbar-scroll-fade-height:1.5rem] sm:[--topbar-scroll-fade-height:1.5rem]"
+        className="topbar-scroll-fade scrollbar-gutter-both flex-1 overflow-y-auto topbar-scroll-fade-compact"
         data-settings-page-scroll
       >
         <WorkspacePageContainer width={width} className={cn("gap-8 pt-3 pb-16 sm:pt-4", className)}>
