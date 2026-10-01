@@ -43,13 +43,13 @@ export interface BootServiceStep {
   readonly timeout?: Duration.Input;
 }
 
-export /**
+/**
  * Stop commands block until the service manager gives up: 90s by default for
  * systemd's TimeoutStopSec, and ExitTimeOut=90 in the rendered plist. This
  * must stay above both, or the runner cancels the stop mid-shutdown and the
  * next step races a still-loaded service.
  */
-const STOP_STEP_TIMEOUT = Duration.seconds(120);
+export const STOP_STEP_TIMEOUT = Duration.seconds(120);
 
 /**
  * Platform service-manager integration as data: paths, a pure renderer, and

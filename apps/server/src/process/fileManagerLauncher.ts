@@ -45,7 +45,7 @@ export function fileManagerCommandForPlatform(
   }
 }
 
-export // A graphical session variable plus an executable `xdg-open` does not prove
+// A graphical session variable plus an executable `xdg-open` does not prove
 // that opening a directory does anything: without an `inode/directory` MIME
 // handler, `xdg-open` exits nonzero after the launcher has already detached,
 // so the client would see a silent no-op. Require the handler before
@@ -55,7 +55,7 @@ export // A graphical session variable plus an executable `xdg-open` does not pr
 // `server.getConfig` applies to editor discovery: that outer timeout degrades
 // to an empty editor list, so a hung `xdg-mime` (broken D-Bus or desktop
 // session) must cost only the file manager, not every discovered editor.
-const LINUX_DIRECTORY_HANDLER_PROBE_TIMEOUT = "2 seconds";
+export const LINUX_DIRECTORY_HANDLER_PROBE_TIMEOUT = "2 seconds";
 
 export const hasUsableLinuxDirectoryHandler = Effect.fn(
   "externalLauncher.hasUsableLinuxDirectoryHandler",
@@ -109,12 +109,12 @@ export const isUsableFileManagerCommand = Effect.fn("externalLauncher.isUsableFi
   },
 );
 
-export // The file-manager command a launch can actually run, not just the platform
+// The file-manager command a launch can actually run, not just the platform
 // preference. WSL hosts prefer the Windows Explorer bridge, but interop can
 // exist without `explorer.exe` on PATH (appendWindowsPath=false) or without a
 // distro name while WSLg still provides a working Linux file manager, so they
 // keep the `xdg-open` fallback instead of losing the editor entirely.
-const resolveUsableFileManagerCommand = Effect.fn(
+export const resolveUsableFileManagerCommand = Effect.fn(
   "externalLauncher.resolveUsableFileManagerCommand",
 )(function* (
   platform: NodeJS.Platform,
@@ -141,14 +141,14 @@ const resolveUsableFileManagerCommand = Effect.fn(
   return undefined;
 });
 
-export // Reveal on Windows and WSL runs through PowerShell (see
+// Reveal on Windows and WSL runs through PowerShell (see
 // resolveFileManagerRevealLaunch), not the `explorer` command that gates the
 // file-manager editor itself, so the capability must probe the executables the
 // reveal actually spawns. Callers gate on file-manager availability first;
 // the Linux "files" kind relies on that gate for the directory-handler probe,
 // while the WSL fallback re-probes because its availability may have come
 // from the Explorer bridge instead.
-const fileManagerRevealKindForPlatform = Effect.fn(
+export const fileManagerRevealKindForPlatform = Effect.fn(
   "externalLauncher.fileManagerRevealKindForPlatform",
 )(function* (
   platform: NodeJS.Platform,

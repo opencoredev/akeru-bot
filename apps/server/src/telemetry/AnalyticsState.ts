@@ -29,9 +29,9 @@ export const RETIRED_PROVIDER_COUNTERS = [
   ["browser_searches_cursor", "browser_searches_other"],
 ] as const;
 
-export // Folds counters for retired providers into `other` so events queued before an
+// Folds counters for retired providers into `other` so events queued before an
 // upgrade still decode and deliver.
-const migrateLegacyState = (encoded: string): string => {
+export const migrateLegacyState = (encoded: string): string => {
   const state: unknown = JSON.parse(encoded);
 
   if (typeof state !== "object" || state === null || !("pending" in state)) return encoded;

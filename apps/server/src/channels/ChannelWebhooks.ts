@@ -38,13 +38,13 @@ export const handleWhatsAppWebhook = (ctx: ChannelRuntimeContext, botId: BotId, 
     ),
   );
 
-export // Meta's message webhooks are a few kilobytes; media arrives by reference, not inline.
-const MAX_WHATSAPP_WEBHOOK_BYTES = 1024 * 1024;
+// Meta's message webhooks are a few kilobytes; media arrives by reference, not inline.
+export const MAX_WHATSAPP_WEBHOOK_BYTES = 1024 * 1024;
 
 export const WEBHOOK_TOO_LARGE = Symbol("webhook-too-large");
 
-export /** Reads a webhook body without buffering more than the cap. */
-const readBoundedWebhookBody = async (
+/** Reads a webhook body without buffering more than the cap. */
+export const readBoundedWebhookBody = async (
   request: Request,
 ): Promise<Buffer | typeof WEBHOOK_TOO_LARGE> => {
   const declared = Number(request.headers.get("content-length"));
@@ -82,8 +82,8 @@ export const parseWebhookJson = (body: Buffer): unknown => {
   }
 };
 
-export /** Hands a webhook to the bot's transport only when its messages are for the saved phone number. */
-const handlePhoneScopedWhatsAppWebhook = (
+/** Hands a webhook to the bot's transport only when its messages are for the saved phone number. */
+export const handlePhoneScopedWhatsAppWebhook = (
   ctx: ChannelRuntimeContext,
   botId: BotId,
   secret: StoredChannelSecret | null,
@@ -122,8 +122,12 @@ const handlePhoneScopedWhatsAppWebhook = (
   );
 };
 
-export /** Serves the older bot-addressed webhook URL with the same phone check as connection URLs. */
-const handleBotWhatsAppWebhook = (ctx: ChannelRuntimeContext, botId: BotId, request: Request) =>
+/** Serves the older bot-addressed webhook URL with the same phone check as connection URLs. */
+export const handleBotWhatsAppWebhook = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  request: Request,
+) =>
   ctx.deps.readModel.pipe(
     Effect.map((model) =>
       model.bots
@@ -150,14 +154,14 @@ export const whatsAppChangePhone = (change: unknown): unknown =>
 export const whatsAppSignature = (body: Buffer, appSecret: string) =>
   `sha256=${NodeCrypto.createHmac("sha256", appSecret).update(body).digest("hex")}`;
 
-export /**
+/**
  * Keeps a webhook batch to the saved phone number. Meta can batch changes for
  * several numbers on one app, so changes for other numbers are dropped and the
  * trimmed body is signed again for the transport. Returns null when nothing in
  * a signed batch belongs to this number. An unsigned or badly signed body is
  * passed through untouched so the transport rejects it.
  */
-const scopeWhatsAppWebhookToPhone = (
+export const scopeWhatsAppWebhookToPhone = (
   body: Buffer,
   headers: Headers,
   appSecret: string,

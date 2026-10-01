@@ -89,7 +89,7 @@ export const readBrowserLaunchEnv = BrowserLaunchEnvConfig.pipe(Effect.orElseSuc
 
 export const readCommandLookupEnv = CommandLookupEnvConfig.pipe(Effect.orElseSucceed(() => ({})));
 
-export // Editor discovery walks PATH for every known editor and runs for every
+// Editor discovery walks PATH for every known editor and runs for every
 // client connect (the server config embeds the available editors). Memoize
 // the discovered set for a bounded window so repeat connects skip even the
 // per-command cache lookups in @akeru/shared/shell.
@@ -104,7 +104,7 @@ export // Editor discovery walks PATH for every known editor and runs for every
 // Expiry uses the monotonic clock (Clock.currentTimeNanos), matching the
 // command-resolution cache in @akeru/shared/shell, so a backward wall-clock
 // adjustment cannot keep an expired entry alive.
-const EDITOR_DISCOVERY_CACHE_TTL_NANOS = 60_000_000_000n;
+export const EDITOR_DISCOVERY_CACHE_TTL_NANOS = 60_000_000_000n;
 
 export interface EditorDiscoveryCacheEntry {
   readonly editors: ReadonlyArray<EditorId>;

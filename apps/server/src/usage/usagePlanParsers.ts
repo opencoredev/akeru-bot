@@ -57,8 +57,8 @@ export function isoFromUnknown(value: unknown): string | null {
   return number === null ? null : isoFromEpoch(number);
 }
 
-export /** Accepts epoch milliseconds or seconds (Codex often sends seconds). */
-function isoFromEpoch(value: number): string {
+/** Accepts epoch milliseconds or seconds (Codex often sends seconds). */
+export function isoFromEpoch(value: number): string {
   const millis = Math.abs(value) < 1e11 ? value * 1000 : value;
 
   return DateTime.formatIso(DateTime.makeUnsafe(millis));

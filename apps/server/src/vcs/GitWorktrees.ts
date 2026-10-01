@@ -1,7 +1,7 @@
 import { ServerConfig } from "../config.ts";
 import * as Effect from "effect/Effect";
 import { GitCommandError } from "@akeru/contracts";
-import * as GitVcsDriver from "./GitVcsDriver.ts";
+import type * as GitVcsDriver from "./GitVcsDriver.ts";
 import { parseRemoteRefWithRemoteNames } from "../git/remoteRefs.ts";
 import {
   WORKTREE_ADD_TIMEOUT_MS,

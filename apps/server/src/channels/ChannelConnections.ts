@@ -62,8 +62,8 @@ export const optionalWebhookUrl = (
   return webhookUrl ? { webhookUrl } : {};
 };
 
-export /** Rewrites saved WhatsApp webhook URLs when the server's public origin changed since they were saved. */
-const syncWhatsAppWebhookUrls = (ctx: ChannelRuntimeContext) =>
+/** Rewrites saved WhatsApp webhook URLs when the server's public origin changed since they were saved. */
+export const syncWhatsAppWebhookUrls = (ctx: ChannelRuntimeContext) =>
   withConnectionSettingsOperation(ctx)(
     Effect.gen(function* () {
       const settings = yield* ctx.deps.settings.getSettings;
@@ -349,14 +349,14 @@ export const detachChannelConnection = (
     }),
   );
 
-export /**
+/**
  * Moves a bot's channel to another live project. The old runtime stops before the new one
  * starts because most transports cannot poll with the same credentials twice. If the new
  * runtime cannot start, the binding keeps its previous project and records the failure, and
  * a previously connected channel is restarted on its old project when possible. If the old
  * runtime fails to stop, the move fails and that runtime stays registered.
  */
-const changeChannelProject = (
+export const changeChannelProject = (
   ctx: ChannelRuntimeContext,
   botId: BotId,
   provider: LiveProvider,

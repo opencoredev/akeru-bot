@@ -5,17 +5,17 @@ export const WELL_KNOWN_ENVIRONMENT_PATH = "/.well-known/t3/environment";
 
 export const PAIR_PROBE_TIMEOUT = Duration.millis(2_500);
 
-export // Tailscale provisions an HTTPS certificate on the first request to a fresh
+// Tailscale provisions an HTTPS certificate on the first request to a fresh
 // serve mapping, which can take a few seconds.
-const TAILSCALE_PROBE_ATTEMPTS = 5;
+export const TAILSCALE_PROBE_ATTEMPTS = 5;
 
 export const TAILSCALE_PROBE_RETRY_DELAY = Duration.seconds(1);
 
 export type PairStateVariant = "userdata" | "dev";
 
-export // deriveServerPaths only checks devUrl for undefined-ness when picking the
+// deriveServerPaths only checks devUrl for undefined-ness when picking the
 // dev-vs-userdata state directory; the value itself is not used.
-const DEV_VARIANT_PLACEHOLDER_URL = new URL("http://localhost");
+export const DEV_VARIANT_PLACEHOLDER_URL = new URL("http://localhost");
 
 export class NoRunningServerError extends Schema.TaggedErrorClass<NoRunningServerError>()(
   "NoRunningServerError",
@@ -106,12 +106,12 @@ export class PublicUrlWithTailscaleError extends Schema.TaggedErrorClass<PublicU
   }
 }
 
-export /**
+/**
  * Errors whose message already tells the user what to do, printed without a
  * stack trace. Anything else in the channel — auth-store failures, config
  * errors, defects — falls through to `runMain` with its cause intact.
  */
-const PAIR_USER_FACING_ERROR_TAGS = [
+export const PAIR_USER_FACING_ERROR_TAGS = [
   "NoRunningServerError",
   "InvalidPublicUrlError",
   "PublicUrlWithTailscaleError",

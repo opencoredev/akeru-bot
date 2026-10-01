@@ -392,8 +392,8 @@ export const SLACK_APP_TOKEN_INVALID = "Slack app-level token is invalid.";
 
 export const SLACK_UNREACHABLE = "Slack could not be reached. Check the network and try again.";
 
-export // Slack `error` codes that mean the app-level token itself is unusable.
-const SLACK_TOKEN_ERRORS: ReadonlySet<unknown> = new Set([
+// Slack `error` codes that mean the app-level token itself is unusable.
+export const SLACK_TOKEN_ERRORS: ReadonlySet<unknown> = new Set([
   "invalid_auth",
   "not_authed",
   "token_revoked",
@@ -403,11 +403,14 @@ const SLACK_TOKEN_ERRORS: ReadonlySet<unknown> = new Set([
   "missing_scope",
 ]);
 
-export // Socket Mode retries a rejected app token in the background instead of failing `initialize`,
+// Socket Mode retries a rejected app token in the background instead of failing `initialize`,
 // so the token is checked up front. Only a Slack auth error blames the token; network, HTTP,
 // and other Slack failures report that Slack could not be reached. Slack's own error text is
 // dropped to keep it out of logs.
-const validateSlackAppToken = (appToken: string, httpClient: HttpClient.HttpClient | undefined) =>
+export const validateSlackAppToken = (
+  appToken: string,
+  httpClient: HttpClient.HttpClient | undefined,
+) =>
   Effect.gen(function* () {
     if (!appToken.startsWith("xapp-"))
       return yield* failWith(SLACK_APP_TOKEN_INVALID, "credentials");

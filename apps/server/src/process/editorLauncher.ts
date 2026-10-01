@@ -114,11 +114,11 @@ export const resolveAvailableEditors = Effect.fn("externalLauncher.resolveAvaila
   },
 );
 
-export // ==============================
+// ==============================
 // Implementations
 // ==============================
 
-const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
+export const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
   input: LaunchEditorInput,
 ): Effect.fn.Return<
   EditorLaunch,

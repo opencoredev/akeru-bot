@@ -11,14 +11,14 @@ import * as ServerConfig from "../config.ts";
 import { DEV_VARIANT_PLACEHOLDER_URL, AdminAlreadyPairedError } from "./pairTypes.ts";
 import { type DiscoveredPairTarget } from "./pairTarget.ts";
 
-export /**
+/**
  * Server config pointed at the discovered server's state directory, so the
  * minted token lands in the database the running server reads from. Built by
  * hand rather than through `resolveServerConfig` to keep the dev-vs-userdata
  * choice pinned to where the runtime state was actually found, independent of
  * ambient environment variables.
  */
-const makePairServerConfig = Effect.fn(function* (input: {
+export const makePairServerConfig = Effect.fn(function* (input: {
   readonly target: DiscoveredPairTarget;
   readonly logLevel: ServerConfig.ServerConfig["Service"]["logLevel"];
 }) {

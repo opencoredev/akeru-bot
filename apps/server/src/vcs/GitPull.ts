@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import { GitCommandError } from "@akeru/contracts";
-import * as GitVcsDriver from "./GitVcsDriver.ts";
+import type * as GitVcsDriver from "./GitVcsDriver.ts";
 import { gitCommandContext } from "./GitCoreHelpers.ts";
 import type { makeGitExecution } from "./GitExecution.ts";
 import type { makeGitLocalStatus } from "./GitLocalStatus.ts";

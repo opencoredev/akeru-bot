@@ -142,12 +142,12 @@ export const withConnectionOperation = (
 export const withConnectionSettingsOperation = (ctx: ChannelRuntimeContext) =>
   ctx.withLock("connection-settings");
 
-export /**
+/**
  * Unregisters and stops a bot's transport. Pass `keepOnFailure` when the caller still owns the
  * channel (a project move), so a transport that fails to stop stays registered and blocks a
  * competing listener. Otherwise it stays unregistered and its inbound callbacks are ignored.
  */
-const stopRuntime = (
+export const stopRuntime = (
   ctx: ChannelRuntimeContext,
   botId: BotId,
   provider: ChannelProvider,
@@ -171,8 +171,8 @@ const stopRuntime = (
     );
   });
 
-export /** Runs `operation` for each running transport under its channel lock, ignoring failures. */
-const forEachRuntime = (
+/** Runs `operation` for each running transport under its channel lock, ignoring failures. */
+export const forEachRuntime = (
   ctx: ChannelRuntimeContext,
   operation: (
     key: string,

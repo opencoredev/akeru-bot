@@ -278,11 +278,11 @@ export const bindingFor = (
     .find((bot) => bot.id === botId)
     ?.channelBindings?.find((binding) => binding.provider === provider);
 
-export /**
+/**
  * Undoes the `connecting` write of a failed attempt, unless something replaced it since: puts
  * back the binding from before the attempt, or removes the one the attempt created.
  */
-const revertConnectingBinding = (
+export const revertConnectingBinding = (
   ctx: ChannelRuntimeContext,
   botId: BotId,
   provider: ChannelProvider,
@@ -312,7 +312,7 @@ const revertConnectingBinding = (
     }),
   );
 
-export /**
+/**
  * Records why a start failed. A binding whose earlier transport still runs keeps its status and
  * gains the failure; one with nothing running becomes `failed` (or stays `blocked`). An attempt
  * on a saved connection keeps the bot assigned to that connection, so the user can retry without
@@ -320,7 +320,7 @@ export /**
  * bot was archived or deleted during the attempt, the binding goes back to how it was before, so
  * no `connecting` binding outlives the attempt or returns when the bot is restored.
  */
-const recordStartFailure = (
+export const recordStartFailure = (
   ctx: ChannelRuntimeContext,
   previous: ChannelBinding | undefined,
   input: ChannelConnectInput,
@@ -374,12 +374,12 @@ const recordStartFailure = (
 
 export const channelStoppedMessage = "The channel connection stopped. Reconnect to resume.";
 
-export /**
+/**
  * Marks the binding for reconnect when a long-lived listener stops on its own, so clients
  * learn about it without waiting for the next snapshot. A stop caused by replacing or
  * removing the transport is ignored because the runtime is no longer current.
  */
-const watchTransportExit = (ctx: ChannelRuntimeContext, started: StartedChannel) => {
+export const watchTransportExit = (ctx: ChannelRuntimeContext, started: StartedChannel) => {
   const { settled } = started.runtime;
 
   if (!settled) return Effect.void;
@@ -413,13 +413,13 @@ const watchTransportExit = (ctx: ChannelRuntimeContext, started: StartedChannel)
   );
 };
 
-export /**
+/**
  * Starts a transport and commits it, persisting `connecting` first so every client sees the
  * attempt. A transport that is already unhealthy when it returns, such as a gateway whose
  * first launch was refused, fails instead of committing. With `recordFailure` false the caller
  * records the outcome itself.
  */
-const startAndCommitChannel = (
+export const startAndCommitChannel = (
   ctx: ChannelRuntimeContext,
   input: ChannelConnectInput,
   options: {

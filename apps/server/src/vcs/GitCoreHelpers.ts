@@ -15,15 +15,15 @@ import * as Stream from "effect/Stream";
 import { GitCommandError, type VcsRef } from "@akeru/contracts";
 import { compactTraceAttributes } from "@akeru/shared/observability";
 import { decodeJsonResult } from "@akeru/shared/schemaJson";
-import * as GitVcsDriver from "./GitVcsDriver.ts";
+import type * as GitVcsDriver from "./GitVcsDriver.ts";
 import { parseRemoteRefWithRemoteNames } from "../git/remoteRefs.ts";
 
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
-export // `git worktree add` checks out the full tree, so on large repositories it can
+// `git worktree add` checks out the full tree, so on large repositories it can
 // take well beyond the default 30s (e.g. a 375k-file repo takes ~40s on an idle
 // machine). Give it generous headroom while still bounding a genuinely hung git.
-const WORKTREE_ADD_TIMEOUT_MS = 300_000;
+export const WORKTREE_ADD_TIMEOUT_MS = 300_000;
 
 export const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
 
@@ -452,10 +452,10 @@ export function isUnbornHeadStderr(stderr: string): boolean {
   );
 }
 
-export // Matches `git worktree remove` on a path git no longer tracks: "is not a
+// Matches `git worktree remove` on a path git no longer tracks: "is not a
 // working tree" when the registration is gone, "cannot remove working tree"
 // when older gits fail validation on a registered-but-deleted directory.
-function isMissingWorktreeStderr(stderr: string): boolean {
+export function isMissingWorktreeStderr(stderr: string): boolean {
   const normalized = stderr.toLowerCase();
 
   return (

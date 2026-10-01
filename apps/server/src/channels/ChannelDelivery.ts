@@ -127,9 +127,9 @@ export const clearPersistedChannelStatuses = (
     }
   });
 
-export // Runs `update` against the channel runtime for the user message that started `turnId`,
+// Runs `update` against the channel runtime for the user message that started `turnId`,
 // but only while that message is still the thread's latest user message.
-const withChannelTurnOrigin = (
+export const withChannelTurnOrigin = (
   ctx: ChannelRuntimeContext,
   threadId: ThreadId,
   turnId: TurnId | undefined,
@@ -187,9 +187,9 @@ export const finishChannelTurn = (
     updateChannelStatus(ctx, runtime, origin, state === "completed" ? "check" : "x", threadId),
   );
 
-export // Swaps the in-progress reaction for "hourglass" while the turn waits on an approval or
+// Swaps the in-progress reaction for "hourglass" while the turn waits on an approval or
 // user-input answer, and back once it resumes. Terminal reactions are never overwritten.
-const markChannelTurnWaiting = (
+export const markChannelTurnWaiting = (
   ctx: ChannelRuntimeContext,
   threadId: ThreadId,
   turnId: TurnId | undefined,
@@ -205,8 +205,8 @@ const markChannelTurnWaiting = (
     return updateChannelStatus(ctx, runtime, origin, waiting ? "hourglass" : "eyes", threadId);
   });
 
-export /** Persists a projected delivery state on the assistant message via the internal command. */
-const setChannelDelivery = (
+/** Persists a projected delivery state on the assistant message via the internal command. */
+export const setChannelDelivery = (
   ctx: ChannelRuntimeContext,
   threadId: ThreadId,
   messageId: MessageId,

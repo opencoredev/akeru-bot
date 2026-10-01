@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { type VcsRef } from "@akeru/contracts";
 import { dedupeRemoteBranchesWithLocalMatches } from "@akeru/shared/git";
-import * as GitVcsDriver from "./GitVcsDriver.ts";
+import type * as GitVcsDriver from "./GitVcsDriver.ts";
 import { parseRemoteNames, parseRemoteRefWithRemoteNames } from "../git/remoteRefs.ts";
 import {
   LIST_REFS_SNAPSHOT_CACHE_CAPACITY,

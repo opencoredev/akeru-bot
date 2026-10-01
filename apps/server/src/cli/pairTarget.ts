@@ -127,12 +127,12 @@ export const resolveTailscaleLocalTarget = (
   return { localPort: state.port };
 };
 
-export /**
+/**
  * Three outcomes, because they drive different decisions: a T3 descriptor
  * (pair with it), nothing answering (safe to configure Tailscale Serve), or
  * something answering that is not a T3 server (do NOT overwrite its mapping).
  */
-type EnvironmentProbeResult =
+export type EnvironmentProbeResult =
   | { readonly _tag: "descriptor"; readonly descriptor: ExecutionEnvironmentDescriptor }
   | { readonly _tag: "unreachable" }
   | { readonly _tag: "not-a-t3-server" };
@@ -168,9 +168,9 @@ export const probeEnvironmentDescriptor = (
     return { _tag: "descriptor", descriptor } as const;
   }).pipe(Effect.catch((outcome) => Effect.succeed(outcome)));
 
-export // signal 0 delivers nothing; it only reports whether the pid exists. EPERM
+// signal 0 delivers nothing; it only reports whether the pid exists. EPERM
 // means it exists but belongs to another user, which still counts as alive.
-const isProcessAlive = (pid: number): boolean => {
+export const isProcessAlive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
 

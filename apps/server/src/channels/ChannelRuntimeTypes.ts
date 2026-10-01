@@ -53,8 +53,8 @@ export interface ChannelTransportRuntime {
   readonly settled?: Promise<void>;
 }
 
-export /** Ways a running transport can fail. */
-type ChannelTransportFailure =
+/** Ways a running transport can fail. */
+export type ChannelTransportFailure =
   | ChannelTransportError
   | ChannelPostRejectedError
   | ChannelRuntimeError;
@@ -109,8 +109,8 @@ export interface InboundChannelMessage {
   readonly text: string;
 }
 
-export /** SDK callback that hands an inbound message to the runtime that owns the transport. */
-type InboundCallback = (input: InboundChannelMessage) => Promise<void>;
+/** SDK callback that hands an inbound message to the runtime that owns the transport. */
+export type InboundCallback = (input: InboundChannelMessage) => Promise<void>;
 
 export interface ChannelTransportContext {
   readonly botName: string;
@@ -174,9 +174,9 @@ export interface ChannelRestoreFailure {
   readonly category: ChannelFailureCategory;
 }
 
-export // Normalized chat-sdk emoji keys, so Slack and Discord each resolve their native form.
+// Normalized chat-sdk emoji keys, so Slack and Discord each resolve their native form.
 // "hourglass" marks a turn that is waiting on an approval or user-input answer.
-const channelStatusReactions = ["eyes", "check", "x", "hourglass"] as const;
+export const channelStatusReactions = ["eyes", "check", "x", "hourglass"] as const;
 
 export type ChannelOrigin = NonNullable<OrchestrationThread["messages"][number]["channelOrigin"]>;
 
@@ -190,8 +190,8 @@ export type KeyedLock = (
   key: string,
 ) => <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
 
-export /** Everything one runtime owns. Created by the layer and closed with its scope. */
-interface ChannelRuntimeContext {
+/** Everything one runtime owns. Created by the layer and closed with its scope. */
+export interface ChannelRuntimeContext {
   readonly deps: ChannelRuntimeDependencies;
   readonly runtimes: Map<string, ChannelRuntimeEntry>;
   readonly statuses: WeakMap<ChannelRuntimeEntry, Map<string, ChannelStatus>>;

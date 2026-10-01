@@ -33,7 +33,7 @@ export interface PendingRequest {
   readonly context: PreviewAutomationRequestErrorContext;
 }
 
-export /**
+/**
  * A lease pinning one provider session to one desktop runtime. It lives exactly
  * as long as the connection it names: `connectionId`/`queue` identity is what
  * makes a lease valid, so a disconnected or replaced host is dropped on the next
@@ -41,7 +41,7 @@ export /**
  * the MCP credential's expiry, which coupled host stickiness to an unrelated
  * auth deadline and could migrate a live session to another runtime mid-flow.
  */
-interface HostAssignment {
+export interface HostAssignment {
   readonly clientId: ClientConnection["clientId"];
   readonly connectionId: ClientConnection["connectionId"];
   readonly queue: ClientConnection["queue"];

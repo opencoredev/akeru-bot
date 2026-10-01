@@ -7,7 +7,7 @@ import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { GitCommandError } from "@akeru/contracts";
 import { gitCommandDuration, gitCommandsTotal, withMetrics } from "../observability/Metrics.ts";
-import * as GitVcsDriver from "./GitVcsDriver.ts";
+import type * as GitVcsDriver from "./GitVcsDriver.ts";
 import {
   DEFAULT_TIMEOUT_MS,
   DEFAULT_MAX_OUTPUT_BYTES,

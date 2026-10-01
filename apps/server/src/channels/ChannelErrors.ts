@@ -42,8 +42,10 @@ export class ChannelTransportError extends Schema.TaggedErrorClass<ChannelTransp
 export const transportError = (cause: unknown) =>
   new ChannelTransportError({ message: channelTransportErrorMessage, cause });
 
-export /** Runs an SDK promise and keeps its original rejection as the cause. */
-const fromPromise = <A>(evaluate: () => PromiseLike<A>): Effect.Effect<A, ChannelTransportError> =>
+/** Runs an SDK promise and keeps its original rejection as the cause. */
+export const fromPromise = <A>(
+  evaluate: () => PromiseLike<A>,
+): Effect.Effect<A, ChannelTransportError> =>
   Effect.tryPromise({ try: () => evaluate(), catch: transportError });
 
 export const networkErrorCodes = new Set([

@@ -51,11 +51,11 @@ export function resolveWslPowerShellPath(): string {
   return "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe";
 }
 
-export // File reveals from WSL resolve PowerShell through the interop PATH rather
+// File reveals from WSL resolve PowerShell through the interop PATH rather
 // than the fixed /mnt/c mount: the automount root is configurable, and a
 // PATH-resolved command keeps the advertised capability aligned with the
 // availability check `launchEditor` performs before spawning.
-const WSL_POWERSHELL_COMMAND = "powershell.exe";
+export const WSL_POWERSHELL_COMMAND = "powershell.exe";
 
 export function shouldUseWindowsHostFromWsl(
   platform: NodeJS.Platform,

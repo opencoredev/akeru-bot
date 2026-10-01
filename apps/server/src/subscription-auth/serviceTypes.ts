@@ -114,13 +114,13 @@ export interface ProviderHealthRecord {
   lastGenerationAt?: string;
 }
 
-export /** A post-login check older than this is treated as abandoned (for example, the server restarted). */
-const HEALTH_CHECK_STALE_MS = 60_000;
+/** A post-login check older than this is treated as abandoned (for example, the server restarted). */
+export const HEALTH_CHECK_STALE_MS = 60_000;
 
 export const HEALTH_CHECK_TIMEOUT_MS = 30_000;
 
-export /** OAuth-only endpoints that prove a subscription token can reach the provider. */
-function oauthHealthRequest(
+/** OAuth-only endpoints that prove a subscription token can reach the provider. */
+export function oauthHealthRequest(
   provider: SubscriptionProviderId,
   credential: OAuthCredentials,
 ): { readonly url: string; readonly headers: Record<string, string> } | undefined {
@@ -189,15 +189,15 @@ export function oauthFailureKind(cause: unknown): "request" | "revoked" {
     : "request";
 }
 
-export /** Shown on every row while the store serves the last good state over a damaged file. */
-function lastGoodWarning(error: SubscriptionCredentialStoreError): string {
+/** Shown on every row while the store serves the last good state over a damaged file. */
+export function lastGoodWarning(error: SubscriptionCredentialStoreError): string {
   return error.reason === "unreadable"
     ? "Saved subscription credentials could not be reread. Akeru Bot keeps using the credentials it loaded earlier. Check the secrets directory permissions."
     : "Saved subscription credentials changed on disk and are damaged. Akeru Bot keeps using the credentials it loaded earlier; the next sign-in or sign-out rewrites the file.";
 }
 
-export /** Status for every provider when the credential file was damaged before any good load. */
-function storeErrorStatus(
+/** Status for every provider when the credential file was damaged before any good load. */
+export function storeErrorStatus(
   provider: SubscriptionProviderId,
   lastFailedRequest: { readonly at: string; readonly message: string },
   dependentBots: ReadonlyArray<{
@@ -238,8 +238,8 @@ export const defaultInstanceByProvider: Record<SubscriptionProviderId, string> =
   "opencode-go": "opencodeGo",
 };
 
-export /** The default instance keeps the bare provider key; other instances get their own account. */
-function credentialKey(provider: SubscriptionProviderId, instanceId?: string): string {
+/** The default instance keeps the bare provider key; other instances get their own account. */
+export function credentialKey(provider: SubscriptionProviderId, instanceId?: string): string {
   return !instanceId || instanceId === defaultInstanceByProvider[provider]
     ? provider
     : `instance:${provider}:${instanceId}`;
@@ -254,8 +254,8 @@ export function credentialAt(
   return isSubscriptionCredential(value) ? value : undefined;
 }
 
-export /** Refreshed tokens keep the stored connection identity and account ID. */
-function refreshedCredential(
+/** Refreshed tokens keep the stored connection identity and account ID. */
+export function refreshedCredential(
   previous: OAuthCredential,
   refreshed: OAuthCredentials,
 ): OAuthCredential {
@@ -271,8 +271,8 @@ function refreshedCredential(
   };
 }
 
-export /** A completed login that the client has not observed yet must not be re-runnable. */
-const PENDING_LOGIN_CAP = 16;
+/** A completed login that the client has not observed yet must not be re-runnable. */
+export const PENDING_LOGIN_CAP = 16;
 
 export function runRefresh(
   provider: SubscriptionProviderId,

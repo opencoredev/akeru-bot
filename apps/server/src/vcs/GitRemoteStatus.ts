@@ -6,7 +6,7 @@ import * as Exit from "effect/Exit";
 import * as Path from "effect/Path";
 import { GitCommandError } from "@akeru/contracts";
 import { normalizeGitRemoteUrl } from "@akeru/shared/git";
-import * as GitVcsDriver from "./GitVcsDriver.ts";
+import type * as GitVcsDriver from "./GitVcsDriver.ts";
 import { parseRemoteNamesInGitOrder } from "../git/remoteRefs.ts";
 import {
   STATUS_UPSTREAM_REFRESH_INTERVAL,
