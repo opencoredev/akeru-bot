@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -9,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../ui/button", () => ({
   Button: (props: { children: ReactNode; onClick?: () => void }) => {
-    if (typeof props.children === "string") mocks.buttons.set(props.children, props);
+    if (Predicate.isString(props.children)) mocks.buttons.set(props.children, props);
 
     return null;
   },
@@ -57,7 +58,7 @@ describe("ProviderModelsSection bulk visibility control", () => {
         instanceId: ProviderInstanceId.make("codex"),
         driverKind: ProviderDriverKind.make("codex"),
         models: input.models,
-        customModels: input.models.filter((entry) => entry.isCustom).map((entry) => entry.slug),
+        customModels: input.models.flatMap((entry) => (entry.isCustom ? [entry.slug] : [])),
         hiddenModels: input.hiddenModels ?? [],
         favoriteModels: [],
         modelOrder: [],

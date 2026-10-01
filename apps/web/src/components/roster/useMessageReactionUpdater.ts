@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { MessageId, ScopedThreadRef } from "@akeru/contracts";
 import { useCallback } from "react";
 
@@ -35,7 +36,7 @@ export function useMessageReactionUpdater(threadRef: ScopedThreadRef | null) {
         if (current && current !== next) {
           const removed = await dispatch(current, false);
 
-          if (removed._tag === "Failure") {
+          if (Predicate.isTagged(removed, "Failure")) {
             toastManager.add({ type: "error", title: t("Could not update reaction") });
 
             return;
@@ -45,7 +46,7 @@ export function useMessageReactionUpdater(threadRef: ScopedThreadRef | null) {
         if (next) {
           const added = await dispatch(next, true);
 
-          if (added._tag === "Failure") {
+          if (Predicate.isTagged(added, "Failure")) {
             toastManager.add({ type: "error", title: t("Could not update reaction") });
           }
         }

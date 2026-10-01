@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { RegistryContext } from "@effect/atom-react";
 import {
   deriveComputerViewer,
@@ -33,7 +34,7 @@ const UNAVAILABLE_RECHECK_MS = 5_000;
 export function computerViewerOutcome<A, E>(
   result: AtomCommandResult<A, E>,
 ): ComputerViewerOutcome<A> {
-  if (result._tag === "Success") return { ok: true, value: result.value };
+  if (Predicate.isTagged(result, "Success")) return { ok: true, value: result.value };
   const error = Cause.squash(result.cause);
 
   return { ok: false, code: isComputerError(error) ? error.code : "adapter" };
@@ -177,8 +178,8 @@ export function useComputerViewer(threadRef: ScopedThreadRef, open: boolean): Co
     return registry.subscribe(
       eventsAtom,
       (result) => {
-        if (result._tag === "Success") controller.receive(result.value);
-        else if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Success")) controller.receive(result.value);
+        else if (Predicate.isTagged(result, "Failure")) {
           void getState({ environmentId, input: { threadId } }).then((outcome) => {
             const next = computerViewerOutcome(outcome);
 

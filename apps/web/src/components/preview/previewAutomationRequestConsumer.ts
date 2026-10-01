@@ -15,23 +15,25 @@ import {
 type AutomationStreamResult<E> = AsyncResult.AsyncResult<PreviewAutomationStreamEvent, E>;
 
 export function serializePreviewAutomationError(
-  error: unknown,
+  cause: unknown,
   context: PreviewAutomationOperationContext,
 ): NonNullable<PreviewAutomationResponse["error"]> {
   return serializePreviewAutomationHostError(
-    PreviewAutomationOperationError.fromCause({ ...context, cause: error }),
+    PreviewAutomationOperationError.fromCause({ ...context, cause }),
   );
 }
 
-export function createPreviewAutomationRequestConsumerAtom<E>(options: {
+export function createPreviewAutomationRequestConsumerAtom<E, R>(options: {
   readonly requestsAtom: Atom.Atom<AutomationStreamResult<E>>;
   readonly clientId: PreviewAutomationHost["clientId"];
   readonly connectionAtom: Atom.Writable<PreviewAutomationStreamEvent["connectionId"] | null>;
   readonly environmentId: PreviewAutomationHost["environmentId"];
   readonly requestHandlerAtom: Atom.Atom<{
-    readonly handle: (request: PreviewAutomationRequest) => Promise<unknown>;
+    readonly handle: (
+      request: PreviewAutomationRequest,
+    ) => Promise<PreviewAutomationResponse["result"]>;
   }>;
-  readonly respond: (response: PreviewAutomationResponse) => Promise<unknown>;
+  readonly respond: (response: PreviewAutomationResponse) => Promise<R>;
   readonly label: string;
 }): Atom.Atom<void> {
   return Atom.make((get) => {

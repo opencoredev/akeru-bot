@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type { EnvironmentId } from "@akeru/contracts";
 import { rankComposerThreadMentions } from "@akeru/shared/composerThreadMentions";
 import { AtSignIcon, FileIcon, GlobeIcon, MessageSquareIcon, XIcon } from "lucide-react";
@@ -72,6 +73,7 @@ export function useBotPromptMentionScope(input: {
   );
 }
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 const NO_ENVIRONMENTS: ReadonlyArray<EnvironmentId> = [];
@@ -124,9 +126,9 @@ export function BotPromptMentionMenu({
     if (!scope) return [];
 
     const matchedIds = new Set(
-      search.matches
-        .filter((match) => match.environmentId === scope.environmentId)
-        .map((match) => match.threadId as string),
+      search.matches.flatMap((match) =>
+        match.environmentId === scope.environmentId ? [match.threadId] : [],
+      ),
     );
 
     return rankComposerThreadMentions(
@@ -219,14 +221,12 @@ export function BotPromptMentionMenu({
       className="absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto rounded-2xl border border-border bg-popover p-1 text-popover-foreground shadow-lg"
     >
       {items.map((item, index) => {
-        const Icon =
-          item.kind === "browser"
-            ? GlobeIcon
-            : item.kind === "bot"
-              ? AtSignIcon
-              : item.kind === "path"
-                ? FileIcon
-                : MessageSquareIcon;
+        const Icon = Match.value(item).pipe(
+          Match.when({ kind: "browser" }, () => GlobeIcon),
+          Match.when({ kind: "bot" }, () => AtSignIcon),
+          Match.when({ kind: "path" }, () => FileIcon),
+          Match.orElse(() => MessageSquareIcon),
+        );
 
         return (
           <div
@@ -286,7 +286,7 @@ export function BotPromptMentionChips({
   const shells = useThreadShells();
 
   const chips = useMemo(() => {
-    const titles = new Map(shells.map((shell) => [shell.id as string, shell.title]));
+    const titles = new Map<string, string>(shells.map((shell) => [shell.id, shell.title]));
 
     return botPromptMentionChips(
       draft,
@@ -304,12 +304,11 @@ export function BotPromptMentionChips({
       data-testid="bot-prompt-mention-chips"
     >
       {chips.map((chip) => {
-        const Icon =
-          chip.kind === "browser"
-            ? GlobeIcon
-            : chip.kind === "bot"
-              ? AtSignIcon
-              : MessageSquareIcon;
+        const Icon = Match.value(chip).pipe(
+          Match.when({ kind: "browser" }, () => GlobeIcon),
+          Match.when({ kind: "bot" }, () => AtSignIcon),
+          Match.orElse(() => MessageSquareIcon),
+        );
 
         return (
           <li key={chip.key} className={COMPOSER_INLINE_CHIP_CLASS_NAME}>

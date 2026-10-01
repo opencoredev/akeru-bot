@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { PanelLeftCloseIcon, PanelLeftIcon } from "lucide-react";
 import * as React from "react";
 import { cn } from "~/lib/utils";
@@ -66,7 +67,7 @@ function Sidebar({
       return null;
     }
 
-    const options = typeof resizable === "boolean" ? {} : resizable;
+    const options = Predicate.isBoolean(resizable) ? {} : resizable;
 
     return {
       maxWidth: options.maxWidth ?? Number.POSITIVE_INFINITY,
@@ -106,6 +107,7 @@ function Sidebar({
   }
 
   if (isMobile) {
+    // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
     return (
       <SidebarInstanceContext value={instanceContextValue}>
         <Sheet onOpenChange={setOpenMobile} open={openMobile} {...props}>

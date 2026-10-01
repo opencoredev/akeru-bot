@@ -1,3 +1,5 @@
+import { recordLookup } from "../recordLookup";
+import { Predicate, Schema } from "effect";
 import type { SubscriptionProviderId } from "@akeru/contracts";
 
 import type { BotAvatar, BotBlobShape } from "../roster/types";
@@ -52,13 +54,13 @@ export function readDesktopOnboardingHandoff(
     const handoff: unknown = JSON.parse(value);
 
     if (
-      typeof handoff === "object" &&
+      Predicate.isObjectOrArray(handoff) &&
       handoff !== null &&
       "environmentId" in handoff &&
-      typeof handoff.environmentId === "string" &&
+      Predicate.isString(handoff.environmentId) &&
       handoff.environmentId.trim() &&
       "botId" in handoff &&
-      typeof handoff.botId === "string" &&
+      Predicate.isString(handoff.botId) &&
       handoff.botId.trim()
     ) {
       return { environmentId: handoff.environmentId, botId: handoff.botId };
@@ -139,7 +141,7 @@ export const DEFAULT_DESKTOP_ONBOARDING_DRAFT: DesktopOnboardingDraft = {
 };
 
 function isBlobShape(value: unknown): value is BotBlobShape {
-  return typeof value === "string" && (BLOB_SHAPES as readonly string[]).includes(value);
+  return Predicate.isString(value) && BLOB_SHAPES.some((candidate) => candidate === value);
 }
 
 function isBlobColor(value: unknown): value is string {
@@ -160,7 +162,7 @@ const providerIds: readonly SubscriptionProviderId[] = [
  * the picker, because the answer is shown back to them and drafts their first
  * message. Ids are historical: never reuse one for different work.
  */
-const legacyUseCaseGoals: Readonly<Record<string, string>> = {
+const legacyUseCaseGoals = {
   build: "Building a software feature",
   fix: "Fixing a software bug",
   understand: "Understanding a codebase",
@@ -170,10 +172,10 @@ const legacyUseCaseGoals: Readonly<Record<string, string>> = {
   monitoring: "Watching a system and telling me when something changes",
   research: "Looking up the same facts and keeping one list current",
   routine: "Taking over a routine that eats my week",
-};
+} satisfies Readonly<Record<string, string>>;
 
 function isProviderId(value: unknown): value is SubscriptionProviderId {
-  return typeof value === "string" && (providerIds as readonly string[]).includes(value);
+  return Predicate.isString(value) && providerIds.some((candidate) => candidate === value);
 }
 
 function isStep(value: unknown): value is DesktopOnboardingStep {
@@ -185,22 +187,45 @@ function isStep(value: unknown): value is DesktopOnboardingStep {
  * category still names work the user chose, so it outranks any custom text
  * left behind by a choice they moved away from.
  */
-function storedGoal(parsed: Record<string, unknown>): string {
-  if (typeof parsed.goal === "string" && parsed.goal.trim().length > 0) return parsed.goal;
-  const custom = typeof parsed.customUseCase === "string" ? parsed.customUseCase : "";
-  const useCaseId = typeof parsed.useCaseId === "string" ? parsed.useCaseId : null;
+function storedGoal(parsed: StoredDraft): string {
+  if (Predicate.isString(parsed.goal) && parsed.goal.trim().length > 0) return parsed.goal;
+  const custom = Predicate.isString(parsed.customUseCase) ? parsed.customUseCase : "";
+  const useCaseId = Predicate.isString(parsed.useCaseId) ? parsed.useCaseId : null;
 
-  if (useCaseId !== null && useCaseId !== "custom") return legacyUseCaseGoals[useCaseId] ?? custom;
+  if (useCaseId !== null && useCaseId !== "custom")
+    return recordLookup(legacyUseCaseGoals, useCaseId) ?? custom;
 
   return custom;
 }
+
+const StoredDraft = Schema.Struct({
+  step: Schema.optionalKey(Schema.Unknown),
+  providerId: Schema.optionalKey(Schema.Unknown),
+  goal: Schema.optionalKey(Schema.Unknown),
+  goalPhase: Schema.optionalKey(Schema.Unknown),
+  customUseCase: Schema.optionalKey(Schema.Unknown),
+  useCaseId: Schema.optionalKey(Schema.Unknown),
+  name: Schema.optionalKey(Schema.Unknown),
+  avatar: Schema.optionalKey(
+    Schema.Struct({
+      kind: Schema.optionalKey(Schema.Unknown),
+      shape: Schema.optionalKey(Schema.Unknown),
+      color: Schema.optionalKey(Schema.Unknown),
+    }),
+  ),
+  botId: Schema.optionalKey(Schema.Unknown),
+});
+
+type StoredDraft = typeof StoredDraft.Type;
+
+const decodeStoredDraft = Schema.decodeUnknownSync(StoredDraft);
 
 export function parseDesktopOnboardingDraft(value: string | null): DesktopOnboardingDraft | null {
   if (value === null) return null;
 
   try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
-    const avatar = parsed.avatar as Record<string, unknown> | undefined;
+    const parsed = decodeStoredDraft(JSON.parse(value));
+    const avatar = parsed.avatar;
     const step = parsed.step === "use-case" ? "goal" : parsed.step;
     const legacy = parsed.step === "use-case" || "useCaseId" in parsed || "customUseCase" in parsed;
     const goal = legacy ? normalizeDesktopOnboardingGoal(storedGoal(parsed)) : storedGoal(parsed);
@@ -209,13 +234,13 @@ export function parseDesktopOnboardingDraft(value: string | null): DesktopOnboar
       !isStep(step) ||
       !isProviderId(parsed.providerId) ||
       goal.length > DESKTOP_ONBOARDING_GOAL_MAX_LENGTH ||
-      typeof parsed.name !== "string" ||
+      !Predicate.isString(parsed.name) ||
       parsed.name.length > 80 ||
       !avatar ||
       avatar.kind !== "blob" ||
       !isBlobShape(avatar.shape) ||
       !isBlobColor(avatar.color) ||
-      !(parsed.botId === null || typeof parsed.botId === "string")
+      !(parsed.botId === null || Predicate.isString(parsed.botId))
     ) {
       return null;
     }

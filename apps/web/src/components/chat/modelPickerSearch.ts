@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { normalizeSearchQuery, scoreQueryMatch } from "@akeru/shared/searchRanking";
 
 type ModelPickerSearchableModel = {
@@ -47,7 +48,7 @@ function scoreModelPickerSearchToken(
 export function buildModelPickerSearchText(model: ModelPickerSearchableModel): string {
   return normalizeSearchQuery(
     [model.name, model.shortName, model.subProvider, model.driverKind, model.providerDisplayName]
-      .filter((value): value is string => typeof value === "string" && value.length > 0)
+      .filter((value): value is string => Predicate.isString(value) && value.length > 0)
       .join(" "),
   );
 }

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { threadDelegations } from "@akeru/client-runtime/delegation-presentation";
 import { botChatTimeline } from "@akeru/client-runtime/state/bot-chat-timeline";
 import { pendingMemoryApprovals } from "@akeru/client-runtime/durable-memory";
@@ -70,6 +71,7 @@ import { useGroupDetailsOpen } from "./detailsPanelOpen";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function resolveAvailableGroupBoss<T extends { readonly id: string }>(
@@ -92,6 +94,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const { t, locale } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
 
+  // SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
   const peopleIdentity = useAtomValue(
     environmentPeopleAtom((environmentId ?? "") as EnvironmentId),
   );
@@ -300,7 +303,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             </div>
           ) : (
             timeline.map((item) => {
-              if (item._tag === "Delegation") {
+              if (Predicate.isTagged(item, "Delegation")) {
                 return (
                   <DelegationCard
                     key={item.key}
@@ -313,7 +316,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 );
               }
 
-              if (item._tag !== "Message") return null;
+              if (!Predicate.isTagged(item, "Message")) return null;
               const { message, separator, startsGroup } = item.message.entry;
 
               if (message.role === "assistant") {

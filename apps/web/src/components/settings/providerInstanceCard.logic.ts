@@ -1,3 +1,7 @@
+import type { MutableProviderConfig } from "./providerConfig";
+import { providerConfig, type ProviderConfig } from "./providerConfig";
+import type { ProviderInstanceConfig } from "@akeru/contracts";
+import { Predicate } from "effect";
 import * as Arr from "effect/Array";
 import * as Result from "effect/Result";
 import { type ServerProviderModel } from "@akeru/contracts";
@@ -8,13 +12,15 @@ import { type ServerProviderModel } from "@akeru/contracts";
  * `string[]` by the concrete driver schemas but arrives here as
  * `Schema.Unknown`.
  */
-export function readConfigStringArray(config: unknown, key: string): ReadonlyArray<string> {
-  if (config === null || typeof config !== "object") return [];
-  const value = (config as Record<string, unknown>)[key];
+export function readConfigStringArray(
+  config: ProviderInstanceConfig["config"],
+  key: string,
+): ReadonlyArray<string> {
+  const value = providerConfig(config)[key];
 
   if (!Array.isArray(value)) return [];
 
-  return value.filter((entry): entry is string => typeof entry === "string");
+  return value.filter((entry): entry is string => Predicate.isString(entry));
 }
 
 /**
@@ -26,12 +32,11 @@ export function readConfigStringArray(config: unknown, key: string): ReadonlyArr
  * "driver default").
  */
 export function nextConfigBlobWithValue(
-  config: unknown,
+  config: ProviderInstanceConfig["config"],
   key: string,
-  value: unknown,
-): Record<string, unknown> {
-  const base: Record<string, unknown> =
-    config !== null && typeof config === "object" ? { ...(config as Record<string, unknown>) } : {};
+  value: ProviderConfig[string],
+): ProviderConfig {
+  const base: MutableProviderConfig = { ...providerConfig(config) };
 
   base[key] = value;
 

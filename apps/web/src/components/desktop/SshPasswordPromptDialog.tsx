@@ -21,8 +21,8 @@ function formatRemainingSeconds(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function getPromptErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : "SSH password prompt failed.";
+function getPromptErrorMessage(cause: unknown): string {
+  const message = cause instanceof Error ? cause.message : "SSH password prompt failed.";
 
   return message.includes("expired") || message.includes("no longer pending")
     ? "This SSH password prompt expired. Try connecting again."

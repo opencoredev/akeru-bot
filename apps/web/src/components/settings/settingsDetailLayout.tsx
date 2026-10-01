@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   Link,
   type LinkComponentProps,
@@ -50,7 +51,7 @@ export function SettingsEntityIcon({
   readonly icon: Icon | string;
   readonly className?: string;
 }) {
-  if (typeof icon === "string") {
+  if (Predicate.isString(icon)) {
     return (
       <img
         src={icon}
@@ -100,6 +101,7 @@ export function SettingsLinkRow<TRouter extends RegisteredRouter, TOptions>({
   readonly tone: ConnectionTone;
   readonly statusLabel: string;
 }) {
+  // SAFETY: ValidateLinkOptions has already checked these route options; Link erases the generic route parameter.
   return (
     <Link
       {...(link as LinkComponentProps)}

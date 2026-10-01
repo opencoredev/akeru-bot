@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 export const DRAFT_HERO_TRANSITION_ANIMATION_ID = "t3-draft-hero-transition";
 
 export const DRAFT_HERO_TRANSITION_DURATION_MS = 180;
@@ -21,7 +23,7 @@ type ComposerViewTransitionDocument = Document & {
 export async function waitForDraftHeroTransition(): Promise<void> {
   const mobileComposerTransition = activeMobileComposerTransition;
 
-  if (typeof document === "undefined" || typeof document.getAnimations !== "function") {
+  if (typeof document === "undefined" || !Predicate.isFunction(document.getAnimations)) {
     await mobileComposerTransition;
 
     return;
@@ -52,6 +54,7 @@ export async function runMobileComposerTransition(
     return;
   }
 
+  // SAFETY: this document extension is optional and startViewTransition is checked before calling it.
   const transitionDocument = document as ComposerViewTransitionDocument;
   const mobileViewport = window.matchMedia?.("(max-width: 639px)").matches ?? false;
 

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -145,7 +146,7 @@ export function ResourceTelemetryDiagnostics() {
         },
       })
         .then((result) => {
-          if (result._tag === "Failure") {
+          if (Predicate.isTagged(result, "Failure")) {
             if (isAtomCommandInterrupted(result)) return;
             throw squashAtomCommandFailure(result);
           }
@@ -160,11 +161,11 @@ export function ResourceTelemetryDiagnostics() {
             ),
           });
         })
-        .catch((error: unknown) => {
+        .catch((cause: unknown) => {
           toastManager.add({
             type: "error",
             title: `Could not send ${signal}`,
-            description: error instanceof Error ? error.message : `Failed to send ${signal}.`,
+            description: cause instanceof Error ? cause.message : `Failed to send ${signal}.`,
           });
         })
         .finally(() => {
@@ -177,12 +178,12 @@ export function ResourceTelemetryDiagnostics() {
   const retryCollector = useCallback(() => {
     setIsRetrying(true);
     void retryTelemetry()
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
         toastManager.add({
           type: "error",
           title: "Could not restart resource monitor",
           description:
-            error instanceof Error ? error.message : "The resource monitor retry failed.",
+            cause instanceof Error ? cause.message : "The resource monitor retry failed.",
         });
       })
       .finally(() => {

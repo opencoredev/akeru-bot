@@ -1,5 +1,12 @@
 "use client";
 
+import type { MutableProviderConfig } from "./providerConfig";
+
+import { providerConfig, type ProviderConfig } from "./providerConfig";
+import type { ProviderInstanceConfig } from "@akeru/contracts";
+
+import { Predicate } from "effect";
+
 import { useMemo, type ReactNode } from "react";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -46,7 +53,7 @@ function readFieldAnnotationString(
   const annotations = readFieldAnnotations(fieldSchema);
   const value = annotations?.[key];
 
-  return typeof value === "string" ? value : undefined;
+  return Predicate.isString(value) ? value : undefined;
 }
 
 function readProviderSettingsFormAnnotation(
@@ -66,10 +73,11 @@ function readProviderSettingsFormSchemaAnnotation(
 function readFieldBooleanDefault(
   fieldSchema: ProviderClientDefinition["settingsSchema"]["fields"][string],
 ): boolean | undefined {
+  // SAFETY: provider settings fields are synchronous schemas without decoding services; the provider interface erases that constraint.
   const decodeDefault = Schema.decodeUnknownOption(fieldSchema as Schema.Decoder<unknown>);
   const decoded = decodeDefault(undefined);
 
-  return Option.isSome(decoded) && typeof decoded.value === "boolean" ? decoded.value : undefined;
+  return Option.isSome(decoded) && Predicate.isBoolean(decoded.value) ? decoded.value : undefined;
 }
 
 export function deriveProviderSettingsFields(
@@ -118,33 +126,33 @@ export function deriveProviderSettingsFields(
     });
 }
 
-export function readProviderConfigString(config: unknown, key: string): string {
-  if (config === null || typeof config !== "object") return "";
-  const value = (config as Record<string, unknown>)[key];
+export function readProviderConfigString(
+  config: ProviderInstanceConfig["config"],
+  key: string,
+): string {
+  const value = providerConfig(config)[key];
 
-  return typeof value === "string" ? value : "";
+  return Predicate.isString(value) ? value : "";
 }
 
 export function readProviderConfigBoolean(
-  config: unknown,
+  config: ProviderInstanceConfig["config"],
   key: string,
   defaultValue = false,
 ): boolean {
-  if (config === null || typeof config !== "object") return defaultValue;
-  const value = (config as Record<string, unknown>)[key];
+  const value = providerConfig(config)[key];
 
-  return typeof value === "boolean" ? value : defaultValue;
+  return Predicate.isBoolean(value) ? value : defaultValue;
 }
 
 export function nextProviderConfigWithFieldValue(
-  config: unknown,
+  config: ProviderInstanceConfig["config"],
   field: ProviderSettingsFieldModel,
   value: string | boolean,
-): Record<string, unknown> | undefined {
-  const base: Record<string, unknown> =
-    config !== null && typeof config === "object" ? { ...(config as Record<string, unknown>) } : {};
+): ProviderConfig | undefined {
+  const base: MutableProviderConfig = { ...providerConfig(config) };
 
-  if (typeof value === "boolean") {
+  if (Predicate.isBoolean(value)) {
     const emptyBooleanValue = field.defaultBooleanValue ?? false;
 
     if (field.clearWhenEmpty === "omit" && value === emptyBooleanValue) {
@@ -172,7 +180,7 @@ interface ProviderSettingsFormProps {
   readonly value: unknown;
   readonly idPrefix: string;
   readonly variant: "card" | "dialog";
-  readonly onChange: (nextConfig: Record<string, unknown> | undefined) => void;
+  readonly onChange: (nextConfig: ProviderConfig | undefined) => void;
 }
 
 function FieldFrame(props: {

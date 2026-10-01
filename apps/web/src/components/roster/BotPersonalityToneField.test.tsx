@@ -52,11 +52,7 @@ describe("BotPersonalityToneField", () => {
 
   it("treats a bot saved before the field existed as balanced", () => {
     const markup = renderToStaticMarkup(
-      <BotPersonalityToneField
-        bot={bot}
-        tone={undefined as unknown as number}
-        onToneChange={() => {}}
-      />,
+      <BotPersonalityToneField bot={bot} tone={undefined} onToneChange={() => {}} />,
     );
 
     expect(markup).toContain('aria-checked="true"');

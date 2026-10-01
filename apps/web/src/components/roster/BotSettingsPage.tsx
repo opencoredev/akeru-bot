@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { BotId } from "@akeru/contracts";
 import { useCanGoBack, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect } from "react";
@@ -77,7 +78,7 @@ export function BotSettingsPage({ botId }: { readonly botId: string }) {
         input: { botId: BotId.make(bot.id), ...input },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         toastManager.add({ type: "error", title: t("Could not save bot settings") });
 
         return false;

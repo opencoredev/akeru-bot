@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type { OrchestrationThreadShell } from "@akeru/contracts";
 import {
   isGroupBotMember,
@@ -219,7 +220,7 @@ export function orderRosterBotsForShortcuts(
   sections: readonly RosterShortcutSection[],
 ): Bot[] {
   const botsById = new Map(
-    bots.filter((bot) => bot.archivedAt === null).map((bot) => [bot.id, bot] as const),
+    bots.flatMap((bot) => (bot.archivedAt === null ? [[bot.id, bot] as const] : [])),
   );
 
   const ordered: Bot[] = [];
@@ -262,7 +263,11 @@ export function resolveAdjacentRosterBot(
   orderedBots: readonly Bot[],
   selectedBotId: string | null,
 ): Bot | null {
-  const step = command === "thread.previous" ? -1 : command === "thread.next" ? 1 : 0;
+  const step = Match.value(command).pipe(
+    Match.when("thread.previous", () => -1),
+    Match.when("thread.next", () => 1),
+    Match.orElse(() => 0),
+  );
 
   if (step === 0 || orderedBots.length === 0) return null;
   const index = orderedBots.findIndex((bot) => bot.id === selectedBotId);

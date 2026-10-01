@@ -1,3 +1,5 @@
+import type { TestProps, TestValue } from "../test-support/reactTree";
+import { Predicate } from "effect";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -94,7 +96,7 @@ vi.mock("./rosterStore", () => ({
 import { DelegationCard, delegationUsageTokens } from "./DelegationCard";
 import { DelegationDetail } from "./DelegationDetail";
 import { delegationClockState } from "./delegationClock";
-import { visitElements } from "../../test/reactElementTree";
+import { visitElements } from "../test-support/reactTree";
 import type { Bot } from "./types";
 
 const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
@@ -205,7 +207,7 @@ function phaseFor(state: AkeruDelegationState) {
   }
 }
 
-function delegation(state: AkeruDelegationState, overrides: Record<string, unknown> = {}) {
+function delegation(state: AkeruDelegationState, overrides: TestProps = {}) {
   return decodeDelegationRecord({
     delegationId: `delegation-${state}`,
     parentDelegationId: null,
@@ -270,12 +272,12 @@ function cardElement(state: AkeruDelegationState, bot: Bot | null = childBot) {
     delegations: [],
     childBot: bot,
     parentBot,
-  }) as ReactElement<Record<string, unknown>>;
+  }) as ReactElement<TestProps>;
 }
 
 /** Finds an element by aria-label, calling nested function components on the way. */
-function findByLabel(node: unknown, label: string): ReactElement<Record<string, unknown>> | null {
-  let found: ReactElement<Record<string, unknown>> | null = null;
+function findByLabel(node: TestValue, label: string): ReactElement<TestProps> | null {
+  let found: ReactElement<TestProps> | null = null;
   visitElements(node, (element) => {
     if (found) return true;
 
@@ -285,8 +287,8 @@ function findByLabel(node: unknown, label: string): ReactElement<Record<string, 
       return true;
     }
 
-    if (typeof element.type === "function" && element.type.name.startsWith("Delegation")) {
-      found = findByLabel((element.type as (props: unknown) => unknown)(element.props), label);
+    if (Predicate.isFunction(element.type) && element.type.name.startsWith("Delegation")) {
+      found = findByLabel((element.type as (props: TestProps) => TestValue)(element.props), label);
     }
 
     return found !== null;
@@ -348,7 +350,8 @@ describe("DelegationCard", () => {
 
     const completed = delegation("completed");
 
-    if (completed.phase._tag !== "Completed") throw new Error("Expected a completed delegation");
+    if (!Predicate.isTagged(completed.phase, "Completed"))
+      throw new Error("Expected a completed delegation");
     expect(
       renderToStaticMarkup(
         <DelegationCard
@@ -368,7 +371,10 @@ describe("DelegationCard", () => {
     const completed = delegation("completed");
     const failed = delegation("failed");
 
-    if (completed.phase._tag !== "Completed" || failed.phase._tag !== "Failed") {
+    if (
+      !Predicate.isTagged(completed.phase, "Completed") ||
+      !Predicate.isTagged(failed.phase, "Failed")
+    ) {
       throw new Error("Expected completed and failed delegations");
     }
 
@@ -397,7 +403,8 @@ describe("DelegationCard", () => {
   it("shows a start failure as the bot-named readable line", () => {
     const failed = delegation("failed");
 
-    if (failed.phase._tag !== "Failed") throw new Error("Expected a failed delegation");
+    if (!Predicate.isTagged(failed.phase, "Failed"))
+      throw new Error("Expected a failed delegation");
 
     const message =
       "Ren could not start: Provider instance 'codex' is disabled in Akeru Bot settings.";

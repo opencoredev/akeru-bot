@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type { ServerProviderSkill } from "@akeru/contracts";
 import { collectComposerInlineTokens } from "@akeru/shared/composerInlineTokens";
 import { AtSignIcon, GlobeIcon, MessageSquareIcon } from "lucide-react";
@@ -88,12 +89,21 @@ function MentionText({
   for (const token of tokens) {
     if (token.start > cursor) nodes.push(plain(text.slice(cursor, token.start), -token.start - 1));
     nodes.push(
-      token.type === "browser-mention" ? (
-        <MentionChip key={token.start} source={token.source} label={t("Browser")} icon="browser" />
-      ) : token.type === "bot-mention" ? (
-        <BotMentionChip key={token.start} source={token.source} botId={token.value} />
-      ) : (
-        <ThreadMentionChip key={token.start} source={token.source} threadId={token.value} />
+      Match.value(token).pipe(
+        Match.when({ type: "browser-mention" }, (token) => (
+          <MentionChip
+            key={token.start}
+            source={token.source}
+            label={t("Browser")}
+            icon="browser"
+          />
+        )),
+        Match.when({ type: "bot-mention" }, (token) => (
+          <BotMentionChip key={token.start} source={token.source} botId={token.value} />
+        )),
+        Match.orElse((token) => (
+          <ThreadMentionChip key={token.start} source={token.source} threadId={token.value} />
+        )),
       ),
     );
     cursor = token.end;

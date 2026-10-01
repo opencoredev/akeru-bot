@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ConnectionTarget } from "@akeru/client-runtime/connection";
 import {
   PORTABILITY_ARCHIVE_MAX_CHARS,
@@ -13,7 +14,7 @@ export function portabilityProjectPickerTarget(
 ): string | null | undefined {
   if (target === null) return undefined;
 
-  if (target._tag === "PrimaryConnectionTarget") return null;
+  if (Predicate.isTagged(target, "PrimaryConnectionTarget")) return null;
 
   return desktopLocalBackendId(target) ?? undefined;
 }
@@ -23,9 +24,8 @@ export function updatePortabilityProjectFolderMap(
   projectId: ProjectId,
   destination: string,
 ): PortabilityProjectFolderMap {
-  const next = Object.fromEntries(
-    Object.entries(current).filter(([candidateId]) => candidateId !== projectId),
-  ) as PortabilityProjectFolderMap;
+  const next = { ...current };
+  delete next[projectId];
 
   const normalizedDestination = destination.trim();
 

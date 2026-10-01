@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   BotId,
   ChannelConnectionId,
@@ -188,7 +189,7 @@ export function ChannelSetupDialog({
       }),
     });
 
-    if (saved._tag === "Failure") {
+    if (Predicate.isTagged(saved, "Failure")) {
       setBusy(false);
       toastManager.add({ type: "error", title: "Could not save channel" });
 
@@ -205,7 +206,7 @@ export function ChannelSetupDialog({
           input: { botId: current.botId, provider },
         });
 
-    if (detached?._tag === "Failure") {
+    if (Predicate.isTagged(detached ?? {}, "Failure")) {
       // The detach can fail after it removed the old connection, when the old listener does not
       // stop. Keep the new connection until the assignment shows which happened.
       setBusy(false);
@@ -220,7 +221,7 @@ export function ChannelSetupDialog({
       input: { botId: current.botId, connectionId, provider, projectId },
     });
 
-    if (attached._tag === "Failure") {
+    if (Predicate.isTagged(attached, "Failure")) {
       const restored = await attach({
         environmentId,
         input: {
@@ -231,7 +232,7 @@ export function ChannelSetupDialog({
         },
       });
 
-      if (restored._tag === "Failure") {
+      if (Predicate.isTagged(restored, "Failure")) {
         // The failed attach may still have persisted a binding to the new connection.
         onSaved(connectionId);
       } else {
@@ -247,7 +248,7 @@ export function ChannelSetupDialog({
       setBusy(false);
       const reason = failureReason(attached);
       setConnectError(
-        restored._tag === "Failure"
+        Predicate.isTagged(restored, "Failure")
           ? isChannelIdentityConflict(attached)
             ? `${conflictCopy} ${t("The old connection could not be restored.")}`
             : [
@@ -274,7 +275,7 @@ export function ChannelSetupDialog({
       input: { connectionId: current.connectionId },
     });
 
-    if (removedOld._tag === "Failure") {
+    if (Predicate.isTagged(removedOld, "Failure")) {
       toastManager.add({
         type: "warning",
         title: t("New credentials connected"),
@@ -313,7 +314,7 @@ export function ChannelSetupDialog({
         }),
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         setBusy(false);
         toastManager.add({ type: "error", title: "Could not save channel" });
 
@@ -329,7 +330,7 @@ export function ChannelSetupDialog({
         input: { botId: BotId.make(botId), connectionId, provider, projectId },
       });
 
-      if (attached._tag === "Failure") {
+      if (Predicate.isTagged(attached, "Failure")) {
         setBusy(false);
         onSaved(connectionId);
         const reason = failureReason(attached);

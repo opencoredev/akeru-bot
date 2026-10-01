@@ -1,3 +1,4 @@
+import type { RuntimeThreadFixture } from "../test-support/fixtures";
 import { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -33,7 +34,7 @@ const mocks = vi.hoisted(() => {
       hasMessages: true,
       lastUserMessageAt: "2026-09-01T00:00:00.000Z",
     },
-    threadShells: [] as Array<Record<string, unknown>>,
+    threadShells: [] as Array<RuntimeThreadFixture>,
     commands: {
       create: Symbol("create"),
       startTurn: Symbol("startTurn"),
@@ -120,8 +121,7 @@ vi.mock("../Sidebar.logic", () => ({
 vi.mock("../../localApi", () => ({ ensureLocalApi: () => ({ shell: { openExternal: vi.fn() } }) }));
 
 vi.mock("./rosterStore", () => {
-  const useRosterStore = (selector: (state: typeof mocks.roster) => unknown) =>
-    selector(mocks.roster);
+  const useRosterStore = <T>(selector: (state: typeof mocks.roster) => T) => selector(mocks.roster);
 
   useRosterStore.getState = () => mocks.roster;
 
@@ -135,7 +135,7 @@ function chatShell(id: string, updatedAt: string) {
     botId: "bot-1",
     parentThreadId: null,
     archivedAt: null,
-    runtimeMode: "full-access",
+    runtimeMode: "full-access" as const,
     updatedAt,
     createdAt: updatedAt,
   };

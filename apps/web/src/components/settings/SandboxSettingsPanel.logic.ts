@@ -97,9 +97,9 @@ export function isSandboxProviderConnected(
 export function selectableSandboxProviders(settings: SandboxSettings) {
   return [
     "local" as const,
-    ...SANDBOX_PROVIDER_DEFINITIONS.filter((definition) =>
-      isSandboxProviderConnected(settings, definition.id),
-    ).map((definition) => definition.id),
+    ...SANDBOX_PROVIDER_DEFINITIONS.flatMap((definition) =>
+      isSandboxProviderConnected(settings, definition.id) ? [definition.id] : [],
+    ),
   ];
 }
 

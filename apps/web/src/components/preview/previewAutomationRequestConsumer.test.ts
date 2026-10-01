@@ -51,7 +51,11 @@ const requestEvent = (
   request: request(requestId, overrides),
 });
 
-const consumerState = (handleRequest: (request: PreviewAutomationRequest) => Promise<unknown>) => ({
+const consumerState = (
+  handleRequest: (
+    request: PreviewAutomationRequest,
+  ) => Promise<PreviewAutomationResponse["result"]>,
+) => ({
   connectionAtom: Atom.make<string | null>(null),
   requestHandlerAtom: Atom.make({ handle: handleRequest }),
 });

@@ -22,6 +22,7 @@ class TestRecorder {
   onerror: (() => void) | null = null;
   starts = 0;
   constructor() {
+    // oxlint-disable-next-line typescript/no-this-alias -- the recorder test double registers its instance so tests can drive recording callbacks.
     latestRecorder = this;
   }
   start() {
@@ -37,7 +38,7 @@ class TestRecorder {
 
 const track = { enabled: false };
 
-const microphone = { getAudioTracks: () => [track] } as unknown as MediaStream;
+const microphone = { getAudioTracks: () => [track] } as MediaStream;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -141,7 +142,7 @@ describe("browser voice playback", () => {
     const controller = new AbortController();
 
     const playing = playVoiceAudio(
-      speaker as unknown as HTMLAudioElement,
+      speaker,
       { audioBase64: "YQ==", mimeType: "audio/mpeg" },
       controller.signal,
     );
@@ -178,7 +179,7 @@ describe("browser voice playback", () => {
     const firstController = new AbortController();
 
     const first = playVoiceAudio(
-      speaker as unknown as HTMLAudioElement,
+      speaker,
       { audioBase64: "YQ==", mimeType: "audio/mpeg" },
       firstController.signal,
     );
@@ -187,7 +188,7 @@ describe("browser voice playback", () => {
     await expect(first).rejects.toMatchObject({ name: "AbortError" });
 
     const second = playVoiceAudio(
-      speaker as unknown as HTMLAudioElement,
+      speaker,
       { audioBase64: "Yg==", mimeType: "audio/mpeg" },
       new AbortController().signal,
     );

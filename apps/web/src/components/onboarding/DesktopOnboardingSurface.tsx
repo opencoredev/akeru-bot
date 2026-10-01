@@ -1,3 +1,4 @@
+import { Match, Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { isAtomCommandInterrupted } from "@akeru/client-runtime/state/runtime";
 import { BotId, type EnvironmentId } from "@akeru/contracts";
@@ -266,7 +267,7 @@ export function OnboardingSurface({
 
     if (isAtomCommandInterrupted(result)) return;
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setCreateError(t("Could not create your bot."));
 
       return;
@@ -451,48 +452,53 @@ export function OnboardingSurface({
               exit={{ opacity: 0, x: -12 }}
               transition={{ duration: reducedMotion ? 0 : 0.24, ease: EASE }}
             >
-              {draft.step === "subscription" ? (
-                <SubscriptionStep
-                  environmentId={environmentId}
-                  draft={draft}
-                  captureMode={captureMode}
-                  onChange={updateDraft}
-                  onContinue={() => updateDraft({ ...draft, step: "goal" })}
-                />
-              ) : draft.step === "goal" ? (
-                <OnboardingGoalStep
-                  draft={draft}
-                  onChange={updateDraft}
-                  onBack={() => updateDraft({ ...draft, step: "subscription" })}
-                  onContinue={() => updateDraft({ ...draft, step: "identity" })}
-                />
-              ) : draft.step === "identity" ? (
-                <IdentityStep
-                  draft={draft}
-                  creating={creating}
-                  providerReadiness={providerReadiness}
-                  error={createError}
-                  onChange={updateDraft}
-                  onBack={() => updateDraft({ ...draft, step: "goal" })}
-                  onContinue={() => void create()}
-                />
-              ) : (
-                <div className="space-y-4">
-                  <h1 className={ONBOARDING_HEADING_CLASS}>
-                    {t("Say hello to {name}", { name: draft.name })}
-                  </h1>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    {t(
-                      "Your goal and the plan for it, written out. Edit it however you like, then send. This is the real conversation, not a demo.",
-                    )}
-                  </p>
-                  {!rosterBot ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
-                      {t("Waking up {name}", { name: draft.name })}
-                    </div>
-                  ) : null}
-                </div>
+              {Match.value(draft).pipe(
+                Match.when({ step: "subscription" }, (draft) => (
+                  <SubscriptionStep
+                    environmentId={environmentId}
+                    draft={draft}
+                    captureMode={captureMode}
+                    onChange={updateDraft}
+                    onContinue={() => updateDraft({ ...draft, step: "goal" })}
+                  />
+                )),
+                Match.when({ step: "goal" }, (draft) => (
+                  <OnboardingGoalStep
+                    draft={draft}
+                    onChange={updateDraft}
+                    onBack={() => updateDraft({ ...draft, step: "subscription" })}
+                    onContinue={() => updateDraft({ ...draft, step: "identity" })}
+                  />
+                )),
+                Match.when({ step: "identity" }, (draft) => (
+                  <IdentityStep
+                    draft={draft}
+                    creating={creating}
+                    providerReadiness={providerReadiness}
+                    error={createError}
+                    onChange={updateDraft}
+                    onBack={() => updateDraft({ ...draft, step: "goal" })}
+                    onContinue={() => void create()}
+                  />
+                )),
+                Match.orElse((draft) => (
+                  <div className="space-y-4">
+                    <h1 className={ONBOARDING_HEADING_CLASS}>
+                      {t("Say hello to {name}", { name: draft.name })}
+                    </h1>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {t(
+                        "Your goal and the plan for it, written out. Edit it however you like, then send. This is the real conversation, not a demo.",
+                      )}
+                    </p>
+                    {!rosterBot ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
+                        {t("Waking up {name}", { name: draft.name })}
+                      </div>
+                    ) : null}
+                  </div>
+                )),
               )}
             </motion.div>
           </AnimatePresence>

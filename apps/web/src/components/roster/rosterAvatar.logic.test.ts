@@ -12,7 +12,6 @@ import {
   BLOB_COLORS,
   BLOB_SHAPES,
 } from "./rosterAvatar.logic";
-import type { BotAvatar } from "./types";
 
 describe("resolveBlobEyes", () => {
   it("cuts eyes out of every preset", () => {
@@ -104,7 +103,7 @@ describe("resolveBlobRendering", () => {
   });
 
   it("falls back for an unknown shape or empty color from persisted data", () => {
-    const persisted = { kind: "blob", shape: "starburst", color: "" } as unknown as BotAvatar;
+    const persisted = { kind: "blob" as const, shape: "starburst", color: "" };
     expect(resolveBlobRendering(persisted)).toEqual({
       shape: DEFAULT_BLOB_SHAPE,
       color: DEFAULT_BLOB_COLOR,
@@ -112,7 +111,7 @@ describe("resolveBlobRendering", () => {
   });
 
   it("falls back for a retired shape name", () => {
-    const persisted = { kind: "blob", shape: "pebble", color: "#FFFFFF" } as unknown as BotAvatar;
+    const persisted = { kind: "blob" as const, shape: "pebble", color: "#FFFFFF" };
     expect(resolveBlobRendering(persisted)).toEqual({
       shape: DEFAULT_BLOB_SHAPE,
       color: "#FFFFFF",

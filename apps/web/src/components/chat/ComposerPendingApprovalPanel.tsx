@@ -1,3 +1,4 @@
+import { Predicate, Schema, Option } from "effect";
 import { ClockIcon } from "lucide-react";
 import { memo } from "react";
 import { createTranslator } from "@akeru/client-runtime/i18n";
@@ -22,6 +23,10 @@ interface ComposerPendingApprovalPanelProps {
 // than a second bordered card.
 const DETAIL_SURFACE_CLASS_NAME = "rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5";
 
+function isJsonObject(value: Schema.Json | undefined): value is Schema.JsonObject {
+  return Predicate.isObject(value);
+}
+
 function CommandGlyph() {
   return (
     <span
@@ -41,15 +46,15 @@ interface RoutineProposalDetails {
   readonly uses: ReadonlyArray<string>;
 }
 
-function stringField(record: Record<string, unknown>, key: string): string | null {
+function stringField(record: Schema.JsonObject, key: string): string | null {
   const value = record[key];
 
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  return Predicate.isString(value) && value.trim() ? value.trim() : null;
 }
 
-function stringList(value: unknown): ReadonlyArray<string> {
+function stringList(value: Schema.Json | undefined): ReadonlyArray<string> {
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && item.trim() !== "")
+    ? value.filter((item): item is string => Predicate.isString(item) && item.trim() !== "")
     : [];
 }
 
@@ -57,11 +62,14 @@ function capitalize(value: string) {
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
-function routineInstructions(instructions: string | null, schedule: unknown): string | null {
+function routineInstructions(
+  instructions: string | null,
+  schedule: Schema.Json | undefined,
+): string | null {
   if (!instructions) return null;
 
-  if (!schedule || typeof schedule !== "object") return instructions;
-  const kind = (schedule as Record<string, unknown>).kind;
+  if (!schedule || !isJsonObject(schedule)) return instructions;
+  const kind = schedule.kind;
   const comma = instructions.indexOf(",");
 
   if (comma < 0) return instructions;
@@ -122,9 +130,13 @@ function commandSignalLabel(signal: string, t: Translate): string {
 
 // Describes only what the draft states. An unknown or missing schedule yields
 // null rather than a guessed default.
-function routineScheduleText(schedule: unknown, t: Translate, locale: string): string | null {
-  if (!schedule || typeof schedule !== "object") return null;
-  const record = schedule as Record<string, unknown>;
+function routineScheduleText(
+  schedule: Schema.Json | undefined,
+  t: Translate,
+  locale: string,
+): string | null {
+  if (!schedule || !isJsonObject(schedule)) return null;
+  const record = schedule;
   const time = stringField(record, "time");
 
   if (!time) return null;
@@ -145,13 +157,16 @@ function routineScheduleText(schedule: unknown, t: Translate, locale: string): s
   return null;
 }
 
+const decodeRoutineArgs = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Json));
+
 export function routineProposalDetails(
-  args: unknown,
+  args: PendingApproval["args"],
   t: Translate = englishTranslator.translate,
   locale: string = englishTranslator.locale,
 ): RoutineProposalDetails | null {
-  if (!args || typeof args !== "object") return null;
-  const record = args as Record<string, unknown>;
+  const record = Option.getOrNull(decodeRoutineArgs(args));
+
+  if (!record) return null;
 
   const details = {
     name: stringField(record, "name"),
@@ -171,7 +186,7 @@ function RoutineProposal({
   label,
   pendingCount,
 }: {
-  args: unknown;
+  args: PendingApproval["args"];
   className: string | undefined;
   hideLabel: boolean;
   label: string;
@@ -280,9 +295,9 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
   const argsCommand =
     approval.requestKind === "command" &&
     approval.args &&
-    typeof approval.args === "object" &&
+    Predicate.isObjectOrArray(approval.args) &&
     "command" in approval.args &&
-    typeof approval.args.command === "string"
+    Predicate.isString(approval.args.command)
       ? approval.args.command
       : null;
 

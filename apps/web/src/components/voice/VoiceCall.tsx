@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   createRealtimeVoiceSession,
@@ -121,8 +122,11 @@ function stopBrowserCall(active: ActiveBrowserCall): void {
   active.stopListeningForDeviceLoss();
 
   if (active.events) {
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
     active.events.onmessage = null;
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
     active.events.onerror = null;
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
     active.events.onclose = null;
   }
 
@@ -138,8 +142,11 @@ function cleanPendingBrowserCall(pending: PendingBrowserCall): void {
   pending.stopListeningForDeviceLoss();
 
   if (pending.events) {
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
     pending.events.onmessage = null;
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
     pending.events.onerror = null;
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
     pending.events.onclose = null;
   }
 
@@ -221,7 +228,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
   // Composed calls wait for the bot's reply; these listeners re-read the turn after each render.
   const turnListenersRef = useRef(new Set<() => void>());
   useEffect(() => {
-    for (const changed of [...turnListenersRef.current]) changed();
+    for (const changed of turnListenersRef.current) changed();
   }, [runtime.latestTurn, runtime.messages]);
   const activeRef = useRef<ActiveBrowserCall | null>(null);
   const mountedRef = useRef(true);
@@ -436,7 +443,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
               input: { botId: BotId.make(bot.id) },
             });
 
-            if (result._tag === "Failure") {
+            if (Predicate.isTagged(result, "Failure")) {
               const cause = Cause.squash(result.cause);
               throw new Error(
                 cause instanceof Error ? cause.message : "Could not start the voice call.",
@@ -488,12 +495,12 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
                   return () => turnListenersRef.current.delete(changed);
                 },
               }),
-            ).catch((error: unknown) => {
+            ).catch((cause: unknown) => {
               if (scope.signal.aborted) return;
               endBrowserCall(browserCall, {
                 type: "error",
                 title: "Voice call ended",
-                description: voiceStartErrorDescription(error),
+                description: voiceStartErrorDescription(cause),
               });
             });
 
@@ -512,10 +519,12 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
           microphone.getTracks().forEach((track) => peer.addTrack(track, microphone));
           const events = peer.createDataChannel("oai-events");
           pending.events = events;
+          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
           events.onerror = () => {
             pending.failure ??= new Error("The call connection failed.");
           };
 
+          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
           events.onclose = () => {
             pending.failure ??= new Error("The voice session closed.");
           };
@@ -556,6 +565,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             if (events.readyState === "open") events.send(payload);
           });
 
+          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
           events.onmessage = (channelMessage) => session.receive(String(channelMessage.data));
           const offer = await peer.createOffer();
 
@@ -577,7 +587,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             input: { botId: BotId.make(bot.id), sdp },
           });
 
-          if (result._tag === "Failure") {
+          if (Predicate.isTagged(result, "Failure")) {
             const cause = Cause.squash(result.cause);
             throw new Error(
               cause instanceof Error ? cause.message : "Could not start the voice call.",
@@ -613,12 +623,14 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
           };
 
           activate(browserCall);
+          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
           events.onerror = () =>
             endBrowserCall(browserCall, {
               type: "error",
               title: "Call connection failed",
               description: "Start a new call to continue.",
             });
+          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
           events.onclose = () =>
             endBrowserCall(browserCall, {
               type: "warning",

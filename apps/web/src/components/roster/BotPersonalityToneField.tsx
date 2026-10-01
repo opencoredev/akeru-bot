@@ -22,12 +22,12 @@ export function BotPersonalityToneField({
   className,
 }: {
   readonly bot: Pick<Bot, "name" | "avatar">;
-  readonly tone: number;
+  readonly tone: number | undefined;
   readonly onToneChange: (tone: number) => void;
   readonly className?: string;
 }) {
   const { t } = useI18n();
-  const selected = resolveBotPersonalityToneOption(tone);
+  const selected = resolveBotPersonalityToneOption(tone ?? 50);
   const band = localizeBotPersonalityToneBand(resolveBotPersonalityToneBand(selected.value), t);
 
   return (
@@ -77,10 +77,10 @@ export function BotPersonalityTonePreview({
   tone,
 }: {
   readonly bot: Pick<Bot, "name" | "avatar">;
-  readonly tone: number;
+  readonly tone: number | undefined;
 }) {
   const { t } = useI18n();
-  const band = localizeBotPersonalityToneBand(resolveBotPersonalityToneBand(tone), t);
+  const band = localizeBotPersonalityToneBand(resolveBotPersonalityToneBand(tone ?? 50), t);
 
   return (
     <figure

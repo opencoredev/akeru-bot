@@ -1,5 +1,8 @@
 "use client";
 
+import { Data } from "effect";
+import { PreviewNavStatus } from "@akeru/contracts";
+
 import type {
   DesktopPreviewTabState,
   PreviewReportStatusInput,
@@ -35,6 +38,8 @@ function originOf(url: string): string | null {
  * Mirrors low-latency desktop state into the store and reflects navigation
  * events back to the server. Webview lifetime is owned by ElectronBrowserHost.
  */
+const NavStatuses = Data.taggedEnum<PreviewNavStatus>();
+
 export function usePreviewBridge(input: {
   threadRef: ScopedThreadRef;
   tabId: string;
@@ -191,13 +196,12 @@ function buildReportInput(args: {
     return {
       input: {
         ...base,
-        navStatus: {
-          _tag: "LoadFailed",
+        navStatus: NavStatuses.LoadFailed({
           url: status.url,
           title: status.title,
           code: status.code,
           description: status.description,
-        },
+        }),
       },
       lastReportedUrl: status.url,
       lastReportedKind: "LoadFailed",

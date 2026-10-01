@@ -61,6 +61,7 @@ export function Bar({
             // biome-ignore lint/a11y/noStaticElementInteractions: progressive enhancement; the Legend offers the same toggle accessibly
             <rect
               // biome-ignore lint/suspicious/noArrayIndexKey: index is the stable category position
+              // oxlint-disable-next-line react/no-array-index-key -- chart marks have stable positional identity; their geometry is updated in place when category data changes.
               key={i}
               x={slot.x}
               y={Math.min(top, base)}

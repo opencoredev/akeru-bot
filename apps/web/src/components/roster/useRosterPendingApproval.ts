@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import type {
   ApprovalRequestId,
@@ -50,7 +51,7 @@ export function useRosterPendingApproval(threadRef: ScopedThreadRef | null) {
           input: { threadId: threadRef.threadId, requestId, decision },
         });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           const cause = squashAtomCommandFailure(result);
           error = cause instanceof Error ? cause.message : "Could not answer approval.";
 

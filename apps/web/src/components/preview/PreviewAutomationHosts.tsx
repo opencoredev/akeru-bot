@@ -1,17 +1,27 @@
 "use client";
 
+import { Schema } from "effect";
+import { isTagged } from "../tagged";
+
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import {
   FILL_PREVIEW_VIEWPORT,
   PREVIEW_AUTOMATION_OPERATIONS,
+  PreviewAutomationWaitForInput,
+  PreviewAutomationEvaluateInput,
+  PreviewAutomationScrollInput,
+  PreviewAutomationPressInput,
+  PreviewAutomationTypeInput,
+  PreviewAutomationClickInput,
   type EnvironmentId,
   type PreviewAutomationHost as PreviewAutomationHostState,
-  type PreviewAutomationNavigateInput,
-  type PreviewAutomationOpenInput,
+  PreviewAutomationNavigateInput,
+  PreviewAutomationOpenInput,
   type PreviewAutomationRequest,
-  type PreviewAutomationResizeInput,
+  type PreviewAutomationResponse,
+  PreviewAutomationResizeInput,
   type PreviewAutomationResizeResult,
-  type PreviewAutomationSetColorSchemeInput,
+  PreviewAutomationSetColorSchemeInput,
   type PreviewAutomationSetColorSchemeResult,
   type PreviewAutomationStatus,
   type PreviewRenderedViewportSize,
@@ -112,9 +122,9 @@ const currentStatus = async (
     available: Boolean(previewBridge?.automation),
     visible,
     tabId,
-    url: navStatus && navStatus._tag !== "Idle" ? navStatus.url : null,
-    title: navStatus && navStatus._tag !== "Idle" ? navStatus.title : null,
-    loading: navStatus?._tag === "Loading",
+    url: navStatus && !isTagged(navStatus, "Idle") ? navStatus.url : null,
+    title: navStatus && !isTagged(navStatus, "Idle") ? navStatus.title : null,
+    loading: isTagged(navStatus ?? {}, "Loading"),
     ...viewportStatus,
   };
 };
@@ -150,6 +160,30 @@ export function PreviewAutomationHosts() {
     </>
   );
 }
+
+interface PreviewActivity {
+  release: (() => void) | null;
+}
+
+const decodeOpen = Schema.decodeUnknownSync(PreviewAutomationOpenInput);
+
+const decodeNavigate = Schema.decodeUnknownSync(PreviewAutomationNavigateInput);
+
+const decodeResize = Schema.decodeUnknownSync(PreviewAutomationResizeInput);
+
+const decodeSetColorScheme = Schema.decodeUnknownSync(PreviewAutomationSetColorSchemeInput);
+
+const decodeClick = Schema.decodeUnknownSync(PreviewAutomationClickInput);
+
+const decodeType = Schema.decodeUnknownSync(PreviewAutomationTypeInput);
+
+const decodePress = Schema.decodeUnknownSync(PreviewAutomationPressInput);
+
+const decodeScroll = Schema.decodeUnknownSync(PreviewAutomationScrollInput);
+
+const decodeEvaluate = Schema.decodeUnknownSync(PreviewAutomationEvaluateInput);
+
+const decodeWaitFor = Schema.decodeUnknownSync(PreviewAutomationWaitForInput);
 
 function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId }) {
   const { environmentId } = props;
@@ -196,14 +230,14 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
   const automationConnectionId = useAtomValue(automationConnectionAtom);
 
   const handleRequest = useCallback(
-    async (request: PreviewAutomationRequest): Promise<unknown> => {
+    async (request: PreviewAutomationRequest): Promise<PreviewAutomationResponse["result"]> => {
       const threadRef: ScopedThreadRef = {
         environmentId,
         threadId: request.threadId,
       };
 
       let tabId = request.tabId ?? null;
-      const browserActivity = { release: null as (() => void) | null };
+      const browserActivity: PreviewActivity = { release: null };
 
       try {
         let state = readThreadPreviewState(threadRef);
@@ -218,7 +252,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
           registry.refresh(previewEnvironment.list(listTarget));
           const result = await listPreviews(listTarget);
 
-          if (result._tag === "Failure") {
+          if (isTagged(result, "Failure")) {
             return raiseAtomCommandFailure(result);
           }
 
@@ -268,7 +302,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
           case "status":
             return await currentStatus(threadRef, tabId);
           case "open": {
-            const input = request.input as PreviewAutomationOpenInput;
+            const input = decodeOpen(request.input);
 
             const resolvedInputUrl = input.url
               ? resolveBrowserNavigationTarget(environmentId, {
@@ -302,7 +336,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                 },
               });
 
-              if (result._tag === "Failure") {
+              if (isTagged(result, "Failure")) {
                 return raiseAtomCommandFailure(result);
               }
 
@@ -347,7 +381,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                   },
                 );
 
-                if (resizeResult._tag === "Failure") {
+                if (isTagged(resizeResult, "Failure")) {
                   return raiseAtomCommandFailure(resizeResult);
                 }
 
@@ -379,7 +413,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
 
           case "navigate": {
             const ready = await requireReadyTab();
-            const input = request.input as PreviewAutomationNavigateInput;
+            const input = decodeNavigate(request.input);
 
             const resolution = resolveBrowserNavigationTarget(
               environmentId,
@@ -405,7 +439,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
 
           case "resize": {
             const ready = await requireReadyTab();
-            const input = request.input as PreviewAutomationResizeInput;
+            const input = decodeResize(request.input);
             const setting = resolvePreviewViewport(input);
 
             const applied = await runBrowserViewportMutation(ready.runtimeTabId, async () => {
@@ -428,7 +462,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                 },
               });
 
-              if (result._tag === "Failure") {
+              if (isTagged(result, "Failure")) {
                 return raiseAtomCommandFailure(result);
               }
 
@@ -481,7 +515,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                     },
                   });
 
-                  if (rollback._tag !== "Failure") {
+                  if (!isTagged(rollback, "Failure")) {
                     updatePreviewServerSnapshot(threadRef, rollback.value);
                   }
                 }
@@ -498,7 +532,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
 
           case "setColorScheme": {
             const ready = await requireReadyTab();
-            const input = request.input as PreviewAutomationSetColorSchemeInput;
+            const input = decodeSetColorScheme(request.input);
             await ready.bridge.setColorScheme(ready.runtimeTabId, input.colorScheme);
 
             return {
@@ -518,7 +552,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
 
             return await ready.bridge.automation.click(
               ready.runtimeTabId,
-              request.input as Parameters<typeof ready.bridge.automation.click>[1],
+              decodeClick(request.input),
             );
           }
 
@@ -527,7 +561,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
 
             return await ready.bridge.automation.type(
               ready.runtimeTabId,
-              request.input as Parameters<typeof ready.bridge.automation.type>[1],
+              decodeType(request.input),
             );
           }
 
@@ -536,7 +570,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
 
             return await ready.bridge.automation.press(
               ready.runtimeTabId,
-              request.input as Parameters<typeof ready.bridge.automation.press>[1],
+              decodePress(request.input),
             );
           }
 
@@ -545,7 +579,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
 
             return await ready.bridge.automation.scroll(
               ready.runtimeTabId,
-              request.input as Parameters<typeof ready.bridge.automation.scroll>[1],
+              decodeScroll(request.input),
             );
           }
 
@@ -554,7 +588,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
 
             return await ready.bridge.automation.evaluate(
               ready.runtimeTabId,
-              request.input as Parameters<typeof ready.bridge.automation.evaluate>[1],
+              decodeEvaluate(request.input),
             );
           }
 
@@ -563,7 +597,7 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
 
             return await ready.bridge.automation.waitFor(
               ready.runtimeTabId,
-              request.input as Parameters<typeof ready.bridge.automation.waitFor>[1],
+              decodeWaitFor(request.input),
             );
           }
 

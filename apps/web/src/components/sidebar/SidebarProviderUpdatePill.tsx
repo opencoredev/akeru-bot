@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import type { ServerProvider } from "@akeru/contracts";
 import { CircleCheckIcon, DownloadIcon, LoaderIcon, TriangleAlertIcon, XIcon } from "lucide-react";
@@ -136,6 +137,7 @@ export function SidebarProviderUpdatePill() {
     return null;
   }
 
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   return (
     <div
       className={`group/provider-update relative flex h-7 w-full items-center overflow-hidden rounded-lg text-xs font-medium transform-gpu transition-all duration-180 ease-(--ease-smooth-out) will-change-transform ${
@@ -188,14 +190,13 @@ export function SidebarProviderUpdatePill() {
               className="provider-update-main relative z-1 flex h-full flex-1 items-center gap-2 px-2 text-left"
               onClick={openProviderSettings}
             >
-              {displayedView.tone === "loading" ? (
-                <LoaderIcon className="size-3.5 animate-spin" />
-              ) : displayedView.tone === "success" ? (
-                <CircleCheckIcon className="size-3.5" />
-              ) : displayedView.tone === "error" ? (
-                <TriangleAlertIcon className="size-3.5" />
-              ) : (
-                <DownloadIcon className="size-3.5" />
+              {Match.value(displayedView).pipe(
+                Match.when({ tone: "loading" }, () => (
+                  <LoaderIcon className="size-3.5 animate-spin" />
+                )),
+                Match.when({ tone: "success" }, () => <CircleCheckIcon className="size-3.5" />),
+                Match.when({ tone: "error" }, () => <TriangleAlertIcon className="size-3.5" />),
+                Match.orElse(() => <DownloadIcon className="size-3.5" />),
               )}
               <span>{displayedView.title}</span>
             </button>

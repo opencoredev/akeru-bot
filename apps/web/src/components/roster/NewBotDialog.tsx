@@ -57,8 +57,8 @@ export function NewBotDialog({
       (assetPath) => {
         setAvatar({ kind: "image", assetPath, dithered: false });
       },
-      (error: unknown) => {
-        console.error("Could not read avatar image.", error);
+      (cause: unknown) => {
+        console.error("Could not read avatar image.", cause);
       },
     );
   };

@@ -1,3 +1,4 @@
+import { Predicate, Option, Schema } from "effect";
 import {
   isServerProviderUnavailability,
   latestTurnFailure,
@@ -9,6 +10,14 @@ import type {
   OrchestrationThreadActivity,
   ServerProviderUnavailability,
 } from "@akeru/contracts";
+
+const decodeWarningPayload = Schema.decodeUnknownOption(
+  Schema.Struct({
+    key: Schema.optionalKey(Schema.Unknown),
+    resolved: Schema.optionalKey(Schema.Unknown),
+    message: Schema.optionalKey(Schema.Unknown),
+  }),
+);
 
 export function activeThreadRuntimeWarning(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
@@ -30,12 +39,9 @@ export function activeThreadRuntimeWarning(
       continue;
     }
 
-    const payload =
-      activity.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
-        : null;
+    const payload = Option.getOrNull(decodeWarningPayload(activity.payload));
 
-    const key = typeof payload?.key === "string" ? payload.key : null;
+    const key = Predicate.isString(payload?.key) ? payload.key : null;
 
     if (payload?.resolved === true) {
       if (key) resolvedKeys.add(key);
@@ -44,7 +50,7 @@ export function activeThreadRuntimeWarning(
 
     if (key && resolvedKeys.has(key)) continue;
 
-    return typeof payload?.message === "string" && payload.message.trim().length > 0
+    return Predicate.isString(payload?.message) && payload.message.trim().length > 0
       ? payload.message
       : activity.summary;
   }
@@ -71,12 +77,9 @@ export function latestThreadRuntimeError(
 
   if (!activity) return null;
 
-  const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = Option.getOrNull(decodeWarningPayload(activity.payload));
 
-  return typeof payload?.message === "string" && payload.message.trim()
+  return Predicate.isString(payload?.message) && payload.message.trim()
     ? payload.message
     : activity.summary;
 }
@@ -93,7 +96,9 @@ export function commandFailure(
   const error = squashAtomCommandFailure(result);
 
   const unavailability =
-    error && typeof error === "object" && "unavailability" in error ? error.unavailability : null;
+    error && Predicate.isObjectOrArray(error) && "unavailability" in error
+      ? error.unavailability
+      : null;
 
   return {
     message: error instanceof Error ? error.message : "Could not send the message.",

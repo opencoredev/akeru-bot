@@ -1,3 +1,4 @@
+import { makeShellSnapshot } from "../test-support/fixtures";
 import {
   EnvironmentId,
   type OrchestrationBot,
@@ -30,7 +31,7 @@ function snapshot(
   threads: OrchestrationThreadShell[],
   extra: Partial<OrchestrationShellSnapshot> = {},
 ): OrchestrationShellSnapshot {
-  return { threads, bots: [], groups: [], ...extra } as unknown as OrchestrationShellSnapshot;
+  return makeShellSnapshot({ threads, bots: [], groups: [], ...extra });
 }
 
 const mori = { id: "bot-mori", name: "Mori" } as OrchestrationBot;

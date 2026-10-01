@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import type { EnvironmentId, SandboxProvider, SandboxSettings } from "@akeru/contracts";
 import { useState } from "react";
@@ -91,7 +92,7 @@ function EnvironmentSandboxSettingsPanel({
     const result = await updateSettings({ environmentId, input: { patch: { sandbox: next } } });
     setSaving(false);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setError(errorMessage(result, t("The server rejected these sandbox settings.")));
 
       return false;
@@ -151,6 +152,7 @@ function EnvironmentSandboxSettingsPanel({
               value={sandbox.defaultProvider}
               onValueChange={(value) => {
                 if (value === null) return;
+                // SAFETY: the value is checked against selectableSandboxProviders before persistence.
                 const provider = value as SandboxProvider;
 
                 if (!selectableSandboxProviders(sandbox).includes(provider)) return;

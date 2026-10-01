@@ -1,3 +1,4 @@
+import type { TestProps, TestValue } from "../test-support/reactTree";
 // @effect-diagnostics nodeBuiltinImport:off - Source contracts read the settings modules.
 import * as NodeFS from "node:fs";
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from "react";
@@ -5,7 +6,7 @@ import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 
 import { BotEngineFields } from "./BotEngineFields";
 import { BotIdentityFields } from "./BotIdentityFields";
 
-type Tree = ReactElement<Record<string, unknown>>;
+type Tree = ReactElement<TestProps>;
 
 /** Source of every module that renders part of the bot settings page. */
 export function readBotSettingsSource(): string {
@@ -19,23 +20,29 @@ export function readBotSettingsSource(): string {
     .join("\n");
 }
 
-function expand(node: unknown): unknown {
+function expand(node: TestValue): TestValue {
   if (Array.isArray(node)) {
     return node.some((child) => Array.isArray(child) || isValidElement(child))
       ? node.map(expand)
       : node;
   }
 
-  if (!isValidElement<Record<string, unknown>>(node)) return node;
+  if (!isValidElement<TestProps>(node)) return node;
 
-  if (node.type === BotIdentityFields) {
+  if (
+    node.type === BotIdentityFields &&
+    isValidElement<Parameters<typeof BotIdentityFields>[0]>(node)
+  ) {
     // SAFETY: the element was created from BotIdentityFields, so its props match.
-    return expand(BotIdentityFields(node.props as Parameters<typeof BotIdentityFields>[0]));
+    return expand(BotIdentityFields(node.props));
   }
 
-  if (node.type === BotEngineFields) {
+  if (
+    node.type === BotEngineFields &&
+    isValidElement<Parameters<typeof BotEngineFields>[0]>(node)
+  ) {
     // SAFETY: the element was created from BotEngineFields, so its props match.
-    return expand(BotEngineFields(node.props as Parameters<typeof BotEngineFields>[0]));
+    return expand(BotEngineFields(node.props));
   }
 
   const props = Object.fromEntries(

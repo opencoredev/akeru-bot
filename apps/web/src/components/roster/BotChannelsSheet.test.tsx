@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { AuthAccessWriteScope, type ChannelBinding } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import type { ReactNode } from "react";
@@ -84,7 +85,7 @@ vi.mock("../ui/sheet", () => {
 
 vi.mock("../ui/button", () => ({
   Button: (props: { children: ReactNode; onClick?: () => void; disabled?: boolean }) => {
-    if (typeof props.children === "string") fixtures.buttons.set(props.children, props);
+    if (Predicate.isString(props.children)) fixtures.buttons.set(props.children, props);
 
     return <button disabled={props.disabled}>{props.children}</button>;
   },

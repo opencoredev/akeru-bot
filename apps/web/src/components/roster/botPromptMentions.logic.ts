@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import {
   BROWSER_MENTION_LABEL,
   collectComposerInlineTokens,
@@ -91,7 +92,7 @@ export interface BotPromptMentionBot {
 export function botPromptMention(
   bot: BotPromptMentionBot,
   bots: ReadonlyArray<BotPromptMentionBot>,
-): { readonly source: string; readonly detail: string | null } {
+) {
   const detail = composerBotMentionDetail(bot, bots);
 
   // A bot named `browser` would read as the browser mention, so it keeps its id token.
@@ -187,7 +188,7 @@ export function applyBotPromptMention(
   draft: string,
   trigger: BotPromptMentionTrigger,
   item: BotPromptMentionItem,
-): { readonly text: string; readonly caret: number } {
+) {
   const source = mentionSource(item);
 
   if (source === null) return { text: draft, caret: trigger.rangeEnd };
@@ -217,12 +218,11 @@ export function botPromptMentionChips(
   botName: (botId: string) => string | null = () => null,
 ): BotPromptMentionChip[] {
   return collectComposerMentionDisplays(draft, threadTitle, botName).map((display) => ({
-    key:
-      display.kind === "browser"
-        ? "browser"
-        : display.kind === "bot"
-          ? `bot:${display.botId}`
-          : `thread:${display.threadId}`,
+    key: Match.value(display).pipe(
+      Match.when({ kind: "browser" }, () => "browser"),
+      Match.when({ kind: "bot" }, (display) => `bot:${display.botId}`),
+      Match.orElse((display) => `thread:${display.threadId}`),
+    ),
     kind: display.kind,
     label: display.label,
     source: display.source,

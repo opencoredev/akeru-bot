@@ -1,5 +1,7 @@
 "use client";
 
+import type { ProviderConfig } from "./providerConfig";
+
 import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { CheckIcon } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -74,7 +76,7 @@ const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 
 const DEFAULT_DRIVER_OPTION = DRIVER_OPTIONS[0]!;
 
-const EMPTY_CONFIG_DRAFT: Record<string, unknown> = {};
+const EMPTY_CONFIG_DRAFT: ProviderConfig = {};
 
 interface ComingSoonDriverOption {
   readonly value: ProviderDriverKind;
@@ -154,7 +156,7 @@ export function AddProviderInstanceDialog({
   const [instanceIdOverride, setInstanceIdOverride] = useState<string | null>(null);
   // Driver-specific config drafts keyed by driver so toggling between drivers
   // during the same dialog session does not lose in-progress input.
-  const [configByDriver, setConfigByDriver] = useState<Record<string, Record<string, unknown>>>({});
+  const [configByDriver, setConfigByDriver] = useState<Record<string, ProviderConfig>>({});
   // Errors are suppressed until the user has tried to submit once. After that
   // they update live so fixing the problem clears the message in place.
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
@@ -179,7 +181,7 @@ export function AddProviderInstanceDialog({
 
   const configDraft = configByDriver[driver] ?? EMPTY_CONFIG_DRAFT;
 
-  const setConfigDraft = (config: Record<string, unknown> | undefined) => {
+  const setConfigDraft = (config: ProviderConfig | undefined) => {
     setConfigByDriver((existing) => {
       const next = { ...existing };
 

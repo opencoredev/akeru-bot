@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { createTranslator } from "@akeru/client-runtime/i18n";
 import {
   type ProviderDriverKind,
@@ -46,11 +47,11 @@ export function replaceDescriptorCurrentValue(
       : descriptor.type === "boolean"
         ? {
             ...descriptor,
-            ...(typeof currentValue === "boolean" ? { currentValue } : {}),
+            ...(Predicate.isBoolean(currentValue) ? { currentValue } : {}),
           }
         : {
             ...descriptor,
-            ...(typeof currentValue === "string" ? { currentValue } : {}),
+            ...(Predicate.isString(currentValue) ? { currentValue } : {}),
           },
   );
 }
@@ -64,7 +65,7 @@ export function getDescriptorStringValue(
 
   const value = getProviderOptionCurrentValue(descriptor);
 
-  return typeof value === "string" ? value : null;
+  return Predicate.isString(value) ? value : null;
 }
 
 function getSelectedTraits(
@@ -120,8 +121,9 @@ function getSelectedTraits(
       ? "ultrathink"
       : getDescriptorStringValue(primarySelectDescriptor)) ?? null;
 
-  const thinkingEnabled =
-    typeof thinkingDescriptor?.currentValue === "boolean" ? thinkingDescriptor.currentValue : null;
+  const thinkingEnabled = Predicate.isBoolean(thinkingDescriptor?.currentValue)
+    ? thinkingDescriptor.currentValue
+    : null;
 
   const contextWindow = getDescriptorStringValue(contextWindowDescriptor);
   const selectedAgent = getDescriptorStringValue(agentDescriptor);
@@ -209,7 +211,7 @@ export function buildTraitsTriggerDisplay(input: {
   primarySelectDescriptorId: string | null;
   ultrathinkPromptControlled: boolean;
   t?: Translate;
-}): { label: string; showFastModeIcon: boolean } {
+}) {
   const t = input.t ?? translateEnglish;
   let fastModeFallbackLabel: string | null = null;
   let fastModeEnabled = false;
@@ -248,7 +250,7 @@ export function buildTraitsTriggerDisplay(input: {
             : t("{label} Off", { label: descriptor.label })
           : getProviderOptionCurrentLabel(descriptor);
 
-    if (typeof label === "string" && label.length > 0) {
+    if (Predicate.isString(label) && label.length > 0) {
       labels.push(label);
     }
   }

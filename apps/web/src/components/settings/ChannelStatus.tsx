@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ChannelBinding, ChannelConnectionProfile } from "@akeru/contracts";
 import {
   type ChannelRepairAction,
@@ -17,7 +18,7 @@ type StatusBinding = Pick<ChannelBinding, "status" | "lastError" | "provider" | 
  * the browser origin, because the browser may reach the server over a private address.
  */
 export function channelWebhookUrl(connection: ChannelConnectionProfile): string | null {
-  return "webhookUrl" in connection && typeof connection.webhookUrl === "string"
+  return "webhookUrl" in connection && Predicate.isString(connection.webhookUrl)
     ? connection.webhookUrl
     : null;
 }

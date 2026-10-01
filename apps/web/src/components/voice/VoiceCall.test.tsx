@@ -216,7 +216,10 @@ describe("voice call UI", () => {
         iceGatheringState: "gathering",
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
-      } as unknown as RTCPeerConnection;
+      } satisfies Pick<
+        RTCPeerConnection,
+        "iceGatheringState" | "addEventListener" | "removeEventListener"
+      >;
 
       const gathered = waitForIceGathering(peer, 100);
       vi.advanceTimersByTime(100);
@@ -247,10 +250,7 @@ describe("voice call UI", () => {
 
     const onLost = vi.fn();
 
-    const stop = listenForMicrophoneLoss(
-      { getAudioTracks: () => [track as unknown as MediaStreamTrack] },
-      onLost,
-    );
+    const stop = listenForMicrophoneLoss({ getAudioTracks: () => [track] }, onLost);
 
     expect(track.addEventListener).toHaveBeenCalledWith("ended", onLost);
     stop();

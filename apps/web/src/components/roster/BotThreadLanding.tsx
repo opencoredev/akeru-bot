@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { pendingMemoryApprovals } from "@akeru/client-runtime/durable-memory";
 import { useAtomValue } from "@effect/atom-react";
 import { presentThreadError } from "@akeru/client-runtime/errors";
@@ -77,6 +78,7 @@ import { resolveRoutedBot } from "./rosterRouteSelection";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 import { ChatActionsMenu, useMarkChatVisited } from "../chat/ChatActionsMenu";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function BotThreadLanding({
@@ -90,6 +92,7 @@ export function BotThreadLanding({
   const { t, locale } = i18n;
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
+  // SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
   const channelSession = useEnvironmentSessionState(environmentId ?? ("" as EnvironmentId));
   const canManageChannelBindings = canManageChannels(channelSession.data);
   const bots = useRosterStore((state) => state.bots);
@@ -391,12 +394,12 @@ export function BotThreadLanding({
             ) : (
               timelineItems.map((item, timelineIndex) => (
                 <Fragment key={item.key}>
-                  {item._tag === "Receipt" ? (
+                  {Predicate.isTagged(item, "Receipt") ? (
                     <RoutineReceiptRow
                       receipt={item.receipt}
                       {...(onOpenRoutines ? { onOpenRoutines } : {})}
                     />
-                  ) : item._tag === "Delegation" ? (
+                  ) : Predicate.isTagged(item, "Delegation") ? (
                     <DelegationCard
                       delegation={item.delegation}
                       delegations={delegations}
@@ -407,8 +410,10 @@ export function BotThreadLanding({
                     (() => {
                       const { message, separator, startsGroup } = item.message.entry;
 
-                      const startsAfterReceipt =
-                        timelineItems[timelineIndex - 1]?._tag === "Receipt";
+                      const startsAfterReceipt = Predicate.isTagged(
+                        timelineItems[timelineIndex - 1] ?? {},
+                        "Receipt",
+                      );
 
                       const messageIndex = item.index;
 

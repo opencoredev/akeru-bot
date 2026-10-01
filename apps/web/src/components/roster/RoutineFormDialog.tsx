@@ -131,6 +131,7 @@ export function RoutineFormDialog({
     }
   };
 
+  // SAFETY: this native select emits only the schedule frequencies rendered by its fixed options.
   return (
     <Dialog
       open

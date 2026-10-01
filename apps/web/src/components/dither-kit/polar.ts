@@ -1,5 +1,7 @@
 // @ts-nocheck
-type Row = Record<string, unknown>;
+import type { ChartValue } from "./chartValue";
+
+type Row = Record<string, ChartValue>;
 
 const TOP = -Math.PI / 2;
 

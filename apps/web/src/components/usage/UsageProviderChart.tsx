@@ -173,7 +173,7 @@ function curvePath(segments: readonly CurveSegment[]): string {
  * peak leaves the tallest day drawn past the top of the plot, where it is
  * clipped.
  */
-export function niceScale(peak: number, count: number): { max: number; ticks: readonly number[] } {
+export function niceScale(peak: number, count: number) {
   if (peak <= 0) return { max: 0, ticks: [0] };
 
   const rawStep = peak / count;
@@ -237,9 +237,9 @@ export function UsageProviderChart({
     if (periods.length === 0) {
       return {
         paths: [],
-        series: [] as readonly DayColumn[],
+        series: [],
         stepX: 0,
-        ticks: [0] as readonly number[],
+        ticks: [0],
         toY: () => VIEW_HEIGHT,
       };
     }

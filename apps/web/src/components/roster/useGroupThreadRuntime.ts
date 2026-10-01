@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useBotConversationMessageProjection } from "./botConversationMessageProjection";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
@@ -49,6 +50,7 @@ import {
   localFailure,
 } from "./threadRuntimeWarning.logic";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function useGroupThreadRuntime(groupId: string) {
@@ -191,7 +193,7 @@ export function useGroupThreadRuntime(groupId: string) {
 
     setResuming(false);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setError(commandFailure(result));
 
       return false;
@@ -307,7 +309,7 @@ export function useGroupThreadRuntime(groupId: string) {
               input: { threadId, runtimeMode },
             });
 
-            if (modeResult._tag === "Failure") {
+            if (Predicate.isTagged(modeResult, "Failure")) {
               setError(commandFailure(modeResult));
 
               return false;
@@ -336,7 +338,7 @@ export function useGroupThreadRuntime(groupId: string) {
             }),
           });
 
-          if (result._tag === "Failure") {
+          if (Predicate.isTagged(result, "Failure")) {
             setError(commandFailure(result));
 
             return false;

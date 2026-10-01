@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   channelBindingNeedsProject,
@@ -41,6 +42,7 @@ import { SettingsLinkRow, SettingsMessageRow } from "./settingsDetailLayout";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export const UNASSIGNED = "unassigned";
@@ -301,7 +303,7 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
       input: { connectionId: connection.id },
     });
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       mutationRef.current = false;
       setBusy(false);
       toastManager.add({ type: "error", title: t("Unassign this channel before deleting it") });
@@ -358,7 +360,7 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
         input: { botId: assignedBot.id, provider: connection.provider },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         setBusyConnectionId(null);
         toastManager.add({ type: "error", title: t("Could not unassign channel") });
 
@@ -377,7 +379,7 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
         },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         // A failed attach keeps the new bot on the connection, so it has to let go before the
         // previous bot can have the connection back.
         // The previous project may be gone; restore into the chosen live project instead.
@@ -411,7 +413,9 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
         // Attaching starts the channel, so a binding the user had disconnected goes back to
         // disconnected rather than coming back online after a failed move.
         const stopped =
-          assignedBot && restored?._tag === "Success" && assignedBinding?.status === "disconnected"
+          assignedBot &&
+          Predicate.isTagged(restored ?? {}, "Success") &&
+          assignedBinding?.status === "disconnected"
             ? await disconnect({
                 environmentId,
                 input: { botId: assignedBot.id, provider: connection.provider },
@@ -421,9 +425,9 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
         toastManager.add({
           type: "error",
           title:
-            released?._tag === "Failure" ||
-            restored?._tag === "Failure" ||
-            stopped?._tag === "Failure"
+            Predicate.isTagged(released ?? {}, "Failure") ||
+            Predicate.isTagged(restored ?? {}, "Failure") ||
+            Predicate.isTagged(stopped ?? {}, "Failure")
               ? t("Could not assign or restore channel")
               : t("Could not assign channel"),
           ...failureDescription(result, connection.provider),
@@ -449,7 +453,7 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
 
     setBusyConnectionId(null);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({
         type: "error",
         title: t("Could not move channel to this project"),
@@ -474,7 +478,7 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
 
     setBusyConnectionId(null);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({
         type: "error",
         title: failureTitle,

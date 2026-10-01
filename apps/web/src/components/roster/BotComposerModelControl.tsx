@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { BotId, ProviderInstanceId } from "@akeru/contracts";
 import { useEffect, useMemo, useState } from "react";
@@ -127,7 +128,7 @@ export function BotComposerModelControl({
       },
     });
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({ type: "error", title: t("Could not change the model") });
     }
   };

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { PlusIcon, RefreshCwIcon } from "lucide-react";
 import { type ReactNode } from "react";
 import { cn } from "../../lib/utils";
@@ -399,7 +400,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
             <Select
               value={selectValue}
               onValueChange={(value) => {
-                if (typeof value !== "string") return;
+                if (!Predicate.isString(value)) return;
                 handleSelectWslMode(value);
               }}
             >

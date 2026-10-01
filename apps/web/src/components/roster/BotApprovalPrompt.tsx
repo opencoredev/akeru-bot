@@ -25,7 +25,7 @@ export function BotApprovalPrompt({
   readonly pendingCount: number;
   readonly responding: boolean;
   readonly error: string | null;
-  readonly onRespond: (decision: ProviderApprovalDecision) => Promise<unknown>;
+  readonly onRespond: (decision: ProviderApprovalDecision) => Promise<boolean | void>;
 }) {
   const { t } = useI18n();
 

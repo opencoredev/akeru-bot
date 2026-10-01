@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   canSaveDurableFactEdit,
   describeDurableFactFailure,
@@ -38,7 +39,7 @@ export function MemoryApprovalPrompt({
   const { t } = i18n;
   const approval = approvals[0];
   const bots = useAtomValue(environmentBotsAtom(threadRef.environmentId));
-  const botNames = useMemo(() => new Map(bots.map((bot) => [bot.id as string, bot.name])), [bots]);
+  const botNames = useMemo(() => new Map(bots.map((bot) => [bot.id, bot.name])), [bots]);
   const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
 
   const [draft, setDraft] = useState<{
@@ -70,7 +71,7 @@ export function MemoryApprovalPrompt({
         input: { threadId: threadRef.threadId, mutation: memoryApprovalMutation(approval, intent) },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         setFailure({
           candidateId: approval.candidateId,
           message: t(describeDurableFactFailure(squashAtomCommandFailure(result)).message),

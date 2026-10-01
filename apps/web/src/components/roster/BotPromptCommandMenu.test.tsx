@@ -9,7 +9,7 @@ vi.mock("../../i18n", async () => {
 });
 
 vi.mock("../../hooks/useSettings", () => ({
-  usePrimarySettings: (select: (settings: { showSkillsInSlashMenu: boolean }) => unknown) =>
+  usePrimarySettings: <T,>(select: (settings: { showSkillsInSlashMenu: boolean }) => T) =>
     select({ showSkillsInSlashMenu: true }),
 }));
 

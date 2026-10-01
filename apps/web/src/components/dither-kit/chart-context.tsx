@@ -1,4 +1,6 @@
 // @ts-nocheck
+import type { ChartValue } from "./chartValue";
+import { Predicate } from "effect";
 import type { ScaleLinear } from "d3-scale";
 import { createContext, use, useCallback, useMemo, useState } from "react";
 import type { CommonChart } from "./common-context";
@@ -28,7 +30,7 @@ export type Margins = {
   left: number;
 };
 
-type Row = Record<string, unknown>;
+type Row = Record<string, ChartValue>;
 
 export type AreaVariant = "gradient" | "dotted" | "hatched" | "solid";
 
@@ -162,7 +164,7 @@ export { ChartContext };
  * render pattern (https://react.dev/reference/react/useState) instead of a ref:
  * the revision is derived purely from render inputs, so it stays consistent
  * across the memoized values below rather than lagging a render behind. */
-export function useRevision(data: unknown, token: number) {
+export function useRevision<T>(data: T, token: number) {
   const [prev, setPrev] = useState({ data, token, revision: 0 });
 
   if (prev.data !== data || prev.token !== token) {
@@ -391,7 +393,7 @@ export function useChartController({
           return {
             name,
             label: config[name]?.label ?? name,
-            value: typeof raw === "number" ? raw : 0,
+            value: Predicate.isNumber(raw) ? raw : 0,
             seed: seedOf(name),
             dimmed: (() => {
               const emphasis = selectedDataKey ?? focusDataKey;

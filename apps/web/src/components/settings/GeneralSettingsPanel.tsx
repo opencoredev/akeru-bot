@@ -1,3 +1,5 @@
+import { recordLookup } from "../recordLookup";
+import { Predicate } from "effect";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import type { MessageKey } from "@akeru/client-runtime/i18n";
@@ -70,12 +72,12 @@ function AboutVersionSection() {
     const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
 
     if (action === "download") {
-      void bridge.downloadUpdate().catch((error: unknown) => {
+      void bridge.downloadUpdate().catch((cause: unknown) => {
         toastManager.add(
           stackedThreadToast({
             type: "error",
             title: t("Could not download update"),
-            description: error instanceof Error ? error.message : t("Download failed."),
+            description: cause instanceof Error ? cause.message : t("Download failed."),
           }),
         );
       });
@@ -115,12 +117,12 @@ function AboutVersionSection() {
 
       void bridge
         .installUpdate()
-        .catch((error: unknown) => {
+        .catch((cause: unknown) => {
           toastManager.add(
             stackedThreadToast({
               type: "error",
               title: t("Could not install update"),
-              description: error instanceof Error ? error.message : t("Install failed."),
+              description: cause instanceof Error ? cause.message : t("Install failed."),
             }),
           );
         })
@@ -129,7 +131,7 @@ function AboutVersionSection() {
       return;
     }
 
-    if (typeof bridge.checkForUpdate !== "function") return;
+    if (!Predicate.isFunction(bridge.checkForUpdate)) return;
     void bridge
       .checkForUpdate()
       .then((result) => {
@@ -144,12 +146,12 @@ function AboutVersionSection() {
           );
         }
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
         toastManager.add(
           stackedThreadToast({
             type: "error",
             title: t("Could not check for updates"),
-            description: error instanceof Error ? error.message : t("Update check failed."),
+            description: cause instanceof Error ? cause.message : t("Update check failed."),
           }),
         );
       });
@@ -163,16 +165,21 @@ function AboutVersionSection() {
       ? !canCheckForUpdate(updateState)
       : isDesktopUpdateButtonDisabled(updateState);
 
-  const actionLabel: Record<string, MessageKey> = { download: "Download", install: "Install" };
+  const actionLabel = { download: "Download", install: "Install" } satisfies Record<
+    string,
+    MessageKey
+  >;
 
-  const statusLabel: Record<string, MessageKey> = {
+  const statusLabel = {
     checking: "Checking…",
     downloading: "Downloading…",
     "up-to-date": "Up to Date",
-  };
+  } satisfies Record<string, MessageKey>;
 
   const buttonLabel = t(
-    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates",
+    recordLookup(actionLabel, action) ??
+      recordLookup(statusLabel, updateState?.status ?? "") ??
+      "Check for Updates",
   );
 
   const description =
@@ -229,6 +236,7 @@ export function GeneralSettingsPanel() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
 
+  // SAFETY: every entry comes from the exhaustive QuitConfirmationMode label table.
   return (
     <SettingsPageContainer>
       <SettingsSection title={t("Preferences")}>

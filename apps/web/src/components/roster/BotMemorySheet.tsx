@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import type {
   AkeruMemoryDocument,
@@ -22,8 +23,8 @@ import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 
 /** The server's own error text, shown as received, or null when it sent none. */
-export function memoryErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : null;
+export function memoryErrorMessage(cause: unknown) {
+  return cause instanceof Error ? cause.message : null;
 }
 
 function failureMessage(result: Parameters<typeof squashAtomCommandFailure>[0]) {
@@ -159,13 +160,13 @@ export function BotMemorySheet({
 
     setBusy(false);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       const message = failureMessage(result) ?? t("Memory request failed.");
       setError(message);
       toastManager.add({ type: "error", title: t("Could not save memory"), description: message });
     }
 
-    return result._tag !== "Failure";
+    return !Predicate.isTagged(result, "Failure");
   };
 
   const current = query.data?.conversation.current ?? null;
@@ -237,7 +238,7 @@ export function BotMemorySheet({
                   }).then((result) => {
                     setBusy(false);
 
-                    if (result._tag === "Failure") {
+                    if (Predicate.isTagged(result, "Failure")) {
                       const message = failureMessage(result);
                       setError(message);
                       toastManager.add({

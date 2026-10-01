@@ -1,3 +1,5 @@
+import { Match } from "effect";
+import { recordLookup } from "../recordLookup";
 import {
   type KeybindingCommand,
   type KeybindingShortcut,
@@ -40,7 +42,13 @@ export function shortcutToKeybindingInput(shortcut: KeybindingShortcut): string 
   if (shortcut.altKey) parts.push("alt");
 
   if (shortcut.shiftKey) parts.push("shift");
-  parts.push(shortcut.key === " " ? "space" : shortcut.key === "escape" ? "esc" : shortcut.key);
+  parts.push(
+    Match.value(shortcut).pipe(
+      Match.when({ key: " " }, () => "space"),
+      Match.when({ key: "escape" }, () => "esc"),
+      Match.orElse((shortcut) => shortcut.key),
+    ),
+  );
 
   return parts.join("+");
 }
@@ -460,7 +468,7 @@ function modifierLabel(modifier: string, isMac: boolean): string {
   }
 }
 
-const KEY_LABELS: Readonly<Record<string, string>> = {
+const KEY_LABELS = {
   space: "Space",
   esc: "Esc",
   escape: "Esc",
@@ -476,7 +484,7 @@ const KEY_LABELS: Readonly<Record<string, string>> = {
   arrowdown: "↓",
   arrowleft: "←",
   arrowright: "→",
-};
+} satisfies Readonly<Record<string, string>>;
 
 /**
  * Splits a keybinding string such as `mod+shift+k` into the labels shown on
@@ -504,7 +512,9 @@ export function keybindingDisplayParts(value: string, platform: string): Readonl
   return [
     ...new Set([
       ...modifiers.map((modifier) => modifierLabel(modifier, isMac)),
-      ...keys.map((key) => KEY_LABELS[key] ?? (key.length === 1 ? key.toUpperCase() : key)),
+      ...keys.map(
+        (key) => recordLookup(KEY_LABELS, key) ?? (key.length === 1 ? key.toUpperCase() : key),
+      ),
     ]),
   ];
 }

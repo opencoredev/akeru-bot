@@ -1,3 +1,5 @@
+import { recordLookup } from "./recordLookup";
+import { Predicate } from "effect";
 import { classifyMarkdownImageSource } from "@akeru/client-runtime/markdown-images";
 import { stabilizeStreamingMarkdown } from "@akeru/client-runtime/markdown-streaming";
 import { isAppDeepLink } from "@akeru/client-runtime/settings-deep-link";
@@ -76,10 +78,7 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 /** GitHub's own five alert kinds, in its colors: the glyph names the urgency, the title says it. */
-const GITHUB_ALERT_PRESENTATIONS: Record<
-  string,
-  { label: string; Icon: typeof InfoIcon; borderClassName: string; titleClassName: string }
-> = {
+const GITHUB_ALERT_PRESENTATIONS = {
   note: {
     label: "Note",
     Icon: InfoIcon,
@@ -110,7 +109,10 @@ const GITHUB_ALERT_PRESENTATIONS: Record<
     borderClassName: "border-destructive/70",
     titleClassName: "text-destructive-foreground",
   },
-};
+} satisfies Record<
+  string,
+  { label: string; Icon: typeof InfoIcon; borderClassName: string; titleClassName: string }
+>;
 
 // Keep component types stable when streaming changes the message state.
 const CHAT_MARKDOWN_COMPONENTS: Components = {
@@ -120,8 +122,10 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
     return <p {...props}>{renderSkillInlineMarkdownChildren(children, skills)}</p>;
   },
   blockquote: function MarkdownBlockquote({ node: _node, children, ...props }) {
-    const alert =
-      GITHUB_ALERT_PRESENTATIONS[String((props as Record<string, unknown>)["data-alert"] ?? "")];
+    const alert = recordLookup(
+      GITHUB_ALERT_PRESENTATIONS,
+      String(("data-alert" in props ? props["data-alert"] : "") ?? ""),
+    );
 
     if (!alert) {
       return <blockquote {...props}>{children}</blockquote>;
@@ -164,8 +168,9 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
     const { text, skills } = use(ChatMarkdownRendererContext);
     const listItemStart = node?.position?.start.offset;
 
-    const markerOffset =
-      typeof listItemStart === "number" ? findTaskListMarkerOffset(text, listItemStart) : null;
+    const markerOffset = Predicate.isNumber(listItemStart)
+      ? findTaskListMarkerOffset(text, listItemStart)
+      : null;
 
     return (
       <li {...props} data-task-marker-offset={markerOffset ?? undefined}>
@@ -273,7 +278,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
               openInPreview: async (target) => {
                 const result = await openExternalLinkInPreview(target);
 
-                if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+                if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
                   reportMarkdownActionFailure(
                     { operation: "open-link-in-preview", target },
                     result.cause,
@@ -326,7 +331,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
     const { cwd, inlineCodeFileLinkMetaByText, fileLinkChip } = use(ChatMarkdownRendererContext);
     const mathExpression = node?.properties?.dataMathExpression;
 
-    if (typeof mathExpression === "string") {
+    if (Predicate.isString(mathExpression)) {
       return <MarkdownMathExpression expression={mathExpression} displayMode={false} />;
     }
 
@@ -350,11 +355,11 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
   },
   img: function MarkdownImage({ node: _node, title: _title, src, alt, ...props }) {
     const { cwd, threadRef } = use(ChatMarkdownRendererContext);
-    const srcString = typeof src === "string" ? normalizeMarkdownLinkDestination(src) : "";
+    const srcString = Predicate.isString(src) ? normalizeMarkdownLinkDestination(src) : "";
     const altText = alt ?? "";
     const imageSource = classifyMarkdownImageSource(srcString, cwd);
 
-    if (imageSource._tag === "Direct") {
+    if (Predicate.isTagged(imageSource, "Direct")) {
       return (
         <img
           {...props}
@@ -366,7 +371,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
       );
     }
 
-    if (imageSource._tag === "WorkspaceFile" && threadRef) {
+    if (Predicate.isTagged(imageSource, "WorkspaceFile") && threadRef) {
       return (
         <ChatMarkdownWorkspaceImage threadRef={threadRef} path={imageSource.path} alt={altText} />
       );

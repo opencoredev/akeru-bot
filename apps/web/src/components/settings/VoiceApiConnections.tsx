@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { VOICE_API_PROVIDERS, type EnvironmentId, type VoiceApiProvider } from "@akeru/contracts";
 import {
   squashAtomCommandFailure,
@@ -23,7 +24,7 @@ import {
 } from "./voiceSettings.logic";
 
 export function commandError(result: AtomCommandResult<unknown, unknown>): string {
-  if (result._tag !== "Failure") return "The request failed.";
+  if (!Predicate.isTagged(result, "Failure")) return "The request failed.";
   const error = squashAtomCommandFailure(result);
 
   return error instanceof Error ? error.message : "The request failed.";
@@ -80,8 +81,8 @@ export function VoiceApiConnectionsSection({
     setMessages((current) => ({ ...current, [provider]: undefined }));
     const result = await call();
     setBusy(null);
-    const ok = result._tag === "Success";
-    const failure = result._tag === "Failure" ? squashAtomCommandFailure(result) : null;
+    const ok = Predicate.isTagged(result, "Success");
+    const failure = Predicate.isTagged(result, "Failure") ? squashAtomCommandFailure(result) : null;
     const keyRejected = failure !== null && voiceKeyWasRejected(failure);
     const nextRejected = nextVoiceKeyRejected(rejectedFor(provider), failure);
     setLocal((current) => ({

@@ -10,10 +10,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => ({
-  mutateFact: vi.fn(async (_input: unknown) => ({ _tag: "Success" as const })),
+  mutateFact: vi.fn(async <T,>(_input: T) => ({ _tag: "Success" as const })),
   // State the next render starts from, in hook order; empty means each hook's initial value.
   states: [] as unknown[],
-  setState: vi.fn((_value: unknown) => {}),
+  setState: vi.fn(<T,>(_value: T) => {}),
 }));
 
 // Hooks run outside a renderer so the element tree exposes each button handler.

@@ -1,3 +1,5 @@
+import type { MarkdownHtmlAstNode } from "./markdownPlugins";
+import { Predicate } from "effect";
 import { faviconUrlForOrigin } from "@akeru/shared/favicon";
 import { GlobeIcon } from "lucide-react";
 import React, {
@@ -67,19 +69,24 @@ function breakableExternalLinkText(text: string): ReactNode[] {
   ));
 }
 
-export function plainHastText(node: unknown): string | null {
-  if (!node || typeof node !== "object" || !("children" in node) || !Array.isArray(node.children)) {
+export function plainHastText(node: MarkdownHtmlAstNode | undefined): string | null {
+  if (
+    !node ||
+    !Predicate.isObjectOrArray(node) ||
+    !("children" in node) ||
+    !Array.isArray(node.children)
+  ) {
     return null;
   }
 
   const parts = node.children.map((child) => {
     if (
       child &&
-      typeof child === "object" &&
+      Predicate.isObjectOrArray(child) &&
       "type" in child &&
       child.type === "text" &&
       "value" in child &&
-      typeof child.value === "string"
+      Predicate.isString(child.value)
     ) {
       return child.value;
     }
@@ -95,14 +102,14 @@ export function plainHastText(node: unknown): string | null {
  * "Fix in Cursor" button — already shows its identity, and a favicon bolted on in front of it
  * is a stray logo rather than a hint.
  */
-export function hastHasText(node: unknown): boolean {
-  if (!node || typeof node !== "object") return false;
+export function hastHasText(node: MarkdownHtmlAstNode | undefined): boolean {
+  if (!node || !Predicate.isObjectOrArray(node)) return false;
 
   if (
     "type" in node &&
     node.type === "text" &&
     "value" in node &&
-    typeof node.value === "string" &&
+    Predicate.isString(node.value) &&
     node.value.trim().length > 0
   ) {
     return true;
@@ -208,7 +215,7 @@ export function MarkdownExternalLinkContent({
   const childNodes = Children.toArray(children);
   const firstChild = childNodes[0];
 
-  if (typeof firstChild === "string" && firstChild.length > 0) {
+  if (Predicate.isString(firstChild) && firstChild.length > 0) {
     const leadingLength = leadingExternalLinkTextLength(firstChild);
 
     return (

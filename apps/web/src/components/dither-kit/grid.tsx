@@ -25,6 +25,7 @@ export function Grid({
         ctx.data.map((_, i) => (
           <line
             // biome-ignore lint/suspicious/noArrayIndexKey: index is the stable x position
+            // oxlint-disable-next-line react/no-array-index-key -- chart marks have stable positional identity; their geometry is updated in place when category data changes.
             key={`v-${i}`}
             x1={ctx.xCenter(i) ?? 0}
             x2={ctx.xCenter(i) ?? 0}

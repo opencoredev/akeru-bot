@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { BotId } from "@akeru/contracts";
 import { ArchiveRestoreIcon, ChevronDownIcon } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -35,7 +36,7 @@ export function RosterArchivedSection({ bots }: { bots: readonly Bot[] }) {
       input: { botId: BotId.make(bot.id) },
     });
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({
         type: "error",
         title: t("Could not restore {name}", { name: bot.name }),

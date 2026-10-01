@@ -1,3 +1,4 @@
+import { Schema, Option } from "effect";
 import {
   type EnvironmentId,
   type PreviewAutomationRequest,
@@ -47,7 +48,7 @@ export const waitForDesktopOverlay = async (
 };
 
 interface ExecutablePreviewWebview extends Element {
-  readonly executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>;
+  readonly executeJavaScript: (code: string, userGesture?: boolean) => Promise<Schema.Json>;
 }
 
 const findPreviewWebview = (tabId: string): ExecutablePreviewWebview | null =>
@@ -61,6 +62,13 @@ export const isPreviewWebviewRendering = (runtimeTabId: string): boolean => {
   return wrapper?.getAttribute("data-preview-rendering") === "active";
 };
 
+const decodeViewport = Schema.decodeUnknownOption(
+  Schema.Struct({
+    width: Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0)),
+    height: Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0)),
+  }),
+);
+
 const readWebviewViewport = async (
   webview: ExecutablePreviewWebview,
 ): Promise<PreviewRenderedViewportSize | null> => {
@@ -68,17 +76,7 @@ const readWebviewViewport = async (
     "({ width: window.innerWidth, height: window.innerHeight })",
   );
 
-  if (typeof value !== "object" || value === null) return null;
-  const { width, height } = value as { readonly width?: unknown; readonly height?: unknown };
-
-  return typeof width === "number" &&
-    Number.isInteger(width) &&
-    width > 0 &&
-    typeof height === "number" &&
-    Number.isInteger(height) &&
-    height > 0
-    ? { width, height }
-    : null;
+  return Option.getOrNull(decodeViewport(value));
 };
 
 export const readRenderedViewport = async (

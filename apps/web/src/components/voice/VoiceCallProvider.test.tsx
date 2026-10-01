@@ -40,8 +40,8 @@ vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
 
 vi.mock("../../hooks/useSettings", () => ({
-  usePrimarySettings: (
-    selector?: (settings: { voice: { enabled: boolean; provider: string } }) => unknown,
+  usePrimarySettings: <T,>(
+    selector?: (settings: { voice: { enabled: boolean; provider: string } }) => T,
   ) => {
     const settings = { voice: { enabled: true, provider: mocks.voiceProvider } };
 
@@ -54,9 +54,9 @@ vi.mock("../../modelSelection", () => ({
 }));
 
 vi.mock("../../providerInstances", () => ({
-  applyProviderInstanceSettings: (entries: unknown) => entries,
+  applyProviderInstanceSettings: <T,>(entries: T) => entries,
   deriveProviderInstanceEntries: () => [],
-  sortProviderInstanceEntries: (entries: unknown) => entries,
+  sortProviderInstanceEntries: <T,>(entries: T) => entries,
 }));
 
 vi.mock("../../state/entities", () => ({ useProjects: () => [mocks.activeProject] }));
@@ -75,7 +75,7 @@ vi.mock("../../state/server", () => ({
 }));
 
 vi.mock("../../state/use-atom-command", () => ({
-  useAtomCommand: (atom: unknown) =>
+  useAtomCommand: <T,>(atom: T) =>
     atom === mocks.startAtom ? mocks.startVoiceCall : mocks.hangupVoiceCall,
 }));
 
@@ -101,7 +101,7 @@ vi.mock("../roster/rosterStore", () => {
   const state = { bots: [mocks.bot], selectedBotId: mocks.bot.id, selectBot: mocks.selectBot };
 
   return {
-    useRosterStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
+    useRosterStore: Object.assign(<T,>(selector: (value: typeof state) => T) => selector(state), {
       getState: () => state,
     }),
   };
@@ -111,7 +111,7 @@ vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
 
 vi.mock("./browserVoiceAudio", () => ({
   // A silent microphone: capture waits until the call scope is cancelled.
-  captureVoiceUtterance: (_microphone: unknown, signal: AbortSignal) => {
+  captureVoiceUtterance: <T,>(_microphone: T, signal: AbortSignal) => {
     mocks.captureSignals.push(signal);
 
     return new Promise((_, reject) =>
@@ -141,6 +141,7 @@ class TestPeer {
     send: vi.fn(),
   };
   constructor() {
+    // oxlint-disable-next-line typescript/no-this-alias -- the peer test double registers its instance so tests can drive connection events.
     latestPeer = this;
   }
   addTrack() {}
@@ -148,7 +149,7 @@ class TestPeer {
   removeEventListener() {}
   close() {}
   createDataChannel() {
-    return this.events as unknown as RTCDataChannel;
+    return this.events;
   }
   async createOffer(): Promise<RTCSessionDescriptionInit> {
     return { type: "offer", sdp: "offer-sdp" };

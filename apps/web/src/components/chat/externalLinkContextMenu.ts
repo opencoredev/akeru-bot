@@ -45,7 +45,7 @@ interface ShowExternalLinkContextMenuOptions {
   ) => Promise<ExternalLinkContextMenuAction | null>;
   readonly openInPreview: (href: string) => Promise<void>;
   readonly openExternal: (href: string) => Promise<void>;
-  readonly copyLink: (href: string) => Promise<unknown>;
+  readonly copyLink: (href: string) => Promise<boolean | void>;
   readonly reportFailure: (
     operation: ExternalLinkContextMenuFailureOperation,
     cause: unknown,

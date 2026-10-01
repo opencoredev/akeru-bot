@@ -68,8 +68,8 @@ export function PieCanvas() {
     let popEase = 0; // eases the hovered slice's outward bulge
     let needsFill = true;
     let lastPaintSig = "";
-    let lastSelected: string | null | undefined = Symbol() as never;
-    let lastHover: number | null | undefined = Symbol() as never;
+    let lastSelected: string | null | undefined | symbol = Symbol();
+    let lastHover: number | null | undefined | symbol = Symbol();
 
     const paint = (prog: number) => {
       const s = state.current;

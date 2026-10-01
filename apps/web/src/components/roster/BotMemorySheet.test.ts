@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -7,7 +8,7 @@ const controls = vi.hoisted(() => ({
   buttons: [] as Array<{ readonly label: string; readonly onClick?: () => void }>,
   inspect: vi.fn(() => "inspect-documents"),
   listFacts: vi.fn(() => "list-facts"),
-  mutate: vi.fn(async (_input: unknown) => ({ _tag: "Success", value: {} })),
+  mutate: vi.fn(async <T>(_input: T) => ({ _tag: "Success", value: {} })),
   query: vi.fn(),
   toast: vi.fn(),
 }));
@@ -18,7 +19,7 @@ vi.mock("../ui/button", async () => {
   return {
     Button: ({ children, onClick, ...props }: React.ComponentProps<"button">) => {
       const label = React.Children.toArray(children)
-        .filter((child): child is string => typeof child === "string")
+        .filter((child): child is string => Predicate.isString(child))
         .join("")
         .trim();
 

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   BotId,
   ChannelMessageOrigin,
@@ -16,6 +17,15 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { channelProviderLabel } from "./botConversationPresentation";
+
+const DELIVERY_TONE_CLASS: Record<
+  NonNullable<ReturnType<typeof channelDeliveryLabel>>["tone"],
+  string
+> = {
+  error: "text-destructive",
+  warning: "text-warning-foreground",
+  neutral: "text-muted-foreground",
+};
 
 export interface ChannelApprovalTarget {
   readonly environmentId: EnvironmentId;
@@ -68,11 +78,7 @@ export function ChannelSendApproval({
       <span
         className={cn(
           "min-w-0 flex-1",
-          deliveryLabel?.tone === "error"
-            ? "text-destructive"
-            : deliveryLabel?.tone === "warning"
-              ? "text-warning-foreground"
-              : "text-muted-foreground",
+          deliveryLabel ? DELIVERY_TONE_CLASS[deliveryLabel.tone] : "text-muted-foreground",
         )}
       >
         {delivered && label !== null
@@ -98,7 +104,7 @@ export function ChannelSendApproval({
             }).then((result) => {
               setBusy(false);
 
-              if (result._tag === "Failure") {
+              if (Predicate.isTagged(result, "Failure")) {
                 toastManager.add({
                   type: "error",
                   title: t("Could not send to {channel}", { channel: label }),

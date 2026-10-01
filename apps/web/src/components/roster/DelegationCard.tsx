@@ -1,3 +1,5 @@
+import { Match } from "effect";
+import { isTagged } from "../tagged";
 import type {
   AkeruDelegationRecord,
   AkeruDelegationState,
@@ -41,7 +43,7 @@ export function delegationUsageTokens(
   delegation: AkeruDelegationRecord,
   childActivities: ReadonlyArray<OrchestrationThreadActivity>,
 ): number | null {
-  const childTurnId = delegation.phase._tag === "Queued" ? null : delegation.phase.childTurnId;
+  const childTurnId = isTagged(delegation.phase, "Queued") ? null : delegation.phase.childTurnId;
 
   if (!childTurnId) return null;
   const activities = childActivities.filter((activity) => activity.turnId === childTurnId);
@@ -112,7 +114,7 @@ function DelegationActions({
 
     return request
       .then((result) => {
-        if (result._tag !== "Failure") return;
+        if (!isTagged(result, "Failure")) return;
         const description = commandFailureMessage(result);
         toastManager.add({
           type: "error",
@@ -217,11 +219,11 @@ export function DelegationCard({
 
   const outcome = presentation.outcome
     ? presentation.outcome.text ||
-      (presentation.outcome.kind === "failure"
-        ? t("Failure details unavailable")
-        : presentation.outcome.kind === "result"
-          ? t("Result unavailable")
-          : null)
+      Match.value(presentation.outcome.kind).pipe(
+        Match.when("failure", () => t("Failure details unavailable")),
+        Match.when("result", () => t("Result unavailable")),
+        Match.orElse(() => null),
+      )
     : null;
 
   return (
@@ -270,7 +272,7 @@ export function DelegationCard({
       </div>
       {outcome ? (
         <p
-          className={`mt-1 text-sm leading-5 ${delegation.phase._tag === "Failed" ? "text-destructive-foreground" : "text-muted-foreground"}`}
+          className={`mt-1 text-sm leading-5 ${isTagged(delegation.phase, "Failed") ? "text-destructive-foreground" : "text-muted-foreground"}`}
         >
           {outcome}
         </p>

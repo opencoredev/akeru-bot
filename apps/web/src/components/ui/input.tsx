@@ -1,5 +1,7 @@
 "use client";
 
+import { Predicate } from "effect";
+
 import { Input as InputPrimitive } from "@base-ui/react/input";
 import type * as React from "react";
 
@@ -48,15 +50,15 @@ function Input({
   if (nativeInput) {
     const { style, onValueChange: _onValueChange, ...nativeInputProps } = props;
     // oxlint-disable-next-line shadcn/no-inline-styles -- primitive forwards the caller's style prop to the native input
-    const nativeStyle = typeof style === "function" ? undefined : style;
+    const nativeStyle = Predicate.isFunction(style) ? undefined : style;
 
     inputElement = (
       <input
         className={inputClassName}
         data-slot="input"
-        size={typeof size === "number" ? size : undefined}
+        size={Predicate.isNumber(size) ? size : undefined}
         style={nativeStyle}
-        {...(nativeInputProps as React.ComponentProps<"input">)}
+        {...nativeInputProps}
       />
     );
   } else {
@@ -64,7 +66,7 @@ function Input({
       <InputPrimitive
         className={inputClassName}
         data-slot="input"
-        size={typeof size === "number" ? size : undefined}
+        size={Predicate.isNumber(size) ? size : undefined}
         {...props}
       />
     );

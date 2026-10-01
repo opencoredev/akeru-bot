@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import {
   defaultInstanceIdForDriver,
   PROVIDER_DISPLAY_NAMES,
@@ -34,10 +35,10 @@ function formatVersion(value: string): string {
   return value.startsWith("v") ? value : `v${value}`;
 }
 
-function chooseRepresentativeProvider(
-  current: ServerProvider | undefined,
-  candidate: ServerProvider,
-): ServerProvider {
+function chooseRepresentativeProvider<T extends ServerProvider>(
+  current: T | undefined,
+  candidate: T,
+): T {
   if (!current) {
     return candidate;
   }
@@ -61,7 +62,7 @@ function dedupeProvidersByDriver<T extends ServerProvider>(providers: ReadonlyAr
   for (const provider of providers) {
     latestProviderByDriver.set(
       provider.driver,
-      chooseRepresentativeProvider(latestProviderByDriver.get(provider.driver), provider) as T,
+      chooseRepresentativeProvider(latestProviderByDriver.get(provider.driver), provider),
     );
   }
 
@@ -327,19 +328,17 @@ export function getProviderUpdateSidebarPillView(
   return (
     terminalCandidates
       .toSorted((left, right) => {
-        const leftProviders =
-          left.tone === "error"
-            ? failedProviders
-            : left.tone === "warning"
-              ? unchangedProviders
-              : succeededProviders;
+        const leftProviders = Match.value(left).pipe(
+          Match.when({ tone: "error" }, () => failedProviders),
+          Match.when({ tone: "warning" }, () => unchangedProviders),
+          Match.orElse(() => succeededProviders),
+        );
 
-        const rightProviders =
-          right.tone === "error"
-            ? failedProviders
-            : right.tone === "warning"
-              ? unchangedProviders
-              : succeededProviders;
+        const rightProviders = Match.value(right).pipe(
+          Match.when({ tone: "error" }, () => failedProviders),
+          Match.when({ tone: "warning" }, () => unchangedProviders),
+          Match.orElse(() => succeededProviders),
+        );
 
         const leftFinishedAt = latestFinishedAtForProviders(leftProviders) ?? "";
         const rightFinishedAt = latestFinishedAtForProviders(rightProviders) ?? "";

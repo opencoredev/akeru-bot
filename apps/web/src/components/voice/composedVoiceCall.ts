@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { AtomCommandResult } from "@akeru/client-runtime/state/runtime";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import {
@@ -32,7 +33,13 @@ export interface ComposedVoiceCallDependencies {
   readonly synthesize: (
     input: VoiceSynthesizeInput,
   ) => Promise<AtomCommandResult<VoiceAudio, unknown>>;
-  readonly cancel: (operationId: string) => Promise<unknown>;
+  readonly cancel: (
+    operationId: string,
+  ) => Promise<
+    | AtomCommandResult<{ readonly cancelled: boolean }, unknown>
+    | { readonly cancelled: boolean }
+    | void
+  >;
   /** Starts a chat turn and returns its user message id, or null when the chat refused it. */
   readonly sendMessage: (text: string) => Promise<string | null>;
   readonly readTurn: () => ComposedVoiceTurnState;
@@ -41,7 +48,7 @@ export interface ComposedVoiceCallDependencies {
 }
 
 function commandValue<A>(result: AtomCommandResult<A, unknown>, fallback: string): A {
-  if (result._tag === "Success") return result.value;
+  if (Predicate.isTagged(result, "Success")) return result.value;
   const error = squashAtomCommandFailure(result);
   throw error instanceof Error ? error : new Error(fallback);
 }

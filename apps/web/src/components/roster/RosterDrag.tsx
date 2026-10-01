@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   type DragEndEvent,
   type DragOverEvent,
@@ -102,7 +103,7 @@ export function SortableRosterMarker(props: {
       style={{
         transform: CSS.Translate.toString(transform),
         transition:
-          typeof props.marker !== "string" && props.marker.kind === "section-placeholder"
+          !Predicate.isString(props.marker) && props.marker.kind === "section-placeholder"
             ? "none"
             : props.marker === "unassigned-placeholder"
               ? "none"

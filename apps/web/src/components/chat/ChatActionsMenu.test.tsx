@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { EnvironmentId, type OrchestrationThreadShell, ThreadId } from "@akeru/contracts";
 import { Children, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -6,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 type Item = { disabled?: boolean; onClick?: () => void; variant?: string };
 
 const mocks = vi.hoisted(() => ({
-  shell: null as unknown,
+  shell: null as ReturnType<typeof shell> | null,
   visited: {} as Record<string, string>,
   items: new Map<string, Item>(),
   subTriggers: new Map<string, Item>(),
@@ -29,7 +30,7 @@ const mocks = vi.hoisted(() => ({
 function textOf(node: ReactNode): string {
   return Children.toArray(node)
     .map((child) =>
-      typeof child === "string"
+      Predicate.isString(child)
         ? child
         : isValidElement<{ children?: ReactNode }>(child)
           ? textOf(child.props.children)
@@ -54,8 +55,12 @@ vi.mock("../../hooks/useChatActions", () => ({ useChatActions: () => mocks.actio
 vi.mock("../../hooks/useNowMinute", () => ({ useNowMinute: () => "2026-09-27T12:00" }));
 
 vi.mock("../../uiStateStore", () => ({
-  useUiStateStore: (select: (state: unknown) => unknown) =>
-    select({ threadLastVisitedAtById: mocks.visited, markThreadVisited: vi.fn() }),
+  useUiStateStore: <T,>(
+    select: (state: {
+      threadLastVisitedAtById: typeof mocks.visited;
+      markThreadVisited: () => void;
+    }) => T,
+  ) => select({ threadLastVisitedAtById: mocks.visited, markThreadVisited: vi.fn() }),
 }));
 
 vi.mock("../ui/menu", () => ({
@@ -284,7 +289,7 @@ describe("buildChatPaletteActions", () => {
       threadRef,
       state,
       newChat: null,
-      actions: mocks.actions as unknown as Parameters<typeof buildChatPaletteActions>[0]["actions"],
+      actions: mocks.actions as Parameters<typeof buildChatPaletteActions>[0]["actions"],
       t,
       now: new Date("2026-09-27T12:00:00.000Z"),
       openRename: vi.fn(),

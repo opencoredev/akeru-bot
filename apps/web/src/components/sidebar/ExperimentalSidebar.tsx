@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   Analytics01Icon,
@@ -178,15 +179,15 @@ export function ExperimentalSidebar() {
             key={panel}
             className={cn("flex min-h-0 flex-1 flex-col", panelSwitched && "motion-place-enter")}
           >
-            {panel === "settings" ? (
-              <>
-                <PanelHeader title={t("Settings")} />
-                <SettingsPanelNav />
-              </>
-            ) : panel === "chats" ? (
-              <BotRosterSidebar chrome="panel" />
-            ) : (
-              <RoutinesPanel />
+            {Match.value(panel).pipe(
+              Match.when("settings", () => (
+                <>
+                  <PanelHeader title={t("Settings")} />
+                  <SettingsPanelNav />
+                </>
+              )),
+              Match.when("chats", () => <BotRosterSidebar chrome="panel" />),
+              Match.orElse(() => <RoutinesPanel />),
             )}
           </div>
         </div>
@@ -282,7 +283,7 @@ function useLiveBots() {
   return useMemo(() => {
     const live = bots.filter((bot) => bot.archivedAt === null);
     // Pinned bots lead, in pin order; everything else keeps roster order.
-    const pinnedIds = pinnedItems.filter((item) => item.kind === "bot").map((item) => item.id);
+    const pinnedIds = pinnedItems.flatMap((item) => (item.kind === "bot" ? [item.id] : []));
 
     return [
       ...pinnedIds.flatMap((id) => live.filter((bot) => bot.id === id)),
@@ -348,5 +349,6 @@ function RoutinesPanel() {
 function useEnvironmentSnapshot() {
   const environmentId = usePrimaryEnvironmentId();
 
+  // SAFETY: the empty environment ID is an inactive-query sentinel; the atom sends no request until an environment exists.
   return useAtomValue(environmentSnapshotAtom(environmentId ?? ("" as never)));
 }

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   EnvironmentId,
@@ -32,7 +33,7 @@ export interface ActiveLogin {
 }
 
 function commandError(result: AtomCommandResult<unknown, unknown>, t: Translate): string {
-  if (result._tag !== "Failure") return t("The request failed.");
+  if (!Predicate.isTagged(result, "Failure")) return t("The request failed.");
   const error = squashAtomCommandFailure(result);
 
   return error instanceof Error ? error.message : t("The request failed.");
@@ -132,7 +133,7 @@ export function useSubscriptionAccounts(
 
       if (cancelled || isAtomCommandInterrupted(result)) return;
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         setActiveLogin((current) =>
           current ? { ...current, error: commandError(result, t) } : current,
         );
@@ -196,10 +197,10 @@ export function useSubscriptionAccounts(
       },
     });
 
-    if (started._tag !== "Success") {
+    if (!Predicate.isTagged(started, "Success")) {
       setCompleting(false);
 
-      if (started._tag === "Failure") setError(commandError(started, t));
+      if (Predicate.isTagged(started, "Failure")) setError(commandError(started, t));
 
       return;
     }
@@ -211,14 +212,14 @@ export function useSubscriptionAccounts(
 
     setCompleting(false);
 
-    if (result._tag === "Success" && result.value.status === "connected") {
+    if (Predicate.isTagged(result, "Success") && result.value.status === "connected") {
       setKeyProvider(null);
       setPastedCode("");
       setBaseUrl("");
       statusQuery.refresh();
     } else {
-      if (result._tag === "Failure") setError(commandError(result, t));
-      else if (result._tag === "Success")
+      if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
+      else if (Predicate.isTagged(result, "Success"))
         setError(
           result.value.status === "failed"
             ? result.value.error
@@ -248,7 +249,7 @@ export function useSubscriptionAccounts(
 
     if (isAtomCommandInterrupted(result)) return;
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setError(commandError(result, t));
       setBusyProvider(null);
 
@@ -272,7 +273,7 @@ export function useSubscriptionAccounts(
 
     if (isAtomCommandInterrupted(result)) return;
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setActiveLogin((current) =>
         current ? { ...current, error: commandError(result, t) } : current,
       );
@@ -292,7 +293,7 @@ export function useSubscriptionAccounts(
     if (environmentId === null || !login) return;
     const result = await cancelAuth({ environmentId, input: { loginId: login.flow.loginId } });
 
-    if (result._tag === "Failure") setError(commandError(result, t));
+    if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
   };
 
   const disconnect = async (provider: SubscriptionProviderId) => {
@@ -307,8 +308,8 @@ export function useSubscriptionAccounts(
 
     setBusyProvider(null);
 
-    if (result._tag === "Success") statusQuery.refresh();
-    else if (result._tag === "Failure") setError(commandError(result, t));
+    if (Predicate.isTagged(result, "Success")) statusQuery.refresh();
+    else if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
   };
 
   const testHealth = async (provider: SubscriptionProviderId) => {
@@ -323,7 +324,7 @@ export function useSubscriptionAccounts(
 
     setBusyProvider(null);
 
-    if (result._tag === "Success") {
+    if (Predicate.isTagged(result, "Success")) {
       statusQuery.refresh();
 
       const status = (instanceId ? result.value.accounts : result.value.providers).find(
@@ -336,7 +337,7 @@ export function useSubscriptionAccounts(
             t("The provider check failed. Reconnect and try again."),
         );
       }
-    } else if (result._tag === "Failure") setError(commandError(result, t));
+    } else if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
   };
 
   return {

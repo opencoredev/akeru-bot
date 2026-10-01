@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -17,7 +18,8 @@ const DEFAULT_FONT_VALUE = "__default__";
 function supportsFontEnumeration(): boolean {
   return (
     typeof window !== "undefined" &&
-    typeof (window as { queryLocalFonts?: unknown }).queryLocalFonts === "function"
+    "queryLocalFonts" in window &&
+    Predicate.isFunction(window.queryLocalFonts)
   );
 }
 
@@ -76,7 +78,8 @@ function probeAlreadyGrantedPermission(): void {
   grantedProbeStarted = true;
   const permissions = typeof navigator !== "undefined" ? navigator.permissions : undefined;
 
-  if (typeof permissions?.query !== "function") return;
+  if (!Predicate.isFunction(permissions?.query)) return;
+  // SAFETY: Chromium supports the local-fonts permission even though lib.dom does not include it in PermissionName.
   permissions.query({ name: "local-fonts" as PermissionName }).then(
     (status) => {
       if (status.state === "granted") discoverInstalledFonts();
@@ -203,7 +206,7 @@ export function FontFamilyPicker({
       onOpenChange={handleOpenChange}
       value={selectedValue}
       onValueChange={(next) => {
-        if (typeof next === "string") handlePick(next);
+        if (Predicate.isString(next)) handlePick(next);
       }}
       onItemHighlighted={(_value, eventDetails) => {
         // Keyboard highlights must pull the virtualized row into view, or

@@ -1,3 +1,4 @@
+import { recordLookup } from "../recordLookup";
 import type { KeybindingWhenNode } from "@akeru/contracts";
 import {
   DEFAULT_RESOLVED_KEYBINDINGS,
@@ -61,10 +62,10 @@ export function parseWhenExpressionDraft(
   return { ok: true, value: ast };
 }
 
-const WHEN_VARIABLE_PHRASES: Readonly<Record<string, string>> = {
+const WHEN_VARIABLE_PHRASES = {
   previewFocus: "the preview is focused",
   modelPickerOpen: "the model picker is open",
-};
+} satisfies Readonly<Record<string, string>>;
 
 /**
  * Plain-language summary of a when clause. Returns `null` when there is no
@@ -77,13 +78,13 @@ export function describeWhenExpression(node: KeybindingWhenNode | undefined): st
     if (node.name === "true") return "Always";
 
     if (node.name === "false") return "Never";
-    const phrase = WHEN_VARIABLE_PHRASES[node.name];
+    const phrase = recordLookup(WHEN_VARIABLE_PHRASES, node.name);
 
     return phrase ? `When ${phrase}` : `When ${node.name}`;
   }
 
   if (node.type === "not" && node.node.type === "identifier") {
-    const phrase = WHEN_VARIABLE_PHRASES[node.node.name];
+    const phrase = recordLookup(WHEN_VARIABLE_PHRASES, node.node.name);
 
     return phrase ? `Unless ${phrase}` : `Unless ${node.node.name}`;
   }

@@ -20,7 +20,7 @@ interface ComposerPendingApprovalActionsProps {
   onRespondToApproval: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
-  ) => Promise<unknown>;
+  ) => Promise<boolean | void>;
 }
 
 type Translate = ReturnType<typeof useI18n>["t"];

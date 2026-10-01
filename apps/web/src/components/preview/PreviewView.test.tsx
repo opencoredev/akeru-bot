@@ -70,8 +70,8 @@ vi.mock("~/browser/browserDefaults", () => ({
 }));
 
 vi.mock("~/composerDraftStore", () => ({
-  useComposerDraftStore: (
-    select: (store: { addPreviewAnnotation: () => void; addImage: () => void }) => unknown,
+  useComposerDraftStore: <T,>(
+    select: (store: { addPreviewAnnotation: () => void; addImage: () => void }) => T,
   ) =>
     select({
       addPreviewAnnotation: mocks.addPreviewAnnotation,
@@ -147,8 +147,8 @@ vi.mock("~/browser/browserRecording", () => ({
 }));
 
 vi.mock("~/browser/browserSurfaceStore", () => ({
-  useBrowserSurfaceStore: (
-    select: (state: { byTabId: Record<string, { rect?: unknown }> }) => unknown,
+  useBrowserSurfaceStore: <T,>(
+    select: (state: { byTabId: Record<string, { rect?: unknown }> }) => T,
   ) => select({ byTabId: {} }),
 }));
 
@@ -312,9 +312,9 @@ describe("PreviewView navigation", () => {
   it("does not rerender while loading time passes", async () => {
     vi.useFakeTimers();
     mocks.loading = true;
-    const document = installTestDom();
+    installTestDom();
     const { createRoot } = await import("react-dom/client");
-    const root = createRoot(document.createElement("div") as unknown as Element);
+    const root = createRoot(globalThis.document.createElement("div"));
     const onRender = vi.fn();
 
     try {

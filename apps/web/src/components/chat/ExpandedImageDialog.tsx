@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@akeru/contracts";
 import { memo, useCallback, useEffect, useState } from "react";
@@ -56,7 +57,8 @@ function useRevealAttachment(environmentId: EnvironmentId | undefined) {
     reveal: async (attachmentId: string) => {
       const result = await revealAttachment({ environmentId, input: { attachmentId } });
 
-      if (result._tag === "Failure") throw new Error("The environment could not show the image.");
+      if (Predicate.isTagged(result, "Failure"))
+        throw new Error("The environment could not show the image.");
     },
   };
 }
@@ -70,11 +72,11 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
   const reveal = useRevealAttachment(environmentId);
 
   const runAction = useCallback((title: string, action: () => Promise<void>) => {
-    action().catch((error: unknown) =>
+    action().catch((cause: unknown) =>
       toastManager.add({
         type: "error",
         title,
-        ...(error instanceof Error ? { description: error.message } : {}),
+        ...(cause instanceof Error ? { description: cause.message } : {}),
       }),
     );
   }, []);

@@ -34,7 +34,7 @@ export function applyBotPromptCommand(
   draft: string,
   trigger: BotPromptCommandTrigger,
   inserted: string,
-): { readonly text: string; readonly caret: number } {
+) {
   const before = draft.slice(0, trigger.rangeStart);
   const after = draft.slice(trigger.rangeEnd).replace(/^[ \t]/, "");
 

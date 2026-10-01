@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   EnvironmentId,
   type PreviewAutomationHost,
@@ -141,10 +142,10 @@ const targetNotEditableDiagnostics = (
   readonly selectorLength?: number;
 } | null => {
   if (
-    typeof cause !== "object" ||
+    !Predicate.isObjectOrArray(cause) ||
     cause === null ||
     !("_tag" in cause) ||
-    cause._tag !== "PreviewAutomationTargetNotEditableError"
+    !Predicate.isTagged(cause, "PreviewAutomationTargetNotEditableError")
   ) {
     return null;
   }
@@ -159,7 +160,7 @@ const targetNotEditableDiagnostics = (
 
   const selectorLength =
     "selectorLength" in cause &&
-    typeof cause.selectorLength === "number" &&
+    Predicate.isNumber(cause.selectorLength) &&
     Number.isInteger(cause.selectorLength) &&
     cause.selectorLength >= 0
       ? cause.selectorLength

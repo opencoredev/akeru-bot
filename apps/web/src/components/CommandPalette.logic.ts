@@ -197,6 +197,7 @@ export function buildChatSearchCommandPaletteItems(input: {
   const titleOf = (chat: CommandPaletteChat) =>
     chat.title === PLACEHOLDER_THREAD_TITLE ? "" : chat.title.trim();
 
+  // SAFETY: title-only matches have no snippet; the shared result list also accepts message snippets.
   const titleMatches = input.chats
     .map((chat, index) => ({
       chat,

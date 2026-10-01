@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { resolveBotFileAttachment } from "./botFileAttachment";
 
 /** The chat title a send proposes: the prompt, else the first file's name, capped at 80. */
@@ -19,7 +20,7 @@ export function readFileAsDataUrl(file: File, mimeType: string): Promise<string>
     reader.addEventListener(
       "load",
       () =>
-        typeof reader.result === "string"
+        Predicate.isString(reader.result)
           ? resolve(`data:${mimeType};base64,${reader.result.split(",", 2)[1] ?? ""}`)
           : reject(new Error(`Could not read ${file.name}.`)),
       { once: true },

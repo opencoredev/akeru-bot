@@ -21,6 +21,7 @@ function isFileDrag(event: WorkspaceFileDragEvent): boolean {
 }
 
 function movedWithinDropTarget(event: WorkspaceFileDragEvent): boolean {
+  // SAFETY: DOM drag transitions supply a node as relatedTarget; contains only checks that node against this drop container.
   return event.relatedTarget !== null && event.currentTarget.contains(event.relatedTarget as Node);
 }
 

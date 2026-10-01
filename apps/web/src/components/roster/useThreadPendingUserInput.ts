@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ApprovalRequestId, ScopedThreadRef } from "@akeru/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -54,7 +55,7 @@ export function useThreadPendingUserInput(input: {
         input: { threadId: linkedThreadRef.threadId, requestId, answers },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         respondingRequestIdsRef.current.delete(requestId);
         setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
         onFailure(commandFailure(result));

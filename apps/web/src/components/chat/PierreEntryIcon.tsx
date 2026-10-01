@@ -1,10 +1,11 @@
+import { recordLookup } from "../recordLookup";
 import { FileIcon, FolderIcon } from "lucide-react";
 import { memo, useInsertionEffect, useMemo } from "react";
 
 import { ensurePierreIconSprite, resolvePierreIconForEntry } from "../../pierre-icons";
 import { cn } from "~/lib/utils";
 
-const ICON_COLORS: Record<string, readonly [light: string, dark: string]> = {
+const ICON_COLORS = {
   astro: ["#a631be", "#d568ea"],
   babel: ["#d5a910", "#ffd452"],
   bash: ["#199f43", "#5ecc71"],
@@ -57,7 +58,7 @@ const ICON_COLORS: Record<string, readonly [light: string, dark: string]> = {
   yml: ["#d52c36", "#ff6762"],
   zig: ["#d47628", "#ffa359"],
   zip: ["#d47628", "#ffa359"],
-};
+} satisfies Record<string, readonly [light: string, dark: string]>;
 
 export const PierreEntryIcon = memo(function PierreEntryIcon(props: {
   pathValue: string;
@@ -80,7 +81,7 @@ export const PierreEntryIcon = memo(function PierreEntryIcon(props: {
     );
   }
 
-  const colors = ICON_COLORS[icon.token ?? "default"] ?? ICON_COLORS.default;
+  const colors = recordLookup(ICON_COLORS, icon.token ?? "default") ?? ICON_COLORS.default;
 
   return (
     <svg

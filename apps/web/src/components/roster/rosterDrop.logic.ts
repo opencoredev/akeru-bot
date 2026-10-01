@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 const BOT_DRAG_PREFIX = "bot:";
 
 const GROUP_DROP_PREFIX = "group:";
@@ -78,13 +80,10 @@ export function rosterSectionItems(section: {
   ];
 }
 
-export function splitRosterSectionItems(items: readonly RosterItemRef[]): {
-  botIds: string[];
-  groupIds: string[];
-} {
+export function splitRosterSectionItems(items: readonly RosterItemRef[]) {
   return {
-    botIds: items.filter((item) => item.kind === "bot").map((item) => item.id),
-    groupIds: items.filter((item) => item.kind === "group").map((item) => item.id),
+    botIds: items.flatMap((item) => (item.kind === "bot" ? [item.id] : [])),
+    groupIds: items.flatMap((item) => (item.kind === "group" ? [item.id] : [])),
   };
 }
 
@@ -112,7 +111,7 @@ export function rosterZoneId(zone: RosterZone): string {
 export function rosterZonesEqual(left: RosterZone, right: RosterZone): boolean {
   if (left === "pinned" || left === "unassigned") return left === right;
 
-  return typeof right === "object" && left.sectionId === right.sectionId;
+  return Predicate.isObjectOrArray(right) && left.sectionId === right.sectionId;
 }
 
 export type RosterListMarker =
@@ -124,7 +123,7 @@ export type RosterListMarker =
   | { readonly kind: "section-placeholder"; readonly sectionId: string };
 
 export function rosterMarkerId(marker: RosterListMarker): string {
-  if (typeof marker === "string") return `${ROSTER_MARKER_PREFIX}${marker}`;
+  if (Predicate.isString(marker)) return `${ROSTER_MARKER_PREFIX}${marker}`;
 
   return `${ROSTER_MARKER_PREFIX}${marker.kind}-${marker.sectionId}`;
 }
@@ -211,7 +210,7 @@ function zoneAtRosterSlot(
 
     if (next) zone = next;
 
-    if (typeof item.marker !== "string" && item.marker.kind === "section-header") {
+    if (!Predicate.isString(item.marker) && item.marker.kind === "section-header") {
       zone = { sectionId: item.marker.sectionId };
     }
 
@@ -239,7 +238,7 @@ function zoneForOverItem(
     return "unassigned";
   }
 
-  if (typeof over.marker !== "string") return { sectionId: over.marker.sectionId };
+  if (!Predicate.isString(over.marker)) return { sectionId: over.marker.sectionId };
 
   return zoneAtRosterSlot(moved, overIndex, firstSectionId);
 }

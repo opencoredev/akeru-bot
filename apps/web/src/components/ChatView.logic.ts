@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   isProviderDriverKind,
   PLACEHOLDER_THREAD_TITLE,
@@ -110,9 +111,9 @@ export function hasEnvironmentReconnectWarningGraceElapsed(
   return activeEnvironmentId !== null && activeEnvironmentId === elapsedEnvironmentId;
 }
 
-export function startNewThreadForProject(
+export function startNewThreadForProject<R>(
   projectRef: ScopedProjectRef | null,
-  handleNewThread: (projectRef: ScopedProjectRef) => Promise<unknown>,
+  handleNewThread: (projectRef: ScopedProjectRef) => Promise<R>,
 ): boolean {
   if (projectRef === null) return false;
   void handleNewThread(projectRef);
@@ -211,10 +212,7 @@ export function shouldWriteThreadErrorToCurrentServerThread(input: {
   );
 }
 
-export function buildThreadTurnInterruptInput(thread: Pick<Thread, "id" | "session">): {
-  threadId: ThreadId;
-  turnId?: TurnId;
-} {
+export function buildThreadTurnInterruptInput(thread: Pick<Thread, "id" | "session">) {
   const runningTurnId = thread.session?.status === "running" ? thread.session.activeTurnId : null;
 
   return {
@@ -266,7 +264,7 @@ export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener("load", () => {
-      if (typeof reader.result === "string") {
+      if (Predicate.isString(reader.result)) {
         resolve(reader.result);
 
         return;
@@ -376,12 +374,7 @@ export function deriveComposerSendState(options: {
    * contexts do: a prompt of just element chips is still a valid send.
    */
   elementContextCount?: number;
-}): {
-  trimmedPrompt: string;
-  sendableTerminalContexts: TerminalContextDraft[];
-  expiredTerminalContextCount: number;
-  hasSendableContent: boolean;
-} {
+}) {
   const trimmedPrompt = stripInlineTerminalContextPlaceholders(options.prompt).trim();
   const sendableTerminalContexts = filterTerminalContextsWithText(options.terminalContexts);
 

@@ -103,10 +103,7 @@ export function parseManualDesktopSshTarget(input: {
 export function parseRemotePairingFields(input: {
   readonly host: string;
   readonly pairingCode: string;
-}): {
-  readonly host: string;
-  readonly pairingCode: string;
-} {
+}) {
   const parsedPairingUrl = parsePairingUrlFields(input.host, window.location.origin);
 
   if (parsedPairingUrl) return parsedPairingUrl;
@@ -125,9 +122,9 @@ export function parseRemotePairingFields(input: {
   return { host, pairingCode };
 }
 
-export function formatDesktopSshConnectionError(error: unknown): string {
+export function formatDesktopSshConnectionError(cause: unknown): string {
   const fallback = "Failed to connect SSH host.";
-  const rawMessage = error instanceof Error ? error.message : fallback;
+  const rawMessage = cause instanceof Error ? cause.message : fallback;
 
   const withoutIpcPrefix = rawMessage.replace(
     /^Error invoking remote method 'desktop:ensure-ssh-environment':\s*/u,

@@ -62,9 +62,9 @@ export function pluginActiveDependentBotNames(
 ): readonly string[] {
   if (!server?.enabled) return [];
 
-  return bots
-    .filter((bot) => bot.archivedAt === null && !bot.disabledMcpServerIds.includes(server.id))
-    .map((bot) => bot.name);
+  return bots.flatMap((bot) =>
+    bot.archivedAt === null && !bot.disabledMcpServerIds.includes(server.id) ? [bot.name] : [],
+  );
 }
 
 export function buildPluginSections(input: {

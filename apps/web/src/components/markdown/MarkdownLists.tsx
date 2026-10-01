@@ -28,7 +28,7 @@ export function findTaskListMarkerOffset(markdown: string, listItemStart: number
  */
 export function orderedListGutterStyle(
   itemCount: number,
-  start: unknown,
+  start: number | string | null | undefined,
 ): { "--list-gutter": string } | undefined {
   const parsedStart = Number.parseInt(String(start ?? 1), 10);
   const firstNumber = Number.isNaN(parsedStart) ? 1 : parsedStart;

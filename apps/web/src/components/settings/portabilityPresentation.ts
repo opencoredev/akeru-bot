@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -22,7 +23,7 @@ export function reportFailure(
   result: AtomCommandResult<unknown, unknown>,
   t: Translate,
 ): void {
-  if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+  if (!Predicate.isTagged(result, "Failure") || isAtomCommandInterrupted(result)) return;
   const error = squashAtomCommandFailure(result);
   toastManager.add({
     type: "error",

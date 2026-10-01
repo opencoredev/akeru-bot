@@ -42,6 +42,7 @@ export {
   useMessageReactionUpdater,
 } from "./useMessageReactionUpdater";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 // Held open while a control's menu is, so the controls never slip out from under the pointer.

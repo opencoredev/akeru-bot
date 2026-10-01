@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import {
   insertRankedSearchResult,
   normalizeSearchQuery,
@@ -61,6 +62,17 @@ function scoreSlashCommandItem(item: SlashSearchItem, query: string): number | n
   return Math.min(...scores);
 }
 
+function slashTieBreaker(item: SlashSearchItem) {
+  return Match.value(item).pipe(
+    Match.when({ type: "slash-command" }, (item) => `0\u0000${item.command}`),
+    Match.when(
+      { type: "provider-slash-command" },
+      (item) => `1\u0000${item.command.name}\u0000${item.provider}`,
+    ),
+    Match.orElse((item) => `2\u0000${item.skill.name}\u0000${item.provider}`),
+  );
+}
+
 export function searchSlashCommandItems<T extends SlashSearchItem>(
   items: ReadonlyArray<T>,
   query: string,
@@ -89,12 +101,7 @@ export function searchSlashCommandItems<T extends SlashSearchItem>(
       {
         item,
         score,
-        tieBreaker:
-          item.type === "slash-command"
-            ? `0\u0000${item.command}`
-            : item.type === "provider-slash-command"
-              ? `1\u0000${item.command.name}\u0000${item.provider}`
-              : `2\u0000${item.skill.name}\u0000${item.provider}`,
+        tieBreaker: slashTieBreaker(item),
       },
       Number.POSITIVE_INFINITY,
     );

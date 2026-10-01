@@ -1,12 +1,13 @@
+import type { DurableFactFixture } from "../test-support/fixtures";
+import { makeReviewItem, decodeMemoryPreview, makeDurableFact } from "../test-support/fixtures";
 import {
   DURABLE_MEMORY_EXPORT_SCOPES,
-  type DurableImportReviewItem,
   type DurableMemoryExportScope,
   type DurableMemoryFact,
   type ImportConflictDecision,
   resolveImportConflicts,
 } from "@akeru/client-runtime/durable-memory";
-import type { AkeruMemoryImportPreview } from "@akeru/contracts";
+
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -50,23 +51,23 @@ function button(node: ReactNode, label: string, index = 0) {
 }
 
 const conflict = (rootId: string, localFact: string, archiveFact: string) =>
-  ({
+  makeReviewItem({
     rootId,
     classification: "conflicting",
     reason: "Local and archive histories diverge.",
     localFact,
     archiveFact,
-  }) as unknown as DurableImportReviewItem;
+  });
 
 describe("DurableImportReview conflict choices", () => {
-  const preview = {
+  const preview = decodeMemoryPreview({
     previewHash: "a".repeat(64),
     items: [
-      { rootId: "m1", classification: "conflicting", reason: "" },
-      { rootId: "m2", classification: "new", reason: "" },
-      { rootId: "m3", classification: "conflicting", reason: "" },
+      { rootId: "m1", classification: "conflicting", reason: "Fixture review item" },
+      { rootId: "m2", classification: "new", reason: "Fixture review item" },
+      { rootId: "m3", classification: "conflicting", reason: "Fixture review item" },
     ],
-  } as unknown as AkeruMemoryImportPreview;
+  });
 
   const groups = [
     {
@@ -79,13 +80,13 @@ describe("DurableImportReview conflict choices", () => {
     {
       classification: "new" as const,
       items: [
-        {
+        makeReviewItem({
           rootId: "m2",
           classification: "new",
           reason: "Missing locally.",
           localFact: null,
           archiveFact: "Works in UTC.",
-        } as unknown as DurableImportReviewItem,
+        }),
       ],
     },
   ];
@@ -103,7 +104,7 @@ describe("DurableImportReview conflict choices", () => {
         unresolvedCount: resolution.ready ? 0 : resolution.unresolved.length,
         busy: false,
         onChoose: (rootId, decision) => {
-          choices = { ...choices, [rootId]: decision };
+          choices[rootId] = decision;
         },
         onApply,
         onCancel: () => {},
@@ -173,8 +174,8 @@ describe("DurableScopePicker", () => {
   });
 });
 
-const listedFact = (overrides: Partial<Record<keyof DurableMemoryFact, unknown>> = {}) =>
-  ({
+const listedFact = (overrides: Partial<DurableFactFixture> = {}) =>
+  makeDurableFact({
     rootId: "m1",
     fact: "Prefers detailed replies.",
     scope: "bot-user",
@@ -188,7 +189,7 @@ const listedFact = (overrides: Partial<Record<keyof DurableMemoryFact, unknown>>
     revision: 2,
     supersededFact: "Prefers short replies.",
     ...overrides,
-  }) as unknown as DurableMemoryFact;
+  });
 
 function renderFactList(
   props: Partial<Parameters<typeof DurableFactList>[0]> & {

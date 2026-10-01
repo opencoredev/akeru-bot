@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { Predicate } from "effect";
 import type { AreaVariant } from "./chart-context";
 import { rgb, type Seed } from "./palette";
 
@@ -108,7 +109,7 @@ export function paintColumn(
 
 /** Linear-resample a per-index fraction array to `cols` columns. */
 export function resample(src: number[], cols: number): number[] {
-  const out = new Array<number>(cols);
+  const out = Array.from({ length: cols }, () => 0);
   const last = Math.max(src.length - 1, 1);
 
   for (let c = 0; c < cols; c++) {
@@ -168,7 +169,7 @@ export type BloomStyle = {
 /** Style for the bloom *layer* canvas (a blurred, additive copy). null when off. */
 export function bloomLayerStyle(input: BloomInput, active: boolean): BloomStyle | null {
   if (!active || input === "off") return null;
-  const cfg = typeof input === "string" ? PRESET[input] : input;
+  const cfg = Predicate.isString(input) ? PRESET[input] : input;
 
   return {
     filter: `blur(${cfg.blur}px) brightness(${cfg.brightness}) saturate(${cfg.saturate ?? 1})`,

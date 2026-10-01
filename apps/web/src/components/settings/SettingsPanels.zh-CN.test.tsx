@@ -20,13 +20,13 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => undefined }));
 
 vi.mock("../../hooks/useSettings", async (importOriginal) => {
-  const select = (selector?: (settings: typeof DEFAULT_UNIFIED_SETTINGS) => unknown) =>
+  const select = <T,>(selector?: (settings: typeof DEFAULT_UNIFIED_SETTINGS) => T) =>
     selector ? selector(DEFAULT_UNIFIED_SETTINGS) : DEFAULT_UNIFIED_SETTINGS;
 
   return {
     ...(await importOriginal<typeof import("../../hooks/useSettings")>()),
     usePrimarySettings: select,
-    useEnvironmentSettings: (_environmentId: unknown, selector?: never) => select(selector),
+    useEnvironmentSettings: (_environmentId: string | null, selector?: never) => select(selector),
     useUpdatePrimarySettings: () => () => undefined,
     useUpdateEnvironmentSettings: () => () => undefined,
   };

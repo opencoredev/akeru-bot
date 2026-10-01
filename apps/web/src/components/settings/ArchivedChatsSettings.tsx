@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
 import type { EnvironmentId } from "@akeru/contracts";
@@ -108,11 +109,11 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
       id={index === 0 ? "archived-chats" : undefined}
       title={
         section.name ??
-        (section.kind === "group"
-          ? t("Deleted group")
-          : section.kind === "bot"
-            ? t("Removed bot")
-            : t("Other chats"))
+        Match.value(section).pipe(
+          Match.when({ kind: "group" }, () => t("Deleted group")),
+          Match.when({ kind: "bot" }, () => t("Removed bot")),
+          Match.orElse(() => t("Other chats")),
+        )
       }
     >
       {section.chats.map((chat) => {

@@ -66,26 +66,16 @@ export function botImageProviderFromSelectValue(value: string | null): ImageProv
   return value !== null && isImageProviderId(value) ? value : null;
 }
 
-export function parseBotUsageCapInput(input: string): {
-  readonly valid: boolean;
-  readonly value: Bot["usageCap"];
-} {
+export function parseBotUsageCapInput(input: string) {
   if (input.trim().length === 0) return { valid: true, value: null };
   const limit = Number(input);
 
   if (!Number.isSafeInteger(limit) || limit <= 0) return { valid: false, value: null };
 
-  return { valid: true, value: { unit: "tokens", limit } };
+  return { valid: true, value: { unit: "tokens" as const, limit } };
 }
 
-export function resolveBotUsageCapForProvider(
-  input: string,
-  providerDriver?: string,
-): {
-  readonly available: boolean;
-  readonly valid: boolean;
-  readonly value: Bot["usageCap"];
-} {
+export function resolveBotUsageCapForProvider(input: string, providerDriver?: string) {
   if (providerDriver === "grok") {
     return { available: false, valid: true, value: null };
   }

@@ -75,7 +75,9 @@ function InputGroupAddon({
       data-align={align}
       data-slot="input-group-addon"
       onMouseDown={(e) => {
-        const target = e.target as HTMLElement;
+        const target = e.target;
+
+        if (!(target instanceof Element)) return;
 
         const isInteractive = target.closest(
           "button, a, input, select, textarea, [role='button'], [role='combobox'], [role='listbox'], [data-slot='select-trigger']",

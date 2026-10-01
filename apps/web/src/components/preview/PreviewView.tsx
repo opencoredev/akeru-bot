@@ -1,5 +1,9 @@
 "use client";
 
+import { isTagged } from "../tagged";
+
+import { Predicate } from "effect";
+
 import { usePreviewCapture } from "./usePreviewCapture";
 
 import { scopedThreadKey } from "@akeru/client-runtime/environment";
@@ -135,12 +139,12 @@ export function PreviewView({
   const snapshot = tabId ? (previewState.sessions[tabId] ?? null) : null;
   const desktopOverlay = tabId ? (previewState.desktopByTabId[tabId] ?? null) : null;
   const navStatus = snapshot?.navStatus ?? { _tag: "Idle" as const };
-  const url = navStatus._tag === "Idle" ? "" : navStatus.url;
-  const loading = desktopOverlay?.loading ?? navStatus._tag === "Loading";
+  const url = isTagged(navStatus, "Idle") ? "" : navStatus.url;
+  const loading = desktopOverlay?.loading ?? isTagged(navStatus, "Loading");
   const canGoBack = desktopOverlay?.canGoBack ?? snapshot?.canGoBack ?? false;
   const canGoForward = desktopOverlay?.canGoForward ?? snapshot?.canGoForward ?? false;
-  const refreshDisabled = navStatus._tag === "Idle";
-  const isUnreachable = navStatus._tag === "LoadFailed";
+  const refreshDisabled = isTagged(navStatus, "Idle");
+  const isUnreachable = isTagged(navStatus, "LoadFailed");
   const showEmptyState = shouldShowPreviewEmptyState(snapshot);
   const controller = desktopOverlay?.controller ?? "none";
   const viewport = snapshot?.viewport ?? FILL_PREVIEW_VIEWPORT;
@@ -150,8 +154,8 @@ export function PreviewView({
     runtimeTabId ? (state.byTabId[runtimeTabId]?.rect ?? null) : null,
   );
 
-  const navUrl = navStatus._tag === "Success" ? navStatus.url : null;
-  const navTitle = navStatus._tag === "Success" ? navStatus.title : null;
+  const navUrl = isTagged(navStatus, "Success") ? navStatus.url : null;
+  const navTitle = isTagged(navStatus, "Success") ? navStatus.title : null;
   const latestHistoryUrl = recentHistoryEntries[0]?.url;
   const threadKey = scopedThreadKey(threadRef);
   useEffect(() => {
@@ -173,7 +177,7 @@ export function PreviewView({
 
       const result = await openPreviewSession({ openPreview: open, threadRef, url: resolvedUrl });
 
-      return result._tag === "Success";
+      return isTagged(result, "Success");
     },
     [open, runtimeTabId, threadRef],
   );
@@ -237,7 +241,7 @@ export function PreviewView({
         },
       });
 
-      if (result._tag === "Failure") {
+      if (isTagged(result, "Failure")) {
         const error = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",
@@ -255,7 +259,7 @@ export function PreviewView({
   const handleToggleDeviceToolbar = () => {
     if (!runtimeTabId) return;
 
-    if (viewport._tag !== "fill") {
+    if (!isTagged(viewport, "fill")) {
       void commitBrowserViewportChange(runtimeTabId, FILL_PREVIEW_VIEWPORT).catch(() => undefined);
 
       return;
@@ -327,8 +331,7 @@ export function PreviewView({
     // focus into the guest webContents. We restore it when the pick
     // resolves so the user's typing context isn't lost — otherwise after
     // every pick they'd have to click back into the textarea.
-    const previouslyFocused =
-      typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null;
+    const previouslyFocused = typeof document !== "undefined" ? document.activeElement : null;
 
     pickActiveRef.current = true;
     setPickActive(true);
@@ -383,7 +386,8 @@ export function PreviewView({
         if (
           previouslyFocused &&
           previouslyFocused.isConnected &&
-          typeof previouslyFocused.focus === "function"
+          "focus" in previouslyFocused &&
+          Predicate.isFunction(previouslyFocused.focus)
         ) {
           try {
             previouslyFocused.focus({ preventScroll: true });
@@ -480,7 +484,7 @@ export function PreviewView({
               hasWebContents={desktopOverlay?.hasWebContents ?? false}
               zoomFactor={desktopOverlay?.zoomFactor ?? 1}
               colorScheme={desktopOverlay?.colorScheme ?? "system"}
-              deviceToolbarVisible={viewport._tag !== "fill"}
+              deviceToolbarVisible={!isTagged(viewport, "fill")}
               onToggleDeviceToolbar={handleToggleDeviceToolbar}
               nativePictureInPicture={desktopOverlay?.pictureInPicture ?? false}
               onNativePictureInPicture={handleNativePictureInPicture}
@@ -524,7 +528,7 @@ export function PreviewView({
             {controller === "agent" ? "Bot controlling browser" : "Human control"}
           </div>
         ) : null}
-        {navStatus._tag === "LoadFailed" ? (
+        {isTagged(navStatus, "LoadFailed") ? (
           <div className="absolute inset-0 z-10 bg-background">
             <PreviewUnreachable
               url={navStatus.url}

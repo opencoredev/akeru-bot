@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -137,7 +138,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       try {
         const result = await onOpen(targetPath);
 
-        if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
+        if (Predicate.isTagged(result, "Success") || isAtomCommandInterrupted(result)) {
           return;
         }
 
@@ -178,7 +179,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       try {
         const result = await onOpenInBrowser();
 
-        if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
+        if (Predicate.isTagged(result, "Success") || isAtomCommandInterrupted(result)) {
           return;
         }
 
@@ -219,7 +220,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       try {
         const result = await onReveal();
 
-        if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
+        if (Predicate.isTagged(result, "Success") || isAtomCommandInterrupted(result)) {
           return;
         }
 

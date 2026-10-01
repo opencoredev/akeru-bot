@@ -45,6 +45,7 @@ function shallowEqual<T extends object>(a: T | null | undefined, b: T | null | u
   if (a === b) return true;
 
   if (!a || !b) return false;
+  // SAFETY: these own enumerable keys are read from the same typed props object for shallow equality.
   const keys = Object.keys(a) as (keyof T)[];
 
   return keys.length === Object.keys(b).length && keys.every((key) => Object.is(a[key], b[key]));
@@ -78,6 +79,7 @@ export function assistantRowPropsEqual(
   previous: AssistantMessageRowProps,
   next: AssistantMessageRowProps,
 ) {
+  // SAFETY: these own enumerable keys are read from the same typed props object for shallow equality.
   const keys = Object.keys(next) as (keyof AssistantMessageRowProps)[];
 
   if (keys.length !== Object.keys(previous).length) return false;

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -54,7 +55,7 @@ export function composioSearchResults(
   connectedOnly?: ReadonlySet<string>,
 ): readonly ComposioToolkit[] {
   const brokered = new Set(
-    catalog.filter((plugin) => plugin.connection.type === "brokered").map((plugin) => plugin.id),
+    catalog.flatMap((plugin) => (plugin.connection.type === "brokered" ? [plugin.id] : [])),
   );
 
   return toolkits.filter(
@@ -68,9 +69,9 @@ export function activeComposioToolkitIds(
   connections: readonly ComposioConnection[],
 ): ReadonlySet<string> {
   return new Set(
-    connections
-      .filter((connection) => connection.status === "ACTIVE")
-      .map((connection) => connection.toolkitSlug),
+    connections.flatMap((connection) =>
+      connection.status === "ACTIVE" ? [connection.toolkitSlug] : [],
+    ),
   );
 }
 
@@ -187,7 +188,7 @@ export function ComposioSection({
     title: string,
     result: Awaited<ReturnType<typeof configure>> | Awaited<ReturnType<typeof authorize>>,
   ): boolean => {
-    if (result._tag !== "Failure") return false;
+    if (!Predicate.isTagged(result, "Failure")) return false;
 
     if (isAtomCommandInterrupted(result)) return true;
     const error = squashAtomCommandFailure(result);
@@ -234,7 +235,7 @@ export function ComposioSection({
     const result = await authorize({ environmentId, input: { toolkitSlug: toolkit.slug } });
     setPendingId(null);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       reportFailure(t("Could not connect {name}", { name: toolkit.name }), result);
 
       return;

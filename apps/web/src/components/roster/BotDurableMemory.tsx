@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   DURABLE_MEMORY_INSPECT_SCOPES,
   type DurableFactIntent,
@@ -110,14 +111,14 @@ function DurableFactsSection({
   const threadTitles = useMemo(
     () =>
       new Map(
-        threadShells
-          .filter((shell) => shell.environmentId === threadRef.environmentId)
-          .map((shell) => [shell.id as string, shell.title]),
+        threadShells.flatMap((shell) =>
+          shell.environmentId === threadRef.environmentId ? [[shell.id, shell.title]] : [],
+        ),
       ),
     [threadShells, threadRef.environmentId],
   );
 
-  const botNames = useMemo(() => new Map(bots.map((bot) => [bot.id as string, bot.name])), [bots]);
+  const botNames = useMemo(() => new Map(bots.map((bot) => [bot.id, bot.name])), [bots]);
   const [scope, setScope] = useState<DurableMemoryExportScope>("bot");
   const [busyRootId, setBusyRootId] = useState<string | null>(null);
   const [editing, setEditing] = useState<DurableFactEditing | null>(null);
@@ -151,7 +152,7 @@ function DurableFactsSection({
         input: { threadId: threadRef.threadId, mutation: durableFactMutation(fact, intent) },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         const described = describeDurableFactFailure(squashAtomCommandFailure(result));
         setFailure(described);
 

@@ -35,6 +35,7 @@ export function parseModelPickerModelKey(
     return null;
   }
 
+  // SAFETY: these private picker keys encode an existing provider instance ID; parsing recovers that same string brand.
   return {
     instanceId: value.slice(0, instanceIdLength) as ProviderInstanceId,
     slug: value.slice(instanceIdLength),
@@ -46,6 +47,7 @@ export function modelPickerLegacySectionKey(instanceId: ProviderInstanceId): str
 }
 
 export function parseModelPickerLegacySectionKey(key: string): ProviderInstanceId | null {
+  // SAFETY: these private picker keys encode an existing provider instance ID; parsing recovers that same string brand.
   return key.startsWith(LEGACY_SECTION_KEY_PREFIX)
     ? (key.slice(LEGACY_SECTION_KEY_PREFIX.length) as ProviderInstanceId)
     : null;

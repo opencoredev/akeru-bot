@@ -1,5 +1,6 @@
 "use client";
 
+import { recordLookup } from "./recordLookup";
 import { useState } from "react";
 import { cn } from "~/lib/utils";
 
@@ -47,7 +48,7 @@ function getSizeClass(size: "default" | "sm" | "lg") {
 }
 
 function getColorValue(color: string): string {
-  return colorMap[color as keyof typeof colorMap] || color;
+  return recordLookup(colorMap, color) || color;
 }
 
 export function ColorSelector({

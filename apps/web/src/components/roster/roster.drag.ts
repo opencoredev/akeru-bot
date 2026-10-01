@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { closestCenter, type CollisionDetection, type Modifier } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
@@ -70,7 +71,7 @@ function sectionTargetForItem(items: readonly RosterListItem[], id: string): str
 
   if (item.marker === "unassigned-placeholder") return rosterMarkerId("unassigned-header");
 
-  if (typeof item.marker === "object" && item.marker.kind === "section-placeholder") {
+  if (Predicate.isObjectOrArray(item.marker) && item.marker.kind === "section-placeholder") {
     return rosterMarkerId({ kind: "section-header", sectionId: item.marker.sectionId });
   }
 
@@ -202,7 +203,7 @@ export function createRosterSortingStrategy(input: {
 
     if (active.kind === "marker") {
       const sectionId =
-        typeof active.marker === "object" && active.marker.kind === "section-header"
+        Predicate.isObjectOrArray(active.marker) && active.marker.kind === "section-header"
           ? active.marker.sectionId
           : parseRosterSectionHeaderId(rosterListItemId(active));
 
@@ -244,7 +245,7 @@ export function createRosterSortingStrategy(input: {
       if (item.kind === "marker") {
         if (
           item.marker === "unassigned-header" ||
-          (typeof item.marker === "object" && item.marker.kind === "section-header")
+          (Predicate.isObjectOrArray(item.marker) && item.marker.kind === "section-header")
         ) {
           const height = rects[index]?.height;
 
@@ -286,7 +287,7 @@ export function createRosterSortingStrategy(input: {
     for (const item of items) {
       if (
         item.kind === "marker" &&
-        typeof item.marker === "object" &&
+        Predicate.isObjectOrArray(item.marker) &&
         item.marker.kind === "section-header" &&
         !sectionIds.includes(item.marker.sectionId)
       ) {
@@ -321,9 +322,11 @@ export function createRosterSortingStrategy(input: {
           ? labelHeight
           : item.kind === "marker" &&
               (item.marker === "unassigned-placeholder" ||
-                (typeof item.marker === "object" && item.marker.kind === "section-placeholder"))
-            ? (groups.get(typeof item.marker === "object" ? item.marker.sectionId : "unassigned")
-                ?.length ?? 0) === 0
+                (Predicate.isObjectOrArray(item.marker) &&
+                  item.marker.kind === "section-placeholder"))
+            ? (groups.get(
+                Predicate.isObjectOrArray(item.marker) ? item.marker.sectionId : "unassigned",
+              )?.length ?? 0) === 0
               ? slimHeight
               : 0
             : item.kind === "marker"
@@ -366,11 +369,11 @@ export function createRosterSortingStrategy(input: {
         item.kind === "marker" &&
         (item.marker === "pinned-header" ||
           item.marker === "pinned-divider" ||
-          (typeof item.marker === "object" && item.marker.kind === "section-header") ||
+          (Predicate.isObjectOrArray(item.marker) && item.marker.kind === "section-header") ||
           item.marker === "unassigned-header")
       ) {
         if (
-          typeof item.marker === "object" &&
+          Predicate.isObjectOrArray(item.marker) &&
           item.marker.kind === "section-header" &&
           current.length > 0
         ) {
@@ -395,7 +398,7 @@ export function createRosterSortingStrategy(input: {
       block.some(
         (item) =>
           item.kind === "marker" &&
-          typeof item.marker === "object" &&
+          Predicate.isObjectOrArray(item.marker) &&
           item.marker.kind === "section-header",
       ),
     );
@@ -408,7 +411,7 @@ export function createRosterSortingStrategy(input: {
       block.some(
         (item) =>
           item.kind === "marker" &&
-          typeof item.marker === "object" &&
+          Predicate.isObjectOrArray(item.marker) &&
           item.marker.kind === "section-header" &&
           item.marker.sectionId === sectionId,
       ),
@@ -426,7 +429,7 @@ export function createRosterSortingStrategy(input: {
             block.some(
               (item) =>
                 item.kind === "marker" &&
-                typeof item.marker === "object" &&
+                Predicate.isObjectOrArray(item.marker) &&
                 item.marker.kind === "section-header" &&
                 item.marker.sectionId === overSectionId,
             ),

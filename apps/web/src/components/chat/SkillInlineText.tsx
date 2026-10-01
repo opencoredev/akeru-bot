@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { Children, cloneElement, isValidElement, type ReactNode } from "react";
 import type { ServerProviderSkill } from "@akeru/contracts";
 import {
@@ -55,7 +56,7 @@ export function renderSkillInlineMarkdownChildren(
   skills: ReadonlyArray<InlineSkill>,
 ): ReactNode {
   return Children.map(children, (child) => {
-    if (typeof child === "string") {
+    if (Predicate.isString(child)) {
       return <SkillInlineText text={child} skills={skills} />;
     }
 
@@ -65,7 +66,7 @@ export function renderSkillInlineMarkdownChildren(
 
     // Custom react-markdown components replace the intrinsic type, so also
     // check the hast node they carry.
-    const markdownTagName = typeof child.type === "string" ? child.type : child.props.node?.tagName;
+    const markdownTagName = Predicate.isString(child.type) ? child.type : child.props.node?.tagName;
 
     if (markdownTagName === "code" || markdownTagName === "a") {
       return child;

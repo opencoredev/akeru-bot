@@ -1,3 +1,5 @@
+import { recordLookup } from "../recordLookup";
+import { Predicate } from "effect";
 import { Toast } from "@base-ui/react/toast";
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import {
@@ -31,8 +33,11 @@ const TOAST_ICONS = {
 /** Visually shorten long error bodies; clipboard copy still uses the full `description` string. */
 const ERROR_DESCRIPTION_CLAMP_MIN_CHARS = 180;
 
-function errorDescriptionClampClass(type: unknown, description: unknown): string | undefined {
-  if (type !== "error" || typeof description !== "string") {
+function errorDescriptionClampClass(
+  type: string | undefined,
+  description: ReactNode,
+): string | undefined {
+  if (type !== "error" || !Predicate.isString(description)) {
     return undefined;
   }
 
@@ -119,8 +124,8 @@ function ToastDescriptionAndExpandable({
   toastType,
 }: {
   toastData: ThreadToastData | undefined;
-  toastDescription: unknown;
-  toastType: unknown;
+  toastDescription: ReactNode;
+  toastType: string | undefined;
 }) {
   const expandableContent = toastData?.expandableContent;
   const labels = toastData?.expandableLabels ?? {};
@@ -224,11 +229,11 @@ interface ToastBodyDescriptor {
 
 export function deriveToastBodyDescriptor(toast: {
   readonly type?: string | undefined;
-  readonly description?: unknown;
-  readonly actionProps?: unknown;
+  readonly description?: ReactNode;
+  readonly actionProps?: { children?: ReactNode } | undefined;
   readonly data?: ThreadToastData | undefined;
 }): ToastBodyDescriptor {
-  const Icon = toast.type ? TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS] : null;
+  const Icon = toast.type ? recordLookup(TOAST_ICONS, toast.type) : null;
 
   const stackedActionLayout =
     hasVisibleToastAction(toast.actionProps) && toast.data?.actionLayout === "stacked-end";
@@ -240,7 +245,7 @@ export function deriveToastBodyDescriptor(toast: {
     toast.data?.secondaryActionVariant ?? "outline";
 
   const copyErrorText =
-    toast.type === "error" && typeof toast.description === "string" && !toast.data?.hideCopyButton
+    toast.type === "error" && Predicate.isString(toast.description) && !toast.data?.hideCopyButton
       ? toast.description
       : null;
 
@@ -269,8 +274,8 @@ export function deriveToastBodyDescriptor(toast: {
 interface ToastBodyContentProps extends ToastBodyDescriptor {
   readonly actionProps: { readonly children?: ReactNode } | undefined;
   readonly toastData: ThreadToastData | undefined;
-  readonly toastDescription: unknown;
-  readonly toastType: unknown;
+  readonly toastDescription: ReactNode;
+  readonly toastType: string | undefined;
 }
 
 export function ToastBodyContent({

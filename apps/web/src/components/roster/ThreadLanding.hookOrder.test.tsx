@@ -1,3 +1,5 @@
+import { makeShellSnapshot } from "../test-support/fixtures";
+import { Match } from "effect";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
@@ -60,14 +62,13 @@ vi.mock("./useServerRoster", () => ({
 }));
 
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: unknown) =>
-    atom === "people"
-      ? { current: null, host: null }
-      : atom === "snapshot"
-        ? mocks.snapshot
-        : atom === "bots"
-          ? []
-          : null,
+  useAtomValue: (atom: string) =>
+    Match.value(atom).pipe(
+      Match.when("people", () => ({ current: null, host: null })),
+      Match.when("snapshot", () => mocks.snapshot),
+      Match.when("bots", () => []),
+      Match.orElse(() => null),
+    ),
 }));
 
 vi.mock("../../state/bots", () => ({
@@ -134,7 +135,9 @@ vi.mock("../chat/ReplyPlaybackProvider", () => {
 });
 
 vi.mock("../ui/sidebar", () => ({
-  SidebarInset: (props: unknown) => {
+  SidebarInset: (
+    props: import("react").ComponentProps<typeof import("../ui/sidebar").SidebarInset>,
+  ) => {
     mocks.landing(props);
 
     return null;
@@ -147,8 +150,8 @@ vi.mock("./botPresence", () => ({
 }));
 
 vi.mock("./rosterStore", () => {
-  const useRosterStore = (
-    selector: (state: { groups: Group[]; bots: Bot[]; environmentId: string }) => unknown,
+  const useRosterStore = <T,>(
+    selector: (state: { groups: Group[]; bots: Bot[]; environmentId: string }) => T,
   ) => selector({ groups: mocks.groups, bots: mocks.bots, environmentId: "environment-1" });
 
   useRosterStore.getState = () => ({ selectBot: vi.fn() });
@@ -311,7 +314,7 @@ beforeEach(() => {
     removeEventListener() {},
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  root = createRoot(document.createElement("div") as unknown as Element);
+  root = createRoot(globalThis.document.createElement("div"));
 });
 
 afterEach(async () => {
@@ -334,11 +337,11 @@ describe("thread landing reply playback hook order", () => {
       createdAt: "2026-09-29T09:00:00.000Z",
     };
 
-    mocks.snapshot = {
+    mocks.snapshot = makeShellSnapshot({
       routineReceiptSources: [source],
       routineRuns: [],
       delegations: [],
-    } as unknown as OrchestrationShellSnapshot;
+    });
 
     const renderBot = async () => {
       await act(async () => root.render(<BotThreadLanding botId={bot.id} />));
@@ -347,7 +350,7 @@ describe("thread landing reply playback hook order", () => {
     await renderBot();
     expect(mocks.refreshHistory).not.toHaveBeenCalled();
 
-    mocks.snapshot = {
+    mocks.snapshot = makeShellSnapshot({
       routineReceiptSources: [source],
       delegations: [],
       routineRuns: [
@@ -359,7 +362,7 @@ describe("thread landing reply playback hook order", () => {
           updatedAt: "2026-09-29T09:01:00.000Z",
         },
       ],
-    } as unknown as OrchestrationShellSnapshot;
+    });
     await renderBot();
     expect(mocks.refreshHistory).toHaveBeenCalledTimes(1);
   });

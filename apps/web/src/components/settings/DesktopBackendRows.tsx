@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { ChevronsLeftRightEllipsisIcon, RefreshCwIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { memo, useCallback } from "react";
@@ -87,9 +88,9 @@ export function SavedBackendListRow({
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
 
   const sshTarget =
-    environment.entry.target._tag === "SshConnectionTarget" &&
+    Predicate.isTagged(environment.entry.target, "SshConnectionTarget") &&
     Option.isSome(environment.entry.profile) &&
-    environment.entry.profile.value._tag === "SshConnectionProfile"
+    Predicate.isTagged(environment.entry.profile.value, "SshConnectionProfile")
       ? environment.entry.profile.value.target
       : null;
 

@@ -1,4 +1,3 @@
-import type { ComponentProps, MouseEvent, PointerEvent } from "react";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 import { visitElements } from "../../test/reactElementTree";
@@ -41,6 +40,27 @@ vi.mock("react/compiler-runtime", async () => {
   return { c: reactHookHarness.useMemoCache };
 });
 
+interface PointerInput {
+  pointerId: number;
+  button: number;
+  isPrimary: boolean;
+  preventDefault: () => void;
+  currentTarget: { setPointerCapture: (id: number) => void };
+}
+
+interface TestButtonProps {
+  type?: string;
+  "aria-label"?: string;
+  "aria-disabled"?: boolean | "true" | "false";
+  "aria-pressed"?: boolean | "true" | "false";
+  onPointerDown?: (event: PointerInput) => void;
+  onPointerUp?: (event: PointerInput) => void;
+  onPointerCancel?: (event: PointerInput) => void;
+  onLostPointerCapture?: (event: PointerInput) => void;
+  onClick?: (event: { detail: number }) => void;
+  disabled?: boolean;
+}
+
 const callbacks = () => ({ onStart: vi.fn(), onRelease: vi.fn(), onCancel: vi.fn() });
 
 function render(props: DictationControlsProps) {
@@ -52,22 +72,21 @@ function render(props: DictationControlsProps) {
   const status = visitElements(tree, (element) => element.props.role === "status")!;
 
   return {
-    button: button.props as ComponentProps<"button">,
-    cancel: cancel?.props as ComponentProps<"button"> | undefined,
+    button: button.props as TestButtonProps,
+    cancel: cancel?.props as TestButtonProps | undefined,
     status: status.props,
   };
 }
 
-const pointerEvent = (pointerId = 1) =>
-  ({
-    pointerId,
-    button: 0,
-    isPrimary: true,
-    preventDefault: vi.fn(),
-    currentTarget: { setPointerCapture: vi.fn() },
-  }) as unknown as PointerEvent<HTMLButtonElement>;
+const pointerEvent = (pointerId = 1) => ({
+  pointerId,
+  button: 0,
+  isPrimary: true,
+  preventDefault: vi.fn(),
+  currentTarget: { setPointerCapture: vi.fn() },
+});
 
-const click = (detail: number) => ({ detail }) as MouseEvent<HTMLButtonElement>;
+const click = (detail: number) => ({ detail });
 
 beforeEach(() => {
   hooks.reset();
@@ -221,7 +240,7 @@ describe("DictationControls", () => {
       (element) => element.type === "button" && element.props["aria-label"] === "Cancel dictation",
     )!;
 
-    (cancel.props as ComponentProps<"button">).onClick!(click(1));
+    (cancel.props as TestButtonProps).onClick!(click(1));
     expect(handlers.onCancel).toHaveBeenCalledTimes(1);
     expect(handlers.onRelease).not.toHaveBeenCalled();
   });
@@ -233,7 +252,7 @@ describe("DictationControls", () => {
     const tree = DictationControls({ status: "failed", appearance: "send-slot", ...handlers });
 
     const retry = visitElements(tree, (element) => element.type === "button")!
-      .props as ComponentProps<"button">;
+      .props as TestButtonProps;
 
     expect(retry["aria-label"]).toBe("Retry dictation");
     retry.onClick!(click(0));
@@ -245,7 +264,7 @@ describe("DictationControls", () => {
         element.type === "button" && element.props["aria-label"] === "Dismiss dictation error",
     )!;
 
-    (dismiss.props as ComponentProps<"button">).onClick!(click(1));
+    (dismiss.props as TestButtonProps).onClick!(click(1));
     expect(handlers.onCancel).toHaveBeenCalledTimes(1);
   });
 

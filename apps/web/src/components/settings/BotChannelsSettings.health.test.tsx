@@ -1,10 +1,12 @@
+import { Schema } from "effect";
+import { Predicate } from "effect";
 import { AuthAccessWriteScope, type ChannelBinding } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { cloneElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { channelFailureReason } from "@akeru/client-runtime/channel-presentation";
-import type { ChannelConnectionProfile } from "@akeru/contracts";
+import { ChannelConnectionProfile } from "@akeru/contracts";
 import { useChannelSettings } from "./BotChannelsSettings";
 import { ChannelConnectionRow } from "./ChannelDetailPage";
 import {
@@ -14,6 +16,8 @@ import {
   button,
   renderPage,
 } from "./botChannelsRender.test-support";
+
+const decodeConnectionProfile = Schema.decodeUnknownSync(ChannelConnectionProfile);
 
 const fixtures = vi.hoisted(() => ({
   bots: [] as Array<{
@@ -44,7 +48,14 @@ const fixtures = vi.hoisted(() => ({
   threads: [] as Array<{ projectId: string; botId: string; updatedAt: string; archivedAt: null }>,
   connections: [
     { id: "profile-1", name: "Fixture line", provider: "imessage", externalIdentity: null },
-  ] as Array<Record<string, unknown>>,
+  ] as Array<{
+    id: string;
+    name: string;
+    provider: string;
+    externalIdentity: string | null;
+    webhookUrl?: string | null;
+    managementUrl?: string | null;
+  }>,
   scopes: [] as string[],
   selects: [] as Array<{ onValueChange?: (value: string | null) => void }>,
   buttons: new Map<string, () => void>(),
@@ -101,7 +112,7 @@ vi.mock("../ui/button", async (importOriginal) => {
   return {
     ...actual,
     Button: (props: Parameters<typeof actual.Button>[0]) => {
-      if (typeof props.children === "string" && props.onClick) {
+      if (Predicate.isString(props.children) && props.onClick) {
         const onClick = props.onClick;
         fixtures.buttons.set(props.children, () => onClick({} as never));
       }
@@ -276,7 +287,11 @@ describe("channel health and repair", () => {
 
       return (
         <ChannelConnectionRow
-          connection={fixtureConnection as unknown as ChannelConnectionProfile}
+          connection={decodeConnectionProfile({
+            ...fixtureConnection,
+            externalIdentity: undefined,
+            adapter: "photon",
+          })}
           settings={settings}
           onReplaceCredentials={replace}
         />
