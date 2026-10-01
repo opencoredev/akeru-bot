@@ -54,7 +54,6 @@ import { parsePermissionRequest } from "../../acp/AcpRuntimeModel.ts";
 import {
   applyGrokAcpModelSelection,
   currentGrokModelIdFromSessionSetup,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Provider composition root creates the configured, scoped ACP subprocess runtime.
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
 } from "../../acp/GrokAcpSupport.ts";

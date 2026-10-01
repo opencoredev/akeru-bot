@@ -23,14 +23,12 @@ import * as Schema from "effect/Schema";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeClaudeTextGeneration } from "../../textGeneration/ClaudeTextGeneration.ts";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { instanceUsesSavedCredential } from "../../subscription-auth/runtime.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderDriverError } from "../Errors.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeClaudeAdapter } from "../Layers/ClaudeAdapter.ts";
 import {
   checkClaudeProviderStatus,
@@ -38,7 +36,6 @@ import {
   probeClaudeCapabilities,
 } from "../Layers/ClaudeProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import * as ModelManifest from "../ModelManifest.ts";
 import {

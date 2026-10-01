@@ -11,10 +11,8 @@ import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { instanceUsesSavedCredential } from "../../subscription-auth/runtime.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeGrokTextGeneration } from "../../textGeneration/GrokTextGeneration.ts";
 import { ProviderDriverError } from "../Errors.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeGrokAdapter } from "../Layers/GrokAdapter.ts";
 import {
   buildInitialGrokProviderSnapshot,
@@ -23,7 +21,6 @@ import {
 } from "../Layers/GrokProvider.ts";
 import { discoverGrokSkills } from "./GrokSkills.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import {
   defaultProviderContinuationIdentity,

@@ -22,7 +22,6 @@ import * as Schema from "effect/Schema";
 import { ServerConfig } from "../../../config.ts";
 import { ServerSettingsService } from "../../../serverSettings.ts";
 import type { ClaudeAdapterShape } from "../../Services/ClaudeAdapter.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured ClaudeAdapter double or Layer for isolated provider tests.
 import { makeClaudeAdapter, type ClaudeAdapterLiveOptions } from "../ClaudeAdapter.ts";
 
 export const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);

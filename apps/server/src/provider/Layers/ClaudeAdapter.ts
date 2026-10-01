@@ -62,7 +62,6 @@ import {
 } from "../Errors.ts";
 import { type ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
 import { type EventNdjsonLogger } from "./logging/EventLogTypes.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root creates the scoped logger with this adapter configuration.
 import { makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 import {

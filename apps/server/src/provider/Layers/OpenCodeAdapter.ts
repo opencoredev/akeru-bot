@@ -34,7 +34,6 @@ import { ServerConfig } from "../../config.ts";
 import { subscriptionRuntimeEnvironment } from "../../subscription-auth/runtime.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { type EventNdjsonLogger } from "./logging/EventLogTypes.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root creates the scoped logger with this adapter configuration.
 import { makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
   ProviderAdapterRequestError,
