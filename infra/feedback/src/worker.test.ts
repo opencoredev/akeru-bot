@@ -5,9 +5,13 @@ import worker, { makeGitHubIssueOutbox } from "./worker.ts";
 
 const ENDPOINT = "https://akeru-feedback.leoisadev.workers.dev/v1/feedback";
 
+function databaseFixture(input: { prepare: (query: string) => object }) {
+  return input as D1Database;
+}
+
 function env(overrides: Partial<FeedbackWorkerEnv> = {}): FeedbackWorkerEnv {
   return {
-    DB: { prepare: vi.fn() } as unknown as D1Database,
+    DB: databaseFixture({ prepare: vi.fn() }),
     HMAC_SECRET: "test-secret-that-is-at-least-32-bytes",
     TURNSTILE_SITE_KEY: "",
     TURNSTILE_SECRET_KEY: "",
@@ -35,7 +39,7 @@ function emptyInboxDatabase(): D1Database {
     run: async () => ({ meta: { changes: 1 } }),
   };
 
-  return { prepare: () => statement } as unknown as D1Database;
+  return databaseFixture({ prepare: () => statement as D1PreparedStatement });
 }
 
 function submission(): Request {
@@ -111,7 +115,7 @@ describe("feedback worker", () => {
 
     await worker.scheduled(
       {} as ScheduledController,
-      env({ DB: { prepare } as unknown as D1Database }),
+      env({ DB: databaseFixture({ prepare }) }),
       {} as ExecutionContext,
     );
 
@@ -124,7 +128,7 @@ describe("feedback worker", () => {
     const run = vi.fn(async () => ({ meta: { changes: 0 } }));
     const bind = vi.fn(() => ({ run }));
     const prepare = vi.fn((_sql: string) => ({ bind }));
-    const outbox = makeGitHubIssueOutbox({ prepare } as unknown as D1Database);
+    const outbox = makeGitHubIssueOutbox(databaseFixture({ prepare }));
 
     await outbox.claim(
       "fb_example",
@@ -149,7 +153,7 @@ describe("feedback worker", () => {
     const run = vi.fn(async () => ({ meta: { changes: 1 } }));
     const bind = vi.fn(() => ({ run }));
     const prepare = vi.fn((_sql: string) => ({ bind }));
-    const outbox = makeGitHubIssueOutbox({ prepare } as unknown as D1Database);
+    const outbox = makeGitHubIssueOutbox(databaseFixture({ prepare }));
 
     await outbox.markDelivered("fb_example", "claim-example", 42, "https://example.com/42");
 

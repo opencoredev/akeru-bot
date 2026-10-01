@@ -1,3 +1,5 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics cryptoRandomUUID:off globalConsole:off globalDate:off
 import type { StoredProductFeedbackSubmission } from "@akeru/contracts";
 import * as NodeBuffer from "node:buffer";
@@ -75,10 +77,7 @@ function indentedCode(value: string): string {
     .join("\n");
 }
 
-export function formatGitHubIssue(record: FeedbackDeliveryRecord): {
-  readonly title: string;
-  readonly body: string;
-} {
+export function formatGitHubIssue(record: FeedbackDeliveryRecord) {
   const summary = record.submission.feedback.replace(/\s+/g, " ").trim().slice(0, 96);
   const element = record.submission.element;
 
@@ -125,7 +124,7 @@ function githubHeaders(token: string): HeadersInit {
   };
 }
 
-function base64UrlJson(value: unknown): string {
+function base64UrlJson(value: Schema.Json): string {
   return NodeBuffer.Buffer.from(JSON.stringify(value)).toString("base64url");
 }
 
@@ -201,10 +200,9 @@ async function createInstallationToken(
   }
 
   if (
-    typeof body !== "object" ||
-    body === null ||
+    !Predicate.isObjectOrArray(body) ||
     !("token" in body) ||
-    typeof body.token !== "string" ||
+    !Predicate.isString(body.token) ||
     body.token.length === 0
   ) {
     return { kind: "failed", errorCode: "invalid_installation_token_receipt" };
@@ -254,12 +252,11 @@ async function createGitHubIssue(
   }
 
   if (
-    typeof issueBody !== "object" ||
-    issueBody === null ||
+    !Predicate.isObjectOrArray(issueBody) ||
     !("number" in issueBody) ||
-    typeof issueBody.number !== "number" ||
+    !Predicate.isNumber(issueBody.number) ||
     !("html_url" in issueBody) ||
-    typeof issueBody.html_url !== "string"
+    !Predicate.isString(issueBody.html_url)
   ) {
     return { kind: "unknown", errorCode: "invalid_issue_receipt" };
   }

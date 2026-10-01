@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off cryptoRandomUUID:off
 import {
   PRODUCT_FEEDBACK_BODY_MAX_BYTES,
@@ -211,7 +212,7 @@ export function productFeedbackOptionsResponse(): Response {
   });
 }
 
-export function makeProductFeedbackEndpoint(options: ProductFeedbackEndpointOptions) {
+export function productFeedbackEndpoint(options: ProductFeedbackEndpointOptions) {
   const now = options.now ?? (() => new Date());
   const randomId = options.randomId ?? (() => crypto.randomUUID());
 
@@ -266,10 +267,9 @@ export function makeProductFeedbackEndpoint(options: ProductFeedbackEndpointOpti
       }
 
       if (
-        typeof untrusted === "object" &&
-        untrusted !== null &&
+        Predicate.isObjectOrArray(untrusted) &&
         "website" in untrusted &&
-        typeof untrusted.website === "string" &&
+        Predicate.isString(untrusted.website) &&
         untrusted.website.length > 0
       ) {
         return rejection(400, {
