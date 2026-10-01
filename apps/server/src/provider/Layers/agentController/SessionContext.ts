@@ -16,6 +16,9 @@ export function createSessionContext(
   const isChildOf = (delegation: AkeruDelegationRecord, threadId: ThreadId) =>
     delegation.phase._tag !== "Queued" && delegation.phase.childThreadId === threadId;
 
+  // Resolves the thread's bot, group boss, and delegation links with by-id
+  // reads. Falls back to the command read model for query doubles that do
+  // not implement the narrow lookups.
   const readSessionStartContext = Effect.fn("AgentController.readSessionStartContext")(function* (
     threadId: ThreadId,
     fallbackBotId: BotId | null,

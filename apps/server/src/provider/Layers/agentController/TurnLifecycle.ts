@@ -445,6 +445,7 @@ export function createTurnLifecycle(deps: {
       );
   };
 
+  // Ends the current admission generation and cancels turns still preparing in it.
   const endTurnAdmissionGeneration = (active: ActiveSession) => {
     active.turnAdmissionGeneration += 1;
     Deferred.doneUnsafe(active.turnPreparationCancelled, Effect.void);

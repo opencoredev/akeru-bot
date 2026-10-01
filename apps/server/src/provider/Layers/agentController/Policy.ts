@@ -83,6 +83,10 @@ export function sessionFailureDetail(
     : failureDetail(cause);
 }
 
+/**
+ * Deletes an MCP server for the Uninstall and Remove catalog tools. The result names the bots that
+ * lose access, and the id is swept from every bot's disabled list so no dead id is left behind.
+ */
 export async function deleteCatalogMcpServer(
   runtime: Pick<AkeruPluginRuntimeOptions, "readSnapshot" | "dispatch">,
   serverId: string,
@@ -168,6 +172,13 @@ export function approvalDetail(toolName: string, action: string | null, oneUse: 
   return `Approve this ${target}? This approval applies only to the pending action. It cannot undo completed work.`;
 }
 
+/**
+ * Providers whose bots run through Akeru's Mastra controller and receive the
+ * Akeru tool catalog. Standard OpenCode stays on the legacy bridge, which never
+ * registers a tool session, so it gets no catalog tools, workers included.
+ * These are exactly the drivers that can delegate, so the delegation gate and
+ * this routing never disagree.
+ */
 export function usesMastraCode(provider: ProviderDriverKind): boolean {
   return driverSupportsDelegation(provider);
 }

@@ -131,19 +131,6 @@ const DEFAULT_MEMORY_TOOL_SETTINGS = {
 
 const APPROVAL_FREE_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(["ask_user"]);
 
-/**
- * Deletes an MCP server for the Uninstall and Remove catalog tools. The result names the bots that
- * lose access, and the id is swept from every bot's disabled list so no dead id is left behind.
- */
-
-/**
- * Providers whose bots run through Akeru's Mastra controller and receive the
- * Akeru tool catalog. Standard OpenCode stays on the legacy bridge, which never
- * registers a tool session, so it gets no catalog tools, workers included.
- * These are exactly the drivers that can delegate, so the delegation gate and
- * this routing never disagree.
- */
-
 const make = (options?: AgentControllerLiveOptions) =>
   Effect.gen(function* () {
     const config = yield* ServerConfig;
@@ -592,8 +579,6 @@ const make = (options?: AgentControllerLiveOptions) =>
       );
     }
 
-    // Ends the current admission generation and cancels turns still preparing in it.
-
     const { inspectEngine, resolveEngine } = createEngineRouting({
       legacyProviderBridge,
       usesMastraCode,
@@ -651,10 +636,6 @@ const make = (options?: AgentControllerLiveOptions) =>
       baseEvent,
       publishSessionState,
     });
-
-    // Resolves the thread's bot, group boss, and delegation links with by-id
-    // reads. Falls back to the command read model for query doubles that do
-    // not implement the narrow lookups.
 
     const { sendTurn, interruptTurn } = createTurnRequests({
       resolvedByThread,
