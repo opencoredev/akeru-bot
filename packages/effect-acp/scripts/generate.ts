@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import * as Data from "effect/Data";
 import * as Predicate from "effect/Predicate";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
@@ -13,6 +14,8 @@ import * as Schema from "effect/Schema";
 import { Command, Flag } from "effect/unstable/cli";
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+
+const CommandError = Data.taggedEnum<GenerateCommandError>();
 
 const CURRENT_SCHEMA_RELEASE = "v0.11.3";
 
@@ -163,16 +166,21 @@ function normalizeNullableTypes(value: Schema.Json): Schema.Json {
     return value.map(normalizeNullableTypes);
   }
 
-  if (value === null || typeof value !== "object") {
+  if (
+    value === null ||
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
+  ) {
     return value;
   }
 
-  const normalizedEntries = Object.entries(value).map(([key, child]) => [
+  const normalizedEntries = Object.entries(value).map(([key, child]): [string, Schema.Json] => [
     key,
     normalizeNullableTypes(child),
   ]);
 
-  const normalizedObject = Object.fromEntries(normalizedEntries) as Record<string, Schema.Json>;
+  const normalizedObject = Object.fromEntries(normalizedEntries);
   const typeValue = normalizedObject.type;
 
   if (!Array.isArray(typeValue)) {
@@ -243,9 +251,11 @@ const generateSchemas = Effect.fn("generateSchemas")(function* (skipDownload: bo
   const generator = makeJsonSchemaGenerator();
 
   for (const [name, schema] of sortedEntries) {
+    // SAFETY: These are upstream JSON Schema definitions; normalization keeps their schema structure. The generator types only its supported dialect.
     generator.addSchema(name, schema as never);
   }
 
+  // SAFETY: Every entry is an upstream or explicit compatibility JSON Schema definition normalized for OpenAPI 3.1.
   const output = generator.generate("openapi-3.1", normalizedDefinitions as never, false).trim();
 
   if (output.length > 0) {
@@ -292,10 +302,9 @@ const generateSchemas = Effect.fn("generateSchemas")(function* (skipDownload: bo
     Effect.tap((code) =>
       code === 0
         ? Effect.void
-        : Effect.fail<GenerateCommandError>({
-            _tag: "GenerateCommandError",
-            message: `oxfmt failed with exit code ${code}`,
-          }),
+        : Effect.fail<GenerateCommandError>(
+            CommandError.GenerateCommandError({ message: `oxfmt failed with exit code ${code}` }),
+          ),
     ),
   );
 });

@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type * as SchemaIssue from "effect/SchemaIssue";
@@ -43,19 +44,26 @@ const schemaIssueDiagnostics = (root: SchemaIssue.Issue): CodexAppServerSchemaIs
     issueKinds.add(issue._tag);
     maximumPathDepth = Math.max(maximumPathDepth, pathDepth);
 
-    switch (issue._tag) {
-      case "Filter":
-      case "Encoding":
-        visit(issue.issue, pathDepth);
-        break;
-      case "Pointer":
-        visit(issue.issue, pathDepth + issue.path.length);
-        break;
-      case "Composite":
-      case "AnyOf":
-        for (const child of issue.issues) visit(child, pathDepth);
-        break;
-    }
+    Match.value(issue).pipe(
+      Match.tags({
+        Filter: (issue) => {
+          visit(issue.issue, pathDepth);
+        },
+        Encoding: (issue) => {
+          visit(issue.issue, pathDepth);
+        },
+        Pointer: (issue) => {
+          visit(issue.issue, pathDepth + issue.path.length);
+        },
+        Composite: (issue) => {
+          for (const child of issue.issues) visit(child, pathDepth);
+        },
+        AnyOf: (issue) => {
+          for (const child of issue.issues) visit(child, pathDepth);
+        },
+      }),
+      Match.orElse(() => {}),
+    );
   };
 
   visit(root, 0);
@@ -82,12 +90,13 @@ export const CodexAppServerPayloadKind = Schema.Literals([
 
 export type CodexAppServerPayloadKind = typeof CodexAppServerPayloadKind.Type;
 
-const payloadKind = (payload: unknown): CodexAppServerPayloadKind => {
-  if (payload === null) return "null";
+const payloadKind = (cause: unknown): CodexAppServerPayloadKind => {
+  if (cause === null) return "null";
 
-  if (Array.isArray(payload)) return "array";
+  if (Array.isArray(cause)) return "array";
 
-  return typeof payload;
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Protocol diagnostics report all JavaScript categories, including malformed non-JSON payloads.
+  return typeof cause;
 };
 
 const protocolMessageFields = ["id", "method", "params", "result", "error"] as const;
@@ -218,10 +227,14 @@ export class CodexAppServerProtocolParseError extends Schema.TaggedErrorClass<Co
     });
   }
 
-  static fromUnroutableMessage(message: unknown) {
+  static fromUnroutableMessage(message: Schema.Json) {
     const diagnostics = { payloadKind: payloadKind(message) };
 
-    if (typeof message !== "object" || message === null || Array.isArray(message)) {
+    if (
+      !(Predicate.isObjectOrArray(message) || message === null) ||
+      message === null ||
+      Array.isArray(message)
+    ) {
       return new CodexAppServerProtocolParseError({
         operation: "route-wire-message",
         ...diagnostics,
@@ -334,7 +347,7 @@ export class CodexAppServerRequestError extends Schema.TaggedErrorClass<CodexApp
     );
   }
 
-  static parseError(message = "Parse error", data?: unknown) {
+  static parseError(message = "Parse error", data?: CodexAppServerProtocolErrorShape["data"]) {
     return new CodexAppServerRequestError({
       code: -32700,
       errorMessage: message,
@@ -342,7 +355,10 @@ export class CodexAppServerRequestError extends Schema.TaggedErrorClass<CodexApp
     });
   }
 
-  static invalidRequest(message = "Invalid request", data?: unknown) {
+  static invalidRequest(
+    message = "Invalid request",
+    data?: CodexAppServerProtocolErrorShape["data"],
+  ) {
     return new CodexAppServerRequestError({
       code: -32600,
       errorMessage: message,
@@ -359,7 +375,7 @@ export class CodexAppServerRequestError extends Schema.TaggedErrorClass<CodexApp
 
   static invalidParams(
     message = "Invalid params",
-    data?: unknown,
+    data?: CodexAppServerProtocolErrorShape["data"],
     diagnostics: CodexAppServerRequestDiagnostics = {},
   ) {
     return new CodexAppServerRequestError({
@@ -391,9 +407,9 @@ export class CodexAppServerRequestError extends Schema.TaggedErrorClass<CodexApp
   static unexpectedPayload(
     method: string,
     operation: "decode-payload" | "encode-payload",
-    payload: unknown,
+    cause: unknown,
   ) {
-    const diagnostics = { payloadKind: payloadKind(payload) };
+    const diagnostics = { payloadKind: payloadKind(cause) };
 
     return new CodexAppServerRequestError({
       code: -32602,
@@ -407,7 +423,7 @@ export class CodexAppServerRequestError extends Schema.TaggedErrorClass<CodexApp
 
   static internalError(
     message = "Internal error",
-    data?: unknown,
+    data?: CodexAppServerProtocolErrorShape["data"],
     diagnostics: CodexAppServerRequestDiagnostics = {},
   ) {
     return new CodexAppServerRequestError({
@@ -418,7 +434,10 @@ export class CodexAppServerRequestError extends Schema.TaggedErrorClass<CodexApp
     });
   }
 
-  static overloaded(message = "Server overloaded; retry later.", data?: unknown) {
+  static overloaded(
+    message = "Server overloaded; retry later.",
+    data?: CodexAppServerProtocolErrorShape["data"],
+  ) {
     return new CodexAppServerRequestError({
       code: -32001,
       errorMessage: message,

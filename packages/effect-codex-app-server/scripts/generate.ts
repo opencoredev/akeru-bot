@@ -94,7 +94,7 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
 
     for (const [definitionName, definitionSchema] of Object.entries(parsed.definitions ?? {})) {
       const compatibleDefinitionSchema =
-        Codex0150DefinitionSchemas[definitionName] ??
+        Codex0150DefinitionSchemas.get(definitionName) ??
         applyCodex0151DefinitionCompatibility(file.exportName, definitionName, definitionSchema);
 
       aggregateSchemas[localDefinitionNames.get(definitionName)!] = stripNullDefaults(
@@ -129,7 +129,7 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
     );
   }
 
-  for (const [name, schema] of Object.entries(ManualSchemas)) {
+  for (const [name, schema] of ManualSchemas.entries()) {
     if (!(name in aggregateSchemas)) {
       aggregateSchemas[name] = stripNullDefaults(normalizeNullableTypes(schema));
     }
@@ -140,10 +140,12 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
   for (const [name, schema] of Object.entries(aggregateSchemas).toSorted(([left], [right]) =>
     left.localeCompare(right),
   )) {
+    // SAFETY: These are upstream JSON Schema definitions; normalization keeps their schema structure. The generator types only its supported dialect.
     generator.addSchema(name, schema as never);
   }
 
   const generatedEntries = new Map<string, string>();
+  // SAFETY: Every entry is an upstream or explicit compatibility JSON Schema definition normalized for OpenAPI 3.1.
   const output = generator.generate("openapi-3.1", aggregateSchemas as never, false).trim();
 
   if (output.length > 0) {

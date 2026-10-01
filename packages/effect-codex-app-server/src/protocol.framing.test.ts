@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -150,7 +151,8 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
       const event = events.find(({ stage }) => stage === "decode_failed");
       assert.exists(event);
       assert.equal(event.direction, "incoming");
-      const payload = event.payload as Record<string, unknown>;
+      const payload = event.payload;
+      assert(Predicate.isObject(payload));
       assert.equal(payload.operation, "decode-wire-message");
       assert.isNumber(payload.issueCount);
       assert.isArray(payload.issueKinds);

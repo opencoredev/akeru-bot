@@ -1,3 +1,4 @@
+import { flow } from "effect/Function";
 import * as Schema from "effect/Schema";
 import * as CodexRpc from "./rpc.ts";
 
@@ -7,8 +8,9 @@ export const encodeUnknownJsonString = Schema.encodeUnknownSync(
 
 export const encoder = new TextEncoder();
 
-export const encodeJsonl = (value: unknown) =>
-  encoder.encode(`${encodeUnknownJsonString(value)}\n`);
+export const encodeJsonl = flow(encodeUnknownJsonString, (encoded) =>
+  encoder.encode(`${encoded}\n`),
+);
 
 export const decodeJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
 

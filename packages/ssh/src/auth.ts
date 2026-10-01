@@ -212,8 +212,8 @@ export const buildSshChildEnvironment = Effect.fn("ssh/auth.buildSshChildEnviron
   };
 });
 
-export function isSshAuthFailure(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
+export function isSshAuthFailure(cause: unknown): boolean {
+  const message = cause instanceof Error ? cause.message : String(cause);
   const normalized = message.toLowerCase();
 
   return (

@@ -8,7 +8,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import {
   buildTailscaleHttpsBaseUrl,
@@ -36,9 +36,10 @@ const encoder = new TextEncoder();
  * Walks values instead of serializing so it holds for fields added later, and
  * tracks visited objects so a cyclic cause chain terminates.
  */
-function assertCarriesNoSecret(error: object, secret: string): void {
+function assertCarriesNoSecret<T extends object>(error: T, secret: string): void {
   const seen = new WeakSet<object>();
 
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Secret-leak assertions inspect arbitrary nested error fields, including cycles and getters.
   const walk = (value: unknown, path: string): void => {
     if (Predicate.isString(value)) {
       assert.notInclude(value, secret, `${path} leaked stderr`);
@@ -46,7 +47,11 @@ function assertCarriesNoSecret(error: object, secret: string): void {
       return;
     }
 
-    if (typeof value !== "object" || value === null || seen.has(value)) {
+    if (
+      !(Predicate.isObjectOrArray(value) || value === null) ||
+      value === null ||
+      seen.has(value)
+    ) {
       return;
     }
 
@@ -116,10 +121,9 @@ function mockSpawnerLayer(
   return Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) => {
-      const childProcess = command as unknown as {
-        readonly command: string;
-        readonly args: ReadonlyArray<string>;
-      };
+      if (!ChildProcess.isStandardCommand(command))
+        return Effect.die("The fixture expects a single command.");
+      const childProcess = command;
 
       return Effect.succeed(mockHandle(handler(childProcess.command, childProcess.args)));
     }),

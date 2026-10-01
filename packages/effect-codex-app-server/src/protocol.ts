@@ -10,9 +10,7 @@ import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
 
 import * as CodexError from "./errors.ts";
-import { JsonRpcId, JsonRpcResponseEnvelope } from "./_internal/shared.ts";
-
-const isJsonRpcId = Schema.is(JsonRpcId);
+import { JsonRpcResponseEnvelope, JsonRpcRequestEnvelope } from "./_internal/shared.ts";
 
 const isJsonRpcResponseEnvelope = Schema.is(JsonRpcResponseEnvelope);
 
@@ -58,7 +56,7 @@ export interface CodexAppServerPatchedProtocolOptions {
   ) => Effect.Effect<void, never>;
   readonly onRequest?: (
     request: CodexAppServerIncomingRequest,
-  ) => Effect.Effect<unknown, CodexError.CodexAppServerError>;
+  ) => Effect.Effect<JsonRpcResponseEnvelope["result"], CodexError.CodexAppServerError>;
   readonly onTermination?: (error: CodexError.CodexAppServerError) => Effect.Effect<void, never>;
 }
 
@@ -75,15 +73,15 @@ export interface CodexAppServerPatchedProtocol {
   readonly incomingRequests: Stream.Stream<CodexAppServerIncomingRequest>;
   readonly request: (
     method: string,
-    payload?: unknown,
-  ) => Effect.Effect<unknown, CodexError.CodexAppServerError>;
+    payload?: JsonRpcRequestEnvelope["params"],
+  ) => Effect.Effect<JsonRpcResponseEnvelope["result"], CodexError.CodexAppServerError>;
   readonly notify: (
     method: string,
-    payload?: unknown,
+    payload?: JsonRpcRequestEnvelope["params"],
   ) => Effect.Effect<void, CodexError.CodexAppServerError>;
   readonly respond: (
     requestId: string | number,
-    result: unknown,
+    result: JsonRpcResponseEnvelope["result"],
   ) => Effect.Effect<void, CodexError.CodexAppServerError>;
   readonly respondError: (
     requestId: string | number,
@@ -91,37 +89,42 @@ export interface CodexAppServerPatchedProtocol {
   ) => Effect.Effect<void, CodexError.CodexAppServerError>;
 }
 
+interface OutgoingMessage {
+  readonly id?: string | number;
+  readonly method?: string;
+  readonly params?: JsonRpcRequestEnvelope["params"];
+  readonly result?: JsonRpcResponseEnvelope["result"];
+  readonly error?: CodexError.CodexAppServerProtocolErrorShape;
+}
+
 interface CodexAppServerPendingRequest {
-  readonly deferred: Deferred.Deferred<unknown, CodexError.CodexAppServerError>;
+  readonly deferred: Deferred.Deferred<
+    JsonRpcResponseEnvelope["result"],
+    CodexError.CodexAppServerError
+  >;
   readonly method: string;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+const isIncomingRequest = Schema.is(JsonRpcRequestEnvelope);
+
+const isNotificationShape = Schema.is(
+  Schema.Struct({ method: Schema.String, params: Schema.optional(Schema.Unknown) }),
+);
+
+function isIncomingNotification(
+  value: Schema.Json,
+): value is CodexAppServerIncomingNotification & Schema.Json {
+  return isNotificationShape(value) && !("id" in value);
 }
 
-function isIncomingRequest(value: unknown): value is CodexAppServerIncomingRequest {
-  if (!isObject(value) || !Predicate.isString(value.method)) {
-    return false;
-  }
-
-  return isJsonRpcId(value.id);
-}
-
-function isIncomingNotification(value: unknown): value is CodexAppServerIncomingNotification {
-  return isObject(value) && Predicate.isString(value.method) && !("id" in value);
-}
-
-function isIncomingResponse(value: unknown): value is typeof JsonRpcResponseEnvelope.Type {
-  return isJsonRpcResponseEnvelope(value);
-}
+const isIncomingResponse = isJsonRpcResponseEnvelope;
 
 const encodeJsonString = Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 
-const decodeJsonString = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+const decodeJsonString = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Json));
 
 const encodeWireMessage = (
-  message: Record<string, unknown>,
+  message: OutgoingMessage,
 ): Effect.Effect<string, CodexError.CodexAppServerProtocolParseError> =>
   encodeJsonString(message).pipe(
     Effect.map((encoded) => `${encoded}\n`),
@@ -146,7 +149,7 @@ const encodeWireMessage = (
 
 const decodeWireMessage = (
   line: string,
-): Effect.Effect<unknown, CodexError.CodexAppServerProtocolParseError> =>
+): Effect.Effect<Schema.Json, CodexError.CodexAppServerProtocolParseError> =>
   decodeJsonString(line).pipe(
     Effect.mapError((cause) =>
       CodexError.CodexAppServerProtocolParseError.fromSchemaError("decode-wire-message", cause),
@@ -154,14 +157,14 @@ const decodeWireMessage = (
   );
 
 const normalizeIncomingError = (
-  error: unknown,
+  cause: unknown,
   operation: CodexError.CodexAppServerTransportOperation,
 ): CodexError.CodexAppServerError =>
-  isCodexAppServerError(error)
-    ? error
+  isCodexAppServerError(cause)
+    ? cause
     : new CodexError.CodexAppServerTransportError({
         operation,
-        cause: error,
+        cause: cause,
       });
 
 const toProtocolMessage = (
@@ -170,7 +173,7 @@ const toProtocolMessage = (
     readonly result?: unknown;
     readonly error?: CodexError.CodexAppServerProtocolErrorShape;
   },
-): { readonly [key: string]: unknown } => ({
+) => ({
   id: requestId,
   ...(fields.result !== undefined ? { result: fields.result } : {}),
   ...(fields.error !== undefined ? { error: fields.error } : {}),
@@ -267,7 +270,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         ] as const;
       }).pipe(Effect.flatten);
 
-    const offerOutgoing = (message: Record<string, unknown>) =>
+    const offerOutgoing = (message: OutgoingMessage) =>
       Effect.gen(function* () {
         yield* logProtocol({
           direction: "outgoing",
@@ -312,7 +315,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         return [handler(pendingRequest), next] as const;
       }).pipe(Effect.flatten);
 
-    const respond = (requestId: string | number, result: unknown) =>
+    const respond = (requestId: string | number, result: JsonRpcResponseEnvelope["result"]) =>
       offerOutgoing(toProtocolMessage(requestId, { result }));
 
     const respondError = (
@@ -320,7 +323,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
       error: CodexError.CodexAppServerRequestError,
     ) => offerOutgoing(toProtocolMessage(requestId, { error: error.toProtocolError() }));
 
-    const handleResponse = (response: typeof JsonRpcResponseEnvelope.Type) => {
+    const handleResponse = (response: JsonRpcResponseEnvelope) => {
       const requestId = String(response.id);
       const protocolError = response.error;
 
@@ -370,9 +373,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         Effect.asVoid,
       );
 
-    const routeMessage = (
-      message: unknown,
-    ): Effect.Effect<void, CodexError.CodexAppServerError> => {
+    const routeMessage = (message: Schema.Json) => {
       if (isIncomingRequest(message)) {
         return handleRequest(message);
       }
@@ -483,7 +484,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
 
     yield* Stream.fromQueue(outgoing).pipe(Stream.run(options.stdio.stdout()), Effect.forkScoped);
 
-    const request = (method: string, payload?: unknown) =>
+    const request = (method: string, payload?: JsonRpcRequestEnvelope["params"]) =>
       Effect.gen(function* () {
         const requestId = yield* Ref.modify(
           nextRequestId,
@@ -505,7 +506,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         );
       });
 
-    const notify = (method: string, payload?: unknown) =>
+    const notify = (method: string, payload?: JsonRpcRequestEnvelope["params"]) =>
       offerOutgoing({
         method,
         ...(payload !== undefined ? { params: payload } : {}),

@@ -9,16 +9,21 @@ export function normalizeNullableTypes(value: Schema.Json): Schema.Json {
     return value.map(normalizeNullableTypes);
   }
 
-  if (value === null || typeof value !== "object") {
+  if (
+    value === null ||
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
+  ) {
     return value;
   }
 
-  const normalizedEntries = Object.entries(value).map(([key, child]) => [
+  const normalizedEntries = Object.entries(value).map(([key, child]): [string, Schema.Json] => [
     key,
     normalizeNullableTypes(child),
   ]);
 
-  const normalizedObject = Object.fromEntries(normalizedEntries) as Record<string, Schema.Json>;
+  const normalizedObject = Object.fromEntries(normalizedEntries);
   const typeValue = normalizedObject.type;
 
   if (!Array.isArray(typeValue)) {
@@ -63,7 +68,12 @@ export function stripNullDefaults(value: Schema.Json): Schema.Json {
     return value.map(stripNullDefaults);
   }
 
-  if (value === null || typeof value !== "object") {
+  if (
+    value === null ||
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
+  ) {
     return value;
   }
 
@@ -71,7 +81,7 @@ export function stripNullDefaults(value: Schema.Json): Schema.Json {
     Object.entries(value)
       .filter(([key, child]) => !(key === "default" && child === null))
       .map(([key, child]) => [key, stripNullDefaults(child)]),
-  ) as Schema.Json;
+  );
 }
 
 export function buildJsonSchemaFiles(
@@ -123,7 +133,12 @@ export function rewriteExternalRefs(
     );
   }
 
-  if (value === null || typeof value !== "object") {
+  if (
+    value === null ||
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
+  ) {
     return value;
   }
 
@@ -168,5 +183,5 @@ export function rewriteExternalRefs(
         ),
       ];
     }),
-  ) as Schema.Json;
+  );
 }
