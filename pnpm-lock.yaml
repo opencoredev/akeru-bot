@@ -101,8 +101,8 @@ importers:
         specifier: 'catalog:'
         version: 0.13.2
       '@oxlint/plugins':
-        specifier: ^1.63.0
-        version: 1.68.0
+        specifier: 1.72.0
+        version: 1.72.0
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -860,6 +860,16 @@ importers:
       vite-plus:
         specifier: 'catalog:'
         version: 0.2.2(@opentelemetry/api@1.9.1)(@types/node@24.12.4)(bufferutil@4.1.0)(esbuild@0.28.1)(jiti@2.7.0)(msw@2.12.11(@types/node@24.12.4)(typescript@6.0.3))(terser@5.48.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
+
+  oxlint-plugin-anti-slop:
+    dependencies:
+      '@oxlint/plugins':
+        specifier: 1.72.0
+        version: 1.72.0
+    devDependencies:
+      oxlint:
+        specifier: 1.72.0
+        version: 1.72.0(oxlint-tsgolint@0.24.0)(vite-plus@0.2.2(@opentelemetry/api@1.9.1)(@types/node@24.12.4)(bufferutil@4.1.0)(esbuild@0.28.1)(jiti@2.7.0)(msw@2.12.11(@types/node@24.12.4)(typescript@6.0.3))(terser@5.48.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0))
 
   packages/client-runtime:
     dependencies:
@@ -4714,6 +4724,10 @@ packages:
 
   '@oxlint/plugins@1.68.0':
     resolution: {integrity: sha512-titLmukUt/h8ho7Svlf0xSBjoy2ccZKrXjpXpZCj+v6V4CJccC2KyP45BLSCMx8YIpifMyiDyUptM4+5sruKbQ==}
+    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
+
+  '@oxlint/plugins@1.72.0':
+    resolution: {integrity: sha512-TF6+ruuIwUpT64deU2JvoDs78m1QjYuMB7IP9AZ2p05fkUesumy+3aqKERE5sYd1C8CmL+yt0swwfXlR3/YluQ==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
   '@peculiar/asn1-schema@2.8.0':
@@ -18524,6 +18538,8 @@ snapshots:
     optional: true
 
   '@oxlint/plugins@1.68.0': {}
+
+  '@oxlint/plugins@1.72.0': {}
 
   '@peculiar/asn1-schema@2.8.0':
     dependencies:

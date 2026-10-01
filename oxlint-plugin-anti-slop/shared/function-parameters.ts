@@ -42,7 +42,9 @@ export function functionParameterBindingName(
 	if (parameter.type === "Identifier") return parameter.name;
 
 	const sourceText = sourceCode.getText(parameter);
-	const annotationStart = parameter.typeAnnotation?.start;
+	// AKERU: @oxlint/plugins 1.72 types an identifier's typeAnnotation as null; upstream targets 1.78.
+	const annotated: { readonly typeAnnotation?: ESTree.TSTypeAnnotation | null } = parameter;
+	const annotationStart = annotated.typeAnnotation?.start;
 	return annotationStart === undefined
 		? sourceText
 		: sourceText.slice(0, annotationStart - parameter.start).trimEnd();

@@ -1,0 +1,16 @@
+{
+  "name": "@akeru/oxlint-plugin-anti-slop",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"rules/*.test.ts\" \"effect/rules/*.test.ts\"",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@oxlint/plugins": "1.72.0"
+  },
+  "devDependencies": {
+    "oxlint": "1.72.0"
+  }
+}

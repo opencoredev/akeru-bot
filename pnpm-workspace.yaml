@@ -2,6 +2,7 @@ packages:
   - apps/*
   - infra/*
   - oxlint-plugin-akeru
+  - oxlint-plugin-anti-slop
   - packages/*
   - scripts
 
