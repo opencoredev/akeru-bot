@@ -3,16 +3,12 @@ import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
 import {
   BotId,
-  type BotEngine,
-  type ApprovalRequestId,
   EnvironmentId,
   GroupId,
-  ProviderInstanceId,
   ThreadId,
-  type ModelSelection,
   type ScopedThreadRef,
 } from "@akeru/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { newMessageId, newThreadId } from "../../lib/utils";
@@ -36,12 +32,6 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import {
-  applyPendingUserInputSingleSelect,
-  buildPendingUserInputAnswers,
-  type PendingUserInputDraftAnswer,
-  togglePendingUserInputOptionSelection,
-} from "../../pendingUserInput";
 import { derivePendingUserInputs } from "../../session-logic";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
@@ -56,6 +46,8 @@ import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { resolveBotFileAttachment } from "./botFileAttachment";
 import { readThreadTurnAttachments, threadTitle } from "./threadRuntimeAttachments";
+import { useThreadPendingUserInput } from "./useThreadPendingUserInput";
+import { groupModelSelection } from "./groupThreadModel.logic";
 import {
   type BotThreadFailure,
   commandFailure,
@@ -64,20 +56,6 @@ import {
 } from "./threadRuntimeWarning.logic";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
-
-function groupModelSelection(
-  engine: BotEngine | null | undefined,
-  projectDefault: ModelSelection | null | undefined,
-  appDefault: ModelSelection | null,
-): ModelSelection | null {
-  return engine
-    ? {
-        instanceId: ProviderInstanceId.make(engine.provider),
-        model: engine.model,
-        ...(engine.options ? { options: engine.options } : {}),
-      }
-    : (projectDefault ?? appDefault);
-}
 
 export function useGroupThreadRuntime(groupId: string) {
   const projects = useProjects();
@@ -162,21 +140,19 @@ export function useGroupThreadRuntime(groupId: string) {
   });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const resumeTurnCommand = useAtomCommand(threadEnvironment.resumeTurn, { reportFailure: false });
-  const respondToUserInputCommand = useAtomCommand(threadEnvironment.respondToUserInput, {
-    reportFailure: false,
-  });
   const groupReady = serverGroups.some((candidate) => candidate.id === groupId);
   const sendQueueRef = useRef(createBotTurnSubmissionQueue());
   const queuedSendCountRef = useRef(0);
   const [sending, setSending] = useState(false);
-  const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
-  const respondingRequestIdsRef = useRef(new Set<ApprovalRequestId>());
-  const singleSelectInFlightRef = useRef<string | null>(null);
-  const [pendingUserInputAnswers, setPendingUserInputAnswers] = useState<
-    Record<string, PendingUserInputDraftAnswer>
-  >({});
-  const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
   const [error, setError] = useState<BotThreadFailure | null>(null);
+  const {
+    pendingUserInputAnswers,
+    pendingUserInputQuestionIndex,
+    respondingRequestIds,
+    answerPendingUserInputWithPrompt,
+    selectPendingUserInputOption,
+    advancePendingUserInput,
+  } = useThreadPendingUserInput({ linkedThreadRef, pendingUserInputs, onFailure: setError });
   const [resuming, setResuming] = useState(false);
   const canResume =
     linkedThreadRef !== null &&
@@ -202,50 +178,11 @@ export function useGroupThreadRuntime(groupId: string) {
     return true;
   }, [canResume, linkedThreadRef, resumeTurnCommand, resuming]);
 
-  const submitPendingUserInput = useCallback(
-    async (
-      requestId: ApprovalRequestId,
-      answers: Record<string, string | string[]>,
-    ): Promise<boolean> => {
-      if (!linkedThreadRef || respondingRequestIdsRef.current.has(requestId)) return false;
-      respondingRequestIdsRef.current.add(requestId);
-      setRespondingRequestIds((current) =>
-        current.includes(requestId) ? current : [...current, requestId],
-      );
-      const result = await respondToUserInputCommand({
-        environmentId: linkedThreadRef.environmentId,
-        input: { threadId: linkedThreadRef.threadId, requestId, answers },
-      });
-      if (result._tag === "Failure") {
-        respondingRequestIdsRef.current.delete(requestId);
-        setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
-        setError(commandFailure(result));
-        return false;
-      }
-      return true;
-    },
-    [linkedThreadRef, respondToUserInputCommand],
-  );
-
   const send = useCallback(
     async (prompt: string, files: readonly File[], requestedBotId?: string): Promise<boolean> => {
       const pendingUserInput = pendingUserInputs[0];
       if (pendingUserInput && linkedThreadRef && files.length === 0) {
-        if (respondingRequestIds.includes(pendingUserInput.requestId)) return false;
-        const question = pendingUserInput.questions[pendingUserInputQuestionIndex];
-        if (!question || !prompt.trim()) return false;
-        const nextAnswers = {
-          ...pendingUserInputAnswers,
-          [question.id]: { customAnswer: prompt.trim() },
-        };
-        setPendingUserInputAnswers(nextAnswers);
-        if (pendingUserInputQuestionIndex < pendingUserInput.questions.length - 1) {
-          setPendingUserInputQuestionIndex((index) => index + 1);
-          return true;
-        }
-        const answers = buildPendingUserInputAnswers(pendingUserInput.questions, nextAnswers);
-        if (!answers) return false;
-        return submitPendingUserInput(pendingUserInput.requestId, answers);
+        return answerPendingUserInputWithPrompt(pendingUserInput, prompt);
       }
       if (!groupReady || !group) {
         setError(localFailure("The group is still connecting."));
@@ -390,92 +327,15 @@ export function useGroupThreadRuntime(groupId: string) {
       groupId,
       groupReady,
       linkedThreadRef,
-      pendingUserInputAnswers,
-      pendingUserInputQuestionIndex,
+      answerPendingUserInputWithPrompt,
       pendingUserInputs,
       providerEntries,
       rememberedThread?.runtimeMode,
-      respondingRequestIds,
       settings.localExecutionMode,
       setRuntimeMode,
       startTurn,
-      submitPendingUserInput,
     ],
   );
-
-  useEffect(() => {
-    setPendingUserInputAnswers({});
-    setPendingUserInputQuestionIndex(0);
-    singleSelectInFlightRef.current = null;
-    const pendingIds = new Set(pendingUserInputs.map((pending) => pending.requestId));
-    for (const requestId of respondingRequestIdsRef.current) {
-      if (!pendingIds.has(requestId)) respondingRequestIdsRef.current.delete(requestId);
-    }
-    setRespondingRequestIds((current) => current.filter((requestId) => pendingIds.has(requestId)));
-  }, [pendingUserInputs[0]?.requestId]);
-
-  const selectPendingUserInputOption = useCallback(
-    (questionId: string, optionLabel: string) => {
-      const pending = pendingUserInputs[0];
-      const question = pending?.questions.find((entry) => entry.id === questionId);
-      if (!pending || !question) return;
-      if (!question.multiSelect) {
-        const selectionKey = `${pending.requestId}:${questionId}`;
-        if (singleSelectInFlightRef.current === selectionKey) return;
-        const selection = applyPendingUserInputSingleSelect(
-          pending.questions,
-          pendingUserInputAnswers,
-          pendingUserInputQuestionIndex,
-          questionId,
-          optionLabel,
-        );
-        if (!selection) return;
-        singleSelectInFlightRef.current = selectionKey;
-        setPendingUserInputAnswers(selection.draftAnswers);
-        if (!selection.answers) {
-          setPendingUserInputQuestionIndex(selection.questionIndex);
-          return;
-        }
-        void submitPendingUserInput(pending.requestId, selection.answers).then((submitted) => {
-          if (!submitted) singleSelectInFlightRef.current = null;
-        });
-        return;
-      }
-      setPendingUserInputAnswers((current) => ({
-        ...current,
-        [questionId]: togglePendingUserInputOptionSelection(
-          question,
-          current[questionId],
-          optionLabel,
-        ),
-      }));
-    },
-    [
-      pendingUserInputAnswers,
-      pendingUserInputQuestionIndex,
-      pendingUserInputs,
-      submitPendingUserInput,
-    ],
-  );
-
-  const advancePendingUserInput = useCallback(async () => {
-    const pending = pendingUserInputs[0];
-    if (!pending || !linkedThreadRef || respondingRequestIds.includes(pending.requestId)) return;
-    if (pendingUserInputQuestionIndex < pending.questions.length - 1) {
-      setPendingUserInputQuestionIndex((index) => index + 1);
-      return;
-    }
-    const answers = buildPendingUserInputAnswers(pending.questions, pendingUserInputAnswers);
-    if (!answers) return;
-    await submitPendingUserInput(pending.requestId, answers);
-  }, [
-    linkedThreadRef,
-    pendingUserInputAnswers,
-    pendingUserInputQuestionIndex,
-    pendingUserInputs,
-    respondingRequestIds,
-    submitPendingUserInput,
-  ]);
 
   const providerAvailable =
     group !== undefined &&
