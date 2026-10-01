@@ -28,7 +28,7 @@ import type { GitExecutionServices } from "./GitExecution.ts";
 import type { GitBranchesServices } from "./GitBranches.ts";
 import type { GitRepositoryPathsServices } from "./GitRepositoryPaths.ts";
 
-export const makeGitRemoteStatus = (dependencies: {
+export const gitRemoteStatus = (dependencies: {
   path: GitExecutionServices["path"];
   executeGit: GitExecutionServices["executeGit"];
   executeGitWithStableDiagnostics: GitExecutionServices["executeGitWithStableDiagnostics"];
@@ -514,4 +514,4 @@ export const makeGitRemoteStatus = (dependencies: {
     };
   });
 
-export type GitRemoteStatusServices = Effect.Success<ReturnType<typeof makeGitRemoteStatus>>;
+export type GitRemoteStatusServices = Effect.Success<ReturnType<typeof gitRemoteStatus>>;

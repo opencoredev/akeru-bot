@@ -83,10 +83,9 @@ export function updateThread(
   return next;
 }
 
-export function decodeForEvent<A>(
+export function decodeForEvent<A, Input>(
   schema: Schema.Decoder<A, never>,
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Event fields enter through the supplied schema decoder here.
-  value: unknown,
+  value: Input,
   eventType: OrchestrationEvent["type"],
   field: string,
 ): Effect.Effect<A, OrchestrationProjectorDecodeError> {

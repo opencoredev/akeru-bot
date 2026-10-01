@@ -18,7 +18,7 @@ import { MemoryRevisionWriteLock } from "../Services/MemoryRevisionWriteLock.ts"
 import { invalidateEntityMemoryObservations } from "../EntityMemoryInvalidation.ts";
 import { EntityMemoryDbRow, selectColumns, decodeRow } from "./EntityMemoryRows.ts";
 
-export const makeEntityMemoryStorage = () =>
+export const entityMemoryStorage = () =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
 
@@ -248,6 +248,4 @@ export const makeEntityMemoryStorage = () =>
     };
   });
 
-export type EntityMemoryStorageServices = Effect.Success<
-  ReturnType<typeof makeEntityMemoryStorage>
->;
+export type EntityMemoryStorageServices = Effect.Success<ReturnType<typeof entityMemoryStorage>>;

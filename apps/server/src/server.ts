@@ -30,8 +30,7 @@ import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
 import {
   clearPersistedServerRuntimeState,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The server entry point owns the persisted runtime-state layer.
-  makePersistedServerRuntimeState,
+  persistedServerRuntimeState,
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
@@ -146,7 +145,7 @@ const makeRoutesLayerWithSharedMcpRegistry = Layer.mergeAll(
 
 // Route-only tests do not build the provider runtime, so give those callers a
 // private registry. The real server uses the runtime-owned registry below.
-export const makeRoutesLayer = makeRoutesLayerWithSharedMcpRegistry.pipe(
+export const routesLayer = makeRoutesLayerWithSharedMcpRegistry.pipe(
   Layer.provide(McpSessionRegistryLayerLive),
   Layer.provide(PreviewAutomationBroker.layer),
 );
@@ -184,7 +183,7 @@ export const makeServerLayer = Layer.unwrap(
             return;
           }
 
-          const state = yield* makePersistedServerRuntimeState({
+          const state = yield* persistedServerRuntimeState({
             config,
             port: address.port,
           });

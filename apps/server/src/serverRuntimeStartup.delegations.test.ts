@@ -26,7 +26,7 @@ import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiven
 import * as ThreadPlanProgress from "./orchestration/ThreadPlanProgress.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "./persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
-import { makeSqlitePersistenceLive } from "./persistence/Layers/Sqlite.ts";
+import { sqlitePersistenceLayer } from "./persistence/Layers/Sqlite.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 
@@ -59,7 +59,7 @@ const makeLayer = (dbPath: string) =>
     Layer.provide(OrchestrationEventStoreLive),
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
-    Layer.provideMerge(makeSqlitePersistenceLive(dbPath)),
+    Layer.provideMerge(sqlitePersistenceLayer(dbPath)),
   );
 
 const baseDelegation = (id: string, parentBotId: BotId = PARENT_BOT_ID): AkeruDelegationRecord => ({

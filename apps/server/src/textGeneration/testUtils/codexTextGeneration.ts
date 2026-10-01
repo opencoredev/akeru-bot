@@ -8,8 +8,7 @@ import { createModelSelection } from "@akeru/shared/model";
 import { CodexSettings, ProviderInstanceId } from "@akeru/contracts";
 import * as ServerConfig from "../../config.ts";
 import * as TextGeneration from "../TextGeneration.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test helper builds an isolated text-generation service with fake processes.
-import { makeCodexTextGeneration } from "../CodexTextGeneration.ts";
+import { layerWithSettings } from "../CodexTextGeneration.ts";
 
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
@@ -197,9 +196,10 @@ function withFakeCodexEnv<A, E, R>(
     const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3code-codex-text-" });
     const codexPath = yield* makeFakeCodexBinary(tempDir, input);
     const config = decodeCodexSettings({ binaryPath: codexPath, launchArgs: input.launchArgs });
-    const textGeneration = yield* makeCodexTextGeneration(config, input.environment);
 
-    return yield* effectFn(textGeneration);
+    return yield* Effect.flatMap(TextGeneration.TextGeneration, effectFn).pipe(
+      Effect.provide(layerWithSettings(config, input.environment)),
+    );
   }).pipe(Effect.scoped);
 }
 

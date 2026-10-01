@@ -27,7 +27,7 @@ import * as ThreadPlanProgress from "../orchestration/ThreadPlanProgress.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../persistence/Layers/OrchestrationEventStore.ts";
 import { ProjectionBotRepositoryLive } from "../persistence/Layers/ProjectionBots.ts";
-import { makeSqlitePersistenceLive } from "../persistence/Layers/Sqlite.ts";
+import { sqlitePersistenceLayer } from "../persistence/Layers/Sqlite.ts";
 import { ProjectionMcpServerRepository } from "../persistence/Services/ProjectionMcpServers.ts";
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
 import { AgentController } from "../provider/Services/AgentController.ts";
@@ -67,7 +67,7 @@ const engineLayer = (dbPath: string) =>
     Layer.provide(OrchestrationEventStoreLive),
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
-    Layer.provideMerge(makeSqlitePersistenceLive(dbPath)),
+    Layer.provideMerge(sqlitePersistenceLayer(dbPath)),
   );
 
 /** One server process: the real engine, routine repository, and routine adapter. */

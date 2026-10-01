@@ -16,7 +16,7 @@ import { describe, expect } from "vite-plus/test";
 
 import {
   coalesceLiveToolUpdatedEvents,
-  makeThreadLiveEventCoalescer,
+  threadLiveEventCoalescer,
 } from "./ThreadLiveEventCoalescer.ts";
 
 const threadId = ThreadId.make("thread-coalescer-test");
@@ -137,7 +137,7 @@ describe("ThreadLiveEventCoalescer", () => {
   it.effect("flushes pending tool updates as soon as an unrelated event arrives", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const coalescer = yield* makeThreadLiveEventCoalescer({ coalesceWindow: "500 millis" });
+        const coalescer = yield* threadLiveEventCoalescer({ coalesceWindow: "500 millis" });
         const startedAt = yield* Clock.currentTimeMillis;
         yield* Effect.forEach(
           Array.from({ length: 10 }, (_, index) => index + 2),
@@ -159,7 +159,7 @@ describe("ThreadLiveEventCoalescer", () => {
   it.effect("flushes pending tool updates as soon as a synchronization marker arrives", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const coalescer = yield* makeThreadLiveEventCoalescer({ coalesceWindow: "500 millis" });
+        const coalescer = yield* threadLiveEventCoalescer({ coalesceWindow: "500 millis" });
         const startedAt = yield* Clock.currentTimeMillis;
         yield* coalescer.offer({ kind: "event", event: makeToolActivity(2) });
         yield* coalescer.offer({ kind: "event", event: makeToolActivity(3) });
@@ -180,7 +180,7 @@ describe("ThreadLiveEventCoalescer", () => {
       Effect.gen(function* () {
         const first = makeToolActivity(1);
 
-        const coalescer = yield* makeThreadLiveEventCoalescer({
+        const coalescer = yield* threadLiveEventCoalescer({
           coalesceWindow: "500 millis",
           maxSerializedBytes: Buffer.byteLength(encodeEvent(first)),
         });
@@ -209,7 +209,7 @@ describe("ThreadLiveEventCoalescer", () => {
   it.effect("keeps the flush timer alive when an offer's shorter scope closes", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const coalescer = yield* makeThreadLiveEventCoalescer({ coalesceWindow: "50 millis" });
+        const coalescer = yield* threadLiveEventCoalescer({ coalesceWindow: "50 millis" });
         yield* Effect.scoped(coalescer.offer({ kind: "event", event: makeToolActivity(1) }));
         yield* TestClock.adjust("50 millis");
         const items = yield* coalescer.stream.pipe(Stream.take(1), Stream.runCollect);
@@ -223,7 +223,7 @@ describe("ThreadLiveEventCoalescer", () => {
   it.effect("keeps an unacknowledged batch charged and clears later events on overflow", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const coalescer = yield* makeThreadLiveEventCoalescer({ maxItems: 3 });
+        const coalescer = yield* threadLiveEventCoalescer({ maxItems: 3 });
         const first = makeMessage(1, "é".repeat(1_024));
         yield* coalescer.offer({ kind: "event", event: first });
 

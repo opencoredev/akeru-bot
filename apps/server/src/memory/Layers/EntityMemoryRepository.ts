@@ -4,14 +4,10 @@ import {
   EntityMemoryRepository,
   type EntityMemoryRepositoryShape,
 } from "../Services/EntityMemoryRepository.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This repository composition root assembles its private storage capability.
-import { makeEntityMemoryStorage } from "./EntityMemoryStorage.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This repository composition root assembles queries over its private storage capability.
-import { makeEntityMemoryQueries } from "./EntityMemoryQueries.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This repository composition root assembles imports over its private storage and queries.
-import { makeEntityMemoryImport } from "./EntityMemoryImport.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This repository composition root assembles writes over its private storage and lock.
-import { makeEntityMemoryWrites } from "./EntityMemoryWrites.ts";
+import { entityMemoryStorage } from "./EntityMemoryStorage.ts";
+import { entityMemoryQueries } from "./EntityMemoryQueries.ts";
+import { entityMemoryImport } from "./EntityMemoryImport.ts";
+import { entityMemoryWrites } from "./EntityMemoryWrites.ts";
 
 const makeEntityMemoryRepository = Effect.gen(function* () {
   const {
@@ -25,12 +21,12 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
     invalidateDerivedCopies,
     invalidateObservations,
     recordDerivedCopies,
-  } = yield* makeEntityMemoryStorage();
+  } = yield* entityMemoryStorage();
 
   const { search, listCurrent, isRevisionAuthorized, listHistory, listByPartitions } =
-    yield* makeEntityMemoryQueries({ sql, getCurrent });
+    yield* entityMemoryQueries({ sql, getCurrent });
 
-  const { previewImport, applyImport } = yield* makeEntityMemoryImport({
+  const { previewImport, applyImport } = yield* entityMemoryImport({
     sql,
     writeLock,
     insertRow,
@@ -40,7 +36,7 @@ const makeEntityMemoryRepository = Effect.gen(function* () {
   });
 
   const { insert, revise, tombstone, deleteRoot, insertScopedFact, applyMutation } =
-    yield* makeEntityMemoryWrites({
+    yield* entityMemoryWrites({
       sql,
       writeLock,
       insertRow,

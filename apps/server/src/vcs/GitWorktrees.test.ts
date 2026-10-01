@@ -18,7 +18,7 @@ import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as TestClock from "effect/testing/TestClock";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { makeGitVcsDriverCore } from "./GitVcsDriverCore.ts";
+import { gitVcsDriverCore } from "./GitVcsDriverCore.ts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
 
 it.effect("marks the current branch when worktree metadata is unavailable", () =>
@@ -46,7 +46,7 @@ it.effect("marks the current branch when worktree metadata is unavailable", () =
         }),
       );
 
-      const driver = yield* makeGitVcsDriverCore().pipe(
+      const driver = yield* gitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, incompleteMetadataSpawner),
       );
 
@@ -89,7 +89,7 @@ it.effect("ignores worktree metadata for directories that no longer exist", () =
         }),
       );
 
-      const driver = yield* makeGitVcsDriverCore().pipe(
+      const driver = yield* gitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, staleWorktreeSpawner),
       );
 
@@ -128,7 +128,7 @@ it.effect("backs off failed upstream refreshes across linked worktrees", () =>
         }),
       );
 
-      const driver = yield* makeGitVcsDriverCore().pipe(
+      const driver = yield* gitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, failingFetchSpawner),
       );
 

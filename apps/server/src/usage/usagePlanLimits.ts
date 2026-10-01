@@ -120,7 +120,7 @@ function emptyConnectedLimits(provider: LiveSubscriptionProviderId): UsageProvid
   };
 }
 
-export function makePlanLimitsReader(getPlanAccess: GetPlanAccess) {
+export function planLimitsReader(getPlanAccess: GetPlanAccess) {
   return Effect.map(
     makePlanLimitCache(getPlanAccess),
     (cache) => (provider?: SubscriptionProviderId) =>
@@ -139,7 +139,7 @@ export function makePlanLimitsReader(getPlanAccess: GetPlanAccess) {
 }
 
 export function readPlanLimitsEffect(getPlanAccess: GetPlanAccess) {
-  return Effect.flatMap(makePlanLimitsReader(getPlanAccess), (read) => read());
+  return Effect.flatMap(planLimitsReader(getPlanAccess), (read) => read());
 }
 
 export async function readPlanLimits(getPlanAccess: GetPlanAccess) {

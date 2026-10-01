@@ -1,7 +1,7 @@
 import * as NodeBuffer from "node:buffer";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { VOICE_AUDIO_MAX_BYTES } from "@akeru/contracts";
-import { makeVoiceAdapters, readVoiceResponse, type VoiceFetch } from "./VoiceAdapters.ts";
+import { voiceAdapters, readVoiceResponse, type VoiceFetch } from "./VoiceAdapters.ts";
 
 const signal = () => new AbortController().signal;
 
@@ -32,9 +32,9 @@ describe("voice capability adapters", () => {
         return Response.json({ text: "transcript", ignored: "private metadata" });
       });
 
-      expect(
-        await makeVoiceAdapters(fetcher).transcribe(provider, "secret", audio, signal()),
-      ).toEqual({ text: "transcript" });
+      expect(await voiceAdapters(fetcher).transcribe(provider, "secret", audio, signal())).toEqual({
+        text: "transcript",
+      });
     },
   );
 
@@ -78,7 +78,7 @@ describe("voice capability adapters", () => {
       });
 
       expect(
-        await makeVoiceAdapters(fetcher).synthesize(provider, "secret", "alloy", "Hello", signal()),
+        await voiceAdapters(fetcher).synthesize(provider, "secret", "alloy", "Hello", signal()),
       ).toEqual({ audioBase64: "bXAz", mimeType: "audio/mpeg" });
     },
   );
@@ -98,7 +98,7 @@ describe("voice capability adapters", () => {
     });
 
     expect(
-      await makeVoiceAdapters(fetcher).negotiate(
+      await voiceAdapters(fetcher).negotiate(
         "secret",
         "offer\r\n",
         "Instructions",
@@ -143,7 +143,7 @@ describe("voice capability adapters", () => {
       return Response.json(response);
     });
 
-    const result = await makeVoiceAdapters(fetcher).listVoices(provider, "secret", signal());
+    const result = await voiceAdapters(fetcher).listVoices(provider, "secret", signal());
     expect(result).toEqual({
       voices: [{ id: "one", name: "One" }],
       nextCursor: provider === "fish" ? "2" : "next",
@@ -157,16 +157,16 @@ describe("voice capability adapters", () => {
       return Response.json({ _id: "chosen", title: "Chosen", type: "tts", state: "trained" });
     });
 
-    await makeVoiceAdapters(fetcher).validateVoice("fish", "secret", "chosen", signal());
+    await voiceAdapters(fetcher).validateVoice("fish", "secret", "chosen", signal());
     await expect(
-      makeVoiceAdapters(fetcher).validateVoice("openai", "secret", "unknown", signal()),
+      voiceAdapters(fetcher).validateVoice("openai", "secret", "unknown", signal()),
     ).rejects.toMatchObject({ reason: "invalid-voice" });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("rejects oversized requests before sending them", async () => {
     const fetcher = vi.fn<VoiceFetch>();
-    const adapters = makeVoiceAdapters(fetcher);
+    const adapters = voiceAdapters(fetcher);
     await expect(
       adapters.synthesize("openai", "secret", "alloy", "x".repeat(4001), signal()),
     ).rejects.toMatchObject({ reason: "invalid-input" });
@@ -213,7 +213,7 @@ describe("voice capability adapters", () => {
     ]) {
       const fetcher = vi.fn<VoiceFetch>(async () => response);
       await expect(
-        makeVoiceAdapters(fetcher).transcribe("openai", "secret", audio, signal()),
+        voiceAdapters(fetcher).transcribe("openai", "secret", audio, signal()),
       ).rejects.toMatchObject({
         reason: "upstream-failed",
         message: "The voice provider request failed. Check the connection and try again.",
@@ -239,7 +239,7 @@ describe("voice capability adapters", () => {
     );
 
     try {
-      const pending = makeVoiceAdapters(fetcher).synthesize(
+      const pending = voiceAdapters(fetcher).synthesize(
         "openai",
         "secret",
         "alloy",
@@ -275,7 +275,7 @@ describe("voice capability adapters", () => {
           async () => new Response(`private key sk-secret ${status}`, { status }),
         );
 
-        const adapters = makeVoiceAdapters(fetcher);
+        const adapters = voiceAdapters(fetcher);
 
         const failures = [
           adapters.synthesize(provider, "secret", "alloy", "Hello", signal()),
@@ -296,7 +296,7 @@ describe("voice capability adapters", () => {
         }
       }
 
-      const offline = makeVoiceAdapters(async () => {
+      const offline = voiceAdapters(async () => {
         throw new TypeError("fetch failed: private DNS detail");
       });
 
@@ -310,11 +310,11 @@ describe("voice capability adapters", () => {
   );
 
   it("keeps auth failures distinct from an unknown voice during validation", async () => {
-    const unauthorized = makeVoiceAdapters(async () => new Response("", { status: 401 }));
+    const unauthorized = voiceAdapters(async () => new Response("", { status: 401 }));
     await expect(
       unauthorized.validateVoice("elevenlabs", "secret", "voice", signal()),
     ).rejects.toMatchObject({ reason: "provider-auth" });
-    const missing = makeVoiceAdapters(async () => new Response("", { status: 404 }));
+    const missing = voiceAdapters(async () => new Response("", { status: 404 }));
     await expect(
       missing.validateVoice("cartesia", "secret", "voice", signal()),
     ).rejects.toMatchObject({ reason: "invalid-voice" });
@@ -325,13 +325,7 @@ describe("voice capability adapters", () => {
     const controller = new AbortController();
     controller.abort();
     await expect(
-      makeVoiceAdapters(fetcher).synthesize(
-        "openai",
-        "secret",
-        "alloy",
-        "Hello",
-        controller.signal,
-      ),
+      voiceAdapters(fetcher).synthesize("openai", "secret", "alloy", "Hello", controller.signal),
     ).rejects.toMatchObject({ reason: "cancelled" });
     expect(fetcher).not.toHaveBeenCalled();
   });

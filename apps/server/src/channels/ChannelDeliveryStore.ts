@@ -131,7 +131,7 @@ export const ChannelDeliveryStoreLive = Layer.effect(
   makeChannelDeliveryStore,
 );
 
-export function makeMemoryChannelDeliveryStore(): ChannelDeliveryStoreShape {
+export function memoryChannelDeliveryStore(): ChannelDeliveryStoreShape {
   const status = new Map<MessageId, "requested" | "sent">();
   const claims = new Map<MessageId, ChannelDeliveryClaim>();
 

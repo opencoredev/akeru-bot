@@ -13,7 +13,7 @@ import { ProjectionTurnRepositoryLive } from "../../src/persistence/Layers/Proje
 import { ProjectionCheckpointRepositoryLive } from "../../src/persistence/Layers/ProjectionCheckpoints.ts";
 import { ProjectionPendingApprovalRepositoryLive } from "../../src/persistence/Layers/ProjectionPendingApprovals.ts";
 import { ProviderSessionRuntimeRepositoryLive } from "../../src/persistence/Layers/ProviderSessionRuntime.ts";
-import { makeSqlitePersistenceLive } from "../../src/persistence/Layers/Sqlite.ts";
+import { sqlitePersistenceLayer } from "../../src/persistence/Layers/Sqlite.ts";
 import { adapterRegistryMock } from "../../src/provider/testUtils/providerAdapterRegistryMock.ts";
 import { ProviderAdapterRegistry } from "../../src/provider/Services/ProviderAdapterRegistry.ts";
 import { makeProviderRegistryLayer } from "../../src/provider/testUtils/providerRegistryMock.ts";
@@ -25,7 +25,7 @@ import { type TestMastraHarness } from "../TestMastraHarness.integration.ts";
 import { EntityMemoryRepositoryLive } from "../../src/memory/Layers/EntityMemoryRepository.ts";
 import { MemoryRevisionWriteLockLive } from "../../src/memory/Services/MemoryRevisionWriteLock.ts";
 import { LegacyProviderBridgeLive } from "../../src/provider/Layers/LegacyProviderBridge.ts";
-import { providerServiceLayerWith } from "../../src/provider/Layers/ProviderService.ts";
+import { ProviderServiceLive } from "../../src/provider/Layers/ProviderService.ts";
 import { makeCodexAdapter } from "../../src/provider/Layers/CodexAdapter.ts";
 import {
   NoOpProviderEventLoggers,
@@ -78,7 +78,7 @@ export function createIntegrationLayers({
       )
     : null;
 
-  const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+  const persistenceLayer = sqlitePersistenceLayer(dbPath);
 
   const memoryRepositoriesLayer = EntityMemoryRepositoryLive.pipe(
     Layer.provide(MemoryRevisionWriteLockLive),
@@ -114,13 +114,13 @@ export function createIntegrationLayers({
   const providerEventLoggersLayer = Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers);
 
   const providerLayer = useRealCodex
-    ? providerServiceLayerWith().pipe(
+    ? ProviderServiceLive.pipe(
         Layer.provide(providerSessionDirectoryLayer),
         Layer.provide(realCodexRegistry),
         Layer.provide(AnalyticsService.layerTest),
         Layer.provide(providerEventLoggersLayer),
       )
-    : providerServiceLayerWith().pipe(
+    : ProviderServiceLive.pipe(
         Layer.provide(providerSessionDirectoryLayer),
         Layer.provide(fakeRegistry!),
         Layer.provide(AnalyticsService.layerTest),

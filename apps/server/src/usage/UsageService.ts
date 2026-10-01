@@ -39,8 +39,7 @@ import { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { ProviderUsageHistory } from "./ProviderUsageHistory.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
 import { parseRateTable, priceUsage, type PricedUsage, type RateTable } from "./usagePricing.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- UsageService owns the lifetime of its private plan-limit cache.
-import { makePlanLimitsReader } from "./usagePlanLimits.ts";
+import { planLimitsReader } from "./usagePlanLimits.ts";
 import type { UsageRecord } from "./usageTranscripts.ts";
 
 const LITELLM_RATES_URL =
@@ -219,7 +218,7 @@ export const make = Effect.gen(function* () {
   const providerUsageHistory = yield* ProviderUsageHistory;
   const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
 
-  const readPlanLimits = yield* makePlanLimitsReader((provider) =>
+  const readPlanLimits = yield* planLimitsReader((provider) =>
     subscriptionAuth.getPlanAccess(provider),
   );
 

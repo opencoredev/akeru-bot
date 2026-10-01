@@ -13,10 +13,8 @@ import {
   projectActivityEvent,
   projectThreadDetailSnapshot,
 } from "./orchestration/ActivityPayloadProjection.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Each WebSocket subscription owns a separate event coalescer; it is not a contextual service.
-import { makeThreadLiveEventCoalescer } from "./orchestration/ThreadLiveEventCoalescer.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Each WebSocket subscription owns its own flow-control budget.
-import { makeLiveStreamBudget, type RetainedLiveItem } from "./orchestration/LiveStreamBudget.ts";
+import { threadLiveEventCoalescer } from "./orchestration/ThreadLiveEventCoalescer.ts";
+import { liveStreamBudget, type RetainedLiveItem } from "./orchestration/LiveStreamBudget.ts";
 
 import {
   isThreadDetailEvent,
@@ -69,7 +67,7 @@ export const createWsOrchestrationSubscriptions = ({
           // sequence but the live subscription is not attached yet). Every
           // path below emits from this same buffered live tail. Overlapping
           // events are deduped by sequence on the client.
-          const liveBudget = yield* makeLiveStreamBudget();
+          const liveBudget = yield* liveStreamBudget();
           const sentThreads = createSentThreadShells();
 
           const liveBuffer = yield* Queue.unbounded<
@@ -263,7 +261,7 @@ export const createWsOrchestrationSubscriptions = ({
 
           // Attach live delivery before reading either replay or snapshot state.
           // Otherwise an event published while the snapshot is loading is lost.
-          const liveBuffer = yield* makeThreadLiveEventCoalescer();
+          const liveBuffer = yield* threadLiveEventCoalescer();
           yield* Effect.forkScoped(
             liveStream.pipe(
               Stream.runForEachArray(liveBuffer.offerAll),

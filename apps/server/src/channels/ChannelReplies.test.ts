@@ -35,7 +35,7 @@ import {
 import * as Effect from "effect/Effect";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
-import { makeMemoryChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
+import { memoryChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
 import { type ChannelRuntimeDependencies } from "./ChannelRuntime.ts";
 
 describe("channel runtime", () => {
@@ -380,7 +380,7 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const messageId = MessageId.make("message-restore-unknown");
       const threadId = ThreadId.make("thread-restore-unknown");
-      const deliveryStore = makeMemoryChannelDeliveryStore();
+      const deliveryStore = memoryChannelDeliveryStore();
       yield* deliveryStore.claim({
         messageId,
         botId: BOT_ID,
@@ -433,7 +433,7 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const messageId = MessageId.make("message-restore-sent");
       const threadId = ThreadId.make("thread-restore-sent");
-      const deliveryStore = makeMemoryChannelDeliveryStore();
+      const deliveryStore = memoryChannelDeliveryStore();
       yield* deliveryStore.claim({
         messageId,
         botId: BOT_ID,
@@ -485,7 +485,7 @@ describe("channel runtime", () => {
     Effect.gen(function* () {
       const harness = makeHarness({
         deliveryStore: {
-          ...makeMemoryChannelDeliveryStore(),
+          ...memoryChannelDeliveryStore(),
           listRequestedClaims: () => Effect.die(new Error("database unavailable")),
         },
       });
@@ -517,7 +517,7 @@ describe("channel runtime", () => {
 
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       yield* sendChannelMessage(harness.dependencies, { botId: BOT_ID, threadId, messageId });
-      const deliveryStore = makeMemoryChannelDeliveryStore();
+      const deliveryStore = memoryChannelDeliveryStore();
       const restored = { ...harness.dependencies, deliveryStore };
       yield* sendChannelMessage(restored, { botId: BOT_ID, threadId, messageId });
       expect(posts).toBe(1);

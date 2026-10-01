@@ -21,7 +21,7 @@ import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import {
-  makeSqlitePersistenceLive,
+  sqlitePersistenceLayer,
   SqlitePersistenceMemory,
 } from "../../persistence/Layers/Sqlite.ts";
 import { adapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
@@ -117,7 +117,7 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
       [ProviderDriverKind.make("codex")]: codex.adapter,
     });
 
-    const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+    const persistenceLayer = sqlitePersistenceLayer(dbPath);
 
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(persistenceLayer),
@@ -192,7 +192,7 @@ it.effect(
       );
 
       const dbPath = NodePath.join(tempDir, "orchestration.sqlite");
-      const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+      const persistenceLayer = sqlitePersistenceLayer(dbPath);
 
       const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
         Layer.provide(persistenceLayer),

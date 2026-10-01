@@ -4,6 +4,7 @@ import { testLayer } from "./testUtils/externalLauncher.ts";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
+import { isHostWindows } from "@akeru/shared/hostProcess";
 import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -112,54 +113,58 @@ it.effect("reveals a file in File Explorer through PowerShell on Windows", () =>
 // single `/select,"<path>"` switch. Mock argv assertions cannot prove this —
 // only Windows' own PowerShell -> CreateProcess quoting chain can, so the
 // test runs only where that chain exists.
-// oxlint-disable-next-line akeru/no-global-process-runtime -- the skip decision needs the real host platform, outside any Effect runtime.
-it.skipIf(process.platform !== "win32")(
-  "delivers the raw /select switch for spaced paths through real PowerShell",
-  { timeout: 60_000 },
-  async () => {
-    const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-reveal-smoke-"));
+async function runWindowsRevealSmoke() {
+  const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-reveal-smoke-"));
 
-    try {
-      const recorderPath = NodePath.join(tempDir, "recorder.cmd");
-      const outputPath = NodePath.join(tempDir, "argv.txt");
-      NodeFS.writeFileSync(recorderPath, `@echo off\r\n>"${outputPath}" echo(%*\r\n`);
+  try {
+    const recorderPath = NodePath.join(tempDir, "recorder.cmd");
+    const outputPath = NodePath.join(tempDir, "argv.txt");
+    NodeFS.writeFileSync(recorderPath, `@echo off\r\n>"${outputPath}" echo(%*\r\n`);
 
-      const target = "C:\\workspace with spaces\\media\\author's clip.mp4";
-      const source = ExternalLauncher.buildFileExplorerRevealPowerShellSource(recorderPath, target);
-      const powerShellPath = `${process.env.SYSTEMROOT ?? "C:\\Windows"}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`;
-      NodeChildProcess.execFileSync(
-        powerShellPath,
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-EncodedCommand",
-          Buffer.from(source, "utf16le").toString("base64"),
-        ],
-        { timeout: 30_000 },
-      );
+    const target = "C:\\workspace with spaces\\media\\author's clip.mp4";
+    const source = ExternalLauncher.buildFileExplorerRevealPowerShellSource(recorderPath, target);
+    const powerShellPath = `${process.env.SYSTEMROOT ?? "C:\\Windows"}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`;
+    NodeChildProcess.execFileSync(
+      powerShellPath,
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-EncodedCommand",
+        Buffer.from(source, "utf16le").toString("base64"),
+      ],
+      { timeout: 30_000 },
+    );
 
-      // Start-Process returns before the recorder runs; wait for its output.
-      // The waits run outside the Effect runtime on purpose: the test
-      // exercises the real Windows process chain in real time.
-      // @effect-diagnostics-next-line globalTimers:off
-      const sleep = (millis: number) => new Promise((resolve) => setTimeout(resolve, millis));
-      // @effect-diagnostics-next-line globalDate:off
-      const deadline = Date.now() + 20_000;
+    // Start-Process returns before the recorder runs; wait for its output.
+    // The waits run outside the Effect runtime on purpose: the test
+    // exercises the real Windows process chain in real time.
+    // @effect-diagnostics-next-line globalTimers:off
+    const sleep = (millis: number) => new Promise((resolve) => setTimeout(resolve, millis));
+    // @effect-diagnostics-next-line globalDate:off
+    const deadline = Date.now() + 20_000;
 
-      // @effect-diagnostics-next-line globalDate:off
-      while (!NodeFS.existsSync(outputPath) && Date.now() < deadline) {
-        await sleep(100);
-      }
-
-      await sleep(200);
-      const recorded = NodeFS.readFileSync(outputPath, "utf8").trim();
-      assert.equal(recorded, `/select,"${target}"`);
-    } finally {
-      NodeFS.rmSync(tempDir, { recursive: true, force: true });
+    // @effect-diagnostics-next-line globalDate:off
+    while (!NodeFS.existsSync(outputPath) && Date.now() < deadline) {
+      await sleep(100);
     }
-  },
+
+    await sleep(200);
+    const recorded = NodeFS.readFileSync(outputPath, "utf8").trim();
+    assert.equal(recorded, `/select,"${target}"`);
+  } finally {
+    NodeFS.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+it.live(
+  "delivers the raw /select switch for spaced paths through real PowerShell",
+  () =>
+    Effect.flatMap(isHostWindows, (windows) =>
+      windows ? Effect.promise(runWindowsRevealSmoke) : Effect.void,
+    ),
+  { timeout: 60_000 },
 );
 
 it.effect("does not advertise reveal on Windows when PowerShell is missing", () =>

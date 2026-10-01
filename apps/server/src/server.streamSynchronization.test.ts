@@ -25,7 +25,7 @@ import { toShellDelegation } from "./orchestration/ShellDelegations.ts";
 import { buildAppUnderTest } from "./serverTestApp.ts";
 import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 import {
-  makeDefaultOrchestrationReadModel,
+  defaultOrchestrationReadModel,
   defaultThreadId,
   makeDefaultOrchestrationThreadShell,
   makeLiveToolActivityEvent,
@@ -250,7 +250,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
   it.effect("marks a socket thread snapshot as synchronized when requested", () =>
     Effect.gen(function* () {
-      const thread = makeDefaultOrchestrationReadModel().threads[0]!;
+      const thread = defaultOrchestrationReadModel().threads[0]!;
       yield* buildAppUnderTest({
         layers: {
           projectionSnapshotQuery: {
@@ -340,7 +340,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
   it.effect("buffers thread events published while the initial snapshot loads", () =>
     Effect.gen(function* () {
-      const thread = makeDefaultOrchestrationReadModel().threads[0]!;
+      const thread = defaultOrchestrationReadModel().threads[0]!;
       const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
 
       const messageEvent = {
@@ -406,7 +406,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
   it.effect("coalesces buffered live tool updates before websocket delivery", () =>
     Effect.gen(function* () {
-      const thread = makeDefaultOrchestrationReadModel().threads[0]!;
+      const thread = defaultOrchestrationReadModel().threads[0]!;
       const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
 
       yield* buildAppUnderTest({

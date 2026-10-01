@@ -191,8 +191,9 @@ function inferOs(userAgent: string | undefined): string | undefined {
   return undefined;
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Native HTTP request sources have several socket shapes; this probe accepts those runtime objects.
-function readRemoteAddressFromSource(source: unknown): string | undefined {
+function readRemoteAddressFromSource(
+  source: HttpServerRequest.HttpServerRequest["source"],
+): string | undefined {
   if (!source || !Predicate.isObjectKeyword(source)) {
     return undefined;
   }

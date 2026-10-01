@@ -155,7 +155,7 @@ export type VoiceFetch = (
   init?: RequestInit,
 ) => Promise<Response>;
 
-export function makeVoiceAdapters(fetcher: VoiceFetch = fetch) {
+export function voiceAdapters(fetcher: VoiceFetch = fetch) {
   async function request(
     provider: VoiceApiProvider,
     key: string,
@@ -476,4 +476,4 @@ export function makeVoiceAdapters(fetcher: VoiceFetch = fetch) {
   return { listVoices, validateVoice, transcribe, synthesize, negotiate, test };
 }
 
-export type VoiceAdapters = ReturnType<typeof makeVoiceAdapters>;
+export type VoiceAdapters = ReturnType<typeof voiceAdapters>;

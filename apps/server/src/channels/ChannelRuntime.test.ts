@@ -13,14 +13,14 @@ import {
   ChannelPostRejectedError,
   ChannelRuntime,
   channelBindingsForRuntime as channelBindingsWith,
-  makeKeyedLock,
+  keyedLock,
   type ChannelRuntimeDependencies,
 } from "./ChannelRuntime.ts";
 
 describe("channel runtime", () => {
   it.effect("serializes work per key in FIFO order while different keys overlap", () =>
     Effect.gen(function* () {
-      const withLock = makeKeyedLock();
+      const withLock = keyedLock();
       const events: string[] = [];
       const releaseFirst = yield* Deferred.make<void>();
       const firstStarted = yield* Deferred.make<void>();
@@ -56,7 +56,7 @@ describe("channel runtime", () => {
 
   it.effect("lets a queued caller be interrupted without blocking later callers", () =>
     Effect.gen(function* () {
-      const withLock = makeKeyedLock();
+      const withLock = keyedLock();
       const events: string[] = [];
       const releaseFirst = yield* Deferred.make<void>();
       const firstStarted = yield* Deferred.make<void>();

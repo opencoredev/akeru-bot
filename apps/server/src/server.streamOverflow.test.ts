@@ -23,7 +23,7 @@ import {
   defaultThreadId,
   makeLiveToolActivityEvent,
   makeDefaultOrchestrationThreadShell,
-  makeDefaultOrchestrationReadModel,
+  defaultOrchestrationReadModel,
   defaultProjectId,
 } from "./serverTestFixtures.ts";
 import { buildAppUnderTest } from "./serverTestApp.ts";
@@ -222,7 +222,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       let snapshotCalls = 0;
       let replayCalls = 0;
       const thread = makeDefaultOrchestrationThreadShell();
-      const project = makeDefaultOrchestrationReadModel().projects[0]!;
+      const project = defaultOrchestrationReadModel().projects[0]!;
 
       const events: OrchestrationEvent[] = Array.from({ length: 1_001 }, (_, index) =>
         makeLiveToolActivityEvent(index + 2, "tool.completed"),
@@ -333,7 +333,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     Effect.gen(function* () {
       let readEventsCalls = 0;
       let replayStatsCalls = 0;
-      const thread = makeDefaultOrchestrationReadModel().threads[0]!;
+      const thread = defaultOrchestrationReadModel().threads[0]!;
       const shell = makeDefaultOrchestrationThreadShell({ id: thread.id });
 
       yield* buildAppUnderTest({

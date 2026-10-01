@@ -26,7 +26,6 @@ import { OrchestrationCommandReceiptRepositoryLive } from "../../../persistence/
 import { ProjectionBotRepositoryLive } from "../../../persistence/Layers/ProjectionBots.ts";
 import { SqlitePersistenceMemory } from "../../../persistence/Layers/Sqlite.ts";
 import { AgentController } from "../../../provider/Services/AgentController.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test composition root builds the registry layer supplied to the harness runtime.
 import { makeProviderRegistryLayer } from "../../../provider/testUtils/providerRegistryMock.ts";
 import { TextGeneration } from "../../../textGeneration/TextGeneration.ts";
 import * as RepositoryIdentityResolver from "../../../project/RepositoryIdentityResolver.ts";

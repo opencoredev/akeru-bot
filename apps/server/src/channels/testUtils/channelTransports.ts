@@ -26,8 +26,7 @@ import { afterEach, vi } from "vite-plus/test";
 import type { ServerSecretStore } from "../../auth/ServerSecretStore.ts";
 import { createEmptyReadModel } from "../../orchestration/projector.ts";
 import type { OrchestrationEngineShape } from "../../orchestration/Services/OrchestrationEngine.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test composition root creates a separate in-memory delivery store per harness.
-import { makeMemoryChannelDeliveryStore } from "../ChannelDeliveryStore.ts";
+import { memoryChannelDeliveryStore } from "../ChannelDeliveryStore.ts";
 import { ChannelRuntime, type ChannelRuntimeDependencies } from "../ChannelRuntime.ts";
 
 const adapters = vi.hoisted(() => ({
@@ -394,7 +393,7 @@ const makeHarness = (input: {
             return settings;
           }),
       },
-      deliveryStore: makeMemoryChannelDeliveryStore(),
+      deliveryStore: memoryChannelDeliveryStore(),
       readModel: Effect.sync(() => model),
       readThread: (threadId) =>
         Effect.sync(() => threads.find((thread) => thread.id === threadId) ?? null),

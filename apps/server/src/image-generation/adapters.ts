@@ -308,7 +308,7 @@ function addUsage(
 const CHATGPT_INSTRUCTIONS =
   "Create the requested image with the image_generation tool. Do not answer with text.";
 
-export function makeChatGptImageAdapter(deps: {
+export function chatGptImageAdapter(deps: {
   readonly subscriptionAuth: Pick<
     SubscriptionAuthService,
     "getOpenAICodexAccess" | "getApiKeyCredential"
@@ -414,7 +414,7 @@ export function makeChatGptImageAdapter(deps: {
   };
 }
 
-export function makeGrokImageAdapter(deps: {
+export function grokImageAdapter(deps: {
   readonly subscriptionAuth: Pick<
     SubscriptionAuthService,
     "getAccessToken" | "getApiKeyCredential"

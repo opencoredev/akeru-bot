@@ -166,7 +166,7 @@ function baseEvent(
  * committing user content. Command output is intentionally modest because the
  * client projection strips it.
  */
-export function makeRecordedTransferTurn(
+export function recordedTransferTurn(
   provider: ProviderDriverKind,
   turnIndex: number,
 ): TestTurnResponse {

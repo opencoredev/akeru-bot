@@ -15,7 +15,7 @@ import * as Effect from "effect/Effect";
 
 import type { SubscriptionProviderId } from "./service.ts";
 import type { ApiKeyCredential } from "./types.ts";
-import { makeApiKeySessionReset } from "./sessionReset.ts";
+import { apiKeySessionReset } from "./sessionReset.ts";
 import { makeTestSubscriptionAuthService } from "./testUtils/subscriptionAuthService.ts";
 
 function session(driver: string, instanceId?: string): ProviderSession {
@@ -42,7 +42,7 @@ function fixture(
     ...extraSessions,
   ];
 
-  const reset = makeApiKeySessionReset(
+  const reset = apiKeySessionReset(
     { getApiKeyCredential: (provider) => credentials[provider] },
     {
       listSessions: () => Effect.succeed(sessions),
@@ -70,7 +70,7 @@ describe("API-key session reset", () => {
       const auth = yield* Effect.promise(() => makeTestSubscriptionAuthService(authPath));
       const stopped: string[] = [];
 
-      const reset = makeApiKeySessionReset(
+      const reset = apiKeySessionReset(
         auth,
         {
           listSessions: () => Effect.succeed([session("claudeAgent"), session("grok")]),

@@ -25,8 +25,7 @@ import {
   SubscriptionAuthError,
 } from "@akeru/contracts";
 import { SubscriptionAuthService } from "./subscription-auth/service.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root binds the session-reset callback to the active provider registry.
-import { makeApiKeySessionReset } from "./subscription-auth/sessionReset.ts";
+import { apiKeySessionReset } from "./subscription-auth/sessionReset.ts";
 import { subscriptionProviderSettingsPatch } from "./subscription-auth/runtime.ts";
 import { imageProviderStatuses } from "./image-generation/service.ts";
 import { deriveProviderInstanceConfigMap } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
@@ -284,7 +283,7 @@ export const createWsServices = (
 
     yield* syncSubscriptionProviderSettings;
 
-    const resetChangedApiKeySessions = makeApiKeySessionReset(
+    const resetChangedApiKeySessions = apiKeySessionReset(
       subscriptionAuth,
       agentController,
       serverSettings.getSettings.pipe(

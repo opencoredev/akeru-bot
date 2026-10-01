@@ -10,8 +10,7 @@ export type ActivityRecord = {
 export type ActivityValue = ActivityRecord[string];
 
 /** Probe only the outer object; callers narrow the fields they read. */
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Persisted payloads need a shallow probe so discarded descendants never bypass projection bounds.
-export function asRecord(value: unknown): ActivityRecord | null {
+export function asRecord(value: ActivityValue): ActivityRecord | null {
   return Predicate.isObject(value) ? value : null;
 }
 

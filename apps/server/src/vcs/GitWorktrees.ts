@@ -15,7 +15,7 @@ import type { GitExecutionServices } from "./GitExecution.ts";
 import type { GitBranchesServices } from "./GitBranches.ts";
 import type { GitRemoteStatusServices } from "./GitRemoteStatus.ts";
 
-export const makeGitWorktrees = (dependencies: {
+export const gitWorktrees = (dependencies: {
   fileSystem: GitExecutionServices["fileSystem"];
   path: GitExecutionServices["path"];
   executeGit: GitExecutionServices["executeGit"];
@@ -353,4 +353,4 @@ export const makeGitWorktrees = (dependencies: {
     };
   });
 
-export type GitWorktreesServices = Effect.Success<ReturnType<typeof makeGitWorktrees>>;
+export type GitWorktreesServices = Effect.Success<ReturnType<typeof gitWorktrees>>;

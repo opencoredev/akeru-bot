@@ -17,8 +17,7 @@ import { assert } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import type { TestTurnResponse } from "../TestProviderAdapter.integration.ts";
 import {
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration scenario assembles the isolated orchestration test environment.
-  makeOrchestrationIntegrationHarness,
+  orchestrationIntegrationHarness,
   type OrchestrationIntegrationHarness,
 } from "../OrchestrationEngineHarness.integration.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -128,7 +127,7 @@ export function withHarness<A, E>(
   provider: IntegrationProvider = CODEX_PROVIDER,
 ) {
   return Effect.acquireUseRelease(
-    makeOrchestrationIntegrationHarness({ provider }),
+    orchestrationIntegrationHarness({ provider }),
     use,
     (harness) => harness.dispose,
   ).pipe(Effect.provide(NodeServices.layer));
@@ -138,7 +137,7 @@ export function withRealCodexHarness<A, E>(
   use: (harness: OrchestrationIntegrationHarness) => Effect.Effect<A, E>,
 ) {
   return Effect.acquireUseRelease(
-    makeOrchestrationIntegrationHarness({ provider: CODEX_PROVIDER, realCodex: true }),
+    orchestrationIntegrationHarness({ provider: CODEX_PROVIDER, realCodex: true }),
     use,
     (harness) => harness.dispose,
   ).pipe(Effect.provide(NodeServices.layer));

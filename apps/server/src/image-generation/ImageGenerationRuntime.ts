@@ -42,10 +42,8 @@ import {
   type ImageAdapterFailure,
   type ImageAdapterInputImage,
   type ImageProviderAdapter,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- ImageGenerationRuntime owns its stateless HTTP image adapters; these are not Effect services.
-  makeChatGptImageAdapter,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- ImageGenerationRuntime owns its stateless HTTP image adapters; these are not Effect services.
-  makeGrokImageAdapter,
+  chatGptImageAdapter,
+  grokImageAdapter,
 } from "./adapters.ts";
 import { sniffImage } from "./imageBytes.ts";
 import { type ImageProviderAvailability, routeImageRequest } from "./router.ts";
@@ -149,8 +147,8 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
   const subscriptionAuth = options.subscriptionAuth ?? (yield* sharedStore);
 
   const adapters = options.adapters ?? {
-    chatgpt: makeChatGptImageAdapter({ subscriptionAuth: yield* sharedStore }),
-    grok: makeGrokImageAdapter({ subscriptionAuth: yield* sharedStore }),
+    chatgpt: chatGptImageAdapter({ subscriptionAuth: yield* sharedStore }),
+    grok: grokImageAdapter({ subscriptionAuth: yield* sharedStore }),
   };
 
   const inFlight = new Map<string, Set<Fiber.Fiber<ImageGenerationResult>>>();

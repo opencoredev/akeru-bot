@@ -127,7 +127,8 @@ keep getter receivers.
 
 Provider composition roots (drivers, adapters, the agent controller, and the Grok session
 runtime) turn off `no-service-constructor-imports`. Each configured provider instance builds its
-own scoped runtime by calling `make*` constructors, so there is no singleton service to yield. The
+own scoped runtime by calling `make*` constructors, so there is no singleton service to yield.
+Grok text generation is on the same list because each request owns a scoped ACP process. The
 file list lives in `vite.config.ts`; add a file only when it owns per-instance construction.
 
 There are no inline exceptions. `akeru/no-lint-suppressions` reports every `oxlint-disable`,

@@ -12,7 +12,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { makeGitVcsDriverCore } from "./GitVcsDriverCore.ts";
+import { gitVcsDriverCore } from "./GitVcsDriverCore.ts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
 
 it.effect("retries an in-flight ref snapshot invalidated by a mutation", () =>
@@ -60,7 +60,7 @@ it.effect("retries an in-flight ref snapshot invalidated by a mutation", () =>
         }),
       );
 
-      const driver = yield* makeGitVcsDriverCore().pipe(
+      const driver = yield* gitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, coordinatingSpawner),
       );
 
@@ -106,7 +106,7 @@ it.effect("invalidates a ref snapshot when a mutation fails after changing Git",
         }),
       );
 
-      const driver = yield* makeGitVcsDriverCore().pipe(
+      const driver = yield* gitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, partiallyFailingSpawner),
       );
 
@@ -144,7 +144,7 @@ it.effect("fails a ref snapshot when for-each-ref exits unsuccessfully", () =>
         }),
       );
 
-      const driver = yield* makeGitVcsDriverCore().pipe(
+      const driver = yield* gitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, failingSnapshotSpawner),
       );
 

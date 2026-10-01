@@ -122,8 +122,10 @@ export const decodeCreateRoutineInput = Schema.decodeUnknownExit(
   },
 );
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Tool arguments enter through the tool-specific schema decoders here.
-export function boundedApprovalArgs(toolName: string | undefined, args: unknown) {
+export function boundedApprovalArgs(
+  toolName: string | undefined,
+  args: Extract<ProviderRuntimeEvent, { type: "request.opened" }>["payload"]["args"],
+) {
   if (args === undefined) return undefined;
 
   if (toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME) {

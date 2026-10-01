@@ -43,7 +43,7 @@ const setup = Layer.effectDiscard(
   }),
 );
 
-export const makeSqlitePersistenceLive = Effect.fn("makeSqlitePersistenceLive")(function* (
+export const sqlitePersistenceLayer = Effect.fn("makeSqlitePersistenceLive")(function* (
   dbPath: string,
   serviceName: string = "akeru-server",
 ) {
@@ -72,6 +72,6 @@ export const layerConfig = Layer.unwrap(
   Effect.gen(function* () {
     const { dbPath, otlpServiceName } = yield* ServerConfig;
 
-    return makeSqlitePersistenceLive(dbPath, otlpServiceName);
+    return sqlitePersistenceLayer(dbPath, otlpServiceName);
   }),
 );

@@ -1,7 +1,6 @@
 import * as Predicate from "effect/Predicate";
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns -- This canonical JSON walker preserves arbitrary archive metadata until JSON serialization.
-const canonicalize = (value: unknown): unknown => {
+const canonicalize = <Value>(value: Value): Value | object => {
   if (Array.isArray(value)) return value.map(canonicalize);
 
   if (!Predicate.isObject(value)) return value;

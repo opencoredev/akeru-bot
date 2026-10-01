@@ -30,8 +30,7 @@ import * as ServerConfig from "../config.ts";
 import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import {
   classifyVoiceFailure,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- VoiceCallManager owns its private HTTP adapters and accepts replacements for tests.
-  makeVoiceAdapters,
+  voiceAdapters,
   voiceFailure,
   type VoiceAdapters,
 } from "./VoiceAdapters.ts";
@@ -126,7 +125,7 @@ const make = (options?: VoiceCallManagerOptions) =>
     const auth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
     let active: ActiveVoiceCall | null = null;
     const secrets = yield* Effect.serviceOption(ServerSecretStore);
-    const adapters = options?.adapters ?? makeVoiceAdapters();
+    const adapters = options?.adapters ?? voiceAdapters();
 
     const operations = new Map<
       string,

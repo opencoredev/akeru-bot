@@ -24,7 +24,7 @@ import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import {
-  makePersistedServerRuntimeState,
+  persistedServerRuntimeState,
   persistServerRuntimeState,
   type PersistedServerRuntimeState,
 } from "../serverRuntimeState.ts";
@@ -270,7 +270,7 @@ describe("akeru pair", () => {
         const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
         yield* persistServerRuntimeState({
           path: statePath,
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config: { host: "127.0.0.1", devUrl: undefined },
             port,
           }),
@@ -308,7 +308,7 @@ describe("akeru pair", () => {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-qr-test-"));
         yield* persistServerRuntimeState({
           path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config: { host: "127.0.0.1", devUrl: undefined },
             port: Number(new URL(origin).port),
           }),
@@ -344,7 +344,7 @@ describe("akeru pair", () => {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-public-test-"));
         yield* persistServerRuntimeState({
           path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config: { host: "127.0.0.1", devUrl: undefined },
             port: Number(new URL(origin).port),
           }),
@@ -399,7 +399,7 @@ describe("akeru pair", () => {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-admin-cli-"));
         yield* persistServerRuntimeState({
           path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config: { host: "127.0.0.1", devUrl: undefined },
             port: Number(new URL(origin).port),
           }),
@@ -435,7 +435,7 @@ describe("akeru pair", () => {
         const statePath = NodePath.join(baseDir, "dev", "server-runtime.json");
         yield* persistServerRuntimeState({
           path: statePath,
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config: { host: undefined, devUrl: new URL("http://localhost:5733") },
             port,
           }),
@@ -472,7 +472,7 @@ describe("akeru pair", () => {
         // The origin answers (another server reused the port), but the pid
         // that wrote this state file is dead — pairing must not mint a token
         // into the dead server's database.
-        const state = yield* makePersistedServerRuntimeState({
+        const state = yield* persistedServerRuntimeState({
           config: { host: "127.0.0.1", devUrl: undefined },
           port: Number(new URL(origin).port),
         });
@@ -504,7 +504,7 @@ describe("akeru pair", () => {
       // fast with ECONNREFUSED and discovery moves on.
       yield* persistServerRuntimeState({
         path: statePath,
-        state: yield* makePersistedServerRuntimeState({
+        state: yield* persistedServerRuntimeState({
           config: { host: "127.0.0.1", devUrl: undefined },
           port: 1,
         }),

@@ -1,23 +1,15 @@
 import * as Effect from "effect/Effect";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
-import { makeGitExecution } from "./GitExecution.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
-import { makeGitBranches } from "./GitBranches.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
-import { makeGitRepositoryPaths } from "./GitRepositoryPaths.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
-import { makeGitRemoteStatus } from "./GitRemoteStatus.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
-import { makeGitLocalStatus } from "./GitLocalStatus.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
-import { makeGitPull } from "./GitPull.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
-import { makeGitWorktrees } from "./GitWorktrees.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This composition root assembles private Git capabilities for the GitVcsDriver layer.
-import { makeGitRefs } from "./GitRefs.ts";
+import { gitExecution } from "./GitExecution.ts";
+import { gitBranches } from "./GitBranches.ts";
+import { gitRepositoryPaths } from "./GitRepositoryPaths.ts";
+import { gitRemoteStatus } from "./GitRemoteStatus.ts";
+import { gitLocalStatus } from "./GitLocalStatus.ts";
+import { gitPull } from "./GitPull.ts";
+import { gitWorktrees } from "./GitWorktrees.ts";
+import { gitRefs } from "./GitRefs.ts";
 
-export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* () {
+export const gitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* () {
   const {
     fileSystem,
     path,
@@ -26,17 +18,17 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     executeGitWithStableDiagnostics,
     runGit,
     runGitStdout,
-  } = yield* makeGitExecution();
+  } = yield* gitExecution();
 
   const { branchExists, resolveAvailableBranchName, resolveCurrentUpstream, fetchRemoteForStatus } =
-    yield* makeGitBranches({ path, executeGit, runGitStdout });
+    yield* gitBranches({ path, executeGit, runGitStdout });
 
   const {
     repositoryPathsCache,
     repositoryPathsRefreshCache,
     normalizeRepositoryPathsCacheKey,
     resolveRepositoryPaths,
-  } = yield* makeGitRepositoryPaths({
+  } = yield* gitRepositoryPaths({
     fileSystem,
     path,
     executeGit,
@@ -56,7 +48,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     ensureRemote,
     computeAheadCountAgainstBase,
     readStatusDetailsRemote,
-  } = yield* makeGitRemoteStatus({
+  } = yield* gitRemoteStatus({
     path,
     executeGit,
     executeGitWithStableDiagnostics,
@@ -69,21 +61,20 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     resolveRepositoryPaths,
   });
 
-  const { statusDetailsLocal, statusDetails, statusDetailsRemote, status } =
-    yield* makeGitLocalStatus({
-      executeGitWithStableDiagnostics,
-      runGitStdout,
-      resolveRepositoryPaths,
-      defaultBranchCache,
-      originExistsCache,
-      refreshStatusUpstreamIfStale,
-      resolveDefaultBranchName,
-      originRemoteExists,
-      computeAheadCountAgainstBase,
-      readStatusDetailsRemote,
-    });
+  const { statusDetailsLocal, statusDetails, statusDetailsRemote, status } = yield* gitLocalStatus({
+    executeGitWithStableDiagnostics,
+    runGitStdout,
+    resolveRepositoryPaths,
+    defaultBranchCache,
+    originExistsCache,
+    refreshStatusUpstreamIfStale,
+    resolveDefaultBranchName,
+    originRemoteExists,
+    computeAheadCountAgainstBase,
+    readStatusDetailsRemote,
+  });
 
-  const { pullCurrentBranch } = yield* makeGitPull({ executeGit, runGitStdout, statusDetails });
+  const { pullCurrentBranch } = yield* gitPull({ executeGit, runGitStdout, statusDetails });
 
   const {
     createWorktree,
@@ -96,7 +87,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     switchRef,
     createRef,
     initRepo,
-  } = yield* makeGitWorktrees({
+  } = yield* gitWorktrees({
     fileSystem,
     path,
     executeGit,
@@ -108,19 +99,18 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     listRemoteNames,
   });
 
-  const { listRefs, withListRefsInvalidation, initRepoWithListRefsInvalidation } =
-    yield* makeGitRefs({
-      fileSystem,
-      path,
-      executeGit,
-      executeGitWithStableDiagnostics,
-      repositoryPathsCache,
-      repositoryPathsRefreshCache,
-      normalizeRepositoryPathsCacheKey,
-      resolveRepositoryPaths,
-      invalidateStatusStaticCaches,
-      initRepo,
-    });
+  const { listRefs, withListRefsInvalidation, initRepoWithListRefsInvalidation } = yield* gitRefs({
+    fileSystem,
+    path,
+    executeGit,
+    executeGitWithStableDiagnostics,
+    repositoryPathsCache,
+    repositoryPathsRefreshCache,
+    normalizeRepositoryPathsCacheKey,
+    resolveRepositoryPaths,
+    invalidateStatusStaticCaches,
+    initRepo,
+  });
 
   return GitVcsDriver.GitVcsDriver.of({
     execute,

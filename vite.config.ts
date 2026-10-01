@@ -222,8 +222,9 @@ export default defineConfig({
       },
       {
         // Composition roots for per-instance provider runtimes. Each configured provider
-        // instance gets its own scoped adapter, logger, and session runtime, so these files
-        // call the make* constructors directly instead of yielding a singleton service.
+        // instance (or Grok text-generation request) gets its own scoped adapter, logger, and
+        // session runtime, so these files call the make* constructors directly instead of
+        // yielding a singleton service.
         files: [
           "apps/server/src/provider/Drivers/**",
           "apps/server/src/provider/Layers/*Adapter.ts",
@@ -234,6 +235,7 @@ export default defineConfig({
           "apps/server/src/provider/Layers/grok/GrokSessionLifecycle.ts",
           "apps/server/src/provider/acp/GrokAcpSupport.ts",
           "apps/server/src/provider/providerMaintenanceRunner.ts",
+          "apps/server/src/textGeneration/GrokTextGeneration.ts",
         ],
         rules: {
           "anti-slop-effect/no-service-constructor-imports": "off",

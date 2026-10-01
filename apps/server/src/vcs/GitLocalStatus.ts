@@ -16,7 +16,7 @@ import type { GitExecutionServices } from "./GitExecution.ts";
 import type { GitRepositoryPathsServices } from "./GitRepositoryPaths.ts";
 import type { GitRemoteStatusServices } from "./GitRemoteStatus.ts";
 
-export const makeGitLocalStatus = (dependencies: {
+export const gitLocalStatus = (dependencies: {
   executeGitWithStableDiagnostics: GitExecutionServices["executeGitWithStableDiagnostics"];
   runGitStdout: GitExecutionServices["runGitStdout"];
   resolveRepositoryPaths: GitRepositoryPathsServices["resolveRepositoryPaths"];
@@ -316,4 +316,4 @@ export const makeGitLocalStatus = (dependencies: {
     return { statusDetailsLocal, statusDetails, statusDetailsRemote, status };
   });
 
-export type GitLocalStatusServices = Effect.Success<ReturnType<typeof makeGitLocalStatus>>;
+export type GitLocalStatusServices = Effect.Success<ReturnType<typeof gitLocalStatus>>;

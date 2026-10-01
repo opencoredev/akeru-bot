@@ -1,8 +1,7 @@
 import * as Predicate from "effect/Predicate";
 import * as NodeCrypto from "node:crypto";
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns -- This canonical JSON walker must preserve arbitrary metadata values until JSON serialization.
-export function canonicalValue(value: unknown): unknown {
+export function canonicalValue<Value>(value: Value): Value | object {
   if (Array.isArray(value)) return value.map(canonicalValue);
 
   if (value === null || !Predicate.isObject(value)) return value;

@@ -21,8 +21,7 @@ import {
   type ChannelRuntimeShape,
 } from "./ChannelRuntimeTypes.ts";
 import {
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This pure helper creates the per-runtime channel lock map.
-  makeKeyedLock,
+  keyedLock,
   stopChannelsForBot,
   clearChannelThreadStatuses,
   shutdownAllChannels,
@@ -67,7 +66,7 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       deps,
       runtimes: new Map(),
       statuses: new WeakMap(),
-      withLock: makeKeyedLock(),
+      withLock: keyedLock(),
       runSdkCallback,
       transportScope,
       connecting: new Set(),
@@ -286,7 +285,7 @@ export type { ChannelReplyTarget } from "./ChannelRuntimeTypes.ts";
 
 export type { ChannelRestoreFailure } from "./ChannelRuntimeTypes.ts";
 
-export { makeKeyedLock } from "./ChannelOperations.ts";
+export { keyedLock } from "./ChannelOperations.ts";
 
 export { channelReplyTextWithFooter } from "./ChannelDelivery.ts";
 

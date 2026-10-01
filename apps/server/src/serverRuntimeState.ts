@@ -50,7 +50,7 @@ const runtimeOriginForConfig = (
   return `http://${hostname}:${port}`;
 };
 
-export const makePersistedServerRuntimeState = (input: {
+export const persistedServerRuntimeState = (input: {
   readonly config: Pick<ServerConfig.ServerConfig["Service"], "host" | "devUrl">;
   readonly port: number;
 }): Effect.Effect<PersistedServerRuntimeState> =>

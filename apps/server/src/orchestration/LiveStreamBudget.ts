@@ -33,7 +33,7 @@ function serializedSize<A extends object>(value: A): number {
 }
 
 /** One budget covers one subscription and its delivery stream, including the batch waiting for an RPC ACK. */
-export const makeLiveStreamBudget = Effect.fn("makeLiveStreamBudget")(function* (limits?: {
+export const liveStreamBudget = Effect.fn("makeLiveStreamBudget")(function* (limits?: {
   readonly maxItems?: number;
   readonly maxSerializedBytes?: number;
 }) {

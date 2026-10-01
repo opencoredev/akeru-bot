@@ -4,8 +4,7 @@ import type { PreviewSessionSnapshot } from "@akeru/contracts";
 import * as Match from "effect/Match";
 import {
   DEFAULT_VIEWPORT,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This browser layer owns the Browserbase context pool and its finalizer.
-  makeBrowserbaseContexts,
+  browserbaseContexts,
   requireBrowserbaseApiKey,
 } from "./BrowserbaseContext.ts";
 import {
@@ -92,7 +91,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
   const tabs = new Map<PreviewTabId, BrowserTab>();
   const activeByThread = new Map<string, PreviewTabId>();
 
-  const contexts = yield* makeBrowserbaseContexts(httpClient, settingsService);
+  const contexts = yield* browserbaseContexts(httpClient, settingsService);
 
   // One lease holds the shared browser open. close() releases it, which closes the
   // Browserbase session; the next getContext() opens a fresh one.

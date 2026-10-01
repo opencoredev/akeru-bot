@@ -15,7 +15,7 @@ import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import { isThreadDetailEvent } from "./ws.ts";
-import { makeOrchestrationIntegrationHarness } from "../integration/OrchestrationEngineHarness.integration.ts";
+import { orchestrationIntegrationHarness } from "../integration/OrchestrationEngineHarness.integration.ts";
 import {
   countingWsRpcProtocolLayer,
   makeCountingWsRpcClient,
@@ -61,7 +61,7 @@ it.live(
         providers,
         (provider) =>
           Effect.acquireUseRelease(
-            makeOrchestrationIntegrationHarness({ provider }),
+            orchestrationIntegrationHarness({ provider }),
             (harness) =>
               Effect.gen(function* () {
                 yield* seedTransferBudgetHistory(harness, provider);

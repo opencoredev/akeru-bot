@@ -14,7 +14,7 @@ import {
 import { EntityMemoryDbRow, selectColumns, decodeRow } from "./EntityMemoryRows.ts";
 import type { EntityMemoryStorageServices } from "./EntityMemoryStorage.ts";
 
-export const makeEntityMemoryQueries = (dependencies: {
+export const entityMemoryQueries = (dependencies: {
   sql: EntityMemoryStorageServices["sql"];
   getCurrent: EntityMemoryStorageServices["getCurrent"];
 }) =>
@@ -224,6 +224,4 @@ export const makeEntityMemoryQueries = (dependencies: {
     return { search, listCurrent, isRevisionAuthorized, listHistory, listByPartitions };
   });
 
-export type EntityMemoryQueriesServices = Effect.Success<
-  ReturnType<typeof makeEntityMemoryQueries>
->;
+export type EntityMemoryQueriesServices = Effect.Success<ReturnType<typeof entityMemoryQueries>>;
