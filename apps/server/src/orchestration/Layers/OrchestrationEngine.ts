@@ -239,9 +239,39 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           });
         }
 
+        let decisionReadModel = commandReadModel;
+        const command = envelope.command;
+        if (
+          (command.type === "thread.settle" || command.type === "thread.snooze") &&
+          projectionSnapshotQuery.getThreadCommandContext
+        ) {
+          const context = yield* projectionSnapshotQuery.getThreadCommandContext(command.threadId);
+          decisionReadModel = {
+            ...commandReadModel,
+            threads: commandReadModel.threads.map((thread) =>
+              thread.id === command.threadId ? { ...thread, ...context } : thread,
+            ),
+          };
+        } else if (
+          command.type === "thread.message.reaction.set" &&
+          projectionSnapshotQuery.getCommandMessage
+        ) {
+          const message = yield* projectionSnapshotQuery.getCommandMessage(command);
+          decisionReadModel = {
+            ...commandReadModel,
+            threads: commandReadModel.threads.map((thread) =>
+              thread.id === command.threadId
+                ? {
+                    ...thread,
+                    messages: Option.isSome(message) ? [message.value] : [],
+                  }
+                : thread,
+            ),
+          };
+        }
         const eventBase = yield* decideOrchestrationCommand({
           command: envelope.command,
-          readModel: commandReadModel,
+          readModel: decisionReadModel,
           ...(envelope.actor !== undefined ? { actor: envelope.actor } : {}),
         }).pipe(
           Effect.provideService(Crypto.Crypto, crypto),
