@@ -126,7 +126,7 @@ vi.mock("./ThreadSettingsSheet", () => ({
   useExistingThreadSettingsRoutePresentation: () => ({ present: vi.fn(), clear: vi.fn() }),
 }));
 vi.mock("./use-thread-settings-sheet-presentation", () => ({
-  useThreadSettingsSheetPresentation: () => ({
+  useThreadSettingsSheetRoute: () => ({
     isActive: false,
     isVisible: false,
     open: vi.fn(),

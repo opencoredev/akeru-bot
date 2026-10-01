@@ -1,6 +1,6 @@
+import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { KeyboardController } from "react-native-keyboard-controller";
-
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
 
 type PresentationPhase = "closed" | "opening" | "visible";
@@ -191,4 +191,59 @@ export function useThreadSettingsSheetPresentation(input: {
     onDismissed,
     onStackTransitionsFinished,
   } as const;
+}
+
+/**
+ * The presentation above, bound to its native settings route: pushes
+ * `routeName` once the sheet is visible, treats the host screen regaining focus
+ * as the dismissal (then calls `onDismissed`), and forwards the navigator's
+ * UIKit completion event so the queued keyboard restore runs on landing.
+ */
+export function useThreadSettingsSheetRoute(input: {
+  readonly editorRef: RefObject<ComposerEditorHandle | null>;
+  readonly isEditorFocused: boolean;
+  readonly routeName: string;
+  readonly onDismissed?: () => void;
+}) {
+  const navigation = useNavigation();
+  const presentation = useThreadSettingsSheetPresentation({
+    editorRef: input.editorRef,
+    isEditorFocused: input.isEditorFocused,
+  });
+  const { routeName, onDismissed } = input;
+  const routePresentedRef = useRef(false);
+
+  useEffect(() => {
+    if (!presentation.isVisible || routePresentedRef.current) {
+      return;
+    }
+
+    routePresentedRef.current = true;
+    navigation.dispatch(StackActions.push(routeName));
+  }, [navigation, presentation.isVisible, routeName]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!routePresentedRef.current) {
+        return;
+      }
+
+      routePresentedRef.current = false;
+      presentation.onDismissed();
+      onDismissed?.();
+    }, [onDismissed, presentation.onDismissed]),
+  );
+
+  useEffect(
+    () =>
+      // UIKit's completion callback for the sheet dismissal, surfaced by the
+      // native-stack patch. This is when the queued keyboard restore runs.
+      (navigation as unknown as NavigationWithFinishTransitioning).addListener(
+        "finishTransitioning",
+        presentation.onStackTransitionsFinished,
+      ),
+    [navigation, presentation.onStackTransitionsFinished],
+  );
+
+  return presentation;
 }

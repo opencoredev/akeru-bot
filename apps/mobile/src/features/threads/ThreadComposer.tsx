@@ -14,7 +14,6 @@ import {
   serializeComposerFileLink,
   type ComposerTrigger,
 } from "@akeru/shared/composerTrigger";
-import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Image, Platform, Pressable, StyleSheet, View } from "react-native";
 import ImageViewing from "react-native-image-viewing";
@@ -63,16 +62,14 @@ import {
   type ExistingThreadSettingsRouteSession,
   useExistingThreadSettingsRoutePresentation,
 } from "./ThreadSettingsSheet";
-import {
-  useThreadSettingsSheetPresentation,
-  type NavigationWithFinishTransitioning,
-} from "./use-thread-settings-sheet-presentation";
+import { useThreadSettingsSheetRoute } from "./use-thread-settings-sheet-presentation";
 import { buildBotUsageCapPatch } from "./botStepUsage";
 import {
   ComposerConnectionStatusPill,
   composerConnectionStatus,
 } from "./composer-connection-status";
 import { COMPOSER_LAYOUT_TRANSITION, ComposerSurface } from "./composer-surface";
+
 export {
   COMPOSER_COLLAPSED_CHROME,
   COMPOSER_EXPANDED_CHROME,
@@ -118,7 +115,6 @@ const NO_PROVIDERS: NonNullable<ThreadComposerProps["serverConfig"]>["providers"
 
 export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposerProps) {
   const { t, plural } = useMobileI18n();
-  const navigation = useNavigation();
   const { themeAppearance } = useAppearancePreferences();
   const isDarkMode = themeAppearance === "dark";
   const foregroundColor = useThemeColor("--color-foreground");
@@ -127,11 +123,18 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const fallbackInputRef = useRef<ComposerEditorHandle>(null);
   const inputRef = props.editorRef ?? fallbackInputRef;
   const [isFocused, setIsFocused] = useState(false);
-  const settingsSheetPresentation = useThreadSettingsSheetPresentation({
+  const settingsRoutePresentation = useExistingThreadSettingsRoutePresentation();
+  const settingsOwnerId = scopedThreadKey(props.environmentId, props.selectedThread.id);
+  const clearSettingsRouteSession = useCallback(
+    () => settingsRoutePresentation.clear(settingsOwnerId),
+    [settingsOwnerId, settingsRoutePresentation.clear],
+  );
+  const settingsSheetPresentation = useThreadSettingsSheetRoute({
     editorRef: inputRef,
     isEditorFocused: isFocused,
+    routeName: "ThreadSettingsSheet",
+    onDismissed: clearSettingsRouteSession,
   });
-  const settingsRoutePresentation = useExistingThreadSettingsRoutePresentation();
   const bots = useAtomValue(environmentBotsAtom(props.environmentId));
   const subscriptionAuth = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId: props.environmentId, input: {} }),
@@ -164,7 +167,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     : (bot?.name ?? providerBotName(composerProviderDriver));
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const deleteBot = useAtomCommand(botEnvironment.delete, { reportFailure: false });
-  const settingsRoutePresentedRef = useRef(false);
   const wasExpandedBeforePreviewRef = useRef(false);
   const inFlightThreadIdsRef = useRef(new Set<string>());
   const { onExpandedChange } = props;
@@ -417,7 +419,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     const error = squashAtomCommandFailure(result);
     return error instanceof Error ? error.message : t("The command failed.");
   }, [bot, deleteBot, props.environmentId, t]);
-  const settingsOwnerId = scopedThreadKey(props.environmentId, props.selectedThread.id);
   const settingsRouteSession = useMemo<ExistingThreadSettingsRouteSession>(
     () => ({
       ownerId: settingsOwnerId,
@@ -476,38 +477,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       settingsRoutePresentation.present(settingsRouteSession);
     }
   }, [settingsRoutePresentation.present, settingsRouteSession, settingsSheetPresentation.isActive]);
-
-  useEffect(() => {
-    if (!settingsSheetPresentation.isVisible || settingsRoutePresentedRef.current) {
-      return;
-    }
-
-    settingsRoutePresentedRef.current = true;
-    navigation.dispatch(StackActions.push("ThreadSettingsSheet"));
-  }, [navigation, settingsSheetPresentation.isVisible]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!settingsRoutePresentedRef.current) {
-        return;
-      }
-
-      settingsRoutePresentedRef.current = false;
-      settingsSheetPresentation.onDismissed();
-      settingsRoutePresentation.clear(settingsOwnerId);
-    }, [settingsOwnerId, settingsRoutePresentation.clear, settingsSheetPresentation.onDismissed]),
-  );
-
-  useEffect(
-    () =>
-      // UIKit's completion callback for the sheet dismissal, surfaced by the
-      // native-stack patch. This is when the queued keyboard restore runs.
-      (navigation as unknown as NavigationWithFinishTransitioning).addListener(
-        "finishTransitioning",
-        settingsSheetPresentation.onStackTransitionsFinished,
-      ),
-    [navigation, settingsSheetPresentation.onStackTransitionsFinished],
-  );
 
   return (
     <Animated.View

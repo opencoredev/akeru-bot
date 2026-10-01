@@ -1,11 +1,6 @@
 import { useMobileI18n } from "../../lib/i18n";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
-import {
-  StackActions,
-  useFocusEffect,
-  useNavigation,
-  usePreventRemove,
-} from "@react-navigation/native";
+import { StackActions, useNavigation, usePreventRemove } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import {
@@ -17,12 +12,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "../../lib/useThemeColor";
 import { themeColorWithAlpha } from "../../lib/mobileTheme";
 import { useFontFamily } from "../../lib/useFontFamily";
-
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@akeru/client-runtime/state/runtime";
-
 import { ComposerEditor, type ComposerEditorHandle } from "../../components/ComposerEditor";
 import { composerActionIsDictation } from "@akeru/client-runtime/dictation";
 import { DictationControls } from "../../components/DictationControls";
@@ -38,11 +31,7 @@ import { ComposerAttachmentStrip } from "../../components/ComposerAttachmentStri
 import { ProviderIcon } from "../../components/ProviderIcon";
 import { AppText as Text } from "../../components/AppText";
 import { ComposerSurface } from "./composer-surface";
-import {
-  useThreadSettingsSheetPresentation,
-  type NavigationWithFinishTransitioning,
-} from "./use-thread-settings-sheet-presentation";
-
+import { useThreadSettingsSheetRoute } from "./use-thread-settings-sheet-presentation";
 import { makeTurnCommandMetadata } from "../../lib/commandMetadata";
 import { convertPastedImagesToAttachments, pickComposerImages } from "../../lib/composerImages";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
@@ -50,9 +39,6 @@ import { useAppearancePreferences } from "../settings/appearance/AppearancePrefe
 import {
   clearComposerDraftContent,
   getComposerDraftSnapshot,
-  mergeComposerDraftContent,
-  restoreComposerDraftSnapshot,
-  type ComposerDraft,
 } from "../../state/use-composer-drafts";
 import { useEnvironmentServerConfig, useProjects } from "../../state/entities";
 import { resolveSelectableModelSelection } from "../../lib/modelOptions";
@@ -61,7 +47,7 @@ import { useRemoteConnectionStatus } from "../../state/use-remote-environment-re
 import { useNewTaskFlow } from "./new-task-flow-provider";
 import { useCreateProjectThread } from "./use-project-actions";
 import { resolveDraftProjectSelection } from "./new-task-project-selection";
-import { useIncomingShare } from "../sharing/IncomingShareProvider";
+import { useNewTaskShareImport } from "./use-new-task-share-import";
 
 export function NewTaskDraftScreen(props: {
   readonly initialProjectRef?: {
@@ -73,18 +59,11 @@ export function NewTaskDraftScreen(props: {
   /** Durable native share inbox item to merge into this project draft. */
   readonly incomingShareId?: string;
 }) {
-  const { plural, t } = useMobileI18n();
+  const { t } = useMobileI18n();
   const projects = useProjects();
   const createProjectThread = useCreateProjectThread();
   const flow = useNewTaskFlow();
   const navigation = useNavigation();
-  const {
-    consumeShare,
-    getShare,
-    isLoading: isIncomingShareInboxLoading,
-    releaseShareReservation,
-    reserveShare,
-  } = useIncomingShare();
   const insets = useSafeAreaInsets();
   const { themeAppearance: colorScheme } = useAppearancePreferences();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
@@ -128,9 +107,10 @@ export function NewTaskDraftScreen(props: {
     status: dictation.status,
   });
   const [isComposerFocused, setIsComposerFocused] = useState(false);
-  const settingsSheetPresentation = useThreadSettingsSheetPresentation({
+  const settingsSheetPresentation = useThreadSettingsSheetRoute({
     editorRef: promptInputRef,
     isEditorFocused: isComposerFocused,
+    routeName: "ThreadSettings",
   });
   useEffect(() => {
     if (Platform.OS !== "ios") {
@@ -146,55 +126,22 @@ export function NewTaskDraftScreen(props: {
       }
     };
   }, [navigation]);
-  const settingsRoutePresentedRef = useRef(false);
-  useEffect(() => {
-    if (!settingsSheetPresentation.isVisible || settingsRoutePresentedRef.current) {
-      return;
-    }
-
-    settingsRoutePresentedRef.current = true;
-    navigation.dispatch(StackActions.push("ThreadSettings"));
-  }, [navigation, settingsSheetPresentation.isVisible]);
-  useFocusEffect(
-    useCallback(() => {
-      if (!settingsRoutePresentedRef.current) {
-        return;
-      }
-
-      settingsRoutePresentedRef.current = false;
-      settingsSheetPresentation.onDismissed();
-    }, [settingsSheetPresentation.onDismissed]),
-  );
-  useEffect(
-    () =>
-      // UIKit's completion callback for the sheet dismissal, surfaced by the
-      // native-stack patch. This is when the queued keyboard restore runs.
-      (navigation as unknown as NavigationWithFinishTransitioning).addListener(
-        "finishTransitioning",
-        settingsSheetPresentation.onStackTransitionsFinished,
-      ),
-    [navigation, settingsSheetPresentation.onStackTransitionsFinished],
-  );
-  const [importingShareKey, setImportingShareKey] = useState<string | null>(null);
-  const [isCancellingShareImport, setIsCancellingShareImport] = useState(false);
-  const [cancelledIncomingShareId, setCancelledIncomingShareId] = useState<string | null>(null);
   const [isReturningToProjectPicker, setIsReturningToProjectPicker] = useState(false);
-  const [shareImportAttempt, setShareImportAttempt] = useState(0);
-  const startedShareImportKeyRef = useRef<string | null>(null);
-  const cancellingShareImportKeyRef = useRef<string | null>(null);
-  const shareImportDraftBackupRef = useRef(new Map<string, ComposerDraft>());
-  const activeShareImportTokenRef = useRef<symbol | null>(null);
-  const shareImportMountedRef = useRef(true);
-  const latestDraftKeyRef = useRef(flow.draftKey);
-  const latestIncomingShareIdRef = useRef(props.incomingShareId);
-  latestDraftKeyRef.current = flow.draftKey;
+  const {
+    isImportingShare,
+    isCancellingShareImport,
+    isIncomingShareTransferPending,
+    isIncomingShareReady,
+  } = useNewTaskShareImport({
+    incomingShareId: props.incomingShareId,
+    initialEnvironmentId: props.initialProjectRef?.environmentId,
+    initialProjectId: props.initialProjectRef?.projectId,
+    draftKey: flow.draftKey,
+    selectedProject,
+  });
   useEffect(() => {
     setDictationGeneration((generation) => generation + 1);
   }, [flow.draftKey, selectedProject?.environmentId]);
-  latestIncomingShareIdRef.current = props.incomingShareId;
-  const isImportingShare = importingShareKey !== null;
-  const alertedUnavailableIncomingShareIdRef = useRef<string | null>(null);
-  const incomingShare = props.incomingShareId ? getShare(props.incomingShareId) : null;
   const requestedInitialProjectAvailable = Boolean(
     props.initialProjectRef?.environmentId &&
     props.initialProjectRef.projectId &&
@@ -206,34 +153,17 @@ export function NewTaskDraftScreen(props: {
   );
   const isProjectPickerReturnActive =
     isReturningToProjectPicker && !requestedInitialProjectAvailable;
-  const isIncomingShareTransferPending = Boolean(
-    incomingShare && cancelledIncomingShareId !== props.incomingShareId,
-  );
   usePreventRemove(
     (isIncomingShareTransferPending && !isProjectPickerReturnActive) || isCancellingShareImport,
     () => undefined,
   );
-  const hasImportedIncomingShare = Boolean(
-    props.incomingShareId &&
-    flow.draftKey &&
-    getComposerDraftSnapshot(flow.draftKey).importedShareIds?.includes(props.incomingShareId),
-  );
-  const isIncomingShareUnavailable = Boolean(
-    props.incomingShareId &&
-    !isIncomingShareInboxLoading &&
-    !incomingShare &&
-    !hasImportedIncomingShare,
-  );
-  const isIncomingShareReady =
-    !props.incomingShareId ||
-    (hasImportedIncomingShare && !incomingShare) ||
-    isIncomingShareUnavailable;
   const appliedInitialProjectKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (cancelledIncomingShareId === props.incomingShareId) {
-      navigation.goBack();
-    }
-  }, [cancelledIncomingShareId, navigation, props.incomingShareId]);
+  useEffect(
+    () => () => {
+      appliedInitialProjectKeyRef.current = null;
+    },
+    [],
+  );
   useEffect(() => {
     if (!isReturningToProjectPicker) {
       return;
@@ -256,18 +186,6 @@ export function NewTaskDraftScreen(props: {
     props.incomingShareId,
     requestedInitialProjectAvailable,
   ]);
-  useEffect(() => {
-    if (!shareImportMountedRef.current) {
-      startedShareImportKeyRef.current = null;
-    }
-    shareImportMountedRef.current = true;
-    return () => {
-      appliedInitialProjectKeyRef.current = null;
-      shareImportMountedRef.current = false;
-      activeShareImportTokenRef.current = null;
-      cancellingShareImportKeyRef.current = null;
-    };
-  }, []);
 
   const { beginEditingPendingTask, cancelEditingPendingTask, editingPendingTask } = flow;
   const attemptedPendingTaskIdRef = useRef<string | null>(null);
@@ -374,211 +292,6 @@ export function NewTaskDraftScreen(props: {
     selectedProject,
     selectedProjectKey,
     setProject,
-  ]);
-
-  useEffect(() => {
-    const shareId = props.incomingShareId;
-    const draftKey = flow.draftKey;
-    const destinationProject = selectedProject;
-    const initialEnvironmentId = props.initialProjectRef?.environmentId;
-    const initialProjectId = props.initialProjectRef?.projectId;
-    const selectedProjectMatchesRoute =
-      !initialEnvironmentId ||
-      !initialProjectId ||
-      (destinationProject?.environmentId === initialEnvironmentId &&
-        destinationProject.id === initialProjectId);
-    if (
-      !shareId ||
-      !draftKey ||
-      !destinationProject ||
-      !selectedProjectMatchesRoute ||
-      cancelledIncomingShareId === shareId
-    ) {
-      return;
-    }
-    const importKey = `${shareId}:${draftKey}`;
-    if (
-      startedShareImportKeyRef.current === importKey ||
-      cancellingShareImportKeyRef.current === importKey
-    ) {
-      return;
-    }
-
-    if (!incomingShare) {
-      if (isIncomingShareUnavailable && alertedUnavailableIncomingShareIdRef.current !== shareId) {
-        alertedUnavailableIncomingShareIdRef.current = shareId;
-        Alert.alert(
-          t("Shared content unavailable"),
-          t(
-            "The shared content is no longer in the inbox. You can continue editing this chat draft.",
-          ),
-        );
-      }
-      return;
-    }
-
-    if (alertedUnavailableIncomingShareIdRef.current === shareId) {
-      alertedUnavailableIncomingShareIdRef.current = null;
-    }
-    startedShareImportKeyRef.current = importKey;
-    const draftBackup =
-      shareImportDraftBackupRef.current.get(importKey) ?? getComposerDraftSnapshot(draftKey);
-    shareImportDraftBackupRef.current.set(importKey, draftBackup);
-    const importToken = Symbol(importKey);
-    let didReserveShare = false;
-    let needsDraftRestore = false;
-    activeShareImportTokenRef.current = importToken;
-    setImportingShareKey(importKey);
-    void (async () => {
-      await reserveShare(shareId, {
-        environmentId: String(destinationProject.environmentId),
-        projectId: String(destinationProject.id),
-      });
-      didReserveShare = true;
-      if (
-        !shareImportMountedRef.current ||
-        activeShareImportTokenRef.current !== importToken ||
-        latestDraftKeyRef.current !== draftKey ||
-        latestIncomingShareIdRef.current !== shareId
-      ) {
-        return;
-      }
-      needsDraftRestore = true;
-      const { skippedAttachmentCount } = await mergeComposerDraftContent(draftKey, {
-        text: incomingShare.text,
-        attachments: incomingShare.attachments,
-        sourceShareId: shareId,
-      });
-      if (
-        !shareImportMountedRef.current ||
-        activeShareImportTokenRef.current !== importToken ||
-        latestDraftKeyRef.current !== draftKey ||
-        latestIncomingShareIdRef.current !== shareId
-      ) {
-        // The durable reservation makes an interrupted transfer resume only
-        // in this project instead of copying into a second project draft.
-        return;
-      }
-      await consumeShare(shareId);
-      if (!shareImportMountedRef.current || activeShareImportTokenRef.current !== importToken) {
-        return;
-      }
-      const warnings = [...incomingShare.warnings];
-      if (skippedAttachmentCount > 0) {
-        warnings.push(
-          plural(skippedAttachmentCount, {
-            one: "{count} shared image was skipped because this draft reached the attachment limit.",
-            other:
-              "{count} shared images were skipped because this draft reached the attachment limit.",
-          }),
-        );
-      }
-      if (warnings.length > 0) {
-        Alert.alert(t("Some shared content was skipped"), warnings.join("\n"));
-      }
-      shareImportDraftBackupRef.current.delete(importKey);
-    })()
-      .catch((error) => {
-        if (!shareImportMountedRef.current || activeShareImportTokenRef.current !== importToken) {
-          return;
-        }
-        Alert.alert(
-          t("Could not import shared content"),
-          error instanceof Error ? error.message : t("The shared content could not be saved."),
-          [
-            {
-              text: t("Cancel import"),
-              style: "cancel",
-              onPress: () => {
-                const cancelImport = async (): Promise<void> => {
-                  if (!shareImportMountedRef.current) {
-                    return;
-                  }
-                  // Latch synchronously before restoring the draft. The
-                  // restore publishes atom state and can re-run the import
-                  // effect before React commits the cancelling state update.
-                  cancellingShareImportKeyRef.current = importKey;
-                  setIsCancellingShareImport(true);
-                  try {
-                    if (needsDraftRestore) {
-                      await restoreComposerDraftSnapshot(draftKey, draftBackup);
-                      needsDraftRestore = false;
-                    }
-                    if (didReserveShare) {
-                      await releaseShareReservation(shareId, {
-                        environmentId: String(destinationProject.environmentId),
-                        projectId: String(destinationProject.id),
-                      });
-                    }
-                    shareImportDraftBackupRef.current.delete(importKey);
-                    if (shareImportMountedRef.current) {
-                      setIsCancellingShareImport(false);
-                      setCancelledIncomingShareId(shareId);
-                    }
-                  } catch (cancelError) {
-                    if (!shareImportMountedRef.current) {
-                      return;
-                    }
-                    Alert.alert(
-                      t("Could not cancel import"),
-                      cancelError instanceof Error
-                        ? cancelError.message
-                        : t("The shared content could not be restored safely."),
-                      [
-                        {
-                          text: t("Retry import"),
-                          onPress: () => {
-                            cancellingShareImportKeyRef.current = null;
-                            setIsCancellingShareImport(false);
-                            setShareImportAttempt((attempt) => attempt + 1);
-                          },
-                        },
-                        {
-                          text: t("Retry cancel"),
-                          onPress: () => void cancelImport(),
-                        },
-                      ],
-                      { cancelable: false },
-                    );
-                  }
-                };
-                void cancelImport();
-              },
-            },
-            {
-              text: t("Retry"),
-              onPress: () => setShareImportAttempt((attempt) => attempt + 1),
-            },
-          ],
-          { cancelable: false },
-        );
-      })
-      .finally(() => {
-        if (startedShareImportKeyRef.current === importKey) {
-          // Every terminal path, including an invalidated operation, must
-          // release the synchronous start latch so this transfer can retry.
-          startedShareImportKeyRef.current = null;
-        }
-        if (shareImportMountedRef.current && activeShareImportTokenRef.current === importToken) {
-          activeShareImportTokenRef.current = null;
-          setImportingShareKey(null);
-        }
-      });
-  }, [
-    consumeShare,
-    cancelledIncomingShareId,
-    flow.draftKey,
-    hasImportedIncomingShare,
-    incomingShare,
-    isIncomingShareInboxLoading,
-    isIncomingShareUnavailable,
-    props.incomingShareId,
-    props.initialProjectRef?.environmentId,
-    props.initialProjectRef?.projectId,
-    releaseShareReservation,
-    reserveShare,
-    selectedProject,
-    shareImportAttempt,
   ]);
 
   const selectedEnvironmentLabel =
