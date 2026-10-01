@@ -49,12 +49,12 @@ function normalizeScreenOptions(
     return options;
   }
 
-  const { headerTintColor, ...rest } = options;
-
-  // SAFETY: App-only experimental items are implemented by the native-stack patch bundled with this app.
+  // SAFETY: Present tint colors are converted to strings; experimental items are supported by the bundled native-stack patch.
   return {
-    ...rest,
-    ...(headerTintColor === undefined ? {} : { headerTintColor: String(headerTintColor) }),
+    ...options,
+    ...(options.headerTintColor === undefined
+      ? {}
+      : { headerTintColor: String(options.headerTintColor) }),
   } as NativeStackNavigationOptions;
 }
 

@@ -58,6 +58,16 @@ describe("native screen options", () => {
     expect(navigation.setOptions).toHaveBeenCalledTimes(3);
   });
 
+  it("preserves an explicit undefined tint so navigation can clear a previous color", () => {
+    const options: AppNativeStackNavigationOptions = {};
+    Object.defineProperty(options, "headerTintColor", { value: undefined, enumerable: true });
+    render(options);
+    expect(navigation.setOptions.mock.calls[0]![0]).toHaveProperty("headerTintColor", undefined);
+    render({});
+    expect(navigation.setOptions).toHaveBeenCalledTimes(2);
+    expect(navigation.setOptions.mock.calls[1]![0]).not.toHaveProperty("headerTintColor");
+  });
+
   it("preserves ref identity and tolerates circular option version values", () => {
     const ref = { current: { nativeView: 1 } };
     const version: CircularVersion = {};
