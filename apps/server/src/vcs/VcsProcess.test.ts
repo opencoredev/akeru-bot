@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, expect, it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
@@ -309,7 +310,7 @@ describe("VcsProcess.run", () => {
         outputMode: "error",
       }).pipe(Effect.flip);
 
-      assert(error._tag === "VcsProcessOutputLimitError");
+      assert(Predicate.isTagged(error, "VcsProcessOutputLimitError"));
       expect(error.stream).toBe("stdout");
       expect(error.maxBytes).toBe(128);
       expect(error.observedBytes).toBeGreaterThan(error.maxBytes);

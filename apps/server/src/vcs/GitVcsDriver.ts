@@ -1,5 +1,5 @@
+import { parseGitRemoteVerboseOutput } from "./GitOutput.ts";
 import * as NodeCrypto from "node:crypto";
-
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -8,7 +8,6 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { ChildProcessSpawner } from "effect/unstable/process";
-
 import {
   GitCommandError,
   VcsProcessExitError,
@@ -90,13 +89,6 @@ export interface ExecuteGitProgress {
   }) => Effect.Effect<void, never>;
 }
 
-export interface GitPushResult {
-  status: "pushed" | "skipped_up_to_date";
-  branch: string;
-  upstreamBranch?: string | undefined;
-  setUpstream?: boolean | undefined;
-}
-
 export interface GitRenameBranchInput {
   cwd: string;
   oldBranch: string;
@@ -111,13 +103,6 @@ export interface GitEnsureRemoteInput {
   cwd: string;
   preferredName: string;
   url: string;
-}
-
-export interface GitFetchRemoteBranchInput {
-  cwd: string;
-  remoteName: string;
-  remoteBranch: string;
-  localBranch: string;
 }
 
 export interface GitFetchRemoteTrackingBranchInput {
@@ -147,13 +132,6 @@ export interface GitResolveRemoteTrackingCommitResult {
   remoteRefName: string;
 }
 
-export interface GitSetBranchUpstreamInput {
-  cwd: string;
-  branch: string;
-  remoteName: string;
-  remoteBranch: string;
-}
-
 export interface GitRemoteStatusOptions {
   readonly refreshUpstream?: boolean;
 }
@@ -169,15 +147,6 @@ export class GitVcsDriver extends Context.Service<
       cwd: string,
       options?: GitRemoteStatusOptions,
     ) => Effect.Effect<GitRemoteStatusDetails, GitCommandError>;
-    readonly pushCurrentBranch: (
-      cwd: string,
-      fallbackBranch: string | null,
-      options?: { readonly remoteName?: string | null },
-    ) => Effect.Effect<GitPushResult, GitCommandError>;
-    readonly readConfigValue: (
-      cwd: string,
-      key: string,
-    ) => Effect.Effect<string | null, GitCommandError>;
     readonly listRefs: (
       input: VcsListRefsInput,
     ) => Effect.Effect<VcsListRefsResult, GitCommandError>;
@@ -196,14 +165,8 @@ export class GitVcsDriver extends Context.Service<
     readonly resolveRemoteTrackingCommit: (
       input: GitResolveRemoteTrackingCommitInput,
     ) => Effect.Effect<GitResolveRemoteTrackingCommitResult, GitCommandError>;
-    readonly fetchRemoteBranch: (
-      input: GitFetchRemoteBranchInput,
-    ) => Effect.Effect<void, GitCommandError>;
     readonly fetchRemoteTrackingBranch: (
       input: GitFetchRemoteTrackingBranchInput,
-    ) => Effect.Effect<void, GitCommandError>;
-    readonly setBranchUpstream: (
-      input: GitSetBranchUpstreamInput,
     ) => Effect.Effect<void, GitCommandError>;
     readonly removeWorktree: (
       input: VcsRemoveWorktreeInput,
@@ -222,7 +185,6 @@ export class GitVcsDriver extends Context.Service<
       input: VcsSwitchRefInput,
     ) => Effect.Effect<VcsSwitchRefResult, GitCommandError>;
     readonly initRepo: (input: VcsInitInput) => Effect.Effect<void, GitCommandError>;
-    readonly listLocalBranchNames: (cwd: string) => Effect.Effect<string[], GitCommandError>;
   }
 >()("akeru-bot/vcs/GitVcsDriver") {}
 
@@ -284,38 +246,6 @@ function chunkPathsForGitCheckIgnore(relativePaths: ReadonlyArray<string>): stri
   }
 
   return chunks;
-}
-
-function parseGitRemoteVerboseOutput(
-  output: string,
-): Map<string, { url?: string; pushUrl?: string }> {
-  const remotes = new Map<string, { url?: string; pushUrl?: string }>();
-  for (const line of output.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) {
-      continue;
-    }
-
-    const match = /^(\S+)\s+(\S+)\s+\((fetch|push)\)$/.exec(trimmed);
-    if (!match) {
-      continue;
-    }
-
-    const name = match[1];
-    const url = match[2];
-    const direction = match[3];
-    if (!name || !url || !direction) {
-      continue;
-    }
-    const remote = remotes.get(name) ?? {};
-    if (direction === "fetch") {
-      remote.url = url;
-    } else {
-      remote.pushUrl = url;
-    }
-    remotes.set(name, remote);
-  }
-  return remotes;
 }
 
 const gitCommand = (
