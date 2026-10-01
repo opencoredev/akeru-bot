@@ -1,7 +1,7 @@
 # Remote access
 
 Reach an Akeru Bot environment from another device: a phone, a tablet, a browser, or a second
-computer. The environment server keeps owning projects, chats, files, terminals, Git state, and
+computer. The environment server keeps owning projects, chats, files, Git state, and
 provider sessions. Remote access only changes how a client reaches that server. Nothing proxies
 through a hosted Akeru service.
 
@@ -171,7 +171,7 @@ a Tailscale or custom HTTPS endpoint is the compatible choice for remote browser
 ### Standard versus admin scope
 
 `akeru pair` and **Create link** in the app mint standard credentials. They grant a client
-everything it needs to chat, operate terminals, and submit reviews, but they cannot list or
+access to chat and control bot work, but they cannot list or
 revoke other pairing links and sessions, which is what **Settings > Connections** uses to manage
 access.
 

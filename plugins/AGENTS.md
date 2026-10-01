@@ -16,4 +16,4 @@
 - Use `approval-pending` with an explicit blocker when a vendor must approve access.
 - Keep tokens and secrets in the host environment or service sign-in flow. Never put them in a manifest or ask an MCP server to export a provider token or secret.
 - Declare an approval for every applicable send, pay, delete, production, secrets, publishing, signatures, refunds, and account-wide action.
-- Run `bun run plugins:check` and the focused catalog tests after each entry change.
+- Run `vp run plugins:check` and the focused catalog tests after each entry change.
