@@ -1,7 +1,7 @@
 import { EventId, TurnId, type OrchestrationThreadActivity } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildBotStepMeters, formatBotStepEngine } from "./botStepMeter.logic";
+import { buildBotStepMeters, formatBotStepEngine } from "./bot-step-usage.ts";
 
 function activity(
   id: string,
@@ -51,5 +51,24 @@ describe("bot step meter", () => {
 
     expect(meters.get("turn-1")).toMatchObject({ tokens: null, costUsd: null });
     expect(formatBotStepEngine(meters.get("turn-1")!.engine)).toBe("anthropic/claude-opus-5");
+  });
+  it("applies a cap hit before updates and keeps the last valid snapshot", () => {
+    const snapshot = {
+      botId: "bot-1",
+      engine: { provider: "codex", model: "gpt-5.6-sol" },
+      tokens: 100,
+      estimatedCost: { status: "available", usd: 0.1 },
+    };
+    const meters = buildBotStepMeters([
+      activity("cap", "bot.usage-cap.hit", {}),
+      activity("usage1", "bot.step-usage.updated", snapshot),
+      activity("usage2", "bot.step-usage.updated", { ...snapshot, tokens: 200 }),
+      activity("invalid", "bot.step-usage.updated", { tokens: "invalid" }),
+      { ...activity("no-turn", "bot.step-usage.updated", snapshot), turnId: null },
+    ]);
+    expect(meters.size).toBe(1);
+    expect(meters.get("turn-1")).toMatchObject({ tokens: 200, hardStopReached: true });
+    expect(formatBotStepEngine(snapshot.engine)).toBe("codex/gpt-5.6-sol");
+    expect(buildBotStepMeters([activity("cap", "bot.usage-cap.hit", {})]).size).toBe(0);
   });
 });

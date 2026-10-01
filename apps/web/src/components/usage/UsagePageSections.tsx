@@ -2,7 +2,7 @@ import type { UsageProviderKind, UsageProviderPlanLimits } from "@akeru/contract
 import { CheckIcon, XIcon } from "lucide-react";
 
 import { cn } from "../../lib/utils";
-import type { EnvironmentUsageStatus } from "../../state/usage";
+import type { EnvironmentUsageStatus } from "@akeru/client-runtime/usage";
 import { Skeleton } from "../ui/skeleton";
 import { UsagePlanMeters } from "./UsageCharts";
 import { PROVIDER_ORDER, PROVIDER_PRESENTATION } from "./usageProviders";

@@ -1,7 +1,7 @@
 import { formatTokens, formatUsd } from "@akeru/shared/usageFormat";
 
 import { useI18n } from "../../i18n";
-import { formatBotStepEngine, type BotStepMeterData } from "./botStepMeter.logic";
+import { formatBotStepEngine, type BotStepMeterData } from "@akeru/client-runtime/bot-step-usage";
 
 export function BotStepMeter({ meter }: { readonly meter: BotStepMeterData | undefined }) {
   const { t } = useI18n();

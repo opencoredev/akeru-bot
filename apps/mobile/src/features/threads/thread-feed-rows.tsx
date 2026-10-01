@@ -31,7 +31,7 @@ import { replyPlaybackControlProps } from "../replyPlayback/useReplyPlaybackThre
 import { useOptionalReplyPlayback } from "../replyPlayback/ReplyPlaybackProvider";
 import { cn } from "../../lib/cn";
 import type { ThreadFeedEntry } from "../../lib/threadActivity";
-import { formatBotStepEngine, type BotStepMeterData } from "./botStepUsage";
+import { formatBotStepEngine, type BotStepMeterData } from "@akeru/client-runtime/bot-step-usage";
 import { ThreadWorkGroupToggle, ThreadWorkLog } from "./thread-work-log";
 import { MessageAttachmentFile, MessageAttachmentImage } from "./thread-feed-images";
 import type { MarkdownStyleSet, MarkdownStyleSets } from "./thread-feed-markdown";

@@ -1,17 +1,19 @@
+import {
+  asRecord,
+  extractToolCommand,
+  stripTrailingExitCode,
+  extractWorkLogItemType,
+  extractWorkLogRequestKind,
+  extractChangedFiles,
+} from "@akeru/client-runtime/work-log-command";
 import { isSilentRunActivity } from "@akeru/client-runtime/silent-run";
 import { isBackgroundTaskActivity } from "@akeru/client-runtime/state/subagentRuntime";
 import { type OrchestrationThreadActivity } from "@akeru/contracts";
 import { type WorkLogEntry, type WorkLogToolLifecycleStatus } from "./workLogTypes";
 import {
-  extractToolCommand,
-  extractChangedFiles,
   extractToolTitle,
-  stripTrailingExitCode,
   extractToolDetail,
   extractToolCallId,
-  extractWorkLogItemType,
-  extractWorkLogRequestKind,
-  asRecord,
   normalizeCompactToolLabel,
 } from "./workLogToolDetail";
 import { isPluginSearchResult } from "./workLogStatus";

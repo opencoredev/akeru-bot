@@ -1,3 +1,4 @@
+import type { EnvironmentUsageStatus } from "@akeru/client-runtime/usage";
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, UsagePlanWindow, UsageProviderPlanLimits } from "@akeru/contracts";
 import type { MergedUsage } from "@akeru/shared/usageMerge";
@@ -11,7 +12,7 @@ import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { AppText as Text } from "../../components/AppText";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { environmentBotsAtom } from "../../state/bots";
-import { useUsage, type EnvironmentUsageStatus } from "../../state/usage";
+import { useUsage } from "../../state/usage";
 import { SettingsRow } from "../settings/components/SettingsRow";
 import { SettingsSection } from "../settings/components/SettingsSection";
 
