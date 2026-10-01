@@ -53,6 +53,8 @@ const buttonVariants = cva(
         // A square pickable avatar tile; aria-pressed marks the chosen one.
         "avatar-tile":
           "rounded-xl border-transparent transition-colors focus-visible:ring-foreground/20 focus-visible:ring-offset-0 not-aria-pressed:hover:bg-secondary/70 aria-pressed:border-border aria-pressed:bg-secondary [&_svg]:mx-0",
+        "keybinding-action":
+          "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent text-foreground data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent text-muted-foreground hover:text-foreground",
         default:
           "border-transparent bg-foreground text-background [:active,[data-pressed]]:bg-foreground/80 [:hover,[data-pressed]]:bg-foreground/88",
         // Primary action that turns into a quiet muted block while disabled.

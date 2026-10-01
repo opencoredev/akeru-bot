@@ -26,6 +26,8 @@ const selectTriggerVariants = cva(
           "border-transparent text-secondary-label focus-visible:ring-2 focus-visible:ring-foreground/20 data-pressed:bg-secondary [:hover,[data-pressed]]:bg-secondary [:hover,[data-pressed]]:text-foreground",
       },
       size: {
+        "keybinding-variable":
+          "h-7 gap-1 rounded-md px-[calc(--spacing(2)-1px)] text-xs before:rounded-[calc(var(--radius-md)-1px)] [&_svg:not([class*='size-'])]:size-3.5 font-mono",
         compact:
           "h-7 gap-1 rounded-md px-[calc(--spacing(2)-1px)] text-xs before:rounded-[calc(var(--radius-md)-1px)] [&_svg:not([class*='size-'])]:size-3.5",
         default: "min-h-9 px-[calc(--spacing(3)-1px)] sm:min-h-8",
@@ -96,10 +98,18 @@ function SelectTrigger({
   );
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+function SelectValue({
+  className,
+  size,
+  ...props
+}: SelectPrimitive.Value.Props & { size?: "keybinding-condition" }) {
   return (
     <SelectPrimitive.Value
-      className={cn("flex-1 truncate data-placeholder:text-placeholder", className)}
+      className={cn(
+        "flex-1 truncate data-placeholder:text-placeholder",
+        size === "keybinding-condition" && "leading-7",
+        className,
+      )}
       data-slot="select-value"
       {...props}
     />
@@ -181,14 +191,18 @@ function SelectItem({
   className,
   children,
   hideIndicator: _hideIndicator = false,
+  size,
   ...props
 }: SelectPrimitive.Item.Props & {
   hideIndicator?: boolean;
+  size?: "keybinding-command" | "keybinding-condition";
 }) {
   return (
     <SelectPrimitive.Item
       className={cn(
         "flex min-h-9 in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-pointer items-center rounded-lg px-2.5 py-1.5 text-base outline-none data-selected:bg-secondary data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-highlighted:bg-secondary data-highlighted:text-foreground data-disabled:opacity-64 sm:min-h-8 sm:text-sm [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        size === "keybinding-command" && "py-1 text-[12px]",
+        size === "keybinding-condition" && "py-1 font-mono text-[12px]",
         className,
       )}
       data-slot="select-item"

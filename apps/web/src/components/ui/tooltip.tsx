@@ -25,7 +25,14 @@ function TooltipPopup({
   align?: TooltipPrimitive.Positioner.Props["align"];
   side?: TooltipPrimitive.Positioner.Props["side"];
   sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
-  variant?: "default" | "glass";
+  variant?:
+    | "default"
+    | "glass"
+    | "diagnostics-prose"
+    | "diagnostics-mono"
+    | "diagnostics-process"
+    | "keybinding-warning"
+    | "telemetry-history";
   anchor?: TooltipPrimitive.Positioner.Props["anchor"];
 }) {
   return (
@@ -44,6 +51,11 @@ function TooltipPopup({
             variant === "glass"
               ? "dropdown-glass shadow-xl shadow-black/25"
               : "dropdown-glass shadow-md/40",
+            variant === "diagnostics-prose" && "text-[11px] leading-relaxed text-wrap",
+            variant === "diagnostics-mono" && "font-mono text-[11px]",
+            variant === "diagnostics-process" && "font-mono text-[11px] leading-relaxed text-wrap",
+            variant === "keybinding-warning" && "leading-relaxed",
+            variant === "telemetry-history" && "space-y-0.5 text-left",
             className,
           )}
           data-slot="tooltip-popup"

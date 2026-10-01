@@ -7,15 +7,22 @@ import { cn } from "~/lib/utils";
 
 type InputProps = Omit<InputPrimitive.Props & React.RefAttributes<HTMLInputElement>, "size"> & {
   size?: "sm" | "compact" | "default" | "lg" | number;
+  reserveWarningSpace?: boolean;
   unstyled?: boolean;
   nativeInput?: boolean;
   /** "color-value" is the compact mono field beside a color swatch; pair it with `unstyled`. */
-  variant?: "default" | "color-value";
+  variant?:
+    | "default"
+    | "color-value"
+    | "keybinding-capture"
+    | "keybinding-expression"
+    | "keybinding-search";
 };
 
 function Input({
   className,
   size = "default",
+  reserveWarningSpace = false,
   unstyled = false,
   nativeInput = false,
   variant = "default",
@@ -68,6 +75,14 @@ function Input({
             "rounded-md before:rounded-[calc(var(--radius-md)-1px)]",
           variant === "color-value" &&
             "rounded-md border-0 bg-black/10 font-mono text-xs text-foreground shadow-none focus-within:bg-black/15 focus-within:ring-0 dark:bg-black/20 dark:focus-within:bg-black/25 [&_[data-slot=input]]:text-right",
+          variant === "keybinding-capture" && "border-ring/60 font-mono ring-3 ring-ring/15",
+          variant === "keybinding-expression" &&
+            "rounded-md font-mono text-xs leading-7 sm:leading-7",
+          variant === "keybinding-expression" && reserveWarningSpace && "pr-9",
+          variant === "keybinding-expression" &&
+            props["aria-invalid"] &&
+            "border-destructive/70 focus-visible:border-destructive",
+          variant === "keybinding-search" && "[&_[data-slot=input]]:pl-8",
           className,
         ) || undefined
       }

@@ -17,9 +17,26 @@ const POPOVER_POPUP_VARIANT_CLASSES = {
     "rounded-md p-0 [--viewport-inline-padding:0px] [&_[data-slot=popover-viewport]]:p-0",
 } as const;
 
-function PopoverTrigger({ className, children, ...props }: PopoverPrimitive.Trigger.Props) {
+function PopoverTrigger({
+  className,
+  children,
+  variant,
+  revealOnHover = false,
+  ...props
+}: PopoverPrimitive.Trigger.Props & { variant?: "keybinding-condition"; revealOnHover?: boolean }) {
   return (
-    <PopoverPrimitive.Trigger className={className} data-slot="popover-trigger" {...props}>
+    <PopoverPrimitive.Trigger
+      className={cn(
+        variant === "keybinding-condition" &&
+          "inline-flex h-6 max-w-full min-w-0 items-center gap-1 rounded-md px-1.5 text-left text-[12px] text-muted-foreground outline-none transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/24 data-[popup-open]:bg-accent/60 data-[popup-open]:text-foreground",
+        variant === "keybinding-condition" &&
+          revealOnHover &&
+          "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[popup-open]:opacity-100",
+        className,
+      )}
+      data-slot="popover-trigger"
+      {...props}
+    >
       {children}
     </PopoverPrimitive.Trigger>
   );
