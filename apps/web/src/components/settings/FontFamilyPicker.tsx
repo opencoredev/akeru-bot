@@ -181,8 +181,10 @@ export function FontFamilyPicker({
     return (
       <ComboboxItem hideIndicator index={index} key={item} value={item}>
         <div className="flex w-full min-w-0 items-center justify-between gap-2">
-          {/* oxlint-disable-next-line shadcn/no-inline-styles -- Preview uses the selected installed font family. */}
-          <span className="min-w-0 truncate" style={{ fontFamily: family }}>
+          <span
+            className="min-w-0 truncate font-(family-name:--font-preview)"
+            style={{ "--font-preview": family }}
+          >
             {family}
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
@@ -241,17 +243,20 @@ export function FontFamilyPicker({
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <ComboboxEmpty>No fonts found.</ComboboxEmpty>
-          <div className="relative min-h-0 max-h-72 w-full flex-1 overflow-hidden">
+          <div
+            className="relative min-h-0 max-h-72 w-full flex-1 overflow-hidden"
+            style={{ "--list-height": `${Math.min(items.length * 30, 288)}px` }}
+          >
             <ComboboxListVirtualized presentation="font-family">
+              {/* Virtualized height depends on the filtered font count. */}
               <LegendList<string>
                 ref={listRef}
+                className="h-(--list-height)"
                 data={items}
                 keyExtractor={(item) => item}
                 renderItem={({ item, index }) => renderItem(item, index)}
                 estimatedItemSize={30}
                 drawDistance={360}
-                // oxlint-disable-next-line shadcn/no-inline-styles -- Virtualized height depends on the filtered font count.
-                style={{ height: Math.min(items.length * 30, 288) }}
               />
             </ComboboxListVirtualized>
           </div>

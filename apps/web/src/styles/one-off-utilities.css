@@ -180,6 +180,14 @@
     background-color 80ms linear;
 }
 
+/* Theme card ball painted from the previewed theme's colors. */
+@utility theme-preview-ball {
+  filter: blur(var(--preview-blur));
+  transform: scale(var(--preview-scale));
+  background-color: var(--preview-base);
+  background-image: var(--preview-glow);
+}
+
 /* Chart marks that fade in once the entrance has drawn. */
 @utility transition-entrance-fade {
   transition: opacity 300ms ease;
