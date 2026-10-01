@@ -119,6 +119,7 @@ function stubCanvasPipeline(
 
 afterEach(() => {
   mocks.heicTo.mockReset();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   globalThis.createImageBitmap = originalCreateImageBitmap;
   globalThis.OffscreenCanvas = originalOffscreenCanvas;
@@ -455,5 +456,49 @@ describe("HEIC attachment preparation", () => {
     expect(result.ok && result.file).toBe(original);
     expect(result.ok && result.recompressed).toBe(false);
     expect(mocks.heicTo).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("compression with missing browser API bindings", () => {
+  it("returns too-large when createImageBitmap is absent", async () => {
+    vi.stubGlobal("createImageBitmap", undefined);
+    Reflect.deleteProperty(globalThis, "createImageBitmap");
+
+    expect(await compressImageToByteLimit(makeFile(100), 10)).toEqual({
+      ok: false,
+      reason: "too-large",
+    });
+  });
+
+  it("returns too-large when neither canvas API is available", async () => {
+    stubCanvasPipeline(() => 4);
+    Reflect.deleteProperty(globalThis, "OffscreenCanvas");
+    vi.stubGlobal("document", undefined);
+
+    expect(await compressImageToByteLimit(makeFile(100), 10)).toEqual({
+      ok: false,
+      reason: "too-large",
+    });
+  });
+
+  it("uses the document canvas when OffscreenCanvas is absent", async () => {
+    const { close } = stubCanvasPipeline(() => 4);
+    Reflect.deleteProperty(globalThis, "OffscreenCanvas");
+    const drawImage = vi.fn();
+    const createElement = vi.fn(() => ({
+      width: 0,
+      height: 0,
+      getContext: () => ({ drawImage }),
+      toDataURL: (type: string) => `data:${type};base64,AQIDBA==`,
+    }));
+    vi.stubGlobal("document", { createElement });
+
+    const result = await compressImageToByteLimit(makeFile(100), 10);
+
+    expect(result.ok).toBe(true);
+    expect(createElement).toHaveBeenCalledWith("canvas");
+    expect(drawImage).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
   });
 });
