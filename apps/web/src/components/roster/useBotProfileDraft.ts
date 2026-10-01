@@ -362,3 +362,5 @@ export function useBotProfileDraft(
     },
   };
 }
+
+export type BotProfileDraft = ReturnType<typeof useBotProfileDraft>;

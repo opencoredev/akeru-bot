@@ -95,6 +95,7 @@ vi.mock("../../i18n", async () => {
 });
 
 import { BotSettingsPage } from "./BotSettingsPage";
+import { expandBotSettingsSections } from "./BotSettingsPage.test-support";
 
 const environmentId = EnvironmentId.make("environment-1");
 const codexId = ProviderInstanceId.make("codex");
@@ -155,7 +156,7 @@ function renderForm(): Tree {
   );
   expect(formElement).not.toBeNull();
   const Form = formElement!.type as (props: Record<string, unknown>) => Tree;
-  return Form(formElement!.props);
+  return expandBotSettingsSections(Form(formElement!.props));
 }
 
 function imageSelect(tree: Tree) {
