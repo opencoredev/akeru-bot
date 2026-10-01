@@ -211,7 +211,9 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
       const work = yield* registry.getInstance(workId);
       expect(personal).toBeDefined();
       expect(work).toBeDefined();
-      expect(personal!.adapter).not.toBe(work!.adapter);
+      expect(personal!.adapter).toBeUndefined();
+      expect(work!.adapter).toBeUndefined();
+      expect(personal!.mastraConnection).not.toBe(work!.mastraConnection);
       expect(personal!.textGeneration).not.toBe(work!.textGeneration);
       expect(personal!.snapshot).not.toBe(work!.snapshot);
 
@@ -464,12 +466,11 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       expect(kimi?.displayName).toBe("Kimi For Coding");
       expect(openCode?.displayName).toBe("OpenCode");
 
-      // Every instance owns its own set of closures — no sharing across
-      // drivers. `adapter` / `textGeneration` / `snapshot` are all
-      // distinct references. Kimi is Mastra-native, so it intentionally has
-      // no legacy adapter or text-generation closure.
-      const adapters = [codex!.adapter, claude!.adapter, grok!.adapter, openCode!.adapter];
-      expect(new Set(adapters).size).toBe(adapters.length);
+      for (const instance of [codex!, claude!, grok!, kimi!]) {
+        expect(instance.adapter).toBeUndefined();
+        expect(instance.mastraConnection).toBeDefined();
+      }
+      expect(openCode!.adapter).toBeDefined();
       const textGenerations = [
         codex!.textGeneration,
         claude!.textGeneration,

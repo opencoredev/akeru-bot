@@ -13,10 +13,9 @@ import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { layerTest as serverSettingsLayerTest } from "../../serverSettings.ts";
-import { ProviderDriverError } from "../Errors.ts";
+import * as ModelManifest from "../ModelManifest.ts";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { GrokDriver } from "./GrokDriver.ts";
-import { GrokSkillsProbeError } from "./GrokSkills.ts";
 
 const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
 
@@ -64,6 +63,7 @@ const grokDriverTestLayer = Layer.mergeAll(
   TestHttpClientLive,
   Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers),
   BackgroundPolicyAlwaysRunLayer,
+  ModelManifest.layerTest,
 );
 
 const LOGGED_IN_MODELS_OUTPUT = [
@@ -187,7 +187,7 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
           const machine = yield* instance.snapshot.refresh;
           const workspace = yield* instance.snapshotForCwd!(workspaceCwd);
 
-          expect(machine.skills?.map((skill) => skill.name)).toEqual(["machine-skill"]);
+          expect(machine.skills ?? []).toEqual([]);
           expect(workspace.skills).toEqual([
             {
               name: "project-skill",
@@ -200,7 +200,7 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       ),
     );
 
-    it.effect("propagates inspect failures as ProviderDriverError", () =>
+    it.effect("silently falls back to an empty catalog when inspect fails", () =>
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
@@ -213,12 +213,9 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
           const machine = yield* instance.snapshot.refresh;
           expect(machine.skills ?? []).toEqual([]);
 
-          const error = yield* instance.snapshotForCwd!(workspaceCwd).pipe(Effect.flip);
-          expect(error._tag).toBe("ProviderDriverError");
-          expect(error).toBeInstanceOf(ProviderDriverError);
-          expect(error.detail).toContain(`Failed to discover Grok skills for '${workspaceCwd}'`);
-          expect(error.cause).toBeInstanceOf(GrokSkillsProbeError);
-          expect((error.cause as GrokSkillsProbeError).stage).toBe("exit");
+          const workspace = yield* instance.snapshotForCwd!(workspaceCwd);
+          expect(workspace.skills).toEqual([]);
+          expect(workspace.auth).toEqual(machine.auth);
         }),
       ),
     );

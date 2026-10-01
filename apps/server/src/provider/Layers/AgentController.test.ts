@@ -1,5 +1,6 @@
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeCrypto from "node:crypto";
+import { codexHarnessModelIds } from "../HarnessProviderStatus.ts";
 import * as NodeFS from "node:fs";
 import * as NodeHttp from "node:http";
 import type * as NodeNet from "node:net";
@@ -8737,6 +8738,32 @@ describe("AgentControllerLive", () => {
         },
       );
     }
+
+    it.effect(
+      "continues an existing engine using a historical Codex model outside currentModels",
+      () => {
+        const bridge = makeBridge();
+        const mastra = makeMastraHarness();
+        instanceModelCatalog.set(String(codexInstanceId), {
+          models: codexHarnessModelIds(["gpt-6-sol"]),
+        });
+        return provideController(
+          Effect.gen(function* () {
+            const controller = yield* AgentController;
+            const resolved = yield* controller.resolveEngine({
+              threadId: codexThreadId,
+              engine: { provider: "codex", model: "gpt-5.4" },
+              fallback: codexSelection,
+              mode: "default",
+              botConversation: true,
+            });
+            assert.equal(resolved.modelSelection.model, "gpt-5.4");
+          }),
+          bridge.service,
+          mastra.factory,
+        );
+      },
+    );
 
     it.effect("fails closed when the saved model is not in the instance snapshot", () => {
       const bridge = makeBridge();

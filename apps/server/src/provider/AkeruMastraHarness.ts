@@ -546,7 +546,7 @@ const MASTRA_MODEL_PREFIX = {
 } as const;
 
 export function mastraModelId(provider: ProviderDriverKind, model: string): string {
-  const trimmed = model.trim();
+  const trimmed = provider === "grok" && model.trim() === "grok-build" ? "grok-4.6" : model.trim();
   const prefix = MASTRA_MODEL_PREFIX[provider as keyof typeof MASTRA_MODEL_PREFIX];
   if (!prefix) return trimmed.includes("/") ? trimmed : `${provider}/${trimmed}`;
   const token = `${prefix}/`;

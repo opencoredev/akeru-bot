@@ -1960,6 +1960,7 @@ describe("AkeruMastraHarness", () => {
       { provider: "anthropic.messages", modelId: "claude-sonnet-4-5" },
     );
     assert.equal(mastraModelId(ProviderDriverKind.make("grok"), "grok-4"), "xai/grok-4");
+    assert.equal(mastraModelId(ProviderDriverKind.make("grok"), "grok-build"), "xai/grok-4.6");
     assert.deepInclude(
       resolveAkeruMastraModel(
         "xai/grok-4",
