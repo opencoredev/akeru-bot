@@ -109,8 +109,9 @@ describe("BotDetailsPanel", () => {
       new URL("./BotDetailsPanel.tsx", import.meta.url),
       "utf8",
     );
+    // The settings page renders its model controls through BotEngineFields.
     const settingsSource = NodeFS.readFileSync(
-      new URL("./BotSettingsPage.tsx", import.meta.url),
+      new URL("./BotEngineFields.tsx", import.meta.url),
       "utf8",
     );
     const composerSource = NodeFS.readFileSync(
