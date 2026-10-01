@@ -1,6 +1,4 @@
-import { CallEndIcon, CallIcon } from "@hugeicons/core-free-icons";
 import { useAtomValue } from "@effect/atom-react";
-import type { SupervisorConnectionState } from "@akeru/client-runtime/connection";
 import {
   createRealtimeVoiceSession,
   createVoiceCallScope,
@@ -8,13 +6,11 @@ import {
   type VoiceCallChatHandlers,
   type VoiceCallScope,
 } from "@akeru/client-runtime/voice";
-import { BotId, type VoiceCallSnapshot } from "@akeru/contracts";
+import { BotId } from "@akeru/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useReducer,
@@ -25,12 +21,8 @@ import {
 
 import type { Bot } from "../roster/types";
 import { resolveStickyBotEngine } from "../roster/botEngineSelection";
-import { useBotEngineAvailability } from "../roster/useBotEngineAvailability";
 import { useBotThreadRuntime } from "../roster/useBotThreadRuntime";
 import { useRosterStore } from "../roster/rosterStore";
-import { Button } from "../ui/button";
-import { AppIcon } from "../ui/app-icon";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { resolveAppModelSelectionState } from "../../modelSelection";
@@ -45,9 +37,49 @@ import { useEnvironmentConnectionState, usePrimaryEnvironmentId } from "../../st
 import { useAtomCommand } from "../../state/use-atom-command";
 import { captureVoiceUtterance, playVoiceAudio } from "./browserVoiceAudio";
 import { composedVoiceAdapters } from "./composedVoiceCall";
+import {
+  listenForMicrophoneLoss,
+  reduceVoiceCallUiState,
+  resolveVoiceCallOfferSdp,
+  scheduleVoiceDisconnectTimeout,
+  VOICE_MODE_CHANGED_MESSAGE,
+  voiceConnectionStateAction,
+  voiceEnvironmentConnectionLost,
+  voiceStartErrorDescription,
+  waitForIceGathering,
+} from "./voiceCall.logic";
+import { VoiceCallBar } from "./VoiceCallControls";
+import {
+  type ActiveVoiceCall,
+  VoiceCallContext,
+  type VoiceCallContextValue,
+} from "./voiceCallContext";
+
+export { handleVoiceChannelMessage, type VoiceCallChatHandlers } from "@akeru/client-runtime/voice";
+export {
+  listenForMicrophoneLoss,
+  reduceVoiceCallUiState,
+  resolveVoiceCallOfferSdp,
+  scheduleVoiceDisconnectTimeout,
+  VOICE_MODE_CHANGED_MESSAGE,
+  voiceConnectionStateAction,
+  voiceEnvironmentConnectionLost,
+  voiceStartErrorDescription,
+  type VoiceCallUiAction,
+  type VoiceCallUiState,
+  waitForIceGathering,
+} from "./voiceCall.logic";
+export {
+  BotVoiceCallButton,
+  BotVoiceCallButtonView,
+  SelectedBotVoiceCallButton,
+  VoiceCallBarView,
+  VoiceCallStartingBarView,
+} from "./VoiceCallControls";
+export { useOptionalVoiceCall, useVoiceCall } from "./voiceCallContext";
 
 interface ActiveBrowserCall {
-  readonly call: Exclude<VoiceCallSnapshot, { status: "idle" }>;
+  readonly call: ActiveVoiceCall;
   readonly environmentId: NonNullable<ReturnType<typeof usePrimaryEnvironmentId>>;
   /** Cancels every capture, provider request, reply wait, and playback owned by this call. */
   readonly scope: VoiceCallScope;
@@ -72,113 +104,6 @@ interface PendingBrowserCall {
   speaker: HTMLAudioElement | null;
   events: RTCDataChannel | null;
   stopListeningForDeviceLoss: () => void;
-}
-
-export type VoiceCallUiState = ActiveBrowserCall["call"] | null;
-export type VoiceCallUiAction =
-  | { readonly type: "connected"; readonly call: ActiveBrowserCall["call"] }
-  | { readonly type: "hung-up" };
-
-export function reduceVoiceCallUiState(
-  state: VoiceCallUiState,
-  action: VoiceCallUiAction,
-): VoiceCallUiState {
-  return action.type === "connected" ? action.call : null;
-}
-
-export { handleVoiceChannelMessage, type VoiceCallChatHandlers } from "@akeru/client-runtime/voice";
-
-/** Shown when the server pinned a different voice mode than the client prepared for. */
-export const VOICE_MODE_CHANGED_MESSAGE =
-  "Voice settings changed while the call was starting. Start the call again.";
-
-export function voiceStartErrorDescription(cause: unknown): string {
-  if (cause instanceof DOMException) {
-    switch (cause.name) {
-      case "NotAllowedError":
-      case "SecurityError":
-        return "Allow microphone access, then try again.";
-      case "NotFoundError":
-        return "Connect a microphone, then try again.";
-      case "NotReadableError":
-      case "AbortError":
-        return "The microphone is unavailable. Close other audio apps, then try again.";
-    }
-  }
-  return cause instanceof Error ? cause.message : "Check microphone access, then try again.";
-}
-
-export function listenForMicrophoneLoss(
-  microphone: Pick<MediaStream, "getAudioTracks">,
-  onLost: () => void,
-): () => void {
-  const tracks = microphone.getAudioTracks();
-  tracks.forEach((track) => track.addEventListener("ended", onLost));
-  return () => tracks.forEach((track) => track.removeEventListener("ended", onLost));
-}
-
-interface VoiceCallContextValue {
-  readonly activeCall: ActiveBrowserCall["call"] | null;
-  readonly reconnecting: boolean;
-  readonly startingBotId: string | null;
-  readonly startOrReturn: (bot: Bot) => void;
-  readonly hangup: () => void;
-  readonly returnToCall: () => void;
-}
-
-const VoiceCallContext = createContext<VoiceCallContextValue | null>(null);
-
-export function waitForIceGathering(
-  peer: RTCPeerConnection,
-  timeoutMs = 5_000,
-  signal?: AbortSignal,
-): Promise<void> {
-  if (peer.iceGatheringState === "complete") return Promise.resolve();
-  return new Promise((resolve) => {
-    const finish = () => {
-      clearTimeout(timer);
-      peer.removeEventListener("icegatheringstatechange", onChange);
-      signal?.removeEventListener("abort", finish);
-      resolve();
-    };
-    const onChange = () => {
-      if (peer.iceGatheringState === "complete") finish();
-    };
-    const timer = setTimeout(finish, timeoutMs);
-    peer.addEventListener("icegatheringstatechange", onChange);
-    signal?.addEventListener("abort", finish, { once: true });
-  });
-}
-
-export function resolveVoiceCallOfferSdp(
-  peer: Pick<RTCPeerConnection, "iceGatheringState" | "localDescription">,
-  offer: RTCSessionDescriptionInit,
-): string | undefined {
-  return peer.iceGatheringState === "complete"
-    ? (peer.localDescription?.sdp ?? offer.sdp)
-    : offer.sdp;
-}
-
-export function voiceConnectionStateAction(
-  state: RTCPeerConnectionState,
-): "end" | "recovered" | "wait-for-recovery" | "keep-recovery-window" {
-  if (state === "failed" || state === "closed") return "end";
-  if (state === "connected") return "recovered";
-  if (state === "disconnected") return "wait-for-recovery";
-  return "keep-recovery-window";
-}
-
-export function voiceEnvironmentConnectionLost(
-  connection: SupervisorConnectionState | null,
-): boolean {
-  return connection !== null && connection.phase !== "connected";
-}
-
-export function scheduleVoiceDisconnectTimeout(
-  getConnectionState: () => RTCPeerConnectionState,
-  onTimeout: (recovered: boolean) => void,
-): ReturnType<typeof setTimeout> {
-  return setTimeout(() => onTimeout(getConnectionState() === "connected"), 5_000);
 }
 
 function stopBrowserCall(active: ActiveBrowserCall): void {
@@ -716,199 +641,5 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
       {children}
       <VoiceCallBar />
     </VoiceCallContext.Provider>
-  );
-}
-
-export function useVoiceCall() {
-  const value = useContext(VoiceCallContext);
-  if (!value) throw new Error("Voice call controls must be inside VoiceCallProvider.");
-  return value;
-}
-
-export function useOptionalVoiceCall() {
-  return useContext(VoiceCallContext);
-}
-
-export function BotVoiceCallButtonView({
-  bot,
-  active,
-  disabled,
-  disabledReason = null,
-  globallyEnabled,
-  onClick,
-}: {
-  readonly bot: Bot;
-  readonly active: boolean;
-  readonly disabled: boolean;
-  /** Why a call cannot start, shown with the button. */
-  readonly disabledReason?: string | null;
-  readonly globallyEnabled: boolean;
-  readonly onClick: () => void;
-}) {
-  if (!globallyEnabled || !bot.voiceEnabled) return null;
-  const label = active ? `Return to call with ${bot.name}` : `Call ${bot.name}`;
-  const description = disabled && disabledReason ? `${label}. ${disabledReason}` : label;
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label={description}
-            disabled={disabled}
-            onClick={onClick}
-          />
-        }
-      >
-        <AppIcon icon={CallIcon} />
-      </TooltipTrigger>
-      <TooltipPopup side="bottom">{description}</TooltipPopup>
-    </Tooltip>
-  );
-}
-
-export function BotVoiceCallButton({
-  bot,
-  disabled = false,
-}: {
-  readonly bot: Bot;
-  readonly disabled?: boolean;
-}) {
-  const { activeCall, startingBotId, startOrReturn } = useVoiceCall();
-  const globallyEnabled = usePrimarySettings((settings) => settings.voice.enabled);
-  const engine = useBotEngineAvailability(bot.engine);
-  const active = activeCall?.botId === bot.id;
-  const blocked = engine.blocked && !active;
-  return (
-    <BotVoiceCallButtonView
-      bot={bot}
-      active={active}
-      disabled={disabled || blocked || startingBotId !== null}
-      disabledReason={blocked ? (engine.unavailability?.title ?? null) : null}
-      globallyEnabled={globallyEnabled}
-      onClick={() => startOrReturn(bot)}
-    />
-  );
-}
-
-export function SelectedBotVoiceCallButton() {
-  const bot = useRosterStore((state) =>
-    state.selectedBotId === null
-      ? null
-      : (state.bots.find((candidate) => candidate.id === state.selectedBotId) ?? null),
-  );
-  return bot ? <BotVoiceCallButton bot={bot} /> : null;
-}
-
-function VoiceCallBar() {
-  const { activeCall, hangup, reconnecting, returnToCall, startingBotId } = useVoiceCall();
-  const startingBotName = useRosterStore((state) =>
-    startingBotId === null
-      ? null
-      : (state.bots.find((candidate) => candidate.id === startingBotId)?.name ?? "Bot"),
-  );
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (!activeCall) return;
-    setNow(Date.now());
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [activeCall]);
-
-  if (!activeCall) {
-    return startingBotName ? (
-      <VoiceCallStartingBarView botName={startingBotName} onCancel={hangup} />
-    ) : null;
-  }
-  return (
-    <VoiceCallBarView
-      activeCall={activeCall}
-      reconnecting={reconnecting}
-      now={now}
-      onReturn={returnToCall}
-      onHangup={hangup}
-    />
-  );
-}
-
-export function VoiceCallStartingBarView({
-  botName,
-  onCancel,
-}: {
-  readonly botName: string;
-  readonly onCancel: () => void;
-}) {
-  return (
-    <div className="pointer-events-none fixed inset-x-0 top-2 z-60 flex justify-center px-4">
-      <div className="pointer-events-auto flex h-10 items-center rounded-full border border-border bg-background/95 pl-4 pr-1.5 shadow-lg backdrop-blur">
-        <span className="pr-3 text-sm font-medium">Calling {botName}</span>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="destructive"
-          aria-label={`Cancel call to ${botName}`}
-          onClick={onCancel}
-        >
-          <AppIcon icon={CallEndIcon} />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-export function VoiceCallBarView({
-  activeCall,
-  reconnecting,
-  now,
-  onReturn,
-  onHangup,
-}: {
-  readonly activeCall: ActiveBrowserCall["call"];
-  readonly reconnecting: boolean;
-  readonly now: number;
-  readonly onReturn: () => void;
-  readonly onHangup: () => void;
-}) {
-  const elapsedSeconds = Math.max(0, Math.floor((now - Date.parse(activeCall.startedAt)) / 1_000));
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = String(elapsedSeconds % 60).padStart(2, "0");
-
-  return (
-    <div className="pointer-events-none fixed inset-x-0 top-2 z-60 flex justify-center px-4">
-      <div className="pointer-events-auto flex h-10 items-center rounded-full border border-border bg-background/95 pl-4 pr-1.5 shadow-lg backdrop-blur">
-        <button
-          type="button"
-          aria-label={`Return to call with ${activeCall.botName}`}
-          className="flex items-center gap-2 pr-3"
-          onClick={onReturn}
-        >
-          <span
-            className={
-              reconnecting ? "size-2 rounded-full bg-warning" : "size-2 rounded-full bg-success"
-            }
-          />
-          <span className="text-sm font-medium">{activeCall.botName}</span>
-          {reconnecting ? (
-            <span className="text-xs text-muted-foreground">Reconnecting</span>
-          ) : null}
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {minutes}:{seconds}
-          </span>
-        </button>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="destructive"
-          aria-label="Hang up"
-          className="rounded-full"
-          onClick={onHangup}
-        >
-          <AppIcon icon={CallEndIcon} />
-        </Button>
-      </div>
-    </div>
   );
 }
