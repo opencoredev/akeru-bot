@@ -1,5 +1,6 @@
-// @ts-nocheck
 "use client";
+
+import type { ChartValue } from "./chartValue";
 
 import { Predicate } from "effect";
 
@@ -11,11 +12,6 @@ import { cn } from "./lib";
 import { axisAtAngle, sliceAtAngle } from "./polar";
 import { PolarChartContext, usePolarController } from "./polar-context";
 import { useChartDimensions } from "./use-chart-dimensions";
-
-// `object` rather than `Record<string, unknown>`: interfaces don't get an
-// implicit index signature, so interface-typed rows failed to satisfy the
-// generic. Internal layers still index rows through their own Row type.
-type Row = object;
 
 const DEFAULT_POLAR_MARGINS: Margins = {
   top: 22,
@@ -35,7 +31,7 @@ function layerOf(node: ReactNode): "back" | "dom" | "svg" {
     : "svg";
 }
 
-export type PolarRootProps<TData extends Row> = {
+export type PolarRootProps<TData extends Record<keyof TData, ChartValue>> = {
   chartType: "pie" | "radar";
   /** Family painter — `PieCanvas` or `RadarCanvas`; ships with each chart. */
   Canvas: ComponentType;
@@ -58,7 +54,7 @@ export type PolarRootProps<TData extends Row> = {
   onSelectionChange?: (key: string | null) => void;
 };
 
-export function PolarRoot<TData extends Row>({
+export function PolarRoot<TData extends Record<keyof TData, ChartValue>>({
   chartType,
   Canvas,
   backDecoration,
@@ -83,8 +79,7 @@ export function PolarRoot<TData extends Row>({
 
   const ctx = usePolarController({
     chartType,
-    // Safe: the controller only reads row[key] for the configured keys.
-    data: data,
+    data,
     config,
     dataKey,
     nameKey,
@@ -97,7 +92,7 @@ export function PolarRoot<TData extends Row>({
     bloom,
     bloomOnHover,
     defaultSelectedDataKey,
-    onSelectionChange,
+    ...(onSelectionChange !== undefined ? { onSelectionChange } : {}),
   });
 
   const backChildren: ReactNode[] = [];

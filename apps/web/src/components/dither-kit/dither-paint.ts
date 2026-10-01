@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Predicate } from "effect";
 import type { AreaVariant } from "./chart-context";
 import { rgb, type Seed } from "./palette";
@@ -82,7 +81,7 @@ export function paintColumn(
     if (stacked) density = 0.5 + 0.5 * density;
 
     if (variant === "hatched" && ((x + y) & 3) >= 2) continue;
-    const lit = variant === "solid" || density > BAYER[y & 3][x & 3] - 0.1 * intensity - bias;
+    const lit = variant === "solid" || density > bayerThreshold(x, y) - 0.1 * intensity - bias;
 
     // "dotted" keeps real gaps for its open look; every other variant covers
     // the cell and lets the dither ride the alpha (on = full tier, off = a
@@ -189,4 +188,9 @@ export const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
 /** Whether the OS asks for reduced motion (snap + steady stars). */
 export function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+}
+
+/** Ordered-dither lookup; bit masks keep both coordinates in the 4×4 matrix. */
+export function bayerThreshold(x: number, y: number) {
+  return BAYER[y & 3]?.[x & 3] ?? 0;
 }

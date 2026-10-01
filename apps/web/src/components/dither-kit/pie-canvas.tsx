@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { useEffect, useRef } from "react";
 import {
-  BAYER,
+  bayerThreshold,
   backingSize,
   bloomLayerStyle,
   easeInOutCubic,
@@ -105,6 +104,8 @@ export function PieCanvas() {
 
           if (si < 0) continue;
           const slice = slices[si];
+
+          if (!slice) continue;
           const active = s.hoverIndex === si;
           const localOuter = active ? outerR + POP * popEase : outerR;
 
@@ -127,7 +128,7 @@ export function PieCanvas() {
           const bias = variant === "dotted" ? 0.12 : 0;
 
           if (variant === "hatched" && ((x + y) & 3) >= 2) continue;
-          const lit = variant === "solid" || density > BAYER[y & 3][x & 3] - 0.1 * it - bias;
+          const lit = variant === "solid" || density > bayerThreshold(x, y) - 0.1 * it - bias;
 
           if (variant === "dotted" && !lit) continue;
           // Density → opacity (see the colour-vs-opacity note in dither-paint);

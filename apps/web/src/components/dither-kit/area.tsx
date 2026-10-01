@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { type ReactNode, useEffect } from "react";
 import {
   type AreaVariant,
@@ -70,7 +69,9 @@ function CartesianSeries({
     });
 
     for (let i = band.length - 1; i >= 0; i -= 1) {
-      parts.push(`L${ctx.xCenter(i)},${ctx.y(band[i][0])}`);
+      const b = band[i];
+
+      if (b) parts.push(`L${ctx.xCenter(i)},${ctx.y(b[0])}`);
     }
 
     hitPath = `${parts.join(" ")} Z`;
@@ -79,7 +80,6 @@ function CartesianSeries({
   return (
     <>
       {hitPath && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: progressive enhancement; the Legend offers the same toggle accessibly
         <path d={hitPath} fill="transparent" className="cursor-pointer" onClick={onClick} />
       )}
       <SeriesContext value={{ dataKey, seed, dimmed }}>{children}</SeriesContext>

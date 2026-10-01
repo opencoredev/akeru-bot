@@ -1,4 +1,4 @@
-// @ts-nocheck
+import type { ChartValue } from "./chartValue";
 import { Predicate } from "effect";
 import { Children, type ComponentType, isValidElement, type ReactNode } from "react";
 import {
@@ -14,11 +14,6 @@ import { cn } from "./lib";
 import type { StackType } from "./scales";
 import { useChartDimensions } from "./use-chart-dimensions";
 
-// `object` rather than `Record<string, unknown>`: interfaces don't get an
-// implicit index signature, so interface-typed rows failed to satisfy the
-// generic. Internal layers still index rows through their own Row type.
-type Row = object;
-
 const DEFAULT_MARGINS: Margins = {
   top: 10,
   right: 12,
@@ -26,7 +21,7 @@ const DEFAULT_MARGINS: Margins = {
   left: 36,
 };
 
-export type CartesianChartProps<TData extends Row> = {
+export type CartesianChartProps<TData extends Record<keyof TData, ChartValue>> = {
   data: TData[];
   config: ChartConfig;
   children: ReactNode;
@@ -75,7 +70,7 @@ function layerOf(node: ReactNode): "back" | "dom" | "svg" {
  * `Canvas` prop supplies the family's painter (continuous for area/line, bars for
  * bar) — so each chart ships only its own canvas.
  */
-export function CartesianRoot<TData extends Row>({
+export function CartesianRoot<TData extends Record<keyof TData, ChartValue>>({
   chartType,
   Canvas,
   data,
@@ -104,8 +99,7 @@ export function CartesianRoot<TData extends Row>({
 
   const ctx = useChartController({
     chartType,
-    // Safe: the controller only reads row[key] for the configured series keys.
-    data: data,
+    data,
     config,
     stackType,
     dimensions: size,
@@ -118,7 +112,7 @@ export function CartesianRoot<TData extends Row>({
     bloom,
     bloomOnHover,
     defaultSelectedDataKey,
-    onSelectionChange,
+    ...(onSelectionChange !== undefined ? { onSelectionChange } : {}),
   });
 
   const backChildren: ReactNode[] = [];
@@ -188,4 +182,5 @@ export function CartesianRoot<TData extends Row>({
   );
 }
 
-export type AreaChartProps<TData extends Row> = CartesianChartProps<TData>;
+export type AreaChartProps<TData extends Record<keyof TData, ChartValue>> =
+  CartesianChartProps<TData>;

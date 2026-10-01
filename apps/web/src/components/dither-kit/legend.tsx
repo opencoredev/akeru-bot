@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useCommonChart } from "./common-context";

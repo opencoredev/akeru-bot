@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { type RefObject, useEffect, useMemo, useRef } from "react";
@@ -163,16 +162,28 @@ function startCartesianLoop({
       }
 
       for (let x = 0; x < cols; x++) {
-        const dt = t.top[x] - cur.top[x];
-        const df = t.floor[x] - cur.floor[x];
+        const targetTop = t.top[x];
+        const targetFloor = t.floor[x];
+        const currentTop = cur.top[x];
+        const currentFloor = cur.floor[x];
+
+        if (
+          targetTop === undefined ||
+          targetFloor === undefined ||
+          currentTop === undefined ||
+          currentFloor === undefined
+        )
+          continue;
+        const dt = targetTop - currentTop;
+        const df = targetFloor - currentFloor;
 
         if (Math.abs(dt) > 0.01 || Math.abs(df) > 0.01) {
-          cur.top[x] += dt * EASE;
-          cur.floor[x] += df * EASE;
+          cur.top[x] = currentTop + dt * EASE;
+          cur.floor[x] = currentFloor + df * EASE;
           moving = true;
         } else {
-          cur.top[x] = t.top[x];
-          cur.floor[x] = t.floor[x];
+          cur.top[x] = targetTop;
+          cur.floor[x] = targetFloor;
         }
       }
     }
@@ -356,7 +367,7 @@ export function CartesianCanvas() {
       const top = band.map((b) => (y(b[1]) / h) * (rows - 1));
 
       const floor = band.map((b, i) =>
-        line ? Math.min(rows - 1, top[i] + glow) : (y(b[0]) / h) * (rows - 1),
+        line ? Math.min(rows - 1, (top[i] ?? 0) + glow) : (y(b[0]) / h) * (rows - 1),
       );
 
       out[key] = { top: resample(top, cols), floor: resample(floor, cols) };

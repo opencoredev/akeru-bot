@@ -1,5 +1,4 @@
-// @ts-nocheck
-import type { ChartValue } from "./chartValue";
+import { chartRows, type ChartValue } from "./chartValue";
 import { Predicate } from "effect";
 import type { ScaleLinear } from "d3-scale";
 import { createContext, use, useCallback, useMemo, useState } from "react";
@@ -53,6 +52,7 @@ export type ChartContextValue = {
   configKeys: string[]; // series order — drives stacking + legend
   data: Row[];
   dataLength: number;
+  dataMarks: ReturnType<typeof chartRows<Row>>;
   stackType: StackType;
 
   margins: Margins;
@@ -138,7 +138,8 @@ export function useChartPart(part: string, kind?: ChartType | ChartType[]): Char
   const ctx = use(ChartContext);
 
   if (!ctx) {
-    const where = kind ? ROOT_OF[Array.isArray(kind) ? kind[0] : kind] : "a chart root";
+    const firstKind = Array.isArray(kind) ? kind[0] : kind;
+    const where = firstKind ? ROOT_OF[firstKind] : "a chart root";
     throw new Error(`<${part} /> must be used within ${where}.`);
   }
 
@@ -225,6 +226,7 @@ export function useChartController({
 
   // Memoized: configKeys is the dep that drives `bands`, `common` and the
   // canvas `targets` memo — a fresh array each render would bust all of them.
+  const dataMarks = useMemo(() => chartRows(data), [data]);
   const configKeys = useMemo(() => Object.keys(config), [config]);
   const revision = useRevision(data, replayToken);
 
@@ -435,6 +437,7 @@ export function useChartController({
       configKeys,
       data,
       dataLength: data.length,
+      dataMarks,
       stackType,
       margins: stableMargins,
       plot: { width: plotWidth, height: plotHeight },
@@ -477,6 +480,7 @@ export function useChartController({
       config,
       configKeys,
       data,
+      dataMarks,
       stackType,
       stableMargins,
       plotWidth,
