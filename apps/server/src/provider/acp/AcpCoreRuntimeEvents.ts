@@ -76,7 +76,7 @@ function runtimeItemStatusFromAcpToolStatus(
   }
 }
 
-export function makeAcpRequestOpenedEvent(input: {
+export function acpRequestOpenedEvent(input: {
   readonly stamp: AcpEventStamp;
   readonly provider: ProviderDriverKind;
   readonly threadId: ThreadId;
@@ -107,7 +107,7 @@ export function makeAcpRequestOpenedEvent(input: {
   };
 }
 
-export function makeAcpRequestResolvedEvent(input: {
+export function acpRequestResolvedEvent(input: {
   readonly stamp: AcpEventStamp;
   readonly provider: ProviderDriverKind;
   readonly threadId: ThreadId;
@@ -130,7 +130,7 @@ export function makeAcpRequestResolvedEvent(input: {
   };
 }
 
-export function makeAcpPlanUpdatedEvent(input: {
+export function acpPlanUpdatedEvent(input: {
   readonly stamp: AcpEventStamp;
   readonly provider: ProviderDriverKind;
   readonly threadId: ThreadId;
@@ -155,7 +155,7 @@ export function makeAcpPlanUpdatedEvent(input: {
   };
 }
 
-export function makeAcpToolCallEvent(input: {
+export function acpToolCallEvent(input: {
   readonly stamp: AcpEventStamp;
   readonly provider: ProviderDriverKind;
   readonly threadId: ThreadId;
@@ -190,7 +190,7 @@ export function makeAcpToolCallEvent(input: {
   };
 }
 
-export function makeAcpAssistantItemEvent(input: {
+export function acpAssistantItemEvent(input: {
   readonly stamp: AcpEventStamp;
   readonly provider: ProviderDriverKind;
   readonly threadId: ThreadId;
@@ -212,7 +212,7 @@ export function makeAcpAssistantItemEvent(input: {
   };
 }
 
-export function makeAcpContentDeltaEvent(input: {
+export function acpContentDeltaEvent(input: {
   readonly stamp: AcpEventStamp;
   readonly provider: ProviderDriverKind;
   readonly threadId: ThreadId;

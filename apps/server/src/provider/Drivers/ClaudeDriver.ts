@@ -34,8 +34,7 @@ import { ProviderDriverError } from "../Errors.ts";
 import { makeClaudeAdapter } from "../Layers/ClaudeAdapter.ts";
 import {
   checkClaudeProviderStatus,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
-  makePendingClaudeProvider,
+  pendingClaudeProvider,
   probeClaudeCapabilities,
 } from "../Layers/ClaudeProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
@@ -61,8 +60,7 @@ import {
   providerSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Both imports are pure identity-key functions, not Effect service constructors.
-import { makeClaudeCapabilitiesCacheKey, makeClaudeContinuationGroupKey } from "./ClaudeHome.ts";
+import { claudeCapabilitiesCacheKey, claudeContinuationGroupKey } from "./ClaudeHome.ts";
 
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
@@ -152,7 +150,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         env: processEnv,
       });
 
-      const continuationGroupKey = yield* makeClaudeContinuationGroupKey(effectiveConfig);
+      const continuationGroupKey = yield* claudeContinuationGroupKey(effectiveConfig);
 
       const stampIdentity = withInstanceIdentity({
         instanceId,
@@ -187,7 +185,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
           ),
       });
 
-      const capabilitiesCacheKey = yield* makeClaudeCapabilitiesCacheKey(effectiveConfig, cwd);
+      const capabilitiesCacheKey = yield* claudeCapabilitiesCacheKey(effectiveConfig, cwd);
 
       // Kick the TTL-gated manifest refresh in the background and classify
       // with the in-memory manifest, so a slow or hung fetch never delays the
@@ -221,7 +219,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         haveSettingsChanged: haveProviderSnapshotSettingsChanged,
         initialSnapshot: (settings) =>
           Effect.zipWith(
-            makePendingClaudeProvider(settings.provider),
+            pendingClaudeProvider(settings.provider),
             modelManifest.current,
             (draft, manifest) =>
               stampIdentity(ModelManifest.applyModelManifest(draft, manifest, DRIVER_KIND)),

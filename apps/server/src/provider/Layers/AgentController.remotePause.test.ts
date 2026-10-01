@@ -27,7 +27,7 @@ import { ServerConfig } from "../../config.ts";
 import { BotMemoryStore } from "../../memory/BotMemory.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
-import { makeAgentControllerLive, type AgentControllerLiveOptions } from "./AgentController.ts";
+import { agentControllerLayerWith, type AgentControllerLiveOptions } from "./AgentController.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import {
   codexThreadId,
@@ -43,13 +43,13 @@ import {
   provideController,
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
-import { makeUsageLedger } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { usageLedgerFixture } from "./test-support/agentControllerMemory.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("retries failed remote pauses in the background without a new session", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
@@ -71,7 +71,7 @@ describe("AgentControllerLive", () => {
 
     const destroy = vi.fn(async () => undefined);
 
-    const layer = makeAgentControllerLive({
+    const layer = agentControllerLayerWith({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace: async () => ({
         id: "tenki-retry",
@@ -86,7 +86,7 @@ describe("AgentControllerLive", () => {
       Layer.provide(
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
-          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          Layer.succeed(BotUsageLedger, usageLedgerFixture().service),
           ServerConfig.layerTest(process.cwd(), { prefix: "akeru-pause-retry-" }).pipe(
             Layer.provide(NodeServices.layer),
           ),
@@ -118,7 +118,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("reuses the remote workspace when only cwd changes", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const remote = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
@@ -138,7 +138,7 @@ describe("AgentControllerLive", () => {
       close: vi.fn(async () => undefined),
     }));
 
-    const layer = makeAgentControllerLive({
+    const layer = agentControllerLayerWith({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
       makeBotBrowser: makeBotBrowser as never,
@@ -146,7 +146,7 @@ describe("AgentControllerLive", () => {
       Layer.provide(
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
-          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          Layer.succeed(BotUsageLedger, usageLedgerFixture().service),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-same-workspace-test-",
           }).pipe(Layer.provide(NodeServices.layer)),
@@ -182,7 +182,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("adds finished child work to only the next Mastra turn", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const results =
       "<delegated-work-results>\n- Researcher completed: 42\n</delegated-work-results>";
@@ -225,7 +225,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("adds finished child work to legacy turns for every legacy provider", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const results =
       "<delegated-work-results>\n- Researcher completed: 42\n</delegated-work-results>";
@@ -295,7 +295,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("adds compact personality instructions to legacy bot turns", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -347,7 +347,7 @@ describe("AgentControllerLive", () => {
     "keeps a legacy review due after terminal %s",
     (terminalState) => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-review-failed-"));
       const botMemoryStore = new BotMemoryStore(memoryDir);
       const botId = BotId.make(`bot-legacy-${terminalState}`);
@@ -442,7 +442,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("rejects an OpenCode Go turn after the provider is disabled", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -486,7 +486,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("rejects an OpenCode Go turn disabled during dispatch admission", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -525,7 +525,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("applies saved Codex options to initial and active Mastra sessions", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -588,7 +588,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("does not fall back to the legacy Codex loop when its Mastra session is absent", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {

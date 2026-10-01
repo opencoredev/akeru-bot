@@ -950,6 +950,6 @@ export const ProviderServiceLive = Layer.effect(
   makeProviderService(),
 );
 
-export function makeProviderServiceLive(options?: ProviderServiceLiveOptions) {
+export function providerServiceLayerWith(options?: ProviderServiceLiveOptions) {
   return Layer.effect(ProviderService.ProviderService, makeProviderService(options));
 }

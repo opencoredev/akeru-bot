@@ -43,7 +43,7 @@ export function computerUseMcpManager() {
   };
 }
 
-export function makeMastraHarness() {
+export function mastraHarnessFixture() {
   const harnessOptions: Array<
     Parameters<NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>>[0]
   > = [];

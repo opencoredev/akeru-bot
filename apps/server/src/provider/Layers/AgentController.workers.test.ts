@@ -26,13 +26,13 @@ import {
   groupParentSnapshot,
   makeWorkerSession,
 } from "./test-support/agentControllerLayers.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   describe("temporary workers", () => {
     it.effect("runs a Task from a group chat as a direct, locked-down worker", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const worker = makeWorkerSession(mastra.session);
 
       const mcpManager = {
@@ -171,7 +171,7 @@ describe("AgentControllerLive", () => {
   describe("temporary workers", () => {
     it.effect("keeps worker limits and declines approvals in a worker chat after a restart", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       const mcpManager = {
         init: vi.fn(async () => undefined),
@@ -252,7 +252,7 @@ describe("AgentControllerLive", () => {
   describe("temporary workers", () => {
     it.effect("removes the hidden worker chat when its first turn is rejected", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const dispatched: OrchestrationCommand[] = [];
 
       return provideController(

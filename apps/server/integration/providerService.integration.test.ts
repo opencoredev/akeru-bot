@@ -11,13 +11,13 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";
-import { makeAdapterRegistryMock } from "../src/provider/testUtils/providerAdapterRegistryMock.ts";
+import { adapterRegistryMock } from "../src/provider/testUtils/providerAdapterRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
 import {
   NoOpProviderEventLoggers,
   ProviderEventLoggers,
 } from "../src/provider/Layers/ProviderEventLoggers.ts";
-import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.ts";
+import { providerServiceLayerWith } from "../src/provider/Layers/ProviderService.ts";
 import {
   ProviderService,
   type ProviderServiceShape,
@@ -60,7 +60,7 @@ const makeIntegrationFixture = () =>
     const cwd = yield* makeWorkspaceDirectory;
     const harness = yield* makeTestProviderAdapterHarness();
 
-    const registry = makeAdapterRegistryMock({
+    const registry = adapterRegistryMock({
       [ProviderDriverKind.make("codex")]: harness.adapter,
     });
 
@@ -76,7 +76,7 @@ const makeIntegrationFixture = () =>
       Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers),
     ).pipe(Layer.provide(SqlitePersistenceMemory));
 
-    const layer = makeProviderServiceLive().pipe(Layer.provide(shared));
+    const layer = providerServiceLayerWith().pipe(Layer.provide(shared));
 
     return {
       cwd,

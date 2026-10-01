@@ -15,8 +15,7 @@ import * as ProviderSessionRuntime from "../../../persistence/ProviderSessionRun
 import { AgentController, type AgentControllerShape } from "../../Services/AgentController.ts";
 import { ProviderSessionReaper } from "../../Services/ProviderSessionReaper.ts";
 import { ProviderSessionDirectoryLive } from "../ProviderSessionDirectory.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured ProviderSessionReaperLive double or Layer for isolated provider tests.
-import { makeProviderSessionReaperLive } from "../ProviderSessionReaper.ts";
+import { providerSessionReaperLayerWith } from "../ProviderSessionReaper.ts";
 
 export const defaultModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
@@ -166,7 +165,7 @@ export function createReaperSupport() {
       Layer.provide(runtimeRepositoryLayer),
     );
 
-    const layer = makeProviderSessionReaperLive({
+    const layer = providerSessionReaperLayerWith({
       inactivityThresholdMs: 1_000,
       sweepIntervalMs: 60_000,
     }).pipe(

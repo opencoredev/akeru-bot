@@ -39,20 +39,20 @@ import {
 import {
   completeLegacyTurnWithMemoryReview,
   makeMemoryOnlyCredentialOptions,
-  makeUsageLedger,
+  usageLedgerFixture,
 } from "./test-support/agentControllerMemory.ts";
 import {
   makeBridge,
   provideController,
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("releases a Mastra cadence reservation when admission is interrupted", () => {
     vi.useFakeTimers();
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-review-interrupt-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const botId = BotId.make("bot-review-interrupt");
@@ -128,7 +128,7 @@ describe("AgentControllerLive", () => {
     "settles a Mastra review only after one successful memory call (count: %s)",
     (successfulMemoryCalls) => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mastra-review-"));
       const botMemoryStore = new BotMemoryStore(memoryDir);
       const botId = BotId.make("bot-mastra-review");
@@ -231,7 +231,7 @@ describe("AgentControllerLive", () => {
   it.effect("stops renewing a Mastra review claim once the turn settles", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-review-renewal-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const botId = BotId.make("bot-review-renewal");
@@ -333,8 +333,8 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("records memory usage for an observation drained before its chat reopens", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
-    const usage = makeUsageLedger();
+    const mastra = mastraHarnessFixture();
+    const usage = usageLedgerFixture();
     const botId = BotId.make("bot-recovered-memory");
 
     return provideController(
@@ -393,8 +393,8 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("reserves and settles billed observational-memory usage", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
-    const usageLedger = makeUsageLedger();
+    const mastra = mastraHarnessFixture();
+    const usageLedger = usageLedgerFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -481,7 +481,7 @@ describe("AgentControllerLive", () => {
     "settles a legacy foreground review only after one successful memory call (count: %s)",
     (successfulMemoryCalls) => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const credentials = makeMemoryOnlyCredentialOptions();
       const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-review-cadence-"));
       const botMemoryStore = new BotMemoryStore(memoryDir);

@@ -17,12 +17,12 @@ import {
   provideController,
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("reads persisted image attachments for Mastra turns", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mastra-image-"));
     const attachmentsDir = NodePath.join(baseDir, "userdata", "attachments");
     NodeFS.mkdirSync(attachmentsDir, { recursive: true });

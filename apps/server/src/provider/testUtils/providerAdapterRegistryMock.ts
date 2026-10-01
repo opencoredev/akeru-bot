@@ -38,7 +38,7 @@ export type KindAdapterMap = Partial<
  * `getByProvider(kind)` path and the new `getByInstance(id)` path (where
  * `id = defaultInstanceIdForDriver(kind)`).
  */
-export const makeAdapterRegistryMock = (adapters: KindAdapterMap): ProviderAdapterRegistryShape => {
+export const adapterRegistryMock = (adapters: KindAdapterMap): ProviderAdapterRegistryShape => {
   const byInstanceId = new Map<ProviderInstanceId, ProviderAdapterShape<ProviderAdapterError>>();
 
   for (const [kind, adapter] of Object.entries(adapters)) {

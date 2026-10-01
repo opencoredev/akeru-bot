@@ -879,7 +879,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     });
   });
 
-export const makeAgentControllerLive = (options?: AgentControllerLiveOptions) =>
+export const agentControllerLayerWith = (options?: AgentControllerLiveOptions) =>
   Layer.effect(AgentController, make(options));
 
 export const AgentControllerLive = Layer.effect(

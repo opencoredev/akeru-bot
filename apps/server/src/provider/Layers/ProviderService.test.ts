@@ -15,13 +15,13 @@ import * as Scope from "effect/Scope";
 import { ProviderAdapterRequestError } from "../Errors.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
-import { makeProviderServiceLive } from "./ProviderService.ts";
+import { providerServiceLayerWith } from "./ProviderService.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
-import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
+import { adapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
 import {
   defaultServerSettingsLayer,
   serverConfigTestLayer,
@@ -51,7 +51,7 @@ it.effect("ProviderServiceLive catches stopAll failures during shutdown", () =>
       ),
     );
 
-    const registry = makeAdapterRegistryMock({
+    const registry = adapterRegistryMock({
       [CODEX_DRIVER]: codex.adapter,
     });
 
@@ -67,7 +67,7 @@ it.effect("ProviderServiceLive catches stopAll failures during shutdown", () =>
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
 
     const providerLayer = Layer.mergeAll(
-      makeProviderServiceLive().pipe(
+      providerServiceLayerWith().pipe(
         Layer.provide(providerAdapterLayer),
         Layer.provide(directoryLayer),
         Layer.provide(defaultServerSettingsLayer),

@@ -26,12 +26,12 @@ import {
   codexSelection,
 } from "./test-support/agentControllerFixtures.ts";
 import { makeBridge, makeLayer, resolveCodex } from "./test-support/agentControllerLayers.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("keeps the memory tool for a delegated turn granted memory scopes", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-delegated-grant-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
 
@@ -114,7 +114,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("waits for observational memory shutdown before closing the controller scope", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const destroyStarted = Promise.withResolvers<void>();
     const destroyReleased = Promise.withResolvers<void>();
 

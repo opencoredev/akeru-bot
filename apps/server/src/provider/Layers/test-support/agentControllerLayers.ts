@@ -38,8 +38,7 @@ import { AgentController } from "../../Services/AgentController.ts";
 import { ProviderValidationError } from "../../Errors.ts";
 import { LegacyProviderBridge } from "../../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../../Services/ProviderService.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured AgentControllerLive double or Layer for isolated provider tests.
-import { makeAgentControllerLive, type AgentControllerLiveOptions } from "../AgentController.ts";
+import { agentControllerLayerWith, type AgentControllerLiveOptions } from "../AgentController.ts";
 import {
   RoutineDraftDispatcher,
   type RoutineDraftDispatcherShape,
@@ -59,10 +58,8 @@ import {
   codexSelection,
   instanceModelCatalog,
 } from "./agentControllerFixtures.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured UsageLedger double or Layer for isolated provider tests.
-import { makeUsageLedger } from "./agentControllerMemory.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured MastraHarness double or Layer for isolated provider tests.
-import { makeMastraHarness } from "./agentControllerHarness.ts";
+import { usageLedgerFixture } from "./agentControllerMemory.ts";
+import { mastraHarnessFixture } from "./agentControllerHarness.ts";
 
 export function makeProviderSession(
   threadId: ThreadId,
@@ -252,7 +249,7 @@ export function makeLayer(
   factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>,
   makeMcpManager?: NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
   baseDir?: string,
-  usageLedger: BotUsageLedgerShape = makeUsageLedger().service,
+  usageLedger: BotUsageLedgerShape = usageLedgerFixture().service,
   overrides?: Pick<
     AgentControllerLiveOptions,
     | "resolveComputerUseServer"
@@ -269,7 +266,7 @@ export function makeLayer(
   settingsOverrides?: Parameters<typeof serverSettingsLayerTest>[0],
   settingsLayer?: Layer.Layer<ServerSettingsService>,
 ) {
-  return makeAgentControllerLive({
+  return agentControllerLayerWith({
     makeMastraHarness: factory,
     ...(makeMcpManager ? { makeMcpManager } : {}),
     ...overrides,
@@ -360,7 +357,7 @@ export const routineInput = {
 } as const;
 
 export const openRoutineReview = (
-  mastra: ReturnType<typeof makeMastraHarness>,
+  mastra: ReturnType<typeof mastraHarnessFixture>,
   events: Array<ProviderRuntimeEvent>,
 ) =>
   Effect.gen(function* () {
@@ -414,7 +411,7 @@ export const openRoutineReview = (
 
 export const provideRoutineController = <A, E>(
   effect: Effect.Effect<A, E, AgentController | ServerSettingsService>,
-  mastra: ReturnType<typeof makeMastraHarness>,
+  mastra: ReturnType<typeof mastraHarnessFixture>,
   dispatcher: Partial<RoutineDraftDispatcherShape>,
 ) =>
   effect.pipe(

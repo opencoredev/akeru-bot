@@ -37,7 +37,7 @@ import {
   resolveClaudeApiModelId,
   resolveClaudeEffort,
 } from "../provider/Layers/ClaudeProvider.ts";
-import { makeClaudeEnvironment } from "../provider/Drivers/ClaudeHome.ts";
+import { claudeEnvironmentForConfig } from "../provider/Drivers/ClaudeHome.ts";
 import { subscriptionRuntimeEnvironment } from "../subscription-auth/runtime.ts";
 
 const CLAUDE_TIMEOUT_MS = 180_000;
@@ -71,7 +71,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
 ) {
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const fileSystem = yield* FileSystem.FileSystem;
-  const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
+  const claudeEnvironment = yield* claudeEnvironmentForConfig(claudeSettings, environment);
 
   const readStreamAsString = <E>(
     operation: string,

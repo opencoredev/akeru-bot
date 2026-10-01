@@ -40,12 +40,12 @@ import {
   provideController,
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("reads entity memory for the access of a reused Mastra session", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-entity-reuse-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const botId = BotId.make("bot-entity-reuse");
@@ -115,7 +115,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("keeps entity memory out of a new legacy session while Memory is off", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const botId = BotId.make("bot-entity-memory-off");
 
     const access = {
@@ -173,7 +173,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("reads entity memory from the current project after reusing a legacy session", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const botId = BotId.make("bot-entity-memory-moved");
 
     const accessFor = (project: string) =>
@@ -246,7 +246,7 @@ describe("AgentControllerLive", () => {
     "withholds bot-private entity facts on the legacy path while Private bot memory is off",
     () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const botId = BotId.make("bot-entity-private-legacy");
       const projectId = ProjectId.make("project-entity-private-legacy");
 
@@ -347,7 +347,7 @@ describe("AgentControllerLive", () => {
     "withholds bot-private entity facts on the Mastra path while Private bot memory is off",
     () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-entity-private-"));
       const botMemoryStore = new BotMemoryStore(memoryDir);
       const botId = BotId.make("bot-entity-private-mastra");
@@ -428,7 +428,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("applies the Private bot memory toggle mid-session on the legacy path", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-private-toggle-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const botId = BotId.make("bot-private-toggle-legacy");

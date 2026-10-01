@@ -180,7 +180,7 @@ function findQuestionAnswer(
   return answers[key] ?? answers[question.question];
 }
 
-export function makeXAiAskUserQuestionResponse(
+export function xAiAskUserQuestionResponse(
   params: XAiAskUserQuestionRequest,
   answers: ProviderUserInputAnswers,
 ): XAiAskUserQuestionAcceptedResponse {
@@ -207,7 +207,7 @@ export function makeXAiAskUserQuestionResponse(
   };
 }
 
-export function makeXAiAskUserQuestionCancelledResponse(): XAiAskUserQuestionCancelledResponse {
+export function xAiAskUserQuestionCancelledResponse(): XAiAskUserQuestionCancelledResponse {
   return { outcome: "cancelled" };
 }
 

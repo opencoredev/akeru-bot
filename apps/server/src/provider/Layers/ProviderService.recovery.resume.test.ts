@@ -9,13 +9,13 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
-import { makeProviderServiceLive } from "./ProviderService.ts";
+import { providerServiceLayerWith } from "./ProviderService.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import { makeSqlitePersistenceLive } from "../../persistence/Layers/Sqlite.ts";
-import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
+import { adapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
 import {
   defaultServerSettingsLayer,
   serverConfigTestLayer,
@@ -44,7 +44,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       const firstClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
 
-      const firstRegistry = makeAdapterRegistryMock({
+      const firstRegistry = adapterRegistryMock({
         [ProviderDriverKind.make("claudeAgent")]: firstClaude.adapter,
       });
 
@@ -52,7 +52,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         Layer.provide(runtimeRepositoryLayer),
       );
 
-      const firstProviderLayer = makeProviderServiceLive().pipe(
+      const firstProviderLayer = providerServiceLayerWith().pipe(
         Layer.provide(
           Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, firstRegistry),
         ),
@@ -86,7 +86,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       const secondClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
 
-      const secondRegistry = makeAdapterRegistryMock({
+      const secondRegistry = adapterRegistryMock({
         [ProviderDriverKind.make("claudeAgent")]: secondClaude.adapter,
       });
 
@@ -94,7 +94,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         Layer.provide(runtimeRepositoryLayer),
       );
 
-      const secondProviderLayer = makeProviderServiceLive().pipe(
+      const secondProviderLayer = providerServiceLayerWith().pipe(
         Layer.provide(
           Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, secondRegistry),
         ),
@@ -163,7 +163,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
         const firstClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
 
-        const firstRegistry = makeAdapterRegistryMock({
+        const firstRegistry = adapterRegistryMock({
           [ProviderDriverKind.make("claudeAgent")]: firstClaude.adapter,
         });
 
@@ -171,7 +171,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
           Layer.provide(runtimeRepositoryLayer),
         );
 
-        const firstProviderLayer = makeProviderServiceLive().pipe(
+        const firstProviderLayer = providerServiceLayerWith().pipe(
           Layer.provide(
             Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, firstRegistry),
           ),
@@ -200,7 +200,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
         const secondClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
 
-        const secondRegistry = makeAdapterRegistryMock({
+        const secondRegistry = adapterRegistryMock({
           [ProviderDriverKind.make("claudeAgent")]: secondClaude.adapter,
         });
 
@@ -208,7 +208,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
           Layer.provide(runtimeRepositoryLayer),
         );
 
-        const secondProviderLayer = makeProviderServiceLive().pipe(
+        const secondProviderLayer = providerServiceLayerWith().pipe(
           Layer.provide(
             Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, secondRegistry),
           ),

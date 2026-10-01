@@ -15,7 +15,7 @@ import { ProviderValidationError } from "../Errors.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.ts";
-import { makeProviderServiceLive } from "./ProviderService.ts";
+import { providerServiceLayerWith } from "./ProviderService.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -24,7 +24,7 @@ import {
   makeSqlitePersistenceLive,
   SqlitePersistenceMemory,
 } from "../../persistence/Layers/Sqlite.ts";
-import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
+import { adapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
 import {
   defaultServerSettingsLayer,
   serverConfigTestLayer,
@@ -45,7 +45,7 @@ it.effect(
     Effect.gen(function* () {
       const original = makeFakeCodexAdapter();
       const replacement = makeFakeCodexAdapter();
-      const baseRegistry = makeAdapterRegistryMock({ [CODEX_DRIVER]: original.adapter });
+      const baseRegistry = adapterRegistryMock({ [CODEX_DRIVER]: original.adapter });
       let swapAfterFirstLookup = false;
       let feedbackLookupCount = 0;
 
@@ -70,7 +70,7 @@ it.effect(
         Layer.provide(runtimeRepositoryLayer),
       );
 
-      const providerLayer = makeProviderServiceLive().pipe(
+      const providerLayer = providerServiceLayerWith().pipe(
         Layer.provide(Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, registry)),
         Layer.provide(directoryLayer),
         Layer.provide(defaultServerSettingsLayer),
@@ -113,7 +113,7 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
 
     const codex = makeFakeCodexAdapter();
 
-    const registry = makeAdapterRegistryMock({
+    const registry = adapterRegistryMock({
       [ProviderDriverKind.make("codex")]: codex.adapter,
     });
 
@@ -134,7 +134,7 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
       });
     }).pipe(Effect.provide(directoryLayer));
 
-    const providerLayer = makeProviderServiceLive().pipe(
+    const providerLayer = providerServiceLayerWith().pipe(
       Layer.provide(Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, registry)),
       Layer.provide(directoryLayer),
       Layer.provide(defaultServerSettingsLayer),
@@ -200,7 +200,7 @@ it.effect(
 
       const firstCodex = makeFakeCodexAdapter();
 
-      const firstRegistry = makeAdapterRegistryMock({
+      const firstRegistry = adapterRegistryMock({
         [ProviderDriverKind.make("codex")]: firstCodex.adapter,
       });
 
@@ -208,7 +208,7 @@ it.effect(
         Layer.provide(runtimeRepositoryLayer),
       );
 
-      const firstProviderLayer = makeProviderServiceLive().pipe(
+      const firstProviderLayer = providerServiceLayerWith().pipe(
         Layer.provide(
           Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, firstRegistry),
         ),
@@ -269,7 +269,7 @@ it.effect(
 
       const secondCodex = makeFakeCodexAdapter();
 
-      const secondRegistry = makeAdapterRegistryMock({
+      const secondRegistry = adapterRegistryMock({
         [ProviderDriverKind.make("codex")]: secondCodex.adapter,
       });
 
@@ -277,7 +277,7 @@ it.effect(
         Layer.provide(runtimeRepositoryLayer),
       );
 
-      const secondProviderLayer = makeProviderServiceLive().pipe(
+      const secondProviderLayer = providerServiceLayerWith().pipe(
         Layer.provide(
           Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, secondRegistry),
         ),

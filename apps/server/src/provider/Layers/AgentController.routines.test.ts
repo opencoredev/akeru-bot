@@ -22,7 +22,7 @@ import {
   codexInstanceId,
   codexSelection,
 } from "./test-support/agentControllerFixtures.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 import {
   routineInput,
   openRoutineReview,
@@ -32,7 +32,7 @@ import {
 describe("AgentControllerLive", () => {
   describe("routine review", () => {
     it.effect("creates the routine when the answer lands before the limit", () => {
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const events: Array<ProviderRuntimeEvent> = [];
 
       const created = {
@@ -85,7 +85,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   describe("routine review", () => {
     it.effect("keeps an accepted review waiting until its routine is created", () => {
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const events: Array<ProviderRuntimeEvent> = [];
 
       const lastState = () =>
@@ -134,7 +134,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   describe("routine review", () => {
     it.effect("keeps the turn waiting on a routine review after a tool approval answer", () => {
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const events: Array<ProviderRuntimeEvent> = [];
 
       return provideRoutineController(
@@ -184,7 +184,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   describe("routine review", () => {
     it.effect("closes an unanswered review as a system cancellation", () => {
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const events: Array<ProviderRuntimeEvent> = [];
       let dispatched = 0;
 
@@ -239,7 +239,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   describe("routine review", () => {
     it.effect("keeps the turn waiting when another routine review remains open", () => {
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const events: Array<ProviderRuntimeEvent> = [];
 
       return provideRoutineController(
@@ -286,7 +286,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   describe("routine review", () => {
     it.effect("rejects a routine answer from another active chat without claiming it", () => {
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const events: Array<ProviderRuntimeEvent> = [];
 
       return provideRoutineController(

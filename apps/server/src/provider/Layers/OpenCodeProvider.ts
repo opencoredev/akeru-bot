@@ -300,7 +300,7 @@ function flattenOpenCodeSkills(input: OpenCodeInventory): ReadonlyArray<ServerPr
   return skills.toSorted((left, right) => left.name.localeCompare(right.name));
 }
 
-export const makePendingOpenCodeProvider = (
+export const pendingOpenCodeProvider = (
   openCodeSettings: OpenCodeSettings,
 ): Effect.Effect<ServerProviderDraft> =>
   Effect.gen(function* () {

@@ -45,7 +45,7 @@ import {
   linearServer,
   groupParentSnapshot,
 } from "./test-support/agentControllerLayers.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect.each(["codex", "kimi"] as const)(
@@ -295,7 +295,7 @@ describe("AgentControllerLive", () => {
   describe("temporary workers", () => {
     it.effect("rebuilds an orphaned worker grant from its delegated parent after a restart", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       const mcpManager = {
         init: vi.fn(async () => undefined),

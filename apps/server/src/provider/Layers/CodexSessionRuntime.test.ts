@@ -16,7 +16,7 @@ import {
   describeMcpElicitation,
   hasConfiguredMcpServer,
   isRecoverableThreadResumeError,
-  makeMemoryConsolidationNotificationFilter,
+  memoryConsolidationNotificationFilter,
   toMcpElicitationResponse,
 } from "./CodexSessionRuntime.ts";
 import { request, makeThreadStartedNotification } from "./test-support/codexProtocol.ts";
@@ -25,18 +25,15 @@ describe("buildTurnStartParams", () => {
   it("keeps invalid turn values only in the schema cause", () => {
     const secret = "codex-turn-input-secret-sentinel";
 
+    const attachment = { type: "image", url: "https://example.test/image.png" } as const;
+    // Runtime corruption exercises the protocol decoder's diagnostics.
+    Object.defineProperty(attachment, "url", { value: { secret } });
+
     const error = Effect.runSync(
       buildTurnStartParams({
         threadId: "provider-thread-1",
         runtimeMode: "full-access",
-        attachments: [
-          {
-            type: "image",
-            // Intentionally malformed fixture exercises the builder's diagnostic boundary.
-            // @ts-expect-error The protocol must reject a non-string image URL.
-            url: { secret },
-          },
-        ],
+        attachments: [attachment],
       }).pipe(Effect.flip),
     );
 
@@ -487,9 +484,9 @@ describe("hasConfiguredMcpServer", () => {
   });
 });
 
-describe("makeMemoryConsolidationNotificationFilter", () => {
+describe("memoryConsolidationNotificationFilter", () => {
   it("suppresses memory consolidation without hiding other Codex subagents", () => {
-    const shouldSuppress = makeMemoryConsolidationNotificationFilter();
+    const shouldSuppress = memoryConsolidationNotificationFilter();
 
     NodeAssert.equal(
       shouldSuppress(
@@ -571,9 +568,9 @@ describe("makeMemoryConsolidationNotificationFilter", () => {
   });
 });
 
-describe("makeMemoryConsolidationNotificationFilter", () => {
+describe("memoryConsolidationNotificationFilter", () => {
   it("forgets memory consolidation threads after they close", () => {
-    const shouldSuppress = makeMemoryConsolidationNotificationFilter();
+    const shouldSuppress = memoryConsolidationNotificationFilter();
     shouldSuppress(
       makeThreadStartedNotification("memory-thread", "unknown", "memory_consolidation"),
     );

@@ -41,7 +41,7 @@ import {
   kimiStartInput,
   resolveKimi,
 } from "./test-support/agentControllerLayers.ts";
-import { makeMastraHarness, assistantMessage } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture, assistantMessage } from "./test-support/agentControllerHarness.ts";
 
 describe("provider access health", () => {
   it("records the model a failed turn ran on with the instance failure", async () => {
@@ -81,7 +81,7 @@ describe("provider access health", () => {
 describe("AgentControllerLive", () => {
   it.effect("runs Codex turns through Mastra Session.sendMessage and normalizes events", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -156,7 +156,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("normalizes legacy plan input when running Claude through Mastra", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -203,7 +203,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("runs Grok through the Akeru Mastra harness", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -246,7 +246,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("runs the saved Kimi model through Mastra without provider fallback", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -289,7 +289,7 @@ describe("AgentControllerLive", () => {
         `switches the saved ${testCase.provider} model in-session between turns via resolveEngine`,
         () => {
           const bridge = makeBridge();
-          const mastra = makeMastraHarness();
+          const mastra = mastraHarnessFixture();
 
           const model = (model: string) => ({
             instanceId: testCase.instanceId,
@@ -372,7 +372,7 @@ describe("AgentControllerLive", () => {
   describe("in-session model switch between turns", () => {
     it.effect("fails closed when the saved model is not in the instance snapshot", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       instanceModelCatalog.set(String(codexInstanceId), { models: ["gpt-5.6-sol"] });
 
       return provideController(
@@ -408,7 +408,7 @@ describe("AgentControllerLive", () => {
   describe("in-session model switch between turns", () => {
     it.effect("allows a saved model advertised through the instance snapshot", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       instanceModelCatalog.set(String(codexInstanceId), {
         models: ["gpt-5.6-sol", "custom-codex"],
       });
@@ -438,7 +438,7 @@ describe("AgentControllerLive", () => {
   describe("in-session model switch between turns", () => {
     it.effect("does not fail closed on a pending snapshot's model list", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       // A pending probe still advertises the built-in catalog. The saved model
       // may be real but only show up once the probe finishes, so the check
       // must not reject it.
@@ -472,7 +472,7 @@ describe("AgentControllerLive", () => {
   describe("Kimi Mastra normalization", () => {
     it.effect("normalizes a full Kimi turn with a tool call over the Mastra session", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       return provideController(
         Effect.gen(function* () {
@@ -566,7 +566,7 @@ describe("AgentControllerLive", () => {
   describe("Kimi Mastra normalization", () => {
     it.effect("normalizes a Kimi approval denial to the Mastra session", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       return provideController(
         Effect.gen(function* () {
@@ -651,7 +651,7 @@ describe("AgentControllerLive", () => {
   describe("Kimi Mastra normalization", () => {
     it.effect("normalizes interrupting a Kimi turn mid-flight through Mastra abort", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       return provideController(
         Effect.gen(function* () {

@@ -16,8 +16,7 @@ import {
   spawnAndCollect,
   type ServerProviderDraft,
 } from "../providerSnapshot.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Provider composition root constructs an environment from this instance configuration.
-import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
+import { claudeEnvironmentForConfig } from "../Drivers/ClaudeHome.ts";
 import { discoverClaudeSkills } from "../Drivers/ClaudeSkills.ts";
 
 import {
@@ -50,7 +49,7 @@ const runClaudeCommand = Effect.fn("runClaudeCommand")(function* (
   args: ReadonlyArray<string>,
   environment?: NodeJS.ProcessEnv,
 ) {
-  const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
+  const claudeEnvironment = yield* claudeEnvironmentForConfig(claudeSettings, environment);
 
   const spawnCommand = yield* resolveSpawnCommand(claudeSettings.binaryPath, args, {
     env: claudeEnvironment,
@@ -251,7 +250,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
-export const makePendingClaudeProvider = (
+export const pendingClaudeProvider = (
   claudeSettings: ClaudeSettings,
 ): Effect.Effect<ServerProviderDraft> =>
   Effect.gen(function* () {
