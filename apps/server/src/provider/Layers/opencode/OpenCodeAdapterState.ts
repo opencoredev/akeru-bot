@@ -98,3 +98,15 @@ export type EventBaseInput = {
   readonly createdAt?: string | undefined;
   readonly raw?: unknown;
 };
+
+export interface OpenCodeNativeLogRecord {
+  readonly observedAt: string;
+  readonly event: {
+    readonly provider: ProviderSession["provider"];
+    readonly threadId: ThreadId;
+    readonly providerThreadId: string;
+    readonly type: string;
+    readonly turnId?: TurnId;
+    readonly payload: OpenCodeSubscribedEvent;
+  };
+}

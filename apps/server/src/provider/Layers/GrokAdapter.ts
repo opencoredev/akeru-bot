@@ -1,3 +1,5 @@
+import { UserInputResolution } from "./grok/GrokAdapterState.ts";
+import * as Predicate from "effect/Predicate";
 import { createGrokEvents } from "./grok/GrokEvents.ts";
 import { createGrokTurnLifecycle } from "./grok/GrokTurnLifecycle.ts";
 import { createGrokSessionLifecycle } from "./grok/GrokSessionLifecycle.ts";
@@ -37,11 +39,13 @@ import {
 } from "../Errors.ts";
 import { mapAcpToAdapterError } from "../acp/AcpAdapterSupport.ts";
 
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root configures its ACP native log factory.
 import { makeAcpNativeLoggerFactory } from "../acp/AcpNativeLogging.ts";
 import { applyGrokAcpModelSelection, resolveGrokAcpBaseModelId } from "../acp/GrokAcpSupport.ts";
 
 import { type GrokAdapterShape } from "../Services/GrokAdapter.ts";
 import { type EventNdjsonLogger } from "./logging/EventLogTypes.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root creates the scoped logger with this adapter configuration.
 import { makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 import { PROVIDER, type GrokSessionContext } from "./grok/GrokAdapterState.ts";
@@ -446,7 +450,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             }),
           );
 
-          if (promptStart._tag === "Skipped") {
+          if (Predicate.isTagged(promptStart, "Skipped")) {
             // Settle after releasing promptLifecycle. Holding both locks
             // deadlocks the next sendTurn, which takes the thread lock first.
             yield* withThreadLock(
@@ -687,7 +691,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           };
         });
 
-        if (observed._tag === "Ignore") {
+        if (Predicate.isTagged(observed, "Ignore")) {
           return;
         }
 
@@ -789,7 +793,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           });
         }
 
-        yield* Deferred.succeed(pending.resolution, { _tag: "answered", answers });
+        yield* Deferred.succeed(pending.resolution, UserInputResolution.answered({ answers }));
       });
 
     const readThread: GrokAdapterShape["readThread"] = (threadId) =>

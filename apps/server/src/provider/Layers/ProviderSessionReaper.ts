@@ -138,12 +138,12 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
       Effect.gen(function* () {
         yield* forkParked(
           sweep.pipe(
-            Effect.catch((error: unknown) =>
+            Effect.catch((error) =>
               Effect.logWarning("provider.session.reaper.sweep-failed", {
                 error,
               }),
             ),
-            Effect.catchDefect((defect: unknown) =>
+            Effect.catchDefect((defect) =>
               Effect.logWarning("provider.session.reaper.sweep-defect", {
                 defect,
               }),

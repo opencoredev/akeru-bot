@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Ref from "effect/Ref";
@@ -36,7 +37,7 @@ export const abortOpenCodeDescendants = Effect.fn("abortOpenCodeDescendants")(fu
             Effect.result,
           );
 
-        if (abortResult._tag === "Failure") {
+        if (Predicate.isTagged(abortResult, "Failure")) {
           firstFailure = abortResult.failure;
         }
       }
@@ -55,7 +56,7 @@ export const abortOpenCodeDescendants = Effect.fn("abortOpenCodeDescendants")(fu
           Effect.result,
         );
 
-      if (childrenResult._tag === "Failure") {
+      if (Predicate.isTagged(childrenResult, "Failure")) {
         return firstFailure ?? childrenResult.failure;
       }
 

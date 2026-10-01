@@ -1,3 +1,6 @@
+import * as Match from "effect/Match";
+import type { OpenCodeNativeLogRecord } from "./OpenCodeAdapterState.ts";
+
 import type { ProviderDriverKind } from "@akeru/contracts";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 import {
@@ -77,7 +80,7 @@ export function createOpenCodeEvents(deps: {
   ) => Effect.Effect<void, never, never>;
   readonly writeNativeEventBestEffort: (
     threadId: ThreadId,
-    event: { readonly observedAt: string; readonly event: Record<string, unknown> },
+    event: OpenCodeNativeLogRecord,
   ) => Effect.Effect<void, never, never>;
   readonly emitOpenCodeRequestEvent: (
     context: OpenCodeSessionContext,
@@ -92,7 +95,7 @@ export function createOpenCodeEvents(deps: {
     context: OpenCodeSessionContext,
     part: OpenCodeTextPartState,
     turnId: TurnId | undefined,
-    raw: unknown,
+    raw: OpenCodeSubscribedEvent,
   ) {
     const text = part.text;
 
@@ -332,11 +335,11 @@ export function createOpenCodeEvents(deps: {
 
           const payload = {
             itemType,
-            ...(part.state.status === "error"
-              ? { status: "failed" as const }
-              : part.state.status === "completed"
-                ? { status: "completed" as const }
-                : { status: "inProgress" as const }),
+            ...Match.value(part.state.status).pipe(
+              Match.when("error", () => ({ status: "failed" as const })),
+              Match.when("completed", () => ({ status: "completed" as const })),
+              Match.orElse(() => ({ status: "inProgress" as const })),
+            ),
             ...(title ? { title } : {}),
             ...(detail ? { detail } : {}),
             data: {

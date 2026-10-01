@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import {
   ApprovalRequestId,
   type ProviderApprovalDecision,
@@ -25,6 +26,8 @@ export interface PendingApproval {
 export type PendingUserInputResolution =
   | { readonly _tag: "answered"; readonly answers: ProviderUserInputAnswers }
   | { readonly _tag: "cancelled" };
+
+export const UserInputResolution = Data.taggedEnum<PendingUserInputResolution>();
 
 export interface PendingUserInput {
   readonly resolution: Deferred.Deferred<PendingUserInputResolution>;

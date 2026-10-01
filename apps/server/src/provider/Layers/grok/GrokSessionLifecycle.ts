@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import type * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import type { ProviderDriverKind } from "@akeru/contracts";
 import type { AcpSessionRuntimeOptions } from "../../acp/AcpSessionRuntime.ts";
@@ -41,10 +43,15 @@ import {
 } from "../../Errors.ts";
 import { mapAcpToAdapterError } from "../../acp/AcpAdapterSupport.ts";
 import {
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
   makeAcpAssistantItemEvent,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
   makeAcpContentDeltaEvent,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
   makeAcpRequestOpenedEvent,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
   makeAcpRequestResolvedEvent,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
   makeAcpToolCallEvent,
 } from "../../acp/AcpCoreRuntimeEvents.ts";
 import { parsePermissionRequest } from "../../acp/AcpRuntimeModel.ts";
@@ -52,12 +59,15 @@ import { parsePermissionRequest } from "../../acp/AcpRuntimeModel.ts";
 import {
   applyGrokAcpModelSelection,
   currentGrokModelIdFromSessionSetup,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Provider composition root creates the configured, scoped ACP subprocess runtime.
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
 } from "../../acp/GrokAcpSupport.ts";
 import {
   extractXAiAskUserQuestions,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure Grok wire response builder; no Effect service is constructed.
   makeXAiAskUserQuestionCancelledResponse,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure Grok wire response builder; no Effect service is constructed.
   makeXAiAskUserQuestionResponse,
   XAiAskUserQuestionRequest,
 } from "../../acp/XAiAcpExtension.ts";
@@ -110,7 +120,7 @@ export function createGrokSessionLifecycle(deps: {
   readonly logNative: (
     threadId: ThreadId,
     method: string,
-    payload: unknown,
+    payload: NonNullable<ProviderRuntimeEvent["raw"]>["payload"],
   ) => Effect.Effect<void, never, never>;
   readonly randomUUIDv4: Effect.Effect<string, ProviderAdapterRequestError, never>;
   readonly offerRuntimeEvent: (event: ProviderRuntimeEvent) => Effect.Effect<void, never, never>;
@@ -131,7 +141,7 @@ export function createGrokSessionLifecycle(deps: {
         readonly status: "pending" | "inProgress" | "completed";
       }>;
     },
-    rawPayload: unknown,
+    rawPayload: NonNullable<ProviderRuntimeEvent["raw"]>["payload"],
     method: string,
   ) => Effect.Effect<void, never, never>;
 }) {
@@ -266,7 +276,11 @@ export function createGrokSessionLifecycle(deps: {
                     });
                     const resolved = yield* Deferred.await(resolution);
                     pendingUserInputs.delete(requestId);
-                    const resolvedAnswers = resolved._tag === "answered" ? resolved.answers : {};
+
+                    const resolvedAnswers = Predicate.isTagged(resolved, "answered")
+                      ? resolved.answers
+                      : {};
+
                     yield* deps.offerRuntimeEvent({
                       type: "user-input.resolved",
                       ...(yield* deps.makeEventStamp()),
@@ -282,12 +296,13 @@ export function createGrokSessionLifecycle(deps: {
                       },
                     });
 
-                    switch (resolved._tag) {
-                      case "answered":
-                        return makeXAiAskUserQuestionResponse(params, resolved.answers);
-                      case "cancelled":
-                        return makeXAiAskUserQuestionCancelledResponse();
-                    }
+                    return Match.value(resolved).pipe(
+                      Match.tag("answered", ({ answers }) =>
+                        makeXAiAskUserQuestionResponse(params, answers),
+                      ),
+                      Match.tag("cancelled", () => makeXAiAskUserQuestionCancelledResponse()),
+                      Match.exhaustive,
+                    );
                   }),
                 ),
               ),
@@ -427,21 +442,21 @@ export function createGrokSessionLifecycle(deps: {
         const nf = yield* Stream.runDrain(
           Stream.mapEffect(acp.getEvents(), (event) =>
             Effect.gen(function* () {
-              if (event._tag === "EventStreamBarrier") {
+              if (Predicate.isTagged(event, "EventStreamBarrier")) {
                 yield* Deferred.succeed(event.acknowledge, undefined);
 
                 return;
               }
 
               if (
-                event._tag === "PlanUpdated" ||
-                event._tag === "ToolCallUpdated" ||
-                event._tag === "ContentDelta"
+                Predicate.isTagged(event, "PlanUpdated") ||
+                Predicate.isTagged(event, "ToolCallUpdated") ||
+                Predicate.isTagged(event, "ContentDelta")
               ) {
                 yield* deps.logNative(ctx.threadId, "session/update", event.rawPayload);
               }
 
-              if (event._tag === "ModeChanged") {
+              if (Predicate.isTagged(event, "ModeChanged")) {
                 return;
               }
 
@@ -456,72 +471,78 @@ export function createGrokSessionLifecycle(deps: {
 
               const stamp = yield* deps.makeEventStamp();
 
-              switch (event._tag) {
-                case "AssistantItemStarted":
-                  yield* deps.offerRuntimeEvent(
-                    makeAcpAssistantItemEvent({
+              return yield* Match.value(event).pipe(
+                Match.tag("AssistantItemStarted", (event) =>
+                  Effect.gen(function* () {
+                    yield* deps.offerRuntimeEvent(
+                      makeAcpAssistantItemEvent({
+                        stamp,
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        turnId: notificationTurnId,
+                        itemId: event.itemId,
+                        lifecycle: "item.started",
+                      }),
+                    );
+                  }),
+                ),
+                Match.tag("AssistantItemCompleted", (event) =>
+                  Effect.gen(function* () {
+                    yield* deps.offerRuntimeEvent(
+                      makeAcpAssistantItemEvent({
+                        stamp,
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        turnId: notificationTurnId,
+                        itemId: event.itemId,
+                        lifecycle: "item.completed",
+                      }),
+                    );
+                  }),
+                ),
+                Match.tag("PlanUpdated", (event) =>
+                  Effect.gen(function* () {
+                    yield* deps.emitPlanUpdate(
+                      ctx,
+                      notificationTurnId,
                       stamp,
-                      provider: PROVIDER,
-                      threadId: ctx.threadId,
-                      turnId: notificationTurnId,
-                      itemId: event.itemId,
-                      lifecycle: "item.started",
-                    }),
-                  );
-
-                  return;
-                case "AssistantItemCompleted":
-                  yield* deps.offerRuntimeEvent(
-                    makeAcpAssistantItemEvent({
-                      stamp,
-                      provider: PROVIDER,
-                      threadId: ctx.threadId,
-                      turnId: notificationTurnId,
-                      itemId: event.itemId,
-                      lifecycle: "item.completed",
-                    }),
-                  );
-
-                  return;
-                case "PlanUpdated":
-                  yield* deps.emitPlanUpdate(
-                    ctx,
-                    notificationTurnId,
-                    stamp,
-                    event.payload,
-                    event.rawPayload,
-                    "session/update",
-                  );
-
-                  return;
-                case "ToolCallUpdated":
-                  yield* deps.offerRuntimeEvent(
-                    makeAcpToolCallEvent({
-                      stamp,
-                      provider: PROVIDER,
-                      threadId: ctx.threadId,
-                      turnId: notificationTurnId,
-                      toolCall: event.toolCall,
-                      rawPayload: event.rawPayload,
-                    }),
-                  );
-
-                  return;
-                case "ContentDelta":
-                  yield* deps.offerRuntimeEvent(
-                    makeAcpContentDeltaEvent({
-                      stamp,
-                      provider: PROVIDER,
-                      threadId: ctx.threadId,
-                      turnId: notificationTurnId,
-                      ...(event.itemId ? { itemId: event.itemId } : {}),
-                      text: event.text,
-                      rawPayload: event.rawPayload,
-                    }),
-                  );
-
-                  return;
-              }
+                      event.payload,
+                      event.rawPayload,
+                      "session/update",
+                    );
+                  }),
+                ),
+                Match.tag("ToolCallUpdated", (event) =>
+                  Effect.gen(function* () {
+                    yield* deps.offerRuntimeEvent(
+                      makeAcpToolCallEvent({
+                        stamp,
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        turnId: notificationTurnId,
+                        toolCall: event.toolCall,
+                        rawPayload: event.rawPayload,
+                      }),
+                    );
+                  }),
+                ),
+                Match.tag("ContentDelta", (event) =>
+                  Effect.gen(function* () {
+                    yield* deps.offerRuntimeEvent(
+                      makeAcpContentDeltaEvent({
+                        stamp,
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        turnId: notificationTurnId,
+                        ...(event.itemId ? { itemId: event.itemId } : {}),
+                        text: event.text,
+                        rawPayload: event.rawPayload,
+                      }),
+                    );
+                  }),
+                ),
+                Match.exhaustive,
+              );
             }),
           ),
         ).pipe(

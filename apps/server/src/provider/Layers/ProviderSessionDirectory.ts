@@ -1,3 +1,5 @@
+import { isInspectionRecord } from "./ProtocolJson.ts";
+
 import { defaultInstanceIdForDriver, ProviderDriverKind, type ThreadId } from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -41,14 +43,9 @@ function decodeProviderDriverKind(
   );
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+const isRecord = isInspectionRecord;
 
-function mergeRuntimePayload(
-  existing: unknown | null,
-  next: unknown | null | undefined,
-): unknown | null {
+function mergeRuntimePayload<A, B>(existing: A, next: B) {
   if (next === undefined) {
     return existing ?? null;
   }
