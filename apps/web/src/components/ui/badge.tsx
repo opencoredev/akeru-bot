@@ -43,18 +43,22 @@ const badgeVariants = cva(
         success: "bg-success/8 text-success-foreground dark:bg-success/16",
         warning: "bg-warning/8 text-warning-foreground dark:bg-warning/16",
       },
+      presentation: {
+        "connection-kind": "h-4 px-1.5 text-[10px]",
+      },
     },
   },
 );
 
 interface BadgeProps extends useRender.ComponentProps<"span"> {
   variant?: VariantProps<typeof badgeVariants>["variant"];
+  presentation?: VariantProps<typeof badgeVariants>["presentation"];
   size?: VariantProps<typeof badgeVariants>["size"];
 }
 
-function Badge({ className, variant, size, render, ...props }: BadgeProps) {
+function Badge({ className, variant, size, presentation, render, ...props }: BadgeProps) {
   const defaultProps = {
-    className: cn(badgeVariants({ className, size, variant })),
+    className: cn(badgeVariants({ className, size, variant, presentation })),
     "data-slot": "badge",
   };
 

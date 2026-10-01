@@ -56,6 +56,7 @@ function ComboboxChipsInput({
 function ComboboxInput({
   className,
   inputClassName,
+  presentation,
   showTrigger = true,
   showClear = false,
   startAddon,
@@ -64,6 +65,7 @@ function ComboboxInput({
   ...props
 }: Omit<ComboboxPrimitive.Input.Props, "size"> & {
   inputClassName?: string;
+  presentation?: "font-search";
   showTrigger?: boolean;
   showClear?: boolean;
   startAddon?: React.ReactNode;
@@ -91,12 +93,18 @@ function ComboboxInput({
           sizeValue === "sm"
             ? "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-6.5"
             : "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-7",
+          presentation === "font-search" &&
+            "[&_input]:h-6.5 [&_input]:ps-5 [&_input]:font-sans [&_input]:leading-6.5",
           className,
         )}
         data-slot="combobox-input"
         render={
           <Input
-            className={cn("has-disabled:opacity-100", inputClassName)}
+            className={cn(
+              "has-disabled:opacity-100",
+              presentation === "font-search" && "rounded-none bg-transparent text-sm",
+              inputClassName,
+            )}
             nativeInput
             size={sizeValue}
             unstyled={unstyled}
@@ -130,9 +138,22 @@ function ComboboxInput({
   );
 }
 
-function ComboboxTrigger({ className, children, ...props }: ComboboxPrimitive.Trigger.Props) {
+function ComboboxTrigger({
+  className,
+  children,
+  presentation,
+  ...props
+}: ComboboxPrimitive.Trigger.Props & { presentation?: "font-family" }) {
   return (
-    <ComboboxPrimitive.Trigger className={className} data-slot="combobox-trigger" {...props}>
+    <ComboboxPrimitive.Trigger
+      className={cn(
+        presentation === "font-family" &&
+          "relative inline-flex min-h-9 w-full min-w-36 cursor-pointer select-none items-center justify-between gap-2 rounded-lg border border-transparent bg-secondary px-[calc(--spacing(3)-1px)] text-left text-base text-foreground outline-none transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring/70 sm:min-h-8 sm:text-sm",
+        className,
+      )}
+      data-slot="combobox-trigger"
+      {...props}
+    >
       {children}
     </ComboboxPrimitive.Trigger>
   );
@@ -286,10 +307,18 @@ function ComboboxList({ className, ...props }: ComboboxPrimitive.List.Props) {
  * A variant of `ComboboxList` without `ScrollArea`, for use when
  * an external virtualizer (e.g. LegendList) owns the scroll container.
  */
-function ComboboxListVirtualized({ className, ...props }: ComboboxPrimitive.List.Props) {
+function ComboboxListVirtualized({
+  className,
+  presentation,
+  ...props
+}: ComboboxPrimitive.List.Props & { presentation?: "font-family" }) {
   return (
     <ComboboxPrimitive.List
-      className={cn("not-empty:px-1 not-empty:py-1", className)}
+      className={cn(
+        "not-empty:px-1 not-empty:py-1",
+        presentation === "font-family" && "size-full min-w-0 p-0",
+        className,
+      )}
       data-slot="combobox-list"
       {...props}
     />

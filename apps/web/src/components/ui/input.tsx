@@ -17,6 +17,7 @@ type InputProps = Omit<InputPrimitive.Props & React.RefAttributes<HTMLInputEleme
     | "keybinding-capture"
     | "keybinding-expression"
     | "keybinding-search";
+  surface?: "background";
 };
 
 function Input({
@@ -26,6 +27,7 @@ function Input({
   unstyled = false,
   nativeInput = false,
   variant = "default",
+  surface,
   ...props
 }: InputProps) {
   const inputClassName = cn(
@@ -83,6 +85,7 @@ function Input({
             props["aria-invalid"] &&
             "border-destructive/70 focus-visible:border-destructive",
           variant === "keybinding-search" && "[&_[data-slot=input]]:pl-8",
+          surface === "background" && "bg-background",
           className,
         ) || undefined
       }

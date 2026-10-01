@@ -7,6 +7,25 @@ import type * as React from "react";
 
 import { cn } from "~/lib/utils";
 
+const buttonPresentations = {
+  "provider-update-strong": "size-5 rounded-sm p-0 text-warning hover:text-warning",
+  "provider-update": "size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground",
+  "model-favorite": "text-yellow-500 hover:text-yellow-600",
+  "compact-gap": "gap-1",
+  "wizard-preview-action": "h-7 px-2 text-xs text-muted-foreground",
+  "environment-add": "h-7 gap-1.5 px-2 text-xs",
+  "environment-remove": "size-8 text-muted-foreground hover:text-destructive",
+  "model-visibility": "text-muted-foreground/60 hover:text-muted-foreground",
+  "channel-disclosure": "size-7 shrink-0 text-muted-foreground hover:text-foreground sm:size-7",
+  "provider-remove": "text-muted-foreground hover:text-destructive",
+  "provider-email-copy":
+    "size-6 shrink-0 rounded-sm p-0 text-muted-foreground hover:text-foreground",
+  "wizard-step":
+    "flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring max-sm:justify-center max-sm:px-2",
+  "wizard-step-current":
+    "flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring max-sm:justify-center max-sm:px-2 bg-card text-foreground shadow-xs ring-1 ring-black/5 hover:bg-card dark:shadow-none dark:ring-white/5",
+};
+
 const buttonVariants = cva(
   "[--control-icon-color:currentColor] [&_svg]:-mx-0.5 relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[var(--control-radius)] border font-medium text-base outline-none transition-shadow before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--control-radius)-1px)] pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 sm:text-sm [&_svg:not([class*='text-'])]:text-[var(--control-icon-color)] [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
@@ -99,22 +118,35 @@ const buttonVariants = cva(
         "ghost-fade":
           "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent text-muted-foreground transition-opacity data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent aria-hidden:pointer-events-none aria-hidden:opacity-0",
       },
+      presentation: buttonPresentations,
     },
   },
 );
 
 interface ButtonProps extends useRender.ComponentProps<"button"> {
   variant?: VariantProps<typeof buttonVariants>["variant"];
+  unstyled?: boolean;
+  presentation?: VariantProps<typeof buttonVariants>["presentation"];
   size?: VariantProps<typeof buttonVariants>["size"];
 }
 
-function Button({ className, variant, size, render, ...props }: ButtonProps) {
+function Button({
+  className,
+  variant,
+  size,
+  presentation,
+  unstyled = false,
+  render,
+  ...props
+}: ButtonProps) {
   const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] = render
     ? undefined
     : "button";
 
   const defaultProps = {
-    className: cn(buttonVariants({ className, size, variant })),
+    className: unstyled
+      ? cn(presentation && buttonPresentations[presentation], className)
+      : cn(buttonVariants({ className, size, variant, presentation })),
     "data-slot": "button",
     type: typeValue,
   };
