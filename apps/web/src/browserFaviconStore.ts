@@ -7,7 +7,7 @@ import type { DesktopPreviewFavicon, ScopedProjectRef, ScopedThreadRef } from "@
 import * as Option from "effect/Option";
 import { useMemo } from "react";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, type PersistOptions } from "zustand/middleware";
 
 import { normalizeHostname } from "~/browser/browserTargetResolver";
 import { useThreadShell } from "~/state/entities";
@@ -137,6 +137,17 @@ export function resolveBrowserFaviconStorage(): StateStorage {
   };
 }
 
+export const mergeBrowserFaviconState = ((persistedState, currentState) => {
+  const state: BrowserFaviconStoreState = {
+    ...currentState,
+    ...migratePersistedBrowserFaviconState(persistedState),
+  };
+
+  return state;
+}) satisfies NonNullable<
+  PersistOptions<BrowserFaviconStoreState, Pick<BrowserFaviconStoreState, "byKey">>["merge"]
+>;
+
 export const useBrowserFaviconStore = create<BrowserFaviconStoreState>()(
   persist(
     (set) => ({
@@ -194,16 +205,6 @@ export const useBrowserFaviconStore = create<BrowserFaviconStoreState>()(
     },
   ),
 );
-
-export function mergeBrowserFaviconState(
-  persistedState: unknown,
-  currentState: BrowserFaviconStoreState,
-): BrowserFaviconStoreState {
-  return {
-    ...currentState,
-    ...migratePersistedBrowserFaviconState(persistedState),
-  };
-}
 
 export function registerFaviconProjectForThread(
   threadRef: ScopedThreadRef,

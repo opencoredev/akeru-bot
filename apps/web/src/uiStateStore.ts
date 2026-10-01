@@ -1,3 +1,6 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import { storedField } from "./lib/persistedSchema";
 import * as Predicate from "effect/Predicate";
 import { Debouncer } from "@tanstack/react-pacer";
 import { create } from "zustand";
@@ -69,7 +72,7 @@ export function legacyProjectCwdPreferenceKey(cwd: string): string {
   return `${LEGACY_PROJECT_CWD_PREFERENCE_PREFIX}${normalizeProjectPathForComparison(cwd)}`;
 }
 
-function sanitizeStringArray(value: unknown): string[] {
+function sanitizeStringArray(value: Schema.Json | undefined): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -81,8 +84,8 @@ function sanitizeStringArray(value: unknown): string[] {
   ];
 }
 
-function sanitizeBooleanRecord(value: unknown): Record<string, boolean> {
-  if (!value || !(value === null || Predicate.isObjectOrArray(value))) {
+function sanitizeBooleanRecord(value: Schema.Json | undefined): Record<string, boolean> {
+  if (!Predicate.isObjectOrArray(value)) {
     return {};
   }
 
@@ -93,8 +96,8 @@ function sanitizeBooleanRecord(value: unknown): Record<string, boolean> {
   );
 }
 
-function sanitizeTimestampRecord(value: unknown): Record<string, string> {
-  if (!value || !(value === null || Predicate.isObjectOrArray(value))) {
+function sanitizeTimestampRecord(value: Schema.Json | undefined): Record<string, string> {
+  if (!Predicate.isObjectOrArray(value)) {
     return {};
   }
 
@@ -109,7 +112,29 @@ function sanitizeTimestampRecord(value: unknown): Record<string, string> {
   );
 }
 
-export function parsePersistedState(parsed: PersistedUiState): UiState {
+const persistedUiField = storedField(Schema.Union([Schema.Json, Schema.Undefined]), undefined);
+
+const PersistedUiInput = Schema.Struct({
+  projectExpandedById: persistedUiField,
+  projectOrder: persistedUiField,
+  threadLastVisitedAtById: persistedUiField,
+  collapsedProjectCwds: persistedUiField,
+  expandedProjectCwds: persistedUiField,
+  projectOrderCwds: persistedUiField,
+  defaultAdvertisedEndpointKey: persistedUiField,
+  threadChangedFilesExpansionVersion: persistedUiField,
+  threadChangedFilesExpandedById: persistedUiField,
+});
+
+const decodePersistedUi = Schema.decodeUnknownOption(PersistedUiInput);
+
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This persistence boundary decodes stored UI fields before migrating legacy preferences.
+export function parsePersistedState(input: unknown): UiState {
+  const decoded = decodePersistedUi(input);
+
+  if (Option.isNone(decoded)) return initialState;
+  const parsed = decoded.value;
+
   const projectExpandedById =
     parsed.projectExpandedById === undefined
       ? (() => {
@@ -172,29 +197,29 @@ function readPersistedState(): UiState {
           continue;
         }
 
-        return parsePersistedState(JSON.parse(legacyRaw) as PersistedUiState);
+        return parsePersistedState(JSON.parse(legacyRaw));
       }
 
       return initialState;
     }
 
-    return parsePersistedState(JSON.parse(raw) as PersistedUiState);
+    return parsePersistedState(JSON.parse(raw));
   } catch {
     return initialState;
   }
 }
 
 function sanitizePersistedThreadChangedFilesExpanded(
-  value: PersistedUiState["threadChangedFilesExpandedById"],
-): Record<string, Record<string, boolean>> {
-  if (!value || !(value === null || Predicate.isObjectOrArray(value))) {
+  value: Schema.Json | undefined,
+): UiThreadState["threadChangedFilesExpandedById"] {
+  if (!Predicate.isObjectOrArray(value)) {
     return {};
   }
 
   const nextState: Record<string, Record<string, boolean>> = {};
 
   for (const [threadId, turns] of Object.entries(value)) {
-    if (!threadId || !turns || !(turns === null || Predicate.isObjectOrArray(turns))) {
+    if (!threadId || !Predicate.isObjectOrArray(turns)) {
       continue;
     }
 

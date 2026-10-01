@@ -81,7 +81,7 @@ export function createDraftModelActions(
             // Iteration key comes from the instance-keyed sticky map,
             // so coerce the string back to `ProviderInstanceId` for
             // the typed lookup.
-            const instanceKey = provider as ProviderInstanceId;
+            const instanceKey = ProviderInstanceId.make(provider);
             const current = nextMap[instanceKey];
             nextMap[instanceKey] = {
               ...selection,
@@ -140,7 +140,7 @@ export function createDraftModelActions(
             // Explicit options provided (or the caller passed a complete
             // snapshot whose absent options mean "no options") → use the
             // selection as-is.
-            nextMap[normalized.instanceId] = normalized as ModelSelection;
+            nextMap[normalized.instanceId] = normalized;
           } else {
             // No options in selection → preserve existing options, update provider+model
             nextMap[normalized.instanceId] = createModelSelection(
@@ -210,7 +210,7 @@ export function createDraftModelActions(
             );
           } else if (current?.options) {
             const { options: _, ...rest } = current;
-            nextMap[instanceKey] = rest as ModelSelection;
+            nextMap[instanceKey] = rest;
           }
         }
 
@@ -274,7 +274,7 @@ export function createDraftModelActions(
           );
         } else if (currentForProvider && (currentForProvider.options?.length ?? 0) > 0) {
           const { options: _, ...rest } = currentForProvider;
-          nextMap[instanceKey] = rest as ModelSelection;
+          nextMap[instanceKey] = rest;
         }
 
         // Handle sticky persistence
@@ -297,7 +297,7 @@ export function createDraftModelActions(
             );
           } else if ((stickyBase.options?.length ?? 0) > 0) {
             const { options: _, ...rest } = stickyBase;
-            nextStickyMap[instanceKey] = rest as ModelSelection;
+            nextStickyMap[instanceKey] = rest;
           }
 
           nextStickyActiveProvider = options.instanceId

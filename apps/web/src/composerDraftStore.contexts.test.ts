@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
 import { ThreadId } from "@akeru/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
@@ -88,15 +89,9 @@ describe("composerDraftStore terminal contexts", () => {
       .getState()
       .addTerminalContext(threadRef, makeTerminalContext({ id: "ctx-persist" }));
 
-    const persistApi = useComposerDraftStore.persist as unknown as {
-      getOptions: () => {
-        partialize: (state: ReturnType<typeof useComposerDraftStore.getState>) => unknown;
-      };
-    };
-
-    const persistedState = persistApi.getOptions().partialize(useComposerDraftStore.getState()) as {
-      draftsByThreadKey?: Record<string, { terminalContexts?: Array<Record<string, unknown>> }>;
-    };
+    const persistedState = getComposerPersistenceOptions().partialize(
+      useComposerDraftStore.getState(),
+    );
 
     expect(
       persistedState.draftsByThreadKey?.[threadKeyFor(threadId, TEST_ENVIRONMENT_ID)]
@@ -111,21 +106,12 @@ describe("composerDraftStore terminal contexts", () => {
     });
     expect(
       persistedState.draftsByThreadKey?.[threadKeyFor(threadId, TEST_ENVIRONMENT_ID)]
-        ?.terminalContexts?.[0]?.text,
-    ).toBeUndefined();
+        ?.terminalContexts?.[0],
+    ).not.toHaveProperty("text");
   });
 
   it("hydrates persisted terminal contexts without in-memory snapshot text", () => {
-    const persistApi = useComposerDraftStore.persist as unknown as {
-      getOptions: () => {
-        merge: (
-          persistedState: unknown,
-          currentState: ReturnType<typeof useComposerDraftStore.getState>,
-        ) => ReturnType<typeof useComposerDraftStore.getState>;
-      };
-    };
-
-    const mergedState = persistApi.getOptions().merge(
+    const mergedState = getComposerPersistenceOptions().merge(
       {
         draftsByThreadId: {
           [threadId]: {
@@ -163,16 +149,7 @@ describe("composerDraftStore terminal contexts", () => {
   });
 
   it("sanitizes malformed persisted drafts during merge", () => {
-    const persistApi = useComposerDraftStore.persist as unknown as {
-      getOptions: () => {
-        merge: (
-          persistedState: unknown,
-          currentState: ReturnType<typeof useComposerDraftStore.getState>,
-        ) => ReturnType<typeof useComposerDraftStore.getState>;
-      };
-    };
-
-    const mergedState = persistApi.getOptions().merge(
+    const mergedState = getComposerPersistenceOptions().merge(
       {
         draftsByThreadId: {
           [threadId]: {
@@ -269,15 +246,7 @@ describe("composerDraftStore element contexts", () => {
   it("persists element contexts via the partializer (round-trippable)", () => {
     useComposerDraftStore.getState().addElementContext(threadRef, baseSelection);
 
-    const persistApi = useComposerDraftStore.persist as unknown as {
-      getOptions: () => {
-        partialize: (state: ReturnType<typeof useComposerDraftStore.getState>) => unknown;
-      };
-    };
-
-    const persisted = persistApi.getOptions().partialize(useComposerDraftStore.getState()) as {
-      draftsByThreadKey?: Record<string, { elementContexts?: Array<Record<string, unknown>> }>;
-    };
+    const persisted = getComposerPersistenceOptions().partialize(useComposerDraftStore.getState());
 
     const entry =
       persisted.draftsByThreadKey?.[threadKeyFor(threadId, TEST_ENVIRONMENT_ID)]
@@ -291,7 +260,7 @@ describe("composerDraftStore element contexts", () => {
     });
     // Persistence does NOT include htmlPreview / styles oversize-clamping —
     // that happens at normalization time, before the value reaches the store.
-    expect(typeof entry?.htmlPreview).toBe("string");
+    expect(Predicate.isString(entry?.htmlPreview)).toBe(true);
   });
 });
 
@@ -303,16 +272,7 @@ describe("composerDraftStore retired review comments", () => {
   });
 
   it("hydrates drafts saved with review comments and drops them", () => {
-    const persistApi = useComposerDraftStore.persist as unknown as {
-      getOptions: () => {
-        merge: (
-          persistedState: unknown,
-          currentState: ReturnType<typeof useComposerDraftStore.getState>,
-        ) => ReturnType<typeof useComposerDraftStore.getState>;
-      };
-    };
-
-    const mergedState = persistApi.getOptions().merge(
+    const mergedState = getComposerPersistenceOptions().merge(
       {
         draftsByThreadId: {
           [threadId]: {
@@ -344,3 +304,12 @@ describe("composerDraftStore retired review comments", () => {
     expect(draft).not.toHaveProperty("reviewComments");
   });
 });
+
+function getComposerPersistenceOptions() {
+  const options = useComposerDraftStore.persist.getOptions();
+
+  if (!options.partialize || !options.merge)
+    throw new Error("Composer persistence must define partialize and merge.");
+
+  return { partialize: options.partialize, merge: options.merge };
+}

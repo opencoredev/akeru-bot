@@ -182,12 +182,13 @@ export function createDraftIdentityActions(
           return state;
         }
 
-        const nextLogicalProjectDraftThreadKeyByLogicalProjectKey: Record<string, string> = {
-          ...state.logicalProjectDraftThreadKeyByLogicalProjectKey,
-          [normalizedLogicalProjectKey]: draftId,
-        };
+        const nextLogicalProjectDraftThreadKeyByLogicalProjectKey: ComposerDraftStoreState["logicalProjectDraftThreadKeyByLogicalProjectKey"] =
+          {
+            ...state.logicalProjectDraftThreadKeyByLogicalProjectKey,
+            [normalizedLogicalProjectKey]: draftId,
+          };
 
-        const nextDraftThreadsByThreadKey: Record<string, DraftThreadState> = {
+        const nextDraftThreadsByThreadKey: ComposerDraftStoreState["draftThreadsByThreadKey"] = {
           ...state.draftThreadsByThreadKey,
           [draftId]: nextDraftThread,
         };

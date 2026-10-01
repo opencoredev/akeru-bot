@@ -1,7 +1,12 @@
+import {
+  type StoredComposerMigration,
+  type StoredElementContext,
+  type StoredTerminalContext,
+} from "./draftMigrationSchemas";
 import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_LOCAL_EXECUTION_MODE,
-  type EnvironmentId,
+  EnvironmentId,
   ModelSelection,
   ProjectId,
   ProviderInstanceId,
@@ -22,8 +27,6 @@ import {
   type PersistedTerminalContextDraft,
   type PersistedComposerDraftStoreState,
   type PersistedDraftThreadState,
-  type PersistedComposerThreadDraftState,
-  type LegacyPersistedComposerThreadDraftState,
 } from "./draftPersistenceSchemas";
 import {
   normalizeLegacyComposerStorageKey,
@@ -42,12 +45,14 @@ import {
   compactModelSelectionByProvider,
 } from "./draftModelSelection";
 
-function normalizePersistedAttachment(value: unknown): PersistedComposerImageAttachment | null {
-  if (!value || !(value === null || Predicate.isObjectOrArray(value))) {
+function normalizePersistedAttachment(
+  value: PersistedComposerImageAttachment | null,
+): PersistedComposerImageAttachment | null {
+  if (!Predicate.isObjectOrArray(value)) {
     return null;
   }
 
-  const candidate = value as Record<string, unknown>;
+  const candidate = value;
   const id = candidate.id;
   const name = candidate.name;
   const mimeType = candidate.mimeType;
@@ -77,10 +82,10 @@ function normalizePersistedAttachment(value: unknown): PersistedComposerImageAtt
 }
 
 function normalizePersistedElementContextDraft(
-  value: unknown,
+  value: StoredElementContext | null,
 ): PersistedElementContextDraft | null {
-  if (!value || !(value === null || Predicate.isObjectOrArray(value))) return null;
-  const candidate = value as Record<string, unknown>;
+  if (!Predicate.isObjectOrArray(value)) return null;
+  const candidate = value;
   const id = candidate.id;
   const threadId = candidate.threadId;
   const pickedAt = candidate.pickedAt;
@@ -105,8 +110,8 @@ function normalizePersistedElementContextDraft(
   const sourceCandidate = candidate.source;
   let source: PersistedElementContextDraft["source"] = null;
 
-  if (sourceCandidate && (sourceCandidate === null || Predicate.isObjectOrArray(sourceCandidate))) {
-    const sourceRecord = sourceCandidate as Record<string, unknown>;
+  if (Predicate.isObjectOrArray(sourceCandidate)) {
+    const sourceRecord = sourceCandidate;
     source = {
       functionName: Predicate.isString(sourceRecord.functionName)
         ? sourceRecord.functionName
@@ -125,7 +130,7 @@ function normalizePersistedElementContextDraft(
 
   return {
     id,
-    threadId: threadId as ThreadId,
+    threadId: ThreadId.make(threadId),
     pickedAt,
     pageUrl,
     pageTitle: Predicate.isString(candidate.pageTitle) ? candidate.pageTitle : null,
@@ -139,13 +144,13 @@ function normalizePersistedElementContextDraft(
 }
 
 function normalizePersistedTerminalContextDraft(
-  value: unknown,
+  value: StoredTerminalContext | null,
 ): PersistedTerminalContextDraft | null {
-  if (!value || !(value === null || Predicate.isObjectOrArray(value))) {
+  if (!Predicate.isObjectOrArray(value)) {
     return null;
   }
 
-  const candidate = value as Record<string, unknown>;
+  const candidate = value;
   const id = candidate.id;
   const threadId = candidate.threadId;
   const createdAt = candidate.createdAt;
@@ -182,7 +187,7 @@ function normalizePersistedTerminalContextDraft(
 
   return {
     id,
-    threadId: threadId as ThreadId,
+    threadId: ThreadId.make(threadId),
     createdAt,
     terminalId,
     terminalLabel,
@@ -192,8 +197,8 @@ function normalizePersistedTerminalContextDraft(
 }
 
 export function normalizePersistedDraftThreads(
-  rawDraftThreadsByThreadId: unknown,
-  rawProjectDraftThreadIdByProjectKey: unknown,
+  rawDraftThreadsByThreadId: StoredComposerMigration["draftThreadsByThreadKey"],
+  rawProjectDraftThreadIdByProjectKey: StoredComposerMigration["logicalProjectDraftThreadKeyByLogicalProjectKey"],
 ): Pick<
   PersistedComposerDraftStoreState,
   "draftThreadsByThreadKey" | "logicalProjectDraftThreadKeyByLogicalProjectKey"
@@ -206,9 +211,7 @@ export function normalizePersistedDraftThreads(
     (rawProjectDraftThreadIdByProjectKey === null ||
       Predicate.isObjectOrArray(rawProjectDraftThreadIdByProjectKey))
   ) {
-    for (const [projectKey, threadId] of Object.entries(
-      rawProjectDraftThreadIdByProjectKey as Record<string, unknown>,
-    )) {
+    for (const [projectKey, threadId] of Object.entries(rawProjectDraftThreadIdByProjectKey)) {
       if (!Predicate.isString(threadId) || threadId.length === 0) {
         continue;
       }
@@ -226,29 +229,21 @@ export function normalizePersistedDraftThreads(
         continue;
       }
 
-      environmentIdByThreadId.set(threadId as ThreadId, projectRef.environmentId);
+      environmentIdByThreadId.set(ThreadId.make(threadId), projectRef.environmentId);
     }
   }
 
-  if (
-    rawDraftThreadsByThreadId &&
-    (rawDraftThreadsByThreadId === null || Predicate.isObjectOrArray(rawDraftThreadsByThreadId))
-  ) {
-    for (const [threadKeyOrId, rawDraftThread] of Object.entries(
-      rawDraftThreadsByThreadId as Record<string, unknown>,
-    )) {
+  if (Predicate.isObjectOrArray(rawDraftThreadsByThreadId)) {
+    for (const [threadKeyOrId, rawDraftThread] of Object.entries(rawDraftThreadsByThreadId)) {
       if (!Predicate.isString(threadKeyOrId) || threadKeyOrId.length === 0) {
         continue;
       }
 
-      if (
-        !rawDraftThread ||
-        !(rawDraftThread === null || Predicate.isObjectOrArray(rawDraftThread))
-      ) {
+      if (!Predicate.isObjectOrArray(rawDraftThread)) {
         continue;
       }
 
-      const candidateDraftThread = rawDraftThread as Record<string, unknown>;
+      const candidateDraftThread = rawDraftThread;
       const parsedThreadRef = parseScopedThreadKey(threadKeyOrId);
       const threadKey = normalizeLegacyComposerStorageKey(threadKeyOrId);
 
@@ -256,15 +251,15 @@ export function normalizePersistedDraftThreads(
         parsedThreadRef?.threadId ??
         (Predicate.isString(candidateDraftThread.threadId) &&
         candidateDraftThread.threadId.length > 0
-          ? (candidateDraftThread.threadId as ThreadId)
-          : (threadKeyOrId as ThreadId));
+          ? ThreadId.make(candidateDraftThread.threadId)
+          : ThreadId.make(threadKeyOrId));
 
       const environmentId =
         parsedThreadRef?.environmentId ??
         (Predicate.isString(candidateDraftThread.environmentId) &&
         candidateDraftThread.environmentId.length > 0
-          ? (candidateDraftThread.environmentId as EnvironmentId)
-          : environmentIdByThreadId.get(threadKeyOrId as ThreadId));
+          ? EnvironmentId.make(candidateDraftThread.environmentId)
+          : environmentIdByThreadId.get(ThreadId.make(threadKeyOrId)));
 
       const projectId = candidateDraftThread.projectId;
       const createdAt = candidateDraftThread.createdAt;
@@ -274,11 +269,9 @@ export function normalizePersistedDraftThreads(
       const normalizedWorktreePath = Predicate.isString(worktreePath) ? worktreePath : null;
       const promotedToCandidate = candidateDraftThread.promotedTo;
 
-      const promotedToRecord =
-        promotedToCandidate &&
-        (promotedToCandidate === null || Predicate.isObjectOrArray(promotedToCandidate))
-          ? (promotedToCandidate as Record<string, unknown>)
-          : null;
+      const promotedToRecord = Predicate.isObjectOrArray(promotedToCandidate)
+        ? promotedToCandidate
+        : null;
 
       const promotedTo =
         promotedToRecord &&
@@ -287,8 +280,8 @@ export function normalizePersistedDraftThreads(
         Predicate.isString(promotedToRecord.threadId) &&
         promotedToRecord.threadId.length > 0
           ? scopeThreadRef(
-              promotedToRecord.environmentId as EnvironmentId,
-              promotedToRecord.threadId as ThreadId,
+              EnvironmentId.make(promotedToRecord.environmentId),
+              ThreadId.make(promotedToRecord.threadId),
             )
           : null;
 
@@ -296,17 +289,17 @@ export function normalizePersistedDraftThreads(
         continue;
       }
 
-      const normalizedEnvironmentId = environmentId as EnvironmentId;
+      const normalizedEnvironmentId = EnvironmentId.make(environmentId);
       draftThreadsByThreadKey[threadKey] = {
         threadId,
         environmentId: normalizedEnvironmentId,
-        projectId: projectId as ProjectId,
+        projectId: ProjectId.make(projectId),
         logicalProjectKey:
           Predicate.isString(candidateDraftThread.logicalProjectKey) &&
           candidateDraftThread.logicalProjectKey.length > 0
             ? candidateDraftThread.logicalProjectKey
             : parsedThreadRef
-              ? projectDraftKey(scopeProjectRef(normalizedEnvironmentId, projectId as ProjectId))
+              ? projectDraftKey(scopeProjectRef(normalizedEnvironmentId, ProjectId.make(projectId)))
               : threadKeyOrId,
         createdAt:
           Predicate.isString(createdAt) && createdAt.length > 0
@@ -337,7 +330,7 @@ export function normalizePersistedDraftThreads(
       Predicate.isObjectOrArray(rawProjectDraftThreadIdByProjectKey))
   ) {
     for (const [logicalProjectKey, threadKeyOrId] of Object.entries(
-      rawProjectDraftThreadIdByProjectKey as Record<string, unknown>,
+      rawProjectDraftThreadIdByProjectKey,
     )) {
       if (!Predicate.isString(threadKeyOrId) || threadKeyOrId.length === 0) {
         continue;
@@ -367,7 +360,7 @@ export function normalizePersistedDraftThreads(
 
       if (!draftThreadsByThreadKey[threadKey]) {
         draftThreadsByThreadKey[threadKey] = {
-          threadId: parsedThreadRef?.threadId ?? (threadKey as ThreadId),
+          threadId: parsedThreadRef?.threadId ?? ThreadId.make(threadKey),
           environmentId: projectRef.environmentId,
           projectId: projectRef.projectId,
           logicalProjectKey,
@@ -399,10 +392,10 @@ export function normalizePersistedDraftThreads(
 }
 
 export function normalizePersistedDraftsByThreadId(
-  rawDraftMap: unknown,
+  rawDraftMap: StoredComposerMigration["draftsByThreadKey"],
   draftThreadsByThreadKey: PersistedComposerDraftStoreState["draftThreadsByThreadKey"],
 ): PersistedComposerDraftStoreState["draftsByThreadKey"] {
-  if (!rawDraftMap || !(rawDraftMap === null || Predicate.isObjectOrArray(rawDraftMap))) {
+  if (!Predicate.isObjectOrArray(rawDraftMap)) {
     return {};
   }
 
@@ -417,25 +410,23 @@ export function normalizePersistedDraftsByThreadId(
 
     environmentIdByThreadId.set(
       parsedThreadRef.threadId,
-      draftThread.environmentId as EnvironmentId,
+      EnvironmentId.make(draftThread.environmentId),
     );
   }
 
   const nextDraftsByThreadKey: DeepMutable<PersistedComposerDraftStoreState["draftsByThreadKey"]> =
     {};
 
-  for (const [threadKeyOrId, draftValue] of Object.entries(
-    rawDraftMap as Record<string, unknown>,
-  )) {
+  for (const [threadKeyOrId, draftValue] of Object.entries(rawDraftMap)) {
     if (!Predicate.isString(threadKeyOrId) || threadKeyOrId.length === 0) {
       continue;
     }
 
-    if (!draftValue || !(draftValue === null || Predicate.isObjectOrArray(draftValue))) {
+    if (!Predicate.isObjectOrArray(draftValue)) {
       continue;
     }
 
-    const draftCandidate = draftValue as PersistedComposerThreadDraftState;
+    const draftCandidate = draftValue;
     const promptCandidate = Predicate.isString(draftCandidate.prompt) ? draftCandidate.prompt : "";
 
     const attachments = Array.isArray(draftCandidate.attachments)
@@ -477,7 +468,7 @@ export function normalizePersistedDraftsByThreadId(
     );
 
     // If the draft already has the v3 shape, use it directly
-    const legacyDraftCandidate = draftValue as LegacyPersistedComposerThreadDraftState;
+    const legacyDraftCandidate = draftValue;
     let modelSelectionByProvider: Partial<Record<ProviderInstanceId, ModelSelection>> = {};
     let activeProvider: ProviderInstanceId | null = null;
 
@@ -487,9 +478,7 @@ export function normalizePersistedDraftsByThreadId(
         Predicate.isObjectOrArray(draftCandidate.modelSelectionByProvider))
     ) {
       // v3 format
-      modelSelectionByProvider = draftCandidate.modelSelectionByProvider as Partial<
-        Record<ProviderInstanceId, ModelSelection>
-      >;
+      modelSelectionByProvider = draftCandidate.modelSelectionByProvider;
       activeProvider = normalizeProviderInstanceId(draftCandidate.activeProvider);
     } else {
       // v2 or legacy format: migrate
@@ -505,7 +494,7 @@ export function normalizePersistedDraftsByThreadId(
         {
           provider: legacyDraftCandidate.provider,
           model: legacyDraftCandidate.model,
-          modelOptions: normalizedModelOptions ?? (legacyDraftCandidate.modelOptions as unknown),
+          modelOptions: normalizedModelOptions ?? legacyDraftCandidate.modelOptions,
           legacyCodex: legacyDraftCandidate,
         },
       );
@@ -550,7 +539,7 @@ export function normalizePersistedDraftsByThreadId(
         : draftThreadsByThreadKey[threadKeyOrId] !== undefined
           ? threadKeyOrId
           : (() => {
-              const environmentId = environmentIdByThreadId.get(threadKeyOrId as ThreadId);
+              const environmentId = environmentIdByThreadId.get(ThreadId.make(threadKeyOrId));
 
               return environmentId
                 ? normalizeLegacyComposerStorageKey(threadKeyOrId, { environmentId })

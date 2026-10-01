@@ -37,7 +37,6 @@ import {
   EMPTY_ELEMENT_CONTEXTS,
   EMPTY_PREVIEW_ANNOTATIONS,
   type ComposerDraftStoreState,
-  type DraftThreadState,
   type ComposerThreadDraftState,
   type ComposerThreadTarget,
   EMPTY_THREAD_DRAFT,
@@ -74,8 +73,10 @@ Object.freeze(EMPTY_ELEMENT_CONTEXTS);
 
 Object.freeze(EMPTY_PREVIEW_ANNOTATIONS);
 
+import type { PersistedComposerDraftStoreState } from "./composer/draftPersistenceSchemas";
+
 const composerDraftStore = create<ComposerDraftStoreState>()(
-  persist(
+  persist<ComposerDraftStoreState, [], [], PersistedComposerDraftStoreState>(
     (setBase, get) => {
       const set = setBase;
 
@@ -112,7 +113,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
           Object.entries(normalizedPersisted.draftThreadsByThreadKey).map(
             ([threadKey, draftThread]) => [threadKey, toHydratedDraftThreadState(draftThread)],
           ),
-        ) as Record<string, DraftThreadState>;
+        );
 
         return {
           ...currentState,
@@ -198,14 +199,14 @@ export function clearComposerDraftsEnvironment(environmentId: EnvironmentId): vo
           parseScopedProjectKey(logicalProjectKey)?.environmentId !== environmentId &&
           !removedThreadKeys.has(threadKey),
       ),
-    ) as Record<string, string>;
+    );
 
     const nextDraftThreads = Object.fromEntries(
       Object.entries(state.draftThreadsByThreadKey).filter(
         ([threadKey, draftThread]) =>
           draftThread.environmentId !== environmentId && !removedThreadKeys.has(threadKey),
       ),
-    ) as Record<string, DraftThreadState>;
+    );
 
     const nextDrafts = Object.fromEntries(
       Object.entries(state.draftsByThreadKey).filter(([threadKey, draft]) => {
@@ -217,13 +218,13 @@ export function clearComposerDraftsEnvironment(environmentId: EnvironmentId): vo
 
         return false;
       }),
-    ) as Record<string, ComposerThreadDraftState>;
+    );
 
     const nextBackgroundSubmissionThreadKeys = Object.fromEntries(
       Object.entries(state.backgroundSubmissionThreadKeys).filter(
         ([threadKey]) => parseScopedThreadKey(threadKey)?.environmentId !== environmentId,
       ),
-    ) as Record<string, true>;
+    );
 
     return {
       draftsByThreadKey: nextDrafts,

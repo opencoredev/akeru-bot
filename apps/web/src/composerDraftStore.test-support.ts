@@ -53,13 +53,11 @@ export function toSelections(
 
 function selectionsByProvider(
   options: Partial<Record<ProviderDriverKind, Record<string, string | boolean | undefined>>>,
-): ProviderOptionSelectionsByProvider {
+) {
   const result: ProviderOptionSelectionsByProvider = {};
 
-  for (const [provider, bag] of Object.entries(options) as Array<
-    [ProviderDriverKind, Record<string, string | boolean | undefined>]
-  >) {
-    result[provider] = toSelections(bag);
+  for (const [provider, bag] of Object.entries(options)) {
+    result[ProviderDriverKind.make(provider)] = toSelections(bag);
   }
 
   return result;
@@ -134,7 +132,7 @@ export function modelSelection(
 
 export function providerModelOptions(
   options: Partial<Record<string, Record<string, string | boolean | undefined>>>,
-): ProviderOptionSelectionsByProvider {
+) {
   return selectionsByProvider(options);
 }
 

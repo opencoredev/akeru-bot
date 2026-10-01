@@ -1,3 +1,5 @@
+import * as Option from "effect/Option";
+import { storedField } from "../lib/persistedSchema";
 import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_MODEL,
@@ -55,50 +57,38 @@ function modelSelectionByProviderToOptions(
 }
 
 function cloneModelSelection(selection: ModelSelection): DeepMutable<ModelSelection> {
-  return {
-    ...selection,
-    ...(selection.options ? { options: selection.options.map((option) => ({ ...option })) } : {}),
-  } as DeepMutable<ModelSelection>;
+  const { options, ...rest } = selection;
+
+  return { ...rest, ...(options ? { options: options.map((option) => ({ ...option })) } : {}) };
 }
 
 export function compactModelSelectionByProvider(
   selections: Partial<Record<ProviderInstanceId, ModelSelection>>,
 ): DeepMutable<Record<ProviderInstanceId, ModelSelection>> {
-  const entries: Array<[string, DeepMutable<ModelSelection>]> = [];
+  const result: DeepMutable<Record<ProviderInstanceId, ModelSelection>> = {};
 
   for (const [provider, selection] of Object.entries(selections)) {
-    if (selection !== undefined) {
-      entries.push([provider, cloneModelSelection(selection)]);
-    }
+    if (selection !== undefined)
+      result[ProviderInstanceId.make(provider)] = cloneModelSelection(selection);
   }
 
-  return Object.fromEntries(entries) as DeepMutable<Record<ProviderInstanceId, ModelSelection>>;
+  return result;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This schema guard is the boundary for legacy driver values from storage.
 export function normalizeProviderDriverKind(value: unknown): ProviderDriverKind | null {
   return isProviderDriverKind(value) ? value : null;
 }
 
-/**
- * Match the `ProviderInstanceId` slug pattern (letter followed by
- * letters/digits/`-`/`_`, 1..64 chars). Permissive validator — the schema
- * layer owns authoritative validation; this is used inline to gate typed
- * writes to the draft's instance-keyed maps without pulling the full
- * Effect Schema runtime into the hot path.
- */
-const PROVIDER_INSTANCE_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
+const isProviderInstanceId = Schema.is(ProviderInstanceId);
 
-/**
- * Coerce an arbitrary persisted value into a valid `ProviderInstanceId`. Used
- * wherever we need to accept both legacy driver-kind keys and custom instance
- * slugs (e.g. `codex_personal`) as routing keys.
- */
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This schema guard accepts untrusted instance identifiers at the storage boundary.
 export function normalizeProviderInstanceId(value: unknown): ProviderInstanceId | null {
-  if (!Predicate.isString(value)) return null;
+  return isProviderInstanceId(value) ? value : null;
+}
 
-  if (!PROVIDER_INSTANCE_ID_PATTERN.test(value)) return null;
-
-  return value as ProviderInstanceId;
+function isStoredRecord(value: Schema.Json | undefined): value is Schema.JsonObject {
+  return Predicate.isObject(value);
 }
 
 /**
@@ -113,14 +103,14 @@ export function normalizeProviderInstanceId(value: unknown): ProviderInstanceId 
  * ignored downstream.
  */
 function coerceProviderOptionSelections(
-  value: unknown,
+  value: Schema.Json | undefined,
 ): ReadonlyArray<ProviderOptionSelection> | undefined {
   if (Array.isArray(value)) {
     const out: ProviderOptionSelection[] = [];
 
     for (const entry of value) {
-      if (!entry || !(entry === null || Predicate.isObjectOrArray(entry))) continue;
-      const record = entry as Record<string, unknown>;
+      if (!isStoredRecord(entry)) continue;
+      const record = entry;
       const id = record.id;
       const optionValue = record.value;
 
@@ -134,8 +124,8 @@ function coerceProviderOptionSelections(
     return out.length > 0 ? out : undefined;
   }
 
-  if (value && (value === null || Predicate.isObjectOrArray(value))) {
-    const record = value as Record<string, unknown>;
+  if (isStoredRecord(value)) {
+    const record = value;
     const out: ProviderOptionSelection[] = [];
 
     for (const [id, raw] of Object.entries(record)) {
@@ -157,15 +147,22 @@ function coerceProviderOptionSelections(
  * recover legacy codex fields (effort/codexFastMode/serviceTier) that lived
  * directly on the draft instead of inside `modelOptions.codex`.
  */
+const StoredProviderOptions = Schema.Struct({
+  codex: storedField(Schema.NullOr(Schema.Json), null),
+  claudeAgent: storedField(Schema.NullOr(Schema.Json), null),
+  opencode: storedField(Schema.NullOr(Schema.Json), null),
+});
+
+const decodeStoredProviderOptions = Schema.decodeUnknownOption(StoredProviderOptions);
+
 export function normalizeProviderModelOptions(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- The decoder validates the legacy options object before migration reads its fields.
   value: unknown,
   provider?: ProviderDriverKind | null,
   legacy?: LegacyCodexFields,
 ): ProviderOptionSelectionsByProvider | null {
-  const candidate =
-    value && (value === null || Predicate.isObjectOrArray(value))
-      ? (value as Record<string, unknown>)
-      : null;
+  const decoded = decodeStoredProviderOptions(value);
+  const candidate = Option.isSome(decoded) ? decoded.value : null;
 
   const result: ProviderOptionSelectionsByProvider = {};
 
@@ -216,7 +213,17 @@ export function normalizeProviderModelOptions(
 // Selections whose instance id doesn't match the slug pattern collapse to
 // `null` — caller is responsible for deciding whether that's a dropped
 // write or a routed error.
+const StoredModelSelection = Schema.Struct({
+  instanceId: storedField(Schema.NullOr(Schema.Json), null),
+  provider: storedField(Schema.NullOr(Schema.Json), null),
+  model: storedField(Schema.NullOr(Schema.Json), null),
+  options: storedField(Schema.NullOr(Schema.Json), null),
+});
+
+const decodeStoredModelSelection = Schema.decodeUnknownOption(StoredModelSelection);
+
 export function normalizeModelSelection(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- The decoder validates persisted model fields before the legacy migration consumes them.
   value: unknown,
   legacy?: {
     provider?: unknown;
@@ -225,10 +232,8 @@ export function normalizeModelSelection(
     legacyCodex?: LegacyCodexFields;
   },
 ): NormalizedModelSelection | null {
-  const candidate =
-    value && (value === null || Predicate.isObjectOrArray(value))
-      ? (value as Record<string, unknown>)
-      : null;
+  const decoded = decodeStoredModelSelection(value);
+  const candidate = Option.isSome(decoded) ? decoded.value : null;
 
   // Post-migration ModelSelection carries `instanceId`; pre-migration (v2
   // storage, legacy wire shapes) carries `provider`. Accept either so both
@@ -263,7 +268,7 @@ export function normalizeModelSelection(
   if (Array.isArray(candidate?.options)) {
     const selections = coerceProviderOptionSelections(candidate.options);
 
-    return createModelSelection(instanceId, model, selections) as NormalizedModelSelection;
+    return createModelSelection(instanceId, model, selections);
   }
 
   // Per-kind options were a pre-migration concern; only recover them for a
@@ -281,7 +286,7 @@ export function normalizeModelSelection(
 
   const options = kindForLegacyOptions ? modelOptions?.[kindForLegacyOptions] : undefined;
 
-  return createModelSelection(instanceId, model, options) as NormalizedModelSelection;
+  return createModelSelection(instanceId, model, options);
 }
 
 type NormalizedModelSelection = Omit<ModelSelection, "instanceId"> & {
@@ -306,11 +311,7 @@ export function legacySyncModelSelectionOptions(
   const kind = normalizeProviderDriverKind(modelSelection.instanceId);
   const options = kind ? modelOptions?.[kind] : undefined;
 
-  return createModelSelection(
-    modelSelection.instanceId,
-    modelSelection.model,
-    options,
-  ) as NormalizedModelSelection;
+  return createModelSelection(modelSelection.instanceId, modelSelection.model, options);
 }
 
 export function legacyMergeModelSelectionIntoProviderModelOptions(
@@ -378,7 +379,7 @@ export function legacyToModelSelectionByProvider(
   }
 
   if (modelSelection) {
-    result[modelSelection.instanceId] = modelSelection as ModelSelection;
+    result[modelSelection.instanceId] = modelSelection;
   }
 
   return result;
