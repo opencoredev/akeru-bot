@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useSyncExternalStore } from "react";
 import { PauseIcon, PlayIcon, SquareIcon, Volume2Icon } from "lucide-react";
 import {
@@ -35,16 +36,13 @@ export function ReplyPlaybackControls({
       ? snapshot.status
       : "idle";
 
-  const label =
-    state === "loading"
-      ? t("Preparing audio")
-      : state === "playing"
-        ? t("Pause readout")
-        : state === "paused"
-          ? t("Resume readout")
-          : state === "error"
-            ? t("Retry readout")
-            : t("Read aloud");
+  const label = Match.value(state).pipe(
+    Match.when("loading", () => t("Preparing audio")),
+    Match.when("playing", () => t("Pause readout")),
+    Match.when("paused", () => t("Resume readout")),
+    Match.when("error", () => t("Retry readout")),
+    Match.orElse(() => t("Read aloud")),
+  );
 
   const activate = () => {
     if (state === "playing") controller.pause();
@@ -64,12 +62,10 @@ export function ReplyPlaybackControls({
         variant="ghost"
         onClick={activate}
       >
-        {state === "playing" ? (
-          <PauseIcon className="size-3.5" />
-        ) : state === "paused" ? (
-          <PlayIcon className="size-3.5" />
-        ) : (
-          <Volume2Icon className="size-3.5" />
+        {Match.value(state).pipe(
+          Match.when("playing", () => <PauseIcon className="size-3.5" />),
+          Match.when("paused", () => <PlayIcon className="size-3.5" />),
+          Match.orElse(() => <Volume2Icon className="size-3.5" />),
         )}
         {label}
       </Button>

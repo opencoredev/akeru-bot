@@ -24,9 +24,8 @@ export function updatePortabilityProjectFolderMap(
   projectId: ProjectId,
   destination: string,
 ): PortabilityProjectFolderMap {
-  const next = Object.fromEntries(
-    Object.entries(current).filter(([candidateId]) => candidateId !== projectId),
-  ) as PortabilityProjectFolderMap;
+  const next = { ...current };
+  delete next[projectId];
 
   const normalizedDestination = destination.trim();
 

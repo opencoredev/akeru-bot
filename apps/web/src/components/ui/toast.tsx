@@ -75,6 +75,7 @@ function Toasts({ position }: { position: ToastPosition }) {
     }
   }, [toasts]);
 
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   return (
     <Toast.Portal data-slot="toast-portal">
       <Toast.Viewport
@@ -106,6 +107,7 @@ function Toasts({ position }: { position: ToastPosition }) {
           const bodyDescriptor = deriveToastBodyDescriptor(toast);
           const { stackedActionLayout, inlineContentEndPad } = bodyDescriptor;
 
+          // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
           return (
             <Toast.Root
               className={cn(

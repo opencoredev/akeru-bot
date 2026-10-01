@@ -1,3 +1,5 @@
+import { Data } from "effect";
+import { AssetResource } from "@akeru/contracts";
 import { Predicate } from "effect";
 import type { ScopedThreadRef } from "@akeru/contracts";
 import { TriangleAlertIcon } from "lucide-react";
@@ -5,6 +7,8 @@ import { memo, useState } from "react";
 import { useAssetUrlState } from "../../assets/assetUrls";
 import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
+
+const AssetResources = Data.taggedEnum<AssetResource>();
 
 export const CHAT_MARKDOWN_IMAGE_SIZE_CLASS_NAME =
   "h-auto w-auto max-h-[30rem] max-w-[min(100%,30rem)] object-contain";
@@ -37,11 +41,10 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
 }) {
   const { t } = useI18n();
 
-  const assetUrl = useAssetUrlState(props.threadRef.environmentId, {
-    _tag: "workspace-file",
-    threadId: props.threadRef.threadId,
-    path: props.path,
-  });
+  const assetUrl = useAssetUrlState(
+    props.threadRef.environmentId,
+    AssetResources["workspace-file"]({ threadId: props.threadRef.threadId, path: props.path }),
+  );
 
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
 

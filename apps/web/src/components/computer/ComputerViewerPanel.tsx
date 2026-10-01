@@ -1,3 +1,4 @@
+import { Data } from "effect";
 import {
   ArrowTurnBackwardIcon,
   CursorPointer01Icon,
@@ -11,10 +12,12 @@ import {
   type ComputerViewerNotice,
   type ComputerViewerView,
 } from "@akeru/client-runtime/state/computer-viewer";
-import type { ComputerAction, ComputerFrame } from "@akeru/contracts";
+import { ComputerAction, type ComputerFrame } from "@akeru/contracts";
 import { useRef, type KeyboardEvent, type PointerEvent, type WheelEvent } from "react";
 
 import { useI18n } from "../../i18n";
+
+const ComputerActions = Data.taggedEnum<ComputerAction>();
 
 export function computerViewerKeyAction(
   event: Parameters<typeof computerKeyAction>[0],
@@ -172,7 +175,7 @@ export function ComputerViewerPanel(props: ComputerViewerPanelProps) {
 
     if (button === null || target === null) return;
     event.preventDefault();
-    props.onInput({ _tag: "click", x: target.x, y: target.y, button });
+    props.onInput(ComputerActions.click({ x: target.x, y: target.y, button }));
   };
 
   const onPointerMove = (event: PointerEvent<HTMLElement>) => {
@@ -181,16 +184,17 @@ export function ComputerViewerPanel(props: ComputerViewerPanelProps) {
 
     if (target === null) return;
     lastMoveRef.current = event.timeStamp;
-    props.onInput({ _tag: "move", x: target.x, y: target.y });
+    props.onInput(ComputerActions.move({ x: target.x, y: target.y }));
   };
 
   const onWheel = (event: WheelEvent<HTMLElement>) => {
     if (!view.canSendInput || event.deltaY === 0) return;
-    props.onInput({
-      _tag: "scroll",
-      direction: event.deltaY > 0 ? "down" : "up",
-      amount: Math.min(MAX_SCROLL, Math.max(1, Math.round(Math.abs(event.deltaY)))),
-    });
+    props.onInput(
+      ComputerActions.scroll({
+        direction: event.deltaY > 0 ? "down" : "up",
+        amount: Math.min(MAX_SCROLL, Math.max(1, Math.round(Math.abs(event.deltaY)))),
+      }),
+    );
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -305,7 +309,7 @@ export function ComputerViewerPanel(props: ComputerViewerPanelProps) {
 
             if (text.length === 0) return;
             event.preventDefault();
-            props.onInput({ _tag: "type", text });
+            props.onInput(ComputerActions.type({ text }));
           }}
           onContextMenu={(event) => {
             if (view.canSendInput) event.preventDefault();

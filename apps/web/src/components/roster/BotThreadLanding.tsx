@@ -78,6 +78,7 @@ import { resolveRoutedBot } from "./rosterRouteSelection";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 import { ChatActionsMenu, useMarkChatVisited } from "../chat/ChatActionsMenu";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function BotThreadLanding({
@@ -91,6 +92,7 @@ export function BotThreadLanding({
   const { t, locale } = i18n;
   const navigate = useNavigate();
   const environmentId = usePrimaryEnvironmentId();
+  // SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
   const channelSession = useEnvironmentSessionState(environmentId ?? ("" as EnvironmentId));
   const canManageChannelBindings = canManageChannels(channelSession.data);
   const bots = useRosterStore((state) => state.bots);

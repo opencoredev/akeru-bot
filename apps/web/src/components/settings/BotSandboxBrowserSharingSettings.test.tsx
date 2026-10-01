@@ -1,8 +1,9 @@
+import type { TestProps, TestValue } from "../test-support/reactTree";
 import { Predicate } from "effect";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { visitElements } from "../../test/reactElementTree";
+import { visitElements } from "../test-support/reactTree";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 
 vi.mock("react", async (importOriginal) => {
@@ -51,15 +52,10 @@ function renderSetting(
 ) {
   hooks.beginRender();
 
-  return BotSandboxBrowserSharingSettings({ value, onChange }) as ReactElement<
-    Record<string, unknown>
-  >;
+  return BotSandboxBrowserSharingSettings({ value, onChange }) as ReactElement<TestProps>;
 }
 
-function findElement(
-  tree: ReactElement<Record<string, unknown>>,
-  predicate: (props: Record<string, unknown>) => boolean,
-) {
+function findElement(tree: ReactElement<TestProps>, predicate: (props: TestProps) => boolean) {
   const element = visitElements(tree, ({ props }) => predicate(props));
 
   if (!element) throw new Error("Expected setting element was not rendered.");
@@ -67,9 +63,10 @@ function findElement(
   return element;
 }
 
-function call(handler: unknown, ...args: ReadonlyArray<unknown>) {
+function call(handler: TestValue, ...args: ReadonlyArray<TestValue>) {
   if (!Predicate.isFunction(handler)) throw new Error("Expected an event handler.");
-  handler(...args);
+  const invoke = handler as (...values: ReadonlyArray<TestValue>) => void;
+  invoke(...args);
 }
 
 describe("BotSandboxBrowserSharingSettings", () => {

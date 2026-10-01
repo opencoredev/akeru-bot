@@ -1,10 +1,6 @@
+import { makeShellSnapshot } from "../test-support/fixtures";
 import { Predicate } from "effect";
-import {
-  EnvironmentId,
-  type OrchestrationBot,
-  type OrchestrationShellSnapshot,
-  ThreadId,
-} from "@akeru/contracts";
+import { EnvironmentId, type OrchestrationBot, ThreadId } from "@akeru/contracts";
 import { Children, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -119,7 +115,7 @@ describe("ArchivedChatsSettingsPanel", () => {
       snapshots: [
         {
           environmentId,
-          snapshot: {
+          snapshot: makeShellSnapshot({
             bots: [],
             groups: [],
             threads: [
@@ -131,7 +127,7 @@ describe("ArchivedChatsSettingsPanel", () => {
                 archivedAt: "2026-09-20T00:00:00.000Z",
               },
             ],
-          } as unknown as OrchestrationShellSnapshot,
+          }),
         },
       ],
       error: "Failed to load archived chats.",
@@ -147,7 +143,7 @@ describe("ArchivedChatsSettingsPanel", () => {
     mocks.archive.snapshots = [
       {
         environmentId,
-        snapshot: {
+        snapshot: makeShellSnapshot({
           bots: [],
           groups: [],
           threads: [
@@ -160,7 +156,7 @@ describe("ArchivedChatsSettingsPanel", () => {
               archivedAt: "2026-09-20T00:00:00.000Z",
             },
           ],
-        } as unknown as OrchestrationShellSnapshot,
+        }),
       },
     ];
     const markup = render();

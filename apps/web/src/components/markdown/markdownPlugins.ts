@@ -12,7 +12,12 @@ import { WINDOWS_DRIVE_PATH_REGEX } from "./markdownPaths";
 export type MarkdownHtmlAstNode = {
   type?: string;
   tagName?: string;
-  properties?: Record<string, unknown>;
+  properties?: Record<
+    string,
+    string | number | boolean | Array<string | number> | null | undefined
+  >;
+  value?: string;
+  data?: { meta?: string | null | undefined } | undefined;
   children?: MarkdownHtmlAstNode[];
 };
 
@@ -85,13 +90,16 @@ export const CHAT_MARKDOWN_REHYPE_PLUGINS_WITH_RAW_HTML: NonNullable<
 
 type MarkdownAstNode = {
   type?: string;
-  meta?: unknown;
+  meta?: string;
   url?: string;
   value?: string;
   lang?: string;
   data?: {
     hName?: string;
-    hProperties?: Record<string, unknown>;
+    hProperties?: Record<
+      string,
+      string | number | boolean | Array<string | number> | null | undefined
+    >;
   };
   children?: MarkdownAstNode[];
 };

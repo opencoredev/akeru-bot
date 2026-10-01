@@ -116,6 +116,7 @@ export function PreviewMoreMenu({
               value={colorScheme}
               onValueChange={(value) => {
                 if (!tabId) return;
+                // SAFETY: the radio group emits only the color schemes rendered from COLOR_SCHEME_OPTIONS.
                 void bridge
                   .setColorScheme(tabId, value as DesktopPreviewColorScheme)
                   .catch(() => undefined);

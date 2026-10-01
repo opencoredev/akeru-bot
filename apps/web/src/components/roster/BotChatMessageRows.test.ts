@@ -17,7 +17,7 @@ const message: OrchestrationMessage = {
 
 const engine = { provider: "codex", model: "gpt" } as const;
 
-const result = { kind: "plugin-search-results" } as unknown as NonNullable<
+const result = { kind: "plugin-search-results" } as NonNullable<
   RowProps["pluginResults"]
 >[number]["result"];
 

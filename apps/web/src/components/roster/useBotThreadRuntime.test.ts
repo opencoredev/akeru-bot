@@ -1,3 +1,4 @@
+import type { RuntimeThreadFixture } from "../test-support/fixtures";
 import { ApprovalRequestId, EnvironmentId, ThreadId } from "@akeru/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -12,8 +13,8 @@ const mocks = vi.hoisted(() => ({
   command: vi.fn(),
   approvalCommand: Symbol("respondToApproval"),
   primaryEnvironmentId: null as EnvironmentId | null,
-  threadShells: [] as Array<Record<string, unknown>>,
-  threadShell: null as Record<string, unknown> | null,
+  threadShells: [] as Array<RuntimeThreadFixture>,
+  threadShell: null as RuntimeThreadFixture | null,
   messageProjection: {
     messages: [],
     lastMessageRole: null,
@@ -84,8 +85,8 @@ vi.mock("./botConversationMessageProjection", () => ({
 }));
 
 vi.mock("./rosterStore", () => ({
-  useRosterStore: (
-    selector: (state: { bots: []; chatPathByBotId: {}; openChatByBotId: {} }) => unknown,
+  useRosterStore: <T>(
+    selector: (state: { bots: []; chatPathByBotId: {}; openChatByBotId: {} }) => T,
   ) => selector({ bots: [], chatPathByBotId: {}, openChatByBotId: {} }),
 }));
 

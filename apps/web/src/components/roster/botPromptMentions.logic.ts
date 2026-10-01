@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import {
   BROWSER_MENTION_LABEL,
   collectComposerInlineTokens,
@@ -217,12 +218,11 @@ export function botPromptMentionChips(
   botName: (botId: string) => string | null = () => null,
 ): BotPromptMentionChip[] {
   return collectComposerMentionDisplays(draft, threadTitle, botName).map((display) => ({
-    key:
-      display.kind === "browser"
-        ? "browser"
-        : display.kind === "bot"
-          ? `bot:${display.botId}`
-          : `thread:${display.threadId}`,
+    key: Match.value(display).pipe(
+      Match.when({ kind: "browser" }, () => "browser"),
+      Match.when({ kind: "bot" }, (display) => `bot:${display.botId}`),
+      Match.orElse((display) => `thread:${display.threadId}`),
+    ),
     kind: display.kind,
     label: display.label,
     source: display.source,

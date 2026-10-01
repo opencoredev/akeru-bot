@@ -237,9 +237,9 @@ export function UsageProviderChart({
     if (periods.length === 0) {
       return {
         paths: [],
-        series: [] as readonly DayColumn[],
+        series: [],
         stepX: 0,
-        ticks: [0] as readonly number[],
+        ticks: [0],
         toY: () => VIEW_HEIGHT,
       };
     }

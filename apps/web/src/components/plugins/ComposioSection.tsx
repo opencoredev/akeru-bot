@@ -55,7 +55,7 @@ export function composioSearchResults(
   connectedOnly?: ReadonlySet<string>,
 ): readonly ComposioToolkit[] {
   const brokered = new Set(
-    catalog.filter((plugin) => plugin.connection.type === "brokered").map((plugin) => plugin.id),
+    catalog.flatMap((plugin) => (plugin.connection.type === "brokered" ? [plugin.id] : [])),
   );
 
   return toolkits.filter(
@@ -69,9 +69,9 @@ export function activeComposioToolkitIds(
   connections: readonly ComposioConnection[],
 ): ReadonlySet<string> {
   return new Set(
-    connections
-      .filter((connection) => connection.status === "ACTIVE")
-      .map((connection) => connection.toolkitSlug),
+    connections.flatMap((connection) =>
+      connection.status === "ACTIVE" ? [connection.toolkitSlug] : [],
+    ),
   );
 }
 

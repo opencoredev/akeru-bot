@@ -193,6 +193,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
 
   const sidebarExperiment = useSidebarExperiment();
 
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   const sidebarProviderStyle = {
     "--sidebar-width": `${
       sidebarExperiment

@@ -55,7 +55,7 @@ function fakeChat() {
     publish(next: ComposedVoiceTurnState) {
       state = next;
 
-      for (const changed of [...listeners]) changed();
+      for (const changed of listeners) changed();
     },
     listenerCount: () => listeners.size,
   };

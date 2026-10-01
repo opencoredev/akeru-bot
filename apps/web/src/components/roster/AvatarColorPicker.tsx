@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useEffect, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import { useI18n } from "../../i18n";
@@ -90,7 +91,11 @@ function ColorPickerPanel({
   };
 
   const handleHueKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    const direction = Match.value(event).pipe(
+      Match.when({ key: "ArrowLeft" }, () => -1),
+      Match.when({ key: "ArrowRight" }, () => 1),
+      Match.orElse(() => 0),
+    );
 
     if (direction === 0) return;
     event.preventDefault();

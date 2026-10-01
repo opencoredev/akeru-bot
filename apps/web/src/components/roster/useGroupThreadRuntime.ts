@@ -50,6 +50,7 @@ import {
   localFailure,
 } from "./threadRuntimeWarning.logic";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function useGroupThreadRuntime(groupId: string) {

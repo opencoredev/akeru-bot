@@ -1,6 +1,8 @@
 // @ts-nocheck
 "use client";
 
+import type { ChartValue } from "./chartValue";
+
 import { Predicate } from "effect";
 
 import { createContext, use, useCallback, useMemo, useState } from "react";
@@ -18,7 +20,7 @@ import { seedOfColor } from "./palette";
 import { type PieSlice, pieSlices, type RadarAxis, radarAxes } from "./polar";
 import type { Dimensions } from "./use-chart-dimensions";
 
-type Row = Record<string, unknown>;
+type Row = Record<string, ChartValue>;
 
 const ROOT_OF = {
   pie: "<PieChart />",

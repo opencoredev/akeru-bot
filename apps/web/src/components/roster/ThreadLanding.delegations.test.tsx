@@ -1,3 +1,4 @@
+import type { TestValue } from "../test-support/reactTree";
 import type { ReactElement } from "react";
 import {
   AkeruDelegationRecord,
@@ -17,7 +18,7 @@ import * as Schema from "effect/Schema";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
-import { visitElements } from "../../test/reactElementTree";
+import { visitElements } from "../test-support/reactTree";
 import type { Bot, Group } from "./types";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
 
@@ -59,7 +60,7 @@ vi.mock("react/compiler-runtime", async () => {
 });
 
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: unknown) =>
+  useAtomValue: <T,>(atom: T) =>
     atom === mocks.snapshotAtom
       ? mocks.snapshot
       : atom === mocks.peopleAtom
@@ -179,8 +180,13 @@ vi.mock("./botPresence", () => ({
 }));
 
 vi.mock("./rosterStore", () => {
-  const useRosterStore = (selector: (state: unknown) => unknown) =>
-    selector({ bots: mocks.bots, groups: mocks.groups, environmentId: "environment-1" });
+  const useRosterStore = <T,>(
+    selector: (state: {
+      bots: typeof mocks.bots;
+      groups: typeof mocks.groups;
+      environmentId: string;
+    }) => T,
+  ) => selector({ bots: mocks.bots, groups: mocks.groups, environmentId: "environment-1" });
 
   useRosterStore.getState = () => ({ selectBot: vi.fn() });
 
@@ -347,7 +353,7 @@ const THREE_TURNS = [
 ];
 
 /** Message ids and delegation ids in the order the landing renders them. */
-function timelineOrder(rendered: unknown): string[] {
+function timelineOrder(rendered: TestValue): string[] {
   const order: string[] = [];
   visitElements(rendered, (element) => {
     if (element.type === DelegationCard) {

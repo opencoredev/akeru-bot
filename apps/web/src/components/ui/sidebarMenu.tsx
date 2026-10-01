@@ -166,7 +166,7 @@ export function SidebarMenuButton({
 
   return (
     <Tooltip>
-      <TooltipTrigger render={buttonElement as React.ReactElement<Record<string, unknown>>} />
+      <TooltipTrigger render={buttonElement} />
       <TooltipPopup
         align="center"
         hidden={state !== "collapsed" || isMobile}
@@ -240,6 +240,7 @@ export function SidebarMenuSkeleton({
     return `${Math.floor(Math.random() * 40) + 50}%`;
   }, []);
 
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   return (
     <div
       className={cn("flex h-8 items-center gap-2 rounded-lg px-2", className)}

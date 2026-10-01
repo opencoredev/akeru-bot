@@ -27,7 +27,10 @@ const DEFAULT_POLAR_MARGINS: Margins = {
 function layerOf(node: ReactNode): "back" | "dom" | "svg" {
   if (!isValidElement(node) || Predicate.isString(node.type)) return "svg";
 
-  return (node.type as { chartLayer?: "back" | "dom" }).chartLayer ?? "svg";
+  return "chartLayer" in node.type &&
+    (node.type.chartLayer === "back" || node.type.chartLayer === "dom")
+    ? node.type.chartLayer
+    : "svg";
 }
 
 export type PolarRootProps<TData extends Row> = {
@@ -79,7 +82,7 @@ export function PolarRoot<TData extends Row>({
   const ctx = usePolarController({
     chartType,
     // Safe: the controller only reads row[key] for the configured keys.
-    data: data as Record<string, unknown>[],
+    data: data,
     config,
     dataKey,
     nameKey,

@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Predicate, Option, Schema } from "effect";
 import {
   isServerProviderUnavailability,
   latestTurnFailure,
@@ -10,6 +10,14 @@ import type {
   OrchestrationThreadActivity,
   ServerProviderUnavailability,
 } from "@akeru/contracts";
+
+const decodeWarningPayload = Schema.decodeUnknownOption(
+  Schema.Struct({
+    key: Schema.optionalKey(Schema.Unknown),
+    resolved: Schema.optionalKey(Schema.Unknown),
+    message: Schema.optionalKey(Schema.Unknown),
+  }),
+);
 
 export function activeThreadRuntimeWarning(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
@@ -31,10 +39,7 @@ export function activeThreadRuntimeWarning(
       continue;
     }
 
-    const payload =
-      activity.payload && Predicate.isObjectOrArray(activity.payload)
-        ? (activity.payload as Record<string, unknown>)
-        : null;
+    const payload = Option.getOrNull(decodeWarningPayload(activity.payload));
 
     const key = Predicate.isString(payload?.key) ? payload.key : null;
 
@@ -72,10 +77,7 @@ export function latestThreadRuntimeError(
 
   if (!activity) return null;
 
-  const payload =
-    activity.payload && Predicate.isObjectOrArray(activity.payload)
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = Option.getOrNull(decodeWarningPayload(activity.payload));
 
   return Predicate.isString(payload?.message) && payload.message.trim()
     ? payload.message

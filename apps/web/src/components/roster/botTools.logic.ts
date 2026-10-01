@@ -75,15 +75,19 @@ export function buildBotToolItems(
         ];
   });
 
-  const mcpServers = servers
-    .filter((server) => server.enabled && !isBuiltinMcpServer(server))
-    .map((server) => ({
-      id: server.id,
-      kind: "mcp" as const,
-      name: server.name,
-      description: mcpDescription(server),
-      workspaceEnabled: true,
-    }));
+  const mcpServers = servers.flatMap((server) =>
+    server.enabled && !isBuiltinMcpServer(server)
+      ? [
+          {
+            id: server.id,
+            kind: "mcp" as const,
+            name: server.name,
+            description: mcpDescription(server),
+            workspaceEnabled: true,
+          },
+        ]
+      : [],
+  );
 
   return [...plugins, ...mcpServers].toSorted(
     (left, right) => left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name),

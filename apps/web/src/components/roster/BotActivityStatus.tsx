@@ -96,6 +96,7 @@ const GLYPH_CELLS = [
 
 /** The pixel comet from the thinking row. Opacity only, so it stays on the compositor. */
 export function PixelThinkingGlyph({ className }: { readonly className?: string }) {
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   return (
     <svg
       aria-hidden="true"

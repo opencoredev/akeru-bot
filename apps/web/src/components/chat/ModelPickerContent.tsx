@@ -512,9 +512,9 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     (): string[] => [
       ...flatModels.map((model) => modelPickerModelKey(model.instanceId, model.slug)),
       ...new Set(
-        flatModels
-          .filter((model) => model.isLegacy)
-          .map((model) => modelPickerLegacySectionKey(model.instanceId)),
+        flatModels.flatMap((model) =>
+          model.isLegacy ? [modelPickerLegacySectionKey(model.instanceId)] : [],
+        ),
       ),
     ],
     [flatModels],
@@ -736,9 +736,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                       highlightedModelKeyRef.current &&
                       filteredItemKeys.includes(highlightedModelKeyRef.current)
                     ) {
-                      (
-                        e as typeof e & { preventBaseUIHandler?: () => void }
-                      ).preventBaseUIHandler?.();
+                      if (
+                        "preventBaseUIHandler" in e &&
+                        Predicate.isFunction(e.preventBaseUIHandler)
+                      )
+                        e.preventBaseUIHandler();
                       e.preventDefault();
                       e.stopPropagation();
 

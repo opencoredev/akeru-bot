@@ -331,8 +331,7 @@ export function PreviewView({
     // focus into the guest webContents. We restore it when the pick
     // resolves so the user's typing context isn't lost — otherwise after
     // every pick they'd have to click back into the textarea.
-    const previouslyFocused =
-      typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null;
+    const previouslyFocused = typeof document !== "undefined" ? document.activeElement : null;
 
     pickActiveRef.current = true;
     setPickActive(true);
@@ -387,6 +386,7 @@ export function PreviewView({
         if (
           previouslyFocused &&
           previouslyFocused.isConnected &&
+          "focus" in previouslyFocused &&
           Predicate.isFunction(previouslyFocused.focus)
         ) {
           try {

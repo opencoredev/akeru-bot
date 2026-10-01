@@ -98,6 +98,7 @@ function Sidebar({
   }
 
   if (isMobile) {
+    // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
     return (
       <SidebarInstanceContext value={instanceContextValue}>
         <Sheet onOpenChange={setOpenMobile} open={openMobile} {...props}>

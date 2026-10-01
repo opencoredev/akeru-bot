@@ -36,7 +36,14 @@ const fixtures = vi.hoisted(() => ({
   threads: [] as Array<{ projectId: string; botId: string; updatedAt: string; archivedAt: null }>,
   connections: [
     { id: "profile-1", name: "Fixture line", provider: "imessage", externalIdentity: null },
-  ] as Array<Record<string, unknown>>,
+  ] as Array<{
+    id: string;
+    name: string;
+    provider: string;
+    externalIdentity: string | null;
+    webhookUrl?: string | null;
+    managementUrl?: string | null;
+  }>,
   scopes: [] as string[],
   selects: [] as Array<{ onValueChange?: (value: string | null) => void }>,
   buttons: new Map<string, () => void>(),

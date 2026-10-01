@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Option, Schema } from "effect";
 import { create } from "zustand";
 
 import {
@@ -44,19 +44,41 @@ function firstAvailableBotId(bots: readonly Bot[]): string | null {
   return bots.find((bot) => bot.archivedAt === null)?.id ?? null;
 }
 
-function isRosterItemList(value: unknown): value is RosterItemRef[] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (item) =>
-        Predicate.isObjectOrArray(item) &&
-        item !== null &&
-        ((item as { kind?: unknown }).kind === "bot" ||
-          (item as { kind?: unknown }).kind === "group") &&
-        Predicate.isString((item as { id?: unknown }).id),
-    )
-  );
-}
+const RosterItem = Schema.Struct({ kind: Schema.Literals(["bot", "group"]), id: Schema.String });
+
+const decodeItems = Schema.decodeUnknownOption(Schema.Array(RosterItem));
+
+const decodeBotLayout = Schema.decodeUnknownOption(
+  Schema.Array(Schema.Struct({ id: Schema.String, pinned: Schema.Boolean })),
+);
+
+const decodeSections = Schema.decodeUnknownOption(
+  Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      botIds: Schema.Array(Schema.String),
+      groupIds: Schema.optionalKey(Schema.Array(Schema.String)),
+      items: Schema.optionalKey(Schema.Array(RosterItem)),
+      collapsed: Schema.Boolean,
+    }),
+  ),
+);
+
+const decodePaths = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.String));
+
+const decodeString = Schema.decodeUnknownOption(Schema.String);
+
+const decodeStoredRoster = Schema.decodeUnknownSync(
+  Schema.Struct({
+    selectedBotId: Schema.optionalKey(Schema.Unknown),
+    chatPathByBotId: Schema.optionalKey(Schema.Unknown),
+    botLayout: Schema.optionalKey(Schema.Unknown),
+    sections: Schema.optionalKey(Schema.Unknown),
+    pinnedItems: Schema.optionalKey(Schema.Unknown),
+    unassignedItems: Schema.optionalKey(Schema.Unknown),
+  }),
+);
 
 function readPersistedRoster(environmentId: string | null = null): PersistedRoster | null {
   const key = persistedRosterKey(environmentId);
@@ -70,62 +92,22 @@ function readPersistedRoster(environmentId: string | null = null): PersistedRost
     const raw = window.localStorage.getItem(key);
 
     if (raw === null) return null;
-    const parsed: unknown = JSON.parse(raw);
-
-    if (!Predicate.isObjectOrArray(parsed) || parsed === null) return null;
-
-    const { selectedBotId, chatPathByBotId, botLayout, sections, pinnedItems, unassignedItems } =
-      parsed as {
-        selectedBotId?: unknown;
-        chatPathByBotId?: unknown;
-        botLayout?: unknown;
-        sections?: unknown;
-        pinnedItems?: unknown;
-        unassignedItems?: unknown;
-      };
+    const parsed = decodeStoredRoster(JSON.parse(raw));
+    const selectedBotId = Option.getOrUndefined(decodeString(parsed.selectedBotId));
+    const chatPathByBotId = Option.getOrUndefined(decodePaths(parsed.chatPathByBotId));
+    const botLayout = Option.getOrUndefined(decodeBotLayout(parsed.botLayout));
+    const sections = Option.getOrUndefined(decodeSections(parsed.sections));
+    const pinnedItems = Option.getOrUndefined(decodeItems(parsed.pinnedItems));
+    const unassignedItems = Option.getOrUndefined(decodeItems(parsed.unassignedItems));
 
     return {
-      ...(Predicate.isString(selectedBotId) ? { selectedBotId } : {}),
-      ...(Predicate.isObjectOrArray(chatPathByBotId) && chatPathByBotId !== null
-        ? { chatPathByBotId: chatPathByBotId as Record<string, string> }
-        : {}),
-      ...(Array.isArray(botLayout) &&
-      botLayout.every(
-        (entry) =>
-          Predicate.isObjectOrArray(entry) &&
-          entry !== null &&
-          Predicate.isString((entry as { id?: unknown }).id) &&
-          Predicate.isBoolean((entry as { pinned?: unknown }).pinned),
-      )
-        ? { botLayout: botLayout as Array<{ id: string; pinned: boolean }> }
-        : {}),
-      ...(Array.isArray(sections) &&
-      sections.every(
-        (section) =>
-          Predicate.isObjectOrArray(section) &&
-          section !== null &&
-          Predicate.isString((section as { id?: unknown }).id) &&
-          Predicate.isString((section as { name?: unknown }).name) &&
-          Array.isArray((section as { botIds?: unknown }).botIds) &&
-          (section as { botIds: unknown[] }).botIds.every((id) => Predicate.isString(id)) &&
-          ((section as { groupIds?: unknown }).groupIds === undefined ||
-            (Array.isArray((section as { groupIds?: unknown }).groupIds) &&
-              (section as { groupIds: unknown[] }).groupIds.every((id) =>
-                Predicate.isString(id),
-              ))) &&
-          ((section as { items?: unknown }).items === undefined ||
-            isRosterItemList((section as { items?: unknown }).items)) &&
-          Predicate.isBoolean((section as { collapsed?: unknown }).collapsed),
-      )
-        ? {
-            sections: (
-              sections as Array<
-                Omit<LegacyRosterSection, "groupIds" | "items"> & {
-                  groupIds?: string[];
-                  items?: RosterItemRef[];
-                }
-              >
-            ).map((section) => {
+      ...(selectedBotId === undefined ? {} : { selectedBotId }),
+      ...(chatPathByBotId === undefined ? {} : { chatPathByBotId: { ...chatPathByBotId } }),
+      ...(botLayout === undefined ? {} : { botLayout: [...botLayout] }),
+      ...(sections === undefined
+        ? {}
+        : {
+            sections: sections.map((section) => {
               const items = rosterSectionItems({
                 botIds: section.botIds,
                 groupIds: section.groupIds ?? [],
@@ -134,15 +116,14 @@ function readPersistedRoster(environmentId: string | null = null): PersistedRost
 
               return {
                 ...section,
-                botIds: items.filter((item) => item.kind === "bot").map((item) => item.id),
-                groupIds: items.filter((item) => item.kind === "group").map((item) => item.id),
+                botIds: items.flatMap((item) => (item.kind === "bot" ? [item.id] : [])),
+                groupIds: items.flatMap((item) => (item.kind === "group" ? [item.id] : [])),
                 items,
               };
             }),
-          }
-        : {}),
-      ...(isRosterItemList(pinnedItems) ? { pinnedItems } : {}),
-      ...(isRosterItemList(unassignedItems) ? { unassignedItems } : {}),
+          }),
+      ...(pinnedItems === undefined ? {} : { pinnedItems: [...pinnedItems] }),
+      ...(unassignedItems === undefined ? {} : { unassignedItems: [...unassignedItems] }),
     };
   } catch {
     return null;
@@ -238,8 +219,9 @@ export function reorderVisibleRosterBots(
   const byId = new Map(bots.map((bot) => [bot.id, bot] as const));
   const visible = visibleBotIds.map((id) => byId.get(id));
 
-  if (visible.some((bot) => !bot || bot.archivedAt !== null)) return null;
-  const ordered = visible as Bot[];
+  if (!visible.every((bot): bot is Bot => bot !== undefined && bot.archivedAt === null))
+    return null;
+  const ordered = visible;
   const [moved] = ordered.splice(sourceIndex, 1);
 
   if (!moved) return null;
@@ -365,9 +347,7 @@ export const useRosterStore = create<RosterStore>((set, get) => ({
         return { pinnedItems, unassignedItems };
       }
 
-      const unassignedIds = plan.order
-        .filter((entry) => entry.kind === "bot")
-        .map((entry) => entry.id);
+      const unassignedIds = plan.order.flatMap((entry) => (entry.kind === "bot" ? [entry.id] : []));
 
       const unassigned = new Set(unassignedIds);
       const botsById = new Map(state.bots.map((bot) => [bot.id, bot] as const));

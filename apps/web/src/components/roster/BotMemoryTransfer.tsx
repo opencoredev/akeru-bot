@@ -34,7 +34,7 @@ const decodeArchive = Schema.decodeUnknownSync(AkeruMarkdownMemoryArchiveV3);
 
 const decodeDurableArchive = Schema.decodeUnknownSync(AkeruMemoryArchiveV2);
 
-function download(value: unknown, fileName: string) {
+function download<T>(value: T, fileName: string) {
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }),
   );

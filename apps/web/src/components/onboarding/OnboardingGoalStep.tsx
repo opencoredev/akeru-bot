@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { ArrowLeftIcon, ArrowRightIcon, PencilIcon } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -298,35 +299,37 @@ export function OnboardingGoalStep({
           exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -SWAP_DISTANCE }}
           transition={{ duration: reducedMotion ? 0 : SWAP_DURATION, ease: EASE }}
         >
-          {phase === "thinking" ? (
-            <GoalThinking answer={goal} status={thinkingStatus} />
-          ) : phase === "plan" ? (
-            <GoalPlanView goal={goal} reducedMotion={reducedMotion} onEdit={editGoal} />
-          ) : (
-            <>
-              <div className="space-y-2">
-                <h1 id={GOAL_HEADING_ID} className={ONBOARDING_HEADING_CLASS}>
-                  {t("What do you want help with?")}
-                </h1>
-                <p className="text-pretty text-sm leading-6 text-muted-foreground">
-                  {t("One or two sentences is plenty. Your bot works the rest out from there.")}
-                </p>
-              </div>
-              <GoalExamples onPick={writeGoal} />
-              <div className="space-y-2.5">
-                <Textarea
-                  autoFocus
-                  size="lg"
-                  rows={5}
-                  className="min-h-32"
-                  value={goal}
-                  maxLength={DESKTOP_ONBOARDING_GOAL_MAX_LENGTH}
-                  aria-labelledby={GOAL_HEADING_ID}
-                  placeholder={t("I want my bot to…")}
-                  onChange={(event) => writeGoal(event.currentTarget.value)}
-                />
-              </div>
-            </>
+          {Match.value(phase).pipe(
+            Match.when("thinking", () => <GoalThinking answer={goal} status={thinkingStatus} />),
+            Match.when("plan", () => (
+              <GoalPlanView goal={goal} reducedMotion={reducedMotion} onEdit={editGoal} />
+            )),
+            Match.orElse(() => (
+              <>
+                <div className="space-y-2">
+                  <h1 id={GOAL_HEADING_ID} className={ONBOARDING_HEADING_CLASS}>
+                    {t("What do you want help with?")}
+                  </h1>
+                  <p className="text-pretty text-sm leading-6 text-muted-foreground">
+                    {t("One or two sentences is plenty. Your bot works the rest out from there.")}
+                  </p>
+                </div>
+                <GoalExamples onPick={writeGoal} />
+                <div className="space-y-2.5">
+                  <Textarea
+                    autoFocus
+                    size="lg"
+                    rows={5}
+                    className="min-h-32"
+                    value={goal}
+                    maxLength={DESKTOP_ONBOARDING_GOAL_MAX_LENGTH}
+                    aria-labelledby={GOAL_HEADING_ID}
+                    placeholder={t("I want my bot to…")}
+                    onChange={(event) => writeGoal(event.currentTarget.value)}
+                  />
+                </div>
+              </>
+            )),
           )}
         </motion.div>
       </AnimatePresence>

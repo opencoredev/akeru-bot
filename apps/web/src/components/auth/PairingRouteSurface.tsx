@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Match, Predicate } from "effect";
 import type { AuthSessionState } from "@akeru/contracts";
 import type { MessageKey } from "@akeru/client-runtime/i18n";
 import type { HostedPairingRequest } from "@akeru/shared/remote";
@@ -274,15 +274,19 @@ export function HostedPairingRouteSurface() {
       environment={{ name: request?.label || null, address: request?.host ?? null }}
       status={status}
     >
-      {status.kind === "failed" ? (
-        <Button className="w-full" onClick={() => void pair()} size="lg">
-          {t("Try again")}
-        </Button>
-      ) : status.kind === "paired" ? (
-        <Button className="w-full" onClick={() => window.location.assign("/")} size="lg">
-          {t("Open app")}
-        </Button>
-      ) : null}
+      {Match.value(status).pipe(
+        Match.when({ kind: "failed" }, () => (
+          <Button className="w-full" onClick={() => void pair()} size="lg">
+            {t("Try again")}
+          </Button>
+        )),
+        Match.when({ kind: "paired" }, () => (
+          <Button className="w-full" onClick={() => window.location.assign("/")} size="lg">
+            {t("Open app")}
+          </Button>
+        )),
+        Match.orElse(() => null),
+      )}
     </PairingPanel>
   );
 }

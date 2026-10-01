@@ -1,3 +1,4 @@
+import type { MarkdownHtmlAstNode } from "./markdownPlugins";
 import { Predicate } from "effect";
 import { faviconUrlForOrigin } from "@akeru/shared/favicon";
 import { GlobeIcon } from "lucide-react";
@@ -71,7 +72,7 @@ function breakableExternalLinkText(text: string): ReactNode[] {
   ));
 }
 
-export function plainHastText(node: unknown): string | null {
+export function plainHastText(node: MarkdownHtmlAstNode | undefined): string | null {
   if (
     !node ||
     !Predicate.isObjectOrArray(node) ||
@@ -104,7 +105,7 @@ export function plainHastText(node: unknown): string | null {
  * "Fix in Cursor" button — already shows its identity, and a favicon bolted on in front of it
  * is a stray logo rather than a hint.
  */
-export function hastHasText(node: unknown): boolean {
+export function hastHasText(node: MarkdownHtmlAstNode | undefined): boolean {
   if (!node || !Predicate.isObjectOrArray(node)) return false;
 
   if (

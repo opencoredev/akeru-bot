@@ -62,6 +62,7 @@ export function captureVoiceUtterance(
       signal.removeEventListener("abort", abort);
       recorder.ondataavailable = null;
       recorder.onstop = null;
+      // oxlint-disable-next-line unicorn/prefer-add-event-listener -- capture owns this recorder and clears its IDL error slot before stopping it during cleanup.
       recorder.onerror = null;
 
       if (recorder.state !== "inactive") recorder.stop();
@@ -81,6 +82,7 @@ export function captureVoiceUtterance(
 
     const abort = () => fail(signal.reason);
     signal.addEventListener("abort", abort, { once: true });
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- capture owns this recorder and clears its IDL error slot before stopping it during cleanup.
     recorder.onerror = () => fail(new Error("The microphone recording failed."));
     recorder.ondataavailable = (event) => {
       chunks.push(event.data);
@@ -106,6 +108,7 @@ export function captureVoiceUtterance(
         return;
       }
 
+      // SAFETY: the recorder is constructed with a supported webm, mp4, or ogg codec; splitting removes only the codec suffix.
       const mimeType = recorder.mimeType.split(";", 1)[0] as VoiceAudio["mimeType"];
       const blob = new Blob(chunks, { type: mimeType });
       settled = true;
@@ -162,7 +165,10 @@ export function captureVoiceUtterance(
 }
 
 export function playVoiceAudio(
-  speaker: HTMLAudioElement,
+  speaker: Pick<
+    HTMLAudioElement,
+    "src" | "play" | "pause" | "removeAttribute" | "addEventListener" | "removeEventListener"
+  >,
   audio: VoiceAudio,
   signal: AbortSignal,
 ): Promise<void> {

@@ -119,15 +119,13 @@ export function useBotLandingTimeline(input: {
     if (!threadId) return null;
 
     const routineIds = [...(snapshot?.routines ?? []), ...(snapshot?.routineReceiptSources ?? [])]
-      .filter((routine) => routine.targetThreadId === threadId)
-      .map((routine) => routine.id)
+      .flatMap((routine) => (routine.targetThreadId === threadId ? [routine.id] : []))
       .toSorted();
 
     const relevantIds = new Set(routineIds);
 
     const runs = (snapshot?.routineRuns ?? [])
-      .filter((run) => relevantIds.has(run.routineId))
-      .map((run) => [run.id, run.updatedAt] as const)
+      .flatMap((run) => (relevantIds.has(run.routineId) ? [[run.id, run.updatedAt] as const] : []))
       .toSorted(([left], [right]) => left.localeCompare(right));
 
     return JSON.stringify([routineIds, runs]);

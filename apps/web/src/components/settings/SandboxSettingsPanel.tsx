@@ -152,6 +152,7 @@ function EnvironmentSandboxSettingsPanel({
               value={sandbox.defaultProvider}
               onValueChange={(value) => {
                 if (value === null) return;
+                // SAFETY: the value is checked against selectableSandboxProviders before persistence.
                 const provider = value as SandboxProvider;
 
                 if (!selectableSandboxProviders(sandbox).includes(provider)) return;

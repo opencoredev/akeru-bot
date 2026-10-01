@@ -8,7 +8,7 @@ import { LanguageProvider } from "../../i18n";
 
 vi.mock("react-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-dom")>()),
-  createPortal: (children: unknown) => children,
+  createPortal: (children: ReactNode) => children,
 }));
 
 // Dialogs and sheets mount their popups after hydration, so render them inline when open.

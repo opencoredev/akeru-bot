@@ -12,8 +12,8 @@ describe("buildBotChatRows", () => {
   it("lists the newest chats up to the limit and marks the open one", () => {
     const rows = buildBotChatRows({ chats, currentThreadId: "chat-2", limit: 4 });
     expect(rows.map((row) => row.threadId)).toEqual(["chat-0", "chat-1", "chat-2", "chat-3"]);
-    expect(rows.filter((row) => row.current).map((row) => row.threadId)).toEqual(["chat-2"]);
-    expect(rows.filter((row) => row.newest).map((row) => row.threadId)).toEqual(["chat-0"]);
+    expect(rows.flatMap((row) => (row.current ? [row.threadId] : []))).toEqual(["chat-2"]);
+    expect(rows.flatMap((row) => (row.newest ? [row.threadId] : []))).toEqual(["chat-0"]);
   });
 
   it("keeps an open chat that is older than the listed ones in the last slot", () => {

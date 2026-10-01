@@ -26,6 +26,8 @@ export function subscribePreviewAction(listener: (action: PreviewAction) => void
   if (typeof window === "undefined") return () => {};
 
   const handler = (event: Event) => {
+    if (!(event instanceof CustomEvent)) return;
+    // SAFETY: only dispatchPreviewAction emits this private event, with a PreviewAction detail.
     const detail = (event as CustomEvent<PreviewAction>).detail;
 
     if (Predicate.isString(detail)) listener(detail);

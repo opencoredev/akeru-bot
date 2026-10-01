@@ -1,11 +1,6 @@
+import { decodeRoutine, decodeRoutineRun } from "../test-support/fixtures";
 import { createTranslator } from "@akeru/client-runtime/i18n";
-import {
-  RoutineId,
-  ThreadId,
-  type OrchestrationMessage,
-  type Routine,
-  type RoutineRun,
-} from "@akeru/contracts";
+import { RoutineId, ThreadId, type OrchestrationMessage, type RoutineRun } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildBotConversationEntries } from "./botConversationPresentation";
@@ -16,7 +11,7 @@ import {
   routineReceiptLabelText,
 } from "./routineReceipts";
 
-const routine = {
+const routine = decodeRoutine({
   id: RoutineId.make("routine-1"),
   botId: "bot-1",
   targetThreadId: ThreadId.make("thread-1"),
@@ -41,9 +36,9 @@ const routine = {
   createdAt: "2026-09-19T08:00:00.000Z",
   updatedAt: "2026-09-19T08:05:00.000Z",
   deletedAt: null,
-} as unknown as Routine;
+});
 
-const run = {
+const run = decodeRoutineRun({
   id: "run-1",
   routineId: routine.id,
   trigger: "scheduled",
@@ -58,7 +53,7 @@ const run = {
   completedAt: "2026-09-19T09:01:00.000Z",
   createdAt: "2026-09-19T09:00:00.000Z",
   updatedAt: "2026-09-19T09:01:00.000Z",
-} as unknown as RoutineRun;
+});
 
 describe("deriveRoutineReceipts", () => {
   it("restarts a speaker group after an intervening routine note", () => {
@@ -134,14 +129,14 @@ describe("deriveRoutineReceipts", () => {
   });
 
   it("shows a started row while a run is in flight", () => {
-    const running = {
+    const running = decodeRoutineRun({
       ...run,
       id: "run-2",
       status: "running",
       result: null,
       completedAt: null,
       updatedAt: "2026-09-19T09:00:00.000Z",
-    } as unknown as RoutineRun;
+    });
 
     const receipts = deriveRoutineReceipts(routine.targetThreadId, [routine], [running]);
     expect(receipts.map((receipt) => receipt.id)).toEqual([
@@ -158,7 +153,8 @@ describe("deriveRoutineReceipts", () => {
       "{summary}: {detail}": "{summary}：{detail}",
     });
 
-    const failed = {
+    const failed = decodeRoutineRun({
+      ...run,
       id: "run-9",
       routineId: routine.id,
       status: "failed",
@@ -166,9 +162,9 @@ describe("deriveRoutineReceipts", () => {
       startedAt: "2026-09-19T09:00:00.000Z",
       completedAt: "2026-09-19T09:05:00.000Z",
       updatedAt: "2026-09-19T09:05:00.000Z",
-      failure: { message: "The workspace is missing" },
+      failure: { kind: "workspace", message: "The workspace is missing" },
       result: null,
-    } as unknown as RoutineRun;
+    });
 
     const receipts = deriveRoutineReceipts(routine.targetThreadId, [routine], [failed], i18n);
     expect(receipts.map((receipt) => receipt.text)).toEqual([
@@ -179,14 +175,14 @@ describe("deriveRoutineReceipts", () => {
   });
 
   it("reports a failed run with its failure message", () => {
-    const failed = {
+    const failed = decodeRoutineRun({
       ...run,
       id: "run-6",
       status: "failed",
       result: null,
-      failure: { message: "The workspace is missing" },
+      failure: { kind: "workspace", message: "The workspace is missing" },
       completedAt: "2026-09-19T09:02:00.000Z",
-    } as unknown as RoutineRun;
+    });
 
     const receipts = deriveRoutineReceipts(routine.targetThreadId, [routine], [failed]);
     expect(receipts[2]).toMatchObject({
@@ -196,48 +192,49 @@ describe("deriveRoutineReceipts", () => {
   });
 
   it("drops a server stack stored with a failed run", () => {
-    const failed = {
+    const failed = decodeRoutineRun({
       ...run,
       id: "run-7",
       status: "failed",
       result: null,
       failure: {
+        kind: "workspace",
         message:
           "Error: The workspace is missing\n    at readWorkspace (file:///srv/akeru/server.ts:1:2)",
       },
       completedAt: "2026-09-19T09:02:00.000Z",
-    } as unknown as RoutineRun;
+    });
 
     const receipts = deriveRoutineReceipts(routine.targetThreadId, [routine], [failed]);
     expect(receipts[2]?.text).toBe("“Daily digest” failed: The workspace is missing");
   });
 
   it("keeps queued and waiting runs out of chat and reports canceled runs neutrally", () => {
-    const queued = {
+    const queued = decodeRoutineRun({
       ...run,
       id: "run-3",
       status: "queued",
       result: null,
       startedAt: null,
       completedAt: null,
-    } as unknown as RoutineRun;
+    });
 
-    const waiting = {
+    const waiting = decodeRoutineRun({
       ...run,
       id: "run-4",
       status: "waiting-for-approval",
       result: null,
       startedAt: null,
       completedAt: null,
-    } as unknown as RoutineRun;
+    });
 
-    const canceled = {
+    const canceled = decodeRoutineRun({
       ...run,
       id: "run-5",
       status: "canceled",
       result: null,
       completedAt: "2026-09-19T09:02:00.000Z",
-    } as unknown as RoutineRun;
+    });
 
     const receipts = deriveRoutineReceipts(
       routine.targetThreadId,

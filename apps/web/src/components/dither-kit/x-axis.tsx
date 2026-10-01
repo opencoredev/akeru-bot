@@ -1,4 +1,5 @@
 // @ts-nocheck
+import type { ChartValue } from "./chartValue";
 import { useChartPart } from "./chart-context";
 
 export function XAxis({
@@ -8,7 +9,7 @@ export function XAxis({
   maxTicks = 8,
 }: {
   dataKey?: string;
-  tickFormatter?: (value: unknown, index: number) => string;
+  tickFormatter?: (value: ChartValue, index: number) => string;
   tickMargin?: number;
   maxTicks?: number;
 }) {
@@ -29,6 +30,7 @@ export function XAxis({
         return (
           <text
             // biome-ignore lint/suspicious/noArrayIndexKey: index is the stable x position
+            // oxlint-disable-next-line react/no-array-index-key -- chart marks have stable positional identity; their geometry is updated in place when category data changes.
             key={i}
             x={ctx.xCenter(i) ?? 0}
             y={y}

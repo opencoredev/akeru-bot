@@ -50,7 +50,16 @@ describe("shouldTitlePlaceholderChat", () => {
 });
 
 describe("opening an older bot chat", () => {
-  const chat = (id: string, updatedAt: string, extra: Record<string, unknown> = {}) => ({
+  const chat = (
+    id: string,
+    updatedAt: string,
+    extra: Partial<{
+      environmentId: string;
+      botId: string;
+      parentThreadId: string | null;
+      archivedAt: string | null;
+    }> = {},
+  ) => ({
     environmentId: "env-a",
     id,
     botId: "bot-ren",

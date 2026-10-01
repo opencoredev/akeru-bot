@@ -58,7 +58,7 @@ describe("ProviderModelsSection bulk visibility control", () => {
         instanceId: ProviderInstanceId.make("codex"),
         driverKind: ProviderDriverKind.make("codex"),
         models: input.models,
-        customModels: input.models.filter((entry) => entry.isCustom).map((entry) => entry.slug),
+        customModels: input.models.flatMap((entry) => (entry.isCustom ? [entry.slug] : [])),
         hiddenModels: input.hiddenModels ?? [],
         favoriteModels: [],
         modelOrder: [],

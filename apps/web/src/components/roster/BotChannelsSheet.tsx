@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Match, Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   BotId,
@@ -44,18 +44,17 @@ import { toastManager } from "../ui/toast";
 import { BotSideSheet, BotSideSheetEmpty } from "./BotSideSheet";
 import type { Bot } from "./types";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 const providerLabel = (provider: ChannelProvider) =>
-  provider === "imessage"
-    ? "Photon"
-    : provider === "whatsapp"
-      ? "Meta Cloud API"
-      : provider === "telegram"
-        ? "Telegram Bot API"
-        : provider === "slack"
-          ? "Slack Socket Mode"
-          : "Discord Gateway";
+  Match.value(provider).pipe(
+    Match.when("imessage", () => "Photon"),
+    Match.when("whatsapp", () => "Meta Cloud API"),
+    Match.when("telegram", () => "Telegram Bot API"),
+    Match.when("slack", () => "Slack Socket Mode"),
+    Match.orElse(() => "Discord Gateway"),
+  );
 
 const assignedBotForConnection = (
   connectionId: ChannelConnectionId,

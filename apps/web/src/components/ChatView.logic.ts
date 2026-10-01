@@ -111,9 +111,9 @@ export function hasEnvironmentReconnectWarningGraceElapsed(
   return activeEnvironmentId !== null && activeEnvironmentId === elapsedEnvironmentId;
 }
 
-export function startNewThreadForProject(
+export function startNewThreadForProject<R>(
   projectRef: ScopedProjectRef | null,
-  handleNewThread: (projectRef: ScopedProjectRef) => Promise<unknown>,
+  handleNewThread: (projectRef: ScopedProjectRef) => Promise<R>,
 ): boolean {
   if (projectRef === null) return false;
   void handleNewThread(projectRef);

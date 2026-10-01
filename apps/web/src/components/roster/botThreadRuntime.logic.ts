@@ -353,7 +353,9 @@ export function findUnhandledMcpAuthorization(
     }
 
     if (!activity.payload || !Predicate.isObjectOrArray(activity.payload)) continue;
-    const authorizationUrl = (activity.payload as Record<string, unknown>).authorizationUrl;
+
+    const authorizationUrl =
+      "authorizationUrl" in activity.payload ? activity.payload.authorizationUrl : undefined;
 
     if (!Predicate.isString(authorizationUrl)) continue;
 

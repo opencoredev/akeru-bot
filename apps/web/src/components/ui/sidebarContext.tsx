@@ -145,6 +145,7 @@ export function SidebarProvider({
     [state, open, setOpen, isMobile, openMobile, toggleSidebar],
   );
 
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   return (
     <SidebarContext value={contextValue}>
       <div

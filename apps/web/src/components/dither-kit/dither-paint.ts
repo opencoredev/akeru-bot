@@ -109,7 +109,7 @@ export function paintColumn(
 
 /** Linear-resample a per-index fraction array to `cols` columns. */
 export function resample(src: number[], cols: number): number[] {
-  const out = new Array<number>(cols);
+  const out = Array.from({ length: cols }, () => 0);
   const last = Math.max(src.length - 1, 1);
 
   for (let c = 0; c < cols; c++) {

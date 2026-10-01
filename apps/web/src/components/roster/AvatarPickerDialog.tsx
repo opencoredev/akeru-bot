@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useRef, useState } from "react";
 
 import { useI18n } from "../../i18n";
@@ -212,11 +213,11 @@ export function AvatarPickerDialog({
         <DialogFooter>
           {failure !== null ? (
             <p role="alert" className="mr-auto self-center text-sm text-destructive">
-              {failure === "save"
-                ? t("Could not save")
-                : failure === "too-large"
-                  ? t("Image too large")
-                  : t("Could not read image")}
+              {Match.value(failure).pipe(
+                Match.when("save", () => t("Could not save")),
+                Match.when("too-large", () => t("Image too large")),
+                Match.orElse(() => t("Could not read image")),
+              )}
             </p>
           ) : null}
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

@@ -236,6 +236,7 @@ export function GeneralSettingsPanel() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
 
+  // SAFETY: every entry comes from the exhaustive QuitConfirmationMode label table.
   return (
     <SettingsPageContainer>
       <SettingsSection title={t("Preferences")}>

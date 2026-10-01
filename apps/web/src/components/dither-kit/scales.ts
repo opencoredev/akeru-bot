@@ -1,13 +1,14 @@
 // @ts-nocheck
+import type { ChartValue } from "./chartValue";
 import { Predicate } from "effect";
 import { scaleBand, scaleLinear, scalePoint } from "d3-scale";
 import { stack as d3Stack, stackOffsetExpand } from "d3-shape";
 
 export type StackType = "default" | "stacked" | "percent";
 
-type Row = Record<string, unknown>;
+type Row = Record<string, ChartValue>;
 
-const num = (v: unknown) => (Predicate.isNumber(v) && Number.isFinite(v) ? v : 0);
+const num = (v: ChartValue) => (Predicate.isNumber(v) && Number.isFinite(v) ? v : 0);
 
 /**
  * Per-series [y0, y1] bands for every row. For `default` every series sits on
@@ -47,7 +48,7 @@ export function computeBands(data: Row[], keys: string[], stackType: StackType) 
   const series = d3Stack<Row>()
     .keys(keys)
     .value((row, key) => num(row[key]))
-    .offset(stackType === "percent" ? stackOffsetExpand : (undefined as never))(data);
+    .offset(stackType === "percent" ? stackOffsetExpand : stackOffsetNone)(data);
 
   const bands: Record<string, [number, number][]> = {};
   let max = 0;

@@ -1,3 +1,4 @@
+import type { MarkdownHtmlAstNode } from "./markdownPlugins";
 import { Predicate } from "effect";
 import katex from "katex";
 import { CheckIcon, CopyIcon, WrapTextIcon } from "lucide-react";
@@ -64,19 +65,8 @@ export function extractFenceTitle(meta: string | undefined): string | null {
   return meta.split(/\s+/).find((candidate) => FENCE_FILENAME_TOKEN_REGEX.test(candidate)) ?? null;
 }
 
-export function extractPreCodeMeta(node: unknown): string | undefined {
-  const children = (
-    node as
-      | {
-          children?: Array<{
-            type?: string;
-            tagName?: string;
-            data?: { meta?: unknown };
-            properties?: { dataCodeMeta?: unknown };
-          }>;
-        }
-      | undefined
-  )?.children;
+export function extractPreCodeMeta(node: MarkdownHtmlAstNode | undefined): string | undefined {
+  const children = node?.children;
 
   const codeNode = children?.find((child) => child?.type === "element" && child.tagName === "code");
   const meta = codeNode?.properties?.dataCodeMeta ?? codeNode?.data?.meta;

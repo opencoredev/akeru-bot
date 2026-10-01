@@ -49,7 +49,9 @@ export function createRosterListMotion(parent: HTMLUListElement) {
   const fadeOut = (node: HTMLElement, position: RowPosition) => {
     if (position.height === 0) return;
     // React owns the removed row; only a noninteractive copy stays for the fade.
-    const clone = node.cloneNode(true) as HTMLElement;
+    const clone = node.cloneNode(true);
+
+    if (!(clone instanceof HTMLElement)) return;
 
     for (const element of [clone, ...clone.querySelectorAll("*")]) {
       for (const attribute of Array.from(element.attributes)) {
@@ -134,17 +136,21 @@ export function createRosterListMotion(parent: HTMLUListElement) {
       if (disposed) return;
 
       const next = new Map(
-        Array.from(parent.children)
-          .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
-          .map((node) => [
-            node,
-            {
-              top: node.offsetTop,
-              left: node.offsetLeft,
-              width: node.offsetWidth,
-              height: node.offsetHeight,
-            },
-          ]),
+        Array.from(parent.children).flatMap((node) =>
+          node instanceof HTMLElement && !exiting.has(node)
+            ? [
+                [
+                  node,
+                  {
+                    top: node.offsetTop,
+                    left: node.offsetLeft,
+                    width: node.offsetWidth,
+                    height: node.offsetHeight,
+                  },
+                ],
+              ]
+            : [],
+        ),
       );
 
       let fadeCount = 0;
@@ -232,9 +238,11 @@ export function createRosterListMotion(parent: HTMLUListElement) {
       suspend();
       const origin = parent.getBoundingClientRect().top;
       released = new Map(
-        Array.from(parent.children)
-          .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
-          .map((node) => [node, node.getBoundingClientRect().top - origin]),
+        Array.from(parent.children).flatMap((node) =>
+          node instanceof HTMLElement && !exiting.has(node)
+            ? [[node, node.getBoundingClientRect().top - origin]]
+            : [],
+        ),
       );
     },
     suspend,

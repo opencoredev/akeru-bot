@@ -1,3 +1,4 @@
+import type { TestProps, TestValue } from "../test-support/reactTree";
 import type { ReactElement } from "react";
 import {
   DEFAULT_SERVER_SETTINGS,
@@ -8,7 +9,7 @@ import {
 } from "@akeru/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { visitElements } from "../../test/reactElementTree";
+import { visitElements } from "../test-support/reactTree";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 
 const atoms = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ const commands = vi.hoisted(() => ({
 }));
 
 const query = vi.hoisted(() => ({
-  lastAtom: null as unknown,
+  lastAtom: null as { imageProviders: { environmentId: EnvironmentId; input: {} } } | null,
   providers: null as ReadonlyArray<ImageProviderStatus> | null,
   error: null as string | null,
   isPending: false,
@@ -59,14 +60,14 @@ vi.mock("react/compiler-runtime", async () => {
 
 vi.mock("../../state/server", () => ({
   serverEnvironment: {
-    imageProviders: (args: unknown) => ({ imageProviders: args }),
+    imageProviders: <T,>(args: T) => ({ imageProviders: args }),
     testImageProvider: atoms.testImageProvider,
     logoutSubscriptionAuth: atoms.logoutSubscriptionAuth,
   },
 }));
 
 vi.mock("../../state/query", () => ({
-  useEnvironmentQuery: (atom: unknown) => {
+  useEnvironmentQuery: (atom: NonNullable<typeof query.lastAtom>) => {
     query.lastAtom = atom;
 
     return {
@@ -84,9 +85,9 @@ vi.mock("../../state/use-atom-command", () => ({
 }));
 
 vi.mock("../../hooks/useSettings", () => ({
-  useEnvironmentSettings: (
+  useEnvironmentSettings: <T,>(
     _environmentId: EnvironmentId,
-    selector: (settings: UnifiedSettings) => unknown,
+    selector: (settings: UnifiedSettings) => T,
   ) =>
     selector({
       ...DEFAULT_SERVER_SETTINGS,
@@ -125,13 +126,13 @@ function providerStatus(
   };
 }
 
-function renderContent(): ReactElement<Record<string, unknown>> {
+function renderContent(): ReactElement<TestProps> {
   hooks.beginRender();
 
-  return ImageGenerationSettingsContent({ environmentId }) as ReactElement<Record<string, unknown>>;
+  return ImageGenerationSettingsContent({ environmentId }) as ReactElement<TestProps>;
 }
 
-function findRow(tree: unknown, provider: ImageProviderStatus["provider"]) {
+function findRow(tree: TestValue, provider: ImageProviderStatus["provider"]) {
   const row = visitElements(
     tree,
     (element) => element.type === ImageProviderRow && element.props.provider === provider,
@@ -193,7 +194,9 @@ describe("ImageGenerationSettingsContent environment wiring", () => {
       (element) => element.type === ImageGenerationRoutingSection,
     );
 
-    (routing?.props.onChange as (patch: object) => void)({ defaultProvider: "grok" });
+    (routing!.props.onChange as (patch: Partial<ImageGenerationSettings>) => void)({
+      defaultProvider: "grok",
+    });
     expect(settingsState.updateSettings).toHaveBeenCalledWith({
       imageGeneration: { defaultProvider: "grok" },
     });
@@ -276,7 +279,7 @@ describe("ImageGenerationSettingsContent environment wiring", () => {
     );
 
     expect(retry).not.toBeNull();
-    (retry?.props.onClick as () => void)();
+    (retry!.props.onClick as () => void)();
     expect(query.refresh).toHaveBeenCalledTimes(1);
   });
 });

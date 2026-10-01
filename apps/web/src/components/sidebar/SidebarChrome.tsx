@@ -338,6 +338,7 @@ function ComputerUseControlForEnvironment({
       });
 
       if (Predicate.isTagged(stopped, "Success")) {
+        // SAFETY: the fixed computer-use server identifier is the same nonempty identifier used to register that server.
         await disableServer({
           environmentId,
           input: { mcpServerId: COMPUTER_USE_SERVER_ID as McpServer["id"] },

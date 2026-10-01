@@ -51,13 +51,17 @@ export function routineDelegateOptions(
   }>,
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
 ): ReadonlyArray<{ readonly id: string; readonly name: string; readonly canTakeWork: boolean }> {
-  return bots
-    .filter((candidate) => candidate.id !== ownerId && candidate.archivedAt === null)
-    .map((candidate) => ({
-      id: candidate.id,
-      name: candidate.name,
-      canTakeWork: botEngineTakesDelegatedWork(candidate.engine, instanceEntries),
-    }));
+  return bots.flatMap((candidate) =>
+    candidate.id !== ownerId && candidate.archivedAt === null
+      ? [
+          {
+            id: candidate.id,
+            name: candidate.name,
+            canTakeWork: botEngineTakesDelegatedWork(candidate.engine, instanceEntries),
+          },
+        ]
+      : [],
+  );
 }
 
 /**

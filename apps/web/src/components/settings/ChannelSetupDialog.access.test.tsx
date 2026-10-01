@@ -43,7 +43,16 @@ const mocks = vi.hoisted(() => ({
   buttons: new Map<string, { onClick?: () => void; disabled?: boolean }>(),
   inputs: new Map<string, { onChange: (event: { currentTarget: { value: string } }) => void }>(),
   changeOpen: (_open: boolean) => {},
-  snapshot: null as unknown,
+  snapshot: null as {
+    bots?: readonly { id: string; title: string }[];
+    projects: Array<{ id: string; title: string; workspaceRoot?: string; updatedAt: string }>;
+    threads: Array<{
+      projectId: string;
+      botId: string;
+      updatedAt: string;
+      archivedAt: string | null;
+    }>;
+  } | null,
   projectSelect: null as null | {
     projects: ReadonlyArray<{ id: string; title: string }>;
     value: string | null;
@@ -128,7 +137,7 @@ vi.mock("../ui/select", () => ({
 
 let root: import("react-dom/client").Root;
 
-let container: TestNode;
+let container: Element;
 
 const onSaved = vi.fn();
 
@@ -173,9 +182,9 @@ beforeEach(async () => {
     removeEventListener() {},
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  container = document.createElement("div");
+  container = globalThis.document.createElement("div");
   const { createRoot } = await import("react-dom/client");
-  root = createRoot(container as unknown as Element);
+  root = createRoot(container);
   await act(() => root.render(<ChannelSetupDialog {...props} />));
 });
 

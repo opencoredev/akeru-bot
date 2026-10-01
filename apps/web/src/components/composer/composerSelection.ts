@@ -131,7 +131,7 @@ export function getAbsoluteOffsetForPoint(node: LexicalNode, pointOffset: number
   let current: LexicalNode | null = node;
 
   while (current) {
-    const nextParent = current.getParent() as LexicalNode | null;
+    const nextParent: LexicalNode | null = current.getParent();
 
     if (!nextParent || !$isElementNode(nextParent)) {
       break;
@@ -184,7 +184,7 @@ export function getExpandedAbsoluteOffsetForPoint(node: LexicalNode, pointOffset
   let current: LexicalNode | null = node;
 
   while (current) {
-    const nextParent = current.getParent() as LexicalNode | null;
+    const nextParent: LexicalNode | null = current.getParent();
 
     if (!nextParent || !$isElementNode(nextParent)) {
       break;

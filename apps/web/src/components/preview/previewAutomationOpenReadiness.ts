@@ -1,9 +1,10 @@
+import { Data } from "effect";
 import { Predicate } from "effect";
 import {
   FILL_PREVIEW_VIEWPORT,
   type PreviewAutomationOpenInput,
   type PreviewSessionSnapshot,
-  type PreviewViewportSetting,
+  PreviewViewportSetting,
 } from "@akeru/contracts";
 
 /**
@@ -12,11 +13,12 @@ import {
  * brand-new tab left in fill mode would be sized by whatever the panel happens
  * to be — deterministic beats incidental here.
  */
-export const DEFAULT_PREVIEW_AUTOMATION_VIEWPORT = {
-  _tag: "freeform",
+const ViewportSettings = Data.taggedEnum<PreviewViewportSetting>();
+
+export const DEFAULT_PREVIEW_AUTOMATION_VIEWPORT = ViewportSettings.freeform({
   width: 1280,
   height: 800,
-} as const satisfies PreviewViewportSetting;
+});
 
 export function previewAutomationOpenNeedsOverlay(
   input: PreviewAutomationOpenInput,

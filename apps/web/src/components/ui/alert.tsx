@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Children, isValidElement } from "react";
 import type * as React from "react";
@@ -22,15 +23,24 @@ const alertVariants = cva("relative rounded-xl border px-3.5 py-3 text-card-fore
 });
 
 function alertChildSlot(child: React.ReactElement): string | undefined {
-  const propsSlot = (child.props as Record<string, string | undefined>)["data-slot"];
+  const propsSlot = isValidElement<{ "data-slot"?: string }>(child)
+    ? child.props["data-slot"]
+    : undefined;
 
   if (propsSlot) {
     return propsSlot;
   }
 
-  const type = child.type as { displayName?: string; name?: string };
+  const type = child.type;
 
-  switch (type.displayName ?? type.name) {
+  const displayName =
+    !Predicate.isString(type) && "displayName" in type && Predicate.isString(type.displayName)
+      ? type.displayName
+      : undefined;
+
+  const name = !Predicate.isString(type) ? type.name : undefined;
+
+  switch (displayName ?? name) {
     case "AlertAction":
       return "alert-action";
     case "AlertTitle":

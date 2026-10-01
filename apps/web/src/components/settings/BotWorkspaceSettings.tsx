@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { type BotSandboxBrowserSharing, ProviderDriverKind } from "@akeru/contracts";
@@ -271,11 +272,11 @@ export function BotWorkspaceSettingsSection() {
           >
             <SelectTrigger className="w-full sm:w-40" aria-label={t("Local execution")}>
               <SelectValue>
-                {settings.localExecutionMode === "full-access"
-                  ? t("Full access")
-                  : settings.localExecutionMode === "approval-required"
-                    ? t("Ask first")
-                    : t("Auto review")}
+                {Match.value(settings).pipe(
+                  Match.when({ localExecutionMode: "full-access" }, () => t("Full access")),
+                  Match.when({ localExecutionMode: "approval-required" }, () => t("Ask first")),
+                  Match.orElse(() => t("Auto review")),
+                )}
               </SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>

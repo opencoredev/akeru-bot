@@ -18,9 +18,22 @@ class TestClipboardEvent extends Event {
   constructor(text: string) {
     super("paste", { cancelable: true });
     this.clipboardData = {
-      files: [],
+      files: { length: 0, item: () => null, [Symbol.iterator]: () => [][Symbol.iterator]() },
+      dropEffect: "none",
+      effectAllowed: "all",
+      items: {
+        length: 0,
+        add: () => null,
+        clear() {},
+        remove() {},
+        [Symbol.iterator]: () => [][Symbol.iterator](),
+      },
+      types: ["text/plain"],
+      clearData() {},
+      setData() {},
+      setDragImage() {},
       getData: (type: string) => (type === "text/plain" ? text : ""),
-    } as unknown as DataTransfer;
+    };
   }
 }
 

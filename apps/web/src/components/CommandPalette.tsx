@@ -338,9 +338,9 @@ function useChatSearchItems(query: string) {
 
   const connectedEnvironmentIds = useMemo(
     () =>
-      environments
-        .filter((environment) => environment.connection.phase === "connected")
-        .map((environment) => environment.environmentId),
+      environments.flatMap((environment) =>
+        environment.connection.phase === "connected" ? [environment.environmentId] : [],
+      ),
     [environments],
   );
 

@@ -258,7 +258,7 @@ describe("isChannelIdentityConflict", () => {
 
 describe("channelFailureCategoryOf", () => {
   it("reads the category the server sent with a channel failure", () => {
-    const failure = (error: object) => ({ cause: Cause.fail(error) });
+    const failure = <E>(error: E) => ({ cause: Cause.fail(error) });
     expect(
       channelFailureCategoryOf(
         failure({ message: "Rejected.", channelFailureCategory: "credentials" }),

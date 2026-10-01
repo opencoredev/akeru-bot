@@ -25,7 +25,7 @@ export const PLUGIN_PAGE_COLUMN_CLASS_NAME =
   "mx-auto flex w-full max-w-6xl flex-col px-4 pt-0 pb-16 sm:px-10 sm:pt-1";
 
 function isPrimaryFilter(filter: PluginFilter): filter is (typeof PRIMARY_FILTERS)[number] {
-  return (PRIMARY_FILTERS as readonly PluginFilter[]).includes(filter);
+  return PRIMARY_FILTERS.some((candidate) => candidate === filter);
 }
 
 /** Toolbar search field: card fill with a leading icon. */

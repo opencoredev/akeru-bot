@@ -1,3 +1,4 @@
+import { recordLookup } from "../recordLookup";
 import { isTagged } from "../tagged";
 import type {
   BackgroundActivityProfile,
@@ -277,14 +278,11 @@ export function buildProviderInstanceUpdatePatch(input: {
     | ServerSettings["textGenerationModelSelection"]
     | undefined;
 }): Partial<UnifiedSettings> {
-  type LegacyProviderSettings = ServerSettings["providers"][keyof ServerSettings["providers"]];
+  const legacyProviderDefaults = DEFAULT_UNIFIED_SETTINGS.providers;
 
-  const legacyProviderDefaults = DEFAULT_UNIFIED_SETTINGS.providers as Record<
-    string,
-    LegacyProviderSettings | undefined
-  >;
-
-  const legacyProviderDefault = input.isDefault ? legacyProviderDefaults[input.driver] : undefined;
+  const legacyProviderDefault = input.isDefault
+    ? recordLookup(legacyProviderDefaults, input.driver)
+    : undefined;
 
   return {
     ...(legacyProviderDefault !== undefined
@@ -292,7 +290,7 @@ export function buildProviderInstanceUpdatePatch(input: {
           providers: {
             ...input.settings.providers,
             [input.driver]: legacyProviderDefault,
-          } as ServerSettings["providers"],
+          },
         }
       : {}),
     providerInstances: {
@@ -349,10 +347,12 @@ export function backgroundActivityOverrideSettings(
 
   for (const [key, value] of Object.entries(nextOverrides)) {
     if (value === undefined) {
+      // SAFETY: Object.entries supplies only own keys of nextOverrides; deletion removes explicitly undefined fields.
       delete nextOverrides[key as keyof typeof nextOverrides];
     }
   }
 
+  // SAFETY: the preceding loop removes every explicitly undefined override, satisfying the exact optional settings type.
   return {
     backgroundActivity: {
       schemaVersion: 1 as const,

@@ -122,7 +122,7 @@ function startCartesianLoop({
   let intensity = 0;
   let needsFill = true;
   let lastPaintSig = "";
-  let lastSelected: string | null | undefined = Symbol() as never;
+  let lastSelected: string | null | undefined | symbol = Symbol();
 
   const draw = (now: number) => {
     raf = animate ? requestAnimationFrame(draw) : 0;

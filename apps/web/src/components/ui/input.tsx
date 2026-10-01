@@ -55,7 +55,7 @@ function Input({
         data-slot="input"
         size={Predicate.isNumber(size) ? size : undefined}
         style={nativeStyle}
-        {...(nativeInputProps as React.ComponentProps<"input">)}
+        {...nativeInputProps}
       />
     );
   } else {

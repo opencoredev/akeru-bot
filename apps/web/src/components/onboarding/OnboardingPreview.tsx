@@ -46,7 +46,11 @@ function ProviderChip({
       {ProviderIcon ? (
         <ProviderIcon className="size-3.5" />
       ) : (
-        <img src={provider.icon as string} alt="" className="size-3.5 brightness-0 dark:invert" />
+        <img
+          src={Predicate.isString(provider.icon) ? provider.icon : undefined}
+          alt=""
+          className="size-3.5 brightness-0 dark:invert"
+        />
       )}
       {provider.label}
     </span>

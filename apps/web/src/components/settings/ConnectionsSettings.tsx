@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { ChevronsLeftRightEllipsisIcon, PlusIcon, TerminalIcon } from "lucide-react";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
@@ -103,13 +104,11 @@ export function ConnectionsSettings() {
           <SettingsSection title="This environment">
             {primaryVersionMismatch || primaryServerUpdateState.status !== "idle" ? (
               <SettingsRow
-                title={
-                  primaryServerUpdateState.status === "failed"
-                    ? "Update failed"
-                    : primaryServerUpdateState.status === "running"
-                      ? "Updating server"
-                      : "Server update available"
-                }
+                title={Match.value(primaryServerUpdateState).pipe(
+                  Match.when({ status: "failed" }, () => "Update failed"),
+                  Match.when({ status: "running" }, () => "Updating server"),
+                  Match.orElse(() => "Server update available"),
+                )}
                 description={
                   primaryServerUpdateState.status !== "idle" ? (
                     <ServerUpdateProgress state={primaryServerUpdateState} />

@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { recordLookup } from "../recordLookup";
 import {
   type KeybindingCommand,
@@ -41,7 +42,13 @@ export function shortcutToKeybindingInput(shortcut: KeybindingShortcut): string 
   if (shortcut.altKey) parts.push("alt");
 
   if (shortcut.shiftKey) parts.push("shift");
-  parts.push(shortcut.key === " " ? "space" : shortcut.key === "escape" ? "esc" : shortcut.key);
+  parts.push(
+    Match.value(shortcut).pipe(
+      Match.when({ key: " " }, () => "space"),
+      Match.when({ key: "escape" }, () => "esc"),
+      Match.orElse((shortcut) => shortcut.key),
+    ),
+  );
 
   return parts.join("+");
 }

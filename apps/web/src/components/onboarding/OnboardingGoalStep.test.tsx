@@ -1,3 +1,4 @@
+import type { TestProps, TestValue } from "../test-support/reactTree";
 import { Predicate } from "effect";
 import { isValidElement, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -49,7 +50,7 @@ vi.mock("motion/react", () => ({
 
 import { OnboardingGoalStep } from "./OnboardingGoalStep";
 
-type Element = ReactElement<Record<string, unknown>>;
+type Element = ReactElement<TestProps>;
 
 /**
  * The step renders through small local components, and a plain-function render
@@ -58,7 +59,7 @@ type Element = ReactElement<Record<string, unknown>>;
  */
 const LOCAL_COMPONENTS = new Set(["GoalExamples", "GoalThinking", "GoalPlanView"]);
 
-function visitElements(node: unknown, visitor: (element: Element) => boolean): Element | null {
+function visitElements(node: TestValue, visitor: (element: Element) => boolean): Element | null {
   if (Array.isArray(node)) {
     for (const child of node) {
       const found = visitElements(child, visitor);
@@ -76,15 +77,12 @@ function visitElements(node: unknown, visitor: (element: Element) => boolean): E
   const type = element.type as { name?: string };
 
   if (Predicate.isFunction(type) && LOCAL_COMPONENTS.has(type.name ?? "")) {
-    const found = visitElements(
-      (type as unknown as (props: unknown) => unknown)(element.props),
-      visitor,
-    );
+    const found = visitElements((type as (props: TestProps) => TestValue)(element.props), visitor);
 
     if (found) return found;
   }
 
-  for (const value of Object.values(element.props as Record<string, unknown>)) {
+  for (const value of Object.values(element.props as TestProps)) {
     const found = visitElements(value, visitor);
 
     if (found) return found;
@@ -94,7 +92,7 @@ function visitElements(node: unknown, visitor: (element: Element) => boolean): E
 }
 
 /** Flattens the visible text under a node, so assertions read what a user would. */
-function textOf(node: unknown): string {
+function textOf(node: TestValue): string {
   if (Predicate.isString(node)) return node;
 
   if (Predicate.isNumber(node)) return String(node);

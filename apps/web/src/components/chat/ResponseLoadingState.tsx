@@ -50,6 +50,7 @@ export function formatLoadingElapsed(elapsedMs: number): string {
 }
 
 export function LoaderMeter({ className }: { readonly className?: string }) {
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   return (
     <span aria-hidden="true" className={cn("grid shrink-0 grid-cols-3 gap-[3px]", className)}>
       {LOADER_CELL_DELAYS_MS.map((delay, index) => (

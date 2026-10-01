@@ -1,8 +1,9 @@
+import type { TestProps, TestValue } from "../test-support/reactTree";
 import { Predicate } from "effect";
-import type { ReactElement } from "react";
+import { isValidElement, type ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { visitElements } from "../../test/reactElementTree";
+import { visitElements } from "../test-support/reactTree";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 
 const clipboard = vi.hoisted(() => ({ writeTextToClipboard: vi.fn() }));
@@ -34,27 +35,27 @@ vi.mock("../../hooks/useCopyToClipboard", () => ({
 
 import { SignInCodeCopy } from "./SignInCodeCopy";
 
-function render(code = "ABCD-1234"): ReactElement<Record<string, unknown>> {
+function render(code = "ABCD-1234"): ReactElement<TestProps> {
   hooks.beginRender();
 
-  return SignInCodeCopy({ code }) as ReactElement<Record<string, unknown>>;
+  return SignInCodeCopy({ code }) as ReactElement<TestProps>;
 }
 
-function text(node: unknown): string {
+function text(node: TestValue): string {
   if (Predicate.isString(node)) return node;
 
   if (Array.isArray(node)) return node.map(text).join("");
 
-  if (node && Predicate.isObjectOrArray(node) && "props" in node) {
-    return text((node as { props: { children?: unknown } }).props.children);
+  if (isValidElement<TestProps>(node)) {
+    return text(node.props.children);
   }
 
   return "";
 }
 
-async function pressCopy(tree: ReactElement<Record<string, unknown>>) {
+async function pressCopy(tree: ReactElement<TestProps>) {
   const button = visitElements(tree, (element) => Predicate.isFunction(element.props.onClick));
-  (button?.props.onClick as () => void)();
+  (button!.props.onClick as () => void)();
   // The copy result lands after the clipboard promise settles.
   await clipboard.writeTextToClipboard.mock.results[0]?.value.catch(() => undefined);
   await Promise.resolve();

@@ -17,6 +17,7 @@ import { type RosterLoadState, resolveRosterLoadState } from "./rosterRouteSelec
 import { useRosterStore } from "./rosterStore";
 import type { BotAvatar } from "./types";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 /** Mirrors the primary environment's persisted bot roster into the UI store. */

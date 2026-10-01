@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { isTagged } from "../tagged";
 import type {
   AkeruDelegationRecord,
@@ -218,11 +219,11 @@ export function DelegationCard({
 
   const outcome = presentation.outcome
     ? presentation.outcome.text ||
-      (presentation.outcome.kind === "failure"
-        ? t("Failure details unavailable")
-        : presentation.outcome.kind === "result"
-          ? t("Result unavailable")
-          : null)
+      Match.value(presentation.outcome.kind).pipe(
+        Match.when("failure", () => t("Failure details unavailable")),
+        Match.when("result", () => t("Result unavailable")),
+        Match.orElse(() => null),
+      )
     : null;
 
   return (

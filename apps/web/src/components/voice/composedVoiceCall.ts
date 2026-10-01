@@ -33,7 +33,13 @@ export interface ComposedVoiceCallDependencies {
   readonly synthesize: (
     input: VoiceSynthesizeInput,
   ) => Promise<AtomCommandResult<VoiceAudio, unknown>>;
-  readonly cancel: (operationId: string) => Promise<unknown>;
+  readonly cancel: (
+    operationId: string,
+  ) => Promise<
+    | AtomCommandResult<{ readonly cancelled: boolean }, unknown>
+    | { readonly cancelled: boolean }
+    | void
+  >;
   /** Starts a chat turn and returns its user message id, or null when the chat refused it. */
   readonly sendMessage: (text: string) => Promise<string | null>;
   readonly readTurn: () => ComposedVoiceTurnState;

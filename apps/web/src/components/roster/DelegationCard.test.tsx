@@ -1,3 +1,4 @@
+import type { TestProps, TestValue } from "../test-support/reactTree";
 import { Predicate } from "effect";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -95,7 +96,7 @@ vi.mock("./rosterStore", () => ({
 import { DelegationCard, delegationUsageTokens } from "./DelegationCard";
 import { DelegationDetail } from "./DelegationDetail";
 import { delegationClockState } from "./delegationClock";
-import { visitElements } from "../../test/reactElementTree";
+import { visitElements } from "../test-support/reactTree";
 import type { Bot } from "./types";
 
 const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
@@ -206,7 +207,7 @@ function phaseFor(state: AkeruDelegationState) {
   }
 }
 
-function delegation(state: AkeruDelegationState, overrides: Record<string, unknown> = {}) {
+function delegation(state: AkeruDelegationState, overrides: TestProps = {}) {
   return decodeDelegationRecord({
     delegationId: `delegation-${state}`,
     parentDelegationId: null,
@@ -271,12 +272,12 @@ function cardElement(state: AkeruDelegationState, bot: Bot | null = childBot) {
     delegations: [],
     childBot: bot,
     parentBot,
-  }) as ReactElement<Record<string, unknown>>;
+  }) as ReactElement<TestProps>;
 }
 
 /** Finds an element by aria-label, calling nested function components on the way. */
-function findByLabel(node: unknown, label: string): ReactElement<Record<string, unknown>> | null {
-  let found: ReactElement<Record<string, unknown>> | null = null;
+function findByLabel(node: TestValue, label: string): ReactElement<TestProps> | null {
+  let found: ReactElement<TestProps> | null = null;
   visitElements(node, (element) => {
     if (found) return true;
 
@@ -287,7 +288,7 @@ function findByLabel(node: unknown, label: string): ReactElement<Record<string, 
     }
 
     if (Predicate.isFunction(element.type) && element.type.name.startsWith("Delegation")) {
-      found = findByLabel((element.type as (props: unknown) => unknown)(element.props), label);
+      found = findByLabel((element.type as (props: TestProps) => TestValue)(element.props), label);
     }
 
     return found !== null;

@@ -20,7 +20,7 @@ interface ComposerPendingApprovalActionsProps {
   onRespondToApproval: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
-  ) => Promise<unknown>;
+  ) => Promise<boolean | void>;
 }
 
 const APPROVAL_ACTION_CLASS_NAME = "font-medium";

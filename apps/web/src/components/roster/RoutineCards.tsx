@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { ChevronLeftIcon, ChevronRightIcon, Clock3Icon } from "lucide-react";
 import {
   routineDateLabel,
@@ -104,25 +105,29 @@ export function RoutineCard({
         {routine.runHistory.length > 0 || reverse ? (
           <div className="flex items-center justify-between gap-2">
             <RunHistory runs={routine.runHistory} />
-            {reverse === "resume" ? (
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={busy || !onSetPaused}
-                onClick={() => onSetPaused?.(routine.id, false)}
-              >
-                {t("Resume")}
-              </Button>
-            ) : reverse === "enable" ? (
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={busy || !onSetEnabled}
-                onClick={() => onSetEnabled?.(routine.id, true)}
-              >
-                {t("Enable")}
-              </Button>
-            ) : null}
+            {Match.value(reverse).pipe(
+              Match.when("resume", () => (
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={busy || !onSetPaused}
+                  onClick={() => onSetPaused?.(routine.id, false)}
+                >
+                  {t("Resume")}
+                </Button>
+              )),
+              Match.when("enable", () => (
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={busy || !onSetEnabled}
+                  onClick={() => onSetEnabled?.(routine.id, true)}
+                >
+                  {t("Enable")}
+                </Button>
+              )),
+              Match.orElse(() => null),
+            )}
           </div>
         ) : null}
       </div>

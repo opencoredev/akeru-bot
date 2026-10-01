@@ -1,4 +1,3 @@
-import type { SensorProps } from "@dnd-kit/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { RosterPointerSensor } from "./roster.pointer";
 
@@ -40,7 +39,7 @@ function gesture() {
     event: pointer("pointerdown"),
     options: { distance: 6, onAttach: vi.fn(), onFinish },
     ...callbacks,
-  } as unknown as SensorProps<ConstructorParameters<typeof RosterPointerSensor>[0]["options"]>;
+  } satisfies ConstructorParameters<typeof RosterPointerSensor>[0];
 
   const sensor = new RosterPointerSensor(props);
   sensors.push(sensor);

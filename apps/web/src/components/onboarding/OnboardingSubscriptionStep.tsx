@@ -402,7 +402,7 @@ export function SubscriptionStep({
                     <ProviderIcon className="size-4" />
                   ) : (
                     <img
-                      src={definition.icon as string}
+                      src={Predicate.isString(definition.icon) ? definition.icon : undefined}
                       alt=""
                       className="size-4 brightness-0 dark:invert"
                     />

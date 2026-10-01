@@ -15,6 +15,19 @@ type Options = {
   onFinish: (started: boolean) => void;
 };
 
+type RosterSensorProps = Pick<
+  SensorProps<Options>,
+  | "active"
+  | "event"
+  | "options"
+  | "onAbort"
+  | "onCancel"
+  | "onEnd"
+  | "onMove"
+  | "onPending"
+  | "onStart"
+>;
+
 /** A roster gesture ends on release, cancellation, or loss of its window.
  * Own the listeners so unmounting the list can cancel the sensor too. */
 export class RosterPointerSensor {
@@ -31,7 +44,8 @@ export class RosterPointerSensor {
   private readonly document: Document;
   private readonly window: Window;
 
-  constructor(private readonly props: SensorProps<Options>) {
+  constructor(private readonly props: RosterSensorProps) {
+    // SAFETY: the sensor activator accepts only pointerdown events before constructing this sensor.
     this.pointer = props.event as PointerEvent;
     this.document = getOwnerDocument(this.pointer.target);
     this.window = getWindow(this.pointer.target);
@@ -59,7 +73,7 @@ export class RosterPointerSensor {
   private suppressClick = (event: Event) => {
     // Keyboard-generated clicks report detail 0. Do not consume those; they
     // are a later activation, not the pointer release from this gesture.
-    if ("detail" in event && (event as MouseEvent).detail === 0) {
+    if ("detail" in event && event.detail === 0) {
       this.clearClickSuppression();
 
       return;

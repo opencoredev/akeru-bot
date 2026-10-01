@@ -71,6 +71,7 @@ import { useGroupDetailsOpen } from "./detailsPanelOpen";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function resolveAvailableGroupBoss<T extends { readonly id: string }>(
@@ -93,6 +94,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const { t, locale } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
 
+  // SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
   const peopleIdentity = useAtomValue(
     environmentPeopleAtom((environmentId ?? "") as EnvironmentId),
   );

@@ -50,6 +50,7 @@ import {
   type BotProfileUpdate,
 } from "./useBotProfileDraft";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 /** Edits one bot's profile as a draft, saved together from the bottom bar. */
@@ -268,6 +269,7 @@ export function BotSettingsForm({
                     !BOT_SANDBOX_OPTIONS.some((option) => option.value === value)
                   )
                     return;
+                  // SAFETY: the value has been checked against default and BOT_SANDBOX_OPTIONS before updating the draft.
                   draft.setSandbox(value as typeof draft.sandbox);
                   draft.markChanged();
                 }}

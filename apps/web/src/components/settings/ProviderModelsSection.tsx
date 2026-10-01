@@ -78,7 +78,7 @@ export function nextHiddenModelsForBulkToggle(
   models: ReadonlyArray<Pick<ServerProviderModel, "slug" | "isCustom">>,
   hiddenModels: ReadonlyArray<string>,
 ): string[] {
-  const builtInSlugs = models.filter((model) => !model.isCustom).map((model) => model.slug);
+  const builtInSlugs = models.flatMap((model) => (!model.isCustom ? [model.slug] : []));
   const builtInSlugSet = new Set(builtInSlugs);
   const allBuiltInModelsHidden = builtInSlugs.every((slug) => hiddenModels.includes(slug));
 

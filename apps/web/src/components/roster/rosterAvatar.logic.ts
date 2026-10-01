@@ -75,7 +75,7 @@ const LEGACY_BLOB_COLORS = {
 } satisfies Record<string, string>;
 
 /** Normalizes a stored body color, moving retired presets onto the current palette. */
-export function resolveBlobColor(value: unknown) {
+export function resolveBlobColor(value: string | null | undefined) {
   if (!isBotAvatarColor(value)) return DEFAULT_BLOB_COLOR;
   const color = value.toUpperCase();
 
@@ -90,9 +90,9 @@ function relativeLuminance(hexColor: string) {
 
   if (!channels || channels.length !== 3 || channels.some(Number.isNaN)) return null;
 
-  const [red, green, blue] = channels.map((channel) =>
+  const [red = 0, green = 0, blue = 0] = channels.map((channel) =>
     channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
-  ) as [number, number, number];
+  );
 
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
@@ -121,12 +121,12 @@ export function resolveBlobOutline(color: string) {
   return luminance !== null && luminance > 0.7 ? "rgba(0, 0, 0, 0.14)" : null;
 }
 
-export function isBotAvatarColor(value: unknown): value is string {
+export function isBotAvatarColor<T>(value: T): value is T & string {
   return Predicate.isString(value) && /^#[\da-f]{6}$/i.test(value);
 }
 
 export function isBotBlobShape(value: string): value is BotBlobShape {
-  return (BLOB_SHAPES as readonly string[]).includes(value);
+  return BLOB_SHAPES.some((candidate) => candidate === value);
 }
 
 /**
@@ -136,7 +136,13 @@ export function isBotBlobShape(value: string): value is BotBlobShape {
  * distinct look. Image avatars and unknown blob shapes from persisted or
  * server data fall back to the default circle.
  */
-export function resolveBlobRendering(avatar: BotAvatar | null | undefined) {
+export function resolveBlobRendering(
+  avatar:
+    | Exclude<BotAvatar, { kind: "blob" }>
+    | { kind: "blob"; shape: string; color: string }
+    | null
+    | undefined,
+) {
   if (avatar?.kind === "dither") {
     const hash = Math.abs(hashSeed(avatar.seed));
 

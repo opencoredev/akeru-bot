@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, Clock3Icon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
@@ -15,12 +16,11 @@ export function RoutineReceiptRow({
 }) {
   const { t, formatDate } = useI18n();
 
-  const Icon =
-    receipt.tone === "error"
-      ? CircleAlertIcon
-      : receipt.tone === "success"
-        ? CircleCheckIcon
-        : Clock3Icon;
+  const Icon = Match.value(receipt).pipe(
+    Match.when({ tone: "error" }, () => CircleAlertIcon),
+    Match.when({ tone: "success" }, () => CircleCheckIcon),
+    Match.orElse(() => Clock3Icon),
+  );
 
   const error = receipt.tone === "error";
   const opensRoutines = !receipt.archived && !!onOpenRoutines;

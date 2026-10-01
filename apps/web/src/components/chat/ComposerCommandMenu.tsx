@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Match, Predicate } from "effect";
 import {
   formatProviderSkillDisplayName,
   resolveProviderSkillSourceKind,
@@ -113,11 +113,14 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                   ? "Searching workspace skills..."
                   : "Searching workspace files..."
                 : (props.emptyStateText ??
-                  (props.triggerKind === "skill"
-                    ? "No skills found. Try / to browse provider commands."
-                    : props.triggerKind === "path"
-                      ? "No matching files or folders."
-                      : "No matching command."))}
+                  Match.value(props).pipe(
+                    Match.when(
+                      { triggerKind: "skill" },
+                      () => "No skills found. Try / to browse provider commands.",
+                    ),
+                    Match.when({ triggerKind: "path" }, () => "No matching files or folders."),
+                    Match.orElse(() => "No matching command."),
+                  ))}
             </p>
           </div>
         )}

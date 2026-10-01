@@ -101,6 +101,7 @@ export function SettingsLinkRow<TRouter extends RegisteredRouter, TOptions>({
   readonly tone: ConnectionTone;
   readonly statusLabel: string;
 }) {
+  // SAFETY: ValidateLinkOptions has already checked these route options; Link erases the generic route parameter.
   return (
     <Link
       {...(link as LinkComponentProps)}

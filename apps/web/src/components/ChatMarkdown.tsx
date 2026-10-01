@@ -124,7 +124,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
   blockquote: function MarkdownBlockquote({ node: _node, children, ...props }) {
     const alert = recordLookup(
       GITHUB_ALERT_PRESENTATIONS,
-      String((props as Record<string, unknown>)["data-alert"] ?? ""),
+      String(("data-alert" in props ? props["data-alert"] : "") ?? ""),
     );
 
     if (!alert) {

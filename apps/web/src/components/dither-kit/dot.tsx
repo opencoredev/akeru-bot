@@ -45,6 +45,7 @@ export function Dot({ variant = "border", r = 2 }: { variant?: DotVariant; r?: n
         <circle
           {...paint}
           // biome-ignore lint/suspicious/noArrayIndexKey: index is the stable x position
+          // oxlint-disable-next-line react/no-array-index-key -- chart marks have stable positional identity; their geometry is updated in place when category data changes.
           key={i}
           cx={ctx.xCenter(i) ?? 0}
           cy={ctx.y(b[1])}

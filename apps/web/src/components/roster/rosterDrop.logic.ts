@@ -82,8 +82,8 @@ export function rosterSectionItems(section: {
 
 export function splitRosterSectionItems(items: readonly RosterItemRef[]) {
   return {
-    botIds: items.filter((item) => item.kind === "bot").map((item) => item.id),
-    groupIds: items.filter((item) => item.kind === "group").map((item) => item.id),
+    botIds: items.flatMap((item) => (item.kind === "bot" ? [item.id] : [])),
+    groupIds: items.flatMap((item) => (item.kind === "group" ? [item.id] : [])),
   };
 }
 

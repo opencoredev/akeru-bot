@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Match, Predicate } from "effect";
 import { BookmarkIcon, CircleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -183,8 +183,9 @@ export function InboxIncidentRow({
       }
       description={copy.detail}
       status={resolveError ?? copy.nextAction}
-      control={
-        action === "memory-approval" ? (
+      control={Match.value(action).pipe(
+        // oxlint-disable-next-line react/no-unstable-nested-components -- Match calls this value factory immediately; React never mounts it as a component.
+        Match.when("memory-approval", () => (
           <span className="flex items-center gap-1.5">
             <Button
               size="xs"
@@ -202,7 +203,9 @@ export function InboxIncidentRow({
               {t("Approve")}
             </Button>
           </span>
-        ) : action === "resolve" ? (
+        )),
+        // oxlint-disable-next-line react/no-unstable-nested-components -- Match calls this value factory immediately; React never mounts it as a component.
+        Match.when("resolve", () => (
           <Button
             size="xs"
             variant="outline"
@@ -211,12 +214,14 @@ export function InboxIncidentRow({
           >
             {isResolving ? t("Resolving…") : t("Resolve")}
           </Button>
-        ) : (
+        )),
+        // oxlint-disable-next-line react/no-unstable-nested-components -- Match calls this value factory immediately; React never mounts it as a component.
+        Match.orElse(() => (
           <Button size="xs" variant="outline" onClick={openRepair}>
             {action === "plugins" ? t("Open Plugins") : t("Open Providers")}
           </Button>
-        )
-      }
+        )),
+      )}
     />
   );
 }

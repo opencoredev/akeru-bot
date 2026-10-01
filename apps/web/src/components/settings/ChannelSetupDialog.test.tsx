@@ -36,14 +36,33 @@ const mocks = vi.hoisted(() => ({
   >(),
   deleteConnection:
     vi.fn<
-      (value: { input: { connectionId: string } }) => Promise<{ _tag: "Success" | "Failure" }>
+      (value: {
+        input: { connectionId: string | undefined };
+      }) => Promise<{ _tag: "Success" | "Failure" }>
     >(),
   calls: [] as string[],
   toast: vi.fn(),
   buttons: new Map<string, { onClick?: () => void; disabled?: boolean }>(),
   inputs: new Map<string, { onChange: (event: { currentTarget: { value: string } }) => void }>(),
   changeOpen: (_open: boolean) => {},
-  snapshot: null as unknown,
+  snapshot: null as {
+    bots?: readonly {
+      id: string;
+      title?: string;
+      channelBindings?: readonly {
+        provider: string;
+        status: string;
+        connectionId: string | undefined;
+      }[];
+    }[];
+    projects: Array<{ id: string; title: string; workspaceRoot?: string; updatedAt: string }>;
+    threads: Array<{
+      projectId: string;
+      botId: string;
+      updatedAt: string;
+      archivedAt: string | null;
+    }>;
+  } | null,
   projectSelect: null as null | {
     projects: ReadonlyArray<{ id: string; title: string }>;
     value: string | null;
@@ -128,7 +147,7 @@ vi.mock("../ui/select", () => ({
 
 let root: import("react-dom/client").Root;
 
-let container: TestNode;
+let container: Element;
 
 const onSaved = vi.fn();
 
@@ -173,9 +192,9 @@ beforeEach(async () => {
     removeEventListener() {},
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  container = document.createElement("div");
+  container = globalThis.document.createElement("div");
   const { createRoot } = await import("react-dom/client");
-  root = createRoot(container as unknown as Element);
+  root = createRoot(container);
   await act(() => root.render(<ChannelSetupDialog {...props} />));
 });
 
@@ -396,7 +415,9 @@ describe("ChannelSetupDialog credential update", () => {
   // Mirrors the bot's telegram assignment the server reports after the detach.
   async function assignment(connectionId: string | undefined) {
     mocks.snapshot = {
-      ...(mocks.snapshot as object),
+      ...mocks.snapshot,
+      projects: mocks.snapshot?.projects ?? [],
+      threads: mocks.snapshot?.threads ?? [],
       bots: [
         {
           id: "test-bot",

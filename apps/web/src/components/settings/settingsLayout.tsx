@@ -48,9 +48,7 @@ function scrollAndFocusSettingsTarget(target: HTMLElement): void {
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const scrollTarget =
-    target.tagName === "SECTION" && target.firstElementChild
-      ? (target.firstElementChild as HTMLElement)
-      : target;
+    target.tagName === "SECTION" && target.firstElementChild ? target.firstElementChild : target;
 
   scrollTarget.scrollIntoView({
     behavior: prefersReducedMotion ? "auto" : "smooth",

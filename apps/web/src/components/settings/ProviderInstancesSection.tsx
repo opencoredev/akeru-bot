@@ -1,3 +1,4 @@
+import { recordLookup } from "../recordLookup";
 import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
@@ -11,7 +12,7 @@ import {
   PROVIDER_DISPLAY_NAMES,
   type ProviderDriverKind,
   type ProviderInstanceConfig,
-  type ProviderInstanceId,
+  ProviderInstanceId,
   resolveProviderInstanceEnabled,
   type ServerProvider,
 } from "@akeru/contracts";
@@ -50,7 +51,7 @@ function withoutProviderInstanceKey<V>(
   record: Readonly<Record<ProviderInstanceId, V>> | undefined,
   key: ProviderInstanceId,
 ): Record<ProviderInstanceId, V> {
-  const next = { ...record } as Record<ProviderInstanceId, V>;
+  const next = { ...record };
   delete next[key];
 
   return next;
@@ -66,9 +67,6 @@ interface InstanceRow {
 
 type EnvironmentSettings = UnifiedSettings;
 
-type LegacyProviderSettings =
-  EnvironmentSettings["providers"][keyof EnvironmentSettings["providers"]];
-
 /**
  * The instances that run a set of drivers: the built-in default slot first
  * (synthesized from the legacy per-driver settings until the user edits it),
@@ -78,12 +76,9 @@ function instanceRowsForDrivers(
   settings: EnvironmentSettings,
   drivers: ReadonlyArray<ProviderDriverKind>,
 ): InstanceRow[] {
-  const legacyProviders = settings.providers as Record<string, LegacyProviderSettings | undefined>;
+  const legacyProviders = settings.providers;
 
-  const defaultLegacyProviders = DEFAULT_UNIFIED_SETTINGS.providers as Record<
-    string,
-    LegacyProviderSettings | undefined
-  >;
+  const defaultLegacyProviders = DEFAULT_UNIFIED_SETTINGS.providers;
 
   const rows: InstanceRow[] = [];
 
@@ -92,7 +87,7 @@ function instanceRowsForDrivers(
     const explicitInstance = settings.providerInstances?.[defaultInstanceId];
     // A remote environment may run a server whose settings predate this
     // driver, so the legacy blob can be missing too.
-    const legacyConfig = legacyProviders[driver];
+    const legacyConfig = recordLookup(legacyProviders, driver);
     let defaultInstance: ProviderInstanceConfig | undefined = explicitInstance;
 
     if (defaultInstance === undefined && legacyConfig !== undefined) {
@@ -110,12 +105,12 @@ function instanceRowsForDrivers(
         isDefault: true,
         isDirty:
           explicitInstance !== undefined ||
-          !Equal.equals(legacyConfig, defaultLegacyProviders[driver]),
+          !Equal.equals(legacyConfig, recordLookup(defaultLegacyProviders, driver)),
       });
     }
 
     for (const [rawId, instance] of Object.entries(settings.providerInstances ?? {})) {
-      const id = rawId as ProviderInstanceId;
+      const id = ProviderInstanceId.make(rawId);
 
       if (instance.driver !== driver || id === defaultInstanceId) continue;
       rows.push({ instanceId: id, instance, driver, isDefault: false, isDirty: false });
@@ -271,13 +266,11 @@ export function ProviderInstancesSection({
   };
 
   const resetDefaultInstance = (driver: ProviderDriverKind) => {
-    const defaultLegacy = (
-      DEFAULT_UNIFIED_SETTINGS.providers as Record<string, LegacyProviderSettings | undefined>
-    )[driver];
+    const defaultLegacy = recordLookup(DEFAULT_UNIFIED_SETTINGS.providers, driver);
 
     if (defaultLegacy === undefined) return;
     updateSettings({
-      providers: { ...settings.providers, [driver]: defaultLegacy } as typeof settings.providers,
+      providers: { ...settings.providers, [driver]: defaultLegacy },
       providerInstances: withoutProviderInstanceKey(
         settings.providerInstances,
         defaultInstanceIdForDriver(driver),

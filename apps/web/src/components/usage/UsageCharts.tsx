@@ -11,7 +11,7 @@ import type { DailyTotals } from "@akeru/shared/usageMerge";
 import { Line } from "../dither-kit/area";
 import { LineChart } from "../dither-kit/area-chart";
 import { BlockLegend } from "../dither-kit/block-legend";
-import type { ChartConfig } from "../dither-kit/chart-context";
+
 import type { DitherColor } from "../dither-kit/palette";
 import { Grid } from "../dither-kit/grid";
 import { Tooltip } from "../dither-kit/tooltip";
@@ -181,7 +181,7 @@ export function UsageActivityChart(props: {
       provider,
       { label: PROVIDER_PRESENTATION[provider].label, color: ACTIVITY_COLOR[provider] },
     ]),
-  ) as ChartConfig;
+  );
 
   if (active.length === 0 || days.length === 0) {
     return <p className="text-sm text-muted-foreground">No activity in this window.</p>;

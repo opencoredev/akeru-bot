@@ -37,7 +37,11 @@ export function voiceStartErrorDescription(cause: unknown): string {
 }
 
 export function listenForMicrophoneLoss(
-  microphone: Pick<MediaStream, "getAudioTracks">,
+  microphone: {
+    getAudioTracks: () => ReadonlyArray<
+      Pick<MediaStreamTrack, "addEventListener" | "removeEventListener">
+    >;
+  },
   onLost: () => void,
 ): () => void {
   const tracks = microphone.getAudioTracks();
@@ -47,7 +51,7 @@ export function listenForMicrophoneLoss(
 }
 
 export function waitForIceGathering(
-  peer: RTCPeerConnection,
+  peer: Pick<RTCPeerConnection, "iceGatheringState" | "addEventListener" | "removeEventListener">,
   timeoutMs = 5_000,
   signal?: AbortSignal,
 ): Promise<void> {

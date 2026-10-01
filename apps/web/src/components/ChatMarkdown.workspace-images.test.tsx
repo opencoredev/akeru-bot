@@ -1,9 +1,9 @@
-import { EnvironmentId, ThreadId } from "@akeru/contracts";
+import { EnvironmentId, ThreadId, type AssetResource } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const testState = vi.hoisted(() => ({
-  resources: [] as Array<unknown>,
+  resources: [] as Array<AssetResource>,
   assetState: "success" as "success" | "loading",
   imageDimensions: undefined as { width: number; height: number } | undefined,
 }));
@@ -11,7 +11,7 @@ const testState = vi.hoisted(() => ({
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
 
 vi.mock("../assets/assetUrls", () => ({
-  useAssetUrlState: (_environmentId: unknown, resource: unknown) => {
+  useAssetUrlState: (_environmentId: EnvironmentId, resource: AssetResource) => {
     testState.resources.push(resource);
 
     return testState.assetState === "loading"

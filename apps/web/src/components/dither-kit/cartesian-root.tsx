@@ -58,7 +58,10 @@ export type CartesianChartProps<TData extends Row> = {
 function layerOf(node: ReactNode): "back" | "dom" | "svg" {
   if (!isValidElement(node) || Predicate.isString(node.type)) return "svg";
 
-  return (node.type as { chartLayer?: "back" | "dom" }).chartLayer ?? "svg";
+  return "chartLayer" in node.type &&
+    (node.type.chartLayer === "back" || node.type.chartLayer === "dom")
+    ? node.type.chartLayer
+    : "svg";
 }
 
 /**
@@ -100,7 +103,7 @@ export function CartesianRoot<TData extends Row>({
   const ctx = useChartController({
     chartType,
     // Safe: the controller only reads row[key] for the configured series keys.
-    data: data as Record<string, unknown>[],
+    data: data,
     config,
     stackType,
     dimensions: size,

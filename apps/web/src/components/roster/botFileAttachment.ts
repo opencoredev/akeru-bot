@@ -19,7 +19,7 @@ const FILE_MIME_BY_EXTENSION = {
   xml: "application/xml",
   yaml: "application/x-yaml",
   yml: "application/x-yaml",
-} satisfies Readonly<Record<string, string>>;
+} as const satisfies Readonly<Record<string, UploadChatFileAttachment["mimeType"]>>;
 
 export type BotFileAttachmentKind =
   | Pick<UploadChatFileAttachment, "mimeType" | "type">
@@ -42,6 +42,7 @@ export function resolveBotFileAttachment(
     ? declaredMimeType
     : recordLookup(FILE_MIME_BY_EXTENSION, extension);
 
+  // SAFETY: the MIME value comes from the supported-file guard or the literal supported extension table.
   return mimeType && file.size > 0 && file.size <= PROVIDER_SEND_TURN_MAX_FILE_BYTES
     ? { type: "file", mimeType: mimeType as UploadChatFileAttachment["mimeType"] }
     : null;

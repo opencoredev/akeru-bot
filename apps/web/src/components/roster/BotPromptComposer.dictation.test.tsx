@@ -1,8 +1,9 @@
+import type { TestProps } from "../test-support/reactTree";
 import type { DictationDraft } from "@akeru/client-runtime/dictation";
-import type { ReactElement } from "react";
-import { beforeEach, describe, expect, it, vi, type Mock } from "vite-plus/test";
+import { isValidElement, type ReactElement } from "react";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { visitElements } from "../../test/reactElementTree";
+import { visitElements } from "../test-support/reactTree";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 
 type Session = ReturnType<typeof import("@akeru/client-runtime/dictation").createDictationSession>;
@@ -15,7 +16,7 @@ type DictationInput = {
 const fake = vi.hoisted(() => ({
   session: null as Session | null,
   input: null as DictationInput | null,
-  transcribe: null as unknown as Mock<() => Promise<string>>,
+  transcribe: vi.fn<() => Promise<string>>(),
 }));
 
 vi.mock("../../i18n", async () => {
@@ -65,7 +66,14 @@ vi.mock("../../lib/imageCompression", () => ({ compressImageForStash: vi.fn() })
 vi.mock("../../promptStashStore", () => ({
   MAX_STASH_ENTRIES: 10,
   partitionStashAttachments: vi.fn(),
-  usePromptStashStore: (selector: (store: object) => unknown) =>
+  usePromptStashStore: <T,>(
+    selector: (store: {
+      entries: [];
+      stashEntry: () => void;
+      takeEntry: () => void;
+      finalizeEntryImages: () => void;
+    }) => T,
+  ) =>
     selector({
       entries: [],
       stashEntry: vi.fn(),
@@ -75,7 +83,7 @@ vi.mock("../../promptStashStore", () => ({
 }));
 
 vi.mock("./rosterStore", () => ({
-  useRosterStore: (selector: (store: { bots: [] }) => unknown) => selector({ bots: [] }),
+  useRosterStore: <T,>(selector: (store: { bots: [] }) => T) => selector({ bots: [] }),
 }));
 
 vi.mock("./BotComposerModelControl", () => ({ BotComposerModelControl: () => null }));
@@ -131,14 +139,17 @@ import { DictationControls, type DictationControlsProps } from "../chat/Dictatio
 import { BotPromptComposer } from "./BotPromptComposer";
 import type { BotPromptAttachment } from "./BotPromptAttachments";
 
-type Element = ReactElement<Record<string, unknown>>;
+type Element = ReactElement<TestProps>;
 
 function render() {
   hooks.beginRender();
   const tree = BotPromptComposer({ botName: "Scout", disabled: false, onSubmit: vi.fn() });
   const slot = visitElements(tree, (element) => element.type === DictationControls);
+
   // Render the send-slot controls in the same pass so their hooks keep stable slots.
-  const controls = slot ? DictationControls(slot.props as unknown as DictationControlsProps) : null;
+  const controls = isValidElement<DictationControlsProps>(slot)
+    ? DictationControls(slot.props)
+    : null;
 
   const find = (label: string) =>
     visitElements([tree, controls], (element) => element.props["aria-label"] === label);
@@ -176,11 +187,15 @@ beforeEach(() => {
 describe("BotPromptComposer dictation failure", () => {
   it("keeps typed text and attachments through retry and dismiss", async () => {
     const view = render();
-    (view.textarea.props.onChange as (event: unknown) => void)({
+    (view.textarea.props.onChange as (event: { currentTarget: { value: string } }) => void)({
       currentTarget: { value: "Summarize the attached notes" },
     });
     const file = new File(["notes"], "notes.txt", { type: "text/plain" });
-    (view.fileInput.props.onChange as (event: unknown) => void)({
+    (
+      view.fileInput.props.onChange as (event: {
+        currentTarget: { files: File[]; value: string };
+      }) => void
+    )({
       currentTarget: { files: [file], value: "" },
     });
     const seeded = render();

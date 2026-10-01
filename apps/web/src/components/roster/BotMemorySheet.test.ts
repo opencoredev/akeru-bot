@@ -8,7 +8,7 @@ const controls = vi.hoisted(() => ({
   buttons: [] as Array<{ readonly label: string; readonly onClick?: () => void }>,
   inspect: vi.fn(() => "inspect-documents"),
   listFacts: vi.fn(() => "list-facts"),
-  mutate: vi.fn(async (_input: unknown) => ({ _tag: "Success", value: {} })),
+  mutate: vi.fn(async <T>(_input: T) => ({ _tag: "Success", value: {} })),
   query: vi.fn(),
   toast: vi.fn(),
 }));

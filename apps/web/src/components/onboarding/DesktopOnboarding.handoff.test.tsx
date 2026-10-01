@@ -1,3 +1,4 @@
+import type { TestValue } from "../test-support/reactTree";
 import { act, forwardRef, useEffect, type ComponentProps, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -75,20 +76,26 @@ vi.mock("../roster/rosterStore", () => {
   const state = { bots: [{ id: "bot-ada", engine: null }] };
 
   return {
-    useRosterStore: Object.assign((select: (value: typeof state) => unknown) => select(state), {
+    useRosterStore: Object.assign(<T,>(select: (value: typeof state) => T) => select(state), {
       getState: () => ({ selectBot: mocks.selectBot }),
     }),
   };
 });
 
 vi.mock("motion/react", () => {
-  const Div = forwardRef<HTMLDivElement, Record<string, unknown>>(
-    ({ initial: _i, animate: _a, exit: _e, transition: _t, children, ...rest }, ref) => (
-      <div ref={ref} {...rest}>
-        {children as ReactNode}
-      </div>
-    ),
-  );
+  const Div = forwardRef<
+    HTMLDivElement,
+    import("react").ComponentProps<"div"> & {
+      initial?: TestValue;
+      animate?: TestValue;
+      exit?: TestValue;
+      transition?: TestValue;
+    }
+  >(({ initial: _i, animate: _a, exit: _e, transition: _t, children, ...rest }, ref) => (
+    <div ref={ref} {...rest}>
+      {children}
+    </div>
+  ));
 
   return {
     AnimatePresence: ({ children }: { children?: ReactNode }) => children,
@@ -199,8 +206,8 @@ let root: Root;
 let storage: Map<string, string>;
 
 function mount() {
-  const document = window.document as unknown as TestNode;
-  root = createRoot(document.createElement("div") as unknown as Element);
+  const document = window.document;
+  root = createRoot(document.createElement("div"));
 
   return act(async () => root.render(<DesktopOnboarding />));
 }

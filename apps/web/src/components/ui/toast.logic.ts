@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Predicate } from "effect";
 import type { ScopedThreadRef, ThreadId } from "@akeru/contracts";
 
@@ -6,7 +7,9 @@ import type { ScopedThreadRef, ThreadId } from "@akeru/contracts";
  * an action must pass a defined `actionProps` whose `children` are empty.
  * Treat that payload (and missing children) as "no visible action".
  */
-export function hasVisibleToastAction(actionProps: unknown): boolean {
+export function hasVisibleToastAction(
+  actionProps: { children?: ReactNode } | null | undefined,
+): boolean {
   if (actionProps == null || !Predicate.isObjectOrArray(actionProps)) {
     return false;
   }

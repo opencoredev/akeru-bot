@@ -97,7 +97,8 @@ function fixture(rows: TestRow[]) {
   }
 
   layout(rows);
-  const motion = createRosterListMotion(parent as unknown as HTMLUListElement);
+  vi.stubGlobal("document", { createElement: () => parent });
+  const motion = createRosterListMotion(document.createElement("ul"));
 
   return { motion, layout, media, parent };
 }

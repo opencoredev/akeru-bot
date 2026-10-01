@@ -18,7 +18,8 @@ const DEFAULT_FONT_VALUE = "__default__";
 function supportsFontEnumeration(): boolean {
   return (
     typeof window !== "undefined" &&
-    Predicate.isFunction((window as { queryLocalFonts?: unknown }).queryLocalFonts)
+    "queryLocalFonts" in window &&
+    Predicate.isFunction(window.queryLocalFonts)
   );
 }
 
@@ -78,6 +79,7 @@ function probeAlreadyGrantedPermission(): void {
   const permissions = typeof navigator !== "undefined" ? navigator.permissions : undefined;
 
   if (!Predicate.isFunction(permissions?.query)) return;
+  // SAFETY: Chromium supports the local-fonts permission even though lib.dom does not include it in PermissionName.
   permissions.query({ name: "local-fonts" as PermissionName }).then(
     (status) => {
       if (status.state === "granted") discoverInstalledFonts();

@@ -224,7 +224,7 @@ beforeEach(() => {
     open: mocks.open,
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  root = createRoot(document.createElement("div") as unknown as Element);
+  root = createRoot(globalThis.document.createElement("div"));
 });
 
 afterEach(async () => {

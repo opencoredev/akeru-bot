@@ -23,6 +23,7 @@ import {
   KEY_DOWN_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_TAB_COMMAND,
+  type LexicalNode,
 } from "lexical";
 import { use, useEffect, useEffectEvent, useRef } from "react";
 import { selectionTouchesMentionBoundary } from "~/composer-editor-mentions";
@@ -319,7 +320,7 @@ export function ComposerInlineTokenBackspacePlugin() {
         const anchorNode = selection.anchor.getNode();
         const selectionOffset = $readSelectionOffsetFromEditorState(0);
 
-        const removeInlineTokenNode = (candidate: unknown): boolean => {
+        const removeInlineTokenNode = (candidate: LexicalNode | null): boolean => {
           if (!isComposerInlineTokenNode(candidate)) {
             return false;
           }
@@ -750,7 +751,8 @@ export function ComposerSurroundSelectionPlugin(props: {
     };
 
     const onInput = (event: Event) => {
-      const inputEvent = event as InputEvent;
+      if (!(event instanceof InputEvent)) return;
+      const inputEvent = event;
 
       if (
         inputEvent.inputType === "insertText" ||

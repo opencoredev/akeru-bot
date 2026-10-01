@@ -37,13 +37,15 @@ describe("channel provider metadata", () => {
 
   it("splits Photon fields by connection mode", () => {
     const fields = channelProviderMeta("imessage").fields;
-    expect(fields.filter((field) => field.mode === "hosted").map((field) => field.key)).toEqual([
+    expect(fields.flatMap((field) => (field.mode === "hosted" ? [field.key] : []))).toEqual([
       "projectId",
       "projectSecret",
     ]);
-    expect(
-      fields.filter((field) => field.mode === "self-hosted").map((field) => field.key),
-    ).toEqual(["serverUrl", "apiKey", "phone"]);
+    expect(fields.flatMap((field) => (field.mode === "self-hosted" ? [field.key] : []))).toEqual([
+      "serverUrl",
+      "apiKey",
+      "phone",
+    ]);
     expect(fields.find((field) => field.key === "phone")?.optional).toBe(true);
   });
 });

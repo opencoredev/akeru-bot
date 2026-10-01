@@ -27,7 +27,7 @@ let nextId = 0;
 function activity(
   kind: string,
   summary: string,
-  payload: Record<string, unknown> = {},
+  payload: NonNullable<OrchestrationThreadActivity["payload"]> = {},
   turnId: TurnId | null = TURN,
 ): OrchestrationThreadActivity {
   return {
@@ -41,7 +41,11 @@ function activity(
   };
 }
 
-const started = (name: string, id: string, payload: Record<string, unknown> = {}) =>
+const started = (
+  name: string,
+  id: string,
+  payload: NonNullable<OrchestrationThreadActivity["payload"]> = {},
+) =>
   activity("tool.started", `${name} started`, {
     itemType: "dynamic_tool_call",
     toolCallId: id,

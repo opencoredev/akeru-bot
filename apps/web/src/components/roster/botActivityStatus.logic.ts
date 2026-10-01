@@ -1,5 +1,5 @@
 import { recordLookup } from "../recordLookup";
-import { Predicate } from "effect";
+import { Predicate, Schema, Option } from "effect";
 import {
   derivePendingApprovals,
   derivePendingUserInputs,
@@ -65,14 +65,22 @@ const ITEM_TYPE_LABELS = {
   dynamic_tool_call: "Using a tool",
 } satisfies Readonly<Record<string, string>>;
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && Predicate.isObjectOrArray(value) && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
+const decodeActivityPayload = Schema.decodeUnknownOption(
+  Schema.Struct({
+    toolCallId: Schema.optionalKey(Schema.Unknown),
+    itemType: Schema.optionalKey(Schema.Unknown),
+    data: Schema.optionalKey(Schema.Unknown),
+  }),
+);
 
-function payloadRecord(activity: OrchestrationThreadActivity): Record<string, unknown> | null {
-  return asRecord(activity.payload) ?? null;
+const decodeMemoryData = Schema.decodeUnknownOption(
+  Schema.Struct({
+    memoryOperationCount: Schema.optionalKey(Schema.Unknown),
+  }),
+);
+
+function payloadRecord(activity: OrchestrationThreadActivity) {
+  return Option.getOrNull(decodeActivityPayload(activity.payload));
 }
 
 function toolCallId(activity: OrchestrationThreadActivity): string {
@@ -90,7 +98,9 @@ function toolName(activity: OrchestrationThreadActivity): string {
 const TASK_LIST_TOOLS = new Set(["task_write", "task_update", "TodoWrite"]);
 
 function memoryLabel(activity: OrchestrationThreadActivity): string {
-  const count = asRecord(payloadRecord(activity)?.data)?.memoryOperationCount;
+  const count = Option.getOrNull(
+    decodeMemoryData(payloadRecord(activity)?.data),
+  )?.memoryOperationCount;
 
   return Predicate.isNumber(count) && count > 0 ? "Saving to memory" : "Reading memory";
 }
