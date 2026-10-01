@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { OrchestrationThreadActivity } from "@akeru/contracts";
+import { EventId, type OrchestrationThreadActivity } from "@akeru/contracts";
 import { projectActivityPayload } from "./ActivityPayloadProjection.ts";
 
 function activity(payload: Record<string, unknown>): OrchestrationThreadActivity {
   return {
-    id: "activity-1",
+    id: EventId.make("activity-1"),
     tone: "tool",
     kind: "tool.completed",
     summary: "Tool",
     payload,
     turnId: null,
     createdAt: "2026-08-01T10:00:00.000Z",
-  } as unknown as OrchestrationThreadActivity;
+  };
 }
 
 /**
@@ -21,6 +21,18 @@ function activity(payload: Record<string, unknown>): OrchestrationThreadActivity
  * assertions are the tripwire.
  */
 describe("projectActivityPayload", () => {
+  it.each([
+    ["x".repeat(4094) + "😀z", "x".repeat(4094) + "…"],
+    ["x".repeat(4093) + "😀zz", "x".repeat(4093) + "😀…"],
+    ["x".repeat(4094) + "😀", "x".repeat(4094) + "😀"],
+    ["x".repeat(4097), "x".repeat(4095) + "…"],
+  ])("preserves Unicode at the MCP string budget", (text, expected) => {
+    const projected = projectActivityPayload(
+      activity({ itemType: "mcp_tool_call", data: { input: { text } } }),
+    );
+    expect(projected.payload).toMatchObject({ data: { input: { text: expected } } });
+    expect(expected.isWellFormed()).toBe(true);
+  });
   it("keeps a Mastra command while dropping its unused arguments", () => {
     const projected = projectActivityPayload(
       activity({
