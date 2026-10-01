@@ -188,6 +188,11 @@
   background-image: var(--preview-glow);
 }
 
+/* Sortable list item transition from dnd-kit, read from --sortable-transition. */
+@utility transition-sortable {
+  transition: var(--sortable-transition);
+}
+
 /* Chart marks that fade in once the entrance has drawn. */
 @utility transition-entrance-fade {
   transition: opacity 300ms ease;
