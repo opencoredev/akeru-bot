@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -237,10 +238,13 @@ describe("AgentControllerLive", () => {
         ].join("\n\n") + "\n\n";
 
       const fakeKimi = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-        const url =
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        const url = Predicate.isString(input)
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
 
-        const body = typeof init?.body === "string" ? init.body : "";
+        const body = Predicate.isString(init?.body) ? init.body : "";
 
         const headers = Object.fromEntries(
           new Headers(input instanceof Request ? input.headers : (init?.headers ?? {})),
@@ -272,8 +276,11 @@ describe("AgentControllerLive", () => {
       const originalFetch = globalThis.fetch;
 
       const fetchPatched = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
-        const url =
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        const url = Predicate.isString(input)
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
 
         return url.startsWith("https://api.kimi.com/coding/v1/messages")
           ? fakeKimi(input as string | URL | Request, init as RequestInit | undefined)
@@ -652,7 +659,7 @@ describe("AgentControllerLive", () => {
 
             assert.equal(error._tag, "AgentControllerUnsupportedEngineError");
 
-            if (error._tag === "AgentControllerUnsupportedEngineError") {
+            if (Predicate.isTagged(error, "AgentControllerUnsupportedEngineError")) {
               assert.include(error.detail, `Provider instance '${provider}' is not available.`);
 
               const causeMessage =
@@ -696,7 +703,7 @@ describe("AgentControllerLive", () => {
 
           assert.equal(error._tag, "ProviderValidationError");
 
-          if (error._tag === "ProviderValidationError") {
+          if (Predicate.isTagged(error, "ProviderValidationError")) {
             assert.include(error.issue, "disabled in Akeru Bot settings");
           }
 

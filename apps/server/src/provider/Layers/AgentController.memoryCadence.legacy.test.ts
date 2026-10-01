@@ -163,11 +163,7 @@ describe("AgentControllerLive", () => {
             }),
           );
 
-          const observedUsers = (
-            mastra.observeExternalTurn.mock.calls as unknown as ReadonlyArray<
-              readonly [{ readonly userMessages: ReadonlyArray<{ readonly id: string }> }]
-            >
-          )[0]?.[0].userMessages;
+          const observedUsers = mastra.observeExternalTurn.mock.calls[0]?.[0].userMessages;
 
           expect(new Set(observedUsers?.map((entry) => entry.id)).size).toBe(2);
           yield* Fiber.interrupt(lateFiber);

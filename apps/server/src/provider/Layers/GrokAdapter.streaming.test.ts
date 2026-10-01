@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import { it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
@@ -20,11 +21,11 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
       const adapter = yield* makeTestAdapter(wrapperPath, {
         nativeEventLogger: {
           filePath: "memory://grok-native-events",
-          write: (record: unknown) =>
-            typeof record === "object" &&
+          write: <Input>(record: Input) =>
+            Predicate.isObject(record) &&
             record !== null &&
             "event" in record &&
-            typeof record.event === "object" &&
+            Predicate.isObject(record.event) &&
             record.event !== null &&
             "kind" in record.event &&
             record.event.kind === "notification"

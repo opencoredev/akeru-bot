@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
@@ -189,9 +190,9 @@ describe("AgentControllerLive", () => {
           }).pipe(Effect.result);
 
           assert.equal(denied._tag, "Failure");
-          expect(denied._tag === "Failure" ? denied.failure.cause.message : "").toContain(
-            "disabled",
-          );
+          expect(
+            Predicate.isTagged(denied, "Failure") ? denied.failure.cause.message : "",
+          ).toContain("disabled");
           yield* controller.sendTurn({ threadId: claudeThreadId, input: "Memory off turn." });
 
           const deniedDuringTurn = yield* callMemoryTool({
@@ -201,7 +202,9 @@ describe("AgentControllerLive", () => {
 
           assert.equal(deniedDuringTurn._tag, "Failure");
           expect(
-            deniedDuringTurn._tag === "Failure" ? deniedDuringTurn.failure.cause.message : "",
+            Predicate.isTagged(deniedDuringTurn, "Failure")
+              ? deniedDuringTurn.failure.cause.message
+              : "",
           ).toContain("disabled");
 
           yield* settings.updateSettings({ memory: { enabled: true } });

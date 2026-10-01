@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeAssert from "node:assert/strict";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
@@ -148,7 +149,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
 
       const nativeEventLogger = {
         filePath: "memory://opencode-native-events",
-        write: (event: unknown, threadId: ThreadId | null) => {
+        write: <Input>(event: Input, threadId: ThreadId | null) => {
           nativeEvents.push(event as (typeof nativeEvents)[number]);
           nativeThreadIds.push(threadId ?? null);
 
@@ -364,7 +365,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         .respondToUserInput(threadId, ApprovalRequestId.make("que_expired"), { File: "a.ts" })
         .pipe(Effect.flip);
 
-      NodeAssert.ok(first._tag === "ProviderAdapterRequestError");
+      NodeAssert.ok(Predicate.isTagged(first, "ProviderAdapterRequestError"));
       NodeAssert.equal(first.retryable === true, retryable);
 
       if (!retryable) {
@@ -375,7 +376,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         .respondToUserInput(threadId, ApprovalRequestId.make("que_expired"), { File: "a.ts" })
         .pipe(Effect.flip);
 
-      NodeAssert.ok(second._tag === "ProviderAdapterRequestError");
+      NodeAssert.ok(Predicate.isTagged(second, "ProviderAdapterRequestError"));
       NodeAssert.equal(second.retryable === true, retryable);
 
       if (!retryable) {

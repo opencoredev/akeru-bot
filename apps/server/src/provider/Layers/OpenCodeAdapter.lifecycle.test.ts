@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeAssert from "node:assert/strict";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
@@ -247,7 +248,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
 
       NodeAssert.equal(error._tag, "ProviderAdapterValidationError");
 
-      if (error._tag !== "ProviderAdapterValidationError") {
+      if (!Predicate.isTagged(error, "ProviderAdapterValidationError")) {
         throw new Error("Unexpected error type");
       }
 

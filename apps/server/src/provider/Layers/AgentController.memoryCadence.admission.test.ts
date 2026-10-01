@@ -1,3 +1,7 @@
+import {
+  projectionQueryFixture,
+  providerRuntimeContext,
+} from "./test-support/projectionFixtures.ts";
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -280,7 +284,10 @@ describe("AgentControllerLive", () => {
             landed = true;
           });
 
-          while (!landed) await vi.advanceTimersByTimeAsync(15);
+          for (;;) {
+            if (landed) break;
+            await vi.advanceTimersByTimeAsync(15);
+          }
         };
 
         const secondRenewal = Promise.withResolvers<void>();
@@ -369,12 +376,15 @@ describe("AgentControllerLive", () => {
     ).pipe(
       Effect.provideService(
         ProjectionSnapshotQuery.ProjectionSnapshotQuery,
-        ProjectionSnapshotQuery.ProjectionSnapshotQuery.of({
-          getThreadRuntimeContext: () => Effect.succeed(Option.some({ botId })),
-          getBotById: () => Effect.succeed(Option.none()),
-          getGroupById: () => Effect.succeed(Option.none()),
-          listThreadDelegations: () => Effect.succeed([]),
-        } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
+        ProjectionSnapshotQuery.ProjectionSnapshotQuery.of(
+          projectionQueryFixture({
+            getThreadRuntimeContext: () =>
+              Effect.succeed(Option.some(providerRuntimeContext({ botId }))),
+            getBotById: () => Effect.succeed(Option.none()),
+            getGroupById: () => Effect.succeed(Option.none()),
+            listThreadDelegations: () => Effect.succeed([]),
+          }),
+        ),
       ),
     );
   });

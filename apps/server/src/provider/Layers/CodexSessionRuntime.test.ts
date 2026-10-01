@@ -1,3 +1,4 @@
+import { decodeCodexTurnStartParamsWithCollaborationMode } from "./codex/CodexRuntimeRequests.ts";
 import * as NodeAssert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -26,16 +27,24 @@ describe("buildTurnStartParams", () => {
     const secret = "codex-turn-input-secret-sentinel";
 
     const error = Effect.runSync(
-      buildTurnStartParams({
+      decodeCodexTurnStartParamsWithCollaborationMode({
         threadId: "provider-thread-1",
-        runtimeMode: "full-access",
-        attachments: [
+        input: [
           {
             type: "image",
-            url: { secret } as unknown as string,
+            url: { secret },
           },
         ],
-      }).pipe(Effect.flip),
+      }).pipe(
+        Effect.mapError((cause) =>
+          CodexErrors.CodexAppServerProtocolParseError.fromSchemaError(
+            "decode-request-payload",
+            cause,
+            { method: "turn/start" },
+          ),
+        ),
+        Effect.flip,
+      ),
     );
 
     const { cause, ...directDiagnostics } = error;

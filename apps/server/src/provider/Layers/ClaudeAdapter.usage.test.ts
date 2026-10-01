@@ -1,5 +1,6 @@
+import { claudeMessage } from "./test-support/claudeMessages.ts";
 // @effect-diagnostics nodeBuiltinImport:off
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+
 import { ProviderDriverKind } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -54,45 +55,51 @@ describe("ClaudeAdapterLive", () => {
         input: "hello",
         attachments: [],
       });
-      harness.query.emit({
-        type: "assistant",
-        session_id: "sdk-session-result-usage",
-        uuid: "assistant-result-usage-1",
-        parent_tool_use_id: null,
-        message: {
-          id: "assistant-message-result-usage-1",
-          role: "assistant",
-          content: [],
-          usage: { input_tokens: 80, output_tokens: 20 },
-        },
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "assistant",
-        session_id: "sdk-session-result-usage",
-        uuid: "assistant-result-usage-2",
-        parent_tool_use_id: null,
-        message: {
-          id: "assistant-message-result-usage-2",
-          role: "assistant",
-          content: [],
-          usage: { input_tokens: 180, output_tokens: 20 },
-        },
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        duration_ms: 1234,
-        duration_api_ms: 1200,
-        num_turns: 1,
-        result: "done",
-        stop_reason: "end_turn",
-        session_id: "sdk-session-result-usage",
-        usage: { input_tokens: 400, output_tokens: 50 },
-        modelUsage: {
-          "claude-opus-4-6": { contextWindow: 200000, maxOutputTokens: 64000 },
-        },
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "assistant",
+          session_id: "sdk-session-result-usage",
+          uuid: "assistant-result-usage-1",
+          parent_tool_use_id: null,
+          message: {
+            id: "assistant-message-result-usage-1",
+            role: "assistant",
+            content: [],
+            usage: { input_tokens: 80, output_tokens: 20 },
+          },
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "assistant",
+          session_id: "sdk-session-result-usage",
+          uuid: "assistant-result-usage-2",
+          parent_tool_use_id: null,
+          message: {
+            id: "assistant-message-result-usage-2",
+            role: "assistant",
+            content: [],
+            usage: { input_tokens: 180, output_tokens: 20 },
+          },
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          duration_ms: 1234,
+          duration_api_ms: 1200,
+          num_turns: 1,
+          result: "done",
+          stop_reason: "end_turn",
+          session_id: "sdk-session-result-usage",
+          usage: { input_tokens: 400, output_tokens: 50 },
+          modelUsage: {
+            "claude-opus-4-6": { contextWindow: 200000, maxOutputTokens: 64000 },
+          },
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       assert.equal(getContextUsageCalls, 0);
@@ -141,40 +148,46 @@ describe("ClaudeAdapterLive", () => {
         input: "hello",
         attachments: [],
       });
-      harness.query.emit({
-        type: "assistant",
-        session_id: "sdk-session-compacted-usage",
-        uuid: "assistant-compacted-usage",
-        parent_tool_use_id: null,
-        message: {
-          id: "assistant-message-compacted-usage",
-          role: "assistant",
-          content: [],
-          usage: { input_tokens: 180, output_tokens: 20 },
-        },
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "system",
-        subtype: "compact_boundary",
-        compact_metadata: { pre_tokens: 200, post_tokens: 40 },
-        session_id: "sdk-session-compacted-usage",
-        uuid: "compact-boundary-usage",
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        duration_ms: 1234,
-        duration_api_ms: 1200,
-        num_turns: 2,
-        result: "done",
-        stop_reason: "end_turn",
-        session_id: "sdk-session-compacted-usage",
-        usage: { input_tokens: 400, output_tokens: 50 },
-        modelUsage: {
-          "claude-opus-4-6": { contextWindow: 200000, maxOutputTokens: 64000 },
-        },
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "assistant",
+          session_id: "sdk-session-compacted-usage",
+          uuid: "assistant-compacted-usage",
+          parent_tool_use_id: null,
+          message: {
+            id: "assistant-message-compacted-usage",
+            role: "assistant",
+            content: [],
+            usage: { input_tokens: 180, output_tokens: 20 },
+          },
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "compact_boundary",
+          compact_metadata: { pre_tokens: 200, post_tokens: 40 },
+          session_id: "sdk-session-compacted-usage",
+          uuid: "compact-boundary-usage",
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          duration_ms: 1234,
+          duration_api_ms: 1200,
+          num_turns: 2,
+          result: "done",
+          stop_reason: "end_turn",
+          session_id: "sdk-session-compacted-usage",
+          usage: { input_tokens: 400, output_tokens: 50 },
+          modelUsage: {
+            "claude-opus-4-6": { contextWindow: 200000, maxOutputTokens: 64000 },
+          },
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
 
@@ -220,25 +233,29 @@ describe("ClaudeAdapterLive", () => {
 
       yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
       const nowMs = yield* Clock.currentTimeMillis;
-      harness.query.emit({
-        type: "rate_limit_event",
-        rate_limit_info: {
-          status: "rejected",
-          rateLimitType: "five_hour",
-          resetsAt: Math.floor(nowMs / 1000) + 2 * 60 * 60,
-        },
-        session_id: "sdk-session-limit",
-        uuid: "rate-limit-rejected",
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        terminal_reason: "api_error",
-        errors: [],
-        session_id: "sdk-session-limit",
-        uuid: "result-limit",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "rate_limit_event",
+          rate_limit_info: {
+            status: "rejected",
+            rateLimitType: "five_hour",
+            resetsAt: Math.floor(nowMs / 1000) + 2 * 60 * 60,
+          },
+          session_id: "sdk-session-limit",
+          uuid: "rate-limit-rejected",
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          terminal_reason: "api_error",
+          errors: [],
+          session_id: "sdk-session-limit",
+          uuid: "result-limit",
+        }),
+      );
       const payload = completedTurn(Array.from(yield* Fiber.join(runtimeEventsFiber)));
       assert.equal(payload.state, "failed");
       assert.equal(
@@ -274,26 +291,30 @@ describe("ClaudeAdapterLive", () => {
       });
 
       yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
-      harness.query.emit({
-        type: "rate_limit_event",
-        rate_limit_info: {
-          status: "rejected",
-          rateLimitType: "five_hour",
-          resetsAt: 1_800_000_000,
-        },
-        session_id: "sdk-session-limit-recovery",
-        uuid: "rate-limit-rejected",
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "rate_limit_event",
-        rate_limit_info: {
-          status: "allowed",
-          rateLimitType: "five_hour",
-          resetsAt: 1_800_000_000,
-        },
-        session_id: "sdk-session-limit-recovery",
-        uuid: "rate-limit-allowed",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "rate_limit_event",
+          rate_limit_info: {
+            status: "rejected",
+            rateLimitType: "five_hour",
+            resetsAt: 1_800_000_000,
+          },
+          session_id: "sdk-session-limit-recovery",
+          uuid: "rate-limit-rejected",
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "rate_limit_event",
+          rate_limit_info: {
+            status: "allowed",
+            rateLimitType: "five_hour",
+            resetsAt: 1_800_000_000,
+          },
+          session_id: "sdk-session-limit-recovery",
+          uuid: "rate-limit-allowed",
+        }),
+      );
 
       const warnings = Array.from(yield* Fiber.join(runtimeEventsFiber)).filter(
         (event) => event.type === "runtime.warning",
@@ -342,25 +363,31 @@ describe("ClaudeAdapterLive", () => {
         yield* adapter.sendTurn({ threadId: session.threadId, input: "again", attachments: [] });
 
         if (index === 0) {
-          harness.query.emit({
-            type: "rate_limit_event",
-            rate_limit_info: { status: "rejected", rateLimitType: "five_hour" },
-            session_id: "sdk-session-limit",
-            uuid: "limit-rejected",
-          } as unknown as SDKMessage);
+          harness.query.emit(
+            claudeMessage({
+              type: "rate_limit_event",
+              rate_limit_info: { status: "rejected", rateLimitType: "five_hour" },
+              session_id: "sdk-session-limit",
+              uuid: "limit-rejected",
+            }),
+          );
         }
 
         if (index < 2) {
-          harness.query.emit({
-            ...rateLimitAssistant,
-            uuid: `assistant-limit-${index}`,
-          } as unknown as SDKMessage);
+          harness.query.emit(
+            claudeMessage({
+              ...rateLimitAssistant,
+              uuid: `assistant-limit-${index}`,
+            }),
+          );
         }
 
-        harness.query.emit({
-          ...rateLimitResult,
-          uuid: `result-limit-${index}`,
-        } as unknown as SDKMessage);
+        harness.query.emit(
+          claudeMessage({
+            ...rateLimitResult,
+            uuid: `result-limit-${index}`,
+          }),
+        );
         const payload = completedTurn(Array.from(yield* Fiber.join(eventsFiber)));
         assert.equal(payload.state, "failed");
         assert.equal(payload.errorMessage, expected);
@@ -390,19 +417,21 @@ describe("ClaudeAdapterLive", () => {
         runtimeMode: "full-access",
       });
 
-      harness.query.emit({
-        type: "system",
-        subtype: "task_progress",
-        task_id: "task-usage-1",
-        description: "Thinking through the patch",
-        usage: {
-          total_tokens: 321,
-          tool_uses: 2,
-          duration_ms: 654,
-        },
-        session_id: "sdk-session-task-usage",
-        uuid: "task-usage-progress-1",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "task_progress",
+          task_id: "task-usage-1",
+          description: "Thinking through the patch",
+          usage: {
+            total_tokens: 321,
+            tool_uses: 2,
+            duration_ms: 654,
+          },
+          session_id: "sdk-session-task-usage",
+          uuid: "task-usage-progress-1",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const usageEvent = runtimeEvents.find((event) => event.type === "thread.token-usage.updated");
@@ -456,29 +485,31 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        duration_ms: 1234,
-        duration_api_ms: 1200,
-        num_turns: 1,
-        result: "done",
-        stop_reason: "end_turn",
-        session_id: "sdk-session-result-usage",
-        usage: {
-          input_tokens: 4,
-          cache_creation_input_tokens: 2715,
-          cache_read_input_tokens: 21144,
-          output_tokens: 679,
-        },
-        modelUsage: {
-          "claude-opus-4-6": {
-            contextWindow: 200000,
-            maxOutputTokens: 64000,
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          duration_ms: 1234,
+          duration_api_ms: 1200,
+          num_turns: 1,
+          result: "done",
+          stop_reason: "end_turn",
+          session_id: "sdk-session-result-usage",
+          usage: {
+            input_tokens: 4,
+            cache_creation_input_tokens: 2715,
+            cache_read_input_tokens: 21144,
+            output_tokens: 679,
           },
-        },
-      } as unknown as SDKMessage);
+          modelUsage: {
+            "claude-opus-4-6": {
+              contextWindow: 200000,
+              maxOutputTokens: 64000,
+            },
+          },
+        }),
+      );
       harness.query.finish();
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
@@ -529,26 +560,28 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        duration_ms: 1234,
-        duration_api_ms: 1200,
-        num_turns: 1,
-        result: "done",
-        stop_reason: "end_turn",
-        session_id: "sdk-session-result-usage-clamped",
-        usage: {
-          total_tokens: 535000,
-        },
-        modelUsage: {
-          "claude-opus-4-6": {
-            contextWindow: 200000,
-            maxOutputTokens: 64000,
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          duration_ms: 1234,
+          duration_api_ms: 1200,
+          num_turns: 1,
+          result: "done",
+          stop_reason: "end_turn",
+          session_id: "sdk-session-result-usage-clamped",
+          usage: {
+            total_tokens: 535000,
           },
-        },
-      } as unknown as SDKMessage);
+          modelUsage: {
+            "claude-opus-4-6": {
+              contextWindow: 200000,
+              maxOutputTokens: 64000,
+            },
+          },
+        }),
+      );
       harness.query.finish();
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));

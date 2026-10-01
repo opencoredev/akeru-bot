@@ -1,6 +1,8 @@
+import { claudeMessage } from "./test-support/claudeMessages.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+
 import { ProviderDriverKind, ProviderRuntimeEvent } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -44,7 +46,7 @@ describe("ClaudeAdapterLive", () => {
 
       assert.equal(result._tag, "Failure");
 
-      if (result._tag !== "Failure") {
+      if (!Predicate.isTagged(result, "Failure")) {
         return;
       }
 
@@ -87,15 +89,17 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      harness.query.emit({
-        type: "result",
-        subtype: "error_during_execution",
-        is_error: false,
-        errors: ["Error: Request was aborted."],
-        stop_reason: "tool_use",
-        session_id: "sdk-session-abort",
-        uuid: "result-abort",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "error_during_execution",
+          is_error: false,
+          errors: ["Error: Request was aborted."],
+          stop_reason: "tool_use",
+          session_id: "sdk-session-abort",
+          uuid: "result-abort",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       assert.deepEqual(
@@ -152,16 +156,18 @@ describe("ClaudeAdapterLive", () => {
 
       // Exact shape the CLI emits when Stop lands mid-tool-call: is_error
       // is true and the only error is internal diagnostic telemetry.
-      harness.query.emit({
-        type: "result",
-        subtype: "error_during_execution",
-        is_error: true,
-        errors: ["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"],
-        stop_reason: "tool_use",
-        terminal_reason: "aborted_tools",
-        session_id: "sdk-session-abort-tools",
-        uuid: "result-abort-tools",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "error_during_execution",
+          is_error: true,
+          errors: ["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"],
+          stop_reason: "tool_use",
+          terminal_reason: "aborted_tools",
+          session_id: "sdk-session-abort-tools",
+          uuid: "result-abort-tools",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       assert.deepEqual(
@@ -242,10 +248,10 @@ describe("ClaudeAdapterLive", () => {
       yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
 
       for (const [index, message] of messages.entries()) {
-        harness.query.emit({ ...message, uuid: `assistant-${index}` } as unknown as SDKMessage);
+        harness.query.emit(claudeMessage({ ...message, uuid: `assistant-${index}` }));
       }
 
-      harness.query.emit(rateLimitResult as unknown as SDKMessage);
+      harness.query.emit(claudeMessage(rateLimitResult));
       const events = Array.from(yield* Fiber.join(eventsFiber));
       const errors = events.filter((event) => event.type === "runtime.error");
       assert.equal(errors.length, 1);
@@ -278,7 +284,7 @@ describe("ClaudeAdapterLive", () => {
 
       assert.equal(result._tag, "Failure");
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         assert.equal(result.failure._tag, "ProviderAdapterProcessError");
       }
 

@@ -1,6 +1,7 @@
+import { claudeMessage } from "./test-support/claudeMessages.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+
 import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -91,96 +92,110 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-1",
-        uuid: "stream-0",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_start",
-          index: 0,
-          content_block: {
-            type: "text",
-            text: "",
-          },
-        },
-      } as unknown as SDKMessage);
-
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-1",
-        uuid: "stream-1",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_delta",
-          index: 0,
-          delta: {
-            type: "text_delta",
-            text: "Hi",
-          },
-        },
-      } as unknown as SDKMessage);
-
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-1",
-        uuid: "stream-2",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_stop",
-          index: 0,
-        },
-      } as unknown as SDKMessage);
-
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-1",
-        uuid: "stream-3",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_start",
-          index: 1,
-          content_block: {
-            type: "tool_use",
-            id: "tool-1",
-            name: "Bash",
-            input: {
-              command: "ls",
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-1",
+          uuid: "stream-0",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_start",
+            index: 0,
+            content_block: {
+              type: "text",
+              text: "",
             },
           },
-        },
-      } as unknown as SDKMessage);
+        }),
+      );
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-1",
-        uuid: "stream-4",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_stop",
-          index: 1,
-        },
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-1",
+          uuid: "stream-1",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: {
+              type: "text_delta",
+              text: "Hi",
+            },
+          },
+        }),
+      );
 
-      harness.query.emit({
-        type: "assistant",
-        session_id: "sdk-session-1",
-        uuid: "assistant-1",
-        parent_tool_use_id: null,
-        message: {
-          id: "assistant-message-1",
-          content: [{ type: "text", text: "Hi" }],
-        },
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-1",
+          uuid: "stream-2",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_stop",
+            index: 0,
+          },
+        }),
+      );
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        errors: [],
-        session_id: "sdk-session-1",
-        uuid: "result-1",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-1",
+          uuid: "stream-3",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_start",
+            index: 1,
+            content_block: {
+              type: "tool_use",
+              id: "tool-1",
+              name: "Bash",
+              input: {
+                command: "ls",
+              },
+            },
+          },
+        }),
+      );
+
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-1",
+          uuid: "stream-4",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_stop",
+            index: 1,
+          },
+        }),
+      );
+
+      harness.query.emit(
+        claudeMessage({
+          type: "assistant",
+          session_id: "sdk-session-1",
+          uuid: "assistant-1",
+          parent_tool_use_id: null,
+          message: {
+            id: "assistant-message-1",
+            content: [{ type: "text", text: "Hi" }],
+          },
+        }),
+      );
+
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          session_id: "sdk-session-1",
+          uuid: "result-1",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       assert.deepEqual(
@@ -272,89 +287,101 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-tool-streams",
-        uuid: "stream-thinking",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_delta",
-          index: 0,
-          delta: {
-            type: "thinking_delta",
-            thinking: "Let",
-          },
-        },
-      } as unknown as SDKMessage);
-
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-tool-streams",
-        uuid: "stream-tool-start",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_start",
-          index: 1,
-          content_block: {
-            type: "tool_use",
-            id: "tool-grep-1",
-            name: "Grep",
-            input: {},
-          },
-        },
-      } as unknown as SDKMessage);
-
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-tool-streams",
-        uuid: "stream-tool-input-1",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_delta",
-          index: 1,
-          delta: {
-            type: "input_json_delta",
-            partial_json: '{"pattern":"foo","path":"src"}',
-          },
-        },
-      } as unknown as SDKMessage);
-
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-tool-streams",
-        uuid: "stream-tool-stop",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_stop",
-          index: 1,
-        },
-      } as unknown as SDKMessage);
-
-      harness.query.emit({
-        type: "user",
-        session_id: "sdk-session-tool-streams",
-        uuid: "user-tool-result",
-        parent_tool_use_id: null,
-        message: {
-          role: "user",
-          content: [
-            {
-              type: "tool_result",
-              tool_use_id: "tool-grep-1",
-              content: "src/example.ts:1:foo",
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-tool-streams",
+          uuid: "stream-thinking",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: {
+              type: "thinking_delta",
+              thinking: "Let",
             },
-          ],
-        },
-      } as unknown as SDKMessage);
+          },
+        }),
+      );
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        errors: [],
-        session_id: "sdk-session-tool-streams",
-        uuid: "result-tool-streams",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-tool-streams",
+          uuid: "stream-tool-start",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_start",
+            index: 1,
+            content_block: {
+              type: "tool_use",
+              id: "tool-grep-1",
+              name: "Grep",
+              input: {},
+            },
+          },
+        }),
+      );
+
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-tool-streams",
+          uuid: "stream-tool-input-1",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 1,
+            delta: {
+              type: "input_json_delta",
+              partial_json: '{"pattern":"foo","path":"src"}',
+            },
+          },
+        }),
+      );
+
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-tool-streams",
+          uuid: "stream-tool-stop",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_stop",
+            index: 1,
+          },
+        }),
+      );
+
+      harness.query.emit(
+        claudeMessage({
+          type: "user",
+          session_id: "sdk-session-tool-streams",
+          uuid: "user-tool-result",
+          parent_tool_use_id: null,
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "tool-grep-1",
+                content: "src/example.ts:1:foo",
+              },
+            ],
+          },
+        }),
+      );
+
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          session_id: "sdk-session-tool-streams",
+          uuid: "result-tool-streams",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       assert.deepEqual(
@@ -463,42 +490,48 @@ describe("ClaudeAdapterLive", () => {
           attachments: [],
         });
 
-        harness.query.emit({
-          type: "assistant",
-          session_id: "sdk-session-early-assistant",
-          uuid: "assistant-early",
-          parent_tool_use_id: null,
-          message: {
-            id: "assistant-message-early",
-            content: [
-              { type: "tool_use", id: "tool-early", name: "Read", input: { path: "a.ts" } },
-            ],
-          },
-        } as unknown as SDKMessage);
-
-        harness.query.emit({
-          type: "stream_event",
-          session_id: "sdk-session-early-assistant",
-          uuid: "stream-early",
-          parent_tool_use_id: null,
-          event: {
-            type: "content_block_delta",
-            index: 0,
-            delta: {
-              type: "text_delta",
-              text: "Late text",
+        harness.query.emit(
+          claudeMessage({
+            type: "assistant",
+            session_id: "sdk-session-early-assistant",
+            uuid: "assistant-early",
+            parent_tool_use_id: null,
+            message: {
+              id: "assistant-message-early",
+              content: [
+                { type: "tool_use", id: "tool-early", name: "Read", input: { path: "a.ts" } },
+              ],
             },
-          },
-        } as unknown as SDKMessage);
+          }),
+        );
 
-        harness.query.emit({
-          type: "result",
-          subtype: "success",
-          is_error: false,
-          errors: [],
-          session_id: "sdk-session-early-assistant",
-          uuid: "result-early",
-        } as unknown as SDKMessage);
+        harness.query.emit(
+          claudeMessage({
+            type: "stream_event",
+            session_id: "sdk-session-early-assistant",
+            uuid: "stream-early",
+            parent_tool_use_id: null,
+            event: {
+              type: "content_block_delta",
+              index: 0,
+              delta: {
+                type: "text_delta",
+                text: "Late text",
+              },
+            },
+          }),
+        );
+
+        harness.query.emit(
+          claudeMessage({
+            type: "result",
+            subtype: "success",
+            is_error: false,
+            errors: [],
+            session_id: "sdk-session-early-assistant",
+            uuid: "result-early",
+          }),
+        );
 
         const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
         assert.deepEqual(
@@ -558,25 +591,29 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      harness.query.emit({
-        type: "assistant",
-        session_id: "sdk-session-fallback-text",
-        uuid: "assistant-fallback",
-        parent_tool_use_id: null,
-        message: {
-          id: "assistant-message-fallback",
-          content: [{ type: "text", text: "Fallback hello" }],
-        },
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "assistant",
+          session_id: "sdk-session-fallback-text",
+          uuid: "assistant-fallback",
+          parent_tool_use_id: null,
+          message: {
+            id: "assistant-message-fallback",
+            content: [{ type: "text", text: "Fallback hello" }],
+          },
+        }),
+      );
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        errors: [],
-        session_id: "sdk-session-fallback-text",
-        uuid: "result-fallback",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          session_id: "sdk-session-fallback-text",
+          uuid: "result-fallback",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       assert.deepEqual(

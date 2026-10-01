@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeAssert from "node:assert/strict";
 import { ProviderDriverKind, type ProviderEvent } from "@akeru/contracts";
@@ -50,7 +51,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 
@@ -103,7 +104,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "item.completed") {
+      if (!Predicate.isTagged(firstEvent, "Some") || firstEvent.value.type !== "item.completed") {
         return;
       }
 
@@ -184,7 +185,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         const firstEvent = yield* Fiber.join(firstEventFiber);
         NodeAssert.equal(firstEvent._tag, "Some");
 
-        if (firstEvent._tag !== "Some" || firstEvent.value.type !== "item.completed") {
+        if (!Predicate.isTagged(firstEvent, "Some") || firstEvent.value.type !== "item.completed") {
           return;
         }
 
@@ -226,7 +227,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 
@@ -269,7 +270,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 
@@ -306,7 +307,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 
@@ -350,7 +351,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 
@@ -387,7 +388,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 
@@ -430,7 +431,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 
@@ -468,7 +469,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
 
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 
@@ -528,7 +529,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber);
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 
@@ -659,7 +660,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       const firstEvent = yield* Fiber.join(firstEventFiber).pipe(Effect.timeout("10 seconds"));
       NodeAssert.equal(firstEvent._tag, "Some");
 
-      if (firstEvent._tag !== "Some") {
+      if (!Predicate.isTagged(firstEvent, "Some")) {
         return;
       }
 

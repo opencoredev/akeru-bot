@@ -1,9 +1,11 @@
+import { claudeMessage } from "./test-support/claudeMessages.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+
 import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { createModelSelection } from "@akeru/shared/model";
 import { assert, describe, it } from "@effect/vitest";
@@ -51,7 +53,8 @@ describe("ClaudeAdapterLive", () => {
         });
 
         const appendedInstructions =
-          typeof createInput?.options.systemPrompt === "object" &&
+          (createInput?.options.systemPrompt === null ||
+            Predicate.isObject(createInput?.options.systemPrompt)) &&
           "append" in createInput.options.systemPrompt
             ? (createInput.options.systemPrompt.append ?? "")
             : "";
@@ -84,7 +87,7 @@ describe("ClaudeAdapterLive", () => {
       const systemPrompt = harness.getLastCreateQueryInput()?.options.systemPrompt;
 
       const appendedInstructions =
-        typeof systemPrompt === "object" && "append" in systemPrompt
+        Predicate.isObject(systemPrompt) && "append" in systemPrompt
           ? (systemPrompt.append ?? "")
           : "";
 
@@ -258,7 +261,7 @@ describe("ClaudeAdapterLive", () => {
     // before the shutdown propagates. Override it to match real SDK behavior
     // where close() does not resolve the prompt consumer.
     const query = new FakeClaudeQuery();
-    (query as { close: () => void }).close = () => {
+    query.close = () => {
       query.closeCalls += 1;
     };
 
@@ -350,15 +353,17 @@ describe("ClaudeAdapterLive", () => {
         (event) => event.type === "runtime.warning" && event.payload.message === readyMessage,
       ).pipe(Stream.runDrain, Effect.forkChild);
 
-      harness.query.emit({
-        type: "system",
-        subtype: "notification",
-        key: "command-lifecycle-ready",
-        text: readyMessage,
-        priority: "high",
-        session_id: sessionId,
-        uuid: "command-lifecycle-ready",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "notification",
+          key: "command-lifecycle-ready",
+          text: readyMessage,
+          priority: "high",
+          session_id: sessionId,
+          uuid: "command-lifecycle-ready",
+        }),
+      );
       yield* Fiber.join(readyFiber);
 
       const processedMessage = "command lifecycle messages processed";
@@ -372,24 +377,28 @@ describe("ClaudeAdapterLive", () => {
         ["started", "command-started"],
         ["completed", "command-completed"],
       ]) {
-        harness.query.emit({
-          type: "command_lifecycle",
-          command_uuid: "4cd8e8a3-df7a-425d-b6c9-4053abc0b8fd",
-          state,
-          session_id: sessionId,
-          uuid,
-        } as unknown as SDKMessage);
+        harness.query.emit(
+          claudeMessage({
+            type: "command_lifecycle",
+            command_uuid: "4cd8e8a3-df7a-425d-b6c9-4053abc0b8fd",
+            state,
+            session_id: sessionId,
+            uuid,
+          }),
+        );
       }
 
-      harness.query.emit({
-        type: "system",
-        subtype: "notification",
-        key: "command-lifecycle-processed",
-        text: processedMessage,
-        priority: "high",
-        session_id: sessionId,
-        uuid: "command-lifecycle-processed",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "notification",
+          key: "command-lifecycle-processed",
+          text: processedMessage,
+          priority: "high",
+          session_id: sessionId,
+          uuid: "command-lifecycle-processed",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       assert.deepEqual(

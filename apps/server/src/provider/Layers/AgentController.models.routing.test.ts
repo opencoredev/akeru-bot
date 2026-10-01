@@ -1,5 +1,7 @@
+import { sessionFixture } from "./test-support/partialFixtures.ts";
+
 // @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
-import type { Session } from "@mastra/core/agent-controller";
+
 import { ProviderDriverKind, ThreadId } from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -34,7 +36,7 @@ describe("AgentControllerLive", () => {
                 sendMessage,
               });
 
-              return {
+              return sessionFixture({
                 state: {
                   get: () => ({}),
                   set: vi.fn(async () => undefined),
@@ -54,7 +56,7 @@ describe("AgentControllerLive", () => {
                 abort: vi.fn(),
                 respondToToolApproval: vi.fn(),
                 respondToToolSuspension: vi.fn(async () => undefined),
-              } as unknown as Session<Record<string, unknown>>;
+              });
             }),
             deleteSession: vi.fn(async () => true),
           },

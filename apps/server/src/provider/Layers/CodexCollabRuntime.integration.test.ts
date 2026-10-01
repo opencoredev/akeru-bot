@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 /**
  * Runtime-level collab regression: boots the REAL CodexSessionRuntime against
  * a scripted mock app-server peer that replays the captured multi-agent wire
@@ -282,7 +284,7 @@ describe("CodexSessionRuntime collab integration", () => {
         Effect.timeoutOption("15 seconds"),
       );
 
-      assert.isTrue(childBStarted._tag === "Some", "child B turnStarted never arrived");
+      assert.isTrue(Predicate.isTagged(childBStarted, "Some"), "child B turnStarted never arrived");
 
       // Stop everything. A's interrupt hangs forever — the bounded child
       // deadline must expire and the parent interrupt must still be sent.
@@ -389,7 +391,7 @@ describe("CodexSessionRuntime collab integration", () => {
     { decision: "cancel", response: { action: "cancel" } },
   ] satisfies ReadonlyArray<{
     readonly decision: ProviderApprovalDecision;
-    readonly response: Record<string, unknown>;
+    readonly response: Schema.JsonObject;
   }>;
 
   for (const { decision, response } of elicitationCases) {
@@ -449,11 +451,15 @@ describe("CodexSessionRuntime collab integration", () => {
         const turnCompleted = yield* Deferred.make<void>();
         yield* runtime.events.pipe(
           Stream.runForEach((event) =>
-            event.method === "mcpServer/elicitation/request"
-              ? Deferred.succeed(approvalRequested, event).pipe(Effect.asVoid)
-              : event.method === "turn/completed"
-                ? Deferred.succeed(turnCompleted, undefined).pipe(Effect.asVoid)
-                : Effect.void,
+            Match.value(event.method).pipe(
+              Match.when("mcpServer/elicitation/request", () =>
+                Deferred.succeed(approvalRequested, event).pipe(Effect.asVoid),
+              ),
+              Match.when("turn/completed", () =>
+                Deferred.succeed(turnCompleted, undefined).pipe(Effect.asVoid),
+              ),
+              Match.orElse(() => Effect.void),
+            ),
           ),
           Effect.forkScoped,
         );

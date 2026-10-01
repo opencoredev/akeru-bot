@@ -1,5 +1,6 @@
+import { claudeMessage } from "./test-support/claudeMessages.ts";
 // @effect-diagnostics nodeBuiltinImport:off
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+
 import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { createModelSelection } from "@akeru/shared/model";
 import { assert, describe, it } from "@effect/vitest";
@@ -38,46 +39,52 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      harness.query.emit({
-        type: "stream_event",
-        session_id: "sdk-session-task",
-        uuid: "stream-task-1",
-        parent_tool_use_id: null,
-        event: {
-          type: "content_block_start",
-          index: 0,
-          content_block: {
-            type: "tool_use",
-            id: "tool-task-1",
-            name: "Task",
-            input: {
-              description: "Review the database layer",
-              prompt: "Audit the SQL changes",
-              subagent_type: "code-reviewer",
+      harness.query.emit(
+        claudeMessage({
+          type: "stream_event",
+          session_id: "sdk-session-task",
+          uuid: "stream-task-1",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_start",
+            index: 0,
+            content_block: {
+              type: "tool_use",
+              id: "tool-task-1",
+              name: "Task",
+              input: {
+                description: "Review the database layer",
+                prompt: "Audit the SQL changes",
+                subagent_type: "code-reviewer",
+              },
             },
           },
-        },
-      } as unknown as SDKMessage);
+        }),
+      );
 
-      harness.query.emit({
-        type: "assistant",
-        session_id: "sdk-session-task",
-        uuid: "assistant-task-1",
-        parent_tool_use_id: null,
-        message: {
-          id: "assistant-message-task-1",
-          content: [{ type: "text", text: "Delegated" }],
-        },
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "assistant",
+          session_id: "sdk-session-task",
+          uuid: "assistant-task-1",
+          parent_tool_use_id: null,
+          message: {
+            id: "assistant-message-task-1",
+            content: [{ type: "text", text: "Delegated" }],
+          },
+        }),
+      );
 
-      harness.query.emit({
-        type: "result",
-        subtype: "success",
-        is_error: false,
-        errors: [],
-        session_id: "sdk-session-task",
-        uuid: "result-task-1",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          session_id: "sdk-session-task",
+          uuid: "result-task-1",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const toolStarted = runtimeEvents.find((event) => event.type === "item.started");
@@ -123,34 +130,40 @@ describe("ClaudeAdapterLive", () => {
         attachments: [],
       });
 
-      harness.query.emit({
-        type: "system",
-        subtype: "task_started",
-        task_id: "task-live",
-        description: "Agent A",
-        task_type: "local_agent",
-        uuid: "task-live-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "system",
-        subtype: "task_started",
-        task_id: "task-settled",
-        description: "Agent B",
-        task_type: "local_agent",
-        uuid: "task-settled-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "system",
-        subtype: "task_notification",
-        task_id: "task-settled",
-        status: "completed",
-        output_file: "/tmp/task-settled.jsonl",
-        summary: "done",
-        uuid: "task-settled-done-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "task_started",
+          task_id: "task-live",
+          description: "Agent A",
+          task_type: "local_agent",
+          uuid: "task-live-uuid",
+          session_id: "sdk-session",
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "task_started",
+          task_id: "task-settled",
+          description: "Agent B",
+          task_type: "local_agent",
+          uuid: "task-settled-uuid",
+          session_id: "sdk-session",
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "task_notification",
+          task_id: "task-settled",
+          status: "completed",
+          output_file: "/tmp/task-settled.jsonl",
+          summary: "done",
+          uuid: "task-settled-done-uuid",
+          session_id: "sdk-session",
+        }),
+      );
 
       yield* Fiber.join(taskEventsFiber);
 
@@ -244,16 +257,18 @@ describe("ClaudeAdapterLive", () => {
       ];
 
       const tick = (usageTotal: number, snapshot: ReturnType<typeof memberSnapshot>) =>
-        harness.query.emit({
-          type: "system",
-          subtype: "task_progress",
-          task_id: "wf-coalesce",
-          description: "Coalescing workflow",
-          usage: { total_tokens: usageTotal, tool_uses: 1, duration_ms: 10 },
-          workflow_progress: snapshot,
-          uuid: `wf-tick-${usageTotal}`,
-          session_id: "sdk-session",
-        } as unknown as SDKMessage);
+        harness.query.emit(
+          claudeMessage({
+            type: "system",
+            subtype: "task_progress",
+            task_id: "wf-coalesce",
+            description: "Coalescing workflow",
+            usage: { total_tokens: usageTotal, tool_uses: 1, duration_ms: 10 },
+            workflow_progress: snapshot,
+            uuid: `wf-tick-${usageTotal}`,
+            session_id: "sdk-session",
+          }),
+        );
 
       // Tick 1: both members are new -> 2 member events.
       tick(100, memberSnapshot(10));
@@ -317,37 +332,43 @@ describe("ClaudeAdapterLive", () => {
 
       // No explicit model/effort on the launch input: the task inherits the
       // session's selection.
-      harness.query.emit({
-        type: "system",
-        subtype: "task_started",
-        task_id: "task-model",
-        description: "Agent M",
-        task_type: "local_agent",
-        tool_use_id: "toolu_agent_m",
-        uuid: "task-model-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "task_started",
+          task_id: "task-model",
+          description: "Agent M",
+          task_type: "local_agent",
+          tool_use_id: "toolu_agent_m",
+          uuid: "task-model-uuid",
+          session_id: "sdk-session",
+        }),
+      );
       // The subagent's assistant snapshot carries the authoritative API
       // model id, which refines the linkage on later rows.
-      harness.query.emit({
-        type: "assistant",
-        parent_tool_use_id: "toolu_agent_m",
-        message: {
-          model: "claude-sonnet-5[1m]",
-          content: [],
-        },
-        uuid: "subagent-snapshot-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "system",
-        subtype: "task_progress",
-        task_id: "task-model",
-        description: "Agent M",
-        usage: { total_tokens: 100, tool_uses: 1, duration_ms: 10 },
-        uuid: "task-model-progress-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "assistant",
+          parent_tool_use_id: "toolu_agent_m",
+          message: {
+            model: "claude-sonnet-5[1m]",
+            content: [],
+          },
+          uuid: "subagent-snapshot-uuid",
+          session_id: "sdk-session",
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "task_progress",
+          task_id: "task-model",
+          description: "Agent M",
+          usage: { total_tokens: 100, tool_uses: 1, duration_ms: 10 },
+          uuid: "task-model-progress-uuid",
+          session_id: "sdk-session",
+        }),
+      );
 
       const taskEvents = Array.from(yield* Fiber.join(taskEventsFiber));
       const started = taskEvents[0];
@@ -405,35 +426,41 @@ describe("ClaudeAdapterLive", () => {
 
       // The subagent streams its first assistant snapshot before the task is
       // registered, so there is no agent to refine yet.
-      harness.query.emit({
-        type: "assistant",
-        parent_tool_use_id: "toolu_agent_early",
-        message: {
-          model: "claude-sonnet-5[1m]",
-          content: [],
-        },
-        uuid: "early-snapshot-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "system",
-        subtype: "task_started",
-        task_id: "task-early",
-        description: "Agent E",
-        task_type: "local_agent",
-        tool_use_id: "toolu_agent_early",
-        uuid: "task-early-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "system",
-        subtype: "task_progress",
-        task_id: "task-early",
-        description: "Agent E",
-        usage: { total_tokens: 100, tool_uses: 1, duration_ms: 10 },
-        uuid: "task-early-progress-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "assistant",
+          parent_tool_use_id: "toolu_agent_early",
+          message: {
+            model: "claude-sonnet-5[1m]",
+            content: [],
+          },
+          uuid: "early-snapshot-uuid",
+          session_id: "sdk-session",
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "task_started",
+          task_id: "task-early",
+          description: "Agent E",
+          task_type: "local_agent",
+          tool_use_id: "toolu_agent_early",
+          uuid: "task-early-uuid",
+          session_id: "sdk-session",
+        }),
+      );
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "task_progress",
+          task_id: "task-early",
+          description: "Agent E",
+          usage: { total_tokens: 100, tool_uses: 1, duration_ms: 10 },
+          uuid: "task-early-progress-uuid",
+          session_id: "sdk-session",
+        }),
+      );
 
       const taskEvents = Array.from(yield* Fiber.join(taskEventsFiber));
       const started = taskEvents[0];
@@ -475,20 +502,22 @@ describe("ClaudeAdapterLive", () => {
         runtimeMode: "full-access",
       });
 
-      harness.query.emit({
-        type: "system",
-        subtype: "task_progress",
-        task_id: "task-subagent-1",
-        description: "Running background teammate",
-        summary: "Code reviewer checked the migration edge cases.",
-        usage: {
-          total_tokens: 123,
-          tool_uses: 4,
-          duration_ms: 987,
-        },
-        session_id: "sdk-session-task-summary",
-        uuid: "task-progress-1",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "task_progress",
+          task_id: "task-subagent-1",
+          description: "Running background teammate",
+          summary: "Code reviewer checked the migration edge cases.",
+          usage: {
+            total_tokens: 123,
+            tool_uses: 4,
+            duration_ms: 987,
+          },
+          session_id: "sdk-session-task-summary",
+          uuid: "task-progress-1",
+        }),
+      );
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const progressEvent = runtimeEvents.find((event) => event.type === "task.progress");
@@ -534,38 +563,42 @@ describe("ClaudeAdapterLive", () => {
           attachments: [],
         });
 
-        harness.query.emit({
-          type: "system",
-          subtype: "task_progress",
-          task_id: "task-usage-clamped",
-          description: "Thinking through the patch",
-          usage: {
-            total_tokens: 190000,
-          },
-          session_id: "sdk-session-task-usage-clamped",
-          uuid: "task-usage-progress-clamped",
-        } as unknown as SDKMessage);
-
-        harness.query.emit({
-          type: "result",
-          subtype: "success",
-          is_error: false,
-          duration_ms: 1234,
-          duration_api_ms: 1200,
-          num_turns: 1,
-          result: "done",
-          stop_reason: "end_turn",
-          session_id: "sdk-session-result-usage-clamped-after-progress",
-          usage: {
-            total_tokens: 535000,
-          },
-          modelUsage: {
-            "claude-opus-4-6": {
-              contextWindow: 200000,
-              maxOutputTokens: 64000,
+        harness.query.emit(
+          claudeMessage({
+            type: "system",
+            subtype: "task_progress",
+            task_id: "task-usage-clamped",
+            description: "Thinking through the patch",
+            usage: {
+              total_tokens: 190000,
             },
-          },
-        } as unknown as SDKMessage);
+            session_id: "sdk-session-task-usage-clamped",
+            uuid: "task-usage-progress-clamped",
+          }),
+        );
+
+        harness.query.emit(
+          claudeMessage({
+            type: "result",
+            subtype: "success",
+            is_error: false,
+            duration_ms: 1234,
+            duration_api_ms: 1200,
+            num_turns: 1,
+            result: "done",
+            stop_reason: "end_turn",
+            session_id: "sdk-session-result-usage-clamped-after-progress",
+            usage: {
+              total_tokens: 535000,
+            },
+            modelUsage: {
+              "claude-opus-4-6": {
+                contextWindow: 200000,
+                maxOutputTokens: 64000,
+              },
+            },
+          }),
+        );
         harness.query.finish();
 
         const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));

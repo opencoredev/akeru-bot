@@ -1,5 +1,7 @@
+import { claudeMessage } from "./test-support/claudeMessages.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+
 import { ProviderDriverKind, ProviderRuntimeEvent } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -58,21 +60,23 @@ describe("ClaudeAdapterLive", () => {
         });
 
         yield* adapter.sendTurn({ threadId: session.threadId, input: "hello", attachments: [] });
-        harness.query.emit({
-          type: "result",
-          subtype,
-          is_error: subtype !== "success",
-          result: "",
-          errors: subtype === "success" ? [] : ["Provider error detail"],
-          stop_reason: null,
-          terminal_reason: "future_terminal_reason",
-          session_id: "sdk-session-future-reason",
-          uuid: "result-future-reason",
-        } as unknown as SDKMessage);
+        harness.query.emit(
+          claudeMessage({
+            type: "result",
+            subtype,
+            is_error: subtype !== "success",
+            result: "",
+            errors: subtype === "success" ? [] : ["Provider error detail"],
+            stop_reason: null,
+            terminal_reason: "future_terminal_reason",
+            session_id: "sdk-session-future-reason",
+            uuid: "result-future-reason",
+          }),
+        );
         const completed = yield* Fiber.join(completionFiber);
         assert.equal(completed._tag, "Some");
 
-        if (completed._tag === "Some" && completed.value.type === "turn.completed") {
+        if (Predicate.isTagged(completed, "Some") && completed.value.type === "turn.completed") {
           assert.equal(
             completed.value.payload.state,
             subtype === "success" ? "completed" : "failed",
@@ -162,19 +166,21 @@ describe("ClaudeAdapterLive", () => {
           uuid: "notif",
         },
       ]) {
-        harness.query.emit(message as unknown as SDKMessage);
+        harness.query.emit(claudeMessage(message));
       }
 
       // High-priority notifications DO surface as a warning row.
-      harness.query.emit({
-        type: "system",
-        subtype: "notification",
-        key: "limit",
-        text: "context window nearly full",
-        priority: "high",
-        session_id: "session",
-        uuid: "notif-high",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "notification",
+          key: "limit",
+          text: "context window nearly full",
+          priority: "high",
+          session_id: "session",
+          uuid: "notif-high",
+        }),
+      );
 
       // session_state_changed maps to the matching session states.
       for (const [state, uuid] of [
@@ -182,27 +188,31 @@ describe("ClaudeAdapterLive", () => {
         ["requires_action", "ssc-req"],
         ["idle", "ssc-idle"],
       ]) {
-        harness.query.emit({
-          type: "system",
-          subtype: "session_state_changed",
-          state,
-          session_id: "session",
-          uuid,
-        } as unknown as SDKMessage);
+        harness.query.emit(
+          claudeMessage({
+            type: "system",
+            subtype: "session_state_changed",
+            state,
+            session_id: "session",
+            uuid,
+          }),
+        );
       }
 
       // api_retry maps to a session heartbeat, not a warning row.
-      harness.query.emit({
-        type: "system",
-        subtype: "api_retry",
-        attempt: 3,
-        max_retries: 10,
-        retry_delay_ms: 1000,
-        error_status: 502,
-        error: { type: "api_error" },
-        session_id: "session",
-        uuid: "retry",
-      } as unknown as SDKMessage);
+      harness.query.emit(
+        claudeMessage({
+          type: "system",
+          subtype: "api_retry",
+          attempt: 3,
+          max_retries: 10,
+          retry_delay_ms: 1000,
+          error_status: 502,
+          error: { type: "api_error" },
+          session_id: "session",
+          uuid: "retry",
+        }),
+      );
       yield* Effect.yieldNow;
       yield* Effect.yieldNow;
 
@@ -229,7 +239,7 @@ describe("ClaudeAdapterLive", () => {
       const heartbeat = runtimeEvents.find(
         (event) =>
           event.type === "session.state.changed" &&
-          typeof event.payload.reason === "string" &&
+          Predicate.isString(event.payload.reason) &&
           event.payload.reason.startsWith("api_retry:"),
       );
 

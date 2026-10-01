@@ -9,6 +9,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { GrokSettings } from "@akeru/contracts";
 import { ServerConfig } from "../../../config.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured GrokAdapter double or Layer for isolated provider tests.
 import { makeGrokAdapter } from "../GrokAdapter.ts";
 
 export const decodeGrokSettings = Schema.decodeSync(GrokSettings);
@@ -75,7 +76,7 @@ export async function readJsonLines(filePath: string) {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
+    .map((line) => JSON.parse(line) as Schema.JsonObject);
 }
 
 export const grokAdapterTestLayer = ServerConfig.layerTest(process.cwd(), {

@@ -1,3 +1,5 @@
+import { claudeMessage } from "./claudeMessages.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type {
@@ -20,6 +22,7 @@ import * as Schema from "effect/Schema";
 import { ServerConfig } from "../../../config.ts";
 import { ServerSettingsService } from "../../../serverSettings.ts";
 import type { ClaudeAdapterShape } from "../../Services/ClaudeAdapter.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured ClaudeAdapter double or Layer for isolated provider tests.
 import { makeClaudeAdapter, type ClaudeAdapterLiveOptions } from "../ClaudeAdapter.ts";
 
 export const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
@@ -32,7 +35,7 @@ export class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
   private readonly queue: Array<SDKMessage> = [];
   private readonly waiters: Array<{
     readonly resolve: (value: IteratorResult<SDKMessage>) => void;
-    readonly reject: (reason: unknown) => void;
+    readonly reject: (cause: unknown) => void;
   }> = [];
   private done = false;
   private failure: unknown | undefined;
@@ -97,7 +100,7 @@ export class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
     this.setMaxThinkingTokensCalls.push(maxThinkingTokens);
   };
 
-  readonly close = (): void => {
+  close = (): void => {
     this.closeCalls += 1;
 
     if (this.closeError !== undefined) {
@@ -207,10 +210,7 @@ export function makeHarness(config?: {
   };
 }
 
-export function makeDeterministicRandomService(seed = 0x1234_5678): {
-  nextIntUnsafe: () => number;
-  nextDoubleUnsafe: () => number;
-} {
+export function makeDeterministicRandomService(seed = 0x1234_5678) {
   let state = seed >>> 0;
 
   const nextIntUnsafe = (): number => {
@@ -244,7 +244,7 @@ export async function readFirstPromptText(
     return undefined;
   }
 
-  if (typeof next.value.message.content === "string") {
+  if (Predicate.isString(next.value.message.content)) {
     return next.value.message.content;
   }
 
@@ -293,7 +293,7 @@ export const completedTurn = (runtimeEvents: ReadonlyArray<ProviderRuntimeEvent>
   return event.payload;
 };
 
-export const AUTH_FAILURE_ASSISTANT = {
+export const AUTH_FAILURE_ASSISTANT = claudeMessage({
   type: "assistant",
   session_id: "sdk-session-auth",
   uuid: "assistant-auth",
@@ -305,7 +305,7 @@ export const AUTH_FAILURE_ASSISTANT = {
     model: "<synthetic>",
     content: [{ type: "text", text: "Not logged in · Please run /login" }],
   },
-} as unknown as SDKMessage;
+});
 
 export const usageLimitMessage =
   "Claude usage limit reached. Send the message again once the limit resets.";
