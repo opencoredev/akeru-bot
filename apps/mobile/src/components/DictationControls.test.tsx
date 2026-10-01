@@ -28,7 +28,7 @@ vi.mock("react-native", () => ({
 }));
 vi.mock("./AppText", () => ({ AppText: "Text" }));
 vi.mock("./AppSymbol", () => ({ SymbolView: "SymbolView" }));
-vi.mock("../lib/useThemeColor", () => ({ useThemeColor: () => "#000" }));
+vi.mock("../lib/useThemeColor", () => ({ useThemeColor: (token: string) => token }));
 vi.mock("../lib/i18n", async () => {
   const { catalogRegistry, createTranslator } = await import("@akeru/client-runtime/i18n");
   const zhCN = await catalogRegistry["zh-CN"]!();
@@ -207,5 +207,22 @@ describe("native DictationControls interaction handlers", () => {
     expect(onBlockedPress).toHaveBeenCalledTimes(2);
     expect(onBlockedPress).toHaveBeenCalledWith("Reconnect to dictate.");
     expect(handlers.onStart).not.toHaveBeenCalled();
+  });
+});
+
+describe("send-slot dictation icon", () => {
+  it("tints the idle and retry icons with the primary foreground and recording with white", () => {
+    const handlers = callbacks();
+    const icon = (status: DictationControlsProps["status"], name: string) => {
+      state.cursor = 0;
+      return find(
+        DictationControls({ status, appearance: "send-slot", ...handlers }),
+        "name",
+        name,
+      );
+    };
+    expect(icon("idle", "mic.fill")?.tintColor).toBe("--color-primary-foreground");
+    expect(icon("failed", "arrow.clockwise")?.tintColor).toBe("--color-primary-foreground");
+    expect(icon("recording", "mic.fill")?.tintColor).toBe("white");
   });
 });

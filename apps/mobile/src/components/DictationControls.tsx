@@ -39,6 +39,7 @@ export function DictationControls({
   const holdStartedAt = useRef(0);
   const startedThisGesture = useRef(false);
   const iconColor = useThemeColor("--color-icon");
+  const primaryForegroundColor = useThemeColor("--color-primary-foreground");
   const active = status === "requesting" || status === "recording";
   const busy = active || status === "transcribing";
   // Send-slot only: a failed dictation stays in the slot as a retry until it is dismissed.
@@ -161,7 +162,8 @@ export function DictationControls({
         <SymbolView
           name={status === "transcribing" ? "stop.fill" : retry ? "arrow.clockwise" : "mic.fill"}
           size={18}
-          tintColor="white"
+          // The recording slot is red; otherwise the slot is the theme primary.
+          tintColor={active ? "white" : primaryForegroundColor}
           type="monochrome"
         />
       ) : (
