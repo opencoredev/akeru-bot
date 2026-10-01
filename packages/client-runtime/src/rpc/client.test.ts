@@ -39,6 +39,8 @@ import {
   type EnvironmentUnaryRpcTag,
 } from "./client.ts";
 
+const decodeBackgroundPolicySnapshot = Schema.decodeUnknownEffect(BackgroundPolicySnapshot);
+
 const TARGET = new PrimaryConnectionTarget({
   environmentId: EnvironmentId.make("environment-1"),
   label: "Test environment",
@@ -115,7 +117,7 @@ describe("environment RPC", () => {
     "delivers background policy snapshots across a failed transport and replacement session",
     () =>
       Effect.gen(function* () {
-        const snapshot = yield* Schema.decodeUnknownEffect(BackgroundPolicySnapshot)({
+        const snapshot = yield* decodeBackgroundPolicySnapshot({
           hostPower: {
             source: "unknown",
             idle: "unknown",

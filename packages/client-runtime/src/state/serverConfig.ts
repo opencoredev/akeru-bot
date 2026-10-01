@@ -208,6 +208,7 @@ export function projectServerWelcome(
   if (event.type !== "welcome") {
     return [current, []];
   }
+  // SAFETY: The lifecycle subscription decodes welcome payloads before this projection receives them.
   const welcome = event.payload as ServerLifecycleWelcomePayload;
   return [Option.some(welcome), [welcome]];
 }

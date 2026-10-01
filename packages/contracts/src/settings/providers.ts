@@ -246,7 +246,7 @@ export const providerInstanceConfigEnabledFlag = (config: unknown): boolean | un
   if (config === null || typeof config !== "object" || Array.isArray(config)) {
     return undefined;
   }
-  const enabled = (config as { readonly enabled?: unknown }).enabled;
+  const enabled = "enabled" in config ? config.enabled : undefined;
   return typeof enabled === "boolean" ? enabled : undefined;
 };
 

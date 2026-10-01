@@ -109,7 +109,7 @@ function escapeAttribute(value: string): string {
 export function buildThreadMentionExcerpt(source: ThreadMentionSource): string {
   const lines: string[] = [];
   let remaining = THREAD_MENTION_MAX_CHARS;
-  for (const message of [...source.messages].reverse()) {
+  for (const message of source.messages.toReversed()) {
     if (message.role === "system") continue;
     const body = message.text.trim();
     if (body.length === 0) continue;
@@ -122,7 +122,8 @@ export function buildThreadMentionExcerpt(source: ThreadMentionSource): string {
     lines.push(line);
     remaining -= line.length + 1;
   }
-  const body = lines.length > 0 ? lines.reverse().join("\n") : "(This chat has no messages yet.)";
+  const body =
+    lines.length > 0 ? lines.toReversed().join("\n") : "(This chat has no messages yet.)";
   return `<chat_context id="${escapeAttribute(source.id)}" title="${escapeAttribute(source.title)}">\n${body}\n</chat_context>`;
 }
 

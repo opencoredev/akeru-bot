@@ -41,8 +41,8 @@ export type HttpReadinessFailure = HttpReadinessFailureCause & {
  */
 export function describeReadinessCause(cause: unknown): unknown {
   if (cause instanceof Error) {
-    const tag = (cause as { readonly _tag?: unknown })._tag;
-    const nested = (cause as { readonly cause?: unknown }).cause;
+    const tag = "_tag" in cause ? cause._tag : undefined;
+    const nested = cause.cause;
     return {
       ...(typeof tag === "string" ? { _tag: tag } : { name: cause.name }),
       message: cause.message,

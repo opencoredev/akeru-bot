@@ -46,9 +46,8 @@ export function groupImportPreview(input: {
     durableFactsFromArchive(input.archive).map((fact) => [fact.rootId, fact.fact]),
   );
   const localFacts = new Map((input.localFacts ?? []).map((fact) => [fact.rootId, fact.fact]));
-  return IMPORT_CLASSIFICATION_ORDER.map((classification) => ({
-    classification,
-    items: input.preview.items.flatMap((item) =>
+  return IMPORT_CLASSIFICATION_ORDER.flatMap((classification) => {
+    const items = input.preview.items.flatMap((item) =>
       item.classification === classification
         ? [
             {
@@ -58,8 +57,9 @@ export function groupImportPreview(input: {
             },
           ]
         : [],
-    ),
-  })).filter((group) => group.items.length > 0);
+    );
+    return items.length > 0 ? [{ classification, items }] : [];
+  });
 }
 
 /**

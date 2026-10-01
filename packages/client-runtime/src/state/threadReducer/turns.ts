@@ -347,9 +347,7 @@ export function applyRevertedEvent(
           ? null
           : {
               turnId: latestCheckpoint.turnId,
-              state: checkpointStatusToTurnState(
-                latestCheckpoint.status as "ready" | "missing" | "error",
-              ),
+              state: checkpointStatusToTurnState(latestCheckpoint.status),
               requestedAt: latestCheckpoint.completedAt,
               startedAt: latestCheckpoint.completedAt,
               completedAt: latestCheckpoint.completedAt,
