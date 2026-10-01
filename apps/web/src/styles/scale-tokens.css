@@ -19,7 +19,8 @@
   --text-15px: 15px;
   --text-17px: 17px;
   --text-26px: 26px;
-  --text-0\.6875rem: 0.6875rem;
+  /* Code block header label. */
+  --text-code-label: 0.6875rem;
   --text-1em: 1em;
 
   --tracking-caps: 0.08em;

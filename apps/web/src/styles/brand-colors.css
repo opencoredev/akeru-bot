@@ -1,0 +1,44 @@
+/* Third-party brand colors for provider, editor, channel, and source-host
+   marks. Static so SVG attributes can read them through var(). */
+@theme static {
+  /* Plain black for marks drawn on black tiles, kept static like the rest. */
+  --color-black: #000;
+
+  --color-brand-claude: #d97757;
+
+  --color-brand-slack-red: #e01e5a;
+  --color-brand-slack-blue: #36c5f0;
+  --color-brand-slack-green: #2eb67d;
+  --color-brand-slack-yellow: #ecb22e;
+  --color-brand-telegram: #229ed9;
+  --color-brand-imessage: #32d74b;
+
+  --color-brand-git: #de4c36;
+  --color-brand-azure-devops-dark: #114a8b;
+  --color-brand-azure-devops-mid: #0669bc;
+  --color-brand-azure-devops-light: #3ccbf4;
+  --color-brand-azure-devops-sky: #2892df;
+  --color-brand-azure-devops: #0078d4;
+  --color-brand-bitbucket: #2684ff;
+  --color-brand-bitbucket-dark: #0052cc;
+
+  --color-brand-gemini-blue: #3186ff;
+  --color-brand-gemini-blue-soft: #3689ff;
+  --color-brand-gemini-yellow: #f6c013;
+  --color-brand-gemini-red: #fa4340;
+  --color-brand-gemini-green: #14bb69;
+
+  --color-brand-vscode-dark: #0065a9;
+  --color-brand-vscode: #007acc;
+  --color-brand-vscode-light: #1f9cf0;
+  --color-brand-vscode-insiders-dark: #009a7c;
+  --color-brand-vscode-insiders: #00b294;
+  --color-brand-vscode-insiders-light: #24bfa5;
+  --color-brand-vscodium-light: #62a0ea;
+  --color-brand-vscodium-dark: #1a5fb4;
+
+  --color-brand-opencode-light-inner: #cfcecd;
+  --color-brand-opencode-light-outer: #211e1e;
+  --color-brand-opencode-dark-inner: #4b4646;
+  --color-brand-opencode-dark-outer: #f1ecec;
+}

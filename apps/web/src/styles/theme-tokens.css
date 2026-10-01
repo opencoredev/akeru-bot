@@ -52,6 +52,21 @@
   /* Favorite star on model rows. Same value in both modes. */
   --favorite-foreground: var(--color-yellow-500);
   --favorite-hover-foreground: var(--color-yellow-600);
+  /* Cautionary inline notices and stats that are not themeable warnings. */
+  --caution-foreground: var(--color-amber-600);
+  --telemetry-warning-foreground: var(--color-amber-600);
+  /* Resource telemetry I/O columns: reads and writes. */
+  --telemetry-read-foreground: var(--color-sky-700);
+  --telemetry-write-foreground: var(--color-amber-700);
+  /* Status dot for pending pairing links. Same value in both modes. */
+  --pending-indicator: var(--color-amber-400);
+  /* Hover fill for light radio cards; dark mode styles its own hover. */
+  --option-hover: var(--color-zinc-50);
+  /* Skill chips and rows. The tint is the same in both modes. */
+  --skill: var(--color-fuchsia-500);
+  --skill-foreground: var(--color-fuchsia-700);
+  /* Grok mark, near-black on light and near-white on dark. */
+  --brand-grok: #0f0f0f;
   /* Selected and disabled were previously spelled inline at each call site,
      so "selected" drifted between accent, muted, and a raw zinc. Name them
      once; themes override them through the roles they alias. */
@@ -110,6 +125,12 @@
     --success-indicator-foreground: var(--color-emerald-400);
     --warning-foreground: var(--color-amber-400);
     --warning-surface: color-mix(in srgb, var(--warning) 16%, transparent);
+    --caution-foreground: var(--color-amber-400);
+    --telemetry-warning-foreground: var(--color-amber-300);
+    --telemetry-read-foreground: var(--color-sky-300);
+    --telemetry-write-foreground: var(--color-amber-300);
+    --skill-foreground: var(--color-fuchsia-300);
+    --brand-grok: #f5f5f5;
     --update-foreground: var(--color-blue-400);
     --update-surface: color-mix(in srgb, var(--update) 18%, transparent);
     --sidebar: var(--card);

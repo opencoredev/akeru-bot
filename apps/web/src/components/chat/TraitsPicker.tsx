@@ -65,7 +65,7 @@ export const TraitsPicker = memo(function TraitsPicker({
         icon={ZapIcon}
         className={cn(
           "fill-current opacity-80",
-          provider === "claudeAgent" ? "text-[#d97757]" : "text-foreground",
+          provider === "claudeAgent" ? "text-brand-claude" : "text-foreground",
         )}
       />
       <span className="sr-only">{t("Fast mode on")}</span>

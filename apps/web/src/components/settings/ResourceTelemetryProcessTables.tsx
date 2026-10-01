@@ -214,10 +214,10 @@ export function ProcessTable({
               <td className="px-3 py-2 text-right font-mono tabular-nums">
                 {formatBytes(process.residentBytes)}
               </td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums text-sky-700 dark:text-sky-300">
+              <td className="px-3 py-2 text-right font-mono tabular-nums text-telemetry-read-foreground">
                 {formatRate(process.ioReadBytesPerSecond)}
               </td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums text-amber-700 dark:text-amber-300">
+              <td className="px-3 py-2 text-right font-mono tabular-nums text-telemetry-write-foreground">
                 {formatRate(process.ioWriteBytesPerSecond)}
               </td>
               <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">
@@ -325,10 +325,10 @@ export function HistoryProcessTable({
               <td className="px-3 py-2 text-right font-mono tabular-nums">
                 {formatBytes(process.peakRssBytes)}
               </td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums text-sky-700 dark:text-sky-300">
+              <td className="px-3 py-2 text-right font-mono tabular-nums text-telemetry-read-foreground">
                 {formatBytes(process.ioReadBytes)}
               </td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums text-amber-700 dark:text-amber-300">
+              <td className="px-3 py-2 text-right font-mono tabular-nums text-telemetry-write-foreground">
                 {formatBytes(process.ioWriteBytes)}
               </td>
               <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">

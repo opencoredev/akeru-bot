@@ -95,7 +95,7 @@ export function ChannelStatusNotice({
   const { t } = useI18n();
 
   const notice = (children: ReactNode) => (
-    <div role="status" className="break-words text-xs text-amber-600 dark:text-amber-400">
+    <div role="status" className="break-words text-xs text-caution-foreground">
       {children}
     </div>
   );

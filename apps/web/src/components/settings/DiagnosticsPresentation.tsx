@@ -91,7 +91,7 @@ export function StatBlock({
       <div
         className={cn(
           "mt-1 truncate font-mono text-lg font-semibold tabular-nums text-foreground",
-          tone === "warning" && "text-amber-600 dark:text-amber-400",
+          tone === "warning" && "text-caution-foreground",
           tone === "danger" && "text-destructive",
         )}
       >

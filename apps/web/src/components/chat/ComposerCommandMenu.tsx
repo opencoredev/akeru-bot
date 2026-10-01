@@ -192,7 +192,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
 // Same tint as the inline skill chip, a little larger so the row reads as the
 // chip it will insert. In em so it follows the row's font size.
 const SKILL_ROW_ICON_CLASS_NAME =
-  "flex size-1.6em shrink-0 items-center justify-center rounded-0.45em bg-fuchsia-500/14 text-1em leading-none text-fuchsia-700 dark:text-fuchsia-300 [&>svg]:size-1em";
+  "flex size-1.6em shrink-0 items-center justify-center rounded-0.45em bg-skill/14 text-1em leading-none text-skill-foreground [&>svg]:size-1em";
 
 const SKILL_SOURCE_LABEL_BY_KIND: Record<ProviderSkillSourceKind, string> = {
   app: "App",

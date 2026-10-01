@@ -438,7 +438,7 @@ export function ResourceTelemetryDiagnostics() {
                   value={String(snapshot.health.inaccessibleProcessCount)}
                   valueClassName={
                     snapshot.health.inaccessibleProcessCount > 0
-                      ? "text-amber-600 dark:text-amber-300"
+                      ? "text-telemetry-warning-foreground"
                       : undefined
                   }
                 />

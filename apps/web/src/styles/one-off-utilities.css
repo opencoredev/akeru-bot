@@ -97,3 +97,8 @@
     font-size: max(var(--font-size-prompt, 1rem), 16px);
   }
 }
+
+/* Faint track drawn in the current text color, such as a progress ring. */
+@utility stroke-current-faint {
+  stroke: color-mix(in srgb, currentColor 22%, transparent);
+}

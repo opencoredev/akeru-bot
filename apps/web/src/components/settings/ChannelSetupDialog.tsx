@@ -479,11 +479,11 @@ export function ChannelSetupDialog({
                 onChange={(event) => setName(event.currentTarget.value)}
               />
               {connectError ? (
-                <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
+                <p role="alert" className="text-sm text-caution-foreground">
                   {connectError}
                 </p>
               ) : unconfirmed !== null ? (
-                <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
+                <p role="alert" className="text-sm text-caution-foreground">
                   {unassigned
                     ? t(
                         "Could not update the credentials, and {name} is now unassigned from this channel. Reconnect to use the new credentials.",

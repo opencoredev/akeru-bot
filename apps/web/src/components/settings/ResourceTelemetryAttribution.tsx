@@ -41,10 +41,10 @@ export function AttributionTable({
                 {entry.component}
               </td>
               <td className="truncate px-3 py-2 text-muted-foreground">{entry.operation}</td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums text-sky-700 dark:text-sky-300">
+              <td className="px-3 py-2 text-right font-mono tabular-nums text-telemetry-read-foreground">
                 {formatBytes(entry.logicalReadBytes)}
               </td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums text-amber-700 dark:text-amber-300">
+              <td className="px-3 py-2 text-right font-mono tabular-nums text-telemetry-write-foreground">
                 {formatBytes(entry.logicalWriteBytes)}
               </td>
               <td className="px-3 py-2 text-right font-mono tabular-nums">{entry.count}</td>

@@ -328,7 +328,7 @@ export function MarkdownCodeBlock({
       data-wrap={wrapped ? "true" : "false"}
     >
       <div className="chat-markdown-codeblock-header flex items-center justify-between gap-2 pt-1.5 pr-1.5 pb-0 pl-3 select-none">
-        <span className="inline-flex min-w-0 items-center gap-0.4rem font-mono text-0.6875rem">
+        <span className="inline-flex min-w-0 items-center gap-0.4rem font-mono text-code-label">
           <MarkdownCodeBlockTitleContent
             fenceTitle={fenceTitle}
             language={language}

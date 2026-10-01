@@ -96,7 +96,7 @@ export function IconStat({
       <div
         className={cn(
           "mt-2.5 truncate font-mono text-2xl font-semibold tracking-tighter tabular-nums text-foreground",
-          tone === "warning" && "text-amber-600 dark:text-amber-300",
+          tone === "warning" && "text-telemetry-warning-foreground",
           tone === "danger" && "text-destructive",
         )}
       >

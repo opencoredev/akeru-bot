@@ -514,9 +514,7 @@ export function DiagnosticsSettingsPanel() {
               <div
                 className={cn(
                   "flex items-start gap-2",
-                  traceDiagnosticsPartialFailure
-                    ? "text-amber-600 dark:text-amber-400"
-                    : "text-destructive",
+                  traceDiagnosticsPartialFailure ? "text-caution-foreground" : "text-destructive",
                 )}
               >
                 <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />
