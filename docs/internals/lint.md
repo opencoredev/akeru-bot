@@ -3,8 +3,8 @@
 > For Akeru Bot maintainers and the agents that work on the repo.
 
 Oxlint runs through Vite+. The whole configuration lives in the `lint` block of the root
-[`vite.config.ts`](../../vite.config.ts). CI runs `vp run lint`, which fails on any `error`
-finding and prints `warn` findings without failing.
+[`vite.config.ts`](../../vite.config.ts). CI runs `vp run lint`, which fails on any finding.
+Every enabled rule is an `error`; the codebase carries no warnings.
 
 Lint the files you touched:
 
@@ -100,9 +100,9 @@ limit, and `vp lint --fix` applies the spacing rule, so run it on new files befo
 
 ## Severity ratchet
 
-Each new rule starts at `error` if the codebase has no findings for it and at `warn` otherwise.
-Warnings show up in every lint run but do not fail CI. When cleanup brings a rule's count to zero,
-change it to `error` in the same pull request so it cannot regress.
+Every enabled rule is an `error`. A new rule lands as `error` with its findings fixed in the same
+change. If a rule has too many findings to fix at once, it may land as `warn` with a recorded
+count, and it moves to `error` in the pull request that brings that count to zero.
 
 To count one rule:
 

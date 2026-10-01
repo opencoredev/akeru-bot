@@ -2,35 +2,35 @@ import "vite-plus/test/config";
 import { defineConfig } from "vite-plus";
 import * as NodeURL from "node:url";
 
-// Anti-slop rules from the vendored oxlint-plugin-anti-slop. Rules with existing findings
-// start at "warn" and move to "error" once their count reaches zero. See docs/internals/lint.md.
+// Anti-slop rules from the vendored oxlint-plugin-anti-slop. Every enabled rule is an error.
+// See docs/internals/lint.md.
 const ANTI_SLOP_RULES = {
   "oxc/no-accumulating-spread": "error",
-  "anti-slop/no-array-filter-map": "warn",
+  "anti-slop/no-array-filter-map": "error",
   "anti-slop/no-reduce-accumulator-copy": "error",
-  "anti-slop/no-chained-type-assertions": "warn",
+  "anti-slop/no-chained-type-assertions": "error",
   // Off: exactOptionalPropertyTypes makes a conditional spread the standard way to omit a key.
   "anti-slop/no-conditional-empty-object-spread": "off",
-  "anti-slop/no-known-value-widening": "warn",
-  "anti-slop/no-module-mocking": "warn",
-  "anti-slop/no-object-parameters": "warn",
-  "anti-slop/no-reflect-apply": "warn",
-  "anti-slop/no-reflect-get": "warn",
-  "anti-slop/no-runtime-typeof": "warn",
+  "anti-slop/no-known-value-widening": "error",
+  "anti-slop/no-module-mocking": "error",
+  "anti-slop/no-object-parameters": "error",
+  "anti-slop/no-reflect-apply": "error",
+  "anti-slop/no-reflect-get": "error",
+  "anti-slop/no-runtime-typeof": "error",
   // Off: `FooShape` is this repo's name for an Effect service interface.
   "anti-slop/no-shape-in-symbol-names": "off",
-  "anti-slop/no-unknown-parameters": "warn",
-  "anti-slop/no-unknown-returns": "warn",
+  "anti-slop/no-unknown-parameters": "error",
+  "anti-slop/no-unknown-returns": "error",
   "anti-slop/no-unknown-type-aliases": "error",
-  "anti-slop/no-unsafe-dictionary-type": "warn",
+  "anti-slop/no-unsafe-dictionary-type": "error",
   "anti-slop/no-widen-then-assert": "error",
   "anti-slop/require-readable-spacing": "error",
-  "anti-slop/require-safety-comment-for-type-assertion": "warn",
-  "anti-slop-effect/no-manual-effect-error-tag": "warn",
-  "anti-slop-effect/no-manual-tag-comparison": "warn",
-  "anti-slop-effect/no-manual-tagged-construction": "warn",
-  "anti-slop-effect/no-service-constructor-imports": "warn",
-  "anti-slop-effect/prefer-effect-match": "warn",
+  "anti-slop/require-safety-comment-for-type-assertion": "error",
+  "anti-slop-effect/no-manual-effect-error-tag": "error",
+  "anti-slop-effect/no-manual-tag-comparison": "error",
+  "anti-slop-effect/no-manual-tagged-construction": "error",
+  "anti-slop-effect/no-service-constructor-imports": "error",
+  "anti-slop-effect/prefer-effect-match": "error",
 } as const;
 
 // @shadcn/lint no-restyle policy for apps/web. Call sites may place a primitive (layout:
@@ -140,9 +140,9 @@ export default defineConfig({
       "@shadcn/lint",
     ],
     categories: {
-      correctness: "warn",
-      suspicious: "warn",
-      perf: "warn",
+      correctness: "error",
+      suspicious: "error",
+      perf: "error",
     },
     rules: {
       "unicorn/no-array-sort": "off",
@@ -189,7 +189,7 @@ export default defineConfig({
         },
       ],
       "akeru/no-global-process-runtime": "error",
-      "akeru/no-inline-schema-compile": "warn",
+      "akeru/no-inline-schema-compile": "error",
       "akeru/no-lint-suppressions": "error",
       "akeru/no-manual-effect-runtime-in-tests": "error",
       "akeru/no-native-title-tooltip": "error",
@@ -258,12 +258,12 @@ export default defineConfig({
       {
         files: ["apps/web/src/**/*.{ts,tsx}"],
         rules: {
-          "shadcn/no-restyle": ["warn", NO_RESTYLE],
-          "shadcn/no-raw-colors": "warn",
-          "shadcn/no-arbitrary-values": "warn",
-          "shadcn/no-inline-styles": "warn",
-          "shadcn/no-unknown-classes": "warn",
-          "shadcn/require-static-classes": "warn",
+          "shadcn/no-restyle": ["error", NO_RESTYLE],
+          "shadcn/no-raw-colors": "error",
+          "shadcn/no-arbitrary-values": "error",
+          "shadcn/no-inline-styles": "error",
+          "shadcn/no-unknown-classes": "error",
+          "shadcn/require-static-classes": "error",
         },
       },
       {
