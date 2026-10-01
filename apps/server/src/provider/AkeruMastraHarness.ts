@@ -1059,17 +1059,31 @@ function inspectAkeruAction(toolName: string, args?: unknown): AkeruActionInspec
   if (namedAction) return { action: namedAction, hasUnclassifiedIntent: false };
 
   const pending: unknown[] = [args];
+  const visited = new WeakSet<object>();
   let inspected = 0;
   let hasUnclassifiedIntent = false;
   while (pending.length > 0 && inspected < 100) {
     const value = pending.pop();
     inspected += 1;
-    if (Array.isArray(value)) {
-      pending.push(...value.filter((entry) => typeof entry === "object" && entry !== null));
+    if (typeof value !== "object" || value === null) continue;
+    if (visited.has(value)) {
+      hasUnclassifiedIntent = true;
       continue;
     }
-    if (typeof value !== "object" || value === null) continue;
-    for (const [key, entry] of Object.entries(value)) {
+    visited.add(value);
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        if (inspected >= 100) return { action: null, hasUnclassifiedIntent: true };
+        inspected += 1;
+        if (typeof entry === "object" && entry !== null) pending.push(entry);
+      }
+      continue;
+    }
+    for (const key in value) {
+      if (inspected >= 100) return { action: null, hasUnclassifiedIntent: true };
+      inspected += 1;
+      if (!Object.hasOwn(value, key)) continue;
+      const entry: unknown = value[key as keyof typeof value];
       const normalizedKey = key.toLowerCase();
       const keyedAction = criticalActionFromText(key);
       if (keyedAction) return { action: keyedAction, hasUnclassifiedIntent: false };
