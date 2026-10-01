@@ -6628,7 +6628,7 @@ describe("AgentControllerLive", () => {
     },
   );
 
-  it.effect("keeps same-thread text turns behind attachment preparation", () => {
+  it.effect("keeps same-thread turn order when an attachment waiter is interrupted", () => {
     const bridge = makeBridge();
     const mastra = makeMastraHarness();
     let readStarted!: () => void;
@@ -6675,13 +6675,16 @@ describe("AgentControllerLive", () => {
         .pipe(Effect.forkChild({ startImmediately: true }));
       yield* Effect.promise(() => started);
       const second = yield* controller
-        .sendTurn({ threadId: codexThreadId, input: "Second" })
+        .sendTurn({ threadId: codexThreadId, input: "Interrupted waiter" })
         .pipe(Effect.forkChild({ startImmediately: true }));
-      yield* Effect.promise(() => Promise.resolve());
+      yield* Fiber.interrupt(second);
+      const third = yield* controller
+        .sendTurn({ threadId: codexThreadId, input: "Third" })
+        .pipe(Effect.forkChild({ startImmediately: true }));
       expect(mastra.sendMessage).not.toHaveBeenCalled();
       finishRead();
       yield* Effect.promise(bridge.waitForNextDispatchAdmission);
-      yield* Fiber.join(second);
+      yield* Fiber.join(third);
       bridge.releaseNextDispatchAdmission();
       yield* Fiber.join(first);
       yield* Effect.promise(() => mastra.waitForSendMessageCount(1));
@@ -6690,7 +6693,7 @@ describe("AgentControllerLive", () => {
       mastra.finishSend();
       expect(mastra.sendMessage.mock.calls.map(([message]) => message.content)).toEqual([
         expect.stringContaining("First"),
-        "Second",
+        "Third",
       ]);
     }).pipe(Effect.provide(layer), Effect.orDie);
   });
