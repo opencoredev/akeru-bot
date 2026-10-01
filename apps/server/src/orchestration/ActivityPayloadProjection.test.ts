@@ -22,6 +22,40 @@ function activity(payload: Record<string, Schema.Json>): OrchestrationThreadActi
  * assertions are the tripwire.
  */
 describe("projectActivityPayload", () => {
+  it("drops deeply nested discarded JSON without walking its descendants", () => {
+    let discarded: Schema.Json = null;
+
+    for (let depth = 0; depth < 1_000; depth += 1) {
+      discarded = { child: discarded };
+    }
+
+    const projected = projectActivityPayload(
+      activity({ itemType: "command_execution", data: { command: "echo hello", discarded } }),
+    );
+
+    expect(projected.payload).toEqual({
+      itemType: "command_execution",
+      data: { command: "echo hello" },
+    });
+  });
+
+  it("truncates deeply nested retained MCP input at the projection depth limit", () => {
+    let input: Schema.Json = null;
+
+    for (let depth = 0; depth < 1_000; depth += 1) {
+      input = { child: input };
+    }
+
+    const projected = projectActivityPayload(
+      activity({ itemType: "mcp_tool_call", data: { input } }),
+    );
+
+    expect(projected.payload).toEqual({
+      itemType: "mcp_tool_call",
+      data: { input: { child: { child: { child: { child: "[truncated]" } } } } },
+    });
+  });
+
   it.each([
     ["x".repeat(4094) + "😀z", "x".repeat(4094) + "…"],
     ["x".repeat(4093) + "😀zz", "x".repeat(4093) + "😀…"],

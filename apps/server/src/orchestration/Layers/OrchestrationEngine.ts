@@ -418,8 +418,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
             return;
           }
 
-          // SAFETY: Dispatch declares OrchestrationDispatchError failures; Cause.squash erases that failure type.
-          const error = Cause.squash(exit.cause) as OrchestrationDispatchError;
+          const error = Cause.squash(exit.cause);
 
           if (
             !isOrchestrationCommandPreviouslyRejectedError(error) &&
@@ -453,7 +452,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
             }
           }
 
-          yield* Deferred.fail(envelope.result, error);
+          yield* Deferred.failCause(envelope.result, exit.cause);
         }),
       ),
       Effect.ensuring(Effect.sync(() => envelope.admission?.release())),

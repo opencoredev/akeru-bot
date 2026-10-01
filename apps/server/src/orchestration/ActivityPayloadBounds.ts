@@ -1,37 +1,18 @@
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
-export type ActivityValue =
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
-  | readonly ActivityValue[]
-  | ActivityRecord;
+const ActivityRecord = Schema.Record(Schema.String, Schema.Unknown);
 
-export interface ActivityRecord {
-  [key: string]: ActivityValue;
-}
+export type ActivityRecord = {
+  -readonly [Key in keyof typeof ActivityRecord.Type]: (typeof ActivityRecord.Type)[Key];
+};
 
-const ActivityValue: Schema.Codec<ActivityValue> = Schema.suspend(() =>
-  Schema.Union([
-    Schema.String,
-    Schema.Number,
-    Schema.Boolean,
-    Schema.Null,
-    Schema.Undefined,
-    Schema.Array(ActivityValue),
-    Schema.Record(Schema.String, ActivityValue),
-  ]),
-);
+export type ActivityValue = ActivityRecord[string];
 
-const isActivityRecord = Schema.is(Schema.Record(Schema.String, ActivityValue));
-
-/** Decode persisted JSON payloads once before walking their fields. */
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This is the decoder boundary for persisted activity payloads.
+/** Probe only the outer object; callers narrow the fields they read. */
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Persisted payloads need a shallow probe so discarded descendants never bypass projection bounds.
 export function asRecord(value: unknown): ActivityRecord | null {
-  return isActivityRecord(value) ? value : null;
+  return Predicate.isObject(value) ? value : null;
 }
 
 export function asTrimmedString(value: ActivityValue): string | null {
@@ -90,7 +71,10 @@ export function projectBoundedValue(value: ActivityValue, depth = 0): ActivityVa
 
   const projected: ActivityRecord = {};
 
-  for (const [key, entry] of Object.entries(value).slice(0, MAX_PROJECTED_OBJECT_KEYS)) {
+  for (const [key, entry] of Object.entries(asRecord(value) ?? {}).slice(
+    0,
+    MAX_PROJECTED_OBJECT_KEYS,
+  )) {
     projected[key] = projectBoundedValue(entry, depth + 1);
   }
 
