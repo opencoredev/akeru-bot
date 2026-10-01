@@ -125,7 +125,7 @@ describe("Plugins dialog content", () => {
     expect(PLUGIN_DIALOG_CLASS_NAME).toContain("h-[min(48rem,90dvh)]");
     expect(PLUGIN_DIRECTORY_HEADER_CLASS_NAME).not.toContain("border-b");
     expect(PLUGIN_DIRECTORY_HEADER_CLASS_NAME).not.toContain("overflow-y-auto");
-    expect(PLUGIN_DIRECTORY_PANEL_CLASS_NAME).toContain("pt-5!");
+    expect(PLUGIN_DIRECTORY_PANEL_CLASS_NAME).not.toContain("pt-5!");
     expect(PLUGIN_DIRECTORY_FILTERS.slice(3)).toEqual(
       PLUGIN_CATEGORIES.filter((category) =>
         listedCatalog.some((plugin) => plugin.category === category),

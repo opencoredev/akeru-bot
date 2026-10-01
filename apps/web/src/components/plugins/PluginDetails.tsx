@@ -299,7 +299,7 @@ export function PluginDetails({
           </div>
         </WorkspacePageHeader>
       ) : (
-        <DialogHeader className="border-b px-5 py-4">
+        <DialogHeader variant="divided" className="px-5 py-4">
           <div className="flex items-center gap-2 pe-8">
             <Button aria-label="Back to plugins" size="icon-sm" variant="ghost" onClick={onBack}>
               <AppIcon icon={ArrowLeft01Icon} className="size-4" />

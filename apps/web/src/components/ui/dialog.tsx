@@ -91,11 +91,20 @@ function DialogPopup({
   );
 }
 
-function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+function DialogHeader({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"div"> & {
+  /** `directory` is the compact header above a searchable catalog; `divided` adds a rule below. */
+  variant?: "default" | "directory" | "divided";
+}) {
   return (
     <div
       className={cn(
         "flex flex-col gap-2 p-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-panel])]:pb-3 max-sm:pb-4",
+        variant === "directory" && "gap-3 px-6 pt-5 pb-4",
+        variant === "divided" && "border-b",
         className,
       )}
       data-slot="dialog-header"
@@ -148,13 +157,19 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
 function DialogPanel({
   className,
   scrollFade = true,
+  variant = "default",
   ...props
-}: React.ComponentProps<"div"> & { scrollFade?: boolean }) {
+}: React.ComponentProps<"div"> & {
+  scrollFade?: boolean;
+  /** `directory` keeps the catalog body tight under a `directory` header. */
+  variant?: "default" | "directory";
+}) {
   return (
     <ScrollArea scrollFade={scrollFade}>
       <div
         className={cn(
           "p-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-header])]:pt-1 in-[[data-slot=dialog-popup]:has([data-slot=dialog-footer]:not(.border-t))]:pb-1",
+          variant === "directory" && "px-5 pt-5! pb-5 sm:px-6",
           className,
         )}
         data-slot="dialog-panel"
