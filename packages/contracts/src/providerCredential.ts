@@ -25,11 +25,14 @@ export function instanceUsesSavedCredential(
 ): boolean {
   if (!instance) return true;
   const connectionKeys = SUBSCRIPTION_CONNECTION_ENV_KEYS[provider] ?? [];
+
   if (instance.environment?.some(({ name }) => connectionKeys.includes(name))) return false;
+
   if (provider === "opencode-go") {
     const inlineConfig = instance.environment?.find(
       ({ name }) => name === "OPENCODE_CONFIG_CONTENT",
     )?.value;
+
     if (inlineConfig) {
       try {
         const config = JSON.parse(inlineConfig) as {
@@ -37,7 +40,9 @@ export function instanceUsesSavedCredential(
             readonly "opencode-go"?: { readonly options?: Record<string, unknown> };
           };
         };
+
         const options = config.provider?.["opencode-go"]?.options;
+
         if (options && (Object.hasOwn(options, "apiKey") || Object.hasOwn(options, "baseURL"))) {
           return false;
         }
@@ -46,21 +51,28 @@ export function instanceUsesSavedCredential(
       }
     }
   }
+
   if (provider === "anthropic") {
     const config = instance.config;
+
     const homePath =
       typeof config === "object" && config !== null && "homePath" in config
         ? config.homePath
         : undefined;
+
     if (typeof homePath === "string" && homePath.trim().length > 0) return false;
   }
+
   if (provider === "openai-codex") {
     const config = instance.config;
+
     const homePath =
       typeof config === "object" && config !== null && "homePath" in config
         ? config.homePath
         : undefined;
+
     if (typeof homePath === "string" && homePath.trim().length > 0) return false;
   }
+
   return true;
 }

@@ -234,7 +234,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
 );
+
 export { WS_METHODS } from "./rpc/methods.ts";
+
 export {
   WsServerUpsertKeybindingRpc,
   WsServerRemoveKeybindingRpc,
@@ -317,12 +319,14 @@ export {
   WsSubscribeBackgroundPolicyRpc,
   WsSubscribeResourceTelemetryRpc,
 } from "./rpc/server.ts";
+
 export {
   WsProjectsSearchEntriesRpc,
   WsProjectsListEntriesRpc,
   WsProjectsReadFileRpc,
   WsProjectsWriteFileRpc,
 } from "./rpc/project.ts";
+
 export {
   WsComputerGetStateRpc,
   WsComputerOpenRpc,
@@ -333,6 +337,7 @@ export {
   WsComputerStopRpc,
   WsComputerEventsRpc,
 } from "./rpc/computer.ts";
+
 export {
   WsPreviewOpenRpc,
   WsPreviewNavigateRpc,
@@ -346,6 +351,7 @@ export {
   WsPreviewAutomationFocusHostRpc,
   WsSubscribePreviewEventsRpc,
 } from "./rpc/preview.ts";
+
 export {
   WsOrchestrationDispatchCommandRpc,
   WsOrchestrationGetWorkflowScriptRpc,

@@ -22,6 +22,7 @@ function lookup(catalog: TranslationCatalog, message: string): string {
 export function translate(locale: string, message: string, params?: TranslationParams): string {
   // Synchronous callers stay on English until a loaded catalog is supplied through createTranslator.
   void locale;
+
   return interpolate(lookup(englishCatalog, message), params);
 }
 
@@ -33,6 +34,7 @@ function renderPlural(
   catalog: TranslationCatalog = englishCatalog,
 ): string {
   const category = pluralRules(locale).select(count);
+
   return interpolate(lookup(catalog, forms[category] ?? forms.other), {
     ...params,
     count: numberFormatter(locale).format(count),
@@ -51,6 +53,7 @@ export function plural(
 /** Catalog injection exercises other locales in tests without shipping additional languages. */
 export function createTranslator(locale: string, testCatalog?: TranslationCatalog) {
   const resolvedLocale = testCatalog ? (canonicalLocale(locale) ?? "en") : resolveLocale(locale);
+
   const translateMessage = (message: string, params?: TranslationParams) =>
     interpolate(
       testCatalog && Object.hasOwn(testCatalog, message)
@@ -58,7 +61,9 @@ export function createTranslator(locale: string, testCatalog?: TranslationCatalo
         : lookup(englishCatalog, message),
       params,
     );
+
   const catalog = testCatalog ?? englishCatalog;
+
   return {
     locale: resolvedLocale,
     t: (key: MessageKey, params?: TranslationParams) => translateMessage(key, params),

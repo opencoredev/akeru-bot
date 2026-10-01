@@ -24,12 +24,14 @@ describe("ACP child process termination", () => {
   it.effect("retains the process identifier and exact exit-status cause", () =>
     Effect.gen(function* () {
       const rootCause = new Error("private process diagnostics");
+
       const cause = PlatformError.systemError({
         _tag: "Unknown",
         module: "ChildProcess",
         method: "exitCode",
         cause: rootCause,
       });
+
       const error = yield* makeTerminationError({
         pid: ChildProcessSpawner.ProcessId(42),
         exitCode: Effect.fail(cause),

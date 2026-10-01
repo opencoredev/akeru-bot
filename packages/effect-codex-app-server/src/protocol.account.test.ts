@@ -15,10 +15,12 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
         CodexRpc.CLIENT_REQUEST_RESPONSES["account/usage/read"],
         CodexSchema.V2GetAccountTokenUsageResponse,
       );
+
       const decoded = yield* decodeAccountTokenUsageResponse({
         dailyUsageBuckets: [{ startDate: "2026-06-10", tokens: 42 }],
         summary: { lifetimeTokens: 42 },
       });
+
       assert.deepEqual(decoded, {
         dailyUsageBuckets: [{ startDate: "2026-06-10", tokens: 42 }],
         summary: { lifetimeTokens: 42 },

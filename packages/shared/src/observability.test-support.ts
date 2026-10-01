@@ -51,6 +51,7 @@ export const makeRecord = (name: string, suffix = ""): TraceRecord => ({
 
 export const readTraceRecords = Effect.fn("readTraceRecords")(function* (tracePath: string) {
   const fileSystem = yield* FileSystem.FileSystem;
+
   return (yield* fileSystem.readFileString(tracePath))
     .trim()
     .split("\n")

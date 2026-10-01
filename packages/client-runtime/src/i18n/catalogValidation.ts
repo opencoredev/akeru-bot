@@ -10,6 +10,7 @@ function parameters(message: string): string {
 /** Validate a complete catalog before making a language available. */
 export function validateCatalog(catalog: TranslationCatalog): string[] {
   const issues: string[] = [];
+
   for (const [key, source] of Object.entries(englishCatalog)) {
     if (!Object.hasOwn(catalog, key)) {
       issues.push(`Missing message: ${key}`);
@@ -17,8 +18,10 @@ export function validateCatalog(catalog: TranslationCatalog): string[] {
       issues.push(`Parameter mismatch: ${key}`);
     }
   }
+
   for (const key of Object.keys(catalog)) {
     if (!Object.hasOwn(englishCatalog, key)) issues.push(`Unknown message: ${key}`);
   }
+
   return issues;
 }

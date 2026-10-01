@@ -43,6 +43,7 @@ function isLoopbackHostname(hostname: string): boolean {
     .trim()
     .toLowerCase()
     .replace(/^\[(.*)\]$/, "$1");
+
   return normalized === "127.0.0.1" || normalized === "::1" || normalized === "localhost";
 }
 
@@ -53,10 +54,13 @@ export const resolveLoopbackSshHttpBaseUrl = Effect.fn("ssh/tunnel.resolveLoopba
         if (typeof rawHttpBaseUrl !== "string" || rawHttpBaseUrl.trim().length === 0) {
           throw new Error("Invalid SSH forwarded http base URL.");
         }
+
         const baseUrl = new URL(rawHttpBaseUrl);
+
         if (!isLoopbackHostname(baseUrl.hostname)) {
           throw new Error("SSH desktop bridge only supports loopback forwarded URLs.");
         }
+
         return baseUrl.toString();
       },
       catch: (cause) =>

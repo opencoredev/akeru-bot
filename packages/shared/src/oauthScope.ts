@@ -25,6 +25,7 @@ export function parseOAuthScope(value: string): ReadonlyArray<string> | null {
   }
 
   const scopes = value.split(" ");
+
   if (scopes.some((scope) => !OAUTH_SCOPE_TOKEN.test(scope))) {
     return null;
   }
@@ -36,6 +37,7 @@ export function encodeOAuthScope(scopes: ReadonlyArray<string>): string {
   const invalidScopes = scopes.filter((scope) => !OAUTH_SCOPE_TOKEN.test(scope));
   const seen = new Set<string>();
   const duplicateScopes = new Set<string>();
+
   for (const scope of scopes) {
     if (seen.has(scope)) duplicateScopes.add(scope);
     seen.add(scope);
@@ -48,11 +50,13 @@ export function encodeOAuthScope(scopes: ReadonlyArray<string>): string {
       duplicateScopes: [...duplicateScopes],
     });
   }
+
   return scopes.join(" ");
 }
 
 export function oauthScopeSetEquals(value: string, expectedScopes: ReadonlyArray<string>): boolean {
   const scopes = parseOAuthScope(value);
+
   return (
     scopes !== null &&
     scopes.length === new Set(expectedScopes).size &&
@@ -65,11 +69,13 @@ export function parseAllowedOAuthScope<Scope extends string>(input: {
   readonly allowedScopes: ReadonlySet<Scope>;
 }): ReadonlyArray<Scope> | null {
   const scopes = parseOAuthScope(input.value);
+
   if (
     scopes === null ||
     !scopes.every((scope): scope is Scope => input.allowedScopes.has(scope as Scope))
   ) {
     return null;
   }
+
   return scopes;
 }

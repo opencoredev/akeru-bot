@@ -59,10 +59,14 @@ export function dictationUnavailableReason(input: {
   readonly transcriptionReason?: string | null;
 }): string | null {
   if (input.callActive) return DICTATION_UNAVAILABLE.callActive;
+
   if (!input.connected) return DICTATION_UNAVAILABLE.disconnected;
+
   if (!input.captureAvailable) return input.captureReason ?? DICTATION_UNAVAILABLE.capture;
+
   if (!input.transcriptionAvailable) {
     return input.transcriptionReason ?? DICTATION_UNAVAILABLE.transcription;
   }
+
   return null;
 }

@@ -20,6 +20,7 @@ import type { RpcSession } from "../rpc/session.ts";
 import { createBotInboxEnvironmentAtoms } from "./botInbox.ts";
 
 const environmentId = EnvironmentId.make("inbox-environment");
+
 const session = (client: WsRpcProtocolClient): RpcSession => ({
   client,
   initialConfig: Effect.never,
@@ -32,10 +33,12 @@ it.effect("routes incident resolution and refreshes the environment inbox", () =
   Effect.scoped(
     Effect.gen(function* () {
       const resolved: string[] = [];
+
       const client = {
         [WS_METHODS.botInboxResolve]: ({ id }: { id: string }) =>
           Effect.sync(() => resolved.push(id)),
       } as unknown as WsRpcProtocolClient;
+
       const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
         target: new PrimaryConnectionTarget({
           environmentId,
@@ -58,8 +61,10 @@ it.effect("routes incident resolution and refreshes the environment inbox", () =
         retryNow: Effect.void,
         retryIfDesired: Effect.void,
       } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+
       const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_id, effect) =>
         Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+
       const atoms = createBotInboxEnvironmentAtoms(
         Atom.runtime(
           Layer.succeed(
@@ -70,9 +75,11 @@ it.effect("routes incident resolution and refreshes the environment inbox", () =
           ),
         ),
       );
+
       const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
         Effect.sync(() => value.dispose()),
       );
+
       const refresh = vi.spyOn(registry, "refresh");
 
       const result = yield* Effect.promise(() =>

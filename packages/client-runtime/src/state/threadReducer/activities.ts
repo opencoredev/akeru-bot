@@ -35,11 +35,14 @@ export function isResolvableContextWindowActivity(activity: OrchestrationThreadA
   if (activity.kind !== "context-window.updated") {
     return false;
   }
+
   const payload =
     activity.payload && typeof activity.payload === "object"
       ? (activity.payload as Record<string, unknown>)
       : null;
+
   const usedTokens = payload?.usedTokens;
+
   return typeof usedTokens === "number" && Number.isFinite(usedTokens) && usedTokens >= 0;
 }
 
@@ -63,16 +66,19 @@ export function applyActivityAppendedEvent(
   // array; a superseded array falls back to the sorting path.
   const ids = activityIdIndex.get(thread.activities);
   const lastActivity = thread.activities.at(-1);
+
   if (
     ids !== undefined &&
     (lastActivity === undefined || activityOrder(lastActivity, activity) <= 0) &&
     !ids.has(activity.id)
   ) {
     let activities: ReadonlyArray<OrchestrationThreadActivity>;
+
     if (supersedesContextWindow) {
       // Dropping rows from a sorted array keeps it sorted, so a superseding
       // update copies once and appends instead of re-sorting the history.
       const retained: Array<OrchestrationThreadActivity> = [];
+
       for (const entry of thread.activities) {
         if (entry.turnId === activity.turnId && isResolvableContextWindowActivity(entry)) {
           ids.delete(entry.id);
@@ -80,14 +86,17 @@ export function applyActivityAppendedEvent(
           retained.push(entry);
         }
       }
+
       retained.push(activity);
       activities = retained;
     } else {
       activities = Arr.append(thread.activities, activity);
     }
+
     activityIdIndex.delete(thread.activities);
     ids.add(activity.id);
     activityIdIndex.set(activities, ids);
+
     return {
       kind: "updated",
       thread: {
@@ -97,6 +106,7 @@ export function applyActivityAppendedEvent(
       },
     };
   }
+
   const activities = pipe(
     thread.activities,
     Arr.filter(
@@ -111,6 +121,7 @@ export function applyActivityAppendedEvent(
     Arr.append(activity),
     Arr.sort(activityOrder),
   );
+
   activityIdIndex.set(activities, new Set(activities.map((entry) => entry.id)));
 
   return {

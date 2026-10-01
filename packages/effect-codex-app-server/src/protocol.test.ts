@@ -54,6 +54,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
     () =>
       Effect.gen(function* () {
         const { stdio, input, output } = yield* makeInMemoryStdio();
+
         const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
           stdio,
           rawNotificationBufferSize: "unbounded",
@@ -62,6 +63,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
 
         const notificationDeferred =
           yield* Deferred.make<ReadonlyArray<CodexProtocol.CodexAppServerIncomingNotification>>();
+
         const requestDeferred =
           yield* Deferred.make<ReadonlyArray<CodexProtocol.CodexAppServerIncomingRequest>>();
 
@@ -97,6 +99,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
         const pendingInitialize = yield* transport
           .request("initialize", initializeParams)
           .pipe(Effect.forkScoped);
+
         assert.deepEqual(yield* decodeJson(yield* Queue.take(output)), {
           id: 1,
           method: "initialize",
@@ -244,6 +247,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
           onSuccess: () => assert.fail("Expected request encoding to fail"),
         }),
       );
+
       assert.instanceOf(requestError, CodexError.CodexAppServerProtocolParseError);
       assert.deepInclude(requestError, {
         operation: "encode-wire-message",
@@ -278,6 +282,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
           onSuccess: () => assert.fail("Expected Codex App Server request to fail"),
         }),
       );
+
       assert.instanceOf(error, CodexError.CodexAppServerRequestError);
       assert.deepInclude(error, {
         code: -32602,

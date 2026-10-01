@@ -5,6 +5,7 @@ import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ProviderDriverKind } from "./providerInstance.ts";
 
 export const ProviderOptionDescriptorType = Schema.Literals(["select", "boolean"]);
+
 export type ProviderOptionDescriptorType = typeof ProviderOptionDescriptorType.Type;
 
 export const ProviderOptionChoice = Schema.Struct({
@@ -13,6 +14,7 @@ export const ProviderOptionChoice = Schema.Struct({
   description: Schema.optional(TrimmedNonEmptyString),
   isDefault: Schema.optional(Schema.Boolean),
 });
+
 export type ProviderOptionChoice = typeof ProviderOptionChoice.Type;
 
 const ProviderOptionDescriptorBase = {
@@ -28,6 +30,7 @@ export const SelectProviderOptionDescriptor = Schema.Struct({
   currentValue: Schema.optional(TrimmedNonEmptyString),
   promptInjectedValues: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
 });
+
 export type SelectProviderOptionDescriptor = typeof SelectProviderOptionDescriptor.Type;
 
 export const BooleanProviderOptionDescriptor = Schema.Struct({
@@ -35,21 +38,25 @@ export const BooleanProviderOptionDescriptor = Schema.Struct({
   type: Schema.Literal("boolean"),
   currentValue: Schema.optional(Schema.Boolean),
 });
+
 export type BooleanProviderOptionDescriptor = typeof BooleanProviderOptionDescriptor.Type;
 
 export const ProviderOptionDescriptor = Schema.Union([
   SelectProviderOptionDescriptor,
   BooleanProviderOptionDescriptor,
 ]);
+
 export type ProviderOptionDescriptor = typeof ProviderOptionDescriptor.Type;
 
 export const ProviderOptionSelectionValue = Schema.Union([TrimmedNonEmptyString, Schema.Boolean]);
+
 export type ProviderOptionSelectionValue = typeof ProviderOptionSelectionValue.Type;
 
 export const ProviderOptionSelection = Schema.Struct({
   id: TrimmedNonEmptyString,
   value: ProviderOptionSelectionValue,
 });
+
 export type ProviderOptionSelection = typeof ProviderOptionSelection.Type;
 
 /**
@@ -91,17 +98,22 @@ export const ProviderOptionSelections = Schema.Union([
   Schema.Array(ProviderOptionSelection),
   ProviderOptionSelectionsFromLegacyObject,
 ]);
+
 export type ProviderOptionSelections = typeof ProviderOptionSelections.Type;
 
 function coerceLegacyOptionsObjectToArray(
   record: Record<string, unknown>,
 ): ReadonlyArray<ProviderOptionSelection> {
   const entries: Array<ProviderOptionSelection> = [];
+
   for (const [rawKey, rawValue] of Object.entries(record)) {
     const id = typeof rawKey === "string" ? rawKey.trim() : "";
+
     if (id.length === 0) continue;
+
     if (typeof rawValue === "string") {
       const trimmed = rawValue.trim();
+
       if (trimmed.length > 0) entries.push({ id, value: trimmed });
     } else if (typeof rawValue === "boolean") {
       entries.push({ id, value: rawValue });
@@ -109,6 +121,7 @@ function coerceLegacyOptionsObjectToArray(
     // Drop anything else (numbers, null, nested objects/arrays) to match the
     // permissive normalization performed by migration 026.
   }
+
   return entries;
 }
 
@@ -116,22 +129,30 @@ function canonicalSelectionsToLegacyObject(
   selections: ReadonlyArray<ProviderOptionSelection>,
 ): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {};
+
   for (const { id, value } of selections) {
     out[id] = value;
   }
+
   return out;
 }
 
 export const ModelCapabilities = Schema.Struct({
   optionDescriptors: Schema.optional(Schema.Array(ProviderOptionDescriptor)),
 });
+
 export type ModelCapabilities = typeof ModelCapabilities.Type;
 
 const CODEX_DRIVER_KIND = ProviderDriverKind.make("codex");
+
 const CLAUDE_DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
+
 const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
+
 const KIMI_DRIVER_KIND = ProviderDriverKind.make("kimi");
+
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
+
 const OPENCODE_GO_DRIVER_KIND = ProviderDriverKind.make("opencodeGo");
 
 export const DEFAULT_MODEL = "gpt-6-sol";
@@ -146,7 +167,9 @@ export const PREFERRED_DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [
   "gpt-5.6-sol",
   "gpt-5.6-terra",
 ];
+
 export const DEFAULT_TEXT_GENERATION_MODEL = "gpt-5.6-luna";
+
 export const DEFAULT_TEXT_GENERATION_REASONING_EFFORT = "low";
 
 export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {

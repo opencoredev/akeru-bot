@@ -22,12 +22,14 @@ describe("ssh tunnel scripts", () => {
           }),
         ),
       );
+
       yield* Effect.yieldNow;
       yield* TestClock.adjust(Duration.millis(1_000));
 
       const result = yield* Fiber.join(fiber);
 
       assert.isTrue(Result.isFailure(result));
+
       if (Result.isFailure(result)) {
         assert.include(result.failure.message, "Timed out waiting 1000ms");
       }

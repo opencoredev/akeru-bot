@@ -4,6 +4,7 @@ import { AkeruMemoryArchiveV1, AkeruMemoryArchiveV2 } from "./akeruMemory/transf
 export const AkeruMemoryArchive = Schema.Union([AkeruMemoryArchiveV1, AkeruMemoryArchiveV2]);
 
 export type AkeruMemoryArchive = typeof AkeruMemoryArchive.Type;
+
 export {
   AKERU_MEMORY_PACKET_MAX_FACTS,
   AKERU_MEMORY_PACKET_MAX_CHARS,
@@ -38,6 +39,7 @@ export {
   AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY,
   AkeruMemoryApprovalRequest,
 } from "./akeruMemory/base.ts";
+
 export {
   AkeruMemoryDocumentTarget,
   AkeruMemoryFileOperation,
@@ -50,6 +52,7 @@ export {
   AkeruMemoryDocumentReplaceInput,
   AkeruMemoryObservationsClearInput,
 } from "./akeruMemory/documents.ts";
+
 export {
   AkeruMemoryShareScope,
   AkeruMemoryArchiveFile,
@@ -78,6 +81,7 @@ export {
   AkeruMemoryImportApplyInput,
   AkeruMemoryImportApplyResult,
 } from "./akeruMemory/transfer.ts";
+
 export {
   AkeruMemoryMutation,
   AkeruMemoryMutateInput,

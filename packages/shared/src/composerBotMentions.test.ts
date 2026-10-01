@@ -51,6 +51,7 @@ describe("composerBotMentionDetail", () => {
       { id: "bot-grok-2", name: "Mika", title: "Reviewer" },
       { id: "bot-3", name: "Mila", title: "Writer" },
     ];
+
     expect(titled.map((bot) => composerBotMentionDetail(bot, titled))).toEqual([
       "Designer",
       "Reviewer",

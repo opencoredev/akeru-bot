@@ -29,17 +29,23 @@ describe("environment query lifecycle", () => {
           const firstStarted = Latch.makeUnsafe();
           const failFirst = Latch.makeUnsafe();
           const firstSettled = Latch.makeUnsafe();
+
           const unavailable = new EnvironmentRpcUnavailableError({
             environmentId: QUERY_ENVIRONMENT.environmentId,
             message: "Query environment is not connected.",
           });
+
           let executions = 0;
+
           const execute = Effect.suspend(() => {
             executions += 1;
+
             if (executions > 1) {
               return Effect.succeed("recovered");
             }
+
             firstStarted.openUnsafe();
+
             return failFirst.await.pipe(
               Effect.andThen(Effect.fail(unavailable)),
               Effect.ensuring(
@@ -49,9 +55,11 @@ describe("environment query lifecycle", () => {
               ),
             );
           });
+
           const harness = yield* makeEnvironmentQueryHarness(execute);
           const registry = AtomRegistry.make();
           const observed: Array<AsyncResult.AsyncResult<string, unknown>> = [];
+
           const unsubscribe = registry.subscribe(
             harness.atom,
             (result) => {
@@ -59,6 +67,7 @@ describe("environment query lifecycle", () => {
             },
             { immediate: true },
           );
+
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => {
               unsubscribe();
@@ -156,6 +165,7 @@ describe("environment query lifecycle", () => {
         const result = registry.get(harness.atom);
         expect(AsyncResult.isFailure(result)).toBe(true);
         expect(result.waiting).toBe(false);
+
         if (AsyncResult.isFailure(result) && expectedFailure !== null) {
           expect(Cause.squash(result.cause)).toBe(expectedFailure);
         }
@@ -172,24 +182,33 @@ describe("environment query lifecycle", () => {
         const refreshStarted = Latch.makeUnsafe();
         const finishRefresh = Latch.makeUnsafe();
         let executions = 0;
+
         const execute = Effect.suspend(() => {
           executions += 1;
+
           if (executions === 1) {
             firstStarted.openUnsafe();
+
             return failFirst.await.pipe(Effect.andThen(Effect.fail(expectedFailure)));
           }
+
           refreshStarted.openUnsafe();
+
           return finishRefresh.await.pipe(Effect.as("recovered"));
         });
+
         const harness = yield* makeEnvironmentQueryHarness(execute);
         const registry = yield* mountEnvironmentQuery(harness.atom);
 
         yield* firstStarted.await;
         failFirst.openUnsafe();
+
         const initial = yield* AtomRegistry.getResult(registry, harness.atom, {
           suspendOnWaiting: true,
         }).pipe(Effect.exit);
+
         expect(Exit.isFailure(initial)).toBe(true);
+
         if (Exit.isFailure(initial)) {
           expect(Cause.squash(initial.cause)).toBe(expectedFailure);
         }
@@ -203,6 +222,7 @@ describe("environment query lifecycle", () => {
         const refreshing = registry.get(harness.atom);
         expect(AsyncResult.isFailure(refreshing)).toBe(true);
         expect(refreshing.waiting).toBe(true);
+
         if (AsyncResult.isFailure(refreshing)) {
           expect(Cause.squash(refreshing.cause)).toBe(expectedFailure);
         }
@@ -240,6 +260,7 @@ describe("executeAtomQuery", () => {
     const [first, second] = await Promise.all([firstResult, secondResult]);
     expect(first._tag).toBe("Success");
     expect(second._tag).toBe("Success");
+
     if (first._tag === "Success" && second._tag === "Success") {
       expect(first.value).toBe("first");
       expect(second.value).toBe("second");

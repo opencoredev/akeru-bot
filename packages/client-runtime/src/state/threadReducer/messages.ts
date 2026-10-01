@@ -24,6 +24,7 @@ export function applyChannelDeliverySetEvent(
         }
       : entry,
   );
+
   return {
     kind: "updated",
     thread: { ...thread, messages, updatedAt: event.payload.updatedAt },
@@ -49,6 +50,7 @@ export function applyMessageSentEvent(
   };
 
   const existingMessage = thread.messages.find((entry) => entry.id === message.id);
+
   const messages = existingMessage
     ? Arr.map(thread.messages, (entry) =>
         entry.id !== message.id
@@ -67,6 +69,7 @@ export function applyMessageSentEvent(
             },
       )
     : Arr.append(thread.messages, message);
+
   // Update latestTurn for assistant messages bound to a turn. A completed
   // assistant message only settles the turn once the session is no longer
   // running it — providers may emit several assistant messages per turn
@@ -77,7 +80,9 @@ export function applyMessageSentEvent(
     event.payload.turnId !== null &&
     thread.session?.status === "running" &&
     thread.session.activeTurnId === event.payload.turnId;
+
   const settlesTurn = !event.payload.streaming && !turnStillRunning;
+
   const latestTurn = reuseLatestTurn(
     thread.latestTurn,
     event.payload.role === "assistant" &&
@@ -138,13 +143,16 @@ export function applyMessageReactionSetEvent(
   event: Extract<OrchestrationEvent, { readonly type: "thread.message-reaction-set" }>,
 ): ThreadDetailReducerResult {
   const message = thread.messages.find((entry) => entry.id === event.payload.messageId);
+
   if (!message) return { kind: "unchanged" };
+
   const withoutReaction = (message.reactions ?? []).filter(
     (reaction) =>
       reaction.botId !== event.payload.botId ||
       reaction.personId !== event.payload.personId ||
       reaction.emoji !== event.payload.emoji,
   );
+
   return {
     kind: "updated",
     thread: {

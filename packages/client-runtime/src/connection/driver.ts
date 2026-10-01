@@ -55,6 +55,7 @@ export const make = Effect.gen(function* () {
     const session = yield* sessions.connect(prepared);
     yield* reportProgress({ stage: "synchronizing", prepared });
     yield* session.ready;
+
     return { prepared, session } satisfies EnvironmentConnectionLease;
   });
 

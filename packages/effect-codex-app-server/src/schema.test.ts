@@ -4,19 +4,31 @@ import * as Schema from "effect/Schema";
 import * as CodexSchema from "./schema.ts";
 
 const isGetAccountResponse = Schema.is(CodexSchema.V2GetAccountResponse);
+
 const isThreadReadResponse = Schema.is(CodexSchema.V2ThreadReadResponse);
+
 const isThreadResumeResponse = Schema.is(CodexSchema.V2ThreadResumeResponse);
+
 const isThreadRollbackResponse = Schema.is(CodexSchema.V2ThreadRollbackResponse);
+
 const isThreadForkResponse = Schema.is(CodexSchema.V2ThreadForkResponse);
+
 const isThreadListResponse = Schema.is(CodexSchema.V2ThreadListResponse);
+
 const isTurnCompletedNotification = Schema.is(CodexSchema.V2TurnCompletedNotification);
+
 const isServerCollabTool = Schema.is(CodexSchema.ServerNotification__CollabAgentTool);
+
 const isResumeCollabTool = Schema.is(CodexSchema.V2ThreadResumeResponse__CollabAgentTool);
+
 const isServerCollabStatus = Schema.is(CodexSchema.ServerNotification__CollabAgentToolCallStatus);
+
 const isResumeCollabStatus = Schema.is(
   CodexSchema.V2ThreadResumeResponse__CollabAgentToolCallStatus,
 );
+
 const decodeThreadResumeResponse = Schema.decodeUnknownSync(CodexSchema.V2ThreadResumeResponse);
+
 const isSubAgentActivityKindCompleted = [
   Schema.is(CodexSchema.ServerNotification__SubAgentActivityKind),
   Schema.is(CodexSchema.V2ItemStartedNotification__SubAgentActivityKind),

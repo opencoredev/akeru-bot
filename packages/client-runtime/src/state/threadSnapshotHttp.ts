@@ -47,8 +47,10 @@ export const fetchEnvironmentThreadSnapshot = Effect.fn(
     input.prepared.httpBaseUrl,
     `/api/orchestration/threads/${input.threadId}`,
   );
+
   const client = yield* makeEnvironmentHttpApiClient(input.prepared.httpBaseUrl);
   const headers = yield* buildEnvironmentAuthHeaders(input.prepared.httpAuthorization);
+
   return yield* executeEnvironmentHttpRequest(
     requestUrl,
     input.timeoutMs ?? DEFAULT_THREAD_SNAPSHOT_TIMEOUT_MS,
@@ -95,6 +97,7 @@ export const threadSnapshotLoaderLayer: Layer.Layer<
   ThreadSnapshotLoader,
   Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;
+
     return ThreadSnapshotLoader.of({
       load: (prepared: PreparedConnection, threadId: ThreadId, window?: ThreadSnapshotWindow) =>
         fetchEnvironmentThreadSnapshot({

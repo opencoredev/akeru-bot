@@ -19,6 +19,7 @@ describe("EnvironmentSupervisor", () => {
       const harness = yield* makeHarness({
         ready: () => Effect.never,
       });
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));
@@ -51,6 +52,7 @@ describe("EnvironmentSupervisor", () => {
       const harness = yield* makeHarness({
         prepare: () => Effect.never,
       });
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));
@@ -60,6 +62,7 @@ describe("EnvironmentSupervisor", () => {
         (state) => state.phase === "connecting" && state.stage === "preparing",
       );
       yield* TestClock.adjust("15 seconds");
+
       const retrying = yield* eventuallyState(
         supervisor.state,
         (state) => state.phase === "backoff" && state.attempt === 1,
@@ -83,6 +86,7 @@ describe("EnvironmentSupervisor", () => {
             ? Effect.die(new Error("Native transport defect."))
             : Effect.succeed(PREPARED_CONNECTION),
       });
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));
@@ -91,6 +95,7 @@ describe("EnvironmentSupervisor", () => {
         supervisor.state,
         (state) => state.phase === "backoff" && state.attempt === 1,
       );
+
       expect(failed).toMatchObject({
         lastFailure: {
           _tag: "ConnectionTransientError",

@@ -7,6 +7,7 @@
 import * as Schema from "effect/Schema";
 
 const TAB_ID_PREFIX = "tab_";
+
 let nextPreviewTabSequence = 0;
 
 /**
@@ -15,6 +16,7 @@ let nextPreviewTabSequence = 0;
  */
 export function newPreviewTabId(): string {
   nextPreviewTabSequence += 1;
+
   return `${TAB_ID_PREFIX}${nextPreviewTabSequence.toString(36)}`;
 }
 
@@ -32,7 +34,9 @@ const LOOPBACK_PREFIX_PATTERN = /^(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])
 
 export function isLoopbackHost(host: string): boolean {
   if (LOOPBACK_HOSTS.has(host)) return true;
+
   if (host === "[::1]") return true;
+
   return false;
 }
 
@@ -40,7 +44,9 @@ export function isLoopbackHost(host: string): boolean {
 export function isPreviewableUrl(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl);
+
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+
     return isLoopbackHost(parsed.hostname);
   } catch {
     return false;
@@ -58,6 +64,7 @@ export class PreviewUrlNormalizationError extends Schema.TaggedErrorClass<Previe
 ) {
   override get message(): string {
     const protocol = this.protocol === undefined ? "" : `: ${this.protocol}`;
+
     return `Invalid preview URL (${this.reason}${protocol}; input length ${this.inputLength}).`;
   }
 }
@@ -80,14 +87,19 @@ function previewUrlProtocol(rawUrl: string): string | undefined {
  */
 export function normalizePreviewUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
+
   if (trimmed.length === 0) {
     throw new PreviewUrlNormalizationError({ inputLength: rawUrl.length, reason: "empty" });
   }
+
   const useHttp = LOOPBACK_PREFIX_PATTERN.test(trimmed);
+
   const candidate = trimmed.includes("://")
     ? trimmed
     : `${useHttp ? "http" : "https"}://${trimmed}`;
+
   let parsed: URL;
+
   try {
     parsed = new URL(candidate);
   } catch (cause) {
@@ -98,6 +110,7 @@ export function normalizePreviewUrl(rawUrl: string): string {
       cause,
     });
   }
+
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new PreviewUrlNormalizationError({
       inputLength: rawUrl.length,
@@ -105,5 +118,6 @@ export function normalizePreviewUrl(rawUrl: string): string {
       protocol: parsed.protocol,
     });
   }
+
   return parsed.href;
 }

@@ -33,6 +33,7 @@ export function renderSchemaMap(
     `export const ${constantName} = {`,
     ...entries.map((entry) => {
       const schemaName = typeName(entry);
+
       return `  ${JSON.stringify(entry.method)}: ${
         schemaName === "undefined" ? "undefined" : `CodexSchema.${schemaName}`
       },`;
@@ -48,15 +49,18 @@ export function renderSchemaTypeReference(schemaName: string) {
 
 export function exportNameForPath(filePath: string): string {
   const relative = filePath.replace(/^schema\/json\//, "").replace(/\.json$/, "");
+
   if (!relative.includes("/")) {
     return relative;
   }
 
   const [namespace, name] = relative.split("/", 2) as [string, string];
+
   const namespacePrefix = namespace
     .split(/[^A-Za-z0-9]+/)
     .filter(Boolean)
     .map((segment) => segment[0]!.toUpperCase() + segment.slice(1))
     .join("");
+
   return `${namespacePrefix}${name}`;
 }

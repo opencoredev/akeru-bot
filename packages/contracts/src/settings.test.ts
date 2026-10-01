@@ -194,6 +194,7 @@ describe("ServerSettingsPatch string normalization", () => {
 
   it("trims encoded server settings values before validation", () => {
     const defaultSettings = decodeServerSettings({});
+
     const encoded = encodeServerSettings({
       ...defaultSettings,
       addProjectBaseDirectory: "  ~/Development  ",

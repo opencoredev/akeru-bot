@@ -107,6 +107,7 @@ describe("readEnvironmentFromWindowsShell", () => {
       if (file === "pwsh.exe") {
         throw new Error("spawn pwsh.exe ENOENT");
       }
+
       return "__T3CODE_ENV_PATH_START__\nC:\\Tools\n__T3CODE_ENV_PATH_END__\n";
     });
 
@@ -223,6 +224,7 @@ effectIt.layer(NodeServices.layer)("resolveWindowsEnvironment", (it) => {
             ? { PATH: "C:\\Profile\\Bin" }
             : { PATH: "C:\\Shell\\Bin;C:\\Windows\\System32" },
       );
+
       const commandAvailable = vi.fn(() => Effect.succeed(true));
 
       expect(
@@ -270,6 +272,7 @@ effectIt.layer(NodeServices.layer)("resolveWindowsEnvironment", (it) => {
               }
             : { PATH: "C:\\Shell\\Bin;C:\\Windows\\System32" },
       );
+
       const commandAvailable = vi.fn(() => Effect.succeed(false));
 
       expect(
@@ -317,6 +320,7 @@ effectIt.layer(NodeServices.layer)("resolveWindowsEnvironment", (it) => {
         (_names: ReadonlyArray<string>, options?: { loadProfile?: boolean }) =>
           options?.loadProfile ? { FNM_DIR: "C:\\Users\\testuser\\AppData\\Roaming\\fnm" } : {},
       );
+
       const commandAvailable = vi.fn(() => Effect.succeed(false));
 
       expect(

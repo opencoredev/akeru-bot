@@ -70,27 +70,33 @@ export function createReplyPlaybackController(
   let generation = 0;
   let disposed = false;
   const listeners = new Set<() => void>();
+
   const publish = (next: ReplyPlaybackState) => {
     state = next;
+
     for (const listener of listeners) listener();
   };
+
   const release = () => {
     generation += 1;
     abort?.abort();
     abort = null;
     const previous = audio;
     audio = null;
+
     try {
       previous?.dispose();
     } catch {
       // Native disposal must not leave this client reporting playing audio.
     }
   };
+
   const stop = () => {
     release();
     request = null;
     publish({ status: "idle" });
   };
+
   const allowed = (identity: ReplyPlaybackIdentity) =>
     !disposed &&
     context !== null &&
@@ -100,14 +106,18 @@ export function createReplyPlaybackController(
     context.threadId === identity.threadId &&
     context.provider === identity.provider &&
     context.voice === identity.voice;
+
   const fail = (error: "generation" | "playback") => {
     const failed = request;
     release();
+
     if (failed)
       publish({ status: "error", identity: failed.identity, automatic: failed.automatic, error });
   };
+
   const start = async (next: ReplyPlaybackRequest) => {
     stop();
+
     if (!allowed(next.identity) || !next.text.trim()) return;
     request = next;
     abort = new AbortController();
@@ -115,6 +125,7 @@ export function createReplyPlaybackController(
     const current = () => token === generation && allowed(next.identity);
     publish({ status: "loading", identity: next.identity, automatic: next.automatic });
     let prepared: ReplyAudioHandle;
+
     try {
       prepared = await prepare(next, abort.signal, {
         onEnded: () => {
@@ -129,25 +140,33 @@ export function createReplyPlaybackController(
       });
     } catch {
       if (current()) fail("generation");
+
       return;
     }
+
     if (!current()) {
       prepared.dispose();
+
       return;
     }
+
     audio = prepared;
+
     try {
       await prepared.play();
+
       if (current())
         publish({ status: "playing", identity: next.identity, automatic: next.automatic });
     } catch {
       if (current()) fail("playback");
     }
   };
+
   return {
     getSnapshot: () => state,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
+
       return () => {
         listeners.delete(listener);
       };
@@ -163,8 +182,10 @@ export function createReplyPlaybackController(
       if (state.status !== "paused" || !audio) return;
       const token = generation;
       const paused = state;
+
       try {
         await audio.play();
+
         if (token === generation && state.status === "paused")
           publish({ ...paused, status: "playing" });
       } catch {
@@ -176,6 +197,7 @@ export function createReplyPlaybackController(
     },
     setContext: (next: ReplyPlaybackContext | null) => {
       context = next;
+
       if (request && !allowed(request.identity)) stop();
     },
     reconcileMessages: (messages: ReadonlyMap<string, string>) => {

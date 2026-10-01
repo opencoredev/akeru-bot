@@ -54,6 +54,7 @@ describe("rankComposerThreadMentions", () => {
       ],
       { query: "", currentThreadId: "current", currentProjectId: "project-a" },
     );
+
     expect(ranked.map((entry) => entry.id)).toEqual(["visible"]);
   });
 
@@ -77,6 +78,7 @@ describe("rankComposerThreadMentions", () => {
         matchedIds: new Set(["content-hit"]),
       },
     );
+
     expect(ranked.map((entry) => entry.id)).toEqual([
       "local-new",
       "local-old",
@@ -103,6 +105,7 @@ describe("buildThreadMentionExcerpt", () => {
       role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
       text: `message ${index} ${"x".repeat(900)}`,
     }));
+
     const excerpt = buildThreadMentionExcerpt({ id: "t1", title: "Plan", messages });
     const body = excerpt.split("\n").slice(1, -1).join("\n");
     expect(body.length).toBeLessThanOrEqual(THREAD_MENTION_MAX_CHARS);
@@ -120,6 +123,7 @@ describe("buildThreadMentionExcerpt", () => {
         { role: "assistant", text: "Answer" },
       ],
     });
+
     expect(excerpt).toBe(
       '<chat_context id="t1" title="Say &quot;hi&quot;">\nUser: Question\nBot: Answer\n</chat_context>',
     );
@@ -146,6 +150,7 @@ describe("appendComposerMentionContext", () => {
       title: `Chat ${index}`,
       messages: [{ role: "user" as const, text: "hi" }],
     }));
+
     const result = appendComposerMentionContext("see", { browser: null, threads });
     expect(result.match(/<chat_context /g)).toHaveLength(THREAD_MENTION_MAX_THREADS);
   });

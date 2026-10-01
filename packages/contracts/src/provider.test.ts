@@ -13,10 +13,15 @@ import {
 } from "./provider.ts";
 
 const decodeProviderSessionStartInput = Schema.decodeUnknownSync(ProviderSessionStartInput);
+
 const decodeProviderSendTurnInput = Schema.decodeUnknownSync(ProviderSendTurnInput);
+
 const decodeProviderSession = Schema.decodeUnknownSync(ProviderSession);
+
 const decodeProviderEvent = Schema.decodeUnknownSync(ProviderEvent);
+
 const decodeProviderUploadFeedbackInput = Schema.decodeUnknownSync(ProviderUploadFeedbackInput);
+
 const decodeProviderUploadFeedbackResult = Schema.decodeUnknownSync(ProviderUploadFeedbackResult);
 
 function getOptionValue(
@@ -42,6 +47,7 @@ describe("ProviderSessionStartInput", () => {
       },
       runtimeMode: "full-access",
     });
+
     expect(parsed.runtimeMode).toBe("full-access");
     expect(parsed.botSandbox).toBeUndefined();
     expect(parsed.modelSelection?.instanceId).toBe("codex");
@@ -59,6 +65,7 @@ describe("ProviderSessionStartInput", () => {
       botSandboxBrowserSharing: "shared",
       runtimeMode: "full-access",
     });
+
     expect(parsed.botSandbox).toBe("vercel");
     expect(parsed.botId).toBe("bot-one");
     expect(parsed.botSandboxBrowserSharing).toBe("shared");
@@ -74,6 +81,7 @@ describe("ProviderSessionStartInput", () => {
       botSandboxBrowserSharing: "separate",
       runtimeMode: "full-access",
     });
+
     expect(parsed.botId).toBe("bot-one");
     expect(parsed.botName).toBe("Research bot");
     expect(parsed.personalityTone).toBe(40);
@@ -105,6 +113,7 @@ describe("ProviderSessionStartInput", () => {
       },
       runtimeMode: "full-access",
     });
+
     expect(parsed.provider).toBe("claudeAgent");
     expect(parsed.modelSelection?.instanceId).toBe("claudeAgent");
     expect(parsed.modelSelection?.model).toBe("claude-sonnet-4-6");
@@ -126,6 +135,7 @@ describe("ProviderSessionStartInput", () => {
         options: [{ id: "fastMode", value: true }],
       },
     });
+
     expect(parsed.provider).toBe("cursor");
     expect(parsed.modelSelection?.instanceId).toBe("cursor");
     expect(parsed.modelSelection?.model).toBe("composer-2");
@@ -211,6 +221,7 @@ describe("provider feedback", () => {
 
   it("keeps the failed thread and original cause without exposing upstream text", () => {
     const cause = new Error("provider request secret");
+
     const error = new ProviderUploadFeedbackError({
       threadId: ThreadId.make("thread-1"),
       cause,
@@ -230,6 +241,7 @@ describe("providerInstanceId routing key (slice-2 invariant)", () => {
       provider: "codex",
       runtimeMode: "full-access",
     });
+
     expect(parsed.providerInstanceId).toBeUndefined();
   });
 
@@ -240,6 +252,7 @@ describe("providerInstanceId routing key (slice-2 invariant)", () => {
       providerInstanceId: "codex_personal",
       runtimeMode: "full-access",
     });
+
     expect(parsed.providerInstanceId).toBe("codex_personal");
   });
 
@@ -253,6 +266,7 @@ describe("providerInstanceId routing key (slice-2 invariant)", () => {
       createdAt: "2024-01-01T00:00:00Z",
       updatedAt: "2024-01-01T00:00:00Z",
     });
+
     expect(session.providerInstanceId).toBe("codex_work");
   });
 
@@ -281,6 +295,7 @@ describe("providerInstanceId routing key (slice-2 invariant)", () => {
       createdAt: "2024-01-01T00:00:00Z",
       method: "session.created",
     });
+
     expect(event.provider).toBe("codex");
     expect(event.providerInstanceId).toBe("codex_personal");
   });

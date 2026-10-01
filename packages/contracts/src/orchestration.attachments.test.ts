@@ -11,6 +11,7 @@ it.effect("project favicon overrides accept only supported image files", () =>
       projectId: "project-1",
       faviconPath: "brand/icon.svg",
     });
+
     assert.strictEqual(valid.type, "project.meta.update");
 
     const invalid = yield* Effect.exit(
@@ -21,6 +22,7 @@ it.effect("project favicon overrides accept only supported image files", () =>
         faviconPath: ".env",
       }),
     );
+
     assert.strictEqual(invalid._tag, "Failure");
   }),
 );

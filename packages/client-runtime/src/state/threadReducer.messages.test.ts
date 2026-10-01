@@ -8,6 +8,7 @@ describe("applyThreadDetailEvent", () => {
   describe("thread.message-sent", () => {
     const boundMessageId = MessageId.make("msg-bound");
     const boundTurnId = TurnId.make("turn-bound");
+
     const boundCheckpoint = {
       turnId: boundTurnId,
       checkpointTurnCount: 1,
@@ -17,6 +18,7 @@ describe("applyThreadDetailEvent", () => {
       assistantMessageId: boundMessageId,
       completedAt: "2026-04-01T06:00:00.000Z",
     } satisfies OrchestrationThread["checkpoints"][number];
+
     const streamingEvent = {
       ...baseEventFields,
       sequence: 7,
@@ -72,16 +74,19 @@ describe("applyThreadDetailEvent", () => {
         ...boundCheckpoint,
         turnId: index === 0 ? boundTurnId : TurnId.make(`turn-${index}`),
       }));
+
       let thread: OrchestrationThread = { ...baseThread, checkpoints };
       let previousCheckpoints: OrchestrationThread["checkpoints"] = checkpoints;
       let oldCollectionReplacements = 0;
       let oldEntryReplacements = 0;
       let newCollectionReplacements = 0;
       let newEntryReplacements = 0;
+
       for (let index = 0; index < 100; index += 1) {
         const oldNext = previousCheckpoints.map((entry) =>
           entry.turnId === boundTurnId ? { ...entry, assistantMessageId: boundMessageId } : entry,
         );
+
         oldCollectionReplacements += Number(oldNext !== previousCheckpoints);
         oldEntryReplacements += oldNext.filter(
           (entry, i) => entry !== previousCheckpoints[i],
@@ -96,6 +101,7 @@ describe("applyThreadDetailEvent", () => {
         ).length;
         thread = result.thread;
       }
+
       expect({ oldCollectionReplacements, oldEntryReplacements }).toEqual({
         oldCollectionReplacements: 100,
         oldEntryReplacements: 100,
@@ -136,6 +142,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.messages).toHaveLength(1);
         expect(result.thread.messages[0]?.text).toBe("Hello, world!");
@@ -185,6 +192,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.messages).toHaveLength(1);
         expect(result.thread.messages[0]?.text).toBe("Hello, world!");
@@ -212,6 +220,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.latestTurn?.turnId).toBe("turn-1");
         expect(result.thread.latestTurn?.state).toBe("completed");
@@ -285,6 +294,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.messages).not.toBe(streamingThread.messages);
         expect(result.thread.messages[0]?.text).toBe("Hello, world");
@@ -348,6 +358,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.latestTurn).not.toBe(unboundThread.latestTurn);
         expect(result.thread.latestTurn?.assistantMessageId).toBe("msg-2");
@@ -398,6 +409,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.latestTurn?.state).toBe("running");
         expect(result.thread.latestTurn?.completedAt).toBeNull();
@@ -409,6 +421,7 @@ describe("applyThreadDetailEvent", () => {
     it("projects person-authored reactions without a bot identity", () => {
       const personId = AuthSessionId.make("person-1");
       const messageId = MessageId.make("msg-reaction");
+
       const threadWithMessage: OrchestrationThread = {
         ...baseThread,
         messages: [
@@ -442,6 +455,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.messages[0]?.reactions).toEqual([{ personId, emoji: "👍" }]);
       }

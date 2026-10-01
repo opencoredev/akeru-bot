@@ -9,14 +9,19 @@
 
 /** Recent turns read from a mentioned chat. */
 export const THREAD_MENTION_TURN_LIMIT = 3;
+
 /** Character budget for one mentioned chat's excerpt. */
 export const THREAD_MENTION_MAX_CHARS = 4_000;
+
 /** Character cap for a single message inside an excerpt. */
 export const THREAD_MENTION_MAX_MESSAGE_CHARS = 1_200;
+
 /** Chats expanded per prompt. Further mentions stay as plain references. */
 export const THREAD_MENTION_MAX_THREADS = 3;
+
 /** Distinct chat mentions the server looks up per prompt, including hidden or missing ones. */
 export const THREAD_MENTION_MAX_LOOKUPS = 12;
+
 /** Rows the composer picker shows for chats. */
 export const THREAD_MENTION_PICKER_LIMIT = 6;
 
@@ -64,6 +69,7 @@ export function rankComposerThreadMentions<T extends ComposerThreadMentionCandid
   },
 ): T[] {
   const query = input.query.trim().toLowerCase();
+
   return [...threads]
     .filter(
       (thread) =>
@@ -76,7 +82,9 @@ export function rankComposerThreadMentions<T extends ComposerThreadMentionCandid
     .sort((left, right) => {
       const leftLocal = left.projectId === input.currentProjectId ? 0 : 1;
       const rightLocal = right.projectId === input.currentProjectId ? 0 : 1;
+
       if (leftLocal !== rightLocal) return leftLocal - rightLocal;
+
       return (right.updatedAt ?? "").localeCompare(left.updatedAt ?? "");
     })
     .slice(0, input.limit ?? THREAD_MENTION_PICKER_LIMIT);
@@ -109,21 +117,27 @@ function escapeAttribute(value: string): string {
 export function buildThreadMentionExcerpt(source: ThreadMentionSource): string {
   const lines: string[] = [];
   let remaining = THREAD_MENTION_MAX_CHARS;
+
   for (const message of source.messages.toReversed()) {
     if (message.role === "system") continue;
     const body = message.text.trim();
+
     if (body.length === 0) continue;
     const speaker = message.role === "user" ? "User" : "Bot";
     const line = `${speaker}: ${clip(body, THREAD_MENTION_MAX_MESSAGE_CHARS)}`;
+
     if (line.length > remaining) {
       if (remaining > 80) lines.push(clip(line, remaining));
       break;
     }
+
     lines.push(line);
     remaining -= line.length + 1;
   }
+
   const body =
     lines.length > 0 ? lines.toReversed().join("\n") : "(This chat has no messages yet.)";
+
   return `<chat_context id="${escapeAttribute(source.id)}" title="${escapeAttribute(source.title)}">\n${body}\n</chat_context>`;
 }
 
@@ -139,6 +153,7 @@ export function appendComposerMentionContext(
   },
 ): string {
   const sections: string[] = [];
+
   if (input.browser === "enabled") {
     sections.push(
       "The user mentioned @browser. Use your Akeru preview browser tools (preview_*) for this request. Do not start a separate browser.",
@@ -148,9 +163,12 @@ export function appendComposerMentionContext(
       "The user mentioned @browser, but agent browser access is turned off in Settings, so you have no browser tools. Say so if the request needs a browser.",
     );
   }
+
   for (const thread of input.threads.slice(0, THREAD_MENTION_MAX_THREADS)) {
     sections.push(buildThreadMentionExcerpt(thread));
   }
+
   if (sections.length === 0) return prompt;
+
   return `${prompt}\n\n<mention_context>\n${sections.join("\n")}\n</mention_context>`;
 }

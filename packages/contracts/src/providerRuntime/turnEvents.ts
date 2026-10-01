@@ -185,11 +185,14 @@ export function classifyTaskAgentKind(input: {
   readonly agentId?: string | undefined;
 }): "agent" | "background" {
   const { taskType, agentId } = input;
+
   const nonAgentType =
     taskType !== undefined && (MONITOR_TASK_TYPES.has(taskType) || INERT_TASK_TYPES.has(taskType));
+
   if (agentId !== undefined && agentId.trim().length > 0) {
     return taskType === undefined || nonAgentType ? "background" : "agent";
   }
+
   return nonAgentType ? "background" : "agent";
 }
 

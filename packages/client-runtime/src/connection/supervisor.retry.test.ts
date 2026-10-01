@@ -21,6 +21,7 @@ describe("EnvironmentSupervisor", () => {
       const harness = yield* makeHarness({
         prepare: () => Effect.fail(transient()),
       });
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));
@@ -49,6 +50,7 @@ describe("EnvironmentSupervisor", () => {
         prepare: (attempt) =>
           attempt === 1 ? Effect.fail(transient()) : Effect.succeed(PREPARED_CONNECTION),
       });
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));
@@ -66,6 +68,7 @@ describe("EnvironmentSupervisor", () => {
       const harness = yield* makeHarness({
         prepare: () => Effect.fail(transient()),
       });
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));
@@ -104,6 +107,7 @@ describe("EnvironmentSupervisor", () => {
         prepare: (attempt) =>
           attempt === 1 ? Effect.fail(blocked()) : Effect.succeed(PREPARED_CONNECTION),
       });
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));
@@ -121,6 +125,7 @@ describe("EnvironmentSupervisor", () => {
   it.effect("treats an involuntary session close as transient and reconnects", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));
@@ -147,6 +152,7 @@ describe("EnvironmentSupervisor", () => {
   it.effect("keeps escalating backoff when a newly opened session flaps", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));
@@ -164,6 +170,7 @@ describe("EnvironmentSupervisor", () => {
         (state) => state.phase === "connected" && state.generation === 2,
       );
       yield* harness.closeLatestSession();
+
       const secondFailure = yield* awaitState(
         supervisor.state,
         (state) => state.phase === "backoff" && state.attempt === 2,
@@ -186,6 +193,7 @@ describe("EnvironmentSupervisor", () => {
   it.effect("explicit retry reconnects an available environment", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: false,
       }).pipe(Effect.provide(harness.dependencies));

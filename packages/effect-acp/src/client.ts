@@ -319,21 +319,26 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
   terminationError?: Effect.Effect<AcpError.AcpError>,
 ): Effect.fn.Return<AcpClient["Service"], never, Scope.Scope> {
   const coreHandlers: AcpCoreRequestHandlers = {};
+
   const notificationHandlers: AcpNotificationHandlers = {
     sessionUpdate: { handlers: [], pending: [] },
     elicitationComplete: { handlers: [], pending: [] },
   };
+
   const extRequestHandlers = new Map<
     string,
     (params: unknown) => Effect.Effect<unknown, AcpError.AcpError>
   >();
+
   const extNotificationHandlers = new Map<
     string,
     (params: unknown) => Effect.Effect<void, AcpError.AcpError>
   >();
+
   let unknownExtRequestHandler:
     | ((method: string, params: unknown) => Effect.Effect<unknown, AcpError.AcpError>)
     | undefined;
+
   let unknownExtNotificationHandler:
     | ((method: string, params: unknown) => Effect.Effect<void, AcpError.AcpError>)
     | undefined;
@@ -353,7 +358,9 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
       if (registration.handlers.length === 0 || registration.pending.length === 0) {
         return Effect.void;
       }
+
       const pending = registration.pending.splice(0, registration.pending.length);
+
       return Effect.forEach(
         pending,
         (notification) => runNotificationHandlers(registration, notification),
@@ -368,25 +375,33 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
       case "SessionUpdate": {
         if (notificationHandlers.sessionUpdate.handlers.length === 0) {
           notificationHandlers.sessionUpdate.pending.push(notification.params);
+
           return Effect.void;
         }
+
         return runNotificationHandlers(notificationHandlers.sessionUpdate, notification.params);
       }
+
       case "ElicitationComplete": {
         if (notificationHandlers.elicitationComplete.handlers.length === 0) {
           notificationHandlers.elicitationComplete.pending.push(notification.params);
+
           return Effect.void;
         }
+
         return runNotificationHandlers(
           notificationHandlers.elicitationComplete,
           notification.params,
         );
       }
+
       case "ExtNotification": {
         const handler = extNotificationHandlers.get(notification.method);
+
         if (handler) {
           return handler(notification.params);
         }
+
         return unknownExtNotificationHandler
           ? unknownExtNotificationHandler(notification.method, notification.params)
           : Effect.void;
@@ -396,9 +411,11 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
 
   const dispatchExtRequest = (method: string, params: unknown) => {
     const handler = extRequestHandlers.get(method);
+
     if (handler) {
       return handler(params);
     }
+
     return unknownExtRequestHandler
       ? unknownExtRequestHandler(method, params)
       : Effect.fail(AcpError.AcpRequestError.methodNotFound(method));
@@ -460,6 +477,7 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
   );
 
   let nextRpcRequestId = 2 ** 32;
+
   const rpc = yield* RpcClient.make(AcpRpcs.AgentRpcs, {
     generateRequestId: () => RpcMessage.RequestId(nextRpcRequestId++),
   }).pipe(Effect.provideService(RpcClient.Protocol, transport.clientProtocol));
@@ -502,71 +520,85 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
     handleRequestPermission: (handler) =>
       Effect.suspend(() => {
         coreHandlers.requestPermission = handler;
+
         return Effect.void;
       }),
     handleElicitation: (handler) =>
       Effect.suspend(() => {
         coreHandlers.elicitation = handler;
+
         return Effect.void;
       }),
     handleReadTextFile: (handler) =>
       Effect.suspend(() => {
         coreHandlers.readTextFile = handler;
+
         return Effect.void;
       }),
     handleWriteTextFile: (handler) =>
       Effect.suspend(() => {
         coreHandlers.writeTextFile = handler;
+
         return Effect.void;
       }),
     handleCreateTerminal: (handler) =>
       Effect.suspend(() => {
         coreHandlers.createTerminal = handler;
+
         return Effect.void;
       }),
     handleTerminalOutput: (handler) =>
       Effect.suspend(() => {
         coreHandlers.terminalOutput = handler;
+
         return Effect.void;
       }),
     handleTerminalWaitForExit: (handler) =>
       Effect.suspend(() => {
         coreHandlers.terminalWaitForExit = handler;
+
         return Effect.void;
       }),
     handleTerminalKill: (handler) =>
       Effect.suspend(() => {
         coreHandlers.terminalKill = handler;
+
         return Effect.void;
       }),
     handleTerminalRelease: (handler) =>
       Effect.suspend(() => {
         coreHandlers.terminalRelease = handler;
+
         return Effect.void;
       }),
     handleSessionUpdate: (handler) =>
       Effect.suspend(() => {
         notificationHandlers.sessionUpdate.handlers.push(handler);
+
         return flushBufferedNotifications(notificationHandlers.sessionUpdate);
       }),
     handleElicitationComplete: (handler) =>
       Effect.suspend(() => {
         notificationHandlers.elicitationComplete.handlers.push(handler);
+
         return flushBufferedNotifications(notificationHandlers.elicitationComplete);
       }),
     handleUnknownExtRequest: (handler) =>
       Effect.suspend(() => {
         unknownExtRequestHandler = handler;
+
         return Effect.void;
       }),
     handleUnknownExtNotification: (handler) =>
       Effect.suspend(() => {
         unknownExtNotificationHandler = handler;
+
         return Effect.void;
       }),
     handleExtRequest: (method, payload, handler) =>
       Effect.suspend(() => {
         extRequestHandlers.set(method, decodeExtRequestRegistration(method, payload, handler));
+
         return Effect.void;
       }),
     handleExtNotification: (method, payload, handler) =>
@@ -575,6 +607,7 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
           method,
           decodeExtNotificationRegistration(method, payload, handler),
         );
+
         return Effect.void;
       }),
   });
@@ -589,5 +622,6 @@ export const layerChildProcess = (
 ): Layer.Layer<AcpClient> => {
   const stdio = makeChildStdio(handle);
   const terminationError = makeTerminationError(handle);
+
   return Layer.effect(AcpClient, make(stdio, options, terminationError));
 };

@@ -62,6 +62,7 @@ export const makeEnvironmentQueryHarness = Effect.fn("TestEnvironmentQuery.makeH
 >(execute: Effect.Effect<A, E>) {
   const supervisorState = yield* SubscriptionRef.make(queryConnectionState());
   const supervisorSession = yield* SubscriptionRef.make(Option.some(QUERY_RPC_SESSION));
+
   const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
     target: QUERY_ENVIRONMENT,
     state: supervisorState,
@@ -72,20 +73,25 @@ export const makeEnvironmentQueryHarness = Effect.fn("TestEnvironmentQuery.makeH
     retryNow: Effect.void,
     retryIfDesired: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+
   const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_environmentId, effect) =>
     Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+
   const followStream: EnvironmentRegistry.EnvironmentRegistry["Service"]["followStream"] = (
     _environmentId,
     stream,
   ) => Stream.provideService(stream, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+
   const environmentRegistry = EnvironmentRegistry.EnvironmentRegistry.of({
     run,
     followStream,
     stateChanges: () => SubscriptionRef.changes(supervisorState),
   } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+
   const runtime = Atom.runtime(
     Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, environmentRegistry),
   );
+
   const family = createEnvironmentQueryAtomFamily(runtime, {
     label: "test.environment-query",
     staleTimeMs: 60_000,
@@ -110,5 +116,6 @@ export const mountEnvironmentQuery = Effect.fn("TestEnvironmentQuery.mount")(fun
       registry.dispose();
     }),
   );
+
   return registry;
 });

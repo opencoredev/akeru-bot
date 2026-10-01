@@ -34,9 +34,11 @@ export const resolveWindowsEnvironment = Effect.fn("shell.resolveWindowsEnvironm
   const readEnvironment = yield* WindowsShellEnvironment;
   const commandAvailable = yield* CommandAvailability;
   const inheritedPath = readEnvPath(env);
+
   const shellPath = readWindowsEnvironmentSafely(readEnvironment, ["PATH"], {
     loadProfile: false,
   }).PATH;
+
   const mergedPath = mergePathValues(shellPath, inheritedPath, "win32");
   const knownCliPath = resolveKnownWindowsCliDirs(env).join(WINDOWS_PATH_DELIMITER);
   const baselinePath = mergePathValues(knownCliPath, mergedPath, "win32");
@@ -52,7 +54,9 @@ export const resolveWindowsEnvironment = Effect.fn("shell.resolveWindowsEnvironm
     ["PATH", "FNM_DIR", "FNM_MULTISHELL_PATH"],
     { loadProfile: true },
   );
+
   const profiledPath = mergePathValues(profiledEnvironment.PATH, baselinePath, "win32");
+
   const profiledPatch: Partial<NodeJS.ProcessEnv> = {
     ...(profiledPath ? { PATH: profiledPath } : {}),
     ...(profiledEnvironment.FNM_DIR ? { FNM_DIR: profiledEnvironment.FNM_DIR } : {}),
@@ -60,10 +64,12 @@ export const resolveWindowsEnvironment = Effect.fn("shell.resolveWindowsEnvironm
       ? { FNM_MULTISHELL_PATH: profiledEnvironment.FNM_MULTISHELL_PATH }
       : {}),
   };
+
   return Object.keys(profiledPatch).length > 0
     ? { ...baselinePatch, ...profiledPatch }
     : baselinePatch;
 });
+
 export {
   type WindowsEnvironmentProbeOptions,
   listLoginShellCandidates,
@@ -77,6 +83,7 @@ export {
   readEnvironmentFromWindowsShell,
   mergePathValues,
 } from "./shell/environment.ts";
+
 export {
   type CommandAvailabilityOptions,
   type CommandAvailabilityChecker,
@@ -89,4 +96,5 @@ export {
   resolveSpawnCommand,
   isCommandAvailable,
 } from "./shell/commandResolution.ts";
+
 export { resolveKnownWindowsCliDirs } from "./shell/windows.ts";

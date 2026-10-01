@@ -16,6 +16,7 @@ import {
 } from "yaml";
 
 export type YamlParseOptions = ParseOptions & DocumentOptions & SchemaOptions & ToJSOptions;
+
 export type YamlStringifyOptions = DocumentOptions &
   SchemaOptions &
   ParseOptions &
@@ -29,6 +30,7 @@ function formatYamlParseError(error: unknown): string {
 
   const position = error.linePos?.[0];
   const location = position === undefined ? "" : `, line=${position.line}, column=${position.col}`;
+
   return `Invalid YAML (code=${error.code}${location}).`;
 }
 

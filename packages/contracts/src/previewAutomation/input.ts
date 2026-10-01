@@ -137,12 +137,15 @@ export const PreviewAutomationResizeInput = Schema.Struct({
       const hasPreset = input.preset !== undefined;
       const hasWidth = input.width !== undefined;
       const hasHeight = input.height !== undefined;
+
       if (hasWidth !== hasHeight) return "Custom dimensions require both width and height.";
+
       if (input.mode === "fill") {
         return !hasPreset && !hasWidth && input.orientation === undefined
           ? true
           : "Fill mode does not accept a preset, dimensions, or orientation.";
       }
+
       if (input.mode === "freeform") {
         if (!hasWidth || !hasHeight || hasPreset || input.orientation !== undefined) {
           return "Freeform mode requires width and height and does not accept a preset or orientation.";
@@ -150,9 +153,11 @@ export const PreviewAutomationResizeInput = Schema.Struct({
       } else if (!hasPreset || hasWidth || hasHeight) {
         return "Preset mode requires a preset and does not accept custom dimensions.";
       }
+
       if (hasWidth && hasHeight && input.width! * input.height! > PREVIEW_VIEWPORT_MAX_AREA) {
         return `Custom viewport area must not exceed ${PREVIEW_VIEWPORT_MAX_AREA} pixels.`;
       }
+
       return true;
     }),
   )
@@ -228,10 +233,13 @@ export const PreviewAutomationClickInput = Schema.Struct({
     Schema.makeFilter((input) => {
       const selectorModes =
         Number(input.selector !== undefined) + Number(input.locator !== undefined);
+
       const hasX = input.x !== undefined;
       const hasY = input.y !== undefined;
+
       if (hasX !== hasY) return "Coordinates require both x and y.";
       const coordinateModes = hasX && hasY ? 1 : 0;
+
       return selectorModes + coordinateModes === 1 || "Provide exactly one click target.";
     }),
   )
@@ -319,6 +327,7 @@ export const PreviewAutomationScrollInput = Schema.Struct({
       if (input.selector !== undefined && input.locator !== undefined) {
         return "Provide at most one of selector or locator.";
       }
+
       return (
         input.deltaX !== undefined || input.deltaY !== undefined || "Provide deltaX or deltaY."
       );
@@ -389,6 +398,7 @@ export const PreviewAutomationWaitForInput = Schema.Struct({
       if (input.selector !== undefined && input.locator !== undefined) {
         return "Provide at most one of selector or locator.";
       }
+
       return (
         input.selector !== undefined ||
         input.locator !== undefined ||

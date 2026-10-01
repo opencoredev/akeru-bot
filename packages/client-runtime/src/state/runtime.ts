@@ -41,6 +41,7 @@ export function createRuntimeCommand<R, ER, W, A, E>(
 ): AtomCommand<W, A, E | ER> {
   const scheduler = options.scheduler ?? createAtomCommandScheduler();
   const concurrency = options.concurrency ?? { mode: "parallel" as const };
+
   return {
     label: options.label,
     run: (registry, input) =>
@@ -49,6 +50,7 @@ export function createRuntimeCommand<R, ER, W, A, E>(
           const atom = runtime
             .atom(options.execute(input, registry))
             .pipe(Atom.withLabel(options.label));
+
           return executeAtomQuery(registry, atom, { reportDefect: false, reportFailure: false });
         }),
       ),
@@ -66,6 +68,7 @@ export function createRuntimeStreamCommand<R, ER, W, A, E>(
 ): AtomCommand<W, A, E | ER | Cause.NoSuchElementError> {
   const scheduler = options.scheduler ?? createAtomCommandScheduler();
   const concurrency = options.concurrency ?? { mode: "parallel" as const };
+
   return {
     label: options.label,
     run: (registry, input) =>
@@ -74,6 +77,7 @@ export function createRuntimeStreamCommand<R, ER, W, A, E>(
           const atom = runtime
             .atom(options.execute(input, registry))
             .pipe(Atom.withLabel(options.label));
+
           return executeAtomQuery(registry, atom, { reportDefect: false, reportFailure: false });
         }),
       ),
@@ -171,6 +175,7 @@ export function createEnvironmentRpcSubscriptionAtomFamily<
     ...(options.idleTtlMs === undefined ? {} : { idleTtlMs: options.idleTtlMs }),
     subscribe: (input: EnvironmentRpcInput<TTag>) => {
       const stream = subscribe(options.tag, input);
+
       return options.transform === undefined
         ? (stream as Stream.Stream<B, EnvironmentRpcStreamFailure<TTag>, EnvironmentSupervisor | R>)
         : options.transform(stream);
@@ -213,6 +218,7 @@ export function createEnvironmentRpcCommand<R, ER, TTag extends EnvironmentUnary
         environmentId,
         input,
       };
+
       return request(options.tag, input).pipe(
         Effect.tap(() => options.onSuccess?.(target, registry) ?? Effect.void),
         Effect.ensuring(options.onSettled?.(target, registry) ?? Effect.void),
@@ -244,11 +250,13 @@ export function createEnvironmentRpcStreamCommand<
     execute: (input: EnvironmentRpcInput<TTag>) => runStream(options.tag, input),
   });
 }
+
 export {
   type AtomCommandOptions,
   type AtomCommandReporter,
   type AtomCommand,
 } from "./atomRuntimeTypes.ts";
+
 export {
   environmentRpcKey,
   runInEnvironment,
@@ -257,6 +265,7 @@ export {
   createEnvironmentQueryAtomFamily,
   createEnvironmentSubscriptionAtomFamily,
 } from "./environmentQueries.ts";
+
 export {
   type SettledAsyncResult,
   type AtomCommandResult,
@@ -272,6 +281,7 @@ export {
   reportAtomCommandResult,
   settlePromise,
 } from "./atomCommandResult.ts";
+
 export {
   type AtomCommandConcurrency,
   type AtomCommandScheduler,

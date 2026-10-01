@@ -27,10 +27,12 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const path = yield* Path.Path;
+
       const command = ChildProcess.make(process.execPath, mockPeerArgs(yield* mockPeerPath), {
         cwd: path.join(import.meta.dirname, ".."),
         ...(env ? { env: { ...process.env, ...env } } : {}),
       });
+
       return yield* spawner.spawn(command);
     });
 
@@ -100,6 +102,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
         if (result._tag !== "Failure") {
           assert.fail("Expected prompt to fail for invalid typed extension payload");
         }
+
         const rendered = Cause.pretty(result.cause);
         assert.include(rendered, "Invalid payload for ACP extension method 'x/typed_request'.");
         assert.notInclude(rendered, "Expected string, got 123");
@@ -125,6 +128,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
           },
         })
         .pipe(Effect.forkScoped);
+
       const extFiber = yield* acp.raw.request("x/test", { hello: "world" }).pipe(Effect.forkScoped);
 
       const firstOutbound = yield* Queue.take(output);
@@ -132,6 +136,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
 
       const decodedInitialize = Schema.decodeEffect(Schema.fromJsonString(InitializeRequest));
       const decodedExt = Schema.decodeEffect(Schema.fromJsonString(ExtRequest));
+
       const firstIsInitialize = yield* decodedInitialize(firstOutbound).pipe(
         Effect.match({
           onFailure: () => false,
@@ -142,6 +147,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
       const initializeRequest = firstIsInitialize
         ? yield* decodedInitialize(firstOutbound)
         : yield* decodedInitialize(secondOutbound);
+
       const extRequest = firstIsInitialize
         ? yield* decodedExt(secondOutbound)
         : yield* decodedExt(firstOutbound);

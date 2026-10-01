@@ -104,6 +104,7 @@ describe("ClientSettings sidebar", () => {
       sidebarV2ConfiguredByUser: true,
       legacySidebarEnabled: true,
     });
+
     expect(decoded).not.toHaveProperty("sidebarV2Enabled");
     expect(decoded).not.toHaveProperty("sidebarV2ConfiguredByUser");
     expect(decoded).not.toHaveProperty("legacySidebarEnabled");
@@ -117,6 +118,7 @@ describe("ClientSettings sidebar", () => {
       sidebarAutoSettleAfterDays: 3,
       sidebarAutoSettleOnMerge: true,
     });
+
     expect(settings).not.toHaveProperty("sidebarAutoSettleAfterDays");
     expect(settings).not.toHaveProperty("sidebarAutoSettleOnMerge");
   });

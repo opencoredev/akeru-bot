@@ -27,6 +27,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.checkpoints).toHaveLength(1);
         expect(result.thread.latestTurn?.turnId).toBe("turn-1");
@@ -67,6 +68,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.latestTurn?.state).toBe("interrupted");
         expect(result.thread.checkpoints[0]?.status).toBe("ready");
@@ -94,6 +96,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.latestTurn?.state).toBe("completed");
       }
@@ -169,6 +172,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         // turn-2 checkpoint is filtered out (turnCount 2 > revert target 1)
         expect(result.thread.checkpoints).toHaveLength(1);

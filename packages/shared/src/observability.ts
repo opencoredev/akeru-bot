@@ -146,12 +146,14 @@ export const makeLocalFileTracer = Effect.fn("makeLocalFileTracer")(function* (
     ...(delegate.context ? { context: delegate.context } : {}),
   });
 });
+
 export {
   type TraceSinkOptions,
   type TraceSinkFlushStats,
   type TraceSink,
   makeTraceSink,
 } from "./observability/traceSink.ts";
+
 export {
   type TraceAttributes,
   type TraceRecordEvent,
@@ -161,10 +163,12 @@ export {
   type TraceRecord,
   type LocalFileTracerOptions,
 } from "./observability/types.ts";
+
 export {
   errorTag,
   causeErrorTag,
   compactTraceAttributes,
   truncateTraceAttributes,
 } from "./observability/attributes.ts";
+
 export { decodeOtlpTraceRecords } from "./observability/otlp.ts";

@@ -46,15 +46,19 @@ export function createAtomCommandScheduler(): AtomCommandScheduler {
 
   const stateFor = (registry: AtomRegistry.AtomRegistry): AtomCommandSchedulerState => {
     const existing = registryStates.get(registry);
+
     if (existing !== undefined) {
       return existing;
     }
+
     const state: AtomCommandSchedulerState = {
       serial: new Map(),
       singleFlight: new Map(),
       latest: new Map(),
     };
+
     registryStates.set(registry, state);
+
     return state;
   };
 
@@ -71,13 +75,16 @@ export function createAtomCommandScheduler(): AtomCommandScheduler {
 
       const key = concurrency.key(input);
       const state = stateFor(registry);
+
       if (concurrency.mode === "singleFlight") {
         const existing = state.singleFlight.get(key) as
           | Promise<AtomCommandResult<A, E>>
           | undefined;
+
         if (existing !== undefined) {
           return existing;
         }
+
         const current = execute();
         state.singleFlight.set(key, current);
         void current.then(
@@ -92,6 +99,7 @@ export function createAtomCommandScheduler(): AtomCommandScheduler {
             }
           },
         );
+
         return current;
       }
 
@@ -111,14 +119,17 @@ export function createAtomCommandScheduler(): AtomCommandScheduler {
             }
           },
         );
+
         return current;
       }
 
       let lane = state.latest.get(key);
+
       if (lane === undefined) {
         lane = { running: false, pending: undefined };
         state.latest.set(key, lane);
       }
+
       const activeLane = lane;
 
       const result = new Promise<AtomCommandResult<A, E>>((resolve) => {
@@ -127,8 +138,10 @@ export function createAtomCommandScheduler(): AtomCommandScheduler {
             execute: execute as () => Promise<AtomCommandResult<unknown, unknown>>,
             resolve: [resolve as (result: AtomCommandResult<unknown, unknown>) => void],
           };
+
           return;
         }
+
         activeLane.pending.execute = execute as () => Promise<AtomCommandResult<unknown, unknown>>;
         activeLane.pending.resolve.push(
           resolve as (result: AtomCommandResult<unknown, unknown>) => void,
@@ -142,16 +155,20 @@ export function createAtomCommandScheduler(): AtomCommandScheduler {
             const batch = activeLane.pending;
             activeLane.pending = undefined;
             let batchResult: AtomCommandResult<unknown, unknown>;
+
             try {
               batchResult = await batch.execute();
             } catch (defect) {
               batchResult = AsyncResult.failure(Cause.die(defect));
             }
+
             for (const resolve of batch.resolve) {
               resolve(batchResult);
             }
           }
+
           activeLane.running = false;
+
           if (state.latest.get(key) === activeLane) {
             state.latest.delete(key);
           }
@@ -173,14 +190,17 @@ export function scheduleAtomCommandEffect<W, A, E, R>(
 ): Effect.Effect<A, E, R> {
   return Effect.gen(function* () {
     const context = yield* Effect.context<R>();
+
     const result = yield* Effect.promise((signal) =>
       scheduler.schedule<W, A, E>(registry, concurrency, input, async () => {
         const exit = await Effect.runPromiseExitWith(context)(effect, { signal });
+
         return Exit.isSuccess(exit)
           ? AsyncResult.success(exit.value)
           : AsyncResult.failure(exit.cause);
       }),
     );
+
     return result._tag === "Success" ? result.value : yield* Effect.failCause(result.cause);
   });
 }

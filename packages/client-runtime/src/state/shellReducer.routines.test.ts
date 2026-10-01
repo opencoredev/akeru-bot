@@ -15,6 +15,7 @@ describe("applyShellStreamEvent", () => {
         sequence: 1,
         assignment: stubAssignment,
       });
+
       const updated = applyShellStreamEvent(assigned, {
         kind: "routine-upserted",
         sequence: 2,
@@ -35,6 +36,7 @@ describe("applyShellStreamEvent", () => {
         job: stubRoutine.job,
         createdAt: stubRoutine.createdAt,
       };
+
       const next = applyShellStreamEvent(
         { ...baseSnapshot, routines: [stubRoutine], routineRuns: [stubRoutineRun] },
         { kind: "routine-removed", sequence: 3, routineId: stubRoutine.id, receiptSource },

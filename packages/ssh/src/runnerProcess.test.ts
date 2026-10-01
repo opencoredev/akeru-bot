@@ -18,6 +18,7 @@ const Started = Schema.Struct({
   port: Schema.Number,
   args: Schema.Array(Schema.String),
 });
+
 const decodeStarted = Schema.decodeUnknownSync(Schema.fromJsonString(Started));
 
 describe.skipIf(HostProcessPlatform.defaultValue() === "win32")(
@@ -92,14 +93,17 @@ if (args.includes("--package")) {
                   ),
                 }),
               );
+
               const ready = yield* Deferred.make<typeof Started.Type>();
               const stdout: string[] = [];
+
               const output = yield* child.stdout.pipe(
                 Stream.decodeText(),
                 Stream.splitLines,
                 Stream.runForEach((line) =>
                   Effect.gen(function* () {
                     stdout.push(line);
+
                     if (stdout.length === 1) {
                       yield* Deferred.succeed(ready, decodeStarted(line));
                     }
@@ -107,11 +111,13 @@ if (args.includes("--package")) {
                 ),
                 Effect.forkScoped,
               );
+
               const stderr = yield* child.stderr.pipe(
                 Stream.decodeText(),
                 Stream.mkString,
                 Effect.forkScoped,
               );
+
               const receipt = yield* Effect.raceFirst(
                 Deferred.await(ready),
                 Fiber.join(output).pipe(
@@ -121,6 +127,7 @@ if (args.includes("--package")) {
                   ),
                 ),
               );
+
               // A failed PID assertion must still close the owned fixture server, including an npm child.
               yield* Effect.addFinalizer(() =>
                 Effect.gen(function* () {
@@ -129,6 +136,7 @@ if (args.includes("--package")) {
                       const connection = NodeNet.connect(receipt.port, "127.0.0.1");
                       connection.on("error", () => undefined);
                       connection.once("close", () => resume(Effect.void));
+
                       return Effect.sync(() => connection.destroy());
                     });
                     yield* child.exitCode;
@@ -141,15 +149,18 @@ if (args.includes("--package")) {
               assert.equal(yield* child.exitCode, 0);
               yield* Fiber.join(output);
               assert.include(stdout, "graceful shutdown");
+
               return receipt.port;
             }).pipe(Effect.scoped);
 
           const port = yield* runServer();
           assert.equal(yield* runServer(port), port);
+
           const calls = (yield* fs.readFileString(callsPath))
             .trim()
             .split("\n")
             .map((line) => JSON.parse(line));
+
           const expectedCall = [
             ...(packageManager === "npm" ? ["exec"] : []),
             "--yes",
@@ -160,6 +171,7 @@ if (args.includes("--package")) {
             "-c",
             "command -v akeru",
           ];
+
           assert.deepEqual(calls, [expectedCall, expectedCall]);
         }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
     );
@@ -178,6 +190,7 @@ describe.skipIf(HostProcessPlatform.defaultValue() === "win32")(
           const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
           const fixture = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-stop-" });
           const signalPath = path.join(fixture, "signals");
+
           const child = yield* spawner.spawn(
             ChildProcess.make(
               process.execPath,
@@ -202,10 +215,12 @@ server.listen(0, "127.0.0.1", () => {
               { cwd: fixture, detached: false },
             ),
           );
+
           // A failed assertion must still stop this captured fixture process.
           yield* Effect.addFinalizer(() =>
             child.kill({ killSignal: "SIGKILL" }).pipe(Effect.ignore),
           );
+
           const started = decodeStarted(
             yield* child.stdout.pipe(
               Stream.decodeText(),
@@ -214,27 +229,34 @@ server.listen(0, "127.0.0.1", () => {
               Stream.mkString,
             ),
           );
+
           assert.equal(started.pid, child.pid);
+
           const savedState = {
             pid: `${child.pid}\n`,
             port: `${started.port}\n`,
             managed: mode === "external" ? "external\n" : "managed\n",
           };
+
           for (const [name, contents] of Object.entries(savedState)) {
             yield* fs.writeFileString(path.join(fixture, name), contents);
           }
+
           const script = buildRemoteStopScript({
             alias: "fixture",
             hostname: "fixture",
             username: null,
             port: null,
           });
+
           // Redirect only the state directory. Never use the developer's SSH state.
           const isolatedScript = script.replace(
             /^STATE_DIR=.*$/mu,
             'STATE_DIR="$T3_TEST_STATE_DIR"',
           );
+
           assert.notEqual(isolatedScript, script);
+
           const runStop = Effect.fn("test.remoteStop")(function* () {
             const stop = yield* spawner.spawn(
               ChildProcess.make("/bin/sh", ["-s"], {
@@ -243,6 +265,7 @@ server.listen(0, "127.0.0.1", () => {
                 stdin: Stream.make(new TextEncoder().encode(isolatedScript)),
               }),
             );
+
             return yield* Effect.all(
               {
                 stdout: stop.stdout.pipe(Stream.decodeText(), Stream.mkString),
@@ -252,32 +275,41 @@ server.listen(0, "127.0.0.1", () => {
               { concurrency: "unbounded" },
             );
           }, Effect.scoped);
+
           let result = yield* runStop();
+
           if (mode !== "graceful") {
             assert.isTrue(yield* child.isRunning);
             yield* Effect.callback<void, Error>((resume) => {
               const connection = NodeNet.connect(started.port, "127.0.0.1");
               connection.once("error", (error) => resume(Effect.fail(error)));
               connection.once("close", () => resume(Effect.void));
+
               return Effect.sync(() => connection.destroy());
             });
           }
+
           if (mode === "timeout") {
             assert.equal(result.exitCode, 1);
             assert.equal(result.stdout, "");
             assert.include(result.stderr, "did not stop within 2 seconds");
             assert.equal(yield* fs.readFileString(signalPath), "1");
+
             for (const [name, contents] of Object.entries(savedState)) {
               assert.equal(yield* fs.readFileString(path.join(fixture, name)), contents);
             }
+
             result = yield* runStop();
           }
+
           assert.equal(result.exitCode, 0);
           assert.equal(result.stdout, '{"stopped":true}\n');
           assert.equal(result.stderr, "");
+
           for (const name of Object.keys(savedState)) {
             assert.isFalse(yield* fs.exists(path.join(fixture, name)));
           }
+
           if (mode === "external") {
             assert.isFalse(yield* fs.exists(signalPath));
           } else {
@@ -295,6 +327,7 @@ describe.skipIf(HostProcessPlatform.defaultValue() === "win32")(
     const decodeArguments = Schema.decodeUnknownSync(
       Schema.fromJsonString(Schema.Array(Schema.String)),
     );
+
     const cases = (["npx", "npm"] as const).flatMap((packageManager) =>
       (
         [
@@ -349,6 +382,7 @@ if (mode === "etarget" || mode === "failed-with-path") {
 `,
         );
         yield* fs.chmod(path.join(bin, packageManager), 0o700);
+
         if (mode === "existing-cli") yield* fs.symlink(cliPath, path.join(bin, "akeru"));
 
         const child = yield* spawner.spawn(
@@ -371,6 +405,7 @@ if (mode === "etarget" || mode === "failed-with-path") {
             ),
           }),
         );
+
         const { stdout, stderr, exitCode } = yield* Effect.all(
           {
             stdout: child.stdout.pipe(Stream.decodeText(), Stream.mkString),
@@ -379,15 +414,19 @@ if (mode === "etarget" || mode === "failed-with-path") {
           },
           { concurrency: "unbounded" },
         );
+
         const installFailed =
           mode === "etarget" || mode === "network" || mode === "failed-with-path";
+
         const missingExecutable = mode === "empty-success";
         assert.equal(exitCode, installFailed || missingExecutable ? 1 : 0);
+
         if (installFailed || missingExecutable) {
           assert.equal(stdout, "");
         } else {
           assert.deepEqual(decodeArguments(stdout), args);
         }
+
         if (installFailed) {
           const npmError = mode === "network" ? "ENETUNREACH" : "ETARGET";
           assert.include(stderr, `npm error code ${npmError}\n`);
@@ -401,6 +440,7 @@ if (mode === "etarget" || mode === "failed-with-path") {
         } else {
           assert.equal(stderr, "");
         }
+
         const expectedCall = [
           ...(packageManager === "npm" ? ["exec"] : []),
           "--yes",
@@ -411,8 +451,10 @@ if (mode === "etarget" || mode === "failed-with-path") {
           "-c",
           "command -v akeru",
         ];
+
         const usesInstaller = mode !== "existing-cli" && mode !== "node-override";
         const calls = yield* fs.readFileString(callsPath);
+
         if (usesInstaller) {
           assert.deepEqual(
             calls

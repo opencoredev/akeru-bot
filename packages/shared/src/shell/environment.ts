@@ -26,6 +26,7 @@ export interface WindowsEnvironmentProbeOptions {
 
 function trimNonEmpty(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim();
+
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
@@ -44,6 +45,7 @@ export function listLoginShellCandidates(
 ): ReadonlyArray<string> {
   const fallbackShell =
     platform === "darwin" ? "/bin/zsh" : platform === "linux" ? "/bin/bash" : undefined;
+
   const seen = new Set<string>();
   const candidates: string[] = [];
 
@@ -51,6 +53,7 @@ export function listLoginShellCandidates(
     if (!candidate || seen.has(candidate)) {
       continue;
     }
+
     seen.add(candidate);
     candidates.push(candidate);
   }
@@ -60,13 +63,16 @@ export function listLoginShellCandidates(
 
 export function extractPathFromShellOutput(output: string): string | null {
   const startIndex = output.indexOf(PATH_CAPTURE_START);
+
   if (startIndex === -1) return null;
 
   const valueStartIndex = startIndex + PATH_CAPTURE_START.length;
   const endIndex = output.indexOf(PATH_CAPTURE_END, valueStartIndex);
+
   if (endIndex === -1) return null;
 
   const pathValue = output.slice(valueStartIndex, endIndex).trim();
+
   return pathValue.length > 0 ? pathValue : null;
 }
 
@@ -103,11 +109,14 @@ export function mergePathEntries(
 
   for (const pathValue of [preferredPath, inheritedPath]) {
     if (!pathValue) continue;
+
     for (const entry of pathValue.split(delimiter)) {
       const trimmedEntry = entry.trim();
+
       if (!trimmedEntry || seen.has(trimmedEntry)) {
         continue;
       }
+
       seen.add(trimmedEntry);
       merged.push(trimmedEntry);
     }
@@ -162,10 +171,12 @@ function extractEnvironmentValue(output: string, name: string): string | undefin
   const startMarker = envCaptureStart(name);
   const endMarker = envCaptureEnd(name);
   const startIndex = output.indexOf(startMarker);
+
   if (startIndex === -1) return undefined;
 
   const valueStartIndex = startIndex + startMarker.length;
   const endIndex = output.indexOf(endMarker, valueStartIndex);
+
   if (endIndex === -1) return undefined;
 
   const value = output
@@ -197,8 +208,10 @@ export const readEnvironmentFromLoginShell: ShellEnvironmentReader = (
   });
 
   const environment: Partial<Record<string, string>> = {};
+
   for (const name of names) {
     const value = extractEnvironmentValue(output, name);
+
     if (value !== undefined) {
       environment[name] = value;
     }
@@ -236,11 +249,14 @@ export function readEnvironmentFromWindowsShell(
     typeof optionsOrExecFile === "function"
       ? ({} satisfies WindowsEnvironmentProbeOptions)
       : (optionsOrExecFile ?? {});
+
   const execFile: ExecFileSyncLike =
     typeof optionsOrExecFile === "function"
       ? optionsOrExecFile
       : (maybeExecFile ?? (NodeChildProcess.execFileSync as ExecFileSyncLike));
+
   const command = buildWindowsEnvironmentCaptureCommand(names);
+
   const args = [
     "-NoLogo",
     ...(options.loadProfile ? ([] as const) : (["-NoProfile"] as const)),
@@ -248,17 +264,21 @@ export function readEnvironmentFromWindowsShell(
     "-Command",
     command,
   ];
+
   for (const shell of WINDOWS_SHELL_CANDIDATES) {
     try {
       const output = execFile(shell, args, { encoding: "utf8", timeout: 5000 });
 
       const environment: Partial<Record<string, string>> = {};
+
       for (const name of names) {
         const value = extractEnvironmentValue(output, name);
+
         if (value !== undefined) {
           environment[name] = value;
         }
       }
+
       return environment;
     } catch {
       continue;
@@ -278,6 +298,7 @@ export function pathDelimiterForPlatform(platform: NodeJS.Platform): string {
 
 function normalizePathEntryForComparison(entry: string, platform: NodeJS.Platform): string {
   const normalized = stripWrappingQuotes(entry.trim());
+
   return platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 
@@ -295,9 +316,11 @@ export function mergePathValues(
 
     for (const entry of rawValue.split(delimiter)) {
       const trimmed = entry.trim();
+
       if (trimmed.length === 0) continue;
 
       const normalized = normalizePathEntryForComparison(trimmed, platform);
+
       if (normalized.length === 0 || seen.has(normalized)) continue;
 
       seen.add(normalized);
@@ -333,10 +356,12 @@ export function mergeWindowsEnv(
   patch: Partial<Record<string, string>>,
 ): NodeJS.ProcessEnv {
   const nextEnv: NodeJS.ProcessEnv = { ...currentEnv };
+
   for (const [key, value] of Object.entries(patch)) {
     if (value !== undefined) {
       nextEnv[key] = value;
     }
   }
+
   return nextEnv;
 }

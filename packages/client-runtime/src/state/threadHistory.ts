@@ -42,9 +42,11 @@ interface ThreadOlderTurnRequestRegistry {
 
 function makeThreadOlderTurnRequestRegistry(): ThreadOlderTurnRequestRegistry {
   const handlers = new Map<string, () => void>();
+
   return {
     register: (key, handler) => {
       handlers.set(key, handler);
+
       return () => {
         if (handlers.get(key) === handler) {
           handlers.delete(key);
@@ -53,10 +55,13 @@ function makeThreadOlderTurnRequestRegistry(): ThreadOlderTurnRequestRegistry {
     },
     request: (key) => {
       const handler = handlers.get(key);
+
       if (handler === undefined) {
         return false;
       }
+
       handler();
+
       return true;
     },
   };

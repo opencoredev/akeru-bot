@@ -38,6 +38,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.activities).toHaveLength(1);
         expect(result.thread.activities[0]?.kind).toBe("file-edit");
@@ -54,6 +55,7 @@ describe("applyThreadDetailEvent", () => {
         authorBotId: BotId.make("bot-1"),
         affectedBotIds: [BotId.make("bot-1")],
       };
+
       const append = (
         thread: OrchestrationThread,
         sequence: number,
@@ -80,7 +82,9 @@ describe("applyThreadDetailEvent", () => {
             },
           },
         });
+
         assert(result.kind === "updated");
+
         return result.thread;
       };
 
@@ -96,6 +100,7 @@ describe("applyThreadDetailEvent", () => {
         memoryRootId: "memory-1",
         createdAt: "2026-04-01T11:00:01.000Z",
       });
+
       expect(pendingMemoryApprovals(resolved.activities)).toEqual([]);
     });
 
@@ -110,6 +115,7 @@ describe("applyThreadDetailEvent", () => {
         ...(sequence === null ? {} : { sequence }),
         createdAt: "2026-04-01T11:00:00.000Z",
       });
+
       const first = applyThreadDetailEvent(baseThread, {
         ...baseEventFields,
         sequence: 133,
@@ -122,10 +128,13 @@ describe("applyThreadDetailEvent", () => {
           activity: makeActivity("activity-a", 1),
         },
       });
+
       expect(first.kind).toBe("updated");
+
       if (first.kind !== "updated") {
         return;
       }
+
       const second = applyThreadDetailEvent(first.thread, {
         ...baseEventFields,
         sequence: 134,
@@ -138,10 +147,13 @@ describe("applyThreadDetailEvent", () => {
           activity: makeActivity("activity-null", null),
         },
       });
+
       expect(second.kind).toBe("updated");
+
       if (second.kind !== "updated") {
         return;
       }
+
       const result = applyThreadDetailEvent(second.thread, {
         ...baseEventFields,
         sequence: 135,
@@ -156,6 +168,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.activities.map((activity) => activity.id)).toEqual([
           "activity-a",
@@ -176,6 +189,7 @@ describe("applyThreadDetailEvent", () => {
         sequence,
         createdAt: "2026-04-01T11:00:00.000Z",
       });
+
       const makeEvent = (sequence: number, activity: ReturnType<typeof makeActivity>) =>
         ({
           ...baseEventFields,
@@ -186,27 +200,36 @@ describe("applyThreadDetailEvent", () => {
           type: "thread.activity-appended",
           payload: { threadId: ThreadId.make("thread-1"), activity },
         }) as const;
+
       const first = applyThreadDetailEvent(
         { ...baseThread, activities: [makeActivity("activity-a", 1, "first")] },
         makeEvent(133, makeActivity("activity-b", 2, "second")),
       );
+
       expect(first.kind).toBe("updated");
+
       if (first.kind !== "updated") {
         return;
       }
+
       const second = applyThreadDetailEvent(
         first.thread,
         makeEvent(134, makeActivity("activity-c", 3, "third")),
       );
+
       expect(second.kind).toBe("updated");
+
       if (second.kind !== "updated") {
         return;
       }
+
       const third = applyThreadDetailEvent(
         second.thread,
         makeEvent(135, makeActivity("activity-c", 4, "third (redelivered)")),
       );
+
       expect(third.kind).toBe("updated");
+
       if (third.kind === "updated") {
         expect(third.thread.activities.map((activity) => activity.id)).toEqual([
           "activity-a",
@@ -228,6 +251,7 @@ describe("applyThreadDetailEvent", () => {
         sequence: index,
         createdAt: "2026-04-01T11:00:00.000Z",
       }));
+
       const result = applyThreadDetailEvent(
         { ...baseThread, activities: existingActivities },
         {
@@ -254,6 +278,7 @@ describe("applyThreadDetailEvent", () => {
       );
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.activities).toHaveLength(130);
         expect(result.thread.activities[0]?.id).toBe("activity-0");
@@ -271,7 +296,9 @@ describe("applyThreadDetailEvent", () => {
         sequence,
         createdAt: "2026-04-01T11:00:00.000Z",
       });
+
       const otherTurnActivity = contextWindowActivity("activity-other-turn", 2, 500);
+
       const existingActivities = [
         contextWindowActivity("activity-cw-1", 1, 1_000),
         { ...otherTurnActivity, turnId: TurnId.make("turn-0") },
@@ -298,6 +325,7 @@ describe("applyThreadDetailEvent", () => {
       );
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         const ids = result.thread.activities.map((activity) => activity.id);
         // Same-turn resolvable rows collapse to the newest; the other turn's
@@ -323,6 +351,7 @@ describe("applyThreadDetailEvent", () => {
         sequence,
         createdAt: "2026-04-01T11:00:00.000Z",
       });
+
       const append = (
         thread: OrchestrationThread,
         sequence: number,
@@ -337,7 +366,9 @@ describe("applyThreadDetailEvent", () => {
           type: "thread.activity-appended",
           payload: { threadId: ThreadId.make("thread-1"), activity: next },
         });
+
         assert(result.kind === "updated");
+
         return result.thread;
       };
 
@@ -354,6 +385,7 @@ describe("applyThreadDetailEvent", () => {
         30,
         activity("tool-1", 3, "command", "turn-1"),
       );
+
       const beforeSupersede = thread;
       thread = append(thread, 31, activity("cw-2", 4, "context-window.updated", "turn-1", 2_000));
       thread = append(thread, 32, activity("tool-2", 5, "command", "turn-1"));
@@ -416,6 +448,7 @@ describe("applyThreadDetailEvent", () => {
       );
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         // The resolvable row must survive so consumers can still derive a
         // usage value by walking backwards past the malformed row.

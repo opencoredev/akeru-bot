@@ -49,6 +49,7 @@ describe("applyShellStreamEvent", () => {
       };
 
       const updatedProject = { ...stubProject, title: "Updated Title" };
+
       const event: OrchestrationShellStreamEvent = {
         kind: "project-upserted",
         sequence: 2,
@@ -105,6 +106,7 @@ describe("applyShellStreamEvent", () => {
       };
 
       const updatedThread = { ...stubThread, title: "Updated Thread" };
+
       const event: OrchestrationShellStreamEvent = {
         kind: "thread-upserted",
         sequence: 5,

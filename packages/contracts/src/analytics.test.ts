@@ -72,6 +72,7 @@ describe("Usage3hEvent", () => {
         }).properties.sandbox_provider,
       ).toBe(sandbox_provider);
     }
+
     rejects({
       ...event,
       properties: { ...event.properties, sandbox_provider: "akeru-cloud" },
@@ -94,6 +95,7 @@ describe("Usage3hEvent", () => {
       const properties = Object.fromEntries(
         Object.entries(event.properties).filter(([key]) => key !== counter),
       );
+
       expect(decodeUsage3hEvent({ ...event, properties })).toEqual(event);
     },
   );
@@ -115,6 +117,7 @@ describe("Usage3hEvent", () => {
     const legacyProperties = Object.fromEntries(
       Object.entries(event.properties).filter(([key]) => key !== "sandbox_turns_ascii"),
     );
+
     expect(decodeUsage3hEvent({ ...event, properties: legacyProperties })).toEqual(event);
   });
 
@@ -123,6 +126,7 @@ describe("Usage3hEvent", () => {
       decodeUsage3hEvent({ ...event, properties: { ...event.properties, sandbox_turns_ascii: 3 } })
         .properties.sandbox_turns_ascii,
     ).toBe(3);
+
     for (const sandbox_turns_ascii of [-1, 0.5, USAGE_3H_COUNTER_MAX + 1, null, "0"]) {
       rejects({ ...event, properties: { ...event.properties, sandbox_turns_ascii } });
     }

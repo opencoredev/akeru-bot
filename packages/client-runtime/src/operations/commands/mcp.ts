@@ -21,6 +21,7 @@ export const createMcpServer: (input: CreateMcpServerInput) => CommandEffect = E
   "EnvironmentCommands.createMcpServer",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   if (input.transport === "stdio") {
     return yield* dispatch({
       ...input,
@@ -29,6 +30,7 @@ export const createMcpServer: (input: CreateMcpServerInput) => CommandEffect = E
       createdAt: metadata.createdAt,
     });
   }
+
   return yield* dispatch({
     ...input,
     type: "mcp-server.create",
@@ -41,6 +43,7 @@ export const updateMcpServer: (input: UpdateMcpServerInput) => CommandEffect = E
   "EnvironmentCommands.updateMcpServer",
 )(function* (input) {
   const nextCommandId = yield* commandId(input);
+
   if (input.transport === "stdio") {
     return yield* dispatch({
       ...input,
@@ -48,6 +51,7 @@ export const updateMcpServer: (input: UpdateMcpServerInput) => CommandEffect = E
       commandId: nextCommandId,
     });
   }
+
   return yield* dispatch({
     ...input,
     type: "mcp-server.update",

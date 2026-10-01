@@ -50,35 +50,47 @@ export function createReplyPlaybackSession(options: {
         ? options.synthesis(environmentId)
         : storedReplySynthesisCapability()
       : (options.synthesis ?? storedReplySynthesisCapability());
+
   // Environment-scoped overrides keep one chat's voice settings out of another environment.
   let synthesisOverride: StoredReplySynthesisCapability | null = null;
   const environmentSynthesisOverrides = new Map<string, StoredReplySynthesisCapability>();
+
   const currentSynthesis = (environmentId: string | null) =>
     (environmentId ? environmentSynthesisOverrides.get(environmentId) : undefined) ??
     synthesisOverride ??
     resolveSynthesis(environmentId);
+
   const synthesisListeners = new Set<() => void>();
   // `useSyncExternalStore` needs the same object until the capability changes, while resolvers
   // build a fresh one per call, so equal capabilities reuse the last snapshot.
   let synthesisSnapshot: StoredReplySynthesisCapability | null = null;
+
   const readSynthesisSnapshot = () => {
     const next = currentSynthesis(context?.environmentId ?? null);
+
     if (!synthesisSnapshot || !sameSynthesis(synthesisSnapshot, next)) synthesisSnapshot = next;
+
     return synthesisSnapshot;
   };
+
   const notifySynthesis = () => {
     for (const listener of synthesisListeners) listener();
   };
+
   const notifyIfSynthesisChanged = () => {
     const previous = synthesisSnapshot;
+
     if (readSynthesisSnapshot() !== previous) notifySynthesis();
   };
+
   const tracker = createAutomaticReadoutTracker();
   const controller = createReplyPlaybackController(options.prepare);
+
   const preference = createReplyReadoutPreference(options.storage, () => {
     tracker.setEnabled(false);
     controller.disableAutomaticReadout();
   });
+
   preference.subscribe(() => tracker.setEnabled(preference.getSnapshot().enabled));
   let context: ReplyPlaybackContext | null = null;
   let scope: string | null = null;
@@ -88,21 +100,28 @@ export function createReplyPlaybackSession(options: {
   // Rows and the observer ask for the same reply on every render, so spoken text is cached per
   // message and reused while its stored text is unchanged.
   const spokenCache = new Map<string, { text: string; spoken: SpokenReply }>();
+
   const spokenFor = (message: ReplyPlaybackMessage): SpokenReply | null => {
     if (message.role !== "assistant" || message.streaming) return null;
     const cached = spokenCache.get(message.id);
+
     if (cached && cached.text === message.text) return cached.spoken;
     const spoken = replyReadoutMessageAction(message);
+
     if (!spoken) return null;
     // Re-insert so the map stays in write order, then evict the oldest entry past the limit.
     spokenCache.delete(message.id);
     spokenCache.set(message.id, { text: message.text, spoken });
+
     if (spokenCache.size > SPOKEN_CACHE_LIMIT) {
       const oldest = spokenCache.keys().next();
+
       if (!oldest.done) spokenCache.delete(oldest.value);
     }
+
     return spoken;
   };
+
   const identityBase = () =>
     context
       ? {
@@ -112,11 +131,14 @@ export function createReplyPlaybackSession(options: {
           voice: context.voice,
         }
       : null;
+
   const actionFor = (message: ReplyPlaybackMessage): ReplyPlaybackAction | null => {
     const spoken = spokenFor(message);
     const base = identityBase();
+
     if (!spoken || !base) return null;
     const synthesis = currentSynthesis(base.environmentId);
+
     const request: ReplyPlaybackRequest = {
       identity: {
         ...base,
@@ -126,7 +148,9 @@ export function createReplyPlaybackSession(options: {
       text: spoken.text,
       automatic: false,
     };
+
     const disclosure = spokenTextDisclosure(spoken);
+
     if (!spoken.speakable) {
       return {
         request,
@@ -135,6 +159,7 @@ export function createReplyPlaybackSession(options: {
           : { unavailableReason: "This reply has no readable text." }),
       };
     }
+
     if (!synthesis.available) {
       return {
         request,
@@ -142,8 +167,10 @@ export function createReplyPlaybackSession(options: {
         unavailableReason: synthesis.reason,
       };
     }
+
     return disclosure ? { request, disclosure } : { request };
   };
+
   return {
     controller,
     preference,
@@ -155,6 +182,7 @@ export function createReplyPlaybackSession(options: {
     getSynthesisSnapshot: readSynthesisSnapshot,
     subscribeSynthesis: (listener: () => void) => {
       synthesisListeners.add(listener);
+
       return () => synthesisListeners.delete(listener);
     },
     // Tells listeners that a synthesis function now returns different values.
@@ -170,6 +198,7 @@ export function createReplyPlaybackSession(options: {
       context = next;
       controller.setContext(next);
       const nextScope = next ? `${next.environmentId}/${next.threadId}` : null;
+
       if (nextScope !== scope) {
         scope = nextScope;
         seen = new Set();
@@ -177,6 +206,7 @@ export function createReplyPlaybackSession(options: {
         baseline = null;
         tracker.reset(scope, 0);
       }
+
       notifyIfSynthesisChanged();
     },
     clearContextIf: (environmentId: string, threadId: string) => {
@@ -194,11 +224,14 @@ export function createReplyPlaybackSession(options: {
     observe: (messages: ReadonlyArray<ReplyPlaybackMessage>) => {
       const versions = new Map<string, string>();
       const live: CompletedReply[] = [];
+
       for (const message of messages) {
         if (message.role !== "assistant") continue;
         versions.set(message.id, message.updatedAt);
+
         if (seen.has(message.id)) continue;
         const spoken = spokenFor(message);
+
         if (!spoken?.speakable) continue;
         live.push({
           messageId: message.id,
@@ -207,25 +240,35 @@ export function createReplyPlaybackSession(options: {
           successful: true,
         });
       }
+
       controller.reconcileMessages(versions);
+
       if (scope === null) return;
+
       if (baseline === null) {
         for (const message of messages) {
           if (message.role !== "assistant") continue;
           seen.add(message.id);
+
           if (baseline === null || message.updatedAt > baseline) baseline = message.updatedAt;
         }
+
         baseline ??= "";
         sequence = seen.size;
         tracker.hydrate(sequence);
+
         return;
       }
+
       const base = identityBase();
+
       for (const reply of live) {
         seen.add(reply.messageId);
         sequence += 1;
+
         if (reply.contentVersion <= baseline) continue;
         const next = tracker.completed(scope, sequence, reply);
+
         if (next && base && currentSynthesis(base.environmentId).available) {
           void controller.start({
             identity: { ...base, messageId: next.messageId, contentVersion: next.contentVersion },

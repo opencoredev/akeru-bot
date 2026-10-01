@@ -32,6 +32,7 @@ export interface TraceSink {
 
 export const makeTraceSink = Effect.fn("makeTraceSink")(function* (options: TraceSinkOptions) {
   const maxBufferedBytes = options.maxBufferedBytes ?? DEFAULT_MAX_BUFFERED_BYTES;
+
   const sink = new RotatingFileSink({
     filePath: options.filePath,
     maxBytes: options.maxBytes,
@@ -52,17 +53,21 @@ export const makeTraceSink = Effect.fn("makeTraceSink")(function* (options: Trac
     buffer = [];
     bufferedBytes = 0;
     let index = 0;
+
     while (index < records.length) {
       const start = index;
       let bytes = 0;
       const lines: string[] = [];
+
       while (index < records.length) {
         const record = records[index]!;
+
         if (bytes + record.bytes > options.maxBytes) break;
         bytes += record.bytes;
         lines.push(record.line);
         index += 1;
       }
+
       const count = index - start;
       const startedAt = performance.now();
       void sink.write(lines.join("")).then(
@@ -96,6 +101,7 @@ export const makeTraceSink = Effect.fn("makeTraceSink")(function* (options: Trac
       pendingFlushStats = { logicalWriteBytes: 0, count: 0, durationMs: 0 };
       const dropped = droppedRecords;
       droppedRecords = 0;
+
       if (dropped > 0 || (writeError !== undefined && !reportedWriteError)) {
         reportedWriteError = writeError !== undefined;
         yield* Effect.logWarning("trace log records could not be persisted", {
@@ -104,8 +110,10 @@ export const makeTraceSink = Effect.fn("makeTraceSink")(function* (options: Trac
           ...(writeError !== undefined ? { errorTag: errorTag(writeError) } : {}),
         });
       }
+
       if (stats.count > 0 && options.onFlush) yield* options.onFlush(stats).pipe(Effect.ignore);
     }).pipe(Effect.withTracerEnabled(false), Effect.uninterruptible);
+
   const flush = drain(false);
   const close = () => drain(true);
 
@@ -118,18 +126,23 @@ export const makeTraceSink = Effect.fn("makeTraceSink")(function* (options: Trac
     filePath: options.filePath,
     push(record) {
       if (closed) return;
+
       try {
         const line = `${JSON.stringify(record)}\n`;
         const bytes = Buffer.byteLength(line);
+
         if (
           bytes > options.maxBytes ||
           bufferedBytes + sink.bufferedBytes + bytes > maxBufferedBytes
         ) {
           droppedRecords += 1;
+
           return;
         }
+
         buffer.push({ line, bytes });
         bufferedBytes += bytes;
+
         if (buffer.length >= FLUSH_BUFFER_THRESHOLD) submit();
       } catch {
         droppedRecords += 1;

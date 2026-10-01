@@ -88,6 +88,7 @@ it("advertises only channel actions exposed by the shipped transports", () => {
     assert.equal(capabilities.attachments, false);
     assert.equal(capabilities.interactiveActions, false);
   }
+
   assert.equal(CHANNEL_TRANSPORT_CAPABILITIES.telegram.reactions, false);
   assert.equal(CHANNEL_TRANSPORT_CAPABILITIES.slack.reactions, true);
   assert.equal(CHANNEL_TRANSPORT_CAPABILITIES.discord.reactions, true);
@@ -103,6 +104,7 @@ it.effect("decodes live channel commands", () =>
       provider: "telegram",
       token: " token ",
     });
+
     const imessage = yield* decodeClientOrchestrationCommand({
       type: "channel.connect",
       commandId: "connect-imessage",
@@ -113,6 +115,7 @@ it.effect("decodes live channel commands", () =>
       projectId: " photon-project ",
       projectSecret: " photon-secret ",
     });
+
     const whatsapp = yield* decodeClientOrchestrationCommand({
       type: "channel.connect",
       commandId: "connect-whatsapp",
@@ -124,6 +127,7 @@ it.effect("decodes live channel commands", () =>
       phoneNumberId: " phone-number-id ",
       verifyToken: " verify-token ",
     });
+
     const slack = yield* decodeClientOrchestrationCommand({
       type: "channel.connect",
       commandId: "connect-slack",
@@ -133,6 +137,7 @@ it.effect("decodes live channel commands", () =>
       botToken: " xoxb-token ",
       appToken: " xapp-token ",
     });
+
     const discord = yield* decodeClientOrchestrationCommand({
       type: "channel.connect",
       commandId: "connect-discord",
@@ -143,6 +148,7 @@ it.effect("decodes live channel commands", () =>
       applicationId: " app-1 ",
       publicKey: " public-key ",
     });
+
     const saveConnection = yield* decodeClientOrchestrationCommand({
       type: "channel.connection.save",
       commandId: "save-photon",
@@ -209,6 +215,7 @@ it.effect("strips runtime-owned channel fields from client commands", () =>
         },
       ],
     });
+
     const turnStart = yield* decodeClientOrchestrationCommand({
       type: "thread.turn.start",
       commandId: "start-turn",
@@ -227,6 +234,7 @@ it.effect("strips runtime-owned channel fields from client commands", () =>
 
     assert.isFalse("channelBindings" in botUpdate);
     assert.strictEqual(turnStart.type, "thread.turn.start");
+
     if (turnStart.type === "thread.turn.start") {
       assert.isFalse("channelOrigin" in turnStart.message);
     }
@@ -348,6 +356,7 @@ it.effect("accepts both inline and uploaded image attachments from clients", () 
     if (command.type !== "thread.turn.start") {
       assert.fail(`Expected thread.turn.start, received ${command.type}.`);
     }
+
     assert.strictEqual(command.message.attachments.length, 2);
     assert.strictEqual("dataUrl" in command.message.attachments[0]!, true);
     assert.strictEqual("id" in command.message.attachments[1]!, true);
@@ -407,8 +416,10 @@ it.effect("decodes exclusive thread ownership", () =>
       worktreePath: null,
       createdAt: "2026-01-01T00:00:00.000Z",
     };
+
     const owned = yield* decodeOrchestrationCommand({ ...base, botId: "bot-1" });
     assert.equal(owned.type, "thread.create");
+
     if (owned.type === "thread.create") {
       assert.equal(owned.botId, "bot-1");
       assert.equal(owned.groupId, undefined);
@@ -417,6 +428,7 @@ it.effect("decodes exclusive thread ownership", () =>
     const invalid = yield* Effect.result(
       decodeOrchestrationCommand({ ...base, botId: "bot-1", groupId: "group-1" }),
     );
+
     assert.equal(invalid._tag, "Failure");
   }),
 );

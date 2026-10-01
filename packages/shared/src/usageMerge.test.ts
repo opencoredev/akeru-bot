@@ -51,6 +51,7 @@ function summary(
     kimi: "kimi-for-coding",
     opencode: "opencode-go",
   } as const;
+
   return {
     contractVersion,
     readAt: "2026-08-07T00:00:00.000Z",
@@ -108,6 +109,7 @@ describe("mergeUsage", () => {
   it("counts a shared transcript directory once", () => {
     // Two worktree servers on one machine resolve the same provider home.
     const shared = { provider: "claude" as const, hostId: "mac", homePath: "/home/theo/.claude" };
+
     const merged = mergeUsage(
       [
         environment("env-a", summary([bucket()], [shared])),
@@ -129,6 +131,7 @@ describe("mergeUsage", () => {
       hostId: "mac",
       homePath: "/home/theo/.claude",
     };
+
     const merged = mergeUsage(
       [
         environment("env-a", summary([bucket()], [sharedClaude])),
@@ -210,6 +213,7 @@ describe("mergeUsage", () => {
     // Every Mac resolves /Users/theo/.claude, so a hostname clash used to make
     // one machine's usage vanish. Filesystem identity separates them.
     const shape = { provider: "claude" as const, hostId: "mac", homePath: "/Users/theo/.claude" };
+
     const merged = mergeUsage(
       [
         environment("env-a", summary([bucket()], [{ ...shape, volumeId: "16777220:1234" }])),
@@ -229,6 +233,7 @@ describe("mergeUsage", () => {
       homePath: "/Users/theo/.claude",
       volumeId: "16777220:1234",
     };
+
     const merged = mergeUsage(
       [
         environment("env-a", summary([bucket()], [same])),

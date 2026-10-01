@@ -26,6 +26,7 @@ export const draftRoutine: (input: DraftRoutineInput) => CommandEffect = Effect.
   "EnvironmentCommands.draftRoutine",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "routine.draft",
@@ -38,6 +39,7 @@ export const approveRoutine: (input: ApproveRoutineInput) => CommandEffect = Eff
   "EnvironmentCommands.approveRoutine",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "routine.approve",
@@ -50,6 +52,7 @@ export const enableRoutine: (input: EnableRoutineInput) => CommandEffect = Effec
   "EnvironmentCommands.enableRoutine",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "routine.enable",
@@ -62,6 +65,7 @@ export const pauseRoutine: (input: PauseRoutineInput) => CommandEffect = Effect.
   "EnvironmentCommands.pauseRoutine",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "routine.pause",
@@ -74,6 +78,7 @@ export const runRoutine: (input: RunRoutineInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.runRoutine",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "routine.run",
@@ -86,6 +91,7 @@ export const deleteRoutine: (input: DeleteRoutineInput) => CommandEffect = Effec
   "EnvironmentCommands.deleteRoutine",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "routine.delete",
@@ -98,6 +104,7 @@ export const assignRoutineSkill: (input: AssignRoutineSkillInput) => CommandEffe
   "EnvironmentCommands.assignRoutineSkill",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "routine.skill.assign",
@@ -110,6 +117,7 @@ export const unassignRoutineSkill: (input: UnassignRoutineSkillInput) => Command
   "EnvironmentCommands.unassignRoutineSkill",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "routine.skill.unassign",

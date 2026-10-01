@@ -143,13 +143,16 @@ export const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(functio
   // Older-page responses resolve through deferreds so tests can interleave
   // live events with an in-flight page fetch.
   const pendingPageResponses = yield* Queue.unbounded<Deferred.Deferred<LoaderResponse>>();
+
   const supervisorState = yield* SubscriptionRef.make<SupervisorConnectionState>(
     AVAILABLE_CONNECTION_STATE,
   );
+
   const client = {
     [ORCHESTRATION_WS_METHODS.subscribeThread]: (input: Record<string, unknown>) =>
       Stream.unwrap(Ref.set(lastSubscribeInput, input).pipe(Effect.as(Stream.fromQueue(inputs)))),
   } as unknown as WsRpcProtocolClient;
+
   const session: RpcSession.RpcSession = {
     client,
     initialConfig: Effect.succeed({
@@ -159,12 +162,15 @@ export const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(functio
     probe: Effect.void,
     closed: Effect.never,
   };
+
   const supervisorSession = yield* SubscriptionRef.make<Option.Option<RpcSession.RpcSession>>(
     Option.some(session),
   );
+
   const prepared = yield* SubscriptionRef.make<Option.Option<PreparedConnection>>(
     Option.some(PREPARED),
   );
+
   const snapshotLoader = ThreadSnapshotLoader.of({
     load: (_prepared, _threadId, window) =>
       Ref.update(loaderWindows, (current) => [...current, window]).pipe(
@@ -180,6 +186,7 @@ export const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(functio
         ),
       ),
   });
+
   const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
     target: TARGET,
     state: supervisorState,
@@ -190,6 +197,7 @@ export const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(functio
     retryNow: Effect.void,
     retryIfDesired: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+
   const cache = Persistence.EnvironmentCacheStore.of({
     loadShell: () => Effect.succeed(Option.none()),
     saveShell: () => Effect.void,
@@ -202,11 +210,13 @@ export const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(functio
     saveServerConfig: () => Effect.void,
     clear: () => Effect.void,
   });
+
   const threadState = yield* makeEnvironmentThreadState(THREAD_ID).pipe(
     Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
     Effect.provideService(Persistence.EnvironmentCacheStore, cache),
     Effect.provideService(ThreadSnapshotLoader, snapshotLoader),
   );
+
   yield* SubscriptionRef.changes(threadState).pipe(
     Stream.runForEach((state) => Queue.offer(observed, state)),
     Effect.forkScoped,
@@ -214,6 +224,7 @@ export const makeHarness = Effect.fn("TestThreadPagination.makeHarness")(functio
 
   const awaitState = (predicate: (state: EnvironmentThreadState) => boolean) =>
     Queue.take(observed).pipe(Effect.repeat({ until: predicate }));
+
   const resolveNextPage = (response: LoaderResponse) =>
     Queue.take(pendingPageResponses).pipe(
       Effect.flatMap((deferred) => Deferred.succeed(deferred, response)),

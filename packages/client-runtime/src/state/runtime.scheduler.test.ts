@@ -14,6 +14,7 @@ describe("runtime command runner", () => {
   it("settles generated command scheduler defects from direct callers", async () => {
     const defect = new Error("invalid command key");
     const runtime = Atom.runtime(Layer.empty);
+
     const command = createRuntimeCommand(runtime, {
       label: "test.invalid-key",
       concurrency: {
@@ -24,14 +25,17 @@ describe("runtime command runner", () => {
       },
       execute: () => Effect.void,
     });
+
     const registry = AtomRegistry.make();
 
     const result = await command.run(registry, undefined);
     expect(result._tag).toBe("Failure");
+
     if (result._tag === "Failure") {
       expect(Cause.hasDies(result.cause)).toBe(true);
       expect(Cause.squash(result.cause)).toBe(defect);
     }
+
     registry.dispose();
   });
 
@@ -39,11 +43,13 @@ describe("runtime command runner", () => {
     const firstLatch = Latch.makeUnsafe();
     const secondLatch = Latch.makeUnsafe();
     const runtime = Atom.runtime(Layer.empty);
+
     const command = createRuntimeCommand(runtime, {
       label: "test.parallel",
       execute: (id: "first" | "second") =>
         (id === "first" ? firstLatch : secondLatch).await.pipe(Effect.as(id)),
     });
+
     const registry = AtomRegistry.make();
 
     const first = command.run(registry, "first");
@@ -62,6 +68,7 @@ describe("runtime command runner", () => {
     const runtime = Atom.runtime(Layer.empty);
     const scheduler = createAtomCommandScheduler();
     const concurrency = { mode: "serial" as const, key: () => "shared" };
+
     const firstCommand = createRuntimeCommand(runtime, {
       label: "test.first",
       scheduler,
@@ -72,12 +79,14 @@ describe("runtime command runner", () => {
           Effect.tap(() => Effect.sync(() => events.push("first:end"))),
         ),
     });
+
     const secondCommand = createRuntimeCommand(runtime, {
       label: "test.second",
       scheduler,
       concurrency,
       execute: () => Effect.sync(() => events.push("second:start")),
     });
+
     const registry = AtomRegistry.make();
 
     const first = firstCommand.run(registry, undefined);
@@ -99,6 +108,7 @@ describe("runtime command runner", () => {
       const runtime = Atom.runtime(Layer.empty);
       const scheduler = createAtomCommandScheduler();
       const concurrency = { mode: "serial" as const, key: () => "shared" };
+
       const updateCommand = createRuntimeCommand(runtime, {
         label: "test.update",
         execute: (_input: void, registry) =>
@@ -112,12 +122,14 @@ describe("runtime command runner", () => {
             ),
           ).pipe(Effect.andThen(resumeComplete.await)),
       });
+
       const configCommand = createRuntimeCommand(runtime, {
         label: "test.config",
         scheduler,
         concurrency,
         execute: () => Effect.succeed("configured"),
       });
+
       const registry = AtomRegistry.make();
 
       const update = updateCommand.run(registry, undefined);
@@ -143,12 +155,14 @@ describe("runtime command runner", () => {
     const latch = Latch.makeUnsafe();
     let executions = 0;
     const runtime = Atom.runtime(Layer.empty);
+
     const command = createRuntimeCommand(runtime, {
       label: "test.single-flight",
       concurrency: { mode: "singleFlight", key: (key: string) => key },
       execute: () =>
         Effect.sync(() => executions++).pipe(Effect.andThen(latch.await), Effect.as("done")),
     });
+
     const registry = AtomRegistry.make();
 
     const first = command.run(registry, "same");
@@ -165,6 +179,7 @@ describe("runtime command runner", () => {
     const firstLatch = Latch.makeUnsafe();
     const executed: number[] = [];
     const runtime = Atom.runtime(Layer.empty);
+
     const command = createRuntimeCommand(runtime, {
       label: "test.latest",
       concurrency: { mode: "latest", key: () => "shared" },
@@ -174,6 +189,7 @@ describe("runtime command runner", () => {
           Effect.as(value),
         ),
     });
+
     const registry = AtomRegistry.make();
 
     const first = command.run(registry, 1);

@@ -26,6 +26,7 @@ describe("EnvironmentRegistry", () => {
 
       yield* Effect.gen(function* () {
         const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+
         const entry = (yield* SubscriptionRef.get(registry.entries)).get(
           SSH_CONNECTION.environmentId,
         );
@@ -64,6 +65,7 @@ describe("EnvironmentRegistry", () => {
         label: "Replacement bearer environment",
         connectionId: "replacement-bearer-connection",
       });
+
       const harness = yield* makeHarness([BEARER_TARGET], [BEARER_PROFILE]);
 
       yield* Effect.gen(function* () {

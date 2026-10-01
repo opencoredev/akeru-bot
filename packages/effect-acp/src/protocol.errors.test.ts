@@ -46,6 +46,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
   it.effect("correlates extension response errors with the originating request", () =>
     Effect.gen(function* () {
       const { stdio, input, output } = yield* makeInMemoryStdio();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         serverRequestMethods: new Set(),
@@ -54,6 +55,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
       const response = yield* transport
         .request("x/private", { hello: "world" })
         .pipe(Effect.forkScoped);
+
       yield* Queue.take(output);
       yield* Queue.offer(
         input,
@@ -86,6 +88,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
           onSuccess: () => assert.fail("Expected extension request to fail"),
         }),
       );
+
       assert.instanceOf(error, AcpError.AcpRequestError);
       assert.deepInclude(error, {
         code: -32602,
@@ -103,8 +106,10 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
         ACP_MOCK_MALFORMED_OUTPUT: "1",
         ACP_MOCK_MALFORMED_OUTPUT_EXIT_CODE: "23",
       });
+
       const terminationCalls = yield* Ref.make(0);
       const firstMessage = yield* Deferred.make<unknown>();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio: makeChildStdio(handle),
         terminationError: makeTerminationError(handle),
@@ -119,11 +124,13 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
       const message = yield* Deferred.await(firstMessage);
       assert.equal(yield* Ref.get(terminationCalls), 1);
       assert.equal((message as { readonly _tag?: string })._tag, "ClientProtocolError");
+
       const defect = (message as { readonly error: { readonly reason: unknown } }).error.reason as {
         readonly _tag: string;
         readonly message: string;
         readonly cause: unknown;
       };
+
       assert.equal(defect._tag, "RpcClientDefect");
       assert.equal(defect.message, "ACP protocol terminated.");
       assert.instanceOf(defect.cause, AcpError.AcpProtocolParseError);

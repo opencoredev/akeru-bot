@@ -26,6 +26,7 @@ describe("applyThreadDetailEvent", () => {
           deletedAt: null,
         },
       } as any);
+
       expect(result.kind).toBe("unchanged");
     });
   });
@@ -54,6 +55,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.id).toBe("thread-2");
         expect(result.thread.title).toBe("New Thread");
@@ -78,6 +80,7 @@ describe("applyThreadDetailEvent", () => {
           deletedAt: "2026-04-01T02:00:00.000Z",
         },
       });
+
       expect(result.kind).toBe("deleted");
     });
   });
@@ -91,6 +94,7 @@ describe("applyThreadDetailEvent", () => {
           startedAt: "2026-04-01T02:00:00.000Z",
         },
       };
+
       const result = applyThreadDetailEvent(regeneratingThread, {
         ...baseEventFields,
         sequence: 3,
@@ -106,6 +110,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.archivedAt).toBe("2026-04-01T03:00:00.000Z");
         expect(result.thread.titleRegeneration).toBeNull();
@@ -114,6 +119,7 @@ describe("applyThreadDetailEvent", () => {
 
     it("clears archivedAt", () => {
       const archivedThread = { ...baseThread, archivedAt: "2026-04-01T03:00:00.000Z" };
+
       const result = applyThreadDetailEvent(archivedThread, {
         ...baseEventFields,
         sequence: 4,
@@ -128,6 +134,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.archivedAt).toBeNull();
       }
@@ -137,6 +144,7 @@ describe("applyThreadDetailEvent", () => {
   describe("thread.settled / thread.unsettled", () => {
     it("sets the settled override and timestamp", () => {
       const settledAt = "2026-04-01T05:00:00.000Z";
+
       const result = applyThreadDetailEvent(baseThread, {
         ...baseEventFields,
         sequence: 5,
@@ -152,6 +160,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.settledOverride).toBe("settled");
         expect(result.thread.settledAt).toBe(settledAt);
@@ -167,7 +176,9 @@ describe("applyThreadDetailEvent", () => {
         settledOverride: "settled",
         settledAt: "2026-04-01T05:00:00.000Z",
       };
+
       const updatedAt = "2026-04-01T06:00:00.000Z";
+
       const result = applyThreadDetailEvent(settledThread, {
         ...baseEventFields,
         sequence: 6,
@@ -183,6 +194,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.settledOverride).toBe(settledOverride);
         expect(result.thread.settledAt).toBeNull();
@@ -193,6 +205,7 @@ describe("applyThreadDetailEvent", () => {
   describe("thread.pinned / thread.unpinned", () => {
     it("sets pinnedAt", () => {
       const pinnedAt = "2026-04-01T05:00:00.000Z";
+
       const result = applyThreadDetailEvent(baseThread, {
         ...baseEventFields,
         sequence: 5,
@@ -208,6 +221,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.pinnedAt).toBe(pinnedAt);
       }
@@ -218,7 +232,9 @@ describe("applyThreadDetailEvent", () => {
         ...baseThread,
         pinnedAt: "2026-04-01T05:00:00.000Z",
       };
+
       const updatedAt = "2026-04-01T06:00:00.000Z";
+
       const result = applyThreadDetailEvent(pinnedThread, {
         ...baseEventFields,
         sequence: 6,
@@ -233,6 +249,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.pinnedAt).toBeNull();
       }
@@ -257,6 +274,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.title).toBe("Updated Title");
         expect(result.thread.branch).toBe("feature/demo");
@@ -272,6 +290,7 @@ describe("applyThreadDetailEvent", () => {
         number: 42,
         url: "https://github.com/pingdotgg/t3code/pull/42",
       };
+
       const linked = applyThreadDetailEvent(baseThread, {
         ...baseEventFields,
         sequence: 5,
@@ -287,6 +306,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(linked.kind).toBe("updated");
+
       if (linked.kind !== "updated") return;
       expect(linked.thread.linkedPullRequest).toEqual(linkedPullRequest);
 
@@ -305,6 +325,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(cleared.kind).toBe("updated");
+
       if (cleared.kind === "updated") {
         expect(cleared.thread.linkedPullRequest).toBeNull();
       }
@@ -327,6 +348,7 @@ describe("applyThreadDetailEvent", () => {
           createdAt: "2026-04-01T13:00:00.000Z",
         },
       } as any);
+
       expect(result.kind).toBe("unchanged");
     });
   });

@@ -28,6 +28,7 @@ import { waitForHttpReady } from "./readiness.ts";
 
 export const reserveLocalTunnelPort = Effect.fn("ssh/tunnel.reserveLocalTunnelPort")(function* () {
   const net = yield* NetService.NetService;
+
   return yield* net.reserveLoopbackPort();
 });
 
@@ -51,6 +52,7 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
   | Scope.Scope
 > {
   const hostSpec = yield* buildSshHostSpecEffect(input.resolvedTarget);
+
   const childEnvironment = yield* buildSshChildEnvironment({
     ...(input.authOptions.authSecret === undefined
       ? {}
@@ -70,6 +72,7 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
         }),
     ),
   );
+
   const args = [
     ...baseSshArgs(input.resolvedTarget, {
       batchMode: input.authOptions.batchMode ?? "no",
@@ -92,6 +95,7 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
     `${input.localPort}:127.0.0.1:${input.remotePort}`,
     hostSpec,
   ];
+
   const sshCommand = yield* resolveSshCommand;
   const tunnelCommand = [sshCommand, ...args];
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -104,6 +108,7 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
     remoteServerKind: input.remoteServerKind,
     httpBaseUrl: input.httpBaseUrl,
   });
+
   const child = yield* spawner
     .spawn(
       ChildProcess.make(sshCommand, args, {
@@ -130,6 +135,7 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
           }),
       ),
     );
+
   yield* Effect.logDebug("ssh.tunnel.spawn.succeeded", {
     ...sshTargetLogFields(input.resolvedTarget),
     command: tunnelCommand,
@@ -138,6 +144,7 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
     remotePort: input.remotePort,
     httpBaseUrl: input.httpBaseUrl,
   });
+
   const tunnelEntry: SshTunnelEntry = {
     key: input.key,
     target: input.resolvedTarget,
@@ -149,6 +156,7 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
     process: child,
     scope,
   };
+
   const exitFailure = Effect.all(
     [collectProcessOutput(child.stderr), child.exitCode.pipe(Effect.map(Number))],
     { concurrency: "unbounded" },
@@ -176,6 +184,7 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
           `SSH tunnel exited unexpectedly for ${input.resolvedTarget.alias} (exit ${exitCode}).`,
         ),
       });
+
       return Effect.logWarning("ssh.tunnel.process.exited", {
         ...sshTargetLogFields(input.resolvedTarget),
         command: tunnelCommand,
@@ -188,6 +197,7 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
       }).pipe(Effect.andThen(Effect.fail(error)));
     }),
   );
+
   yield* Effect.raceFirst(
     waitForHttpReady({
       baseUrl: input.httpBaseUrl,
@@ -209,19 +219,25 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
       Effect.gen(function* () {
         const net = yield* NetService.NetService;
         const processRunningExit = yield* Effect.exit(child.isRunning);
+
         const localPortAvailableExit = yield* Effect.exit(
           net.canListenOnHost(input.localPort, "127.0.0.1"),
         );
+
         const remoteLogTailExit = yield* Effect.exit(
           readRemoteServerLogTail(input.resolvedTarget, input.authOptions),
         );
+
         const processRunning = Exit.isSuccess(processRunningExit) ? processRunningExit.value : null;
+
         const localPortAvailable = Exit.isSuccess(localPortAvailableExit)
           ? localPortAvailableExit.value
           : null;
+
         const remoteLogTail = Exit.isSuccess(remoteLogTailExit)
           ? remoteLogTailExit.value || null
           : null;
+
         yield* Effect.logWarning("ssh.tunnel.ready.failed", {
           ...sshTargetLogFields(input.resolvedTarget),
           command: tunnelCommand,
@@ -256,5 +272,6 @@ export const startSshTunnel = Effect.fn("ssh/tunnel.startSshTunnel")(function* (
             .pipe(Effect.ignore),
     ),
   );
+
   return tunnelEntry;
 });

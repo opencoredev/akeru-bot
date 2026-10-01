@@ -50,10 +50,12 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
     effect: Effect.Effect<A, E, R>,
   ): Effect.fn.Return<A, E, R> {
     let lock = targetLocks.get(key);
+
     if (lock === undefined) {
       lock = Semaphore.makeUnsafe(1);
       targetLocks.set(key, lock);
     }
+
     return yield* lock.withPermits(1)(effect);
   });
 
@@ -91,11 +93,13 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
   ): Effect.fn.Return<string, SshInvalidTargetError | SshPasswordPromptError, SshPasswordPrompt> {
     const promptService = yield* SshPasswordPrompt;
     const hostSpec = yield* buildSshHostSpecEffect(target);
+
     if (!promptService.isAvailable) {
       yield* Effect.logWarning("ssh.auth.passwordPrompt.unavailable", {
         ...sshTargetLogFields(target),
         attempt,
       });
+
       return yield* new SshPasswordPromptError({
         message: `SSH authentication failed for ${hostSpec}.`,
       });
@@ -105,25 +109,30 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       ...sshTargetLogFields(target),
       attempt,
     });
+
     const password = yield* promptService.request({
       attempt,
       destination: target.alias.trim() || target.hostname.trim(),
       username: target.username,
       prompt: `Enter the SSH password for ${hostSpec}.`,
     });
+
     if (password === null) {
       yield* Effect.logWarning("ssh.auth.passwordPrompt.cancelled", {
         ...sshTargetLogFields(target),
         attempt,
       });
+
       return yield* new SshPasswordPromptError({
         message: `SSH authentication cancelled for ${hostSpec}.`,
       });
     }
+
     yield* Effect.logInfo("ssh.auth.passwordPrompt.received", {
       ...sshTargetLogFields(target),
       attempt,
     });
+
     return password;
   });
 
@@ -144,12 +153,15 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
         cause: input.error,
       });
       const promptService = yield* SshPasswordPrompt;
+
       if (!promptService.isAvailable) {
         return yield* input.error;
       }
+
       if (input.authSecret !== null) {
         authSecrets.delete(input.key);
       }
+
       if (input.promptCount >= 2) {
         return yield* input.error;
       }
@@ -157,6 +169,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       const nextPromptCount = input.promptCount + 1;
       const nextAuthSecret = yield* promptForPassword(input.target, nextPromptCount);
       authSecrets.set(input.key, nextAuthSecret);
+
       return yield* runWithSshAuthAttempt({
         ...input,
         promptCount: nextPromptCount,
@@ -169,6 +182,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
     input: SshAuthAttemptInput<T>,
   ): Effect.fn.Return<T, SshEnvironmentEffectError, SshEnvironmentEffectContext> {
     const promptService = yield* SshPasswordPrompt;
+
     const authOptions =
       input.authSecret === null
         ? {
@@ -206,12 +220,14 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       ...sshRunnerLogFields(input.runner),
       key: input.key,
     });
+
     const remoteLaunch = yield* runWithSshAuth({
       key: input.key,
       target: input.resolvedTarget,
       operation: (authOptions) =>
         launchOrReuseRemoteServer(input.resolvedTarget, authOptions, input.runner),
     });
+
     const remotePort = remoteLaunch.remotePort;
     yield* Effect.logDebug("ssh.environment.remotePort.ready", {
       ...sshTargetLogFields(input.resolvedTarget),
@@ -229,6 +245,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       remotePort,
     });
     const entryScope = yield* Scope.make("sequential");
+
     const tunnelEntry = yield* runWithSshAuth({
       key: input.key,
       target: input.resolvedTarget,
@@ -248,6 +265,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
         Exit.isSuccess(exit) ? Effect.void : Scope.close(entryScope, Exit.void).pipe(Effect.ignore),
       ),
     );
+
     tunnels.set(input.key, tunnelEntry);
     const spawnerService = yield* ChildProcessSpawner.ChildProcessSpawner;
     const fileSystemService = yield* FileSystem.FileSystem;
@@ -256,18 +274,22 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       entryScope,
       Effect.gen(function* () {
         const stopRemote = tunnels.get(tunnelEntry.key) === tunnelEntry;
+
         if (stopRemote) {
           tunnels.delete(tunnelEntry.key);
         }
+
         yield* tunnelEntry.process
           .kill({
             killSignal: "SIGTERM",
             forceKillAfter: TUNNEL_SHUTDOWN_TIMEOUT_MS,
           })
           .pipe(Effect.ignore);
+
         if (!stopRemote) {
           return;
         }
+
         yield* Effect.logDebug("ssh.environment.tunnel.finalizer.start", {
           ...sshTargetLogFields(tunnelEntry.target),
           key: tunnelEntry.key,
@@ -306,6 +328,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       localPort,
       remotePort,
     });
+
     return tunnelEntry;
   });
 
@@ -323,9 +346,11 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
         localPort: entry.localPort,
         remotePort: entry.remotePort,
       });
+
       const readinessExit = yield* Effect.exit(
         waitForHttpReady({ baseUrl: entry.httpBaseUrl, timeoutMs: 2_000 }),
       );
+
       if (Exit.isSuccess(readinessExit)) {
         yield* Effect.logDebug("ssh.environment.tunnel.reused", {
           ...sshTargetLogFields(resolvedTarget),
@@ -333,8 +358,10 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
           localPort: entry.localPort,
           remotePort: entry.remotePort,
         });
+
         return entry;
       }
+
       yield* Effect.logWarning("ssh.environment.tunnel.existing.stale", {
         ...sshTargetLogFields(resolvedTarget),
         key,
@@ -372,27 +399,32 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       ...sshTargetLogFields(target),
       issuePairingToken: requestOptions?.issuePairingToken === true,
     });
+
     return yield* withTargetLock(
       targetConnectionKey(target),
       Effect.gen(function* () {
         const baseResolved = yield* resolveSshTarget(target.alias || target.hostname);
+
         const resolvedTarget: DesktopSshEnvironmentTarget = {
           ...baseResolved,
           ...(target.username !== null ? { username: target.username } : {}),
           ...(target.port !== null ? { port: target.port } : {}),
         };
+
         const key = targetConnectionKey(resolvedTarget);
         yield* Effect.logDebug("ssh.environment.target.resolved", {
           ...sshTargetLogFields(resolvedTarget),
           key,
         });
         const packageSpec = options.resolveCliPackageSpec?.();
+
         const runner =
           options.resolveCliRunner === undefined
             ? packageSpec === undefined
               ? undefined
               : { packageSpec }
             : yield* options.resolveCliRunner;
+
         yield* Effect.logDebug("ssh.environment.runner.resolved", {
           ...sshTargetLogFields(resolvedTarget),
           ...sshRunnerLogFields(runner),
@@ -408,6 +440,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
                 issueRemotePairingToken(entry.target, authOptions, runner),
             })
           : null;
+
         const pairingToken = pairingResult?.credential ?? null;
 
         yield* Effect.logInfo("ssh.environment.ensure.succeeded", {
@@ -418,6 +451,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
           remoteServerKind: entry.remoteServerKind,
           issuedPairingToken: pairingToken !== null,
         });
+
         return {
           target: entry.target,
           httpBaseUrl: entry.httpBaseUrl,
@@ -438,11 +472,13 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
       targetConnectionKey(target),
       Effect.gen(function* () {
         const baseResolved = yield* resolveSshTarget(target.alias || target.hostname);
+
         const resolvedTarget: DesktopSshEnvironmentTarget = {
           ...baseResolved,
           ...(target.username !== null ? { username: target.username } : {}),
           ...(target.port !== null ? { port: target.port } : {}),
         };
+
         const key = targetConnectionKey(resolvedTarget);
         const entry = tunnels.get(key) ?? null;
         yield* Effect.logDebug("ssh.environment.disconnect.targetResolved", {
@@ -450,6 +486,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
           key,
           hasTunnel: entry !== null,
         });
+
         if (entry !== null) {
           // Explicit disconnect owns the remote stop so its failure reaches the caller.
           yield* Effect.gen(function* () {
@@ -457,6 +494,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
             yield* closeTunnelEntry(entry);
           }).pipe(Effect.uninterruptible);
         }
+
         yield* runWithSshAuth({
           key,
           target: resolvedTarget,
@@ -483,6 +521,7 @@ export class SshEnvironmentManager extends Context.Service<
   static readonly layer = (options: SshEnvironmentManagerOptions = {}) =>
     Layer.effect(SshEnvironmentManager, makeSshEnvironmentManager(options));
 }
+
 export {
   DEFAULT_REMOTE_PORT,
   type RemoteT3RunnerOptions,
@@ -490,11 +529,13 @@ export {
   type SshEnvironmentManagerShape,
   normalizeSshErrorMessage,
 } from "./types.ts";
+
 export {
   launchOrReuseRemoteServer,
   issueRemotePairingToken,
   stopRemoteServer,
 } from "./remoteServer.ts";
+
 export {
   REMOTE_PICK_PORT_SCRIPT,
   REMOTE_WAIT_READY_SCRIPT,
@@ -509,4 +550,5 @@ export {
   buildRemotePairingScript,
   buildRemoteStopScript,
 } from "./remoteScripts.ts";
+
 export { waitForHttpReady, resolveLoopbackSshHttpBaseUrl } from "./readiness.ts";

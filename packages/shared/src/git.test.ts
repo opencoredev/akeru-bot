@@ -68,6 +68,7 @@ describe("isTemporaryWorktreeBranch", () => {
       isTemporaryWorktreeBranch(
         buildTemporaryWorktreeBranchName((byteLength) => {
           expect(byteLength).toBe(4);
+
           return "DEADBEEF";
         }),
       ),

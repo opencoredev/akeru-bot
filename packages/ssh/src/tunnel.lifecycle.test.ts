@@ -29,20 +29,25 @@ describe("ssh tunnel scripts", () => {
       const spawnedCommands: Array<ReadonlyArray<string>> = [];
       let tunnelKillCount = 0;
       let stopCommandCount = 0;
+
       const spawner = ChildProcessSpawner.make((command) =>
         Effect.sync(() => {
           const args = commandArgs(command);
           spawnedCommands.push(args);
+
           if (args.includes("-N")) {
             return makeRunningProcess(() => {
               tunnelKillCount += 1;
             });
           }
+
           if (args.includes("sh") && args.includes("--")) {
             return makeSuccessfulProcess('{"remotePort":3773}\n');
           }
+
           if (args.includes("sh")) {
             stopCommandCount += 1;
+
             if (mode === "failed stop" && stopCommandCount === 1) {
               return {
                 ...makeSuccessfulProcess(""),
@@ -52,11 +57,14 @@ describe("ssh tunnel scripts", () => {
                 ),
               };
             }
+
             return makeSuccessfulProcess('{"stopped":true}\n');
           }
+
           return makeSuccessfulProcess("\n");
         }),
       );
+
       const layer = Layer.mergeAll(
         NodeServices.layer,
         Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
@@ -65,6 +73,7 @@ describe("ssh tunnel scripts", () => {
         SshPasswordPrompt.disabledLayer,
         SshEnvironmentManager.layer(),
       );
+
       const target = {
         alias: "devbox",
         hostname: "devbox.example.com",
@@ -84,8 +93,10 @@ describe("ssh tunnel scripts", () => {
         assert.include(firstTunnelArgs, "ControlPersist=no");
 
         const disconnected = yield* Effect.result(manager.disconnectEnvironment(target));
+
         if (mode === "failed stop") {
           assert.isTrue(Result.isFailure(disconnected));
+
           if (Result.isFailure(disconnected)) {
             assert.instanceOf(disconnected.failure, SshCommandError);
             assert.equal(
@@ -96,6 +107,7 @@ describe("ssh tunnel scripts", () => {
         } else {
           assert.isTrue(Result.isSuccess(disconnected));
         }
+
         assert.equal(tunnelKillCount, 1);
         assert.equal(stopCommandCount, 1);
 
@@ -128,23 +140,29 @@ describe("ssh tunnel scripts", () => {
       Effect.gen(function* () {
         const shutdownStarted = yield* Deferred.make<void>();
         const finishShutdown = yield* Deferred.make<void>();
+
         const pauseShutdown = Deferred.succeed(shutdownStarted, undefined).pipe(
           Effect.andThen(Deferred.await(finishShutdown)),
         );
+
         let launches = 0;
         let tunnels = 0;
         let stops = 0;
         let remoteRunning = false;
         const target = { alias: "devbox", hostname: "devbox", username: null, port: null };
+
         const spawner = ChildProcessSpawner.make((command) =>
           Effect.sync(() => {
             const args = commandArgs(command);
             const isTarget = args.includes(target.alias);
+
             if (args.includes("-G")) {
               return makeSuccessfulProcess("");
             }
+
             if (args.includes("-N")) {
               const tunnel = makeRunningProcess(() => undefined);
+
               if (isTarget && ++tunnels === 1 && stalledStep === "local tunnel") {
                 return {
                   ...tunnel,
@@ -152,24 +170,31 @@ describe("ssh tunnel scripts", () => {
                     pauseShutdown.pipe(Effect.andThen(tunnel.kill(options))),
                 };
               }
+
               return tunnel;
             }
+
             if (args.includes("--")) {
               if (isTarget) {
                 launches += 1;
                 remoteRunning = true;
               }
+
               return makeSuccessfulProcess('{"remotePort":3773}\n');
             }
+
             const stop = makeSuccessfulProcess('{"stopped":true}\n');
+
             if (!isTarget) return stop;
             const pause = ++stops === 1 && stalledStep === "remote server";
+
             return {
               ...stop,
               exitCode: (pause ? pauseShutdown : Effect.void).pipe(
                 Effect.andThen(
                   Effect.sync(() => {
                     remoteRunning = false;
+
                     return ChildProcessSpawner.ExitCode(0);
                   }),
                 ),
@@ -177,6 +202,7 @@ describe("ssh tunnel scripts", () => {
             };
           }),
         );
+
         const layer = Layer.mergeAll(
           NodeServices.layer,
           Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
@@ -185,6 +211,7 @@ describe("ssh tunnel scripts", () => {
           SshPasswordPrompt.disabledLayer,
           SshEnvironmentManager.layer(),
         );
+
         yield* Effect.gen(function* () {
           const manager = yield* SshEnvironmentManager;
           yield* manager.ensureEnvironment(target);

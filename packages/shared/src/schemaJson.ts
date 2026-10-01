@@ -9,8 +9,11 @@ import * as SchemaIssue from "effect/SchemaIssue";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
 const MAX_SCHEMA_DIAGNOSTIC_ISSUES = 8;
+
 const MAX_SCHEMA_DIAGNOSTIC_PATH_SEGMENTS = 16;
+
 const MAX_SCHEMA_DIAGNOSTIC_PATH_SEGMENT_LENGTH = 64;
+
 const MAX_SCHEMA_DIAGNOSTIC_LENGTH = 2_048;
 
 interface SchemaDiagnosticIssue {
@@ -29,10 +32,12 @@ function formatDiagnosticPathSegment(key: PropertyKey): string {
   if (typeof key === "number") {
     return `[${key}]`;
   }
+
   const value = truncateDiagnostic(
     typeof key === "symbol" ? String(key) : key,
     MAX_SCHEMA_DIAGNOSTIC_PATH_SEGMENT_LENGTH,
   );
+
   return `[${JSON.stringify(value)}]`;
 }
 
@@ -40,11 +45,14 @@ function formatDiagnosticIssue(issue: SchemaDiagnosticIssue): string {
   if (issue.path.length === 0) {
     return issue.message;
   }
+
   const path = issue.path
     .slice(0, MAX_SCHEMA_DIAGNOSTIC_PATH_SEGMENTS)
     .map(formatDiagnosticPathSegment)
     .join("");
+
   const suffix = issue.path.length > MAX_SCHEMA_DIAGNOSTIC_PATH_SEGMENTS ? "[...]" : "";
+
   return `${issue.message}\n  at ${path}${suffix}`;
 }
 
@@ -82,6 +90,7 @@ function collectSchemaDiagnosticIssues(
       if (issue.issue._tag !== "InvalidValue") {
         return collectSchemaDiagnosticIssues(issue.issue, path, diagnostics);
       }
+
       break;
     case "Pointer":
       return collectSchemaDiagnosticIssues(issue.issue, [...path, ...issue.path], diagnostics);
@@ -97,12 +106,14 @@ function collectSchemaDiagnosticIssues(
           0,
         );
       }
+
       break;
   }
 
   if (diagnostics.length < MAX_SCHEMA_DIAGNOSTIC_ISSUES) {
     diagnostics.push({ message: schemaDiagnosticMessage(issue), path });
   }
+
   return 1;
 }
 
@@ -110,11 +121,14 @@ export const decodeJsonResult = <S extends Schema.Codec<unknown, unknown, never,
   schema: S,
 ) => {
   const decode = Schema.decodeExit(Schema.fromJsonString(schema));
+
   return (input: string) => {
     const result = decode(input);
+
     if (Exit.isFailure(result)) {
       return Result.fail(result.cause);
     }
+
     return Result.succeed(result.value);
   };
 };
@@ -123,11 +137,14 @@ export const decodeUnknownJsonResult = <S extends Schema.Codec<unknown, unknown,
   schema: S,
 ) => {
   const decode = Schema.decodeUnknownExit(Schema.fromJsonString(schema));
+
   return (input: unknown) => {
     const result = decode(input);
+
     if (Exit.isFailure(result)) {
       return Result.fail(result.cause);
     }
+
     return Result.succeed(result.value);
   };
 };
@@ -143,9 +160,11 @@ export const formatSchemaError = (cause: Cause.Cause<Schema.SchemaError>) => {
     switch (reason._tag) {
       case "Fail":
         failureCount += 1;
+
         if (Schema.isSchemaError(reason.error)) {
           issueCount += collectSchemaDiagnosticIssues(reason.error.issue, [], issues);
         }
+
         break;
       case "Die":
         defectCount += 1;
@@ -162,10 +181,13 @@ export const formatSchemaError = (cause: Cause.Cause<Schema.SchemaError>) => {
 
   const omittedIssueCount = issueCount - issues.length;
   const formatted = issues.map(formatDiagnosticIssue).join("\n");
+
   if (omittedIssueCount === 0) {
     return truncateDiagnostic(formatted, MAX_SCHEMA_DIAGNOSTIC_LENGTH);
   }
+
   const suffix = `\n... and ${omittedIssueCount} more issue(s)`;
+
   return truncateDiagnostic(formatted, MAX_SCHEMA_DIAGNOSTIC_LENGTH - suffix.length) + suffix;
 };
 
@@ -232,11 +254,13 @@ export const fromLenientJson = <S extends Schema.Top>(schema: S) =>
 
 export function extractJsonObject(raw: string): string {
   const trimmed = raw.trim();
+
   if (trimmed.length === 0) {
     return trimmed;
   }
 
   const start = trimmed.indexOf("{");
+
   if (start < 0) {
     return trimmed;
   }
@@ -244,8 +268,10 @@ export function extractJsonObject(raw: string): string {
   let depth = 0;
   let inString = false;
   let escaping = false;
+
   for (let index = start; index < trimmed.length; index += 1) {
     const char = trimmed[index];
+
     if (inString) {
       if (escaping) {
         escaping = false;
@@ -254,6 +280,7 @@ export function extractJsonObject(raw: string): string {
       } else if (char === '"') {
         inString = false;
       }
+
       continue;
     }
 
@@ -269,6 +296,7 @@ export function extractJsonObject(raw: string): string {
 
     if (char === "}") {
       depth -= 1;
+
       if (depth === 0) {
         return trimmed.slice(start, index + 1);
       }

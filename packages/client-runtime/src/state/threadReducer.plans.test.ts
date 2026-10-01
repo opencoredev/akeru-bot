@@ -28,6 +28,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.proposedPlans).toHaveLength(1);
         expect(result.thread.proposedPlans[0]?.id).toBe("plan-1");

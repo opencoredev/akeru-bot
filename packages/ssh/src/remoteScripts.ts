@@ -12,6 +12,7 @@ import {
 
 const remoteNodeEngineCheckMain = function remoteNodeEngineCheckMain() {
   const range = process.argv[2] || "";
+
   const rawVersion =
     process.versions && process.versions.node ? process.versions.node : process.version;
 
@@ -41,9 +42,11 @@ function applyScriptPlaceholders(
   replacements: Readonly<Record<string, string>>,
 ): string {
   let result = template;
+
   for (const [token, value] of Object.entries(replacements)) {
     result = result.replaceAll(`@@${token}@@`, value);
   }
+
   return result;
 }
 
@@ -472,6 +475,7 @@ fi
 export function buildRemoteT3RunnerScript(input?: RemoteT3RunnerOptions): string {
   const packageSpec = shellSingleQuote(input?.packageSpec?.trim() || "akeru-bot@latest");
   const nodeScriptPath = input?.nodeScriptPath?.trim() || "";
+
   return stripTrailingNewlines(
     applyScriptPlaceholders(REMOTE_RUNNER_SCRIPT, {
       T3_PACKAGE_SPEC: packageSpec,

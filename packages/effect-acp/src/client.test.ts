@@ -17,10 +17,12 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const path = yield* Path.Path;
+
       const command = ChildProcess.make(process.execPath, mockPeerArgs(yield* mockPeerPath), {
         cwd: path.join(import.meta.dirname, ".."),
         ...(env ? { env: { ...process.env, ...env } } : {}),
       });
+
       return yield* spawner.spawn(command);
     });
 
@@ -32,9 +34,11 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
       const typedNotifications = yield* Ref.make<Array<unknown>>([]);
       const handle = yield* makeHandle();
       const scope = yield* Scope.make();
+
       const acpLayer = AcpClient.layerChildProcess(handle, {
         rawNotificationBufferSize: "unbounded",
       });
+
       const context = yield* Layer.buildWithScope(acpLayer, scope);
 
       const ext = yield* Effect.gen(function* () {
@@ -92,6 +96,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
             version: "0.0.0",
           },
         });
+
         assert.equal(init.protocolVersion, 1);
 
         yield* acp.agent.authenticate({ methodId: "cursor_login" });
@@ -100,12 +105,14 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
           cwd: process.cwd(),
           mcpServers: [],
         });
+
         assert.equal(session.sessionId, "mock-session-1");
 
         const prompt = yield* acp.agent.prompt({
           sessionId: session.sessionId,
           prompt: [{ type: "text", text: "hello" }],
         });
+
         assert.equal(prompt.stopReason, "end_turn");
 
         const streamed = yield* Stream.runCollect(Stream.take(acp.raw.notifications, 2));

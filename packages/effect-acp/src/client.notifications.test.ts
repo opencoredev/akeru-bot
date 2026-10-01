@@ -33,10 +33,12 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const path = yield* Path.Path;
+
       const command = ChildProcess.make(process.execPath, mockPeerArgs(yield* mockPeerPath), {
         cwd: path.join(import.meta.dirname, ".."),
         ...(env ? { env: { ...process.env, ...env } } : {}),
       });
+
       return yield* spawner.spawn(command);
     });
 
@@ -50,11 +52,13 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
       yield* acp.handleSessionUpdate(() =>
         Effect.suspend(() => {
           updates++;
+
           return updates === count
             ? Deferred.succeed(handled, undefined).pipe(Effect.asVoid)
             : Effect.void;
         }),
       );
+
       for (let index = 0; index < count; index++) {
         yield* Queue.offer(
           input,
@@ -71,6 +75,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
           }),
         );
       }
+
       yield* Deferred.await(handled);
       assert.equal(updates, count);
       assert.deepEqual(yield* Stream.runCollect(acp.raw.notifications), []);
@@ -143,6 +148,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
           cwd: process.cwd(),
           mcpServers: [],
         });
+
         yield* acp.agent.prompt({
           sessionId: session.sessionId,
           prompt: [{ type: "text", text: "hello" }],
@@ -224,6 +230,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
           cwd: process.cwd(),
           mcpServers: [],
         });
+
         yield* acp.agent.prompt({
           sessionId: session.sessionId,
           prompt: [{ type: "text", text: "hello" }],
@@ -305,6 +312,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
             }),
           ]),
         );
+
         yield* Queue.offer(input, responseBatch);
 
         assert.deepEqual(yield* Fiber.join(promptFiber), {

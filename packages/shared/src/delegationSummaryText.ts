@@ -36,14 +36,18 @@ function plainText(value: string): string {
 export function delegationSummaryText(input: DelegationSummaryTextInput): string {
   const maxDetailChars = input.maxDetailChars ?? DEFAULT_MAX_DETAIL_CHARS;
   const task = plainText(input.task).replace(/\s+/g, " ");
+
   const detail = plainText(
     input.outcome._tag === "Completed" ? input.outcome.summary : input.outcome.message,
   );
+
   const bounded =
     detail.length > maxDetailChars ? `${detail.slice(0, maxDetailChars).trimEnd()}…` : detail;
+
   const head =
     input.outcome._tag === "Completed"
       ? `${input.botName} finished "${task}"`
       : `${input.botName} could not finish "${task}"`;
+
   return bounded ? `${head}: ${bounded}` : `${head}.`;
 }

@@ -59,6 +59,7 @@ describe("Akeru memory contracts", () => {
         ...revision,
         confidence: 1.01,
       }).pipe(Effect.exit);
+
       assert.isTrue(exit._tag === "Failure");
     }),
   );
@@ -82,7 +83,9 @@ describe("Akeru memory contracts", () => {
         decidedAt: null,
         decidedMemoryRootId: null,
       });
+
       assert.isNull(candidate.pendingUpdate);
+
       const decision = yield* Schema.decodeUnknownEffect(AkeruMemoryCandidateDecision)({
         candidateId: candidate.candidateId,
         decision: "approve",
@@ -102,6 +105,7 @@ describe("Akeru memory contracts", () => {
         complete: true,
         target: "workspace",
       });
+
       assert.equal(input.target, "workspace");
     }),
   );
@@ -131,6 +135,7 @@ describe("Akeru memory contracts", () => {
         candidateId: "candidate-1",
         decision: "reject",
       });
+
       const receipt = yield* Schema.decodeUnknownEffect(AkeruMemoryDecisionReceipt)({
         candidateId: "candidate-1",
         status: "rejected",
@@ -158,19 +163,23 @@ describe("Akeru memory contracts", () => {
         confidence: 1,
         updatedAt: "2026-08-30T21:00:00.000Z",
       } as const;
+
       const decode = Schema.decodeUnknownEffect(AkeruMemoryPacket);
+
       const tooManyFacts = yield* decode({
         threadId: "thread-1",
         facts: Array.from({ length: AKERU_MEMORY_PACKET_MAX_FACTS + 1 }, () => fact),
         estimatedTokens: 1,
         rendered: "memory",
       }).pipe(Effect.exit);
+
       const tooManyTokens = yield* decode({
         threadId: "thread-1",
         facts: [fact],
         estimatedTokens: AKERU_MEMORY_PACKET_MAX_ESTIMATED_TOKENS + 1,
         rendered: "memory",
       }).pipe(Effect.exit);
+
       const tooManyChars = yield* decode({
         threadId: "thread-1",
         facts: [fact],
@@ -187,6 +196,7 @@ describe("Akeru memory contracts", () => {
   it.effect("decodes allowlisted memory mutations and rejects extra fields", () =>
     Effect.gen(function* () {
       const decode = Schema.decodeUnknownEffect(AkeruMemoryMutateInput);
+
       const edit = yield* decode({
         threadId: "thread-1",
         mutation: {
@@ -196,10 +206,12 @@ describe("Akeru memory contracts", () => {
           fact: "The user prefers concise replies.",
         },
       });
+
       const arbitrary = yield* decode({
         threadId: "thread-1",
         mutation: { operation: "database.execute", sql: "DELETE FROM memory" },
       }).pipe(Effect.exit);
+
       const deleteWithoutRevision = yield* decode({
         threadId: "thread-1",
         mutation: { operation: "fact.delete", memoryId: "root-1" },

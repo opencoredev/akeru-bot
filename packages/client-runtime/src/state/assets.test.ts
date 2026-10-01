@@ -38,8 +38,10 @@ describe("createAssetEnvironmentAtoms", () => {
       EnvironmentRegistry,
       never
     >;
+
     const assets = createAssetEnvironmentAtoms(runtime);
     const environmentId = EnvironmentId.make("environment-1");
+
     const originalTarget = {
       environmentId,
       input: {
@@ -100,8 +102,10 @@ describe("createAssetEnvironmentAtoms", () => {
       EnvironmentRegistry,
       never
     >;
+
     const assets = createAssetEnvironmentAtoms(runtime);
     const environmentId = EnvironmentId.make("environment-1");
+
     const resources = [
       { _tag: "attachment" as const, attachmentId: "attachment-1" },
       { _tag: "attachment" as const, attachmentId: "attachment-2" },

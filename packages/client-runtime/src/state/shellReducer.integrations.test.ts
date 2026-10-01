@@ -20,6 +20,7 @@ describe("applyShellStreamEvent", () => {
         sequence: 4,
         mcpServer: stubMcpServer,
       });
+
       const updated = applyShellStreamEvent(added, {
         kind: "mcp-server-upserted",
         sequence: 5,
@@ -52,6 +53,7 @@ describe("applyShellStreamEvent", () => {
         sequence: 9,
         delegation: stubDelegation,
       });
+
       const updated = applyShellStreamEvent(added, {
         kind: "delegation-upserted",
         sequence: 10,
@@ -79,6 +81,7 @@ describe("applyShellStreamEvent", () => {
           stubDelegation.createdAt,
           `2026-04-02T00:${String(index).padStart(2, "0")}:00.000Z`,
         );
+
       const open = {
         ...stubDelegation,
         phase: {
@@ -89,22 +92,26 @@ describe("applyShellStreamEvent", () => {
           progress: null,
         },
       };
+
       const otherThread = {
         ...finished(0),
         delegationId: DelegationId.make("delegation-other-thread"),
         parentThreadId: ThreadId.make("thread-other"),
       };
+
       let snapshot = applyShellStreamEvent(baseSnapshot, {
         kind: "delegation-upserted",
         sequence: 1,
         delegation: open,
       });
+
       snapshot = applyShellStreamEvent(snapshot, {
         kind: "delegation-upserted",
         sequence: 2,
         delegation: otherThread,
       });
       const finishedCount = SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD + 5;
+
       for (let index = 0; index < finishedCount; index++) {
         snapshot = applyShellStreamEvent(snapshot, {
           kind: "delegation-upserted",
@@ -128,7 +135,9 @@ describe("applyShellStreamEvent", () => {
           `2026-04-01T00:${String(index).padStart(2, "0")}:00.000Z`,
           "2026-04-02T00:00:00.000Z",
         );
+
       let snapshot = baseSnapshot;
+
       // Arrive newest-created first, so arrival order disagrees with the ranking.
       for (let index = SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD; index >= 0; index--) {
         snapshot = applyShellStreamEvent(snapshot, {

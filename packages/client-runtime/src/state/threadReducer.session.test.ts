@@ -41,6 +41,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.latestTurn?.state).toBe("completed");
         expect(result.thread.latestTurn?.completedAt).toBe("2026-04-01T08:00:00.000Z");
@@ -70,6 +71,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.session?.status).toBe("running");
         expect(result.thread.latestTurn?.turnId).toBe("turn-1");
@@ -107,6 +109,7 @@ describe("applyThreadDetailEvent", () => {
       });
 
       expect(result.kind).toBe("updated");
+
       if (result.kind === "updated") {
         expect(result.thread.session?.status).toBe("stopped");
         expect(result.thread.session?.activeTurnId).toBeNull();
@@ -126,6 +129,7 @@ describe("applyThreadDetailEvent", () => {
           createdAt: "2026-04-01T09:00:00.000Z",
         },
       });
+
       expect(result.kind).toBe("unchanged");
     });
   });

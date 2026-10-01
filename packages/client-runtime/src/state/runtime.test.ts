@@ -28,6 +28,7 @@ describe("settleAsyncResult", () => {
   it("preserves successful values and typed failures", async () => {
     const success = await settleAsyncResult(() => Promise.resolve(Exit.succeed("done")));
     expect(AsyncResult.isSuccess(success)).toBe(true);
+
     if (AsyncResult.isSuccess(success)) {
       expect(success.value).toBe("done");
     }
@@ -35,6 +36,7 @@ describe("settleAsyncResult", () => {
     const expectedFailure = new Error("request failed");
     const failure = await settleAsyncResult(() => Promise.resolve(Exit.fail(expectedFailure)));
     expect(AsyncResult.isFailure(failure)).toBe(true);
+
     if (AsyncResult.isFailure(failure)) {
       expect(Cause.hasDies(failure.cause)).toBe(false);
       expect(Cause.squash(failure.cause)).toBe(expectedFailure);
@@ -43,10 +45,13 @@ describe("settleAsyncResult", () => {
 
   it("encodes thrown and rejected promises as defects", async () => {
     const thrownDefect = new Error("thrown defect");
+
     const thrown = await settleAsyncResult<void, never>(() => {
       throw thrownDefect;
     });
+
     expect(AsyncResult.isFailure(thrown)).toBe(true);
+
     if (AsyncResult.isFailure(thrown)) {
       expect(Cause.hasDies(thrown.cause)).toBe(true);
       expect(Cause.squash(thrown.cause)).toBe(thrownDefect);
@@ -55,6 +60,7 @@ describe("settleAsyncResult", () => {
     const rejectedDefect = new Error("rejected defect");
     const rejected = await settleAsyncResult<void, never>(() => Promise.reject(rejectedDefect));
     expect(AsyncResult.isFailure(rejected)).toBe(true);
+
     if (AsyncResult.isFailure(rejected)) {
       expect(Cause.hasDies(rejected.cause)).toBe(true);
       expect(Cause.squash(rejected.cause)).toBe(rejectedDefect);
@@ -67,6 +73,7 @@ describe("atom command result helpers", () => {
     const result = mapAtomCommandResult(AsyncResult.success(2), (value) => value * 3);
 
     expect(result._tag).toBe("Success");
+
     if (result._tag === "Success") {
       expect(result.value).toBe(6);
     }
@@ -79,6 +86,7 @@ describe("atom command result helpers", () => {
     );
 
     expect(result._tag).toBe("Failure");
+
     if (result._tag === "Failure") {
       expect(Cause.squash(result.cause)).toBe("nope");
     }
@@ -100,6 +108,7 @@ describe("atom command result helpers", () => {
     const defect = new Error("raw promise rejected");
     const failure = await settlePromise(() => Promise.reject(defect));
     expect(failure._tag).toBe("Failure");
+
     if (failure._tag === "Failure") {
       expect(Cause.hasDies(failure.cause)).toBe(true);
       expect(Cause.squash(failure.cause)).toBe(defect);
@@ -109,6 +118,7 @@ describe("atom command result helpers", () => {
   it("reports expected failures and defects through separate policies", async () => {
     const warnings: string[] = [];
     const errors: string[] = [];
+
     const reporter = {
       warn: (message: string) => {
         warnings.push(message);
@@ -143,10 +153,12 @@ describe("atom command result helpers", () => {
 describe("environmentRpcKey", () => {
   it("isolates subscription state by environment and cwd", () => {
     const environmentId = EnvironmentId.make("environment-1");
+
     const originalTarget = {
       environmentId,
       input: { cwd: "/repo/original" },
     };
+
     const nextTarget = {
       environmentId,
       input: { cwd: "/repo/next" },
@@ -170,14 +182,19 @@ describe("environment query lifecycle", () => {
         const refreshStarted = Latch.makeUnsafe();
         const finishRefresh = Latch.makeUnsafe();
         let executions = 0;
+
         const execute = Effect.suspend(() => {
           executions += 1;
+
           if (executions === 1) {
             return Effect.succeed("cached");
           }
+
           refreshStarted.openUnsafe();
+
           return finishRefresh.await.pipe(Effect.as("updated"));
         });
+
         const harness = yield* makeEnvironmentQueryHarness(execute);
         const registry = yield* mountEnvironmentQuery(harness.atom);
 
@@ -246,19 +263,24 @@ describe("Atom.fn mutation semantics", () => {
       Effect.gen(function* () {
         const firstLatch = Latch.makeUnsafe();
         const secondLatch = Latch.makeUnsafe();
+
         const mutation = Atom.fn<never, "first" | "second", "first" | "second">(
           (id: "first" | "second") =>
             (id === "first" ? firstLatch : secondLatch).await.pipe(Effect.as(id)),
           { concurrent: true },
         );
+
         const registry = AtomRegistry.make();
         const unmount = registry.mount(mutation);
 
         registry.set(mutation, "first");
+
         const firstResult = yield* AtomRegistry.getResult(registry, mutation, {
           suspendOnWaiting: true,
         }).pipe(Effect.forkChild({ startImmediately: true }));
+
         registry.set(mutation, "second");
+
         const secondResult = yield* AtomRegistry.getResult(registry, mutation, {
           suspendOnWaiting: true,
         }).pipe(Effect.forkChild({ startImmediately: true }));
@@ -284,6 +306,7 @@ describe("runtime command runner", () => {
   it("encodes custom command rejections as defects", async () => {
     const defect = new Error("custom command rejected");
     const registry = AtomRegistry.make();
+
     const result = await runAtomCommand(
       registry,
       {
@@ -295,10 +318,12 @@ describe("runtime command runner", () => {
     );
 
     expect(result._tag).toBe("Failure");
+
     if (result._tag === "Failure") {
       expect(Cause.hasDies(result.cause)).toBe(true);
       expect(Cause.squash(result.cause)).toBe(defect);
     }
+
     registry.dispose();
   });
 });

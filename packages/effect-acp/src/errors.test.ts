@@ -10,11 +10,13 @@ import * as AcpError from "./errors.ts";
 const decodeNestedNumberPayload = Schema.decodeUnknownEffect(
   Schema.Struct({ profile: Schema.Struct({ token: Schema.Number }) }),
 );
+
 const encodeUnknownJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 describe("effect-acp errors", () => {
   it.effect("retains RPC method and cause without deriving the message from the cause", () => {
     const rootCause = new Error("connection details that must not become the public message");
+
     const failure = new RpcClientError.RpcClientError({
       reason: new RpcClientError.RpcClientDefect({
         message: rootCause.message,
@@ -59,6 +61,7 @@ describe("effect-acp errors", () => {
 
   it("does not expose legacy diagnostic detail as the transport message", () => {
     const cause = new Error("connection refused at a private endpoint");
+
     const error = new AcpError.AcpTransportError({
       detail: cause.message,
       cause,
@@ -73,6 +76,7 @@ describe("effect-acp errors", () => {
       operation: "read-input-stream",
       cause: new Error("private transport diagnostics"),
     });
+
     const error = AcpError.AcpRequestError.fromExtensionHandlerError(cause, "x/test");
 
     expect(error).toMatchObject({
@@ -107,9 +111,11 @@ describe("effect-acp errors", () => {
   it.effect("keeps invalid extension payload values only in the exact schema cause", () =>
     Effect.gen(function* () {
       const secret = "acp-schema-payload-secret";
+
       const cause = yield* decodeNestedNumberPayload({ profile: { token: secret } }).pipe(
         Effect.flip,
       );
+
       const error = AcpError.AcpRequestError.invalidExtensionPayload("x/private", cause);
       const { cause: directCause, ...directDiagnostics } = error;
 
@@ -131,6 +137,7 @@ describe("effect-acp errors", () => {
         "x/private",
         cause,
       );
+
       const { cause: protocolCause, ...protocolDiagnostics } = protocolError;
       expect(protocolCause).toBe(cause);
       expect(protocolError).toMatchObject({

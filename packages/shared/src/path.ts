@@ -33,12 +33,15 @@ function trimTrailingPathSeparators(value: string): string {
   if (value.length === 0 || isRootPath(value)) {
     return value;
   }
+
   const trimmed = value.startsWith("/")
     ? value.replace(/\/+$/g, "")
     : value.replace(/[\\/]+$/g, "");
+
   if (trimmed.length === 0) {
     return value;
   }
+
   return /^[a-zA-Z]:$/.test(trimmed) ? `${trimmed}\\` : trimmed;
 }
 
@@ -48,8 +51,10 @@ export function normalizeProjectPathForDispatch(value: string): string {
 
 export function normalizeProjectPathForComparison(value: string): string {
   const normalized = normalizeProjectPathForDispatch(value);
+
   if (isWindowsDrivePath(normalized) || isUncPath(normalized)) {
     return normalized.replaceAll("/", "\\").toLowerCase();
   }
+
   return normalized;
 }

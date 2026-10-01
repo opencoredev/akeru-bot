@@ -46,7 +46,9 @@ export function commandId(input: { readonly commandId?: CommandId }) {
     if (input.commandId !== undefined) {
       return input.commandId;
     }
+
     const crypto = yield* Crypto.Crypto;
+
     return yield* crypto.randomUUIDv4.pipe(Effect.orDie, Effect.map(CommandId.make));
   });
 }

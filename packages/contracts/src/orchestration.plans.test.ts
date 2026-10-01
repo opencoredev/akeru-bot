@@ -20,6 +20,7 @@ it.effect("accepts a source proposed plan reference in thread.turn.start", () =>
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.deepStrictEqual(parsed.sourceProposedPlan, {
       threadId: "thread-1",
       planId: "plan-1",

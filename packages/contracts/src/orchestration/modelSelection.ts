@@ -71,11 +71,13 @@ export const ModelSelection = ModelSelectionSource.pipe(
             : Predicate.isString(raw.provider)
               ? raw.provider
               : undefined;
+
         const base = {
           instanceId: instanceIdSource,
           model: raw.model,
           ...(raw.options !== undefined ? { options: raw.options } : {}),
         };
+
         // SAFETY: decodeTo validates the compatibility result against ModelSelectionWire before returning it.
         return Effect.succeed(base as typeof ModelSelectionWire.Encoded);
       },

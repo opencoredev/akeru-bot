@@ -8,6 +8,7 @@ describe("textGenerationSelectionForTarget", () => {
     ProviderInstanceId.make("claudeAgent"),
     "claude-opus-4-6",
   );
+
   const sourceSettings = {
     ...DEFAULT_SERVER_SETTINGS,
     providerInstances: {
@@ -36,6 +37,7 @@ describe("textGenerationSelectionForTarget", () => {
         },
       },
     };
+
     expect(
       textGenerationSelectionForTarget(claudeSelection, sourceSettings, targetSettings),
     ).toEqual(createModelSelection(ProviderInstanceId.make("claude_work"), "claude-opus-4-6"));
@@ -46,6 +48,7 @@ describe("textGenerationSelectionForTarget", () => {
       ...DEFAULT_SERVER_SETTINGS,
       providerInstances: {},
     };
+
     expect(
       textGenerationSelectionForTarget(claudeSelection, sourceSettings, targetSettings),
     ).toEqual(claudeSelection);
@@ -62,6 +65,7 @@ describe("textGenerationSelectionForTarget", () => {
         },
       },
     };
+
     expect(
       textGenerationSelectionForTarget(claudeSelection, sourceSettings, targetSettings),
     ).toBeUndefined();
@@ -82,6 +86,7 @@ describe("textGenerationSelectionForTarget", () => {
           },
         },
       };
+
       expect(
         textGenerationSelectionForTarget(claudeSelection, sourceSettings, targetSettings),
       ).toBeUndefined();

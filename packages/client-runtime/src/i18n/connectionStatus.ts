@@ -50,6 +50,7 @@ export function translateConnectionStatus(
   const reason = connection.errorCode
     ? translateMessage(connectionFailureMessage(connection.errorCode))
     : null;
+
   switch (connection.phase) {
     case "available":
       return translateMessage("Available");
@@ -79,5 +80,6 @@ export function translateConnectionStatusWithDiagnostic(
 ): string {
   const status = translateConnectionStatus(translateMessage, connection);
   const failed = connection.phase === "error" || connection.phase === "reconnecting";
+
   return failed && connection.error ? `${status} (${connection.error})` : status;
 }

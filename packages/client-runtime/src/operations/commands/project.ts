@@ -19,6 +19,7 @@ export const createProject: (input: CreateProjectInput) => CommandEffect = Effec
   "EnvironmentCommands.createProject",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "project.create",

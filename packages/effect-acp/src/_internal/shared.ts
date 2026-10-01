@@ -4,6 +4,7 @@ import { RpcClientError } from "effect/unstable/rpc";
 
 import * as AcpSchema from "../_generated/schema.gen.ts";
 import * as AcpError from "../errors.ts";
+
 const isError = Schema.is(AcpSchema.Error);
 
 export const callRpc = <A>(
@@ -34,6 +35,7 @@ export const runHandler = Effect.fnUntraced(function* <A, B>(
   if (!handler) {
     return yield* Effect.fail(AcpError.AcpRequestError.methodNotFound(method).toProtocolError());
   }
+
   return yield* handler(payload).pipe(
     Effect.mapError((error) =>
       AcpError.AcpRequestError.fromCoreHandlerError(error, method).toProtocolError(),
@@ -74,6 +76,7 @@ export function decodeExtNotificationRegistration<A, I>(
 const encoder = new TextEncoder();
 
 const JsonRpcId = Schema.Union([Schema.Number, Schema.String]);
+
 const JsonRpcHeaders = Schema.Array(Schema.Unknown);
 
 export const jsonRpcRequest = <A, I>(method: string, params: Schema.Codec<A, I>) =>

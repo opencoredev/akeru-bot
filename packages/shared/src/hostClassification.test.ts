@@ -39,6 +39,7 @@ describe("isPublicFaviconHost", () => {
     for (const host of ["100.64.0.1", "100.100.100.100", "100.126.17.15", "100.127.255.255"]) {
       expect(isPublicFaviconHost(host), host).toBe(false);
     }
+
     expect(isPublicFaviconHost("100.63.255.255")).toBe(true);
     expect(isPublicFaviconHost("100.128.0.1")).toBe(true);
   });
@@ -62,6 +63,7 @@ describe("isPublicFaviconHost", () => {
     for (const host of ["::1", "[::1]", "fd00::1", "fc00::1", "fe80::1", "FD12:3456::1"]) {
       expect(isPublicFaviconHost(host), host).toBe(false);
     }
+
     expect(isPublicFaviconHost("2606:4700:4700::1111")).toBe(true);
   });
 
@@ -76,6 +78,7 @@ describe("isPublicFaviconHost", () => {
     ]) {
       expect(isPublicFaviconHost(host), host).toBe(false);
     }
+
     expect(isPublicFaviconHost("::ffff:8.8.8.8")).toBe(true);
     expect(isPublicFaviconHost("::ffff:808:808")).toBe(true);
   });
@@ -90,6 +93,7 @@ describe("isPublicFaviconHost", () => {
     ]) {
       expect(isPublicFaviconHost(host), host).toBe(false);
     }
+
     expect(isPublicFaviconHost("github.com.")).toBe(true);
   });
 

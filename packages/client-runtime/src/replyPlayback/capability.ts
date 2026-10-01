@@ -34,6 +34,7 @@ export function storedReplySynthesisCapability(
       reason: "Voice is disabled in Settings.",
     };
   }
+
   if (voice.provider === undefined) {
     return {
       available: false,
@@ -42,6 +43,7 @@ export function storedReplySynthesisCapability(
       reason: STORED_REPLY_SYNTHESIS_UNAVAILABLE,
     };
   }
+
   if (voice.provider === "chatgpt") {
     return {
       available: false,
@@ -50,13 +52,16 @@ export function storedReplySynthesisCapability(
       reason: STORED_REPLY_SYNTHESIS_UNAVAILABLE,
     };
   }
+
   const provider = voice.synthesisProvider ?? "openai";
+
   const selectedVoice =
     provider === "openai"
       ? (voice.synthesisVoices?.openai ?? "alloy")
       : provider
         ? voice.synthesisVoices?.[provider]
         : undefined;
+
   if (!provider || !selectedVoice) {
     return {
       available: false,
@@ -65,5 +70,6 @@ export function storedReplySynthesisCapability(
       reason: STORED_REPLY_SYNTHESIS_UNAVAILABLE,
     };
   }
+
   return { available: true, provider, voice: selectedVoice };
 }

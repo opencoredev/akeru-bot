@@ -44,16 +44,19 @@ export function createProjectEnvironmentAtoms<R, E>(
 ) {
   const projectScheduler = createAtomCommandScheduler();
   const fileScheduler = createAtomCommandScheduler();
+
   const optimisticFileFamily = Atom.family((key: string) =>
     Atom.make<OptimisticProjectFile | null>(null).pipe(
       Atom.withLabel(`environment-data:projects:optimistic-file:${key}`),
     ),
   );
+
   const projectConcurrency = {
     mode: "serial" as const,
     key: ({ environmentId, input }: { environmentId: string; input: { projectId: string } }) =>
       JSON.stringify([environmentId, input.projectId]),
   };
+
   return {
     searchEntries: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:search-entries",

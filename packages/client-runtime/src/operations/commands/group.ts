@@ -29,6 +29,7 @@ export const createGroup: (input: CreateGroupInput) => CommandEffect = Effect.fn
   "EnvironmentCommands.createGroup",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "group.create",

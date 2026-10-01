@@ -46,6 +46,7 @@ function parseEnvironmentRpcKey<Input>(key: string): {
   readonly input: Input;
 } {
   const decoded = JSON.parse(key) as [EnvironmentIdType, Input];
+
   return {
     environmentId: EnvironmentId.make(decoded[0]),
     input: decoded[1],
@@ -113,9 +114,11 @@ export function createEnvironmentQueryAtomFamily<R, ER, Input, A, E>(
       { initialValue: null },
     ),
   );
+
   const family = Atom.family((key: string) => {
     const target = parseEnvironmentRpcKey<Input>(key);
     const idleTtlMs = options.idleTtlMs ?? 5 * 60_000;
+
     const queryAtom = runtime
       .atom<
         A,
@@ -124,10 +127,13 @@ export function createEnvironmentQueryAtomFamily<R, ER, Input, A, E>(
         const connection = Option.getOrNull(
           AsyncResult.value(get(connectionAtom(target.environmentId))),
         );
+
         if (connection === null) {
           return Effect.never;
         }
+
         const [connectionState, session] = connection;
+
         switch (connectionState.phase) {
           case "connected":
             return Option.isSome(session)
@@ -142,6 +148,7 @@ export function createEnvironmentQueryAtomFamily<R, ER, Input, A, E>(
             if (connectionState.lastFailure !== null) {
               return Effect.fail(connectionState.lastFailure);
             }
+
             return Effect.fail(
               new EnvironmentRpcUnavailableError({
                 environmentId: target.environmentId,
@@ -163,12 +170,14 @@ export function createEnvironmentQueryAtomFamily<R, ER, Input, A, E>(
         }),
         Atom.setIdleTTL(idleTtlMs),
       );
+
     return (
       options.refreshIntervalMs === undefined
         ? queryAtom
         : queryAtom.pipe(Atom.withRefresh(options.refreshIntervalMs))
     ).pipe(Atom.setIdleTTL(idleTtlMs), Atom.withLabel(`${options.label}:${key}`));
   });
+
   return (target) => family(environmentRpcKey(target));
 }
 
@@ -178,6 +187,7 @@ export function createEnvironmentSubscriptionAtomFamily<R, ER, Input, A, E>(
 ) {
   const family = Atom.family((key: string) => {
     const target = parseEnvironmentRpcKey<Input>(key);
+
     return runtime
       .atom(followStreamInEnvironment(target.environmentId, options.subscribe(target.input)))
       .pipe(
@@ -185,6 +195,7 @@ export function createEnvironmentSubscriptionAtomFamily<R, ER, Input, A, E>(
         Atom.withLabel(`${options.label}:${key}`),
       );
   });
+
   return (target: { readonly environmentId: EnvironmentIdType; readonly input: Input }) =>
     family(environmentRpcKey(target));
 }

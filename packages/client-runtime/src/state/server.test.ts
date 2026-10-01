@@ -88,6 +88,7 @@ describe("update restart reconnect nudges", () => {
   it.effect("retries once per backoff entry instead of only the first", () =>
     Effect.gen(function* () {
       const retries = yield* Ref.make(0);
+
       const states = [
         { phase: "backoff" },
         { phase: "connecting" },
@@ -202,6 +203,7 @@ describe("server state projection", () => {
       targetVersion: "0.0.31",
       method: "respawn" as const,
     };
+
     const disconnect = new RpcClientError.RpcClientError({
       reason: new Socket.SocketCloseError({ code: 1006 }),
     });
@@ -212,6 +214,7 @@ describe("server state projection", () => {
         Option.some(result),
         Exit.fail(disconnect),
       );
+
       expect(resumed).toEqual(result);
     });
   });
@@ -248,6 +251,7 @@ describe("server state projection", () => {
       fromVersion: "0.0.30",
       targetVersion: "0.0.31",
     };
+
     const failed = {
       status: "failed" as const,
       stage: "installing" as const,
@@ -269,6 +273,7 @@ describe("server state projection", () => {
         method: "boot-service" as const,
         updateId: "update-1",
       };
+
       const ready = (status: "committed" | "rolled-back") =>
         ({
           version: 1 as const,
@@ -289,9 +294,11 @@ describe("server state projection", () => {
 
       expect(matchesServerUpdateReadyEvent(result, ready("committed"))).toBe(true);
       yield* validateServerUpdateReadyEvent(result, ready("committed"));
+
       const rollback = yield* Effect.flip(
         validateServerUpdateReadyEvent(result, ready("rolled-back")),
       );
+
       expect(rollback.message).toBe("prepared-timeout");
     }),
   );
@@ -302,7 +309,9 @@ describe("server state projection", () => {
       type: "snapshot",
       config: CONFIG,
     });
+
     const settings = { ...CONFIG.settings };
+
     const projected = applyServerConfigProjection(snapshot, {
       version: 1,
       type: "settingsUpdated",
@@ -320,10 +329,12 @@ describe("server state projection", () => {
       cwd: "/repo",
       projectName: "repo",
     } as ServerLifecycleWelcomePayload;
+
     const [afterWelcome] = projectServerWelcome(Option.none(), {
       type: "welcome",
       payload: welcome,
     });
+
     const [afterReady, emitted] = projectServerWelcome(afterWelcome, {
       type: "ready",
       payload: {},
@@ -340,6 +351,7 @@ describe("server state projection", () => {
         environment: { serverVersion },
         settings: { source },
       }) as unknown as ServerConfig;
+
     const cached = config("cache", "0.0.29");
     const staleLive = config("stale-live", "0.0.29");
     const initial = config("session", "0.0.30");
@@ -380,9 +392,11 @@ describe("server state projection", () => {
   it.effect("starts from cached configuration and persists the live projection", () =>
     Effect.gen(function* () {
       const events = yield* Queue.unbounded<ServerConfigStreamEvent>();
+
       const client = {
         [WS_METHODS.subscribeServerConfig]: () => Stream.fromQueue(events),
       } as unknown as WsRpcProtocolClient;
+
       const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
         target: TARGET,
         state: yield* SubscriptionRef.make(AVAILABLE_CONNECTION_STATE),
@@ -393,7 +407,9 @@ describe("server state projection", () => {
         retryNow: Effect.void,
         retryIfDesired: Effect.void,
       } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+
       const savedConfigs = yield* Queue.unbounded<ServerConfig>();
+
       const cache = Persistence.EnvironmentCacheStore.of({
         loadShell: () => Effect.succeed(Option.none()),
         saveShell: () => Effect.void,
@@ -411,6 +427,7 @@ describe("server state projection", () => {
             Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
             Effect.provideService(Persistence.EnvironmentCacheStore, cache),
           );
+
           expect(Option.getOrThrow(yield* SubscriptionRef.get(state)).config).toBe(CONFIG);
 
           const providers: ServerConfig["providers"] = [];
@@ -419,6 +436,7 @@ describe("server state projection", () => {
             type: "providerStatuses",
             payload: { providers },
           });
+
           const projected = yield* SubscriptionRef.changes(state).pipe(
             Stream.filter((value) =>
               Option.match(value, {
@@ -428,6 +446,7 @@ describe("server state projection", () => {
             ),
             Stream.runHead,
           );
+
           expect(Option.getOrThrow(Option.getOrThrow(projected)).config.providers).toBe(providers);
         }),
       );
@@ -441,6 +460,7 @@ describe("server state projection", () => {
       const client = {
         [WS_METHODS.subscribeServerConfig]: () => Stream.empty,
       } as unknown as WsRpcProtocolClient;
+
       const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
         target: TARGET,
         state: yield* SubscriptionRef.make(AVAILABLE_CONNECTION_STATE),
@@ -451,7 +471,9 @@ describe("server state projection", () => {
         retryNow: Effect.void,
         retryIfDesired: Effect.void,
       } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+
       const savedConfigs = yield* Queue.unbounded<ServerConfig>();
+
       const cache = Persistence.EnvironmentCacheStore.of({
         loadShell: () => Effect.succeed(Option.none()),
         saveShell: () => Effect.void,

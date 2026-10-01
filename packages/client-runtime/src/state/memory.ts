@@ -27,7 +27,9 @@ export function createMemoryEnvironmentAtoms<R, E>(
     tag: WS_METHODS.memoryDocumentsInspect,
     staleTimeMs: 5_000,
   });
+
   const scheduler = createAtomCommandScheduler();
+
   const concurrency = {
     mode: "serial" as const,
     key: ({
@@ -38,6 +40,7 @@ export function createMemoryEnvironmentAtoms<R, E>(
       readonly input: { readonly threadId: ThreadId };
     }) => `${environmentId}:${input.threadId}`,
   };
+
   const refreshDocuments = (
     target: {
       readonly environmentId: EnvironmentId;
@@ -59,15 +62,19 @@ export function createMemoryEnvironmentAtoms<R, E>(
     tag: WS_METHODS.memoryFactsList,
     staleTimeMs: 5_000,
   });
+
   // Bot and project facts are shared by every chat with that bot or project, so a
   // change refreshes the lists of each chat this client has listed in the environment.
   const listedThreadIds = new Map<EnvironmentId, Set<ThreadId>>();
+
   const listFacts: typeof listFactsFamily = (target) => {
     const threadIds = listedThreadIds.get(target.environmentId) ?? new Set<ThreadId>();
     threadIds.add(target.input.threadId);
     listedThreadIds.set(target.environmentId, threadIds);
+
     return listFactsFamily(target);
   };
+
   const refreshFacts = (
     target: {
       readonly environmentId: EnvironmentId;
@@ -78,6 +85,7 @@ export function createMemoryEnvironmentAtoms<R, E>(
     Effect.sync(() => {
       const nodes = registry.getNodes();
       const threadIds = listedThreadIds.get(target.environmentId);
+
       for (const listTarget of LISTED_FACT_TARGETS) {
         // A scope move changes which list a fact belongs to, so every list for the chat goes stale.
         registry.refresh(
@@ -87,17 +95,22 @@ export function createMemoryEnvironmentAtoms<R, E>(
           }),
         );
       }
+
       for (const threadId of threadIds ?? []) {
         if (threadId === target.input.threadId) continue;
+
         const mounted = LISTED_FACT_TARGETS.flatMap((listTarget) => {
           const atom = listFactsFamily({
             environmentId: target.environmentId,
             input: { threadId, target: listTarget },
           });
+
           return nodes.has(atom) ? [atom] : [];
         });
+
         // Chats whose lists are gone no longer need refreshes, so forget them.
         if (mounted.length === 0) threadIds?.delete(threadId);
+
         for (const atom of mounted) registry.refresh(atom);
       }
     });

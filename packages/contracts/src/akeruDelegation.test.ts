@@ -14,9 +14,13 @@ import {
 import { OrchestrationCommand, OrchestrationEvent } from "./orchestration.ts";
 
 const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
+
 const encodeDelegationRecord = Schema.encodeSync(AkeruDelegationRecord);
+
 const decodeOrchestrationCommand = Schema.decodeUnknownSync(OrchestrationCommand);
+
 const decodeOrchestrationEvent = Schema.decodeUnknownSync(OrchestrationEvent);
+
 const encodeOrchestrationEvent = Schema.encodeUnknownSync(OrchestrationEvent);
 
 const record = {
@@ -92,6 +96,7 @@ describe("Akeru delegation contracts", () => {
 
   it("lifts legacy event records into the tagged phase without changing identity", () => {
     const { phase, ...base } = record;
+
     const legacy = {
       ...base,
       state: "completed",
@@ -102,6 +107,7 @@ describe("Akeru delegation contracts", () => {
       startedAt: "2026-08-31T00:00:10.000Z",
       completedAt: "2026-08-31T00:01:00.000Z",
     };
+
     const decoded = decodeDelegationRecord(legacy);
     expect(decoded.delegationId).toBe(record.delegationId);
     expect(decoded).not.toHaveProperty("state");
@@ -126,6 +132,7 @@ describe("Akeru delegation contracts", () => {
 
   it("keeps phase details through the flat wire form", () => {
     const { phase: _phase, ...base } = decodeDelegationRecord(record);
+
     const phases = [
       {
         _tag: "Running",
@@ -150,10 +157,12 @@ describe("Akeru delegation contracts", () => {
         canceledBy: "parent-bot",
       },
     ];
+
     for (const phase of phases) {
       const tagged = decodeDelegationRecord({
         ...encodeDelegationRecord({ ...base, phase } as never),
       });
+
       expect(tagged.phase).toEqual(phase);
     }
   });
@@ -172,9 +181,11 @@ describe("Akeru delegation contracts", () => {
       retryOfDelegationId: "delegation-0",
       trigger: "scheduled",
     } as const;
+
     expect(decodeDelegationRecord({ ...record, ...fields })).toMatchObject(fields);
 
     const { phase, ...base } = record;
+
     const legacy = {
       ...base,
       ...fields,
@@ -186,6 +197,7 @@ describe("Akeru delegation contracts", () => {
       startedAt: "2026-08-31T00:00:10.000Z",
       completedAt: "2026-08-31T00:01:00.000Z",
     };
+
     const decoded = decodeDelegationRecord(legacy);
     expect(decoded).toMatchObject({ ...fields, phase: { _tag: "Completed" } });
     expect(decoded).not.toHaveProperty("state");
@@ -197,6 +209,7 @@ describe("Akeru delegation contracts", () => {
 
   it("lifts legacy queued and failed records", () => {
     const { phase: _phase, ...base } = record;
+
     const legacy = {
       ...base,
       childThreadId: null,
@@ -206,6 +219,7 @@ describe("Akeru delegation contracts", () => {
       startedAt: null,
       completedAt: null,
     };
+
     expect(decodeDelegationRecord({ ...legacy, state: "queued" }).phase).toEqual({
       _tag: "Queued",
     });
@@ -265,6 +279,7 @@ describe("Akeru delegation contracts", () => {
       metadata: {},
       payload: { delegation: record },
     };
+
     expect(
       [
         decodeOrchestrationEvent({ ...eventBase, type: "delegation.created" }),
@@ -293,6 +308,7 @@ describe("Akeru delegation contracts", () => {
         failure: { failureCode: "child_failed", message: "The bot stopped." },
       },
     });
+
     expect(decoded.phase).toMatchObject({ _tag: "Failed", acknowledgedAt: null });
   });
 
@@ -319,11 +335,13 @@ describe("Akeru delegation contracts", () => {
         canceledBy: "user",
       },
     });
+
     expect(isAkeruDelegationResultPending(canceled)).toBe(false);
   });
 
   it("derives the waiting-on-children flag from non-terminal children", () => {
     const completed = decodeDelegationRecord(record);
+
     const running = decodeDelegationRecord({
       ...record,
       delegationId: "delegation-2",
@@ -335,6 +353,7 @@ describe("Akeru delegation contracts", () => {
         progress: null,
       },
     });
+
     const parent = completed.parentThreadId;
     expect(isThreadWaitingOnChildren([completed], parent)).toBe(false);
     expect(isThreadWaitingOnChildren([completed, running], parent)).toBe(true);
@@ -371,6 +390,7 @@ describe("Akeru delegation contracts", () => {
         createdAt: "2026-08-31T00:02:00.000Z",
       },
     });
+
     expect(
       event.type === "thread.turn-start-requested" && event.payload.acknowledgedDelegationIds,
     ).toEqual(["delegation-1"]);

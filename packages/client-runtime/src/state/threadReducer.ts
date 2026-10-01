@@ -269,4 +269,5 @@ export function applyThreadDetailEvent(
   // Forward-compatible: ignore unrecognized event types.
   return { kind: "unchanged" };
 }
+
 export { type ThreadDetailReducerResult } from "./threadReducer/types.ts";

@@ -111,6 +111,7 @@ describe("botRoutinesView", () => {
   it("keeps only the bot's live routines with their skills and connectors", () => {
     const view = botRoutinesView(snapshot, "bot-1");
     expect(view.kind).toBe("ready");
+
     if (view.kind !== "ready") return;
     expect(view.routines.map((item) => item.id)).toEqual(["routine-1"]);
     expect(view.routines[0]).toMatchObject({
@@ -146,12 +147,14 @@ describe("routineStateNote", () => {
 
   it("tells a user-paused routine apart from one Akeru stopped", () => {
     expect(routineStateNote({ ...item, paused: true })).toBe("Paused until you resume it.");
+
     const blocked = toRoutinePanelItem(
       { ...routine, lifecycle: "blocked" } as unknown as Routine,
       [],
       [],
       [],
     );
+
     expect(blocked.pausedByAkeru).toBe(true);
     expect(routineStateNote(blocked)).toBe("Paused. Fix the cause in Bot inbox, then resume it.");
   });

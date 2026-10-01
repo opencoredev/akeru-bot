@@ -31,25 +31,31 @@ interface GeneratedPaths {
 const UpstreamJsonSchemaSchema = Schema.Struct({
   $defs: Schema.Record(Schema.String, Schema.Json),
 });
+
 const MetaJsonSchema = Schema.Struct({
   agentMethods: Schema.Record(Schema.String, Schema.String),
   clientMethods: Schema.Record(Schema.String, Schema.String),
   version: Schema.Union([Schema.Number, Schema.String]),
 });
+
 const encodeAgentMethods = Schema.encodeEffect(
   Schema.fromJsonString(MetaJsonSchema.fields.agentMethods),
 );
+
 const encodeClientMethods = Schema.encodeEffect(
   Schema.fromJsonString(MetaJsonSchema.fields.clientMethods),
 );
+
 const encodeVersion = Schema.encodeEffect(Schema.fromJsonString(MetaJsonSchema.fields.version));
 
 const decodeUpstreamSchema = Schema.decodeEffect(Schema.fromJsonString(UpstreamJsonSchemaSchema));
+
 const decodeMetaJson = Schema.decodeEffect(Schema.fromJsonString(MetaJsonSchema));
 
 const getGeneratedPaths = Effect.fn("getGeneratedPaths")(function* () {
   const path = yield* Path.Path;
   const generatedDir = path.join(import.meta.dirname, "..", "src", "_generated");
+
   return {
     generatedDir,
     upstreamSchemaPath: path.join(generatedDir, "upstream-schema.json"),
@@ -97,6 +103,7 @@ const downloadSchemas = Effect.fn("downloadSchemas")(function* (tag: string) {
 
 const readFileString = Effect.fn("readJsonFile")(function* (filePath: string) {
   const fs = yield* FileSystem.FileSystem;
+
   return yield* fs.readFileString(filePath);
 });
 
@@ -118,20 +125,24 @@ function collectSchemaEntries(
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && !line.startsWith("//"));
+
   const entries: Array<{ name: string; code: string }> = [];
 
   for (let index = 0; index < lines.length; index += 1) {
     const typeLine = lines[index];
+
     if (!typeLine?.startsWith("export type ")) {
       continue;
     }
 
     const constLine = lines[index + 1];
+
     if (!constLine?.startsWith("export const ")) {
       throw new Error(`Malformed generator output near: ${typeLine}`);
     }
 
     const match = /^export type ([A-Za-z0-9_]+)/.exec(typeLine);
+
     if (!match?.[1]) {
       throw new Error(`Could not extract schema name from: ${typeLine}`);
     }
@@ -150,6 +161,7 @@ function normalizeNullableTypes(value: Schema.Json): Schema.Json {
   if (Array.isArray(value)) {
     return value.map(normalizeNullableTypes);
   }
+
   if (value === null || typeof value !== "object") {
     return value;
   }
@@ -158,6 +170,7 @@ function normalizeNullableTypes(value: Schema.Json): Schema.Json {
     key,
     normalizeNullableTypes(child),
   ]);
+
   const normalizedObject = Object.fromEntries(normalizedEntries) as Record<string, Schema.Json>;
   const typeValue = normalizedObject.type;
 
@@ -166,17 +179,21 @@ function normalizeNullableTypes(value: Schema.Json): Schema.Json {
   }
 
   const normalizedTypes = typeValue.filter((entry): entry is string => typeof entry === "string");
+
   if (normalizedTypes.length !== typeValue.length || !normalizedTypes.includes("null")) {
     return normalizedObject;
   }
 
   const nonNullTypes = normalizedTypes.filter((entry) => entry !== "null");
+
   if (nonNullTypes.length !== 1) {
     return normalizedObject;
   }
+
   const nonNullType = nonNullTypes[0]!;
 
   const nextObject: Record<string, Schema.Json> = {};
+
   for (const [key, child] of Object.entries(normalizedObject)) {
     if (key !== "type") {
       nextObject[key] = child;
@@ -207,7 +224,9 @@ const generateSchemas = Effect.fn("generateSchemas")(function* (skipDownload: bo
   const upstreamSchema = yield* readFileString(upstreamSchemaPath).pipe(
     Effect.flatMap(decodeUpstreamSchema),
   );
+
   const upstreamMeta = yield* readFileString(upstreamMetaPath).pipe(Effect.flatMap(decodeMetaJson));
+
   const normalizedDefinitions = Object.fromEntries(
     Object.entries(upstreamSchema.$defs).map(([name, schema]) => [
       name,
@@ -218,6 +237,7 @@ const generateSchemas = Effect.fn("generateSchemas")(function* (skipDownload: bo
   const sortedEntries = Object.entries(normalizedDefinitions).toSorted(([left], [right]) =>
     left.localeCompare(right),
   );
+
   const generatedEntries = new Map<string, string>();
   const generator = makeJsonSchemaGenerator();
 
@@ -226,6 +246,7 @@ const generateSchemas = Effect.fn("generateSchemas")(function* (skipDownload: bo
   }
 
   const output = generator.generate("openapi-3.1", normalizedDefinitions as never, false).trim();
+
   if (output.length > 0) {
     for (const entry of collectSchemaEntries(output)) {
       if (!generatedEntries.has(entry.name)) {

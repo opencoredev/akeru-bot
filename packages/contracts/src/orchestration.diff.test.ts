@@ -13,6 +13,7 @@ it.effect("parses turn diff input when fromTurnCount <= toTurnCount", () =>
       fromTurnCount: 1,
       toTurnCount: 2,
     });
+
     assert.strictEqual(parsed.fromTurnCount, 1);
     assert.strictEqual(parsed.toTurnCount, 2);
   }),
@@ -26,6 +27,7 @@ it.effect("parses turn diff input with whitespace ignoring enabled", () =>
       toTurnCount: 2,
       ignoreWhitespace: true,
     });
+
     assert.strictEqual(parsed.ignoreWhitespace, true);
   }),
 );
@@ -37,6 +39,7 @@ it.effect("parses full thread diff input with whitespace ignoring enabled", () =
       toTurnCount: 2,
       ignoreWhitespace: true,
     });
+
     assert.strictEqual(parsed.ignoreWhitespace, true);
   }),
 );
@@ -50,6 +53,7 @@ it.effect("rejects turn diff input when fromTurnCount > toTurnCount", () =>
         toTurnCount: 2,
       }),
     );
+
     assert.strictEqual(result._tag, "Failure");
   }),
 );
@@ -64,6 +68,7 @@ it.effect("rejects thread turn diff when fromTurnCount > toTurnCount", () =>
         diff: "patch",
       }),
     );
+
     assert.strictEqual(result._tag, "Failure");
   }),
 );

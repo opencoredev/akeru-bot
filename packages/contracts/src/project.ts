@@ -7,11 +7,15 @@ import {
 } from "./baseSchemas.ts";
 
 const PROJECT_SEARCH_ENTRIES_MAX_LIMIT = 200;
+
 const PROJECT_SEARCH_CONTENTS_MAX_LIMIT = 500;
+
 const PROJECT_WRITE_FILE_PATH_MAX_LENGTH = 512;
+
 const PROJECT_READ_FILE_PATH_MAX_LENGTH = 512;
 
 export const ProjectEntryKind = Schema.Literals(["file", "directory"]);
+
 export type ProjectEntryKind = typeof ProjectEntryKind.Type;
 
 export const ProjectSearchEntriesInput = Schema.Struct({
@@ -23,18 +27,21 @@ export const ProjectSearchEntriesInput = Schema.Struct({
   kind: Schema.optional(ProjectEntryKind),
   imageOnly: Schema.optional(Schema.Boolean),
 });
+
 export type ProjectSearchEntriesInput = typeof ProjectSearchEntriesInput.Type;
 
 export const ProjectEntry = Schema.Struct({
   path: TrimmedNonEmptyString,
   kind: ProjectEntryKind,
 });
+
 export type ProjectEntry = typeof ProjectEntry.Type;
 
 export const ProjectSearchEntriesResult = Schema.Struct({
   entries: Schema.Array(ProjectEntry),
   truncated: Schema.Boolean,
 });
+
 export type ProjectSearchEntriesResult = typeof ProjectSearchEntriesResult.Type;
 
 export const ProjectSearchContentsInput = Schema.Struct({
@@ -47,12 +54,14 @@ export const ProjectSearchContentsInput = Schema.Struct({
   wholeWord: Schema.Boolean,
   useRegex: Schema.Boolean,
 });
+
 export type ProjectSearchContentsInput = typeof ProjectSearchContentsInput.Type;
 
 export const ProjectContentMatchRange = Schema.Struct({
   start: NonNegativeInt,
   end: NonNegativeInt,
 });
+
 export type ProjectContentMatchRange = typeof ProjectContentMatchRange.Type;
 
 export const ProjectContentMatch = Schema.Struct({
@@ -61,6 +70,7 @@ export const ProjectContentMatch = Schema.Struct({
   lineContent: Schema.String,
   matchRanges: Schema.Array(ProjectContentMatchRange),
 });
+
 export type ProjectContentMatch = typeof ProjectContentMatch.Type;
 
 export const ProjectSearchContentsResult = Schema.Struct({
@@ -68,17 +78,20 @@ export const ProjectSearchContentsResult = Schema.Struct({
   truncated: Schema.Boolean,
   regexFallbackError: Schema.optional(Schema.String),
 });
+
 export type ProjectSearchContentsResult = typeof ProjectSearchContentsResult.Type;
 
 export const ProjectListEntriesInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
 });
+
 export type ProjectListEntriesInput = typeof ProjectListEntriesInput.Type;
 
 export const ProjectListEntriesResult = Schema.Struct({
   entries: Schema.Array(ProjectEntry),
   truncated: Schema.Boolean,
 });
+
 export type ProjectListEntriesResult = typeof ProjectListEntriesResult.Type;
 
 export const ProjectEntriesFailure = Schema.Literals([
@@ -90,6 +103,7 @@ export const ProjectEntriesFailure = Schema.Literals([
   "search_index_scan_timed_out",
   "search_index_search_failed",
 ]);
+
 export type ProjectEntriesFailure = typeof ProjectEntriesFailure.Type;
 
 type ProjectEntriesFailureContext = {
@@ -102,6 +116,7 @@ type ProjectEntriesFailureContext = {
 
 function decodedProjectErrorMessage(props: object): string | undefined {
   if (!("message" in props)) return undefined;
+
   return typeof props.message === "string" ? props.message : undefined;
 }
 
@@ -195,6 +210,7 @@ export const ProjectReadFileInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   relativePath: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_READ_FILE_PATH_MAX_LENGTH)),
 });
+
 export type ProjectReadFileInput = typeof ProjectReadFileInput.Type;
 
 export const ProjectReadFileResult = Schema.Struct({
@@ -203,6 +219,7 @@ export const ProjectReadFileResult = Schema.Struct({
   byteLength: NonNegativeInt,
   truncated: Schema.Boolean,
 });
+
 export type ProjectReadFileResult = typeof ProjectReadFileResult.Type;
 
 export const ProjectFileFailure = Schema.Literals([
@@ -212,6 +229,7 @@ export const ProjectFileFailure = Schema.Literals([
   "binary_file",
   "operation_failed",
 ]);
+
 export type ProjectFileFailure = typeof ProjectFileFailure.Type;
 
 export const ProjectFileOperation = Schema.Literals([
@@ -224,6 +242,7 @@ export const ProjectFileOperation = Schema.Literals([
   "make-directory",
   "write-file",
 ]);
+
 export type ProjectFileOperation = typeof ProjectFileOperation.Type;
 
 type ProjectFileFailureContext = {
@@ -267,11 +286,13 @@ export const ProjectWriteFileInput = Schema.Struct({
   relativePath: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_WRITE_FILE_PATH_MAX_LENGTH)),
   contents: Schema.String,
 });
+
 export type ProjectWriteFileInput = typeof ProjectWriteFileInput.Type;
 
 export const ProjectWriteFileResult = Schema.Struct({
   relativePath: TrimmedNonEmptyString,
 });
+
 export type ProjectWriteFileResult = typeof ProjectWriteFileResult.Type;
 
 export class ProjectWriteFileError extends Schema.TaggedErrorClass<ProjectWriteFileError>()(

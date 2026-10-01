@@ -34,6 +34,7 @@ describe("thread pagination state", () => {
       const state = yield* harness.awaitState((value) =>
         Option.match(value.page, { onNone: () => false, onSome: (page) => !page.loadingOlder }),
       );
+
       // The stale page was dropped: no resurrected rows, cursor unchanged.
       expect(hasMessage(state, "message-old")).toBe(false);
       expect(Option.getOrThrow(state.page).beforeCursor).toBe("cursor-1");
@@ -68,6 +69,7 @@ describe("thread pagination state", () => {
       const state = yield* harness.awaitState((value) =>
         Option.match(value.page, { onNone: () => false, onSome: (page) => !page.loadingOlder }),
       );
+
       expect(hasMessage(state, "message-old")).toBe(false);
       // The replacement snapshot's cursor wins over the discarded page's.
       expect(Option.getOrThrow(state.page).beforeCursor).toBe("cursor-2");
@@ -88,6 +90,7 @@ describe("thread pagination state", () => {
       const state = yield* harness.awaitState((value) =>
         Option.match(value.page, { onNone: () => false, onSome: (page) => !page.loadingOlder }),
       );
+
       expect(hasMessage(state, "message-old")).toBe(false);
       expect(Option.getOrThrow(state.page).beforeCursor).toBe("cursor-1");
     }),
@@ -118,9 +121,11 @@ describe("thread pagination state", () => {
       // merged older turn-1 row survives. If the merge had advanced the
       // dedupe sequence to the page's 12, this event would be swallowed.
       yield* Queue.offer(harness.inputs, revertEvent(11));
+
       const state = yield* harness.awaitState(
         (value) => !hasMessage(value, "message-recent") && hasMessage(value, "message-old"),
       );
+
       expect(hasMessage(state, "message-old")).toBe(true);
     }),
   );

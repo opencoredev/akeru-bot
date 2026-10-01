@@ -47,7 +47,9 @@ export class QrSegment {
   // can be converted to UTF-8 bytes and encoded as a byte mode segment.
   public static makeBytes(data: Readonly<Array<byte>>): QrSegment {
     let bb: Array<bit> = [];
+
     for (const b of data) appendBits(b, 8, bb);
+
     return new QrSegment(QrSegment.Mode.BYTE, data.length, bb);
   }
 
@@ -56,12 +58,14 @@ export class QrSegment {
     if (!QrSegment.isNumeric(digits))
       throw new RangeError("String contains non-numeric characters");
     let bb: Array<bit> = [];
+
     for (let i = 0; i < digits.length; ) {
       // Consume up to 3 digits per iteration
       const n: int = Math.min(digits.length - i, 3);
       appendBits(parseInt(digits.substring(i, i + n), 10), n * 3 + 1, bb);
       i += n;
     }
+
     return new QrSegment(QrSegment.Mode.NUMERIC, digits.length, bb);
   }
 
@@ -73,15 +77,18 @@ export class QrSegment {
       throw new RangeError("String contains unencodable characters in alphanumeric mode");
     let bb: Array<bit> = [];
     let i: int;
+
     for (i = 0; i + 2 <= text.length; i += 2) {
       // Process groups of 2
       let temp: int = QrSegment.ALPHANUMERIC_CHARSET.indexOf(text.charAt(i)) * 45;
       temp += QrSegment.ALPHANUMERIC_CHARSET.indexOf(text.charAt(i + 1));
       appendBits(temp, 11, bb);
     }
+
     if (i < text.length)
       // 1 character remaining
       appendBits(QrSegment.ALPHANUMERIC_CHARSET.indexOf(text.charAt(i)), 6, bb);
+
     return new QrSegment(QrSegment.Mode.ALPHANUMERIC, text.length, bb);
   }
 
@@ -99,6 +106,7 @@ export class QrSegment {
   // (ECI) designator with the given assignment value.
   public static makeEci(assignVal: int): QrSegment {
     let bb: Array<bit> = [];
+
     if (assignVal < 0) throw new RangeError("ECI assignment value out of range");
     else if (assignVal < 1 << 7) appendBits(assignVal, 8, bb);
     else if (assignVal < 1 << 14) {
@@ -108,6 +116,7 @@ export class QrSegment {
       appendBits(0b110, 3, bb);
       appendBits(assignVal, 21, bb);
     } else throw new RangeError("ECI assignment value out of range");
+
     return new QrSegment(QrSegment.Mode.ECI, 0, bb);
   }
 
@@ -147,6 +156,7 @@ export class QrSegment {
   ) {
     this.mode = mode;
     this.numChars = numChars;
+
     if (numChars < 0) throw new RangeError("Invalid argument");
     this.bitData = bitData.slice(); // Make defensive copy
   }
@@ -162,11 +172,14 @@ export class QrSegment {
   // the given version. The result is infinity if a segment has too many characters to fit its length field.
   public static getTotalBits(segs: Readonly<Array<QrSegment>>, version: int): number {
     let result: number = 0;
+
     for (const seg of segs) {
       const ccbits: int = seg.mode.numCharCountBits(version);
+
       if (seg.numChars >= 1 << ccbits) return Infinity; // The segment's length doesn't fit the field's bit width
       result += 4 + ccbits + seg.bitData.length;
     }
+
     return result;
   }
 
@@ -174,6 +187,7 @@ export class QrSegment {
   private static toUtf8ByteArray(str: string): Array<byte> {
     str = encodeURI(str);
     let result: Array<byte> = [];
+
     for (let i = 0; i < str.length; i++) {
       if (str.charAt(i) != "%") result.push(str.charCodeAt(i));
       else {
@@ -181,6 +195,7 @@ export class QrSegment {
         i += 2;
       }
     }
+
     return result;
   }
 

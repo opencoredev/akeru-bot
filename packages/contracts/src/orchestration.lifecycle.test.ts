@@ -33,6 +33,7 @@ it.effect("decodes historical project.created payloads with a default provider",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.defaultModelSelection?.instanceId, "codex");
   }),
 );
@@ -51,6 +52,7 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.modelSelection, undefined);
     assert.strictEqual(parsed.runtimeMode, DEFAULT_LOCAL_EXECUTION_MODE);
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
@@ -91,6 +93,7 @@ it.effect("decodes historical thread.created payloads without parent links", () 
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.parentThreadId, undefined);
     assert.strictEqual(parsed.parentDelegationId, undefined);
   }),
@@ -103,6 +106,7 @@ it.effect("decodes thread archive and unarchive commands", () =>
       commandId: "cmd-archive-1",
       threadId: "thread-1",
     });
+
     const unarchive = yield* decodeOrchestrationCommand({
       type: "thread.unarchive",
       commandId: "cmd-unarchive-1",
@@ -121,6 +125,7 @@ it.effect("decodes thread settle and unsettle commands", () =>
       commandId: "cmd-settle-1",
       threadId: "thread-1",
     });
+
     const unsettle = yield* decodeOrchestrationCommand({
       type: "thread.unsettle",
       commandId: "cmd-unsettle-1",
@@ -139,6 +144,7 @@ it.effect("decodes thread settle and unsettle commands", () =>
       threadId: "thread-1",
       reason: "activity",
     }).pipe(Effect.flip);
+
     assert.ok(forged);
   }),
 );
@@ -160,6 +166,7 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
       archivedAt: null,
       session: null,
     };
+
     const thread = yield* decodeOrchestrationThread({
       ...common,
       deletedAt: null,
@@ -168,6 +175,7 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
       activities: [],
       checkpoints: [],
     });
+
     const shell = yield* decodeOrchestrationThreadShell({
       ...common,
       latestUserMessageAt: null,
@@ -193,6 +201,7 @@ it.effect("defaults delegations when decoding historical read models", () =>
       threads: [],
       updatedAt: "2026-08-31T12:00:00.000Z",
     });
+
     assert.deepEqual(readModel.delegations, []);
   }),
 );
@@ -229,6 +238,7 @@ it.effect("decodes thread archived and unarchived events", () =>
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
     });
+
     const unarchived = yield* decodeOrchestrationEvent({
       sequence: 2,
       eventId: "event-unarchive-1",
@@ -249,6 +259,7 @@ it.effect("decodes thread archived and unarchived events", () =>
     if (archived.type !== "thread.archived") {
       assert.fail(`Expected thread.archived event, received ${archived.type}.`);
     }
+
     assert.strictEqual(archived.payload.archivedAt, "2026-01-01T00:00:00.000Z");
     assert.strictEqual(unarchived.type, "thread.unarchived");
   }),
@@ -273,6 +284,7 @@ it.effect("decodes thread settled and unsettled events", () =>
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
     });
+
     const unsettled = yield* decodeOrchestrationEvent({
       sequence: 2,
       eventId: "event-unsettle-1",
@@ -305,6 +317,7 @@ it.effect(
         messageId: "msg-1",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
+
       assert.strictEqual(parsed.modelSelection, undefined);
       assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
       assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
@@ -322,6 +335,7 @@ it.effect("decodes historical latest turns without a request message id", () =>
       completedAt: null,
       assistantMessageId: null,
     });
+
     assert.strictEqual(parsed.requestMessageId, undefined);
   }),
 );

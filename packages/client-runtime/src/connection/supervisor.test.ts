@@ -11,6 +11,7 @@ describe("EnvironmentSupervisor", () => {
   it.effect("does not attempt a connection until it is desired", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY).pipe(
         Effect.provide(harness.dependencies),
       );
@@ -23,6 +24,7 @@ describe("EnvironmentSupervisor", () => {
   it.effect("does not let the initial connect signal cancel the first attempt", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY).pipe(
         Effect.provide(harness.dependencies),
       );
@@ -41,6 +43,7 @@ describe("EnvironmentSupervisor", () => {
         prepare: (attempt) =>
           attempt === 1 ? Effect.fail(transient("Relay connection timed out.")) : Effect.never,
       });
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));
@@ -56,6 +59,7 @@ describe("EnvironmentSupervisor", () => {
         (state) =>
           state.phase === "connecting" && state.stage === "preparing" && state.attempt === 2,
       );
+
       expect(retrying).toMatchObject({
         phase: "connecting",
         stage: "preparing",
@@ -72,6 +76,7 @@ describe("EnvironmentSupervisor", () => {
   it.effect("explicit disconnect releases the session and returns to available", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
+
       const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
         initiallyDesired: true,
       }).pipe(Effect.provide(harness.dependencies));

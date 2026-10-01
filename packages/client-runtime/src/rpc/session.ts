@@ -42,6 +42,7 @@ export class RpcSessionFactory extends Context.Service<
 type InitialConfigError = Effect.Error<
   ReturnType<WsRpcProtocolClient[typeof WS_METHODS.serverGetConfig]>
 >;
+
 type ProbeError = Effect.Error<ReturnType<WsRpcProtocolClient[typeof WS_METHODS.serverProbe]>>;
 
 function mapSessionRpcError(error: InitialConfigError | ProbeError): ConnectionAttemptError {
@@ -75,6 +76,7 @@ export const make = Effect.gen(function* () {
 
     const connected = yield* Deferred.make<void>();
     const disconnected = yield* Deferred.make<never, ConnectionTransientError>();
+
     const hooks = RpcClient.ConnectionHooks.of({
       onConnect: Deferred.succeed(connected, undefined).pipe(Effect.asVoid),
       onDisconnect: Deferred.isDone(connected).pipe(
@@ -92,9 +94,11 @@ export const make = Effect.gen(function* () {
         Effect.asVoid,
       ),
     });
+
     const socketLayer = Socket.layerWebSocket(connection.socketUrl, {
       openTimeout: SOCKET_OPEN_TIMEOUT,
     }).pipe(Layer.provide(Layer.succeed(Socket.WebSocketConstructor, webSocketConstructor)));
+
     const protocolLayer = Layer.effect(
       RpcClient.Protocol,
       RpcClient.makeProtocolSocket({
@@ -110,16 +114,20 @@ export const make = Effect.gen(function* () {
         ),
       ),
     );
+
     const protocolContext = yield* Layer.build(protocolLayer).pipe(
       Effect.withSpan("environment.websocket.connect"),
     );
+
     const client = yield* makeWsRpcProtocolClient.pipe(Effect.provide(protocolContext));
+
     const initialConfig = yield* Effect.cached(
       client[WS_METHODS.serverGetConfig]({}).pipe(
         Effect.mapError(mapSessionRpcError),
         Effect.withSpan("environment.initialSync"),
       ),
     );
+
     const probe = initialConfig.pipe(
       Effect.flatMap((config) =>
         (config.environment.capabilities.connectionProbe === true

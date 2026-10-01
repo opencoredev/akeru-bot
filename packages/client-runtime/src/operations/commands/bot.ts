@@ -37,6 +37,7 @@ export const createBot: (input: CreateBotInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.createBot",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "bot.create",

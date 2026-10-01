@@ -24,12 +24,15 @@ type FetchCall = readonly [input: RequestInfo | URL, init: RequestInit];
 const recordedFetch = (...responses: ReadonlyArray<Response>) => {
   const calls: Array<FetchCall> = [];
   let responseIndex = 0;
+
   const fetchFn = ((input, init) => {
     calls.push([input, init ?? {}]);
     const response = responses[responseIndex++];
+
     if (!response) {
       return Promise.reject(new Error("Unexpected fetch call"));
     }
+
     return Promise.resolve(response);
   }) satisfies typeof fetch;
 
@@ -38,8 +41,10 @@ const recordedFetch = (...responses: ReadonlyArray<Response>) => {
 
 const hangingFetch = () => {
   const calls: Array<FetchCall> = [];
+
   const fetchFn = ((input, init) => {
     calls.push([input, init ?? {}]);
+
     return new Promise<Response>(() => undefined);
   }) satisfies typeof fetch;
 
@@ -60,6 +65,7 @@ const expectFetchCall = (
 ): void => {
   const call = calls[index - 1];
   expect(call).toBeDefined();
+
   if (!call) {
     return;
   }
@@ -75,6 +81,7 @@ const expectFetchCall = (
 
   if ("body" in expected) {
     const body = init.body;
+
     if (typeof body === "string") {
       expect(body).toBe(expected.body);
     } else if (body instanceof Uint8Array) {
@@ -235,6 +242,7 @@ describe("remote environment authorization", () => {
       const environment = yield* fetchRemoteEnvironmentDescriptor({
         httpBaseUrl: "https://remote.example.com/",
       }).pipe(provideRemoteHttp(fetch.fetchFn));
+
       expect(environment).toMatchObject({
         environmentId: "environment-remote",
         label: "Remote environment",
@@ -244,6 +252,7 @@ describe("remote environment authorization", () => {
         httpBaseUrl: "https://remote.example.com/",
         bearerToken: "bearer-token",
       }).pipe(provideRemoteHttp(fetch.fetchFn));
+
       expect(session).toMatchObject({
         authenticated: true,
         scopes: ["orchestration:read", "orchestration:operate"],
@@ -253,6 +262,7 @@ describe("remote environment authorization", () => {
         httpBaseUrl: "https://remote.example.com/",
         bearerToken: "bearer-token",
       }).pipe(provideRemoteHttp(fetch.fetchFn));
+
       expect(ticket).toMatchObject({
         ticket: "ws-ticket",
       });
@@ -286,6 +296,7 @@ describe("remote environment authorization", () => {
         httpBaseUrl: "http://remote.example.com/",
         timeoutMs: 25,
       }).pipe(provideRemoteHttp(fetch.fetchFn), Effect.flip, Effect.forkScoped);
+
       yield* Effect.yieldNow;
       yield* TestClock.adjust(Duration.millis(25));
       const error = yield* Fiber.join(errorFiber);
@@ -317,6 +328,7 @@ describe("remote environment authorization", () => {
       }).pipe(provideRemoteHttp(fetch.fetchFn), Effect.flip);
 
       expect(isEnvironmentAuthInvalidError(error)).toBe(true);
+
       if (isEnvironmentAuthInvalidError(error)) {
         expect(error.reason).toBe("missing_credential");
         expect(error.traceId).toBe("trace-auth-test");

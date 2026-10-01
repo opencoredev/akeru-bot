@@ -11,6 +11,7 @@ import {
 } from "./project.ts";
 
 const decodeSearchEntriesInput = Schema.decodeUnknownSync(ProjectSearchEntriesInput);
+
 const decodeSearchContentsInput = Schema.decodeUnknownSync(ProjectSearchContentsInput);
 
 describe("project search inputs", () => {
@@ -21,6 +22,7 @@ describe("project search inputs", () => {
       limit: 10,
       kind: "file",
     });
+
     expect(decoded.query).toBe("");
   });
 
@@ -33,6 +35,7 @@ describe("project search inputs", () => {
       wholeWord: false,
       useRegex: false,
     });
+
     expect(decoded.query).toBe(" foo ");
   });
 });
@@ -40,6 +43,7 @@ describe("project search inputs", () => {
 describe("project RPC errors", () => {
   it("derives stable messages from structured request context while retaining causes", () => {
     const cause = new Error("sensitive platform detail");
+
     const searchError = new ProjectSearchEntriesError({
       cwd: "/workspace",
       queryLength: "authorization: Bearer secret-token".length,
@@ -49,6 +53,7 @@ describe("project RPC errors", () => {
       detail: "index unavailable",
       cause,
     });
+
     const readError = new ProjectReadFileError({
       cwd: "/workspace",
       relativePath: "src/index.ts",
@@ -77,6 +82,7 @@ describe("project RPC errors", () => {
       failure: "search_index_search_failed",
       cause,
     });
+
     expect(contentSearchError.message).toBe("Failed to search workspace contents in '/workspace'.");
     expect(contentSearchError.message).not.toContain(cause.message);
     expect(contentSearchError).not.toHaveProperty("query");
@@ -92,6 +98,7 @@ describe("project RPC errors", () => {
       message: "Legacy project search failure.",
       query: "legacy sensitive query",
     });
+
     const writeError = decodeWriteError({
       _tag: "ProjectWriteFileError",
       message: "Legacy project write failure.",

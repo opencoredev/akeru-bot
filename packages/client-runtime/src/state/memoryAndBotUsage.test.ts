@@ -22,6 +22,7 @@ import { createBotUsageEnvironmentAtoms } from "./botUsage.ts";
 import { createMemoryEnvironmentAtoms } from "./memory.ts";
 
 const environmentId = EnvironmentId.make("memory-usage-environment");
+
 const target = new PrimaryConnectionTarget({
   environmentId,
   label: "Memory and usage",
@@ -39,6 +40,7 @@ const runtimeFor = Effect.fn("memoryAndBotUsage.runtimeFor")(function* (
     probe: Effect.void,
     closed: Effect.never,
   };
+
   const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
     target,
     state: yield* SubscriptionRef.make<SupervisorConnectionState>({
@@ -56,19 +58,24 @@ const runtimeFor = Effect.fn("memoryAndBotUsage.runtimeFor")(function* (
     retryNow: Effect.void,
     retryIfDesired: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+
   const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_id, effect) =>
     Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+
   const followStream: EnvironmentRegistry.EnvironmentRegistry["Service"]["followStream"] = (
     _id,
     stream,
   ) => Stream.provideService(stream, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+
   const stateChanges: EnvironmentRegistry.EnvironmentRegistry["Service"]["stateChanges"] = () =>
     SubscriptionRef.changes(supervisor.state);
+
   const service = EnvironmentRegistry.EnvironmentRegistry.of({
     run,
     followStream,
     stateChanges,
   } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+
   return Atom.runtime(Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, service));
 });
 
@@ -78,13 +85,16 @@ describe("memory and bot usage environment atoms", () => {
       Effect.gen(function* () {
         const threadId = ThreadId.make("thread-memory");
         let resolveInspect!: () => void;
+
         const inspected = new Promise<void>((resolve) => {
           resolveInspect = resolve;
         });
+
         const client = {
           [WS_METHODS.memoryDocumentsInspect]: () =>
             Effect.sync(() => {
               resolveInspect();
+
               return {
                 botId: BotId.make("bot-memory"),
                 groupId: null,
@@ -96,10 +106,13 @@ describe("memory and bot usage environment atoms", () => {
             }),
           [WS_METHODS.memoryDocumentReplace]: () => Effect.succeed({} as never),
         } as unknown as WsRpcProtocolClient;
+
         const atoms = createMemoryEnvironmentAtoms(yield* runtimeFor(client));
+
         const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
           Effect.sync(() => value.dispose()),
         );
+
         const input = { environmentId, input: { threadId } };
         const inspectAtom = atoms.inspectDocuments(input);
         const refresh = vi.spyOn(registry, "refresh");
@@ -119,6 +132,7 @@ describe("memory and bot usage environment atoms", () => {
             },
           }),
         );
+
         expect(AsyncResult.isSuccess(result)).toBe(true);
         expect(refresh.mock.calls.some(([atom]) => atom === inspectAtom)).toBe(true);
       }),
@@ -131,26 +145,32 @@ describe("memory and bot usage environment atoms", () => {
         const botId = BotId.make("bot-usage");
         let requestedBotId: BotId | undefined;
         let resolveUsage!: () => void;
+
         const requested = new Promise<void>((resolve) => {
           resolveUsage = resolve;
         });
+
         const client = {
           [WS_METHODS.botUsage]: (input: { readonly botId: BotId }) =>
             Effect.sync(() => {
               requestedBotId = input.botId;
               resolveUsage();
+
               return {} as never;
             }),
         } as unknown as WsRpcProtocolClient;
+
         const atoms = createBotUsageEnvironmentAtoms(yield* runtimeFor(client));
         const atom = atoms.summary({ environmentId, input: { botId } });
         expect(atom).toBe(atoms.summary({ environmentId, input: { botId } }));
         expect(atom).not.toBe(
           atoms.summary({ environmentId, input: { botId: BotId.make("other-bot") } }),
         );
+
         const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
           Effect.sync(() => value.dispose()),
         );
+
         const unmount = registry.mount(atom);
         yield* Effect.addFinalizer(() => Effect.sync(unmount));
         yield* Effect.promise(() => requested);

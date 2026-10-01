@@ -32,11 +32,13 @@ describe("causeErrorTag", () => {
 describe("truncateTraceAttributes", () => {
   it("clamps oversized strings at any depth without mutating the input", () => {
     const stack = "s".repeat(2_000);
+
     const attributes = {
       "db.query.text": "q".repeat(2_000),
       short: "ok",
       error: { name: "Error", stack, nested: ["a".repeat(2_000)] },
     };
+
     const truncated = truncateTraceAttributes(attributes);
 
     assert.equal((truncated["db.query.text"] as string).length, 200 + "…[truncated]".length);

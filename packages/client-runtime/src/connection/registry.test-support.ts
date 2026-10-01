@@ -144,14 +144,17 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
   const storedTargets = yield* Ref.make(
     new Map(initialTargets.map((target) => [target.environmentId, target])),
   );
+
   const shellCache = yield* Ref.make(new Map([[TARGET.environmentId, CACHED_SNAPSHOT]]));
   const cacheClears = yield* Ref.make<ReadonlyArray<EnvironmentId>>([]);
   const ownedDataClears = yield* Ref.make<ReadonlyArray<EnvironmentId>>([]);
   const sessions = yield* Ref.make<ReadonlyArray<SessionControl>>([]);
   const releasedSessions = yield* Ref.make(0);
+
   const storedProfiles = yield* Ref.make(
     new Map(initialProfiles.map((profile) => [profile.connectionId, profile])),
   );
+
   const profileReadCount = yield* Ref.make(0);
   const storedCredentials = yield* Ref.make(new Map(initialCredentials));
   const disconnectedSshTargets = yield* Ref.make<ReadonlyArray<DesktopSshEnvironmentTarget>>([]);
@@ -159,6 +162,7 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
   const targetStore = Persistence.ConnectionTargetStore.of({
     list: Ref.get(storedTargets).pipe(Effect.map((targets) => [...targets.values()])),
   });
+
   const registrationStore = Persistence.ConnectionRegistrationStore.of({
     register: (registration) =>
       Effect.gen(function* () {
@@ -166,25 +170,31 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
         yield* Ref.update(storedTargets, (current) => {
           const next = new Map(current);
           next.set(registration.target.environmentId, registration.target);
+
           return next;
         });
+
         switch (registration._tag) {
           case "BearerConnectionRegistration":
             yield* Ref.update(storedProfiles, (current) => {
               const next = new Map(current);
               next.set(registration.profile.connectionId, registration.profile);
+
               return next;
             });
             yield* Ref.update(storedCredentials, (current) => {
               const next = new Map(current);
               next.set(registration.target.connectionId, registration.credential);
+
               return next;
             });
+
             return;
           case "SshConnectionRegistration":
             yield* Ref.update(storedProfiles, (current) => {
               const next = new Map(current);
               next.set(registration.profile.connectionId, registration.profile);
+
               return next;
             });
         }
@@ -195,22 +205,27 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
         yield* Ref.update(storedTargets, (current) => {
           const next = new Map(current);
           next.delete(target.environmentId);
+
           return next;
         });
+
         if (target._tag === "BearerConnectionTarget" || target._tag === "SshConnectionTarget") {
           yield* Ref.update(storedProfiles, (current) => {
             const next = new Map(current);
             next.delete(target.connectionId);
+
             return next;
           });
           yield* Ref.update(storedCredentials, (current) => {
             const next = new Map(current);
             next.delete(target.connectionId);
+
             return next;
           });
         }
       }),
   });
+
   const cacheStore = Persistence.EnvironmentCacheStore.of({
     loadShell: (environmentId) =>
       Ref.get(shellCache).pipe(
@@ -220,6 +235,7 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
       Ref.update(shellCache, (current) => {
         const next = new Map(current);
         next.set(environmentId, snapshot);
+
         return next;
       }),
     loadThread: (_environmentId, _threadId) => Effect.succeed(Option.none()),
@@ -231,6 +247,7 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
       Ref.update(shellCache, (current) => {
         const next = new Map(current);
         next.delete(environmentId);
+
         return next;
       }).pipe(
         Effect.andThen(
@@ -238,15 +255,19 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
         ),
       ),
   });
+
   const ownedDataCleanup = Persistence.EnvironmentOwnedDataCleanup.of({
     clear: (environmentId) =>
       Ref.update(ownedDataClears, (environmentIds) => [...environmentIds, environmentId]),
   });
+
   const networkStatus = yield* SubscriptionRef.make<"unknown" | "offline" | "online">("online");
+
   const connectivity = Connectivity.Connectivity.of({
     status: SubscriptionRef.get(networkStatus),
     changes: SubscriptionRef.changes(networkStatus),
   });
+
   const profileStore = ConnectionProfileStore.ConnectionProfileStore.of({
     get: (connectionId) =>
       Ref.update(profileReadCount, (count) => count + 1).pipe(
@@ -257,15 +278,18 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
       Ref.update(storedProfiles, (current) => {
         const next = new Map(current);
         next.set(profile.connectionId, profile);
+
         return next;
       }),
     remove: (connectionId) =>
       Ref.update(storedProfiles, (current) => {
         const next = new Map(current);
         next.delete(connectionId);
+
         return next;
       }),
   });
+
   const credentialStore = ConnectionCredentialStore.ConnectionCredentialStore.of({
     get: (connectionId) =>
       Ref.get(storedCredentials).pipe(
@@ -275,35 +299,42 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
       Ref.update(storedCredentials, (current) => {
         const next = new Map(current);
         next.set(connectionId, credential);
+
         return next;
       }),
     remove: (connectionId) =>
       Ref.update(storedCredentials, (current) => {
         const next = new Map(current);
         next.delete(connectionId);
+
         return next;
       }),
   });
+
   const sshGateway = ClientCapabilities.SshEnvironmentGateway.of({
     provision: () => Effect.die(new Error("SSH provisioning is not used.")),
     prepare: () => Effect.die(new Error("SSH preparation is not used.")),
     disconnect: (target) => Ref.update(disconnectedSshTargets, (current) => [...current, target]),
   });
+
   const driver = ConnectionDriver.ConnectionDriver.of({
     connect: (entry, reportProgress) =>
       Effect.gen(function* () {
         const target = entry.target;
+
         const prepared = {
           ...PREPARED,
           environmentId: target.environmentId,
           label: target.label,
           target,
         };
+
         yield* reportProgress({ stage: "preparing" });
         yield* reportProgress({ stage: "opening", prepared });
         yield* options?.beforeSessionConnect?.(target.environmentId) ?? Effect.void;
         const closed = yield* Deferred.make<never, ConnectionTransientError>();
         yield* Ref.update(sessions, (current) => [...current, { closed }]);
+
         const session = yield* Effect.acquireRelease(
           Effect.succeed({
             client: {} as RpcSession.RpcSession["client"],
@@ -314,13 +345,16 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
           } satisfies RpcSession.RpcSession),
           () => Ref.update(releasedSessions, (count) => count + 1),
         );
+
         yield* reportProgress({ stage: "synchronizing", prepared });
         yield* session.ready;
+
         return { prepared, session };
       }),
   });
 
   const cacheLayer = Layer.succeed(Persistence.EnvironmentCacheStore, cacheStore);
+
   const layer = EnvironmentRegistry.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -364,9 +398,11 @@ export function awaitConnectionState(
 ) {
   return Effect.gen(function* () {
     const current = yield* registry.state(environmentId);
+
     if (predicate(current)) {
       return current;
     }
+
     return yield* registry
       .stateChanges(environmentId)
       .pipe(Stream.filter(predicate), Stream.runHead, Effect.map(Option.getOrThrow));

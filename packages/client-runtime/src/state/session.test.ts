@@ -15,6 +15,7 @@ describe("environment session state", () => {
       const result = yield* initialConfigOption(
         Effect.fail(new TestConfigError({ message: "temporary failure" })),
       );
+
       expect(Option.isNone(result)).toBe(true);
     }),
   );

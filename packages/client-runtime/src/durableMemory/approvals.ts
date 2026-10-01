@@ -46,6 +46,7 @@ export function pendingMemoryApprovals(
   activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>,
 ): ReadonlyArray<AkeruMemoryApprovalRequest> {
   const resolved = new Set<string>();
+
   for (const activity of activities) {
     if (
       activity.kind === AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY &&
@@ -54,8 +55,10 @@ export function pendingMemoryApprovals(
       resolved.add(activity.payload.candidateId);
     }
   }
+
   const pending: AkeruMemoryApprovalRequest[] = [];
   const seen = new Set<string>();
+
   for (const activity of activities) {
     if (
       activity.kind !== AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY ||
@@ -63,11 +66,14 @@ export function pendingMemoryApprovals(
     ) {
       continue;
     }
+
     const request = activity.payload;
+
     if (resolved.has(request.candidateId) || seen.has(request.candidateId)) continue;
     seen.add(request.candidateId);
     pending.push(request);
   }
+
   return pending;
 }
 
@@ -86,7 +92,9 @@ export function memoryApprovalMutation(
       decision: { candidateId: request.candidateId, decision: "reject" },
     };
   }
+
   const edited = intent.fact?.trim();
+
   return {
     operation: "candidate.decide",
     decision: {

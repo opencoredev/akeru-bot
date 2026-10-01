@@ -8,6 +8,7 @@ import { createReplyPlaybackSession, SPOKEN_CACHE_LIMIT } from "./session.ts";
 
 vi.mock("./messageAction.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./messageAction.ts")>();
+
   return { replyReadoutMessageAction: vi.fn(actual.replyReadoutMessageAction) };
 });
 
@@ -18,8 +19,11 @@ const message = {
   text: "**Stored** answer",
   updatedAt: "2026-09-08T00:00:00.000Z",
 };
+
 const later = { ...message, id: "reply-2", updatedAt: "2026-09-08T00:01:00.000Z" };
+
 const history = { ...message, id: "old", updatedAt: "2026-09-07T00:00:00.000Z" };
+
 const context = {
   environmentId: "environment",
   threadId: "thread",
@@ -35,6 +39,7 @@ function setup(available = false) {
     pause: vi.fn(),
     dispose: vi.fn(),
   }));
+
   const session = available
     ? createReplyPlaybackSession({
         storage: { getItem: async () => "true", setItem: async () => {} },
@@ -45,7 +50,9 @@ function setup(available = false) {
         storage: { getItem: async () => "true", setItem: async () => {} },
         prepare,
       });
+
   session.setContext(available ? { ...context, provider: "speech", voice: "voice" } : context);
+
   return { session, prepare };
 }
 
@@ -67,12 +74,15 @@ describe("reply playback session", () => {
   it("keeps a long chat cached across repeated passes", async () => {
     const { session } = setup(true);
     await session.preference.load();
+
     const replies = Array.from({ length: 501 }, (_, index) => ({
       ...message,
       id: `reply-${index}`,
     }));
+
     for (const reply of replies) session.actionFor(reply);
     vi.mocked(replyReadoutMessageAction).mockClear();
+
     for (const reply of replies) session.actionFor(reply);
     expect(replyReadoutMessageAction).not.toHaveBeenCalled();
   });
@@ -80,10 +90,12 @@ describe("reply playback session", () => {
   it("evicts only the oldest reply past the cache limit", async () => {
     const { session } = setup(true);
     await session.preference.load();
+
     const replies = Array.from({ length: SPOKEN_CACHE_LIMIT + 1 }, (_, index) => ({
       ...message,
       id: `reply-${index}`,
     }));
+
     for (const reply of replies) session.actionFor(reply);
     vi.mocked(replyReadoutMessageAction).mockClear();
     session.actionFor(replies[1]!);
@@ -144,6 +156,7 @@ describe("reply playback session", () => {
           ? { available: true, provider: "speech", voice: "voice" }
           : { available: false, provider: "unavailable", voice: "unavailable", reason: "no" },
     });
+
     expect(session.synthesisFor("environment")).toEqual({
       available: true,
       provider: "speech",
@@ -163,7 +176,9 @@ describe("reply playback session", () => {
         reason: "no",
       }),
     });
+
     session.setSynthesis({ available: true, provider: "speech", voice: "voice" }, "a");
+
     const context = {
       threadId: "thread",
       provider: "p",
@@ -171,6 +186,7 @@ describe("reply playback session", () => {
       connected: true,
       mediaBlocked: false,
     };
+
     session.setContext({ ...context, environmentId: "a" });
     expect(session.actionFor(message)?.unavailableReason).toBeUndefined();
     session.setContext({ ...context, environmentId: "b" });
@@ -187,6 +203,7 @@ describe("reply playback session", () => {
           ? { available: true, provider: "speech", voice: "voice" }
           : { available: false, provider: "unavailable", voice: "unavailable", reason: "no" },
     });
+
     const onSynthesisChanged = vi.fn();
     session.subscribeSynthesis(onSynthesisChanged);
     const empty = session.getSynthesisSnapshot();
@@ -213,11 +230,13 @@ describe("reply playback session", () => {
       provider: "speech",
       voice: "voice",
     }));
+
     const session = createReplyPlaybackSession({
       storage: { getItem: async () => "true", setItem: async () => {} },
       prepare: vi.fn(),
       synthesis: lookup,
     });
+
     expect(session.synthesisFor(null).available).toBe(false);
     expect(session.synthesisFor("").available).toBe(false);
     expect(lookup).not.toHaveBeenCalled();

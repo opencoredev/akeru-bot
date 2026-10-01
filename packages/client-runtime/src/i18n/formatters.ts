@@ -4,13 +4,17 @@ function cachedFormatter<Options extends object, Formatter>(
   create: (locale: string, options?: Options) => Formatter,
 ) {
   const cache = new Map<string, Formatter>();
+
   return (locale: string, options?: Options): Formatter => {
     const key = JSON.stringify([locale, options ?? {}]);
     const existing = cache.get(key);
+
     if (existing) return existing;
     const formatter = create(locale, options);
+
     if (cache.size >= 32) cache.delete(cache.keys().next().value ?? "");
     cache.set(key, formatter);
+
     return formatter;
   };
 }

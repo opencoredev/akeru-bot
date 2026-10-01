@@ -9,6 +9,7 @@ import {
 } from "./projectGrouping.ts";
 
 const environmentId = EnvironmentId.make("environment");
+
 const repositoryIdentity = {
   canonicalKey: "github.com/t3tools/t3code",
   locator: {
@@ -110,6 +111,7 @@ describe("buildProjectGroups", () => {
     const first = makeProject("t3code", "/work/t3code");
     const second = makeProject("t3code-2", "/work/t3code-2");
     const third = makeProject("t3code-3", "/work/t3code-3");
+
     const groups = buildProjectGroups({
       projects: [first, second, third],
       settings: settings("repository", {
@@ -130,6 +132,7 @@ describe("buildProjectGroups", () => {
       repositoryIdentity: null,
       updatedAt: "2026-07-01T00:00:00.000Z",
     });
+
     const fresh = makeProject("fresh", "/work/t3code/", {
       updatedAt: "2026-07-02T00:00:00.000Z",
     });
@@ -138,6 +141,7 @@ describe("buildProjectGroups", () => {
       projects: [stale, fresh],
       settings: settings("repository"),
     });
+
     expect(groups).toHaveLength(1);
     expect(groups[0]?.members).toHaveLength(1);
     expect(groups[0]?.representative.id).toBe("fresh");
@@ -148,16 +152,19 @@ describe("buildProjectGroups", () => {
     const identified = makeProject("identified", "/work/t3code", {
       updatedAt: "2026-07-01T00:00:00.000Z",
     });
+
     const freshUnidentified = makeProject("fresh", "/work/t3code/", {
       repositoryIdentity: null,
       updatedAt: "2026-07-02T00:00:00.000Z",
     });
+
     const sibling = makeProject("sibling", "/work/t3code-2");
 
     const groups = buildProjectGroups({
       projects: [identified, freshUnidentified, sibling],
       settings: settings("repository"),
     });
+
     expect(groups).toHaveLength(1);
     expect(groups[0]?.members.map((member) => member.project.id)).toEqual(["fresh", "sibling"]);
   });
@@ -169,19 +176,23 @@ describe("buildProjectGroups", () => {
       name: "old-repository",
       displayName: "Old Repository",
     };
+
     const stale = makeProject("stale", "/work/t3code", {
       repositoryIdentity: staleIdentity,
       updatedAt: "2026-07-01T00:00:00.000Z",
     });
+
     const fresh = makeProject("fresh", "/work/t3code/", {
       updatedAt: "2026-07-02T00:00:00.000Z",
     });
+
     const sibling = makeProject("sibling", "/work/t3code-2");
 
     const groups = buildProjectGroups({
       projects: [stale, fresh, sibling],
       settings: settings("repository"),
     });
+
     expect(groups).toHaveLength(1);
     expect(groups[0]?.members.map((member) => member.project.id)).toEqual(["fresh", "sibling"]);
   });
@@ -193,23 +204,28 @@ describe("buildProjectGroups", () => {
       name: "old-repository",
       displayName: "Old Repository",
     };
+
     const staleIdentified = makeProject("stale-identified", "/work/t3code", {
       repositoryIdentity: staleIdentity,
       updatedAt: "2026-07-01T00:00:00.000Z",
     });
+
     const freshIdentified = makeProject("fresh-identified", "/work/t3code/", {
       updatedAt: "2026-07-02T00:00:00.000Z",
     });
+
     const winner = makeProject("winner", "/work/t3code", {
       repositoryIdentity: null,
       updatedAt: "2026-07-03T00:00:00.000Z",
     });
+
     const sibling = makeProject("sibling", "/work/t3code-2");
 
     const groups = buildProjectGroups({
       projects: [staleIdentified, freshIdentified, winner, sibling],
       settings: settings("repository"),
     });
+
     expect(groups).toHaveLength(1);
     expect(groups[0]?.members.map((member) => member.project.id)).toEqual(["winner", "sibling"]);
   });

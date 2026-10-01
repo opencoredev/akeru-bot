@@ -9,6 +9,7 @@ export interface ParseCliArgsOptions {
 
 export function tokenizeCliArgs(args?: string): ReadonlyArray<string> {
   const input = args?.trim();
+
   if (!input) return [];
 
   const tokens: string[] = [];
@@ -18,6 +19,7 @@ export function tokenizeCliArgs(args?: string): ReadonlyArray<string> {
 
   for (let index = 0; index < input.length; index++) {
     const char = input[index];
+
     if (char === undefined) continue;
 
     if (quote) {
@@ -26,6 +28,7 @@ export function tokenizeCliArgs(args?: string): ReadonlyArray<string> {
         quoted = true;
       } else if (char === "\\" && quote === '"') {
         const next = input[index + 1];
+
         if (next !== undefined && ['"', "\\", "$", "`"].includes(next)) {
           current += next;
           index++;
@@ -35,6 +38,7 @@ export function tokenizeCliArgs(args?: string): ReadonlyArray<string> {
       } else {
         current += char;
       }
+
       continue;
     }
 
@@ -49,6 +53,7 @@ export function tokenizeCliArgs(args?: string): ReadonlyArray<string> {
       }
     } else if (char === "\\") {
       const next = input[index + 1];
+
       if (next !== undefined && /\s/.test(next)) {
         current += next;
         index++;
@@ -61,6 +66,7 @@ export function tokenizeCliArgs(args?: string): ReadonlyArray<string> {
   }
 
   if (current || quoted) tokens.push(current);
+
   return tokens;
 }
 
@@ -100,10 +106,12 @@ export function parseCliArgs(
 
     if (token.startsWith("--")) {
       const rest = token.slice(2);
+
       if (!rest) continue;
 
       // Handle --key=value syntax
       const eqIndex = rest.indexOf("=");
+
       if (eqIndex !== -1) {
         flags[rest.slice(0, eqIndex)] = rest.slice(eqIndex + 1);
         continue;
@@ -117,6 +125,7 @@ export function parseCliArgs(
 
       // Handle --key value or --flag (boolean)
       const next = tokens[i + 1];
+
       if (next !== undefined && !next.startsWith("--")) {
         flags[rest] = next;
         i++;

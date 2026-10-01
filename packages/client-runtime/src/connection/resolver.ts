@@ -36,7 +36,9 @@ export class ConnectionResolver extends Context.Service<
 >()("@akeru/client-runtime/connection/resolver/ConnectionResolver") {}
 
 const isBearerProfile = Schema.is(BearerConnectionProfile);
+
 const isSshProfile = Schema.is(SshConnectionProfile);
+
 const isBearerCredential = Schema.is(BearerConnectionCredential);
 
 function primarySocketUrl(
@@ -44,10 +46,13 @@ function primarySocketUrl(
   clientMetadata: AuthClientPresentationMetadata | undefined,
 ): string {
   const url = new URL(target.wsBaseUrl);
+
   if (url.pathname === "" || url.pathname === "/") {
     url.pathname = "/ws";
   }
+
   appendClientConnectionParams(url, clientMetadata);
+
   return url.toString();
 }
 
@@ -60,6 +65,7 @@ const makePrimaryBroker = Effect.fn("clientRuntime.connection.broker.makePrimary
     target: PrimaryConnectionTarget,
   ) {
     const bearerToken = yield* auth.bearerToken;
+
     if (Option.isNone(bearerToken)) {
       return {
         environmentId: target.environmentId,
@@ -77,6 +83,7 @@ const makePrimaryBroker = Effect.fn("clientRuntime.connection.broker.makePrimary
       wsBaseUrl: target.wsBaseUrl,
       bearerToken: bearerToken.value,
     });
+
     return {
       ...authorized,
       target,
@@ -92,22 +99,26 @@ const makeBearerBroker = Effect.fn("clientRuntime.connection.broker.makeBearer")
     entry: ConnectionCatalogEntry & { readonly target: BearerConnectionTarget },
   ) {
     const target = entry.target;
+
     const profile = yield* Option.match(entry.profile, {
       onNone: () => Effect.fail(profileMissingError(target.connectionId)),
       onSome: Effect.succeed,
     });
+
     if (!isBearerProfile(profile)) {
       return yield* new ConnectionBlockedError({
         reason: "configuration",
         detail: `Connection profile ${target.connectionId} is not a bearer connection.`,
       });
     }
+
     if (profile.environmentId !== target.environmentId) {
       return yield* environmentMismatchError({
         expected: target.environmentId,
         actual: profile.environmentId,
       });
     }
+
     const credential = yield* credentials.get(target.connectionId).pipe(
       Effect.flatMap(
         Option.match({
@@ -116,15 +127,18 @@ const makeBearerBroker = Effect.fn("clientRuntime.connection.broker.makeBearer")
         }),
       ),
     );
+
     if (!isBearerCredential(credential)) {
       return yield* credentialMissingError(target.connectionId);
     }
+
     const authorized = yield* remote.authorizeBearer({
       expectedEnvironmentId: target.environmentId,
       httpBaseUrl: profile.httpBaseUrl,
       wsBaseUrl: profile.wsBaseUrl,
       bearerToken: credential.token,
     });
+
     return {
       environmentId: authorized.environmentId,
       label: authorized.label,
@@ -145,27 +159,32 @@ const makeSshBroker = Effect.fn("clientRuntime.connection.broker.makeSsh")(funct
     entry: ConnectionCatalogEntry & { readonly target: SshConnectionTarget },
   ) {
     const target = entry.target;
+
     const profile = yield* Option.match(entry.profile, {
       onNone: () => Effect.fail(profileMissingError(target.connectionId)),
       onSome: Effect.succeed,
     });
+
     if (!isSshProfile(profile)) {
       return yield* new ConnectionBlockedError({
         reason: "configuration",
         detail: `Connection profile ${target.connectionId} is not an SSH connection.`,
       });
     }
+
     if (profile.environmentId !== target.environmentId) {
       return yield* environmentMismatchError({
         expected: target.environmentId,
         actual: profile.environmentId,
       });
     }
+
     const prepared = yield* ssh.prepare({
       connectionId: target.connectionId,
       expectedEnvironmentId: target.environmentId,
       target: profile.target,
     });
+
     yield* profiles.put(
       new SshConnectionProfile({
         connectionId: profile.connectionId,
@@ -174,12 +193,14 @@ const makeSshBroker = Effect.fn("clientRuntime.connection.broker.makeSsh")(funct
         target: prepared.bootstrap.target,
       }),
     );
+
     const authorized = yield* remote.authorizeBearer({
       expectedEnvironmentId: target.environmentId,
       httpBaseUrl: prepared.bootstrap.httpBaseUrl,
       wsBaseUrl: prepared.bootstrap.wsBaseUrl,
       bearerToken: prepared.bearerToken,
     });
+
     return {
       environmentId: authorized.environmentId,
       label: authorized.label,
@@ -204,6 +225,7 @@ export const make = Effect.gen(function* () {
       "connection.environment.id": target.environmentId,
       "connection.target.kind": target._tag,
     });
+
     switch (target._tag) {
       case "PrimaryConnectionTarget":
         return yield* primary(target);

@@ -44,6 +44,7 @@ export const fetchEnvironmentSessionState = Effect.fn(
   const requestUrl = environmentEndpointUrl(input.prepared.httpBaseUrl, "/api/auth/session");
   const client = yield* makeEnvironmentHttpApiClient(input.prepared.httpBaseUrl);
   const headers = yield* buildEnvironmentAuthHeaders(input.prepared.httpAuthorization);
+
   return yield* executeEnvironmentHttpRequest(
     requestUrl,
     input.timeoutMs ?? DEFAULT_SESSION_STATE_TIMEOUT_MS,
@@ -119,9 +120,11 @@ export function createEnvironmentSessionAtoms<R, E>(
     runtime
       .atom((get) => {
         const prepared = Option.getOrNull(get(preparedConnectionValueAtom(environmentId)));
+
         if (prepared === null) {
           return Effect.never;
         }
+
         return Effect.gen(function* () {
           return yield* fetchEnvironmentSessionState({ prepared });
         });

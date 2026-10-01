@@ -156,8 +156,10 @@ export function applyCodex0151DefinitionCompatibility(
   const schema = definitionSchema as {
     readonly oneOf?: ReadonlyArray<{ readonly enum?: ReadonlyArray<string> }>;
   };
+
   const [firstVariant, ...remainingVariants] = schema.oneOf ?? [];
   const currentEnum = firstVariant?.enum;
+
   if (!currentEnum) {
     return definitionSchema;
   }
@@ -165,12 +167,14 @@ export function applyCodex0151DefinitionCompatibility(
   const missingValues = CodexErrorInfoCompatibilityValues.filter(
     (value) => !currentEnum.includes(value),
   );
+
   if (missingValues.length === 0) {
     return definitionSchema;
   }
 
   const enumValues = [...currentEnum];
   const otherIndex = enumValues.indexOf("other");
+
   const nextEnum =
     otherIndex === -1
       ? [...enumValues, ...missingValues]

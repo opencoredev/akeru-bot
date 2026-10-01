@@ -1,6 +1,8 @@
 const SAFE_ERROR_LABEL =
   /^(?:Error|EvalError|RangeError|ReferenceError|SyntaxError|TypeError|URIError|AggregateError|DOMException|[A-Za-z][A-Za-z0-9]*(?:Error|Failure))$/;
+
 const SAFE_TRACE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+
 const STACK_FRAME_LIMIT = 32;
 
 export interface SafeErrorLogAttributes {
@@ -22,6 +24,7 @@ function sanitizeStackUrl(value: string): string {
     url.password = "";
     url.search = "";
     url.hash = "";
+
     return url.toString();
   } catch {
     return value;
@@ -39,6 +42,7 @@ function readSafeStack(error: Error): string | undefined {
       .filter((line) => /^\s*at\s+/.test(line) || /^[^@\s]+@(?:https?|file):\/\//.test(line))
       .slice(0, STACK_FRAME_LIMIT)
       .map(sanitizeStackFrame);
+
     return frames && frames.length > 0 ? frames.join("\n") : undefined;
   } catch {
     return undefined;
@@ -50,6 +54,7 @@ function readErrorTag(error: unknown): string | undefined {
     if (typeof error !== "object" || error === null) {
       return undefined;
     }
+
     return readSafeLabel((error as { readonly _tag?: unknown })._tag);
   } catch {
     return undefined;
@@ -64,9 +69,11 @@ function readTraceId(error: unknown): string | undefined {
     while (typeof current === "object" && current !== null && !seen.has(current)) {
       seen.add(current);
       const record = current as { readonly cause?: unknown; readonly traceId?: unknown };
+
       if (typeof record.traceId === "string" && SAFE_TRACE_ID.test(record.traceId)) {
         return record.traceId;
       }
+
       current = record.cause;
     }
 
@@ -83,6 +90,7 @@ export function safeErrorLogAttributes(error: unknown): SafeErrorLogAttributes {
   if (error instanceof Error) {
     const errorName = readSafeLabel(error.name);
     const stack = readSafeStack(error);
+
     return {
       errorType: "error",
       ...(errorName !== undefined ? { errorName } : {}),

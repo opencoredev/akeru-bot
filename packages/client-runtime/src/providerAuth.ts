@@ -31,9 +31,11 @@ const isSubscriptionBaseUrl = Schema.is(SubscriptionBaseUrl);
 
 export function apiKeyValidationError(key: string, baseUrl: string): string | null {
   if (!key.trim()) return "Enter an API key.";
+
   if (baseUrl.trim() && !isSubscriptionBaseUrl(baseUrl.trim())) {
     return "Use an HTTP or HTTPS base URL without credentials, a query, or a fragment.";
   }
+
   return null;
 }
 
@@ -61,7 +63,9 @@ export function anyProviderHealthChecking(
 /** Catalog copy: render through `t`. */
 export function providerConnectionLabel(status: SubscriptionProviderStatus): MessageKey {
   if (!status.connected) return "Not connected";
+
   if (status.healthChecking === true) return "Checking health…";
+
   return providerUsesApiKey(status) ? "API key saved" : "OAuth connected";
 }
 
@@ -85,13 +89,18 @@ export function filterProvidersBySubscriptionConnection(
   statuses: ReadonlyArray<SubscriptionProviderStatus> | undefined,
 ): ReadonlyArray<ServerProvider> {
   if (!statuses) return providers;
+
   const connected = new Set(
     statuses.filter((status) => status.connected).map((status) => status.provider),
   );
+
   return providers.filter((provider) => {
     const subscriptionProvider = SUBSCRIPTION_PROVIDER_BY_DRIVER[String(provider.driver)];
+
     if (!subscriptionProvider) return true;
+
     if (provider.instanceId !== defaultInstanceIdForDriver(provider.driver)) return true;
+
     return connected.has(subscriptionProvider);
   });
 }
@@ -108,23 +117,31 @@ export function withRefreshableSubscriptionLogin(
   providerInstances?: Readonly<Record<string, ProviderInstanceConfig>>,
 ): ServerProvider {
   const subscriptionProvider = SUBSCRIPTION_PROVIDER_BY_DRIVER[String(provider.driver)];
+
   if (!subscriptionProvider) return provider;
+
   if (provider.instanceId !== defaultInstanceIdForDriver(provider.driver)) return provider;
+
   if (
     !instanceUsesSavedCredential(subscriptionProvider, providerInstances?.[provider.instanceId])
   ) {
     return provider;
   }
+
   const status = statuses?.find((candidate) => candidate.provider === subscriptionProvider);
+
   if (status?.health !== "expired" || status.authMode !== "oauth") return provider;
   const expired = provider.unavailability === "expired-login";
+
   if (!expired && provider.auth.status !== "unauthenticated") return provider;
+
   const {
     unavailability: _unavailability,
     unavailabilityDetail: _unavailabilityDetail,
     repairAction: _repairAction,
     ...rest
   } = provider;
+
   return {
     ...(expired ? rest : provider),
     auth:

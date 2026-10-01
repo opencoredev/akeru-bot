@@ -10,6 +10,7 @@ describe("Atom.fn mutation semantics", () => {
       const firstLatch = Latch.makeUnsafe();
       const secondLatch = Latch.makeUnsafe();
       const interrupted: string[] = [];
+
       const mutation = Atom.fn((id: "first" | "second") =>
         (id === "first" ? firstLatch : secondLatch).await.pipe(
           Effect.as(id),
@@ -20,6 +21,7 @@ describe("Atom.fn mutation semantics", () => {
           ),
         ),
       );
+
       const registry = AtomRegistry.make();
       const unmount = registry.mount(mutation);
 
@@ -44,11 +46,13 @@ describe("Atom.fn mutation semantics", () => {
   it.effect("keeps stream mutations waiting until the final emitted value", () =>
     Effect.gen(function* () {
       const completionLatch = Latch.makeUnsafe();
+
       const mutation = Atom.fn(() =>
         Stream.make("progress").pipe(
           Stream.concat(Stream.fromEffect(completionLatch.await.pipe(Effect.as("done")))),
         ),
       );
+
       const registry = AtomRegistry.make();
       const unmount = registry.mount(mutation);
 
@@ -56,6 +60,7 @@ describe("Atom.fn mutation semantics", () => {
 
       const progress = registry.get(mutation);
       expect(AsyncResult.isSuccess(progress)).toBe(true);
+
       if (AsyncResult.isSuccess(progress)) {
         expect(progress.value).toBe("progress");
         expect(progress.waiting).toBe(true);

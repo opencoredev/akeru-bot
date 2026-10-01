@@ -54,7 +54,9 @@ describe("readPathFromLoginShell", () => {
     const firstCall = execFile.mock.calls[0] as
       | [string, ReadonlyArray<string>, { encoding: "utf8"; timeout: number }]
       | undefined;
+
     expect(firstCall).toBeDefined();
+
     if (!firstCall) {
       throw new Error("Expected execFile to be called");
     }
@@ -224,6 +226,7 @@ effectIt.layer(NodeServices.layer)("resolveSpawnCommand", (it) => {
         }),
         Effect.provideService(SpawnExecutableResolution, (_command, _platform, env) => {
           resolvedEnvironment = env;
+
           return "C:\\Users\\tester\\AppData\\Roaming\\npm\\codex.cmd";
         }),
       );

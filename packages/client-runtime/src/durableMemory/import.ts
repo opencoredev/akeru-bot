@@ -45,7 +45,9 @@ export function groupImportPreview(input: {
   const archiveFacts = new Map(
     durableFactsFromArchive(input.archive).map((fact) => [fact.rootId, fact.fact]),
   );
+
   const localFacts = new Map((input.localFacts ?? []).map((fact) => [fact.rootId, fact.fact]));
+
   return IMPORT_CLASSIFICATION_ORDER.flatMap((classification) => {
     const items = input.preview.items.flatMap((item) =>
       item.classification === classification
@@ -58,6 +60,7 @@ export function groupImportPreview(input: {
           ]
         : [],
     );
+
     return items.length > 0 ? [{ classification, items }] : [];
   });
 }
@@ -80,9 +83,11 @@ export function resolveImportConflicts(
   | { readonly ready: false; readonly unresolved: ReadonlyArray<AkeruMemoryRootId> } {
   const conflicts = preview.items.filter((item) => item.classification === "conflicting");
   const unresolved = conflicts.filter((item) => choices[item.rootId] === undefined);
+
   if (unresolved.length > 0) {
     return { ready: false, unresolved: unresolved.map((item) => item.rootId) };
   }
+
   return {
     ready: true,
     resolutions: conflicts.map((item) => ({
@@ -95,6 +100,7 @@ export function resolveImportConflicts(
 /** Durable archives are schema version 2; bot-note archives are version 3. */
 export function memoryArchiveSchemaVersion(value: unknown): number | null {
   if (typeof value !== "object" || value === null || !("schemaVersion" in value)) return null;
+
   return typeof value.schemaVersion === "number" ? value.schemaVersion : null;
 }
 

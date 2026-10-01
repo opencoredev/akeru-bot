@@ -24,6 +24,7 @@ export const startThreadTurn: (input: StartThreadTurnInput) => CommandEffect = E
   "EnvironmentCommands.startThreadTurn",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     timezone: input.timezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"),
@@ -37,6 +38,7 @@ export const resumeThreadTurn: (input: ResumeThreadTurnInput) => CommandEffect =
   "EnvironmentCommands.resumeThreadTurn",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "thread.turn.resume",
@@ -48,6 +50,7 @@ export const resumeThreadTurn: (input: ResumeThreadTurnInput) => CommandEffect =
 export const appendVoiceTranscript: (input: AppendVoiceTranscriptInput) => CommandEffect =
   Effect.fn("EnvironmentCommands.appendVoiceTranscript")(function* (input) {
     const metadata = yield* timestampedCommandMetadata(input);
+
     return yield* dispatch({
       ...input,
       type: "thread.voice-transcript.append",
@@ -60,6 +63,7 @@ export const interruptThreadTurn: (input: InterruptThreadTurnInput) => CommandEf
   "EnvironmentCommands.interruptThreadTurn",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "thread.turn.interrupt",
@@ -71,6 +75,7 @@ export const interruptThreadTurn: (input: InterruptThreadTurnInput) => CommandEf
 export const respondToThreadApproval: (input: RespondToThreadApprovalInput) => CommandEffect =
   Effect.fn("EnvironmentCommands.respondToThreadApproval")(function* (input) {
     const metadata = yield* timestampedCommandMetadata(input);
+
     return yield* dispatch({
       ...input,
       type: "thread.approval.respond",
@@ -82,6 +87,7 @@ export const respondToThreadApproval: (input: RespondToThreadApprovalInput) => C
 export const respondToThreadUserInput: (input: RespondToThreadUserInputInput) => CommandEffect =
   Effect.fn("EnvironmentCommands.respondToThreadUserInput")(function* (input) {
     const metadata = yield* timestampedCommandMetadata(input);
+
     return yield* dispatch({
       ...input,
       type: "thread.user-input.respond",
@@ -94,6 +100,7 @@ export const stopThreadSession: (input: StopThreadSessionInput) => CommandEffect
   "EnvironmentCommands.stopThreadSession",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "thread.session.stop",

@@ -12,6 +12,7 @@ describe("voice call contracts", () => {
       botId: BotId.make("bot-voice"),
       sdp,
     });
+
     expect(input.sdp).toBe(sdp);
 
     const result = Schema.decodeUnknownSync(VoiceCallStartResult)({
@@ -24,6 +25,7 @@ describe("voice call contracts", () => {
       },
       answerSdp: sdp,
     });
+
     expect(result.answerSdp).toBe(sdp);
   });
 });

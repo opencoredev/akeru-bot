@@ -14,6 +14,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
     Effect.gen(function* () {
       const { stdio, input, output } = yield* makeInMemoryStdio();
       const notifications: Array<CodexProtocol.CodexAppServerIncomingNotification> = [];
+
       const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
         stdio,
         onNotification: (notification) =>
@@ -21,6 +22,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
             notifications.push(notification);
           }),
       });
+
       const response = yield* transport.request("thread/read", {}).pipe(Effect.forkScoped);
       yield* Queue.take(output);
 
@@ -32,9 +34,11 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
           diff: "x".repeat(4 * 1024 * 1024),
         },
       };
+
       const bytes = encoder.encode(
         `${encodeUnknownJsonString(notification)}\n${encodeUnknownJsonString({ id: 1, result: { ok: true } })}\n`,
       );
+
       for (let offset = 0; offset < bytes.length; offset += 1024) {
         yield* Queue.offer(input, bytes.subarray(offset, offset + 1024));
       }
@@ -72,9 +76,11 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
         const secondLine = '{"method":"x/second","params":{"value":2}}';
         const finalLine = '{"method":"x/final","params":{"text":"最後"}}\r';
         const bytes = encoder.encode(`\n \t\r\n${firstLine}\r\n\n${secondLine}\n${finalLine}`);
+
         for (let offset = 0; offset < bytes.length; offset += chunkSize) {
           yield* Queue.offer(input, bytes.subarray(offset, offset + chunkSize));
         }
+
         yield* Queue.end(input);
 
         assert.instanceOf(
@@ -94,10 +100,12 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
     Effect.gen(function* () {
       const { stdio, input, output } = yield* makeInMemoryStdio();
       const termination = yield* Deferred.make<CodexError.CodexAppServerError>();
+
       const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
         stdio,
         onTermination: (error) => Deferred.succeed(termination, error).pipe(Effect.asVoid),
       });
+
       const response = yield* transport.request("thread/read", {}).pipe(Effect.forkScoped);
       yield* Queue.take(output);
 
@@ -108,12 +116,14 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
       const error = yield* Deferred.await(termination);
       assert.instanceOf(error, CodexError.CodexAppServerProtocolParseError);
       assert.equal(error.operation, "decode-wire-message");
+
       const responseError = yield* Fiber.join(response).pipe(
         Effect.match({
           onFailure: (failure) => failure,
           onSuccess: () => assert.fail("Expected the malformed response to fail the request"),
         }),
       );
+
       assert.strictEqual(responseError, error);
     }),
   );

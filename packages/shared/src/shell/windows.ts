@@ -15,6 +15,7 @@ export function escapeWindowsShellArg(arg: string): string {
   escaped = escaped.replace(/(\\*)$/, "$1$1");
   // Quote the whole argument so embedded whitespace is preserved.
   escaped = `"${escaped}"`;
+
   // Escape cmd.exe metacharacters so cmd passes them through verbatim.
   return escaped.replace(WINDOWS_SHELL_META_CHARS, "^$1");
 }

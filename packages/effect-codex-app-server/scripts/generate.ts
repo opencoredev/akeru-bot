@@ -45,6 +45,7 @@ import {
 const getGeneratedPaths = Effect.fn("getGeneratedPaths")(function* () {
   const path = yield* Path.Path;
   const generatedDir = path.join(import.meta.dirname, "..", "src", "_generated");
+
   return {
     generatedDir,
     schemaOutputPath: path.join(generatedDir, "schema.gen.ts"),
@@ -77,11 +78,13 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
   const exportNameByQualifiedName = new Map(
     jsonSchemaFiles.map((file) => [file.qualifiedName, file.exportName]),
   );
+
   const aggregateSchemas: Record<string, Schema.Json> = {};
 
   for (const file of jsonSchemaFiles) {
     const raw = yield* fetchText(file.downloadUrl);
     const parsed = yield* decodeJsonSchemaDocument(raw);
+
     const localDefinitionNames = new Map(
       Object.keys(parsed.definitions ?? {}).map((definitionName) => [
         definitionName,
@@ -93,6 +96,7 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
       const compatibleDefinitionSchema =
         Codex0150DefinitionSchemas[definitionName] ??
         applyCodex0151DefinitionCompatibility(file.exportName, definitionName, definitionSchema);
+
       aggregateSchemas[localDefinitionNames.get(definitionName)!] = stripNullDefaults(
         normalizeNullableTypes(
           rewriteExternalRefs(
@@ -106,6 +110,7 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
     }
 
     const topLevelSchema: Record<string, Schema.Json> = {};
+
     for (const [key, value] of Object.entries(parsed)) {
       if (key !== "definitions") {
         topLevelSchema[key] = value;
@@ -131,6 +136,7 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
   }
 
   const generator = makeJsonSchemaGenerator();
+
   for (const [name, schema] of Object.entries(aggregateSchemas).toSorted(([left], [right]) =>
     left.localeCompare(right),
   )) {
@@ -139,6 +145,7 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
 
   const generatedEntries = new Map<string, string>();
   const output = generator.generate("openapi-3.1", aggregateSchemas as never, false).trim();
+
   if (output.length > 0) {
     for (const entry of collectSchemaEntries(output)) {
       if (!generatedEntries.has(entry.name)) {
@@ -148,15 +155,19 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
   }
 
   const generatedSchemaNames = new Set(generatedEntries.keys());
+
   const clientRequestRaw = yield* fetchText(
     `https://raw.githubusercontent.com/openai/codex/${UPSTREAM_REF}/codex-rs/app-server-protocol/schema/typescript/ClientRequest.ts`,
   );
+
   const clientNotificationRaw = yield* fetchText(
     `https://raw.githubusercontent.com/openai/codex/${UPSTREAM_REF}/codex-rs/app-server-protocol/schema/typescript/ClientNotification.ts`,
   );
+
   const serverRequestRaw = yield* fetchText(
     `https://raw.githubusercontent.com/openai/codex/${UPSTREAM_REF}/codex-rs/app-server-protocol/schema/typescript/ServerRequest.ts`,
   );
+
   const serverNotificationRaw = yield* fetchText(
     `https://raw.githubusercontent.com/openai/codex/${UPSTREAM_REF}/codex-rs/app-server-protocol/schema/typescript/ServerNotification.ts`,
   );
@@ -244,10 +255,12 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
   ].join("\n");
 
   const namespaceGroups = new Map<string, Array<JsonSchemaFile>>();
+
   for (const file of jsonSchemaFiles) {
     if (!file.namespace) {
       continue;
     }
+
     const current = namespaceGroups.get(file.namespace) ?? [];
     current.push(file);
     namespaceGroups.set(file.namespace, current);
@@ -261,6 +274,7 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
       .toSorted(([left], [right]) => left.localeCompare(right))
       .map(([namespace, files]) => {
         const constantName = namespace.replace(/[^A-Za-z0-9]/g, "");
+
         return [
           `export const ${constantName} = {`,
           ...files
@@ -276,8 +290,10 @@ const generateFiles = Effect.fn("generateFiles")(function* () {
   ].join("\n");
 
   const fs = yield* FileSystem.FileSystem;
+
   const { generatedDir, metaOutputPath, namespacesOutputPath, schemaOutputPath } =
     yield* getGeneratedPaths();
+
   yield* fs.writeFileString(schemaOutputPath, schemaOutput);
   yield* fs.writeFileString(metaOutputPath, metaOutput);
   yield* fs.writeFileString(namespacesOutputPath, namespacesOutput);

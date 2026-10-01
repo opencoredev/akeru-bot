@@ -40,6 +40,7 @@ it.effect("decodes WhatsApp message origins", () =>
     });
 
     assert.equal(command.type, "thread.turn.start");
+
     if (command.type !== "thread.turn.start") return;
     assert.deepEqual(command.message.channelOrigin, {
       provider: "whatsapp",
@@ -62,6 +63,7 @@ it.effect("requires credentials for the selected iMessage mode", () =>
         mode: "hosted",
       }),
     );
+
     const missingSelfHosted = yield* Effect.exit(
       decodeClientOrchestrationCommand({
         type: "channel.connect",
@@ -92,6 +94,7 @@ it.effect("trims branded ids and command string fields at decode boundaries", ()
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.commandId, "cmd-1");
     assert.strictEqual(parsed.projectId, "project-1");
     assert.strictEqual(parsed.title, "Project Title");
@@ -130,6 +133,7 @@ it.effect("decodes project.meta-updated payloads with explicit default provider"
       },
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.defaultModelSelection?.instanceId, "claudeAgent");
   }),
 );
@@ -146,6 +150,7 @@ it.effect("rejects command fields that become empty after trim", () =>
         createdAt: "2026-01-01T00:00:00.000Z",
       }),
     );
+
     assert.strictEqual(result._tag, "Failure");
   }),
 );
@@ -169,6 +174,7 @@ it.effect("preserves explicit provider and runtime mode in thread.turn.start", (
       runtimeMode: "full-access",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.modelSelection?.instanceId, "codex");
     assert.strictEqual(parsed.runtimeMode, "full-access");
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
@@ -191,6 +197,7 @@ it.effect("decodes thread.meta-updated payloads with explicit provider", () =>
       },
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.previousTitle, "Previous title");
     assert.strictEqual(parsed.titleRegeneration?.requestId, "cmd-title-regenerate");
     assert.strictEqual(parsed.modelSelection?.instanceId, "claudeAgent");
@@ -233,6 +240,7 @@ it.effect("decodes orchestration session runtime mode defaults", () =>
       lastError: null,
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
   }),
 );
@@ -243,6 +251,7 @@ it.effect("ModelSelection accepts an explicit instanceId routing key", () =>
       instanceId: "codex_personal",
       model: "gpt-5-codex",
     });
+
     assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("codex_personal"));
   }),
 );
@@ -254,6 +263,7 @@ it.effect("ModelSelection prefers explicit instanceId over legacy provider", () 
       instanceId: "codex_personal",
       model: "gpt-5-codex",
     });
+
     assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("codex_personal"));
   }),
 );
@@ -267,6 +277,7 @@ it.effect(
         model: "llama3:70b",
         options: [{ id: "temperature", value: "0.4" }],
       });
+
       assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("ollama"));
       assert.strictEqual(parsed.model, "llama3:70b");
     }),
@@ -279,6 +290,7 @@ it.effect("ModelSelection encodes to the canonical instanceId wire form", () =>
       model: "llama3:70b",
       options: [{ id: "temperature", value: "0.4" }],
     });
+
     const encoded = yield* encodeModelSelection(decoded);
     assert.deepStrictEqual(encoded, {
       instanceId: "ollama",
@@ -296,6 +308,7 @@ it.effect("ModelSelection rejects malformed instance ids", () =>
         model: "x",
       }),
     );
+
     assert.strictEqual(result._tag, "Failure");
   }),
 );

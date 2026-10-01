@@ -22,6 +22,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
   it.effect("supports generic extension requests over the patched transport", () =>
     Effect.gen(function* () {
       const { stdio, input, output } = yield* makeInMemoryStdio();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         serverRequestMethods: new Set(),
@@ -30,6 +31,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
       const response = yield* transport
         .request("x/test", { hello: "world" })
         .pipe(Effect.forkScoped);
+
       const outbound = yield* Queue.take(output);
       assert.deepEqual(yield* decodeExtRequest(outbound), {
         jsonrpc: "2.0",
@@ -93,10 +95,12 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
   it.effect("preserves zero-valued ids for inbound core client requests", () =>
     Effect.gen(function* () {
       const { stdio, input, output } = yield* makeInMemoryStdio();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         serverRequestMethods: new Set(["session/request_permission"]),
       });
+
       const inboundRequest = yield* Deferred.make<unknown>();
 
       yield* transport.serverProtocol
@@ -168,10 +172,12 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
   it.effect("cleans up interrupted extension requests before a late response arrives", () =>
     Effect.gen(function* () {
       const { stdio, input, output } = yield* makeInMemoryStdio();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         serverRequestMethods: new Set(),
       });
+
       const lateResponse = yield* Deferred.make<unknown>();
 
       yield* transport.clientProtocol
@@ -181,6 +187,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
       const response = yield* transport
         .request("x/test", { hello: "world" })
         .pipe(Effect.forkScoped);
+
       const outbound = yield* Queue.take(output);
       assert.deepEqual(yield* decodeExtRequest(outbound), {
         jsonrpc: "2.0",
@@ -223,6 +230,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
       const handle = yield* makeHandle({ ACP_MOCK_EXIT_IMMEDIATELY_CODE: "7" });
       const firstMessage = yield* Deferred.make<unknown>();
       const termination = yield* Deferred.make<AcpError.AcpError>();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio: makeChildStdio(handle),
         terminationError: makeTerminationError(handle),
@@ -239,11 +247,13 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
       assert.instanceOf(exitError, AcpError.AcpProcessExitedError);
       assert.equal((exitError as AcpError.AcpProcessExitedError).code, 7);
       assert.equal((message as { readonly _tag?: string })._tag, "ClientProtocolError");
+
       const defect = (message as { readonly error: { readonly reason: unknown } }).error.reason as {
         readonly _tag: string;
         readonly message: string;
         readonly cause: unknown;
       };
+
       assert.equal(defect._tag, "RpcClientDefect");
       assert.equal(defect.message, "ACP protocol terminated.");
       assert.instanceOf(defect.cause, AcpError.AcpProcessExitedError);
@@ -273,6 +283,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
   it.effect("keeps client send failure messages independent from the cause", () =>
     Effect.gen(function* () {
       const { stdio } = yield* makeInMemoryStdio();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         serverRequestMethods: new Set(),
@@ -287,6 +298,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
           headers: [],
         })
         .pipe(Effect.flip);
+
       const defect = failure.reason as {
         readonly _tag: string;
         readonly message: string;
@@ -302,6 +314,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
   it.effect("fails pending extension requests with the propagated exit code", () =>
     Effect.gen(function* () {
       const { stdio, input, output } = yield* makeInMemoryStdio();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         terminationError: Effect.succeed(new AcpError.AcpProcessExitedError({ code: 0 })),
@@ -311,6 +324,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
       const response = yield* transport
         .request("x/test", { hello: "world" })
         .pipe(Effect.forkScoped);
+
       yield* Queue.take(output);
       yield* Queue.end(input);
 
@@ -320,6 +334,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
           onSuccess: () => assert.fail("Expected request to fail after process exit"),
         }),
       );
+
       assert.instanceOf(error, AcpError.AcpProcessExitedError);
       assert.equal(error.code, 0);
     }),

@@ -76,13 +76,17 @@ export const eventuallyState = Effect.fn("TestConnectionHarness.eventuallyState"
   predicate: (value: SupervisorConnectionState) => boolean,
 ) {
   let lastState = yield* SubscriptionRef.get(state);
+
   for (let iteration = 0; iteration < 100; iteration += 1) {
     lastState = yield* SubscriptionRef.get(state);
+
     if (predicate(lastState)) {
       return lastState;
     }
+
     yield* Effect.yieldNow;
   }
+
   return yield* Effect.die(
     new Error(
       `Expected supervisor state was not observed. Last state: phase=${lastState.phase}, stage=${lastState.stage ?? "none"}, attempt=${lastState.attempt}, generation=${lastState.generation}`,
@@ -102,9 +106,11 @@ export const makeHarness = Effect.fn("TestConnectionHarness.make")(function* (op
   const networkStatus = yield* SubscriptionRef.make<NetworkStatus>(
     options?.networkStatus ?? "online",
   );
+
   const prepareCount = yield* Ref.make(0);
   const sessionCount = yield* Ref.make(0);
   const releaseCount = yield* Ref.make(0);
+
   const wakeups = yield* SubscriptionRef.make<{
     readonly sequence: number;
     readonly reason: ConnectionWakeups.ConnectionWakeup;
@@ -112,6 +118,7 @@ export const makeHarness = Effect.fn("TestConnectionHarness.make")(function* (op
     sequence: 0,
     reason: "application-active",
   });
+
   const closedSessions = yield* Ref.make<
     ReadonlyArray<Deferred.Deferred<never, ConnectionTransientError>>
   >([]);
@@ -123,9 +130,11 @@ export const makeHarness = Effect.fn("TestConnectionHarness.make")(function* (op
 
   const prepare = Effect.fn("TestConnectionDriver.prepare")(function* (target: ConnectionTarget) {
     const attempt = yield* Ref.updateAndGet(prepareCount, (count) => count + 1);
+
     if (options?.prepare) {
       return yield* options.prepare(attempt, target);
     }
+
     return PREPARED_CONNECTION;
   });
 
@@ -155,6 +164,7 @@ export const makeHarness = Effect.fn("TestConnectionHarness.make")(function* (op
 
     yield* reportProgress({ stage: "synchronizing", prepared });
     yield* session.ready;
+
     return { prepared, session } satisfies ConnectionDriver.EnvironmentConnectionLease;
   });
 
@@ -191,6 +201,7 @@ export const makeHarness = Effect.fn("TestConnectionHarness.make")(function* (op
     ) {
       const sessions = yield* Ref.get(closedSessions);
       const latest = sessions.at(-1);
+
       if (latest) {
         yield* Deferred.fail(latest, error);
       }

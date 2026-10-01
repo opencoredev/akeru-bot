@@ -81,12 +81,15 @@ function dropLease(
   notice: ComputerViewerNotice | null,
 ): ComputerViewerState {
   if (state.lease === null && state.pending !== "acquire") return state;
+
   return { ...state, lease: null, pending: null, notice: notice ?? state.notice };
 }
 
 function lossNotice(status: ComputerState["status"]): ComputerViewerNotice {
   if (status === "stopped") return "stopped";
+
   if (status === "unavailable") return "ended";
+
   return "revoked";
 }
 
@@ -113,13 +116,18 @@ function applyServerState(state: ComputerViewerState, server: ComputerState): Co
     // A stopped or unavailable computer has no current picture.
     frame: server.status === "ready" || server.status === "human" ? state.frame : null,
   };
+
   const lease = next.lease;
+
   if (lease === null) return next;
+
   if (server.status === "human") {
     return lease.confirmed ? next : { ...next, lease: { ...lease, confirmed: true } };
   }
+
   // A `ready` report that predates the acquire is not proof the lease is gone.
   if (server.status === "ready" && !lease.confirmed) return next;
+
   return dropLease(next, lossNotice(server.status));
 }
 
@@ -130,17 +138,22 @@ export function reduceComputerViewer(
   switch (event.type) {
     case "visibility": {
       if (event.visible === state.visible) return state;
+
       if (event.visible) return { ...state, visible: true };
+
       // Hidden viewers drop their stream and any held control. The caller
       // returns control to the bot; the frame is not kept for a later show.
       return { ...initialComputerViewerState, connected: state.connected };
     }
+
     case "connection": {
       if (event.connected === state.connected) return state;
+
       if (event.connected) return { ...state, connected: true };
       // The server stops the computer when an owner disconnects, so a lease
       // never survives a reconnect. Server state is unknown until resubscribed.
       const hadLease = state.lease !== null || state.pending === "acquire";
+
       return {
         ...state,
         connected: false,
@@ -151,10 +164,12 @@ export function reduceComputerViewer(
         notice: hadLease ? "disconnected" : state.notice,
       };
     }
+
     case "server-state":
       return applyServerState(state, event.state);
     case "frame":
       if (state.server?.status !== "ready" && state.server?.status !== "human") return state;
+
       return { ...state, frame: event.frame };
     case "pending":
       return { ...state, pending: event.pending, notice: null };
@@ -181,19 +196,24 @@ export function reduceComputerViewer(
       return applyServerState({ ...state, pending: null, lease: null }, event.state);
     case "input-sent":
       if (state.lease === null) return state;
+
       return { ...state, lease: { ...state.lease, sequence: state.lease.sequence + 1 } };
     case "failed": {
       const notice = failureNotice(event.code);
+
       // Uncertain input is never replayed: any failure while holding control
       // gives the lease up rather than guessing the next sequence.
       if (state.lease !== null || state.pending === "acquire") return dropLease(state, notice);
+
       return { ...state, pending: null, notice };
     }
+
     case "tick": {
       if (state.lease === null || event.now < state.lease.expiresAt) return state;
       // The server stops the whole computer when a lease runs out, so the
       // last reported "human" status must not read as someone else's control.
       const expired = dropLease(state, "expired");
+
       return expired.server === null
         ? expired
         : { ...expired, server: { ...expired.server, status: "stopped" }, frame: null };
@@ -226,6 +246,7 @@ export interface ComputerViewerView {
 export function deriveComputerViewer(state: ComputerViewerState): ComputerViewerView {
   const server = state.server;
   const idle = state.pending === null;
+
   const base = {
     canTakeControl: false,
     canReturnControl: false,
@@ -234,17 +255,24 @@ export function deriveComputerViewer(state: ComputerViewerState): ComputerViewer
     canSendInput: false,
     controlUnavailableReason: null,
   };
+
   if (!state.visible) return { ...base, phase: "hidden", owner: "nobody" };
+
   if (!state.connected) return { ...base, phase: "reconnecting", owner: "nobody" };
+
   if (server === null) return { ...base, phase: "connecting", owner: "nobody" };
+
   if (server.status === "unavailable" || server.capability === "none") {
     return { ...base, phase: "unsupported", owner: "nobody" };
   }
+
   if (server.status === "stopped" || server.status === "closed") {
     return { ...base, phase: "stopped", owner: "nobody", canResume: idle };
   }
+
   const owner: ComputerViewerOwner =
     state.lease !== null ? "you" : server.status === "human" ? "someone-else" : "bot";
+
   return {
     ...base,
     phase: "live",
@@ -296,11 +324,15 @@ export function explainComputerCapability(input: {
 }): ComputerCapabilityExplanation {
   if (input.state !== null && input.state.capability !== "none") return "available";
   const sandbox = input.sandbox ?? "local";
+
   if (sandbox === "local") return "local";
+
   if (!COMPUTER_SANDBOX_CAPABILITY[sandbox].graphical) return "sandbox";
+
   if (input.provider === null || !COMPUTER_CONTROL_PROVIDERS.has(input.provider)) {
     return "provider";
   }
+
   return "not-running";
 }
 
@@ -317,10 +349,13 @@ export function computerFramePoint(input: {
   readonly clientY: number;
 }): { readonly x: number; readonly y: number } | null {
   const { frame, rect } = input;
+
   if (rect.width <= 0 || rect.height <= 0) return null;
   const relativeX = (input.clientX - rect.left) / rect.width;
   const relativeY = (input.clientY - rect.top) / rect.height;
+
   if (relativeX < 0 || relativeX > 1 || relativeY < 0 || relativeY > 1) return null;
+
   return {
     x: Math.min(frame.width - 1, Math.floor(relativeX * frame.width)),
     y: Math.min(frame.height - 1, Math.floor(relativeY * frame.height)),
@@ -357,15 +392,20 @@ export function computerKeyAction(event: {
   readonly shiftKey: boolean;
 }): ComputerAction | null {
   const chord = event.ctrlKey || event.altKey || event.metaKey;
+
   if (!chord && event.key.length === 1) return { _tag: "type", text: event.key };
+
   const named =
     COMPUTER_KEY_NAMES[event.key] ?? (event.key.length === 1 ? event.key.toLowerCase() : null);
+
   if (named === null) return null;
+
   const modifiers = [
     event.ctrlKey ? "ctrl" : null,
     event.altKey ? "alt" : null,
     event.shiftKey && (chord || event.key.length > 1) ? "shift" : null,
     event.metaKey ? "super" : null,
   ].filter((modifier) => modifier !== null);
+
   return { _tag: "key", key: [...modifiers, named].join("+") };
 }

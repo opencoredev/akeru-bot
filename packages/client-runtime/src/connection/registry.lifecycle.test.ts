@@ -26,6 +26,7 @@ describe("EnvironmentRegistry", () => {
 
       yield* Effect.gen(function* () {
         const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+
         const offline = yield* Effect.forkChild(
           SubscriptionRef.changes(registry.networkStatus).pipe(
             Stream.filter((status) => status === "offline"),
@@ -47,6 +48,7 @@ describe("EnvironmentRegistry", () => {
       const bothLoadsStarted = yield* Deferred.make<void>();
       const releaseLoads = yield* Deferred.make<void>();
       const loadCount = yield* Ref.make(0);
+
       const harness = yield* makeHarness([TARGET, SECOND_TARGET], [], [], {
         beforeSessionConnect: () =>
           Ref.updateAndGet(loadCount, (count) => count + 1).pipe(
@@ -96,6 +98,7 @@ describe("EnvironmentRegistry", () => {
             (state) => state.phase === "backoff",
           ),
         );
+
         yield* Effect.yieldNow;
         yield* Deferred.fail(
           active!.closed,
@@ -159,6 +162,7 @@ describe("EnvironmentRegistry", () => {
     Effect.gen(function* () {
       const removalStarted = yield* Deferred.make<void>();
       const continueRemoval = yield* Deferred.make<void>();
+
       const harness = yield* makeHarness([TARGET], [], [], {
         beforeRegistrationRemove: () =>
           Deferred.succeed(removalStarted, undefined).pipe(
@@ -181,6 +185,7 @@ describe("EnvironmentRegistry", () => {
         const stateLookup = yield* Effect.forkChild(
           Effect.flip(registry.state(TARGET.environmentId)),
         );
+
         yield* Effect.yieldNow;
         expect(yield* Ref.get(harness.sessions)).toHaveLength(1);
 

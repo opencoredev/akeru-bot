@@ -90,6 +90,7 @@ describe("EnvironmentRegistry", () => {
         label: "Shadowed bearer environment",
         connectionId: "shadowed-bearer-connection",
       });
+
       const harness = yield* makeHarness([shadowedTarget]);
 
       yield* Effect.gen(function* () {
@@ -115,11 +116,13 @@ describe("EnvironmentRegistry", () => {
     Effect.gen(function* () {
       const registrationStarted = yield* Deferred.make<void>();
       const continueRegistration = yield* Deferred.make<void>();
+
       const shadowedTarget = new BearerConnectionTarget({
         environmentId: TARGET.environmentId,
         label: "Shadowed bearer environment",
         connectionId: "shadowed-bearer-connection",
       });
+
       const harness = yield* makeHarness([], [], [], {
         beforeRegistrationRegister: () =>
           Deferred.succeed(registrationStarted, undefined).pipe(
@@ -129,15 +132,19 @@ describe("EnvironmentRegistry", () => {
 
       yield* Effect.gen(function* () {
         const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+
         const persistedRegistration = yield* registry
           .register(bearerRegistration(shadowedTarget))
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Deferred.await(registrationStarted);
 
         const platformRegistration = yield* registry
           .registerPlatform(new PrimaryConnectionRegistration({ target: TARGET }))
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Effect.yieldNow;
+
         const removal = yield* Effect.flip(registry.remove(TARGET.environmentId)).pipe(
           Effect.forkChild({ startImmediately: true }),
         );

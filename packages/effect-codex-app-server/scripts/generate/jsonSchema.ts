@@ -7,6 +7,7 @@ export function normalizeNullableTypes(value: Schema.Json): Schema.Json {
   if (Array.isArray(value)) {
     return value.map(normalizeNullableTypes);
   }
+
   if (value === null || typeof value !== "object") {
     return value;
   }
@@ -15,6 +16,7 @@ export function normalizeNullableTypes(value: Schema.Json): Schema.Json {
     key,
     normalizeNullableTypes(child),
   ]);
+
   const normalizedObject = Object.fromEntries(normalizedEntries) as Record<string, Schema.Json>;
   const typeValue = normalizedObject.type;
 
@@ -23,17 +25,21 @@ export function normalizeNullableTypes(value: Schema.Json): Schema.Json {
   }
 
   const normalizedTypes = typeValue.filter((entry): entry is string => typeof entry === "string");
+
   if (normalizedTypes.length !== typeValue.length || !normalizedTypes.includes("null")) {
     return normalizedObject;
   }
 
   const nonNullTypes = normalizedTypes.filter((entry) => entry !== "null");
+
   if (nonNullTypes.length !== 1) {
     return normalizedObject;
   }
+
   const nonNullType = nonNullTypes[0]!;
 
   const nextObject: Record<string, Schema.Json> = {};
+
   for (const [key, child] of Object.entries(normalizedObject)) {
     if (key !== "type") {
       nextObject[key] = child;
@@ -55,6 +61,7 @@ export function stripNullDefaults(value: Schema.Json): Schema.Json {
   if (Array.isArray(value)) {
     return value.map(stripNullDefaults);
   }
+
   if (value === null || typeof value !== "object") {
     return value;
   }
@@ -79,6 +86,7 @@ export function buildJsonSchemaFiles(
       return [];
     const relative = entry.path.replace(/^codex-rs\/app-server-protocol\/schema\/json\//, "");
     const parts = relative.split("/");
+
     if (parts.length > 1) {
       return [
         {
@@ -90,6 +98,7 @@ export function buildJsonSchemaFiles(
         } satisfies JsonSchemaFile,
       ];
     }
+
     return [
       {
         exportName: exportNameForPath(relative),
@@ -112,6 +121,7 @@ export function rewriteExternalRefs(
       rewriteExternalRefs(entry, localDefinitionNames, currentNamespace, exportNameByQualifiedName),
     );
   }
+
   if (value === null || typeof value !== "object") {
     return value;
   }
@@ -121,6 +131,7 @@ export function rewriteExternalRefs(
       if (key === "$ref" && typeof child === "string" && child.startsWith("#/definitions/")) {
         const definitionName = child.slice("#/definitions/".length);
         const localRewrite = localDefinitionNames.get(definitionName);
+
         if (localRewrite) {
           return [key, `#/definitions/${localRewrite}`];
         }

@@ -14,12 +14,14 @@ export function parseRequestEntries(fileContents: string): ReadonlyArray<MethodE
   const entryPattern = /\{\s*"method":\s*"([^"]+)",\s*id:\s*RequestId,\s*params:\s*([^,}]+)/g;
   const entries: Array<MethodEntry> = [];
   let match: RegExpExecArray | null;
+
   while ((match = entryPattern.exec(fileContents)) !== null) {
     entries.push({
       method: match[1]!,
       paramsType: match[2]!.trim(),
     });
   }
+
   return entries;
 }
 
@@ -27,12 +29,14 @@ export function parseNotificationEntries(fileContents: string): ReadonlyArray<Me
   const entryPattern = /\{\s*"method":\s*"([^"]+)"(?:,\s*"params":\s*([^ }]+))?\s*\}/g;
   const entries: Array<MethodEntry> = [];
   let match: RegExpExecArray | null;
+
   while ((match = entryPattern.exec(fileContents)) !== null) {
     entries.push({
       method: match[1]!,
       ...(match[2] ? { paramsType: match[2].trim() } : {}),
     });
   }
+
   return entries;
 }
 
@@ -50,6 +54,7 @@ export function resolveSchemaTypeName(
     `V1${rawTypeName}`,
     `SerdeJson${rawTypeName}`,
   ];
+
   for (const candidate of candidates) {
     if (generatedSchemaNames.has(candidate)) {
       return candidate;
@@ -77,12 +82,14 @@ export function resolveResponseTypeName(
   };
 
   const override = overrides[method];
+
   if (override) {
     return resolveSchemaTypeName(override, generatedSchemaNames);
   }
 
   if (paramsType && paramsType !== "undefined") {
     const fromParams = paramsType.replace(/Params$/, "Response");
+
     try {
       return resolveSchemaTypeName(fromParams, generatedSchemaNames);
     } catch {

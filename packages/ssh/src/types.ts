@@ -85,9 +85,11 @@ export function sshRunnerLogFields(runner: RemoteT3RunnerOptions | undefined) {
   if (runner?.nodeScriptPath?.trim()) {
     return { runner: "node-script", nodeScriptPath: runner.nodeScriptPath.trim() };
   }
+
   if (runner?.packageSpec?.trim()) {
     return { runner: "package", packageSpec: runner.packageSpec.trim() };
   }
+
   return { runner: "default" };
 }
 
@@ -120,5 +122,6 @@ export interface SshEnvironmentManagerShape {
 
 export function normalizeSshErrorMessage(stderr: string, fallbackMessage: string): string {
   const cleaned = stderr.trim();
+
   return cleaned.length > 0 ? cleaned : fallbackMessage;
 }

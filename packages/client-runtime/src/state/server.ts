@@ -69,10 +69,12 @@ export function createServerEnvironmentAtoms<R, E>(
   const configScheduler = createAtomCommandScheduler();
   // Updates stay serial end-to-end, but only their handoff phase occupies the config lane.
   const updateScheduler = createAtomCommandScheduler();
+
   const configConcurrency = {
     mode: "serial" as const,
     key: ({ environmentId }: { readonly environmentId: string }) => environmentId,
   };
+
   const configProjectionFamily = Atom.family((environmentId: EnvironmentId) =>
     runtime
       .atom(serverConfigStateChanges(environmentId))
@@ -81,27 +83,33 @@ export function createServerEnvironmentAtoms<R, E>(
         Atom.withLabel(`environment-data:server:config-projection:${environmentId}`),
       ),
   );
+
   const configProjection = (target: {
     readonly environmentId: EnvironmentId;
     readonly input: EnvironmentRpcInput<typeof WS_METHODS.subscribeServerConfig>;
   }) => configProjectionFamily(target.environmentId);
+
   const emptyConfigAtom = Atom.make<ServerConfig | null>(null).pipe(
     Atom.withLabel("environment-data:server:config:empty"),
   );
+
   const configValueAtom = Atom.family((environmentId: EnvironmentId | null) => {
     if (environmentId === null) {
       return emptyConfigAtom;
     }
+
     return Atom.make((get): ServerConfig | null => {
       const projection = Option.getOrNull(
         AsyncResult.value(get(configProjection({ environmentId, input: {} }))),
       );
+
       return resolveServerConfigValue(
         projection,
         get(options.initialConfigValueAtom(environmentId)),
       );
     }).pipe(Atom.withLabel(`environment-data:server:config:${environmentId}`));
   });
+
   const updateStateValueAtom = Atom.family((environmentId: EnvironmentId) =>
     Atom.make((get) =>
       serverUpdateStateForServerVersion(
@@ -110,8 +118,10 @@ export function createServerEnvironmentAtoms<R, E>(
       ),
     ).pipe(Atom.withLabel(`environment-data:server:update-state-value:${environmentId}`)),
   );
+
   const updateStateAtom = (environmentId: EnvironmentId | null) =>
     environmentId === null ? EMPTY_SERVER_UPDATE_STATE_ATOM : updateStateValueAtom(environmentId);
+
   const updateServer = createRuntimeCommand<
     EnvironmentRegistry | EnvironmentCacheStore | R,
     E,
@@ -125,9 +135,11 @@ export function createServerEnvironmentAtoms<R, E>(
     execute: (target, atomRegistry) => {
       const stateAtom = serverUpdateStateAtom(target.environmentId);
       const targetVersion = target.input.targetVersion;
+
       let fromVersion =
         atomRegistry.get(configValueAtom(target.environmentId))?.environment.serverVersion ??
         targetVersion;
+
       let currentStage: ServerUpdateStage = "downloading";
       atomRegistry.set(stateAtom, {
         status: "running",
@@ -138,6 +150,7 @@ export function createServerEnvironmentAtoms<R, E>(
 
       return Effect.gen(function* () {
         const environmentRegistry = yield* EnvironmentRegistry;
+
         const result = yield* scheduleAtomCommandEffect(
           atomRegistry,
           configScheduler,
@@ -155,11 +168,13 @@ export function createServerEnvironmentAtoms<R, E>(
 
             const supportsProgress =
               currentConfig?.environment.capabilities.serverSelfUpdateProgress === true;
+
             const updateResult: ServerSelfUpdateResult = supportsProgress
               ? yield* Effect.gen(function* () {
                   const terminal = yield* Ref.make<Option.Option<ServerSelfUpdateResult>>(
                     Option.none(),
                   );
+
                   const streamExit = yield* environmentRegistry
                     .runStream(
                       target.environmentId,
@@ -183,6 +198,7 @@ export function createServerEnvironmentAtoms<R, E>(
                       ),
                       Effect.exit,
                     );
+
                   return yield* resolveServerUpdateProgressResult(
                     targetVersion,
                     yield* Ref.get(terminal),
@@ -191,12 +207,15 @@ export function createServerEnvironmentAtoms<R, E>(
                 })
               : yield* Effect.gen(function* () {
                   const selfUpdateMethod = currentConfig?.environment.capabilities.serverSelfUpdate;
+
                   const exit = yield* environmentRegistry
                     .run(target.environmentId, request(WS_METHODS.serverUpdateServer, target.input))
                     .pipe(Effect.exit);
+
                   if (Exit.isSuccess(exit)) {
                     return exit.value;
                   }
+
                   if (
                     (selfUpdateMethod === "boot-service" || selfUpdateMethod === "respawn") &&
                     isLegacyUpdateHandoffLoss(exit.cause)
@@ -206,6 +225,7 @@ export function createServerEnvironmentAtoms<R, E>(
                     // loss as a handoff, then prove it by waiting for target ready.
                     return { targetVersion, method: selfUpdateMethod };
                   }
+
                   return yield* Effect.failCause(exit.cause);
                 });
 
@@ -216,6 +236,7 @@ export function createServerEnvironmentAtoms<R, E>(
               fromVersion,
               targetVersion,
             });
+
             return updateResult;
           }),
         );
@@ -239,15 +260,18 @@ export function createServerEnvironmentAtoms<R, E>(
             Effect.timeoutOption(SERVER_UPDATE_RESUME_TIMEOUT),
             Effect.map(Option.flatten),
           );
+
         if (Option.isNone(resumed)) {
           return yield* new ServerUpdateResumeTimeoutError({
             environmentId: target.environmentId,
             targetVersion,
           });
         }
+
         yield* validateServerUpdateReadyEvent(result, resumed.value);
 
         atomRegistry.set(stateAtom, IDLE_SERVER_UPDATE_STATE);
+
         return result;
       }).pipe(
         Effect.onExit((exit) =>
@@ -255,10 +279,13 @@ export function createServerEnvironmentAtoms<R, E>(
             if (Exit.isSuccess(exit)) {
               return;
             }
+
             if (Cause.hasInterruptsOnly(exit.cause)) {
               atomRegistry.set(stateAtom, IDLE_SERVER_UPDATE_STATE);
+
               return;
             }
+
             atomRegistry.set(stateAtom, {
               status: "failed",
               stage: currentStage,
@@ -271,6 +298,7 @@ export function createServerEnvironmentAtoms<R, E>(
       );
     },
   });
+
   const authenticateMcpServer = createRuntimeCommand(runtime, {
     label: "environment-data:server:authenticate-mcp-server",
     concurrency: {
@@ -310,19 +338,23 @@ export function createServerEnvironmentAtoms<R, E>(
                   }),
             ),
           );
+
         if (toolCount === undefined) {
           return yield* new McpServerAuthenticationClientError({
             message: "MCP authentication ended before the server connected.",
           });
         }
+
         return { toolCount, recoveryFailures };
       }),
   });
+
   const settingsValueAtom = Atom.family((environmentId: EnvironmentId) =>
     Atom.make((get) => get(configValueAtom(environmentId))?.settings ?? null).pipe(
       Atom.withLabel(`environment-data:server:settings:${environmentId}`),
     ),
   );
+
   const providersValueAtom = Atom.family((environmentId: EnvironmentId) =>
     Atom.make((get) => get(configValueAtom(environmentId))?.providers ?? null).pipe(
       Atom.withLabel(`environment-data:server:providers:${environmentId}`),
@@ -561,12 +593,14 @@ export function createServerEnvironmentAtoms<R, E>(
     }),
   };
 }
+
 export {
   type ServerUpdateStage,
   type ServerUpdateState,
   type ServerUpdateTarget,
   type McpServerAuthenticationTarget,
 } from "./serverTypes.ts";
+
 export {
   ServerUpdateResumeTimeoutError,
   ServerUpdateProgressIncompleteError,
@@ -579,7 +613,9 @@ export {
   isLegacyUpdateHandoffLoss,
   resolveServerUpdateProgressResult,
 } from "./serverUpdate.ts";
+
 export { McpServerAuthenticationClientError } from "./mcpAuthentication.ts";
+
 export {
   type ServerConfigProjection,
   applyServerConfigProjection,

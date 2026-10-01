@@ -82,6 +82,7 @@ export function validateServerUpdateReadyEvent(
 ): Effect.Effect<void, ServerUpdateTerminalError> {
   if (result.updateId === undefined) return Effect.void;
   const outcome = event.payload.updateOutcome;
+
   if (
     outcome?.id === result.updateId &&
     outcome.status === "committed" &&
@@ -90,6 +91,7 @@ export function validateServerUpdateReadyEvent(
   ) {
     return Effect.void;
   }
+
   return Effect.fail(
     new ServerUpdateTerminalError({
       targetVersion: result.targetVersion,
@@ -177,6 +179,7 @@ function isRpcSocketError(error: unknown): boolean {
   if (!isRpcClientError(error)) {
     return false;
   }
+
   switch (error.reason._tag) {
     case "SocketReadError":
     case "SocketWriteError":
@@ -191,6 +194,7 @@ export function isLegacyUpdateHandoffLoss(cause: Cause.Cause<unknown>): boolean 
   if (Cause.hasInterruptsOnly(cause)) {
     return true;
   }
+
   return (
     cause.reasons.length > 0 &&
     cause.reasons.every((reason) => Cause.isFailReason(reason) && isRpcSocketError(reason.error))
@@ -208,8 +212,10 @@ export function resolveServerUpdateProgressResult<E>(
   ) {
     return Effect.succeed(terminal.value);
   }
+
   if (Exit.isFailure(streamExit)) {
     return Effect.failCause(streamExit.cause);
   }
+
   return Effect.fail(new ServerUpdateProgressIncompleteError({ targetVersion }));
 }

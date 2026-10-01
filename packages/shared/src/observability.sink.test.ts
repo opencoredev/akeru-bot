@@ -56,12 +56,15 @@ describe("observability", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const tempDir = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-trace-interrupt-",
         });
+
         for (const count of [0, 1, 256]) {
           const tracePath = path.join(tempDir, `${count}.ndjson`);
           const ready = yield* Deferred.make<void>();
+
           const owner = yield* Effect.gen(function* () {
             const sink = yield* makeTraceSink({
               filePath: tracePath,
@@ -69,12 +72,16 @@ describe("observability", () => {
               maxFiles: 2,
               batchWindowMs: 10_000,
             });
+
             for (let index = 0; index < count; index++) sink.push(makeRecord(`record-${index}`));
             yield* Deferred.succeed(ready, undefined);
+
             return yield* Effect.never;
           }).pipe(Effect.scoped, Effect.forkChild);
+
           yield* Deferred.await(ready);
           yield* Fiber.interrupt(owner);
+
           if (count > 0) assert.equal((yield* readTraceRecords(tracePath)).length, count);
         }
       }),
@@ -88,9 +95,11 @@ describe("observability", () => {
           const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-trace-bound-" });
           const tracePath = path.join(dir, "trace.ndjson");
           const messages: unknown[] = [];
+
           const capture = Logger.make<unknown, void>(({ message }) => {
             messages.push(message);
           });
+
           yield* Effect.gen(function* () {
             const sink = yield* makeTraceSink({
               filePath: tracePath,
@@ -99,6 +108,7 @@ describe("observability", () => {
               maxBufferedBytes: 1024,
               batchWindowMs: 10_000,
             });
+
             for (let index = 0; index < 1000; index++) sink.push(makeRecord("bounded"));
             yield* sink.close();
             const records = yield* readTraceRecords(tracePath);
@@ -126,9 +136,11 @@ describe("observability", () => {
             yield* fs.makeDirectory(tracePath);
             const messages: unknown[] = [];
             const stats: TraceSinkFlushStats[] = [];
+
             const capture = Logger.make<unknown, void>(({ message }) => {
               messages.push(message);
             });
+
             yield* Effect.gen(function* () {
               const sink = yield* makeTraceSink({
                 filePath: tracePath,
@@ -140,6 +152,7 @@ describe("observability", () => {
                     stats.push(entry);
                   }),
               });
+
               sink.push(makeRecord("failed"));
               yield* sink.flush;
               yield* sink.close();
@@ -168,6 +181,7 @@ describe("observability", () => {
                 maxBufferedBytes: 1024,
                 batchWindowMs: 10_000,
               });
+
               for (let index = 0; index < 100; index++) {
                 yield* Effect.void.pipe(
                   Effect.withSpan("bounded"),
@@ -230,6 +244,7 @@ describe("observability", () => {
             sink.push(makeRecord("rotate", `${index}-${"x".repeat(48)}`));
             yield* sink.flush;
           }
+
           yield* sink.close();
 
           const matchingFiles = Arr.sort(
@@ -271,12 +286,15 @@ describe("observability", () => {
           for (let index = 0; index < 256; index += 1) {
             sink.push(makeRecord("threshold", `${index}-${"x".repeat(48)}`));
           }
+
           yield* sink.close();
 
           const matchingFiles = (yield* fileSystem.readDirectory(tempDir)).filter(
             (entry) => entry === "shared.trace.ndjson" || entry.startsWith("shared.trace.ndjson."),
           );
+
           assert.include(matchingFiles, "shared.trace.ndjson.1");
+
           for (const entry of matchingFiles) {
             const stat = yield* fileSystem.stat(path.join(tempDir, entry));
             assert.isAtMost(Number(stat.size), maxBytes, entry);
@@ -389,6 +407,7 @@ describe("observability", () => {
 
           assert.notEqual(parent, undefined);
           assert.notEqual(child, undefined);
+
           if (!parent || !child) {
             return;
           }

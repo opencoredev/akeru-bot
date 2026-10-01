@@ -31,10 +31,13 @@ export function dictationTranscriptionCapability(input: {
   if (input.voice?.enabled === false) {
     return { available: false, reason: DICTATION_TRANSCRIPTION_UNAVAILABLE.disabled };
   }
+
   const provider = input.voice?.transcriptionProvider ?? "openai";
+
   const connected = input.providers?.some(
     (status) => status.provider === provider && status.connected,
   );
+
   return connected
     ? { available: true, provider }
     : { available: false, reason: DICTATION_TRANSCRIPTION_UNAVAILABLE.noProvider };
@@ -62,6 +65,7 @@ const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/
 
 export function encodeDictationAudioBase64(bytes: Uint8Array): string {
   let output = "";
+
   for (let index = 0; index < bytes.length; index += 3) {
     const a = bytes[index]!;
     const b = bytes[index + 1];
@@ -73,6 +77,7 @@ export function encodeDictationAudioBase64(bytes: Uint8Array): string {
       (b === undefined ? "=" : BASE64[(chunk >> 6) & 63]!) +
       (c === undefined ? "=" : BASE64[chunk & 63]!);
   }
+
   return output;
 }
 
@@ -94,8 +99,10 @@ type TranscribeResult =
 
 function failureReason(cause: unknown): string | null {
   const error = Cause.isCause(cause) ? Cause.squash(cause) : cause;
+
   if (typeof error !== "object" || error === null) return null;
   const record = error as { readonly _tag?: unknown; readonly reason?: unknown };
+
   return record._tag === "VoiceCallError" && typeof record.reason === "string"
     ? record.reason
     : null;
@@ -124,20 +131,26 @@ export function createVoiceDictationTranscriber(options: {
   }) => {
     signal.throwIfAborted();
     const mimeType = dictationAudioMediaType(audio.mediaType);
+
     if (!mimeType) throw new Error("This recording format can't be transcribed.");
     // Dictation identities carry the id of the environment the composer was bound to.
     const environmentId = identity.environmentId as EnvironmentId;
     const operationId = options.nextOperationId();
+
     const abort = () => {
       void options.cancel({ environmentId, input: { operationId } }).catch(() => undefined);
     };
+
     signal.addEventListener("abort", abort, { once: true });
+
     try {
       const result = await options.transcribe({
         environmentId,
         input: { operationId, audioBase64: encodeDictationAudioBase64(audio.bytes), mimeType },
       });
+
       signal.throwIfAborted();
+
       if (result._tag === "Success") return result.value.text;
       const reason = failureReason(result.cause);
       throw new Error((reason && FAILURE_MESSAGES[reason]) ?? "Transcription failed. Try again.");

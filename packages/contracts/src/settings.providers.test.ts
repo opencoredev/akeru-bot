@@ -160,6 +160,7 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
         },
       },
     });
+
     const personalId = ProviderInstanceId.make("codex_personal");
     const workId = ProviderInstanceId.make("codex_work");
     const ollamaId = ProviderInstanceId.make("ollama_local");
@@ -216,6 +217,7 @@ describe("provider enabled defaults", () => {
   it("still decodes settings that name the retired Cursor provider", () => {
     const cursor = ProviderDriverKind.make("cursor");
     const cursorId = ProviderInstanceId.make("cursor");
+
     const decoded = decodeServerSettings({
       providers: { cursor: { enabled: true, binaryPath: "cursor-agent" } },
       providerInstances: {
@@ -265,6 +267,7 @@ describe("ServerSettingsPatch.providerInstances", () => {
         codex_personal: { driver: "codex", config: { homePath: "~/.codex" } },
       },
     });
+
     expect(replacement.providerInstances).toBeDefined();
     expect(replacement.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.driver).toBe(
       "codex",
@@ -280,6 +283,7 @@ describe("ServerSettingsPatch.providerInstances", () => {
         },
       },
     });
+
     const ollamaId = ProviderInstanceId.make("ollama_local");
     expect(patch.providerInstances?.[ollamaId]?.driver).toBe("ollama");
   });

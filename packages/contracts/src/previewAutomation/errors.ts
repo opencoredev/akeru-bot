@@ -68,6 +68,7 @@ export class PreviewAutomationNoAvailableHostError extends Schema.TaggedErrorCla
 ) {
   override get message(): string {
     const summary = `No preview automation host is available for ${this.operation} in environment ${this.environmentId}.`;
+
     return summary;
   }
 }
@@ -95,6 +96,7 @@ export class PreviewAutomationTabNotFoundError extends Schema.TaggedErrorClass<P
     const summary = this.tabId
       ? `Preview tab ${this.tabId} was not found for ${this.operation}.`
       : `No active preview tab was found for ${this.operation}.`;
+
     return summary;
   }
 }
@@ -108,6 +110,7 @@ export class PreviewAutomationTimeoutError extends Schema.TaggedErrorClass<Previ
 ) {
   override get message(): string {
     const summary = `Preview automation ${this.operation} timed out after ${this.timeoutMs}ms.`;
+
     return summary;
   }
 }
@@ -149,6 +152,7 @@ export class PreviewAutomationInvalidSelectorError extends Schema.TaggedErrorCla
     if (this.selectorKind !== undefined && this.selectorLength !== undefined) {
       return `Preview automation ${this.operation} received an invalid ${this.selectorKind} (${this.selectorLength} characters).`;
     }
+
     return `Preview automation ${this.operation} received an invalid selector.`;
   }
 }
@@ -166,9 +170,11 @@ export class PreviewAutomationTargetNotEditableError extends Schema.TaggedErrorC
     if (this.selectorKind === "focused-element") {
       return `Preview automation ${this.operation} requires an editable focused element.`;
     }
+
     if (this.selectorKind !== undefined && this.selectorLength !== undefined) {
       return `Preview automation ${this.operation} requires an editable ${this.selectorKind} (${this.selectorLength} characters).`;
     }
+
     return `Preview automation ${this.operation} requires an editable target.`;
   }
 }
@@ -186,6 +192,7 @@ export class PreviewAutomationResultTooLargeError extends Schema.TaggedErrorClas
       this.maximumBytes === undefined
         ? `Preview automation ${this.operation} produced a result that is too large.`
         : `Preview automation ${this.operation} produced a result larger than ${this.maximumBytes} bytes.`;
+
     return summary;
   }
 }

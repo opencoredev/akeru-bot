@@ -200,6 +200,7 @@ describe("serverSettings helpers", () => {
 
   it("replaces providerInstances maps so omitted instance fields are cleared", () => {
     const codexId = ProviderInstanceId.make("codex");
+
     const current = {
       ...DEFAULT_SERVER_SETTINGS,
       providerInstances: {
@@ -353,6 +354,7 @@ describe("serverSettings helpers", () => {
     const custom = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
       automaticGitFetchInterval: Duration.seconds(15),
     });
+
     const next = applyServerSettingsPatch(custom, {
       automaticGitFetchInterval: Duration.seconds(30),
     });

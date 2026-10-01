@@ -71,6 +71,7 @@ export function copyLatestTurnIdentities(
   if (previous?.turnId !== turnId) {
     return {};
   }
+
   return {
     ...(previous.requestMessageId !== undefined
       ? { requestMessageId: previous.requestMessageId }
@@ -91,6 +92,7 @@ export function reuseLatestTurn(
   if (previous === null || next === null) {
     return next;
   }
+
   return previous.turnId === next.turnId &&
     previous.state === next.state &&
     previous.requestedAt === next.requestedAt &&
@@ -111,12 +113,15 @@ export function rebindCheckpointAssistantMessage(
   messageId: MessageId,
 ): ReadonlyArray<OrchestrationCheckpointSummary> {
   let next: OrchestrationCheckpointSummary[] | undefined;
+
   for (let index = 0; index < checkpoints.length; index += 1) {
     const entry = checkpoints[index]!;
+
     if (entry.turnId !== turnId || entry.assistantMessageId === messageId) continue;
     next ??= checkpoints.slice();
     next[index] = { ...entry, assistantMessageId: messageId };
   }
+
   return next ?? checkpoints;
 }
 
@@ -130,9 +135,11 @@ export function retainMessagesAfterRevert(
     if (message.role === "system") {
       return true;
     }
+
     if (message.turnId === null) {
       return true;
     }
+
     return retainedTurnIds.has(message.turnId);
   });
 }
@@ -162,10 +169,13 @@ export function applyTurnInterruptRequestedEvent(
   if (event.payload.turnId === undefined) {
     return { kind: "unchanged" };
   }
+
   const latestTurn = thread.latestTurn;
+
   if (latestTurn === null || latestTurn.turnId !== event.payload.turnId) {
     return { kind: "unchanged" };
   }
+
   return {
     kind: "updated",
     thread: {
@@ -188,6 +198,7 @@ export function applySessionSetEvent(
   // Leaving the "running" session status is the turn-end signal: settle a
   // still-running latest turn so its duration reflects the whole turn.
   const settledTurnState = settledTurnStateForSessionStatus(event.payload.session.status);
+
   const latestTurn = reuseLatestTurn(
     thread.latestTurn,
     event.payload.session.status === "running" && event.payload.session.activeTurnId !== null
@@ -270,6 +281,7 @@ export function applyTurnDiffCompletedEvent(
   };
 
   const existing = thread.checkpoints.find((entry) => entry.turnId === checkpoint.turnId);
+
   // Don't overwrite a non-missing checkpoint with a missing one.
   if (existing && existing.status !== "missing" && checkpoint.status === "missing") {
     return { kind: "unchanged" };
@@ -286,6 +298,7 @@ export function applyTurnDiffCompletedEvent(
   // checkpoint, but don't settle a turn its session is still running.
   const diffTurnStillRunning =
     thread.session?.status === "running" && thread.session.activeTurnId === event.payload.turnId;
+
   const latestTurn =
     !diffTurnStillRunning &&
     (thread.latestTurn === null || thread.latestTurn.turnId === event.payload.turnId)
@@ -324,14 +337,17 @@ export function applyRevertedEvent(
 
   const retainedTurnIds = new Set(Arr.map(checkpoints, (entry) => entry.turnId));
   const messages = retainMessagesAfterRevert(thread.messages, retainedTurnIds);
+
   const proposedPlans = pipe(
     thread.proposedPlans,
     Arr.filter((plan) => plan.turnId === null || retainedTurnIds.has(plan.turnId)),
   );
+
   const activities = pipe(
     thread.activities,
     Arr.filter((activity) => activity.turnId === null || retainedTurnIds.has(activity.turnId)),
   );
+
   const latestCheckpoint = checkpoints.at(-1) ?? null;
 
   return {

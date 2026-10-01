@@ -29,6 +29,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
           const count = 10_000;
           const text = "x".repeat(1024);
           let handled = 0;
+
           const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
             stdio,
             serverRequestMethods: new Set(),
@@ -36,6 +37,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
             onNotification: () =>
               Effect.suspend(() => {
                 handled++;
+
                 return handled === 1
                   ? Effect.fail(AcpError.AcpRequestError.internalError("handler failed"))
                   : Effect.void;
@@ -56,6 +58,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
               ),
             );
           }
+
           yield* Queue.offer(
             input,
             yield* encodeJsonl(ExtRequest, {
@@ -93,18 +96,21 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
       const { stdio, input } = yield* makeInMemoryStdio();
       const observed = yield* Deferred.make<void>();
       const terminated = yield* Deferred.make<void>();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         serverRequestMethods: new Set(),
         rawNotificationBufferSize: "unbounded",
         onTermination: () => Deferred.succeed(terminated, undefined).pipe(Effect.asVoid),
       });
+
       const reader = yield* transport.incoming.pipe(
         Stream.runForEach(() =>
           Deferred.succeed(observed, undefined).pipe(Effect.andThen(Effect.never)),
         ),
         Effect.forkScoped,
       );
+
       yield* Queue.offer(input, encoder.encode('{"jsonrpc":"2.0","method":"x/first"}\n'));
       yield* Deferred.await(observed);
       yield* Fiber.interrupt(reader);
@@ -129,11 +135,13 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
   it.effect("drains raw observations and completes waiting readers on decode failure", () =>
     Effect.gen(function* () {
       const { stdio, input } = yield* makeInMemoryStdio();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         serverRequestMethods: new Set(),
         rawNotificationBufferSize: 8,
       });
+
       const reader = yield* transport.incoming.pipe(Stream.runCollect, Effect.forkScoped);
       yield* Queue.offer(input, encoder.encode('{"jsonrpc":"2.0","method":"x/first"}\n'));
       yield* Queue.offer(input, encoder.encode("{malformed}\n"));
@@ -148,15 +156,18 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
     Effect.gen(function* () {
       const { stdio } = yield* makeInMemoryStdio();
       const scope = yield* Scope.make();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         serverRequestMethods: new Set(),
         rawNotificationBufferSize: 8,
       }).pipe(Effect.provideService(Scope.Scope, scope));
+
       const reader = yield* transport.incoming.pipe(
         Stream.runCollect,
         Effect.forkScoped({ startImmediately: true }),
       );
+
       yield* Scope.close(scope, Exit.void);
       assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(reader)));
     }),

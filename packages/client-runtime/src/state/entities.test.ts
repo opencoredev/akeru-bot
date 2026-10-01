@@ -29,9 +29,13 @@ import { mergeEnvironmentThread } from "./threadDetail.ts";
 import { createEnvironmentThreadShellAtoms } from "./threadShell.ts";
 
 const ENVIRONMENT_ID = EnvironmentId.make("environment-1");
+
 const PROJECT_ID = ProjectId.make("project-1");
+
 const OTHER_PROJECT_ID = ProjectId.make("project-2");
+
 const THREAD_ID = ThreadId.make("thread-1");
+
 const OTHER_THREAD_ID = ThreadId.make("thread-2");
 
 describe("scoped entity keys", () => {
@@ -157,9 +161,11 @@ function makeHarness() {
   const shellStateAtoms = Atom.family((_environmentId: EnvironmentId) =>
     Atom.make(AsyncResult.success(shellState(SNAPSHOT))),
   );
+
   const threadStateAtoms = Atom.family((_key: string) =>
     Atom.make(AsyncResult.success(EMPTY_ENVIRONMENT_THREAD_STATE)),
   );
+
   const catalogValueAtom = Atom.make({
     isReady: true,
     entries: new Map([
@@ -177,15 +183,19 @@ function makeHarness() {
       ],
     ]),
   });
+
   const snapshotAtom = createEnvironmentSnapshotAtom(shellStateAtoms);
+
   const projects = createEnvironmentProjectAtoms({
     catalogValueAtom,
     snapshotAtom,
   });
+
   const threadShells = createEnvironmentThreadShellAtoms({
     catalogValueAtom,
     snapshotAtom,
   });
+
   const threadDetails = createEnvironmentThreadDetailAtoms((environmentId, threadId) =>
     threadStateAtoms(`${environmentId}\u0000${threadId}`),
   );
@@ -203,6 +213,7 @@ function makeHarness() {
 describe("environment entity projections", () => {
   it("composes detail collections with authoritative shell workspace metadata", () => {
     const messages: OrchestrationThread["messages"] = [];
+
     const detail = {
       ...THREAD_SHELL,
       environmentId: ENVIRONMENT_ID,
@@ -215,6 +226,7 @@ describe("environment entity projections", () => {
       activities: [],
       checkpoints: [],
     } satisfies OrchestrationThread & { readonly environmentId: EnvironmentId };
+
     const shell = {
       ...THREAD_SHELL,
       environmentId: ENVIRONMENT_ID,
@@ -238,14 +250,17 @@ describe("environment entity projections", () => {
     const projectRefsAtom = harness.projects.environmentProjectRefsAtom(ENVIRONMENT_ID);
     const threadRefsAtom = harness.threadShells.environmentThreadRefsAtom(ENVIRONMENT_ID);
     const projectsAtom = harness.projects.projectsAtom;
+
     const projectAtom = harness.projects.projectAtom({
       environmentId: ENVIRONMENT_ID,
       projectId: PROJECT_ID,
     });
+
     const threadAtom = harness.threadShells.threadShellAtom({
       environmentId: ENVIRONMENT_ID,
       threadId: THREAD_ID,
     });
+
     const projectRefs = harness.registry.get(projectRefsAtom);
     const threadRefs = harness.registry.get(threadRefsAtom);
     const projects = harness.registry.get(projectsAtom);
@@ -276,12 +291,15 @@ describe("environment entity projections", () => {
 
   it("preserves project-scoped thread collections across unrelated project updates", () => {
     const harness = makeHarness();
+
     const projectRef = {
       environmentId: ENVIRONMENT_ID,
       projectId: PROJECT_ID,
     };
+
     const refsByProjectAtom =
       harness.threadShells.environmentThreadRefsByProjectAtom(ENVIRONMENT_ID);
+
     const threadsAtom = harness.threadShells.threadShellsForProjectRefsAtom([projectRef]);
     const refs = harness.registry.get(refsByProjectAtom).get(PROJECT_ID);
     const threads = harness.registry.get(threadsAtom);
@@ -347,26 +365,31 @@ describe("environment entity projections", () => {
         { environmentId: ENVIRONMENT_ID, projectId: PROJECT_ID },
       ]),
     );
+
     expect(projectThreads.map((thread) => thread.id)).toEqual([THREAD_ID]);
     expect(projectThreads.some((thread) => thread.id === childId)).toBe(false);
   });
 
   it("updates only the requested thread detail and preserves untouched field identities", () => {
     const harness = makeHarness();
+
     const threadRef = {
       environmentId: ENVIRONMENT_ID,
       threadId: THREAD_ID,
     };
+
     const otherThreadRef = {
       environmentId: ENVIRONMENT_ID,
       threadId: OTHER_THREAD_ID,
     };
+
     const threadDetailAtom = harness.threadDetails.detailAtom(threadRef);
     const messagesAtom = harness.threadDetails.messagesAtom(threadRef);
     const activitiesAtom = harness.threadDetails.activitiesAtom(threadRef);
     const statusAtom = harness.threadDetails.statusAtom(threadRef);
     const otherThreadDetailAtom = harness.threadDetails.detailAtom(otherThreadRef);
     const otherValue = harness.registry.get(otherThreadDetailAtom);
+
     const detail = {
       ...THREAD_SHELL,
       deletedAt: null,

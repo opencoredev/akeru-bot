@@ -138,6 +138,7 @@ describe("remote", () => {
 
   it("rejects unsupported direct pairing URL protocols", () => {
     let pairingUrlError: unknown;
+
     try {
       resolveRemotePairingTarget({
         pairingUrl: "ftp://remote.example.com/pair#token=pairing-token",
@@ -153,6 +154,7 @@ describe("remote", () => {
 
   it("rejects unsupported hosted pairing backend protocols", () => {
     let hostError: unknown;
+
     try {
       resolveRemotePairingTarget({
         pairingUrl:
@@ -169,6 +171,7 @@ describe("remote", () => {
 
   it("rejects unsupported direct host protocols", () => {
     let hostError: unknown;
+
     try {
       resolveRemotePairingTarget({
         host: "ftp://remote.example.com",
@@ -202,20 +205,24 @@ describe("remote", () => {
 
   it("preserves URL parsing causes with their input source", () => {
     let pairingUrlError: unknown;
+
     try {
       resolveRemotePairingTarget({ pairingUrl: "not a url" });
     } catch (cause) {
       pairingUrlError = cause;
     }
+
     expect(pairingUrlError).toBeInstanceOf(RemotePairingUrlInvalidError);
     expect((pairingUrlError as RemotePairingUrlInvalidError).cause).toBeInstanceOf(TypeError);
 
     let hostError: unknown;
+
     try {
       resolveRemotePairingTarget({ host: "https://[invalid", pairingCode: "pairing-token" });
     } catch (cause) {
       hostError = cause;
     }
+
     expect(hostError).toBeInstanceOf(RemoteBackendUrlInvalidError);
     expect(hostError).toMatchObject({ source: "direct-host" });
     expect((hostError as RemoteBackendUrlInvalidError).cause).toBeInstanceOf(TypeError);

@@ -9,9 +9,11 @@ export const ExecutionEnvironmentPlatformOs = Schema.Literals([
   "windows",
   "unknown",
 ]);
+
 export type ExecutionEnvironmentPlatformOs = typeof ExecutionEnvironmentPlatformOs.Type;
 
 export const ExecutionEnvironmentPlatformArch = Schema.Literals(["arm64", "x64", "other"]);
+
 export type ExecutionEnvironmentPlatformArch = typeof ExecutionEnvironmentPlatformArch.Type;
 
 export const ExecutionEnvironmentPlatform = Schema.Struct({
@@ -25,13 +27,16 @@ export const ExecutionEnvironmentPlatform = Schema.Struct({
  * orchestration contracts can reference it without an import cycle.
  */
 export const ThreadEnvMode = Schema.Literals(["local", "worktree"]);
+
 export type ThreadEnvMode = typeof ThreadEnvMode.Type;
+
 export type ExecutionEnvironmentPlatform = typeof ExecutionEnvironmentPlatform.Type;
 
 /** How a server can replace itself with another version when asked over RPC.
     New servers only advertise the stable launcher-backed "boot-service" path;
     "respawn" remains decodable for compatibility with older servers. */
 export const ServerSelfUpdateMethod = Schema.Literals(["boot-service", "respawn"]);
+
 export type ServerSelfUpdateMethod = typeof ServerSelfUpdateMethod.Type;
 
 /** What update path a client should offer for a server: one of the RPC
@@ -43,6 +48,7 @@ export const ServerSelfUpdateCapability = Schema.Literals([
   "respawn",
   "desktop-managed",
 ]);
+
 export type ServerSelfUpdateCapability = typeof ServerSelfUpdateCapability.Type;
 
 export const ExecutionEnvironmentCapabilities = Schema.Struct({
@@ -76,6 +82,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       restart. Clients fall back to server.updateServer when absent. */
   serverSelfUpdateProgress: Schema.optionalKey(Schema.Boolean),
 });
+
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 
 export const ExecutionEnvironmentDescriptor = Schema.Struct({
@@ -85,6 +92,7 @@ export const ExecutionEnvironmentDescriptor = Schema.Struct({
   serverVersion: TrimmedNonEmptyString,
   capabilities: ExecutionEnvironmentCapabilities,
 });
+
 export type ExecutionEnvironmentDescriptor = typeof ExecutionEnvironmentDescriptor.Type;
 
 export const EnvironmentConnectionState = Schema.Literals([
@@ -93,6 +101,7 @@ export const EnvironmentConnectionState = Schema.Literals([
   "disconnected",
   "error",
 ]);
+
 export type EnvironmentConnectionState = typeof EnvironmentConnectionState.Type;
 
 export const RepositoryIdentityLocator = Schema.Struct({
@@ -100,6 +109,7 @@ export const RepositoryIdentityLocator = Schema.Struct({
   remoteName: TrimmedNonEmptyString,
   remoteUrl: TrimmedNonEmptyString,
 });
+
 export type RepositoryIdentityLocator = typeof RepositoryIdentityLocator.Type;
 
 export const RepositoryIdentity = Schema.Struct({
@@ -111,22 +121,26 @@ export const RepositoryIdentity = Schema.Struct({
   owner: Schema.optionalKey(TrimmedNonEmptyString),
   name: Schema.optionalKey(TrimmedNonEmptyString),
 });
+
 export type RepositoryIdentity = typeof RepositoryIdentity.Type;
 
 export const ScopedProjectRef = Schema.Struct({
   environmentId: EnvironmentId,
   projectId: ProjectId,
 });
+
 export type ScopedProjectRef = typeof ScopedProjectRef.Type;
 
 export const ScopedThreadRef = Schema.Struct({
   environmentId: EnvironmentId,
   threadId: ThreadId,
 });
+
 export type ScopedThreadRef = typeof ScopedThreadRef.Type;
 
 export const ScopedThreadSessionRef = Schema.Struct({
   environmentId: EnvironmentId,
   threadId: ThreadId,
 });
+
 export type ScopedThreadSessionRef = typeof ScopedThreadSessionRef.Type;

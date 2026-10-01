@@ -43,17 +43,20 @@ export function describeReadinessCause(cause: unknown): unknown {
   if (cause instanceof Error) {
     const tag = "_tag" in cause ? cause._tag : undefined;
     const nested = cause.cause;
+
     return {
       ...(typeof tag === "string" ? { _tag: tag } : { name: cause.name }),
       message: cause.message,
       ...(nested === undefined ? {} : { cause: describeReadinessCause(nested) }),
     };
   }
+
   if (typeof cause !== "object" || cause === null) {
     return cause;
   }
 
   const record = cause as Readonly<Record<string, unknown>>;
+
   return {
     ...(typeof record._tag === "string" ? { _tag: record._tag } : {}),
     ...(typeof record.message === "string" ? { message: record.message } : {}),
@@ -87,9 +90,11 @@ export const waitForHttpReady = Effect.fn("shared.httpReadiness.waitForHttpReady
   const timeoutMs = input.timeoutMs ?? 30_000;
   const intervalMs = input.intervalMs ?? 100;
   const probeTimeoutMs = input.probeTimeoutMs ?? DEFAULT_HTTP_READY_PROBE_TIMEOUT_MS;
+
   const retryPolicy = Schedule.spaced(Duration.millis(intervalMs)).pipe(
     Schedule.upTo({ times: Math.max(0, Math.ceil(timeoutMs / intervalMs)) }),
   );
+
   const requestUrl = new URL(input.path ?? "/", input.baseUrl).toString();
   const client = yield* HttpClient.HttpClient;
   const lastProbeFailure = yield* Ref.make<unknown>(null);
@@ -100,13 +105,17 @@ export const waitForHttpReady = Effect.fn("shared.httpReadiness.waitForHttpReady
   // (mirrors the SSH original's `cause instanceof SshReadinessError` checks).
   const makeError = input.makeError;
   const madeErrors = new WeakSet<object>();
+
   const fail = (failure: HttpReadinessFailureCause): E => {
     const error = makeError({ requestUrl, probeTimeoutMs, attempt, ...failure });
+
     if (typeof error === "object" && error !== null) {
       madeErrors.add(error);
     }
+
     return error;
   };
+
   const isMadeError = (value: unknown): value is E =>
     typeof value === "object" && value !== null && madeErrors.has(value);
 
@@ -123,10 +132,12 @@ export const waitForHttpReady = Effect.fn("shared.httpReadiness.waitForHttpReady
     HttpClient.transform((effect) =>
       Effect.gen(function* () {
         attempt += 1;
+
         const responseOption = yield* effect.pipe(
           Effect.timeoutOption(Duration.millis(probeTimeoutMs)),
           Effect.mapError((cause) => fail({ kind: "request-failure", cause })),
         );
+
         return yield* Option.match(responseOption, {
           onSome: Effect.succeed,
           onNone: () =>
@@ -179,6 +190,7 @@ export const waitForHttpReady = Effect.fn("shared.httpReadiness.waitForHttpReady
           attempts: attempt,
           lastFailure,
         });
+
         return yield* Effect.fail(
           fail({
             kind: "overall-timeout",

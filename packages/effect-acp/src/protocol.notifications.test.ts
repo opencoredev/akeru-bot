@@ -23,6 +23,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
     () =>
       Effect.gen(function* () {
         const { stdio, input, output } = yield* makeInMemoryStdio();
+
         const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
           stdio,
           serverRequestMethods: new Set(),
@@ -31,6 +32,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
 
         const notifications =
           yield* Deferred.make<ReadonlyArray<AcpProtocol.AcpIncomingNotification>>();
+
         yield* transport.incoming.pipe(
           Stream.take(2),
           Stream.runCollect,
@@ -133,6 +135,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
     Effect.gen(function* () {
       const { stdio } = yield* makeInMemoryStdio();
       const events: Array<AcpProtocol.AcpProtocolLogEvent> = [];
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         serverRequestMethods: new Set(),
@@ -171,6 +174,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
   it.effect("fails notification encoding through the declared ACP error channel", () =>
     Effect.gen(function* () {
       const { stdio } = yield* makeInMemoryStdio();
+
       const transport = yield* AcpProtocol.makeAcpPatchedProtocol({
         stdio,
         serverRequestMethods: new Set(),
@@ -202,6 +206,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
           onSuccess: () => assert.fail("Expected request encoding to fail"),
         }),
       );
+
       assert.instanceOf(requestError, AcpError.AcpProtocolParseError);
       assert.deepInclude(requestError, {
         operation: "encode-message",

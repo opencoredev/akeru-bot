@@ -11,6 +11,7 @@ describe("applyShellStreamEvent", () => {
         sequence: 4,
         bot: stubBot,
       });
+
       const updated = applyShellStreamEvent(added, {
         kind: "bot-upserted",
         sequence: 5,
@@ -29,6 +30,7 @@ describe("applyShellStreamEvent", () => {
         ...baseSnapshot,
         bots: [stubBot],
       };
+
       const next = applyShellStreamEvent(snapshotWithBot, {
         kind: "bot-removed",
         sequence: 6,
@@ -47,6 +49,7 @@ describe("applyShellStreamEvent", () => {
         sequence: 6,
         group: stubGroup,
       });
+
       const updated = applyShellStreamEvent(added, {
         kind: "group-upserted",
         sequence: 7,
@@ -66,6 +69,7 @@ describe("applyShellStreamEvent", () => {
         ...baseSnapshot,
         groups: [stubGroup],
       };
+
       const next = applyShellStreamEvent(snapshotWithGroup, {
         kind: "group-removed",
         sequence: 8,

@@ -18,20 +18,24 @@ export function errorTag(error: unknown): string {
     if (typeof error === "object" && error !== null && "_tag" in error) {
       return isStructuralTag(error._tag) ? error._tag : "TaggedError";
     }
+
     if (error instanceof Error) {
       return isStructuralTag(error.name) ? error.name : "Error";
     }
   } catch {
     return "UnknownError";
   }
+
   return typeof error;
 }
 
 export function causeErrorTag(cause: Cause.Cause<unknown>): string {
   const failure = Cause.findErrorOption(cause);
+
   if (Option.isSome(failure)) {
     return errorTag(failure.value);
   }
+
   return cause.reasons[0]?._tag ?? "Empty";
 }
 
@@ -43,7 +47,9 @@ function markSeen(value: object, seen: WeakSet<object>): boolean {
   if (seen.has(value)) {
     return true;
   }
+
   seen.add(value);
+
   return false;
 }
 
@@ -57,12 +63,15 @@ function normalizeJsonValue(value: unknown, seen: WeakSet<object> = new WeakSet(
   ) {
     return value ?? null;
   }
+
   if (typeof value === "bigint") {
     return value.toString();
   }
+
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? "Invalid Date" : value.toISOString();
   }
+
   if (value instanceof Error) {
     return {
       name: value.name,
@@ -70,16 +79,20 @@ function normalizeJsonValue(value: unknown, seen: WeakSet<object> = new WeakSet(
       ...(value.stack ? { stack: value.stack } : {}),
     };
   }
+
   if (Array.isArray(value)) {
     if (markSeen(value, seen)) {
       return "[Circular]";
     }
+
     return value.map((entry) => normalizeJsonValue(entry, seen));
   }
+
   if (value instanceof Map) {
     if (markSeen(value, seen)) {
       return "[Circular]";
     }
+
     return Object.fromEntries(
       Array.from(value.entries(), ([key, entryValue]) => [
         String(key),
@@ -87,18 +100,23 @@ function normalizeJsonValue(value: unknown, seen: WeakSet<object> = new WeakSet(
       ]),
     );
   }
+
   if (value instanceof Set) {
     if (markSeen(value, seen)) {
       return "[Circular]";
     }
+
     return Array.from(value.values(), (entry) => normalizeJsonValue(entry, seen));
   }
+
   if (!isPlainObject(value)) {
     return String(value);
   }
+
   if (markSeen(value, seen)) {
     return "[Circular]";
   }
+
   return Object.fromEntries(
     Object.entries(value).map(([key, entryValue]) => [key, normalizeJsonValue(entryValue, seen)]),
   );
@@ -108,11 +126,13 @@ export function compactTraceAttributes(
   attributes: Readonly<Record<string, unknown>>,
 ): TraceAttributes {
   const entries: Array<[string, unknown]> = [];
+
   for (const [key, value] of Object.entries(attributes)) {
     if (value !== undefined) {
       entries.push([key, normalizeJsonValue(value)]);
     }
   }
+
   return Object.fromEntries(entries);
 }
 
@@ -120,12 +140,14 @@ export function formatTraceExit(exit: Exit.Exit<unknown, unknown>): EffectTraceR
   if (ExitRuntime.isSuccess(exit)) {
     return { _tag: "Success" };
   }
+
   if (Cause.hasInterruptsOnly(exit.cause)) {
     return {
       _tag: "Interrupted",
       cause: Cause.pretty(exit.cause),
     };
   }
+
   return {
     _tag: "Failure",
     cause: Cause.pretty(exit.cause),
@@ -149,20 +171,27 @@ function truncateNestedValue(value: unknown): unknown {
       ? value
       : `${value.slice(0, TRACE_ATTRIBUTE_MAX_LENGTH)}${TRACE_ATTRIBUTE_TRUNCATION_SUFFIX}`;
   }
+
   if (Array.isArray(value)) {
     const truncated = value.map(truncateNestedValue);
+
     return truncated.some((entry, index) => entry !== value[index]) ? truncated : value;
   }
+
   if (isPlainObject(value)) {
     let truncated: Record<string, unknown> | undefined;
+
     for (const [key, entry] of Object.entries(value)) {
       const next = truncateNestedValue(entry);
+
       if (next === entry) continue;
       truncated ??= { ...value };
       truncated[key] = next;
     }
+
     return truncated ?? value;
   }
+
   return value;
 }
 
@@ -174,6 +203,7 @@ function truncateNestedValue(value: unknown): unknown {
  */
 export function truncateTraceAttributes(attributes: TraceAttributes): TraceAttributes {
   let truncated: Record<string, unknown> | undefined;
+
   for (const [key, value] of Object.entries(attributes)) {
     if (typeof value === "string" && ALWAYS_TRUNCATED_TRACE_ATTRIBUTES.has(key)) {
       if (value.length <= TRACE_ATTRIBUTE_TRUNCATED_LENGTH) continue;
@@ -182,10 +212,13 @@ export function truncateTraceAttributes(attributes: TraceAttributes): TraceAttri
         `${value.slice(0, TRACE_ATTRIBUTE_TRUNCATED_LENGTH)}${TRACE_ATTRIBUTE_TRUNCATION_SUFFIX}`;
       continue;
     }
+
     const next = truncateNestedValue(value);
+
     if (next === value) continue;
     truncated ??= { ...attributes };
     truncated[key] = next;
   }
+
   return truncated ?? attributes;
 }

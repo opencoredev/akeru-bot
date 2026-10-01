@@ -133,6 +133,7 @@ describe("connection presentation", () => {
       error: "Relay request timed out.",
       traceId: "trace-retry",
     } as const;
+
     expect(connectionStatusText(connection)).toBe(
       "Failed to connect. Reconnecting... Reason: Relay request timed out.",
     );

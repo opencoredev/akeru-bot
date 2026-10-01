@@ -71,6 +71,7 @@ export function projectServerConfig(
   event: ServerConfigStreamEvent,
 ): readonly [Option.Option<ServerConfigProjection>, ReadonlyArray<ServerConfigProjection>] {
   const next = applyServerConfigProjection(current, event);
+
   return [next, Option.toArray(next)];
 }
 
@@ -90,6 +91,7 @@ export const makeEnvironmentServerConfigState = Effect.fn("EnvironmentServerConf
     const supervisor = yield* EnvironmentSupervisor;
     const cache = yield* EnvironmentCacheStore;
     const environmentId = supervisor.target.environmentId;
+
     const cachedConfig = yield* cache.loadServerConfig(environmentId).pipe(
       Effect.catch((error) =>
         Effect.logWarning("Could not load cached server configuration.").pipe(
@@ -101,6 +103,7 @@ export const makeEnvironmentServerConfigState = Effect.fn("EnvironmentServerConf
         ),
       ),
     );
+
     const state = yield* SubscriptionRef.make<Option.Option<ServerConfigProjection>>(
       Option.map(cachedConfig, (config) => ({
         config,
@@ -108,6 +111,7 @@ export const makeEnvironmentServerConfigState = Effect.fn("EnvironmentServerConf
         source: "cache" as const,
       })),
     );
+
     const persistence = yield* Queue.sliding<ServerConfig>(1);
     const pendingPersistence = yield* Ref.make<Option.Option<ServerConfig>>(Option.none());
 
@@ -134,6 +138,7 @@ export const makeEnvironmentServerConfigState = Effect.fn("EnvironmentServerConf
       if (!(yield* persist(config))) {
         return;
       }
+
       yield* Ref.update(pendingPersistence, (pending) =>
         Option.isSome(pending) && pending.value === config ? Option.none() : pending,
       );
@@ -149,9 +154,11 @@ export const makeEnvironmentServerConfigState = Effect.fn("EnvironmentServerConf
       Stream.runForEach((event) =>
         Effect.gen(function* () {
           const next = applyServerConfigProjection(yield* SubscriptionRef.get(state), event);
+
           if (Option.isNone(next)) {
             return;
           }
+
           yield* Ref.set(pendingPersistence, Option.some(next.value.config));
           yield* SubscriptionRef.set(state, next);
           yield* Queue.offer(persistence, next.value.config);
@@ -208,8 +215,10 @@ export function projectServerWelcome(
   if (event.type !== "welcome") {
     return [current, []];
   }
+
   // SAFETY: The lifecycle subscription decodes welcome payloads before this projection receives them.
   const welcome = event.payload as ServerLifecycleWelcomePayload;
+
   return [Option.some(welcome), [welcome]];
 }
 
@@ -224,5 +233,6 @@ export function resolveServerConfigValue(
   ) {
     return projection.config;
   }
+
   return initialConfig ?? projection?.config ?? null;
 }

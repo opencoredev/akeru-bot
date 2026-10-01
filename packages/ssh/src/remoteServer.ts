@@ -48,13 +48,17 @@ const decodeRemoteJsonOutput = <A, E>(
     Effect.catch((error) =>
       Effect.gen(function* () {
         const jsonObject = extractJsonObject(stdout);
+
         if (jsonObject === stdout.trim()) {
           return yield* Effect.fail(error);
         }
+
         const exit = yield* Effect.exit(decode(jsonObject));
+
         if (Exit.isSuccess(exit)) {
           return exit.value;
         }
+
         return yield* Effect.fail(error);
       }),
     ),
@@ -81,6 +85,7 @@ export const launchOrReuseRemoteServer = Effect.fn("ssh/tunnel.launchOrReuseRemo
       ...sshRunnerLogFields(runner),
       stateKey: remoteStateKey(target),
     });
+
     const result = yield* runSshCommand(target, {
       remoteCommandArgs: ["sh", "-l", "-s", "--", remoteStateKey(target)],
       stdin: buildRemoteLaunchScript(runner),
@@ -89,12 +94,14 @@ export const launchOrReuseRemoteServer = Effect.fn("ssh/tunnel.launchOrReuseRemo
       ...(input?.batchMode === undefined ? {} : { batchMode: input.batchMode }),
       ...(input?.interactiveAuth === undefined ? {} : { interactiveAuth: input.interactiveAuth }),
     });
+
     if (!getLastNonEmptyOutputLine(result.stdout)) {
       return yield* new SshLaunchError({
         message: "SSH launch did not return a remote port.",
         stdout: result.stdout,
       });
     }
+
     const parsed = yield* decodeRemoteLaunchOutput(result.stdout).pipe(
       Effect.mapError(
         (cause) =>
@@ -105,18 +112,21 @@ export const launchOrReuseRemoteServer = Effect.fn("ssh/tunnel.launchOrReuseRemo
           }),
       ),
     );
+
     if (!Number.isInteger(parsed.remotePort)) {
       return yield* new SshLaunchError({
         message: `SSH launch returned an invalid remote port: ${String(parsed.remotePort)}.`,
         stdout: result.stdout,
       });
     }
+
     yield* Effect.logInfo("ssh.remoteServer.launch.ready", {
       ...sshTargetLogFields(target),
       remotePort: parsed.remotePort,
       remoteServerKind: parsed.serverKind ?? null,
       stateKey: remoteStateKey(target),
     });
+
     return {
       remotePort: parsed.remotePort,
       remoteServerKind: parsed.serverKind ?? null,
@@ -139,6 +149,7 @@ export const issueRemotePairingToken = Effect.fn("ssh/tunnel.issueRemotePairingT
     ...sshTargetLogFields(target),
     stateKey: remoteStateKey(target),
   });
+
   const result = yield* runSshCommand(target, {
     remoteCommandArgs: ["sh", "-s"],
     stdin: buildRemotePairingScript(target, runner),
@@ -146,12 +157,14 @@ export const issueRemotePairingToken = Effect.fn("ssh/tunnel.issueRemotePairingT
     ...(input?.batchMode === undefined ? {} : { batchMode: input.batchMode }),
     ...(input?.interactiveAuth === undefined ? {} : { interactiveAuth: input.interactiveAuth }),
   });
+
   if (!getLastNonEmptyOutputLine(result.stdout)) {
     return yield* new SshPairingError({
       message: "SSH pairing did not return a credential.",
       stdout: result.stdout,
     });
   }
+
   const parsed = yield* decodeRemotePairingOutput(result.stdout).pipe(
     Effect.mapError(
       (cause) =>
@@ -162,16 +175,19 @@ export const issueRemotePairingToken = Effect.fn("ssh/tunnel.issueRemotePairingT
         }),
     ),
   );
+
   if (parsed.credential.trim().length === 0) {
     return yield* new SshPairingError({
       message: "SSH pairing command returned an invalid credential.",
       stdout: result.stdout,
     });
   }
+
   yield* Effect.logDebug("ssh.remoteServer.pairingToken.created", {
     ...sshTargetLogFields(target),
     stateKey: remoteStateKey(target),
   });
+
   return {
     credential: parsed.credential,
   };
@@ -218,5 +234,6 @@ export const readRemoteServerLogTail = Effect.fn("ssh/tunnel.readRemoteServerLog
     ...(input?.batchMode === undefined ? {} : { batchMode: input.batchMode }),
     ...(input?.interactiveAuth === undefined ? {} : { interactiveAuth: input.interactiveAuth }),
   });
+
   return result.stdout.trim();
 });

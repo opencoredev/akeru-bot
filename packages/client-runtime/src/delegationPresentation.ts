@@ -38,12 +38,14 @@ export interface DelegationPresentation {
 export function presentDelegation(delegation: AkeruDelegationRecord): DelegationPresentation {
   const phase = delegation.phase;
   const state = akeruDelegationStateOf(phase);
+
   const delivery: DelegationDelivery | null =
     phase._tag === "Completed" || phase._tag === "Failed"
       ? phase.acknowledgedAt === null
         ? "pending"
         : "delivered"
       : null;
+
   return {
     state,
     terminal: isAkeruDelegationTerminal(phase),
@@ -70,14 +72,18 @@ export function presentDelegation(delegation: AkeruDelegationRecord): Delegation
  */
 export function delegationElapsedMs(delegation: AkeruDelegationRecord, now: number): number | null {
   const phase = delegation.phase;
+
   const startedAt = Date.parse(
     phase._tag === "Queued" || phase.startedAt === null ? delegation.createdAt : phase.startedAt,
   );
+
   const endedAt =
     phase._tag === "Failed" || phase._tag === "Canceled" || phase._tag === "Completed"
       ? Date.parse(phase.completedAt)
       : now;
+
   if (Number.isNaN(startedAt) || Number.isNaN(endedAt) || endedAt < startedAt) return null;
+
   return endedAt - startedAt;
 }
 
@@ -119,12 +125,17 @@ export function delegationActions(
   delegations: ReadonlyArray<AkeruDelegationRecord>,
 ): ReadonlyArray<DelegationAction> {
   const phase = delegation.phase._tag;
+
   if (phase === "Failed" || phase === "Canceled") {
     return isDelegationSuperseded(delegation, delegations) ? [] : ["retry"];
   }
+
   if (phase === "Completed") return [];
   const actions: DelegationAction[] = [];
+
   if (!delegation.keep) actions.push("keep");
+
   if (AKERU_DELEGATION_TRANSITIONS[phase].has("Canceled")) actions.push("cancel");
+
   return actions;
 }

@@ -62,6 +62,7 @@ describe("EnvironmentThreads", () => {
           Option.isSome(value.data) &&
           value.data.value.title === "Live title",
       );
+
       yield* TestClock.adjust("500 millis");
       yield* Effect.yieldNow;
 
@@ -88,6 +89,7 @@ describe("EnvironmentThreads", () => {
           yield* Effect.yieldNow;
 
           expect(yield* Ref.get(harness.savedThreads)).toEqual([]);
+
           return harness.savedThreads;
         }),
       );
@@ -122,12 +124,14 @@ describe("EnvironmentThreads", () => {
           thread: { ...BASE_THREAD, title: "Stale HTTP thread" },
         }),
       });
+
       yield* Queue.offer(harness.inputs, snapshot(BASE_THREAD));
       yield* Queue.offer(harness.inputs, deleted());
       yield* awaitThreadState(harness.observed, (value) => value.status === "deleted");
 
       expect(yield* Ref.get(harness.loaderCalls)).toBe(0);
       yield* Queue.offer(harness.wakeups, "application-active");
+
       for (let attempt = 0; attempt < 100; attempt += 1) {
         if ((yield* Ref.get(harness.subscriptionCount)) >= 2) break;
         yield* Effect.yieldNow;

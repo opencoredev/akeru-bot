@@ -48,6 +48,7 @@ export const createThread: (input: CreateThreadInput) => CommandEffect = Effect.
   "EnvironmentCommands.createThread",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "thread.create",
@@ -170,6 +171,7 @@ export const setThreadRuntimeMode: (input: SetThreadRuntimeModeInput) => Command
   "EnvironmentCommands.setThreadRuntimeMode",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "thread.runtime-mode.set",
@@ -181,6 +183,7 @@ export const setThreadRuntimeMode: (input: SetThreadRuntimeModeInput) => Command
 export const setThreadInteractionMode: (input: SetThreadInteractionModeInput) => CommandEffect =
   Effect.fn("EnvironmentCommands.setThreadInteractionMode")(function* (input) {
     const metadata = yield* timestampedCommandMetadata(input);
+
     return yield* dispatch({
       ...input,
       type: "thread.interaction-mode.set",

@@ -10,6 +10,7 @@ export const TEST_NODE_ENGINE_RANGE = "^22.16 || ^23.11 || >=24.10";
 
 export const makeSuccessfulProcess = (stdout: string) => {
   const stdoutStream = Stream.make(new TextEncoder().encode(stdout));
+
   return ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(123),
     stdout: stdoutStream,
@@ -27,6 +28,7 @@ export const makeSuccessfulProcess = (stdout: string) => {
 
 export const makeDelayedSuccessfulProcess = (stdout: string, delayMs: number) => {
   const process = makeSuccessfulProcess(stdout);
+
   return {
     ...process,
     exitCode: Effect.sleep(Duration.millis(delayMs)).pipe(
@@ -37,6 +39,7 @@ export const makeDelayedSuccessfulProcess = (stdout: string, delayMs: number) =>
 
 export const makeRunningProcess = (onKill: () => void) => {
   let finish: ((exitCode: ChildProcessSpawner.ExitCode) => void) | null = null;
+
   return ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(123),
     stdout: Stream.empty,
@@ -44,6 +47,7 @@ export const makeRunningProcess = (onKill: () => void) => {
     all: Stream.empty,
     exitCode: Effect.callback<ChildProcessSpawner.ExitCode>((resume) => {
       finish = (exitCode) => resume(Effect.succeed(exitCode));
+
       return Effect.sync(() => {
         finish = null;
       });

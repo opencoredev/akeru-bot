@@ -20,9 +20,11 @@ describe("HTTP readiness failure classification", () => {
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>();
       const failures: HttpReadinessFailure[] = [];
+
       const client = HttpClient.make(() =>
         Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
       );
+
       const fiber = yield* waitForHttpReady({
         baseUrl: "http://environment.example.test/",
         timeoutMs: 1_000,
@@ -30,6 +32,7 @@ describe("HTTP readiness failure classification", () => {
         probeTimeoutMs: 250,
         makeError: (failure) => {
           failures.push(failure);
+
           return new ReadinessTestError({ message: failure.kind });
         },
       }).pipe(Effect.flip, Effect.provideService(HttpClient.HttpClient, client), Effect.forkChild);
@@ -51,8 +54,10 @@ describe("HTTP readiness failure classification", () => {
       const failures: HttpReadinessFailure[] = [];
       let attempts = 0;
       const externalCause = { kind: "overall-timeout", timeoutMs: 123 };
+
       const client = HttpClient.make((request) => {
         attempts += 1;
+
         return attempts === 1
           ? Effect.fail(
               new HttpClientError.HttpClientError({
@@ -61,11 +66,13 @@ describe("HTTP readiness failure classification", () => {
             )
           : Effect.succeed(HttpClientResponse.fromWeb(request, new Response("", { status: 200 })));
       });
+
       const fiber = yield* waitForHttpReady({
         baseUrl: "http://environment.example.test/",
         intervalMs: 100,
         makeError: (failure) => {
           failures.push(failure);
+
           return new ReadinessTestError({ message: failure.kind });
         },
       }).pipe(Effect.provideService(HttpClient.HttpClient, client), Effect.forkChild);

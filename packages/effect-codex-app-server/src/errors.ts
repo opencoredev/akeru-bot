@@ -7,6 +7,7 @@ export const CodexAppServerRequestOperation = Schema.Literals([
   "handle-request",
   "receive-response",
 ]);
+
 export type CodexAppServerRequestOperation = typeof CodexAppServerRequestOperation.Type;
 
 export const CodexAppServerSchemaIssueKind = Schema.Literals([
@@ -22,6 +23,7 @@ export const CodexAppServerSchemaIssueKind = Schema.Literals([
   "Forbidden",
   "OneOf",
 ]);
+
 export type CodexAppServerSchemaIssueKind = typeof CodexAppServerSchemaIssueKind.Type;
 
 export interface CodexAppServerSchemaIssueDiagnostics {
@@ -39,6 +41,7 @@ const schemaIssueDiagnostics = (root: SchemaIssue.Issue): CodexAppServerSchemaIs
     issueCount += 1;
     issueKinds.add(issue._tag);
     maximumPathDepth = Math.max(maximumPathDepth, pathDepth);
+
     switch (issue._tag) {
       case "Filter":
       case "Encoding":
@@ -55,6 +58,7 @@ const schemaIssueDiagnostics = (root: SchemaIssue.Issue): CodexAppServerSchemaIs
   };
 
   visit(root, 0);
+
   return {
     issueCount,
     issueKinds: [...issueKinds],
@@ -74,17 +78,21 @@ export const CodexAppServerPayloadKind = Schema.Literals([
   "function",
   "undefined",
 ]);
+
 export type CodexAppServerPayloadKind = typeof CodexAppServerPayloadKind.Type;
 
 const payloadKind = (payload: unknown): CodexAppServerPayloadKind => {
   if (payload === null) return "null";
+
   if (Array.isArray(payload)) return "array";
+
   return typeof payload;
 };
 
 const protocolMessageFields = ["id", "method", "params", "result", "error"] as const;
 
 export const CodexAppServerProtocolMessageField = Schema.Literals(protocolMessageFields);
+
 export type CodexAppServerProtocolMessageField = typeof CodexAppServerProtocolMessageField.Type;
 
 export interface CodexAppServerRequestDiagnostics {
@@ -106,12 +114,14 @@ export const CodexAppServerProtocolParseOperation = Schema.Literals([
   "decode-request-payload",
   "decode-response-payload",
 ]);
+
 export type CodexAppServerProtocolParseOperation = typeof CodexAppServerProtocolParseOperation.Type;
 
 export const CodexAppServerTransportOperation = Schema.Literals([
   "read-input-stream",
   "read-process-exit-status",
 ]);
+
 export type CodexAppServerTransportOperation = typeof CodexAppServerTransportOperation.Type;
 
 export const CodexAppServerIdentifierPurpose = Schema.Literals([
@@ -121,6 +131,7 @@ export const CodexAppServerIdentifierPurpose = Schema.Literals([
   "mcp-elicitation-request",
   "user-input-request",
 ]);
+
 export type CodexAppServerIdentifierPurpose = typeof CodexAppServerIdentifierPurpose.Type;
 
 export interface CodexAppServerProtocolErrorShape {
@@ -174,6 +185,7 @@ export class CodexAppServerProtocolParseError extends Schema.TaggedErrorClass<Co
 ) {
   override get message() {
     const method = this.method === undefined ? "" : ` for method '${this.method}'`;
+
     return `Codex App Server protocol operation '${this.operation}' failed${method}.`;
   }
 
@@ -207,6 +219,7 @@ export class CodexAppServerProtocolParseError extends Schema.TaggedErrorClass<Co
 
   static fromUnroutableMessage(message: unknown) {
     const diagnostics = { payloadKind: payloadKind(message) };
+
     if (typeof message !== "object" || message === null || Array.isArray(message)) {
       return new CodexAppServerProtocolParseError({
         operation: "route-wire-message",
@@ -215,12 +228,15 @@ export class CodexAppServerProtocolParseError extends Schema.TaggedErrorClass<Co
     }
 
     const presentFields = protocolMessageFields.filter((field) => field in message);
+
     const method =
       "method" in message && typeof message.method === "string" ? message.method : undefined;
+
     const requestId =
       "id" in message && (typeof message.id === "string" || typeof message.id === "number")
         ? String(message.id)
         : undefined;
+
     return new CodexAppServerProtocolParseError({
       operation: "route-wire-message",
       ...diagnostics,
@@ -305,6 +321,7 @@ export class CodexAppServerRequestError extends Schema.TaggedErrorClass<CodexApp
     if (error._tag === "CodexAppServerRequestError") {
       return error;
     }
+
     return CodexAppServerRequestError.internalError(
       `Codex App Server request handler failed for method '${method}'`,
       undefined,
@@ -358,6 +375,7 @@ export class CodexAppServerRequestError extends Schema.TaggedErrorClass<CodexApp
     cause: Schema.SchemaError,
   ) {
     const diagnostics = schemaIssueDiagnostics(cause.issue);
+
     return new CodexAppServerRequestError({
       code: -32602,
       errorMessage: `Invalid payload for method '${method}' during '${operation}'`,
@@ -375,6 +393,7 @@ export class CodexAppServerRequestError extends Schema.TaggedErrorClass<CodexApp
     payload: unknown,
   ) {
     const diagnostics = { payloadKind: payloadKind(payload) };
+
     return new CodexAppServerRequestError({
       code: -32602,
       errorMessage: `Method '${method}' does not accept a payload during '${operation}'`,

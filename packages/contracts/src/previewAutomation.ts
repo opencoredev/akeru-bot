@@ -119,6 +119,7 @@ export const PreviewUrlResolution = Schema.Struct({
 });
 
 export type PreviewUrlResolution = typeof PreviewUrlResolution.Type;
+
 export {
   PREVIEW_AUTOMATION_V1_OPERATIONS,
   PREVIEW_AUTOMATION_OPERATIONS,
@@ -130,6 +131,7 @@ export {
   PreviewAutomationClientId,
   PreviewAutomationConnectionId,
 } from "./previewAutomation/targets.ts";
+
 export {
   PreviewAutomationOpenInput,
   PreviewAutomationNavigateInput,
@@ -144,6 +146,7 @@ export {
   PreviewAutomationEvaluateInput,
   PreviewAutomationWaitForInput,
 } from "./previewAutomation/input.ts";
+
 export {
   PreviewAutomationElement,
   PreviewAutomationConsoleEntry,
@@ -151,10 +154,12 @@ export {
   PreviewAutomationActionEvent,
   PreviewAutomationSnapshot,
 } from "./previewAutomation/snapshot.ts";
+
 export {
   PreviewAutomationRecordingStatus,
   PreviewAutomationRecordingArtifact,
 } from "./previewAutomation/artifacts.ts";
+
 export {
   PreviewAutomationUnavailableError,
   PreviewAutomationNoAvailableHostError,

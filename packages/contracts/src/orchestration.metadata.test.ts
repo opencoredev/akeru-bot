@@ -58,6 +58,7 @@ it.effect("accepts bootstrap metadata in thread.turn.start", () =>
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.bootstrap?.createThread?.projectId, "project-1");
     assert.strictEqual(parsed.bootstrap?.prepareWorktree?.baseBranch, "main");
     assert.strictEqual(parsed.bootstrap?.prepareWorktree?.startFromOrigin, true);
@@ -80,6 +81,7 @@ it.effect("drops the retired title seed in thread.turn.start", () =>
       titleSeed: "Investigate reconnect failures",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.ok(!("titleSeed" in parsed));
   }),
 );
@@ -92,7 +94,9 @@ it.effect("accepts a title regeneration intent in thread.meta.update", () =>
       threadId: "thread-1",
       regenerateTitle: true,
     });
+
     assert.strictEqual(parsed.type, "thread.meta.update");
+
     if (parsed.type === "thread.meta.update") {
       assert.strictEqual(parsed.regenerateTitle, true);
     }
@@ -107,6 +111,7 @@ it.effect("accepts a linked pull request in thread.meta.update", () =>
       number: 42,
       url: "https://github.com/pingdotgg/t3code/pull/42",
     };
+
     const parsed = yield* decodeOrchestrationCommand({
       type: "thread.meta.update",
       commandId: "cmd-link-pull-request",
@@ -115,6 +120,7 @@ it.effect("accepts a linked pull request in thread.meta.update", () =>
     });
 
     assert.strictEqual(parsed.type, "thread.meta.update");
+
     if (parsed.type === "thread.meta.update") {
       assert.deepStrictEqual(parsed.linkedPullRequest, linkedPullRequest);
     }
@@ -130,7 +136,9 @@ it.effect("accepts an internal title regeneration completion", () =>
       requestId: "cmd-title-regenerate",
       title: "Updated title",
     });
+
     assert.strictEqual(parsed.type, "thread.title.regeneration.complete");
+
     if (parsed.type === "thread.title.regeneration.complete") {
       assert.strictEqual(parsed.requestId, "cmd-title-regenerate");
       assert.strictEqual(parsed.title, "Updated title");
@@ -149,6 +157,7 @@ it.effect("rejects an explicit title combined with title regeneration", () =>
         regenerateTitle: true,
       }),
     );
+
     assert.strictEqual(result._tag, "Failure");
   }),
 );
@@ -164,6 +173,7 @@ it.effect("decodes thread.turn-start-requested source proposed plan metadata whe
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.deepStrictEqual(parsed.sourceProposedPlan, {
       threadId: "thread-1",
       planId: "plan-1",
@@ -179,6 +189,7 @@ it.effect("drops the retired title seed from thread.turn-start-requested events"
       titleSeed: "Investigate reconnect failures",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.ok(!("titleSeed" in parsed));
   }),
 );
@@ -198,6 +209,7 @@ it.effect("decodes latest turn source proposed plan metadata when present", () =
         planId: "plan-1",
       },
     });
+
     assert.deepStrictEqual(parsed.sourceProposedPlan, {
       threadId: "thread-1",
       planId: "plan-1",
@@ -215,6 +227,7 @@ it.effect("defaults proposed plan implementation metadata for historical rows", 
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.implementedAt, null);
     assert.strictEqual(parsed.implementationThreadId, null);
   }),
@@ -231,6 +244,7 @@ it.effect("preserves proposed plan implementation metadata when present", () =>
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-02T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.implementedAt, "2026-01-02T00:00:00.000Z");
     assert.strictEqual(parsed.implementationThreadId, "thread-2");
   }),

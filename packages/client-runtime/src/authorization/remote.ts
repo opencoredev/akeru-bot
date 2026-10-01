@@ -20,6 +20,7 @@ export {
   RemoteEnvironmentAuthTimeoutError,
   RemoteEnvironmentAuthUndeclaredStatusError,
 } from "../rpc/http.ts";
+
 export type RemoteEnvironmentAuthError = RemoteEnvironmentRequestError;
 
 const DEFAULT_REMOTE_REQUEST_TIMEOUT_MS = 10_000;
@@ -41,16 +42,20 @@ export const appendClientConnectionParams = (
   if (clientMetadata?.surface) {
     url.searchParams.set("clientSurface", clientMetadata.surface);
   }
+
   if (clientMetadata?.appVersion) {
     url.searchParams.set("clientAppVersion", clientMetadata.appVersion);
   }
+
   if (clientMetadata?.surface === "mobile") {
     if (clientMetadata.os) {
       url.searchParams.set("clientOs", clientMetadata.os);
     }
+
     if (clientMetadata.osMajorVersion !== undefined) {
       url.searchParams.set("clientOsMajorVersion", String(clientMetadata.osMajorVersion));
     }
+
     if (clientMetadata.deviceModel) {
       url.searchParams.set("clientDeviceModel", clientMetadata.deviceModel);
     }
@@ -67,6 +72,7 @@ export const bootstrapRemoteBearerSession = Effect.fn(
   readonly timeoutMs?: number;
 }) {
   const client = yield* makeEnvironmentHttpApiClient(input.httpBaseUrl);
+
   return yield* executeEnvironmentHttpRequest(
     environmentEndpointUrl(input.httpBaseUrl, "/oauth/token"),
     input.timeoutMs ?? DEFAULT_REMOTE_REQUEST_TIMEOUT_MS,
@@ -92,6 +98,7 @@ export const fetchRemoteSessionState = Effect.fn(
   readonly timeoutMs?: number;
 }) {
   const client = yield* makeEnvironmentHttpApiClient(input.httpBaseUrl);
+
   return yield* executeEnvironmentHttpRequest(
     environmentEndpointUrl(input.httpBaseUrl, "/api/auth/session"),
     input.timeoutMs ?? DEFAULT_REMOTE_REQUEST_TIMEOUT_MS,
@@ -111,6 +118,7 @@ export const issueRemoteWebSocketTicket = Effect.fn(
   readonly timeoutMs?: number;
 }) {
   const client = yield* makeEnvironmentHttpApiClient(input.httpBaseUrl);
+
   return yield* executeEnvironmentHttpRequest(
     environmentEndpointUrl(input.httpBaseUrl, "/api/auth/websocket-ticket"),
     input.timeoutMs ?? DEFAULT_REMOTE_REQUEST_TIMEOUT_MS,
@@ -138,10 +146,13 @@ export const resolveRemoteWebSocketConnectionUrl = Effect.fn(
   });
 
   const url = new URL(input.wsBaseUrl);
+
   if (url.pathname === "" || url.pathname === "/") {
     url.pathname = "/ws";
   }
+
   url.searchParams.set("wsTicket", issued.ticket);
   appendClientConnectionParams(url, input.clientMetadata);
+
   return url.toString();
 });

@@ -280,10 +280,12 @@ export class ServerSettingsError extends Schema.TaggedErrorClass<ServerSettingsE
   override get message(): string {
     const provider =
       this.providerInstanceId === undefined ? "" : ` for provider ${this.providerInstanceId}`;
+
     const variable =
       this.environmentVariable === undefined
         ? ""
         : ` and environment variable ${this.environmentVariable}`;
+
     return `Server settings ${this.operation} failed${provider}${variable} at ${this.settingsPath}.`;
   }
 }
@@ -395,6 +397,7 @@ export const defaultEnabledForDriver = (driver: ProviderDriverKind): boolean => 
     string,
     { readonly enabled?: boolean } | undefined
   >;
+
   return legacyDefaults[driver]?.enabled ?? true;
 };
 
@@ -408,8 +411,10 @@ export const resolveProviderInstanceEnabled = (
   instance: Pick<ProviderInstanceConfig, "driver" | "enabled" | "config">,
 ): boolean => {
   const configEnabled = providerInstanceConfigEnabledFlag(instance.config);
+
   if (instance.enabled === false || configEnabled === false) {
     return false;
   }
+
   return instance.enabled ?? configEnabled ?? defaultEnabledForDriver(instance.driver);
 };

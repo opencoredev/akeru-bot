@@ -24,6 +24,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
           const text = "x".repeat(1024);
           let notificationCount = 0;
           let requestCount = 0;
+
           const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
             stdio,
             ...(bufferSize === undefined
@@ -39,6 +40,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
             onRequest: (request) =>
               Effect.suspend(() => {
                 requestCount++;
+
                 return request.id === 0
                   ? Effect.fail(
                       CodexError.CodexAppServerRequestError.methodNotFound(request.method),
@@ -55,6 +57,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
               encodeJsonl({ id: index, method: "x/request", params: { text } }),
             );
           }
+
           for (let index = 0; index < count; index++) {
             assert.deepEqual(
               yield* decodeJson(yield* Queue.take(output)),
@@ -66,6 +69,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
                 : { id: index, result: { ok: true } },
             );
           }
+
           yield* Queue.end(input);
           yield* Deferred.await(terminated);
 
@@ -73,10 +77,12 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
           assert.equal(requestCount, count);
           const notifications = yield* Stream.runCollect(transport.incomingNotifications);
           const requests = yield* Stream.runCollect(transport.incomingRequests);
+
           const retainedIndexes = Array.from(
             { length: bufferSize ?? 0 },
             (_, offset) => count - (bufferSize ?? 0) + offset,
           );
+
           assert.deepEqual(
             notifications.map((notification) => notification.params),
             retainedIndexes.map((index) => ({ index, text })),
@@ -98,24 +104,28 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
       const notificationObserved = yield* Deferred.make<void>();
       const requestObserved = yield* Deferred.make<void>();
       const terminated = yield* Deferred.make<void>();
+
       const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
         stdio,
         rawNotificationBufferSize: "unbounded",
         rawRequestBufferSize: "unbounded",
         onTermination: () => Deferred.succeed(terminated, undefined).pipe(Effect.asVoid),
       });
+
       const notificationReader = yield* transport.incomingNotifications.pipe(
         Stream.runForEach(() =>
           Deferred.succeed(notificationObserved, undefined).pipe(Effect.andThen(Effect.never)),
         ),
         Effect.forkScoped,
       );
+
       const requestReader = yield* transport.incomingRequests.pipe(
         Stream.runForEach(() =>
           Deferred.succeed(requestObserved, undefined).pipe(Effect.andThen(Effect.never)),
         ),
         Effect.forkScoped,
       );
+
       yield* Queue.offer(input, encodeJsonl({ method: "x/first" }));
       yield* Queue.offer(input, encodeJsonl({ id: 1, method: "x/first" }));
       yield* Deferred.await(notificationObserved);
@@ -127,6 +137,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
         yield* Queue.offer(input, encodeJsonl({ method: "x/next", params: id }));
         yield* Queue.offer(input, encodeJsonl({ id, method: "x/next" }));
       }
+
       yield* Queue.end(input);
       yield* Deferred.await(terminated);
       assert.deepEqual(
@@ -147,15 +158,18 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
   it.effect("drains raw observations and completes waiting readers on decode failure", () =>
     Effect.gen(function* () {
       const { stdio, input } = yield* makeInMemoryStdio();
+
       const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
         stdio,
         rawNotificationBufferSize: 8,
         rawRequestBufferSize: 8,
       });
+
       const notifications = yield* transport.incomingNotifications.pipe(
         Stream.runCollect,
         Effect.forkScoped,
       );
+
       const requests = yield* transport.incomingRequests.pipe(Stream.runCollect, Effect.forkScoped);
       yield* Queue.offer(input, encodeJsonl({ method: "x/first" }));
       yield* Queue.offer(input, encodeJsonl({ id: 1, method: "x/first" }));
@@ -169,19 +183,23 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
     Effect.gen(function* () {
       const { stdio } = yield* makeInMemoryStdio();
       const scope = yield* Scope.make();
+
       const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
         stdio,
         rawNotificationBufferSize: 8,
         rawRequestBufferSize: 8,
       }).pipe(Effect.provideService(Scope.Scope, scope));
+
       const notifications = yield* transport.incomingNotifications.pipe(
         Stream.runCollect,
         Effect.forkScoped({ startImmediately: true }),
       );
+
       const requests = yield* transport.incomingRequests.pipe(
         Stream.runCollect,
         Effect.forkScoped({ startImmediately: true }),
       );
+
       yield* Scope.close(scope, Exit.void);
       assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(notifications)));
       assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(requests)));

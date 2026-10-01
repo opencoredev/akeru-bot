@@ -36,16 +36,21 @@ export function summarizeDurableFacts(
   const byId = new Map(revisions.map((revision) => [revision.id, revision]));
   const latest = new Map<AkeruMemoryRootId, AkeruMemoryRevision>();
   const first = new Map<AkeruMemoryRootId, AkeruMemoryRevision>();
+
   for (const revision of revisions) {
     const current = latest.get(revision.rootId);
+
     if (!current || revision.revision > current.revision) latest.set(revision.rootId, revision);
     const earliest = first.get(revision.rootId);
+
     if (!earliest || revision.revision < earliest.revision) first.set(revision.rootId, revision);
   }
+
   return (
     [...latest.values()]
       .map((revision) => {
         const previous = revision.supersedesId ? byId.get(revision.supersedesId) : undefined;
+
         return {
           rootId: revision.rootId,
           fact: revision.fact,
@@ -105,6 +110,7 @@ export function durableFactMoveScopes(
   policy: Pick<DurableFactPolicy, "privateBotMemory">,
 ) {
   const current = MOVE_SCOPE_BY_FACT_SCOPE[fact.scope];
+
   return DURABLE_FACT_MOVE_SCOPES.filter(
     (option) =>
       option.scope !== current &&
@@ -117,7 +123,9 @@ export function durableFactReadOnlyReason(
   policy: Pick<DurableFactPolicy, "canOperate" | "memoryEnabled">,
 ): MessageKey | null {
   if (!policy.memoryEnabled) return "Memory is off. Turn it on in settings to change facts.";
+
   if (!policy.canOperate) return "This connection can read memory but not change it.";
+
   return null;
 }
 
@@ -131,7 +139,9 @@ export function durableFactSourceLabel(
   i18n: DurableMemoryTranslator = englishTranslator,
 ) {
   if (fact.sourceThreadId === null) return null;
+
   if (fact.sourceThreadId === input.currentThreadId) return i18n.t("this chat");
+
   return input.threadTitles.get(fact.sourceThreadId)?.trim() || i18n.t("another chat");
 }
 
@@ -146,19 +156,23 @@ export function durableFactBotsLabel(
 ): string | null {
   const labels: string[] = [];
   let unknown = 0;
+
   for (const botId of fact.affectedBotIds) {
     if (botId === input.currentBotId) labels.push(i18n.t("this bot"));
     else {
       const name = input.botNames.get(botId)?.trim();
+
       if (name) labels.push(name);
       else unknown += 1;
     }
   }
+
   if (unknown > 0) {
     labels.push(
       unknown === 1 ? i18n.t("another bot") : i18n.t("{count} other bots", { count: unknown }),
     );
   }
+
   return labels.length > 0 ? labels.join(i18n.t(", ")) : null;
 }
 
@@ -193,12 +207,17 @@ export function durableFactActions(
   policy: DurableFactPolicy,
 ): ReadonlyArray<DurableFactAction> {
   if (durableFactReadOnlyReason(policy) !== null || fact.deletionState === "deleted") return [];
+
   if (fact.deletionState === "tombstoned") return ["delete"];
   const actions: DurableFactAction[] = ["edit", fact.pinned ? "unpin" : "pin"];
+
   if (durableFactMoveScopes(fact, policy).length > 0) actions.push("move");
+
   if (fact.approvalState === "pending") actions.push("approve", "reject");
+
   if (fact.approvalState === "rejected") actions.push("approve");
   actions.push("forget", "delete");
+
   return actions;
 }
 
@@ -208,6 +227,7 @@ export function durableFactMutation(
   intent: DurableFactIntent,
 ): AkeruMemoryMutation {
   const target = { memoryId: fact.rootId, expectedRevision: fact.revision };
+
   switch (intent.action) {
     case "edit":
       return { operation: "fact.edit", ...target, fact: intent.fact.trim() };
@@ -229,6 +249,7 @@ export function durableFactMutation(
 /** Whether an edit draft can be saved: non-empty and different from the current text. */
 export function canSaveDurableFactEdit(fact: Pick<DurableMemoryFact, "fact">, draft: string) {
   const next = draft.trim();
+
   return next.length > 0 && next !== fact.fact;
 }
 
@@ -247,6 +268,7 @@ export function describeDurableFactFailure(cause: unknown): {
   readonly detail: string | null;
 } {
   const tag = typeof cause === "object" && cause !== null && "_tag" in cause ? cause._tag : null;
+
   if (tag === "EnvironmentAuthorizationError") {
     return {
       conflict: false,
@@ -254,14 +276,17 @@ export function describeDurableFactFailure(cause: unknown): {
       detail: null,
     };
   }
+
   const detail =
     typeof cause === "object" && cause !== null && "detail" in cause
       ? String(cause.detail)
       : cause instanceof Error
         ? cause.message
         : null;
+
   if (detail?.includes("revision conflict")) {
     return { conflict: true, message: DURABLE_FACT_CONFLICT_MESSAGE, detail: null };
   }
+
   return { conflict: false, message: "The fact could not be updated.", detail: detail || null };
 }

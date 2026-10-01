@@ -26,6 +26,7 @@ describe("EnvironmentThreads", () => {
         titleUpdated("Replayed", CACHED_SNAPSHOT_SEQUENCE + 2),
         titleUpdated("Third", CACHED_SNAPSHOT_SEQUENCE + 3),
       ]);
+
       const published = yield* awaitThreadState(
         harness.observed,
         (value) => Option.isSome(value.data) && value.data.value.title !== BASE_THREAD.title,
@@ -36,10 +37,12 @@ describe("EnvironmentThreads", () => {
 
       // The resume cursor covers the whole batch.
       yield* harness.replaceSession;
+
       for (let attempt = 0; attempt < 100; attempt += 1) {
         if ((yield* Ref.get(harness.subscriptionCount)) >= 2) break;
         yield* Effect.yieldNow;
       }
+
       expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBe(CACHED_SNAPSHOT_SEQUENCE + 3);
     }),
   );
@@ -70,6 +73,7 @@ describe("EnvironmentThreads", () => {
         lastFailure: null,
         retryAt: null,
       });
+
       for (let index = 0; index < 10; index += 1) {
         yield* Effect.yieldNow;
       }

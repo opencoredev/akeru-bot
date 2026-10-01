@@ -31,6 +31,7 @@ it.effect("accepts provider-scoped model options in thread.turn.start", () =>
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+
     assert.strictEqual(parsed.modelSelection?.instanceId, "codex");
     assert.strictEqual(getOptionValue(parsed.modelSelection?.options, "reasoningEffort"), "high");
     assert.strictEqual(getOptionValue(parsed.modelSelection?.options, "fastMode"), true);
@@ -98,6 +99,7 @@ it.effect("ModelSelection migrates legacy `provider` field to `instanceId`", () 
       model: "gpt-5-codex",
       options: [{ id: "reasoningEffort", value: "high" }],
     });
+
     assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("codex"));
     assert.strictEqual(parsed.model, "gpt-5-codex");
     assert.deepStrictEqual(parsed.options, [{ id: "reasoningEffort", value: "high" }]);

@@ -91,6 +91,7 @@ describe("routine contracts", () => {
 
   it("keeps scheduled and recovery triggers out of client run commands", () => {
     const decode = Schema.decodeUnknownSync(ClientRoutineCommand);
+
     const command = {
       type: "routine.run",
       commandId: "command-run-1",
@@ -98,6 +99,7 @@ describe("routine contracts", () => {
       runId: "run-inbox-1",
       createdAt: now,
     };
+
     expect(decode({ ...command, trigger: "dry-run" })).toMatchObject({ trigger: "dry-run" });
     expect(() => decode({ ...command, trigger: "scheduled" })).toThrow();
   });

@@ -102,13 +102,17 @@ describe("ssh tunnel scripts", () => {
       username: "julius",
       port: 2222,
     } as const;
+
     const spawnedCommands: Array<ReadonlyArray<string>> = [];
+
     const spawner = ChildProcessSpawner.make((command) =>
       Effect.sync(() => {
         spawnedCommands.push(commandArgs(command));
+
         return makeSuccessfulProcess('loaded nvm default\n{"remotePort":3774}\n');
       }),
     );
+
     const spawnerLayer = Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner);
     const processLayer = Layer.merge(NodeServices.layer, spawnerLayer);
 
@@ -126,9 +130,11 @@ describe("ssh tunnel scripts", () => {
       username: "julius",
       port: 2222,
     } as const;
+
     const spawner = ChildProcessSpawner.make(() =>
       Effect.succeed(makeDelayedSuccessfulProcess('{"remotePort":3774}\n', 75_000)),
     );
+
     const spawnerLayer = Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner);
     const processLayer = Layer.mergeAll(NodeServices.layer, spawnerLayer, TestClock.layer());
 
@@ -149,6 +155,7 @@ describe("ssh tunnel scripts", () => {
       username: "julius",
       port: 2222,
     } as const;
+
     const spawner = ChildProcessSpawner.make(() =>
       Effect.succeed(
         makeSuccessfulProcess(`{
@@ -161,8 +168,10 @@ describe("ssh tunnel scripts", () => {
 `),
       ),
     );
+
     const spawnerLayer = Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner);
     const processLayer = Layer.merge(NodeServices.layer, spawnerLayer);
+
     return Effect.gen(function* () {
       const result = yield* issueRemotePairingToken(target);
       assert.equal(result.credential, "LCL4R2TPHDKQ");
@@ -176,6 +185,7 @@ describe("ssh tunnel scripts", () => {
       username: "julius",
       port: 2222,
     } as const;
+
     const spawner = ChildProcessSpawner.make(() =>
       Effect.succeed(
         makeSuccessfulProcess(`loaded nvm default
@@ -189,8 +199,10 @@ describe("ssh tunnel scripts", () => {
 `),
       ),
     );
+
     const spawnerLayer = Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner);
     const processLayer = Layer.merge(NodeServices.layer, spawnerLayer);
+
     return Effect.gen(function* () {
       const result = yield* issueRemotePairingToken(target);
       assert.equal(result.credential, "LCL4R2TPHDKQ");

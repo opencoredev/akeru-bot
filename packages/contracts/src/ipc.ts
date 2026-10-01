@@ -246,6 +246,7 @@ export interface LocalApi {
     setClientSettings: (settings: ClientSettings) => Promise<void>;
   };
 }
+
 export {
   type ContextMenuItem,
   type QuitShortcutHintEvent,
@@ -270,6 +271,7 @@ export {
   DesktopUpdateReleaseNoteSchema,
   DesktopUpdateStateSchema,
 } from "./ipc/app.ts";
+
 export {
   type DesktopUpdateActionResult,
   DesktopUpdateActionResultSchema,
@@ -291,6 +293,7 @@ export {
   DesktopSshPasswordPromptCancelledType,
   DesktopSshPasswordPromptCancelledResultSchema,
 } from "./ipc/environment.ts";
+
 export {
   DesktopSshEnvironmentEnsureOptionsSchema,
   DesktopSshEnvironmentEnsureInputSchema,
@@ -337,6 +340,7 @@ export {
   type DesktopPreviewScreenshotArtifact,
   DesktopPreviewScreenshotArtifactSchema,
 } from "./ipc/preview.ts";
+
 export {
   type PickedElementStackFrame,
   PickedElementStackFrameSchema,
@@ -363,6 +367,7 @@ export {
   type PreviewAnnotationSubmissionResult,
   PreviewAnnotationSubmissionResultSchema,
 } from "./ipc/annotations.ts";
+
 export {
   DesktopPreviewTabInputSchema,
   DesktopPreviewCreateTabInputSchema,

@@ -35,6 +35,7 @@ export async function runAtomCommand<W, A, E>(
 ): Promise<AtomCommandResult<A, E>> {
   const result = await settleAtomCommandResult(() => command.run(registry, input));
   reportAtomCommandResult(result, { ...options, label: options.label ?? command.label }, reporter);
+
   return result;
 }
 
@@ -74,6 +75,7 @@ export async function executeAtomCommand<A, E>(
 ): Promise<AtomCommandResult<A, E>> {
   const result = await settleAsyncResult(execute);
   reportAtomCommandResult(result, options, reporter);
+
   return result;
 }
 
@@ -86,11 +88,13 @@ export async function executeAtomQuery<A, E>(
   const query = Effect.scoped(
     Effect.gen(function* () {
       yield* AtomRegistry.mount(registry, atom);
+
       return yield* AtomRegistry.getResult(registry, atom, {
         suspendOnWaiting: true,
       });
     }),
   );
+
   return executeAtomCommand(() => Effect.runPromiseExit(query), options, reporter);
 }
 
@@ -104,6 +108,7 @@ export function reportAtomCommandResult(
   }
 
   const label = options.label ?? "atom command";
+
   if (Cause.hasDies(result.cause)) {
     if (options.reportDefect ?? true) {
       reporter.error(`[atom-command] ${label} defected`, result.cause);

@@ -19,9 +19,11 @@ describe("EnvironmentThreads", () => {
   it.effect("seeds the thread from the HTTP snapshot and resumes live events", () =>
     Effect.gen(function* () {
       const httpThread: OrchestrationThread = { ...BASE_THREAD, title: "HTTP title" };
+
       const harness = yield* makeHarness({
         httpSnapshot: Option.some({ snapshotSequence: 1, thread: httpThread }),
       });
+
       // No socket snapshot is pushed; only a live event arrives over the socket.
       // It can only be applied if the HTTP snapshot already seeded the thread.
       yield* Queue.offer(harness.inputs, titleUpdated("Live title", 2));
@@ -76,12 +78,15 @@ describe("EnvironmentThreads", () => {
       expect(yield* Ref.get(harness.retryCount)).toBe(0);
 
       yield* harness.replaceSession;
+
       for (let attempt = 0; attempt < 100; attempt += 1) {
         if ((yield* Ref.get(harness.subscriptionCount)) >= 2) {
           break;
         }
+
         yield* Effect.yieldNow;
       }
+
       yield* Queue.offer(
         harness.inputs,
         snapshot({
@@ -89,6 +94,7 @@ describe("EnvironmentThreads", () => {
           title: "Recovered thread",
         }),
       );
+
       const recovered = yield* awaitThreadState(
         harness.observed,
         (value) =>
@@ -110,6 +116,7 @@ describe("EnvironmentThreads", () => {
       const failed = yield* awaitThreadState(harness.observed, (value) =>
         Option.isSome(value.error),
       );
+
       expect(Option.getOrThrow(failed.error)).toBe("Could not synchronize the chat.");
     }),
   );
@@ -122,16 +129,20 @@ describe("EnvironmentThreads", () => {
       const failed = yield* awaitThreadState(harness.observed, (value) =>
         Option.isSome(value.error),
       );
+
       expect(Option.getOrThrow(failed.error)).toBe("thread not found yet");
       expect(yield* Ref.get(harness.subscriptionCount)).toBe(1);
 
       yield* TestClock.adjust("250 millis");
+
       for (let attempt = 0; attempt < 100; attempt += 1) {
         if ((yield* Ref.get(harness.subscriptionCount)) >= 2) {
           break;
         }
+
         yield* Effect.yieldNow;
       }
+
       yield* Queue.offer(
         harness.inputs,
         snapshot({
@@ -167,6 +178,7 @@ describe("EnvironmentThreads", () => {
         harness.inputs,
         titleUpdated("Caught-up title", CACHED_SNAPSHOT_SEQUENCE + 1),
       );
+
       const catchingUp = yield* awaitThreadState(
         harness.observed,
         (value) =>
@@ -174,13 +186,16 @@ describe("EnvironmentThreads", () => {
           Option.isSome(value.data) &&
           value.data.value.title === "Caught-up title",
       );
+
       expect(catchingUp.status).toBe("synchronizing");
 
       yield* Queue.offer(harness.inputs, synchronized());
+
       const live = yield* awaitThreadState(
         harness.observed,
         (value) => value.status === "live" && Option.isSome(value.data),
       );
+
       expect(Option.getOrThrow(live.data).title).toBe("Caught-up title");
     }),
   );
@@ -202,6 +217,7 @@ describe("EnvironmentThreads", () => {
       );
 
       yield* harness.replaceSession;
+
       for (let attempt = 0; attempt < 100; attempt += 1) {
         if ((yield* Ref.get(harness.subscriptionCount)) >= 2) break;
         yield* Effect.yieldNow;
@@ -230,10 +246,12 @@ describe("EnvironmentThreads", () => {
       );
 
       yield* Queue.offer(harness.wakeups, "application-active");
+
       const synchronizing = yield* awaitThreadState(
         harness.observed,
         (value) => value.status === "synchronizing" && Option.isSome(value.data),
       );
+
       for (let attempt = 0; attempt < 100; attempt += 1) {
         if ((yield* Ref.get(harness.subscriptionCount)) >= 2) break;
         yield* Effect.yieldNow;
@@ -246,23 +264,29 @@ describe("EnvironmentThreads", () => {
       expect(yield* Ref.get(harness.loaderCalls)).toBe(0);
 
       yield* Queue.offer(harness.inputs, synchronized());
+
       const live = yield* awaitThreadState(
         harness.observed,
         (value) => value.status === "live" && Option.isSome(value.data),
       );
+
       expect(Option.getOrThrow(live.data).title).toBe("Latest title");
 
       yield* Queue.offer(harness.wakeups, "application-active-probe");
+
       for (let attempt = 0; attempt < 100; attempt += 1) {
         if ((yield* Ref.get(harness.subscriptionCount)) >= 3) break;
         yield* Effect.yieldNow;
       }
+
       expect(yield* Ref.get(harness.subscriptionCount)).toBe(3);
 
       yield* Queue.offer(harness.wakeups, "application-active-reconnect");
+
       for (let attempt = 0; attempt < 10; attempt += 1) {
         yield* Effect.yieldNow;
       }
+
       expect(yield* Ref.get(harness.subscriptionCount)).toBe(3);
     }),
   );

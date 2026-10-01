@@ -88,15 +88,18 @@ export const preparePairingRegistration = Effect.fn(
 )(function* (input: PairingConnectionInput) {
   const target = yield* resolvePairingTarget(input);
   const presentation = yield* ClientCapabilities.ClientPresentation;
+
   const descriptor = yield* fetchRemoteEnvironmentDescriptor({
     httpBaseUrl: target.httpBaseUrl,
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
+
   const access = yield* bootstrapRemoteBearerSession({
     httpBaseUrl: target.httpBaseUrl,
     credential: target.credential,
     scopes: presentation.scopes,
     clientMetadata: presentation.metadata,
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
+
   const connectionId = `bearer:${descriptor.environmentId}`;
 
   return new BearerConnectionRegistration({
@@ -124,10 +127,12 @@ export const registerPairingConnection = Effect.fn(
   const registration = yield* preparePairingRegistration(input);
   const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
   yield* registry.register(registration);
+
   return registration.target.environmentId;
 });
 
 const isBearerCredential = Schema.is(BearerConnectionCredential);
+
 const isBearerProfile = Schema.is(BearerConnectionProfile);
 
 export const updateBearerConnection = Effect.fn(
@@ -136,15 +141,18 @@ export const updateBearerConnection = Effect.fn(
   const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
   const credentials = yield* ConnectionCredentialStore.ConnectionCredentialStore;
   const entry = (yield* SubscriptionRef.get(registry.entries)).get(input.environmentId);
+
   const credential =
     entry?.target._tag === "BearerConnectionTarget"
       ? yield* credentials.get(entry.target.connectionId)
       : Option.none();
+
   const registration = yield* prepareBearerConnectionUpdate({
     input,
     entry: Option.fromUndefinedOr(entry),
     credential,
   });
+
   yield* registry.register(registration);
 });
 
@@ -156,6 +164,7 @@ export const prepareBearerConnectionUpdate = Effect.fn(
   readonly credential: Option.Option<ConnectionCredential>;
 }) {
   const entry = Option.getOrNull(options.entry);
+
   if (
     entry === undefined ||
     entry === null ||
@@ -170,6 +179,7 @@ export const prepareBearerConnectionUpdate = Effect.fn(
   }
 
   const credential = options.credential;
+
   if (Option.isNone(credential) || !isBearerCredential(credential.value)) {
     return yield* new ConnectionBlockedError({
       reason: "authentication",
@@ -178,12 +188,14 @@ export const prepareBearerConnectionUpdate = Effect.fn(
   }
 
   const label = options.input.label.trim();
+
   if (label === "") {
     return yield* new ConnectionBlockedError({
       reason: "configuration",
       detail: "Environment label cannot be empty.",
     });
   }
+
   const httpBaseUrl = yield* Effect.try({
     try: () => normalizeHttpBaseUrl(options.input.httpBaseUrl),
     catch: (cause) =>
@@ -192,7 +204,9 @@ export const prepareBearerConnectionUpdate = Effect.fn(
         detail: cause instanceof Error ? cause.message : "The environment URL is invalid.",
       }),
   });
+
   const connectionId = entry.target.connectionId;
+
   return new BearerConnectionRegistration({
     target: new BearerConnectionTarget({
       environmentId: options.input.environmentId,
@@ -239,6 +253,7 @@ export const registerSshConnection = Effect.fn(
   const registration = yield* prepareSshRegistration(input);
   const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
   yield* registry.register(registration);
+
   return registration.target.environmentId;
 });
 

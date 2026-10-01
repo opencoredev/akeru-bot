@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 export const VcsDriverKind = Schema.Literals(["git", "jj", "unknown"]);
+
 export type VcsDriverKind = typeof VcsDriverKind.Type;
 
 export const VcsFreshnessSource = Schema.Literals([
@@ -10,6 +11,7 @@ export const VcsFreshnessSource = Schema.Literals([
   "cached-remote",
   "explicit-remote",
 ]);
+
 export type VcsFreshnessSource = typeof VcsFreshnessSource.Type;
 
 export const VcsFreshness = Schema.Struct({
@@ -17,6 +19,7 @@ export const VcsFreshness = Schema.Struct({
   observedAt: Schema.DateTimeUtc,
   expiresAt: Schema.Option(Schema.DateTimeUtc),
 });
+
 export type VcsFreshness = typeof VcsFreshness.Type;
 
 export const VcsDriverCapabilities = Schema.Struct({
@@ -27,6 +30,7 @@ export const VcsDriverCapabilities = Schema.Struct({
   supportsPushDefaultRemote: Schema.Boolean,
   ignoreClassifier: Schema.Literals(["native", "git-compatible-fallback"]),
 });
+
 export type VcsDriverCapabilities = typeof VcsDriverCapabilities.Type;
 
 export const VcsRepositoryIdentity = Schema.Struct({
@@ -35,6 +39,7 @@ export const VcsRepositoryIdentity = Schema.Struct({
   metadataPath: Schema.NullOr(TrimmedNonEmptyString),
   freshness: VcsFreshness,
 });
+
 export type VcsRepositoryIdentity = typeof VcsRepositoryIdentity.Type;
 
 export const VcsListWorkspaceFilesResult = Schema.Struct({
@@ -42,6 +47,7 @@ export const VcsListWorkspaceFilesResult = Schema.Struct({
   truncated: Schema.Boolean,
   freshness: VcsFreshness,
 });
+
 export type VcsListWorkspaceFilesResult = typeof VcsListWorkspaceFilesResult.Type;
 
 export const VcsRemote = Schema.Struct({
@@ -50,12 +56,14 @@ export const VcsRemote = Schema.Struct({
   pushUrl: Schema.Option(TrimmedNonEmptyString),
   isPrimary: Schema.Boolean,
 });
+
 export type VcsRemote = typeof VcsRemote.Type;
 
 export const VcsListRemotesResult = Schema.Struct({
   remotes: Schema.Array(VcsRemote),
   freshness: VcsFreshness,
 });
+
 export type VcsListRemotesResult = typeof VcsListRemotesResult.Type;
 
 export interface VcsProcessErrorContext {
@@ -79,6 +87,7 @@ export const VcsProcessExitFailureKind = Schema.Literals([
   "rate-limited",
   "command-failed",
 ]);
+
 export type VcsProcessExitFailureKind = typeof VcsProcessExitFailureKind.Type;
 
 export interface VcsProcessExitFailure {
@@ -240,6 +249,7 @@ export const VcsOutputDecodeError = Schema.Union([
   VcsProcessOutputLimitError,
   VcsProcessMissingExitCodeError,
 ]);
+
 export type VcsOutputDecodeError = typeof VcsOutputDecodeError.Type;
 
 export class VcsRepositoryDetectionError extends Schema.TaggedErrorClass<VcsRepositoryDetectionError>()(
@@ -280,4 +290,5 @@ export const VcsError = Schema.Union([
   VcsRepositoryDetectionError,
   VcsUnsupportedOperationError,
 ]);
+
 export type VcsError = typeof VcsError.Type;

@@ -22,6 +22,7 @@ const BEARER_TARGET = new BearerConnectionTarget({
   label: "Remote",
   connectionId: "bearer-1",
 });
+
 const BEARER_PROFILE = new BearerConnectionProfile({
   connectionId: BEARER_TARGET.connectionId,
   environmentId: ENVIRONMENT_ID,
@@ -29,9 +30,11 @@ const BEARER_PROFILE = new BearerConnectionProfile({
   httpBaseUrl: "https://remote.example.test",
   wsBaseUrl: "wss://remote.example.test",
 });
+
 const BEARER_CREDENTIAL = new BearerConnectionCredential({
   token: "bearer-token",
 });
+
 describe("ConnectionCatalogDocument", () => {
   it("registers a bearer connection as one catalog mutation", () => {
     const document = registerConnectionInCatalog(
@@ -74,6 +77,7 @@ describe("ConnectionCatalogDocument", () => {
       label: "SSH",
       connectionId: "ssh-1",
     });
+
     const profile = new SshConnectionProfile({
       connectionId: target.connectionId,
       environmentId: target.environmentId,
@@ -85,6 +89,7 @@ describe("ConnectionCatalogDocument", () => {
         port: 22,
       },
     });
+
     const document = registerConnectionInCatalog(
       EMPTY_CONNECTION_CATALOG_DOCUMENT,
       new SshConnectionRegistration({ target, profile }),

@@ -106,6 +106,7 @@ function decodeLinks(input: ReadonlyArray<OtlpSpanLink>): ReadonlyArray<TraceRec
   return input.flatMap((current) => {
     const traceId = current.traceId;
     const spanId = current.spanId;
+
     return {
       traceId,
       spanId,
@@ -130,27 +131,35 @@ function decodeValue(input: OtlpResource.AnyValue | null | undefined): unknown {
   if (input == null) {
     return null;
   }
+
   if ("stringValue" in input) {
     return input.stringValue;
   }
+
   if ("boolValue" in input) {
     return input.boolValue;
   }
+
   if ("intValue" in input) {
     return input.intValue;
   }
+
   if ("doubleValue" in input) {
     return input.doubleValue;
   }
+
   if ("bytesValue" in input) {
     return input.bytesValue;
   }
+
   if (input.arrayValue) {
     return input.arrayValue.values.map((entry) => decodeValue(entry));
   }
+
   if (input.kvlistValue) {
     return decodeAttributes(input.kvlistValue.values);
   }
+
   return null;
 }
 

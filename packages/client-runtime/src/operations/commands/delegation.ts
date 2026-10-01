@@ -14,6 +14,7 @@ export const cancelDelegation: (input: CancelDelegationInput) => CommandEffect =
   "EnvironmentCommands.cancelDelegation",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "delegation.cancel",
@@ -26,6 +27,7 @@ export const retryDelegation: (input: RetryDelegationInput) => CommandEffect = E
   "EnvironmentCommands.retryDelegation",
 )(function* (input) {
   const metadata = yield* timestampedCommandMetadata(input);
+
   return yield* dispatch({
     ...input,
     type: "delegation.retry",

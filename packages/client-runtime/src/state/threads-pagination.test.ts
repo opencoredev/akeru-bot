@@ -37,6 +37,7 @@ describe("thread pagination state", () => {
         paginationCapability: false,
         initialResponse: Option.some({ snapshotSequence: 10, thread: BASE_THREAD }),
       });
+
       const state = yield* harness.awaitState((value) => Option.isSome(value.data));
       expect(Option.isNone(state.page)).toBe(true);
       const windows = yield* Ref.get(harness.loaderWindows);
@@ -78,6 +79,7 @@ describe("thread pagination state", () => {
         snapshotSequence: 20,
         thread: { ...BASE_THREAD, title: "Full reload" },
       };
+
       const harness = yield* makeHarness({
         paginationCapability: false,
         cached: WINDOWED_SNAPSHOT,
@@ -90,6 +92,7 @@ describe("thread pagination state", () => {
           onSome: (thread) => thread.title === "Full reload",
         }),
       );
+
       expect(Option.isNone(state.page)).toBe(true);
       // The subscription resumed from the fresh full snapshot, not the
       // discarded windowed cache's watermark, and sent no window fields.
@@ -104,11 +107,13 @@ describe("thread pagination state", () => {
       const harness = yield* makeHarness({ cached: WINDOWED_SNAPSHOT });
       const state = yield* harness.awaitState((value) => Option.isSome(value.page));
       expect(Option.getOrThrow(state.page).beforeCursor).toBe("cursor-1");
+
       // Wait for the subscription (recorded when the WS method is invoked)
       // before asserting its input.
       const subscribeInput = yield* Ref.get(harness.lastSubscribeInput).pipe(
         Effect.repeat({ until: (input) => input !== undefined }),
       );
+
       expect(subscribeInput?.afterSequence).toBe(10);
     }),
   );

@@ -32,6 +32,7 @@ export type int = number;
 // to the given buffer. Requires 0 <= len <= 31 and 0 <= val < 2^len.
 export function appendBits(val: int, len: int, bb: Array<bit>): void {
   if (len < 0 || len > 31 || val >>> len != 0) throw new RangeError("Value out of range");
+
   for (
     let i = len - 1;
     i >= 0;
