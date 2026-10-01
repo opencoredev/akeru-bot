@@ -45,7 +45,8 @@ export interface CatalogBackend {
   readonly quarantine?: (raw: string) => Effect.Effect<void, ConnectionTransientError>;
 }
 
-export function makeCatalogBackend(database: IDBDatabase): CatalogBackend {
+/** Desktop secure storage when the bridge offers it; otherwise the catalog store in this database. */
+export function catalogBackendForDatabase(database: IDBDatabase): CatalogBackend {
   const bridge = window.desktopBridge;
 
   if (bridge?.getConnectionCatalog !== undefined && bridge.setConnectionCatalog !== undefined) {
@@ -90,7 +91,8 @@ interface CatalogStore {
   ) => Effect.Effect<void, ConnectionTransientError>;
 }
 
-export const makeCatalogStore = Effect.fn("web.connectionStorage.makeCatalogStore")(function* (
+/** Serializes catalog reads and writes over a backend and caches the decoded document. */
+export const cachedCatalogStore = Effect.fn("web.connectionStorage.makeCatalogStore")(function* (
   backend: CatalogBackend,
 ) {
   const state = yield* Ref.make<Option.Option<ConnectionCatalogDocumentType>>(Option.none());

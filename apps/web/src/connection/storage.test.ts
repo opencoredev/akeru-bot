@@ -5,7 +5,11 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { afterEach, vi } from "vite-plus/test";
 
-import { makeCatalogBackend, makeCatalogStore, migrateLegacyConnectionDatabase } from "./storage";
+import {
+  catalogBackendForDatabase,
+  cachedCatalogStore,
+  migrateLegacyConnectionDatabase,
+} from "./storage";
 
 const emptyCatalog = {
   schemaVersion: 1,
@@ -21,13 +25,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("makeCatalogStore", () => {
+describe("cachedCatalogStore", () => {
   it.effect("quarantines malformed catalogs and starts from an empty document", () =>
     Effect.gen(function* () {
       const writes: string[] = [];
       const quarantined: string[] = [];
 
-      const store = yield* makeCatalogStore({
+      const store = yield* cachedCatalogStore({
         read: Effect.succeed("{not-json"),
         write: (raw) => Effect.sync(() => writes.push(raw)),
         quarantine: (raw) => Effect.sync(() => quarantined.push(raw)),
@@ -47,7 +51,7 @@ describe("makeCatalogStore", () => {
         detail: "permission denied",
       });
 
-      const store = yield* makeCatalogStore({
+      const store = yield* cachedCatalogStore({
         read: Effect.fail(failure),
         write: () => Effect.void,
       });
@@ -57,7 +61,7 @@ describe("makeCatalogStore", () => {
   );
 });
 
-describe("makeCatalogBackend", () => {
+describe("catalogBackendForDatabase", () => {
   it.effect("fails writes when desktop secure storage declines the catalog", () =>
     Effect.gen(function* () {
       const setConnectionCatalog = vi.fn().mockResolvedValue(false);
@@ -67,7 +71,7 @@ describe("makeCatalogBackend", () => {
           setConnectionCatalog,
         },
       });
-      const backend = makeCatalogBackend({} as IDBDatabase);
+      const backend = catalogBackendForDatabase({} as IDBDatabase);
 
       const error = yield* backend.write("{}").pipe(Effect.flip);
 
