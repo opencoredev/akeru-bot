@@ -45,6 +45,7 @@ export function ThreadNavigationSidebarHeader(props: {
   const placeholderColor = useThemeColor("--color-placeholder");
   const { environments, projectFilterOptions, selectedEnvironmentId, selectedProjectKey } = props;
   const { onEnvironmentChange, onProjectChange } = props;
+
   const listMenuActions = useMemo<MenuAction[]>(
     () => [
       {
@@ -91,29 +92,40 @@ export function ThreadNavigationSidebarHeader(props: {
     ],
     [environments, selectedEnvironmentId, projectFilterOptions, selectedProjectKey],
   );
+
   const handleListMenuAction = useCallback(
     ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
       const event = nativeEvent.event;
+
       if (event === "environment:all") {
         onEnvironmentChange(null);
+
         return;
       }
+
       if (event.startsWith("environment:")) {
         const environment = environments.find(
           (candidate) => String(candidate.environmentId) === event.slice("environment:".length),
         );
+
         if (environment) onEnvironmentChange(environment.environmentId);
+
         return;
       }
+
       if (event === "project:all") {
         onProjectChange(null);
+
         return;
       }
+
       if (event.startsWith("project:")) {
         const projectKey = event.slice("project:".length);
+
         if (projectFilterOptions.some((project) => project.key === projectKey)) {
           onProjectChange(projectKey);
         }
+
         return;
       }
     },

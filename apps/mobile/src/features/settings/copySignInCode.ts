@@ -7,6 +7,7 @@ import * as Clipboard from "expo-clipboard";
 export async function copySignInCode(code: string): Promise<boolean> {
   try {
     await Clipboard.setStringAsync(code);
+
     return true;
   } catch {
     return false;

@@ -9,10 +9,12 @@ import {
   useExistingThreadSettingsRoutePresentation,
 } from "./thread-settings-session";
 import { ThreadSettingsPickerNavigator } from "./thread-settings-picker";
+
 export {
   ExistingThreadSettingsRouteProvider,
   useExistingThreadSettingsRoutePresentation,
 } from "./thread-settings-session";
+
 export type { ExistingThreadSettingsRouteSession } from "./thread-settings-session";
 
 /** Existing-thread model picker hosted by the root RNS form-sheet route. */
@@ -50,6 +52,7 @@ export function ExistingThreadSettingsRouteScreen() {
 export function NewTaskThreadSettingsRouteScreen() {
   const flow = useNewTaskFlow();
   const navigation = useNavigation<NativeStackNavigationProp<Record<string, object | undefined>>>();
+
   const optionDescriptors = useMemo(
     () =>
       resolveProviderOptionDescriptors({

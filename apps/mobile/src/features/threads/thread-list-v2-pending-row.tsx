@@ -39,8 +39,10 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   const drawerColor = useThemeColor("--color-drawer");
   const pressedBackgroundColor = useThemeColor("--color-subtle");
   const sidebarPane = props.pane === "sidebar";
+
   const projectTitle =
     props.projectTitle ?? props.project?.title ?? pendingTask.creation.projectTitle ?? "";
+
   const branch = pendingTask.creation.branch;
 
   const handleMenuAction = useCallback(

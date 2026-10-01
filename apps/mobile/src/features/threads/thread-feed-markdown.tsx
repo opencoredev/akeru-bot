@@ -53,6 +53,7 @@ export interface MarkdownStyleSet {
 }
 
 const failedMarkdownFaviconHosts = new Set<string>();
+
 const markdownLinkStyles = StyleSheet.create({
   inlineIcon: {
     width: 14,
@@ -122,12 +123,14 @@ function MarkdownCodeBlock(props: {
   const { t } = useMobileI18n();
   const content = props.content.replace(/\n$/, "");
   const languageLabel = props.language?.trim() || "text";
+
   const highlighted = useMarkdownCodeHighlight({
     code: content,
     enabled: props.highlightCode && Boolean(props.language?.trim()),
     language: props.language,
     theme: props.theme,
   });
+
   let tokenOffset = 0;
 
   return (
@@ -179,15 +182,18 @@ function MarkdownCodeBlock(props: {
             ? highlighted.map((line, lineIndex) => {
                 const lineStartOffset = tokenOffset;
                 const lineText = line.map((token) => token.content).join("");
+
                 const renderedLine = (
                   <NativeText key={`line:${lineStartOffset}:${lineText}`}>
                     {line.map((token) => {
                       const startOffset = tokenOffset;
                       tokenOffset += token.content.length;
+
                       const fontStyle =
                         token.fontStyle !== null && (token.fontStyle & 1) === 1
                           ? ("italic" as const)
                           : ("normal" as const);
+
                       const fontWeight =
                         token.fontStyle !== null && (token.fontStyle & 2) === 2
                           ? ("700" as const)
@@ -211,9 +217,11 @@ function MarkdownCodeBlock(props: {
                     {lineIndex + 1 < highlighted.length ? "\n" : ""}
                   </NativeText>
                 );
+
                 if (lineIndex + 1 < highlighted.length) {
                   tokenOffset += 1;
                 }
+
                 return renderedLine;
               })
             : content}
@@ -228,14 +236,17 @@ export function useMarkdownStyles(
   renderImage: MarkdownImageRenderer,
 ): MarkdownStyleSets {
   const { appearance, themeAppearance } = useAppearancePreferences();
+
   const markdownFontSizes = useMemo(
     () => resolveMarkdownFontSizes(appearance.baseFontSize),
     [appearance.baseFontSize],
   );
+
   const nativeMarkdownTypography = useMemo(
     () => resolveNativeMarkdownTypography(appearance.baseFontSize),
     [appearance.baseFontSize],
   );
+
   const themeMode = themeAppearance;
   const markdownBodyColor = String(useThemeColor("--color-md-body"));
   const markdownStrongColor = String(useThemeColor("--color-md-strong"));
@@ -367,7 +378,9 @@ export function useMarkdownStyles(
             </NativeText>
           );
         }
+
         const presentation = resolveMarkdownLinkPresentation(href);
+
         if (presentation.kind === "file") {
           return (
             <NativeText
@@ -383,6 +396,7 @@ export function useMarkdownStyles(
             </NativeText>
           );
         }
+
         if (presentation.kind === "external") {
           return (
             <MarkdownExternalLink
@@ -394,7 +408,9 @@ export function useMarkdownStyles(
             </MarkdownExternalLink>
           );
         }
+
         const linkHref = presentation.href;
+
         return (
           <NativeText
             className="underline"
@@ -415,11 +431,13 @@ export function useMarkdownStyles(
         <View className="mt-0.5 mb-2">
           {node.children?.map((child, index) => {
             const childKey = `${child.type}:${child.beg ?? "unknown"}:${child.end ?? "unknown"}`;
+
             if (child.type === "task_list_item") {
               return (
                 <Renderer key={childKey} node={child} depth={1} inListItem parentIsText={false} />
               );
             }
+
             return (
               <View className="mb-[3px] flex-row items-start" key={childKey}>
                 <NativeText
@@ -453,6 +471,7 @@ export function useMarkdownStyles(
           : undefined,
       code_inline: ({ content }) => {
         const value = content ?? "";
+
         return (
           <NativeText
             className="font-mono"
@@ -500,6 +519,7 @@ export function useMarkdownStyles(
         border: markdownUserFenceBg,
       },
     };
+
     const userStyles: NodeStyleOverrides = {
       ...baseStyles,
       paragraph: { marginTop: 0, marginBottom: 0 },
@@ -529,6 +549,7 @@ export function useMarkdownStyles(
         border: markdownCodeBg,
       },
     };
+
     const assistantStyles: NodeStyleOverrides = {
       ...baseStyles,
     };

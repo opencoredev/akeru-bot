@@ -41,6 +41,7 @@ export function BotUsageDetails(props: { readonly botName: string; readonly view
   if (props.view.kind === "loading") {
     return <Text className="py-16 text-center text-base text-foreground-muted">Loading…</Text>;
   }
+
   if (props.view.kind === "error") {
     return (
       <View className="gap-1 rounded-[24px] border-continuous bg-card px-4 py-3">
@@ -49,6 +50,7 @@ export function BotUsageDetails(props: { readonly botName: string; readonly view
       </View>
     );
   }
+
   if (props.view.kind === "empty") {
     return (
       <View className="gap-1 rounded-[24px] border-continuous bg-card px-4 py-3">

@@ -25,6 +25,7 @@ export function RemoteHealthSection({ environmentId }: { readonly environmentId:
   const doctor = useEnvironmentQuery(serverEnvironment.remoteDoctor({ environmentId, input: {} }));
 
   if (doctor.data !== null && !doctor.data.applicable) return null;
+
   if (doctor.data === null && doctor.error === null) return null;
 
   return (

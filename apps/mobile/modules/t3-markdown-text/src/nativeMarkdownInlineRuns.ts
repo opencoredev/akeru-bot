@@ -33,6 +33,7 @@ function decodeCodePoint(codePoint: number, entity: string): string {
   if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
     return entity;
   }
+
   return String.fromCodePoint(codePoint);
 }
 
@@ -43,9 +44,11 @@ function decodeHtmlEntitiesOnce(value: string): string {
       if (decimal) {
         return decodeCodePoint(Number.parseInt(decimal, 10), entity);
       }
+
       if (hexadecimal) {
         return decodeCodePoint(Number.parseInt(hexadecimal, 16), entity);
       }
+
       switch (entity.toLowerCase()) {
         case "&amp;":
           return "&";
@@ -68,13 +71,17 @@ function decodeHtmlEntitiesOnce(value: string): string {
 
 function decodeHtmlEntities(value: string): string {
   let decoded = value;
+
   for (let pass = 0; pass < 2; pass += 1) {
     const next = decodeHtmlEntitiesOnce(decoded);
+
     if (next === decoded) {
       break;
     }
+
     decoded = next;
   }
+
   return decoded;
 }
 
@@ -86,6 +93,7 @@ export function inlineHtmlText(value: string): string {
   if (/^<br\s*\/?>$/i.test(value.trim())) {
     return "\n";
   }
+
   return decodeHtmlEntities(value.replace(/<[^>]+>/g, ""));
 }
 
@@ -141,21 +149,27 @@ export function appendRun(
       ? { paragraphSpacing: context.paragraphSpacing }
       : {}),
   };
+
   const previous = runs.at(-1);
+
   if (previous && sameRunStyle(previous, run)) {
     runs[runs.length - 1] = { ...previous, text: previous.text + run.text };
+
     return runs;
   }
 
   runs.push(run);
+
   return runs;
 }
 
 function formatSkillLabel(skill: SelectableMarkdownSkill): string {
   const displayName = skill.displayName?.trim();
+
   if (displayName) {
     return displayName;
   }
+
   return skill.name
     .split(/[\s:_-]+/)
     .filter(Boolean)
@@ -174,12 +188,15 @@ export function decorateSkillRuns(
   if (skills.length === 0) {
     return runs;
   }
+
   const skillByToken = new Map(skills.map((skill) => [skill.token ?? `$${skill.name}`, skill]));
   const literalTokens = skills.flatMap((skill) => (skill.token ? [escapeRegExp(skill.token)] : []));
+
   const tokenRegex = new RegExp(
     `(^|\\s)(\\$[a-zA-Z][a-zA-Z0-9:_-]*${literalTokens.map((token) => `|${token}`).join("")})(?=\\s|$)`,
     "g",
   );
+
   const decorated: NativeMarkdownTextRun[] = [];
 
   for (const run of runs) {
@@ -190,18 +207,23 @@ export function decorateSkillRuns(
 
     let cursor = 0;
     let matched = false;
+
     for (const match of run.text.matchAll(tokenRegex)) {
       const prefix = match[1] ?? "";
       const token = match[2] ?? "";
       const skill = skillByToken.get(token);
+
       if (!skill) {
         continue;
       }
+
       const start = (match.index ?? 0) + prefix.length;
       const end = start + token.length;
+
       if (start > cursor) {
         decorated.push({ ...run, text: run.text.slice(cursor, start) });
       }
+
       decorated.push({
         ...run,
         text: run.text.slice(start, end),
@@ -212,6 +234,7 @@ export function decorateSkillRuns(
       cursor = end;
       matched = true;
     }
+
     if (!matched) {
       decorated.push(run);
     } else if (cursor < run.text.length) {
@@ -230,6 +253,7 @@ function appendChildren(
   for (const child of node.children ?? []) {
     appendNode(runs, child, context);
   }
+
   return runs;
 }
 
@@ -237,6 +261,7 @@ export function nodeTextContent(node: MarkdownNode): string {
   if (node.content !== undefined) {
     return node.content;
   }
+
   return (node.children ?? []).map(nodeTextContent).join("");
 }
 
@@ -265,6 +290,7 @@ export function appendNode(
       return appendChildren(runs, node, { ...context, strikethrough: true });
     case "link": {
       const presentation = resolveMarkdownLinkPresentation(node.href ?? "");
+
       if (presentation.kind === "file") {
         return appendRun(runs, presentation.label, {
           ...context,
@@ -272,6 +298,7 @@ export function appendNode(
           fileIcon: presentation.icon,
         });
       }
+
       if (presentation.kind === "external") {
         return appendChildren(runs, node, {
           ...context,
@@ -279,11 +306,13 @@ export function appendNode(
           externalHost: presentation.host,
         });
       }
+
       return appendChildren(runs, node, {
         ...context,
         ...(presentation.href ? { href: presentation.href } : {}),
       });
     }
+
     case "image":
       return appendRun(runs, node.alt ?? node.title ?? "", context);
     default:
@@ -297,6 +326,7 @@ export function nativeMarkdownTextRuns(node: MarkdownNode): ReadonlyArray<Native
 
 export function nativeMarkdownWithPreservedSoftBreaks(node: MarkdownNode): MarkdownNode {
   const children = node.children?.map(nativeMarkdownWithPreservedSoftBreaks);
+
   return {
     ...node,
     ...(node.type === "soft_break" ? { type: "line_break" as const } : {}),

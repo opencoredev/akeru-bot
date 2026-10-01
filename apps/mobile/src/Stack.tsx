@@ -65,11 +65,14 @@ const WORKSPACE_OVERLAY_ROUTES = new Set([
  */
 function workspacePathFromState(state: NavigationState): string {
   const routes = state.routes.filter((route) => !WORKSPACE_OVERLAY_ROUTES.has(route.name));
+
   const effectiveState =
     routes.length > 0 && routes.length !== state.routes.length
       ? ({ ...state, routes, index: routes.length - 1 } as NavigationState)
       : state;
+
   const path = getPathFromState(effectiveState, navigationPathConfig);
+
   return path.startsWith("/") ? path : `/${path}`;
 }
 
@@ -79,6 +82,7 @@ function workspacePathFromState(state: NavigationState): string {
 // each enqueue, shell change, or reconnect.
 function ThreadOutboxDrainWorker() {
   useThreadOutboxDrain();
+
   return null;
 }
 
@@ -94,14 +98,18 @@ function RootStackLayout(props: {
   useAppShortcuts(props.state);
   useEffect(() => {
     const topRouteName = props.state.routes[props.state.index]?.name;
+
     const transition = transitionIncomingSharePresentation(sharePresentationRef.current, {
       isShareSheetPresented: topRouteName === "NewTaskSheet",
       pendingShareId: pendingShare?.id ?? null,
     });
+
     sharePresentationRef.current = transition.state;
+
     if (!transition.shareIdToPresent) {
       return;
     }
+
     navigation.navigate("NewTaskSheet", {
       screen: "NewTask",
       params: { incomingShareId: transition.shareIdToPresent },
@@ -130,6 +138,7 @@ function NotFoundScreen() {
   const navigation = useNavigation();
   const screenBgStyle = StyleSheet.flatten(useResolveClassNames("bg-screen"));
   const primaryBgStyle = StyleSheet.flatten(useResolveClassNames("bg-primary"));
+
   const returnHomeButtonStyle = StyleSheet.flatten([
     {
       borderRadius: 999,
@@ -282,6 +291,7 @@ export const RootStack = createNativeStackNavigator({
     }),
   },
 });
+
 type RootStackType = typeof RootStack;
 
 const navigationPathConfig = {

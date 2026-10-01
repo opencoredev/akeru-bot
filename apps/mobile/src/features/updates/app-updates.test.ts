@@ -42,11 +42,13 @@ describe("runAppUpdateCheck", () => {
 
   it("reports manual failures without continuing the update", async () => {
     const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
+
     const client = makeUpdateClient({
       checkForUpdateAsync: vi.fn(async () => {
         throw new Error("offline");
       }),
     });
+
     const failures: string[] = [];
     const states: AppUpdateCheckState[] = [];
 
@@ -67,11 +69,13 @@ describe("runAppUpdateCheck", () => {
     async (code) => {
       const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
       const error = Object.assign(new Error("Updates are unavailable"), { code });
+
       const client = makeUpdateClient({
         checkForUpdateAsync: vi.fn(async () => {
           throw error;
         }),
       });
+
       const failures: string[] = [];
       const states: AppUpdateCheckState[] = [];
 
@@ -93,19 +97,23 @@ describe("runAppUpdateCheck", () => {
       readonly isAvailable: boolean;
       readonly isRollBackToEmbedded: boolean;
     }) => void;
+
     const checkResult = new Promise<{
       readonly isAvailable: boolean;
       readonly isRollBackToEmbedded: boolean;
     }>((resolve) => {
       resolveCheck = resolve;
     });
+
     const client = makeUpdateClient({
       checkForUpdateAsync: vi.fn(() => checkResult),
     });
+
     const checkOnLaunch = createAppUpdateLaunchCheck(client);
     const manualStates: AppUpdateCheckState[] = [];
 
     const launchCheck = checkOnLaunch();
+
     const manualCheck = runAppUpdateCheck({
       client,
       onStateChange: (state) => manualStates.push(state),
@@ -129,20 +137,24 @@ describe("runAppUpdateCheck", () => {
   it("forwards failures to a manual check coalesced with the launch check", async () => {
     const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
     let rejectCheck!: (error: Error) => void;
+
     const checkResult = new Promise<{
       readonly isAvailable: boolean;
       readonly isRollBackToEmbedded: boolean;
     }>((_resolve, reject) => {
       rejectCheck = reject;
     });
+
     const client = makeUpdateClient({
       checkForUpdateAsync: vi.fn(() => checkResult),
     });
+
     const checkOnLaunch = createAppUpdateLaunchCheck(client);
     const failures: string[] = [];
     const manualStates: AppUpdateCheckState[] = [];
 
     const launchCheck = checkOnLaunch();
+
     const manualCheck = runAppUpdateCheck({
       client,
       onFailure: (message) => failures.push(message),
@@ -163,15 +175,18 @@ describe("runAppUpdateCheck", () => {
       readonly isAvailable: boolean;
       readonly isRollBackToEmbedded: boolean;
     }) => void;
+
     const checkResult = new Promise<{
       readonly isAvailable: boolean;
       readonly isRollBackToEmbedded: boolean;
     }>((resolve) => {
       resolveCheck = resolve;
     });
+
     const client = makeUpdateClient({
       checkForUpdateAsync: vi.fn(() => checkResult),
     });
+
     const reentrantStates: AppUpdateCheckState[] = [];
     let reentrantCheck: Promise<void> | undefined;
     let didReenter = false;

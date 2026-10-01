@@ -27,12 +27,15 @@ import {
 import { resolveThreadIdentity } from "./threadIdentity";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 import { MONO_FONT, SIDEBAR_V2_ROW_RADIUS, providerBotName } from "./thread-list-v2-presentation";
+
 export { providerBotName, threadListV2TimeLabel } from "./thread-list-v2-presentation";
+
 export {
   ThreadListV2SectionDivider,
   ThreadListV2SettledShelfHeader,
   ThreadListV2SnoozedShelfHeader,
 } from "./thread-list-v2-shelves";
+
 export { ThreadListV2PendingRow } from "./thread-list-v2-pending-row";
 
 // Status hues follow the system-wide convention set by sidebar v1 and the
@@ -146,6 +149,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
 }) {
   const { t } = useMobileI18n();
   const { width: windowWidth } = useWindowDimensions();
+
   const {
     thread,
     variant,
@@ -161,6 +165,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onUnpinThread,
     onMovePinnedThread,
   } = props;
+
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
 
@@ -179,41 +184,52 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const timeLabel = props.timeLabel;
 
   const handleDelete = useCallback(() => onDeleteThread(thread), [onDeleteThread, thread]);
+
   const handleRegenerateTitle = useCallback(
     () => onRegenerateThreadTitle(thread),
     [onRegenerateThreadTitle, thread],
   );
+
   const handleSettle = useCallback(() => onSettleThread(thread), [onSettleThread, thread]);
+
   const handleSnooze = useCallback(
     (snoozedUntil: string) => onSnoozeThread(thread, snoozedUntil),
     [onSnoozeThread, thread],
   );
+
   const handleUnsnooze = useCallback(() => onUnsnoozeThread(thread), [onUnsnoozeThread, thread]);
   const handleUnsettle = useCallback(() => onUnsettleThread(thread), [onUnsettleThread, thread]);
   const handlePin = useCallback(() => onPinThread(thread), [onPinThread, thread]);
   const handleUnpin = useCallback(() => onUnpinThread(thread), [onUnpinThread, thread]);
+
   const handleMovePinnedUp = useCallback(
     () => onMovePinnedThread?.(thread, "up"),
     [onMovePinnedThread, thread],
   );
+
   const handleMovePinnedDown = useCallback(
     () => onMovePinnedThread?.(thread, "down"),
     [onMovePinnedThread, thread],
   );
+
   const handleArchive = useCallback(() => onArchiveThread(thread), [onArchiveThread, thread]);
 
   // Swipe uses the primary lifecycle transition for the row.
   const canUnsettle = variant === "slim";
   const [snoozeGateTick, bumpSnoozeGateTick] = useState(0);
+
   const snoozeGateExpiryMs = props.snoozeSupported
     ? resolveThreadListV2SnoozeGateExpiryMs(thread, { now: new Date().toISOString() })
     : null;
+
   useEffect(() => {
     if (snoozeGateExpiryMs === null) return;
     const delayMs = Math.min(Math.max(0, snoozeGateExpiryMs - Date.now()) + 50, 2_147_483_647);
     const id = setTimeout(() => bumpSnoozeGateTick((tick) => tick + 1), delayMs);
+
     return () => clearTimeout(id);
   }, [snoozeGateExpiryMs, snoozeGateTick]);
+
   const swipeActions = resolveThreadListV2SwipeActions({
     variant,
     settlementSupported: props.settlementSupported,
@@ -221,10 +237,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     snoozable: canSnooze(thread, { now: new Date().toISOString() }),
     snoozed: snoozedRow,
   });
+
   const snoozePresets = useMemo(
     () => (swipeActions.secondary === "snooze" ? resolveSnoozePresets(new Date()) : ([] as const)),
     [props.snoozePresetMinute, swipeActions.secondary],
   );
+
   const snoozePresetActions = useMemo<MenuAction[]>(
     () =>
       snoozePresets.map((preset) => ({
@@ -234,6 +252,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       })),
     [snoozePresets],
   );
+
   // Pinned cards keep the full lifecycle menu; only the pin item flips to
   // Unpin. (Settling a pinned thread clears the pin server-side; snoozing
   // hides the card until wake with the pin intact.)
@@ -271,6 +290,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       thread.pinnedAt,
     ],
   );
+
   const titleRegenerationMenuItems = useMemo<MenuAction[]>(
     () =>
       buildThreadTitleRegenerationMenuItems({
@@ -279,6 +299,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       }),
     [props.titleRegenerationSupported, thread.titleRegeneration],
   );
+
   const snoozableCardMenuActions = useMemo<MenuAction[]>(
     () => [
       { id: "settle", title: "Settle", image: "checkmark" },
@@ -294,6 +315,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ],
     [pinMenuItem, snoozePresetActions, titleRegenerationMenuItems],
   );
+
   const cardMenuActions = useMemo<MenuAction[]>(
     () => [
       CARD_MENU_ACTIONS[0]!,
@@ -303,6 +325,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ],
     [pinMenuItem, titleRegenerationMenuItems],
   );
+
   const slimMenuActions = useMemo<MenuAction[]>(
     () => [
       SLIM_MENU_ACTIONS[0]!,
@@ -312,31 +335,45 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ],
     [pinMenuItem, thread.pinnedAt, titleRegenerationMenuItems],
   );
+
   const snoozedMenuActions = useMemo<MenuAction[]>(
     () => [SNOOZED_MENU_ACTIONS[0]!, ...titleRegenerationMenuItems, SNOOZED_MENU_ACTIONS[1]!],
     [titleRegenerationMenuItems],
   );
+
   const legacyMenuActions = useMemo<MenuAction[]>(
     () => [LEGACY_MENU_ACTIONS[0]!, ...titleRegenerationMenuItems, LEGACY_MENU_ACTIONS[1]!],
     [titleRegenerationMenuItems],
   );
+
   const handleMenuAction = useCallback(
     ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
       if (nativeEvent.event === "settle") handleSettle();
+
       if (nativeEvent.event === "unsettle") handleUnsettle();
+
       if (nativeEvent.event === "unsnooze") handleUnsnooze();
+
       if (nativeEvent.event === "pin") handlePin();
+
       if (nativeEvent.event === "unpin") handleUnpin();
+
       if (nativeEvent.event === "move-pin-up") handleMovePinnedUp();
+
       if (nativeEvent.event === "move-pin-down") handleMovePinnedDown();
+
       if (nativeEvent.event === "archive") handleArchive();
+
       if (nativeEvent.event === "regenerate-title") handleRegenerateTitle();
+
       if (nativeEvent.event === "delete") handleDelete();
+
       const snoozeSelection = resolveThreadListV2SnoozeMenuSelection({
         event: nativeEvent.event,
         displayedPresets: snoozePresets,
         now: new Date(),
       });
+
       if (snoozeSelection._tag === "selected") {
         handleSnooze(snoozeSelection.preset.snoozedUntil);
       } else if (snoozeSelection._tag === "expired") {
@@ -362,6 +399,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       t,
     ],
   );
+
   const primaryAction = useMemo(() => {
     // Pre-settlement server: archive is the swipe action, as in v1. (Slim
     // rows cannot occur here — unsupported environments never classify as
@@ -374,6 +412,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         onPress: handleArchive,
       };
     }
+
     if (swipeActions.primary === "unsnooze") {
       return {
         accessibilityLabel: `Wake ${thread.title} now`,
@@ -382,6 +421,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         onPress: handleUnsnooze,
       };
     }
+
     return swipeActions.primary === "unsettle"
       ? {
           accessibilityLabel: `Un-settle ${thread.title}`,
@@ -403,6 +443,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     swipeActions.primary,
     thread.title,
   ]);
+
   const secondaryAction = useMemo(
     () =>
       swipeActions.secondary === "snooze"
@@ -420,7 +461,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : null,
     [handleMenuAction, snoozePresetActions, swipeActions.secondary, thread.title],
   );
+
   const displayThreadTitle = thread.title;
+
   const swipeAccessibilityHint =
     secondaryAction === null
       ? `Opens the chat. Swipe left to ${primaryAction.label.toLowerCase()}.`
@@ -430,6 +473,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   // every piece of row text must use that surface's paired foreground.
   const projectTitleText = props.projectTitle ?? props.project?.title ?? "";
   const metaMutedClass = selected ? "text-user-bubble-foreground-muted" : "text-foreground-muted";
+
   const identity = resolveThreadIdentity({
     thread,
     bots: environmentBots,
@@ -437,17 +481,22 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     providerDriver: props.providerDriver,
     providerName: providerBotName,
   });
+
   const botName = identity.title;
+
   const botAvatar = identity.isGroup
     ? null
     : (identity.bots[0]?.avatar ?? seededBlobAvatar(identity.avatarSeed));
+
   const avatarState =
     status === "working"
       ? "working"
       : status === "approval" || status === "input"
         ? "needs-you"
         : "idle";
+
   const online = status === "working" || status === "approval" || status === "input";
+
   // Preview line: live state first, then where the work lives.
   const previewText =
     status === "failed" && thread.session?.lastError
@@ -459,6 +508,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         ]
           .filter(Boolean)
           .join("  ·  ");
+
   // Roster row, matching the web bot roster: blob avatar with presence dot,
   // bot name, the chat title as a task chip, timestamp, and a preview line.
   const cardContent = (

@@ -50,12 +50,14 @@ export function useSwipeableScrollGate(options?: {
       setGateActive(next);
     }
   }, []);
+
   const clearSettle = useCallback(() => {
     if (settleTimerRef.current !== null) {
       clearTimeout(settleTimerRef.current);
       settleTimerRef.current = null;
     }
   }, []);
+
   useEffect(() => clearSettle, [clearSettle]);
 
   const onScrollBeginDrag = useCallback(
@@ -67,6 +69,7 @@ export function useSwipeableScrollGate(options?: {
     },
     [clearSettle, externalOnScrollBeginDrag],
   );
+
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       // Only vertical movement during a user drag arms the gate — a purely
@@ -79,10 +82,12 @@ export function useSwipeableScrollGate(options?: {
       ) {
         update(true);
       }
+
       externalOnScroll?.(event);
     },
     [externalOnScroll, update],
   );
+
   const onScrollEndDrag = useCallback(() => {
     draggingRef.current = false;
     clearSettle();
@@ -90,9 +95,11 @@ export function useSwipeableScrollGate(options?: {
     // stays armed until the deceleration finishes.
     settleTimerRef.current = setTimeout(() => update(false), 160);
   }, [clearSettle, update]);
+
   const onMomentumScrollBegin = useCallback(() => {
     clearSettle();
   }, [clearSettle]);
+
   const onMomentumScrollEnd = useCallback(() => {
     update(false);
   }, [update]);

@@ -41,6 +41,7 @@ type MemoryRouteParams = {
 /** The server's own error text, shown as received, or null when it sent none. */
 const commandFailureMessage = (result: Parameters<typeof squashAtomCommandFailure>[0]) => {
   const failure = squashAtomCommandFailure(result);
+
   return failure instanceof Error ? failure.message : null;
 };
 
@@ -116,26 +117,33 @@ export function ThreadMemoryScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useMobileI18n();
   const { environmentId, threadId } = route.params;
+
   const query = useEnvironmentQuery(
     memoryEnvironment.inspectDocuments({ environmentId, input: { threadId } }),
   );
+
   const replaceDocument = useAtomCommand(memoryEnvironment.replaceDocument, {
     reportFailure: false,
   });
+
   const clearObservations = useAtomCommand(memoryEnvironment.clearObservations, {
     reportFailure: false,
   });
+
   const [busy, setBusy] = useState(false);
   const [durableScope, setDurableScope] = useState<DurableMemoryExportScope>("bot");
+
   const durableQuery = useEnvironmentQuery(
     memoryEnvironment.listFacts({
       environmentId,
       input: { threadId, target: durableScope },
     }),
   );
+
   const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
   const operateAccess = useEnvironmentOperateAccess(environmentId);
   const memorySettings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId))?.memory;
+
   const factPolicy = useMemo(
     () =>
       // Wait for both operate access and settings, so actions never flash in and out.
@@ -148,7 +156,9 @@ export function ThreadMemoryScreen() {
           },
     [operateAccess, memorySettings],
   );
+
   const durableFacts = durableQuery.data?.facts;
+
   const threadTitles = useThreadTitles(
     useMemo(
       () => [
@@ -161,37 +171,47 @@ export function ThreadMemoryScreen() {
       [durableFacts],
     ),
   );
+
   const botNames = useBotNames(
     useMemo(
       () => [...new Set((durableFacts ?? []).flatMap((fact) => fact.affectedBotIds))],
       [durableFacts],
     ),
   );
+
   const [busyFactRootId, setBusyFactRootId] = useState<string | null>(null);
   const [factEdit, setFactEdit] = useState<{ rootId: string; draft: string } | null>(null);
+
   const [factFailure, setFactFailure] = useState<ReturnType<
     typeof describeDurableFactFailure
   > | null>(null);
+
   const runFactIntent = async (fact: DurableMemoryFact, intent: DurableFactIntent) => {
     setBusyFactRootId(fact.rootId);
     setFactFailure(null);
+
     try {
       const result = await mutateFact({
         environmentId,
         input: { threadId, mutation: durableFactMutation(fact, intent) },
       });
+
       if (result._tag === "Failure") {
         const described = describeDurableFactFailure(squashAtomCommandFailure(result));
         setFactFailure(described);
+
         // A stale edit would overwrite the newer text, so drop it with the old revision.
         if (described.conflict) setFactEdit(null);
+
         return;
       }
+
       setFactEdit(null);
     } finally {
       setBusyFactRootId(null);
     }
   };
+
   const previousObservations = query.data?.conversation.current
     ? query.data.conversation.history.filter(
         (item) => item.generationCount !== query.data!.conversation.current!.generationCount,
@@ -205,11 +225,14 @@ export function ThreadMemoryScreen() {
   ) => {
     if (!query.data) return;
     setBusy(true);
+
     const result = await replaceDocument({
       environmentId,
       input: { threadId, expectedBotId: query.data.botId, expectedContent, target, content },
     });
+
     setBusy(false);
+
     if (result._tag === "Failure") {
       Alert.alert(
         t("Could not save memory"),
@@ -300,6 +323,7 @@ export function ThreadMemoryScreen() {
                         void clearObservations({ environmentId, input: { threadId } }).then(
                           (result) => {
                             setBusy(false);
+
                             if (result._tag === "Failure") {
                               Alert.alert(
                                 t("Could not clear memory"),

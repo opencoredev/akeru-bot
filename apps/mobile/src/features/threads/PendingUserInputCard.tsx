@@ -98,21 +98,27 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   // Measured card height, written straight from onLayout: the collapse slide
   // distance. Not animated — it only changes on discrete relayouts.
   const cardHeight = useSharedValue(0);
+
   const notifyCoverage = useCallback(() => {
     if (!cardCoverage) {
       return;
     }
+
     const coverage = Math.max(0, cardHeightRef.current - barHeightRef.current);
+
     if (coverage === cardCoverage.value) {
       return;
     }
+
     if (cardCoverage.value === 0) {
       // First measurement lands while the list is doing its initial
       // end-pin (thread opened onto a pending request); animating it from
       // zero would move the end anchor out from under that scroll.
       cardCoverage.value = coverage;
+
       return;
     }
+
     // Animated so a coverage change at rest (discrete max-height
     // corrections) glides the feed instead of stepping it; toggle timing is
     // owned by the host's progress values.
@@ -121,6 +127,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       easing: Easing.out(Easing.cubic),
     });
   }, [cardCoverage]);
+
   const handleBarLayout = useCallback(
     (event: LayoutChangeEvent) => {
       barHeightRef.current = event.nativeEvent.layout.height;
@@ -128,6 +135,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
     },
     [notifyCoverage],
   );
+
   const handleCardLayout = useCallback(
     (event: LayoutChangeEvent) => {
       cardHeightRef.current = event.nativeEvent.layout.height;
@@ -136,7 +144,9 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
     },
     [cardHeight, notifyCoverage],
   );
+
   const cardProgress = props.cardProgress;
+
   // No opacity: fading an opaque card over the live transcript reads as a
   // crossfade (card text, transcript, and bar all half-visible at once).
   // Instead the card stays opaque and slides its full height down past the
@@ -144,6 +154,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   // the card has physically left.
   const cardAnimatedStyle = useAnimatedStyle(() => {
     const progress = cardProgress === undefined ? 1 : cardProgress.value;
+
     return {
       transform: [{ translateY: (1 - progress) * cardHeight.value }],
     };
@@ -155,6 +166,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   // mount + layout before anything moves.
   const renderCard = EXPANDED_CARD_IS_OVERLAY || !props.collapsed;
   const showBar = props.collapsed || EXPANDED_CARD_IS_OVERLAY;
+
   // The bar renders UNDER the card (earlier in JSX), always opaque: while
   // expanded the opaque card covers it, and during the collapse slide the
   // card's top edge wipes past and reveals it — no opacity handoff, so no
@@ -196,6 +208,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       ) : null}
     </View>
   ) : null;
+
   const card = renderCard ? (
     // The surface is opaque on purpose: the card floats over the thread
     // feed with no blur behind it, so a translucent background renders
@@ -252,6 +265,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       >
         {props.pendingUserInput.questions.map((question) => {
           const draft = props.drafts[question.id];
+
           return (
             <View key={question.id} className="gap-2 pt-1">
               <Text className="font-t3-bold text-xs uppercase tracking-[1px] text-neutral-500 dark:text-neutral-500">
@@ -263,8 +277,10 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
               <View className="gap-2">
                 {question.options.map((option) => {
                   const selected = isPendingUserInputOptionSelected(draft, option.label);
+
                   const description =
                     option.description !== option.label ? option.description : undefined;
+
                   return (
                     <Pressable
                       key={option.label}
@@ -331,6 +347,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       </Pressable>
     </Animated.View>
   ) : null;
+
   return (
     <View className="relative">
       {bar}

@@ -7,7 +7,9 @@ import * as Schema from "effect/Schema";
 import type { SQLiteDatabase } from "expo-sqlite";
 
 const DATABASE_NAME = "t3code-client.db";
+
 const DATABASE_SCHEMA_VERSION = 1;
+
 const LEGACY_CACHE_DIRECTORIES = [
   "connection-shell-snapshots",
   "shell-snapshots",
@@ -17,6 +19,7 @@ const LEGACY_CACHE_DIRECTORIES = [
 ] as const;
 
 export const ClientCacheKind = Schema.Literals(["shell", "thread", "server-config", "vcs-refs"]);
+
 export type ClientCacheKind = typeof ClientCacheKind.Type;
 
 export interface ClientCacheSummaryRow {
@@ -87,11 +90,13 @@ export function decodeLegacyCacheRecord(
   payload: string,
 ): LegacyCacheRecord | null {
   let parsed: Record<string, unknown> | null;
+
   try {
     parsed = objectRecord(JSON.parse(payload));
   } catch {
     return null;
   }
+
   if (
     parsed === null ||
     typeof parsed.environmentId !== "string" ||
@@ -145,6 +150,7 @@ async function migrateLegacyFileCaches(database: SQLiteDatabase): Promise<boolea
   try {
     const { Directory, File, Paths } = await import("expo-file-system");
     let complete = true;
+
     const listFiles = (
       directory: InstanceType<typeof Directory>,
     ): Array<InstanceType<typeof File>> =>
@@ -153,10 +159,13 @@ async function migrateLegacyFileCaches(database: SQLiteDatabase): Promise<boolea
     for (const directoryName of LEGACY_CACHE_DIRECTORIES) {
       try {
         const directory = new Directory(Paths.document, directoryName);
+
         if (!directory.exists) continue;
+
         for (const file of listFiles(directory)) {
           const payload = await file.text();
           const record = decodeLegacyCacheRecord(directoryName, payload);
+
           if (record === null) continue;
           await database.runAsync(
             `INSERT INTO client_cache
@@ -171,15 +180,18 @@ async function migrateLegacyFileCaches(database: SQLiteDatabase): Promise<boolea
             Date.now(),
           );
         }
+
         directory.delete();
       } catch (cause) {
         complete = false;
         console.warn(`[mobile-database] could not migrate legacy cache ${directoryName}`, cause);
       }
     }
+
     return complete;
   } catch (cause) {
     console.warn("[mobile-database] could not load legacy cache migration", cause);
+
     return false;
   }
 }
@@ -232,6 +244,7 @@ const makeAvailable = Effect.gen(function* () {
     Effect.tryPromise({
       try: async () => {
         const SQLite = await import("expo-sqlite");
+
         return SQLite.openDatabaseAsync(DATABASE_NAME);
       },
       catch: databaseError("open"),
@@ -242,9 +255,11 @@ const makeAvailable = Effect.gen(function* () {
   yield* Effect.tryPromise({
     try: async () => {
       await database.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+
       const schema = await database.getFirstAsync<{ readonly user_version: number }>(
         "PRAGMA user_version",
       );
+
       await database.withExclusiveTransactionAsync(async (transaction) => {
         await transaction.execAsync(`
               CREATE TABLE IF NOT EXISTS client_cache (
@@ -267,8 +282,10 @@ const makeAvailable = Effect.gen(function* () {
               );
             `);
       });
+
       if ((schema?.user_version ?? 0) < DATABASE_SCHEMA_VERSION) {
         const migrated = await migrateLegacyFileCaches(database);
+
         if (migrated) {
           await database.execAsync(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION};`);
         }
@@ -404,6 +421,7 @@ const makeAvailable = Effect.gen(function* () {
 
 function makeUnavailable(error: MobileDatabaseError): MobileDatabase["Service"] {
   const fail = Effect.fail(error);
+
   return MobileDatabase.of({
     loadCache: () => fail,
     saveCache: () => fail,

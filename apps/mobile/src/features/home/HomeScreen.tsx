@@ -90,6 +90,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
   const insets = useSafeAreaInsets();
   const accentColor = useThemeColor("--color-icon-muted");
+
   const {
     threadSearch,
     threadSearchMatchByKey,
@@ -116,6 +117,7 @@ export function HomeScreen(props: HomeScreenProps) {
     searchQuery: props.searchQuery,
     selectedThreadKey: null,
   });
+
   const {
     settlement: settlementEnvironmentIds,
     snooze: snoozeEnvironmentIds,
@@ -123,12 +125,14 @@ export function HomeScreen(props: HomeScreenProps) {
     pinReorder: pinReorderEnvironmentIds,
     titleRegeneration: titleRegenerationEnvironmentIds,
   } = capabilities;
+
   const {
     loaded: shelfPreferencesLoaded,
     settledShelfExpanded,
     toggleSettledShelf,
     toggleSnoozedShelf,
   } = shelves;
+
   const handleSwipeableWillOpen = useCallback((methods: SwipeableMethods) => {
     if (openSwipeableRef.current !== methods) {
       openSwipeableRef.current?.close();
@@ -145,6 +149,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const handleScrollBeginDrag = useCallback(() => {
     openSwipeableRef.current?.close();
   }, []);
+
   const { swipeEnabled, scrollGateHandlers } = useSwipeableScrollGate({
     onScrollBeginDrag: handleScrollBeginDrag,
   });
@@ -155,56 +160,66 @@ export function HomeScreen(props: HomeScreenProps) {
     },
     [props.onSettleThread],
   );
+
   const handleSnoozeThread = useCallback(
     (thread: EnvironmentThreadShell, snoozedUntil: string) => {
       void props.onSnoozeThread(thread, snoozedUntil);
     },
     [props.onSnoozeThread],
   );
+
   const handleUnsnoozeThread = useCallback(
     (thread: EnvironmentThreadShell) => {
       void props.onUnsnoozeThread(thread);
     },
     [props.onUnsnoozeThread],
   );
+
   const handlePinThread = useCallback(
     (thread: EnvironmentThreadShell) => {
       void props.onPinThread(thread);
     },
     [props.onPinThread],
   );
+
   const handleMovePinnedThread = useCallback(
     (thread: EnvironmentThreadShell, direction: "up" | "down") => {
       void props.onMovePinnedThread(thread, direction);
     },
     [props.onMovePinnedThread],
   );
+
   const handleUnpinThread = useCallback(
     (thread: EnvironmentThreadShell) => {
       void props.onUnpinThread(thread);
     },
     [props.onUnpinThread],
   );
+
   const handleRegenerateThreadTitle = useCallback(
     (thread: EnvironmentThreadShell) => {
       void props.onRegenerateThreadTitle(thread);
     },
     [props.onRegenerateThreadTitle],
   );
+
   const handleDeleteThread = props.onDeleteThread;
   const handleUnsettleThread = props.onUnsettleThread;
 
   const renderV2Item = useCallback(
     ({ item, index }: { readonly item: ThreadListV2ListItem; readonly index: number }) => {
       const nextItem = threadListV2Items[index + 1];
+
       const showTrailingDivider =
         nextItem?.type === "v2-thread" ||
         (nextItem?.type === "v2-pending" && !nextItem.showPendingDivider);
+
       if (item.type === "v2-pending") {
         const pendingScopeKey = scopedProjectKey(
           item.pendingTask.message.environmentId,
           item.pendingTask.creation.projectId,
         );
+
         return (
           <ThreadListV2PendingRow
             pendingTask={item.pendingTask}
@@ -223,6 +238,7 @@ export function HomeScreen(props: HomeScreenProps) {
           />
         );
       }
+
       if (item.type === "v2-snoozed-shelf") {
         return (
           <ThreadListV2SnoozedShelfHeader
@@ -233,6 +249,7 @@ export function HomeScreen(props: HomeScreenProps) {
           />
         );
       }
+
       if (item.type === "v2-settled-shelf") {
         return (
           <ThreadListV2SettledShelfHeader
@@ -243,7 +260,9 @@ export function HomeScreen(props: HomeScreenProps) {
           />
         );
       }
+
       const thread = item.item.thread;
+
       return (
         <ThreadListV2Row
           thread={thread}
@@ -296,6 +315,7 @@ export function HomeScreen(props: HomeScreenProps) {
           canMovePinnedUp={arrangedPinnedKeys.indexOf(`${thread.environmentId}:${thread.id}`) > 0}
           canMovePinnedDown={(() => {
             const index = arrangedPinnedKeys.indexOf(`${thread.environmentId}:${thread.id}`);
+
             return index !== -1 && index < arrangedPinnedKeys.length - 1;
           })()}
           onSnoozeThread={handleSnoozeThread}
@@ -348,6 +368,7 @@ export function HomeScreen(props: HomeScreenProps) {
       nowMinute,
     ],
   );
+
   const v2KeyExtractor = useCallback((item: ThreadListV2ListItem) => item.key, []);
 
   // FlatList treats a changed extraData identity as "re-render every visible
@@ -383,12 +404,15 @@ export function HomeScreen(props: HomeScreenProps) {
   // so they count here too.
   const hasAnyThreads =
     props.threads.some((thread) => thread.archivedAt === null) || props.pendingTasks.length > 0;
+
   const hasSearchQuery = props.searchQuery.trim().length > 0;
+
   const selectedEnvironmentLabel =
     props.selectedEnvironmentId === null
       ? null
       : (props.savedConnectionsById[props.selectedEnvironmentId]?.environmentLabel ??
         "this environment");
+
   // Connection state surfaces in the header title slot
   // (WorkspaceConnectionTitle) — nothing renders inside the list, so
   // reconnects never shift the rows.
@@ -403,6 +427,7 @@ export function HomeScreen(props: HomeScreenProps) {
       : !props.catalogState.hasReadyEnvironment
         ? { label: "Add environment", onPress: props.onAddConnection }
         : { label: "New chat", onPress: props.onStartNewTask };
+
     return (
       <View className="flex-1 bg-screen">
         <View

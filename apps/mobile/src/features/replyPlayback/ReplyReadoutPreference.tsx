@@ -12,8 +12,10 @@ export function ReplyReadoutPreference({ preference }: { readonly preference: Pr
     preference.getSnapshot,
     preference.getSnapshot,
   );
+
   const { t } = useMobileI18n();
   const label = t("Automatically read new replies in this chat on this device");
+
   return (
     <View className="gap-2">
       <View className="min-h-11 flex-row items-center gap-3">

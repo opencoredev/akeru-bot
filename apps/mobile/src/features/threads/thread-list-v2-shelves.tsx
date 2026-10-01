@@ -13,6 +13,7 @@ export const ThreadListV2SectionDivider = memo(function ThreadListV2SectionDivid
   readonly pane?: "screen" | "sidebar";
 }) {
   const borderColor = useThemeColor("--color-border");
+
   return (
     <View
       className={cn(
@@ -27,6 +28,7 @@ export const ThreadListV2SectionDivider = memo(function ThreadListV2SectionDivid
 });
 
 const SNOOZE_ACCENT_LIGHT = "#2563eb";
+
 const SNOOZE_ACCENT_DARK = "#60a5fa";
 
 export const ThreadListV2SnoozedShelfHeader = memo(function ThreadListV2SnoozedShelfHeader(props: {
@@ -38,6 +40,7 @@ export const ThreadListV2SnoozedShelfHeader = memo(function ThreadListV2SnoozedS
 }) {
   const { t } = useMobileI18n();
   const { themeAppearance: colorScheme } = useAppearancePreferences();
+
   return (
     <Pressable
       accessibilityHint={
@@ -78,6 +81,7 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
 }) {
   const { t } = useMobileI18n();
   const mutedColor = useThemeColor("--color-foreground-muted");
+
   return (
     <Pressable
       accessibilityHint={

@@ -13,7 +13,9 @@ import { nodeText } from "./nativeMarkdownNodes";
 type HighlightedCode = ReadonlyArray<ReadonlyArray<MarkdownHighlightedToken>>;
 
 const highlightedCodeCache = new Map<string, HighlightedCode>();
+
 const highlightedCodePromiseCache = new Map<string, Promise<HighlightedCode>>();
+
 const HIGHLIGHTED_CODE_CACHE_LIMIT = 64;
 
 /** Code inside markdown scales with the base text size (12pt at the default 15pt body). */
@@ -39,9 +41,11 @@ function cacheHighlightedCode(key: string, tokens: HighlightedCode): void {
 
   while (highlightedCodeCache.size > HIGHLIGHTED_CODE_CACHE_LIMIT) {
     const oldestKey = highlightedCodeCache.keys().next().value;
+
     if (oldestKey === undefined) {
       break;
     }
+
     highlightedCodeCache.delete(oldestKey);
   }
 }
@@ -54,11 +58,13 @@ function loadHighlightedCode(
 ): Promise<HighlightedCode> {
   const key = codeHighlightCacheKey(code, language, theme);
   const cached = highlightedCodeCache.get(key);
+
   if (cached) {
     return Promise.resolve(cached);
   }
 
   const pending = highlightedCodePromiseCache.get(key);
+
   if (pending) {
     return pending;
   }
@@ -67,13 +73,16 @@ function loadHighlightedCode(
     .then((tokens) => {
       cacheHighlightedCode(key, tokens);
       highlightedCodePromiseCache.delete(key);
+
       return tokens;
     })
     .catch((error) => {
       highlightedCodePromiseCache.delete(key);
       throw error;
     });
+
   highlightedCodePromiseCache.set(key, promise);
+
   return promise;
 }
 
@@ -84,6 +93,7 @@ function useHighlightedCode(
   highlightCode: MarkdownCodeHighlighter,
 ): HighlightedCode | null {
   const key = codeHighlightCacheKey(code, language, theme);
+
   const [highlighted, setHighlighted] = useState<{
     readonly key: string;
     readonly tokens: HighlightedCode | null;
@@ -95,9 +105,11 @@ function useHighlightedCode(
   useEffect(() => {
     let active = true;
     const cached = highlightedCodeCache.get(key);
+
     if (cached) {
       cacheHighlightedCode(key, cached);
       setHighlighted({ key, tokens: cached });
+
       return () => {
         active = false;
       };
@@ -114,6 +126,7 @@ function useHighlightedCode(
           setHighlighted({ key, tokens: null });
         }
       });
+
     return () => {
       active = false;
     };
@@ -143,20 +156,26 @@ function HighlightedCodeText(props: {
       </MarkdownTextPrimitive>
     );
   }
+
   const highlighted = props.highlighted;
   let sourceOffset = 0;
   const keyOccurrences = new Map<string, number>();
+
   const keyedLines = highlighted.map((line) => {
     const lineStart = sourceOffset;
+
     const tokens = line.map((token) => {
       const start = sourceOffset;
       sourceOffset += token.content.length;
       const signature = `${start}:${token.content}:${token.color ?? ""}:${token.fontStyle ?? ""}`;
       const occurrence = keyOccurrences.get(signature) ?? 0;
       keyOccurrences.set(signature, occurrence + 1);
+
       return { key: `${signature}:${occurrence}`, token };
     });
+
     sourceOffset += 1;
+
     return {
       key: `line:${lineStart}:${line.map((token) => token.content).join("")}`,
       tokens,
@@ -208,6 +227,7 @@ export function NativeCodeBlock(props: {
   const theme = colorScheme === "dark" ? "dark" : "light";
   const highlighted = useHighlightedCode(content, props.node.language, theme, props.highlightCode);
   const languageLabel = props.node.language?.toUpperCase() ?? "CODE";
+
   return (
     <View
       style={{

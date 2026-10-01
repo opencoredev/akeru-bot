@@ -46,8 +46,10 @@ export function DictationControls({
   const retry = appearance === "send-slot" && status === "failed" && !unavailableReason;
   const blocked = Boolean(unavailableReason);
   const explainsBlock = appearance === "send-slot" && blocked && onBlockedPress !== undefined;
+
   const disabled =
     (appearance === "labeled" && status === "transcribing") || (blocked && !explainsBlock);
+
   const operation = useRef(busy);
   const cancelCallback = useRef(onCancel);
   useEffect(() => {
@@ -56,22 +58,28 @@ export function DictationControls({
   useEffect(() => {
     operation.current = busy;
   }, [status]);
+
   const cancel = () => {
     holding.current = false;
+
     if (!operation.current) return;
     operation.current = false;
     cancelCallback.current();
   };
+
   useEffect(() => {
     if (!blocked) return;
+
     // A blocked slot cannot retry, so settle a failed dictation and give the send slot back.
     if (status === "failed") cancelCallback.current();
     else cancel();
   }, [blocked, status]);
+
   const start = () => {
     operation.current = true;
     onStart();
   };
+
   // The reason is provider text, so it is interpolated untranslated.
   const announcement = unavailableReason
     ? t("Dictation unavailable: {reason}", { reason: unavailableReason })
@@ -85,13 +93,18 @@ export function DictationControls({
   const activate = () => {
     if (explainsBlock) {
       onBlockedPress(unavailableReason!);
+
       return;
     }
+
     if (disabled || holding.current) return;
+
     if (appearance === "send-slot" && status === "transcribing") {
       cancel();
+
       return;
     }
+
     if (active) onRelease();
     else start();
   };
@@ -104,6 +117,7 @@ export function DictationControls({
         : retry
           ? t("Retry dictation")
           : t("Start dictation");
+
   const micButton = (
     <View
       accessible
@@ -123,22 +137,29 @@ export function DictationControls({
       onResponderGrant={() => {
         if (explainsBlock) {
           onBlockedPress(unavailableReason!);
+
           return;
         }
+
         if (disabled || holding.current) return;
+
         // While transcribing, the send slot is a cancel button, so a tap cancels.
         if (appearance === "send-slot" && status === "transcribing") {
           cancel();
+
           return;
         }
+
         holding.current = true;
         holdStartedAt.current = Date.now();
         startedThisGesture.current = !active;
+
         if (!active) start();
       }}
       onResponderRelease={() => {
         if (!holding.current) return;
         holding.current = false;
+
         // A tap starts recording; only a real hold finishes on release.
         if (
           appearance === "send-slot" &&
@@ -174,6 +195,7 @@ export function DictationControls({
 
   if (appearance === "send-slot") {
     if (!active && !retry) return micButton;
+
     return (
       <View className="flex-row items-center gap-2">
         <Pressable

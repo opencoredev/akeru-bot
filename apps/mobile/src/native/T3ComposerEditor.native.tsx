@@ -62,9 +62,11 @@ export function ComposerEditor({
     onChangeText,
     onSelectionChange,
   });
+
   const handlePaste = useNativePaste((uris) => onPasteImages?.(uris));
   const resolvedTextStyle = StyleSheet.flatten(textStyle) ?? {};
   const regularFontFamily = useFontFamily("regular");
+
   return (
     <TextInputWrapper onPaste={handlePaste} style={[{ minHeight: 0 }, style]}>
       <NativeView

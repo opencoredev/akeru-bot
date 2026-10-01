@@ -45,9 +45,11 @@ export function resolveThreadFeedLiveFollow(
       if (event.userScrollSessionActive) {
         return false;
       }
+
       if (event.isAtEnd) {
         return true;
       }
+
       return current;
   }
 }

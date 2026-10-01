@@ -13,6 +13,7 @@ const ReplyPlaybackContext = createContext<ReplyPlaybackSession | null>(null);
 export function ReplyPlaybackProvider({ children }: { readonly children: ReactNode }) {
   const synthesize = useAtomCommand(serverEnvironment.synthesizeVoice, { reportFailure: false });
   const cancel = useAtomCommand(serverEnvironment.cancelVoice, { reportFailure: false });
+
   const session = useMemo(
     () =>
       createMobileReplyPlaybackSession({
@@ -27,10 +28,13 @@ export function ReplyPlaybackProvider({ children }: { readonly children: ReactNo
       }),
     [cancel, synthesize],
   );
+
   useEffect(() => {
     void session.preference.load();
+
     return () => session.dispose();
   }, [session]);
+
   return <ReplyPlaybackContext.Provider value={session}>{children}</ReplyPlaybackContext.Provider>;
 }
 

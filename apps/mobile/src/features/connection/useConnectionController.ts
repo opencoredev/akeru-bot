@@ -12,9 +12,11 @@ import { projectWorkspaceEnvironment, type WorkspaceEnvironment } from "../../st
 
 export function useConnectionController() {
   const { environments } = useEnvironments();
+
   const connectPairingUrlMutation = useAtomCommand(connectPairingUrlAtom, {
     reportFailure: false,
   });
+
   const updateBearer = useAtomCommand(updateBearerConnection, { reportFailure: false });
   const removeEnvironmentMutation = useAtomCommand(environmentCatalog.remove, "environment remove");
   const retryEnvironmentMutation = useAtomCommand(environmentCatalog.retryNow, "environment retry");
@@ -23,18 +25,22 @@ export function useConnectionController() {
     () => environments.map(projectWorkspaceEnvironment),
     [environments],
   );
+
   const connectPairingUrl = useCallback(
     (pairingUrl: string) => connectPairingUrlMutation(pairingUrl),
     [connectPairingUrlMutation],
   );
+
   const removeEnvironment = useCallback(
     (environmentId: EnvironmentId) => removeEnvironmentMutation(environmentId),
     [removeEnvironmentMutation],
   );
+
   const retryEnvironment = useCallback(
     (environmentId: EnvironmentId) => retryEnvironmentMutation(environmentId),
     [retryEnvironmentMutation],
   );
+
   const updateEnvironment = useCallback(
     (
       environmentId: EnvironmentId,

@@ -22,6 +22,7 @@ export function buildComposerCommandItems(
 
   if (trigger.kind === "slash-command") {
     const q = trigger.query.toLowerCase();
+
     const allBuiltIn = [
       {
         id: "cmd:model",
@@ -31,9 +32,11 @@ export function buildComposerCommandItems(
         description: "Switch model",
       },
     ];
+
     const builtIn = allBuiltIn.filter((item) => item.command.includes(q));
 
     const providerCommands: ComposerCommandItem[] = [];
+
     for (const cmd of providerStatus?.slashCommands ?? []) {
       if (!cmd.name.toLowerCase().includes(q)) continue;
       providerCommands.push({
@@ -60,6 +63,7 @@ export function buildComposerCommandItems(
 
   if (trigger.kind === "skill") {
     const enabledSkills = (providerStatus?.skills ?? []).filter((s) => s.enabled);
+
     const normalizedQuery = normalizeSearchQuery(trigger.query, {
       trimLeadingPattern: /^\$+/,
     });
@@ -79,8 +83,10 @@ export function buildComposerCommandItems(
       score: number;
       tieBreaker: string;
     }> = [];
+
     for (const skill of enabledSkills) {
       const displayLabel = (skill.displayName ?? skill.name).toLowerCase();
+
       const scores = [
         scoreQueryMatch({
           value: skill.name.toLowerCase(),
@@ -144,6 +150,7 @@ export function buildComposerCommandItems(
   if (trigger.kind === "path") {
     const fileItems = pathEntries.map((entry) => {
       const parts = entry.path.split("/");
+
       return {
         id: `path:${entry.path}`,
         type: "path" as const,
@@ -153,6 +160,7 @@ export function buildComposerCommandItems(
         description: parts.length > 1 ? parts.slice(0, -1).join("/") : "",
       };
     });
+
     return fileItems;
   }
 

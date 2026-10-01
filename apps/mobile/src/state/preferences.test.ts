@@ -16,6 +16,7 @@ vi.mock("react-native", () => ({
 
 vi.mock("../lib/runtime", async () => {
   const Layer = await import("effect/Layer");
+
   return {
     runtime: { runPromise: vi.fn() },
     runtimeContextLayer: Layer.empty,
@@ -32,9 +33,11 @@ import {
 
 function deferred<A>() {
   let resolve!: (value: A) => void;
+
   const promise = new Promise<A>((resume) => {
     resolve = resume;
   });
+
   return { promise, resolve } as const;
 }
 
@@ -56,6 +59,7 @@ function makePreferencesState(
           ),
         )),
   });
+
   return createMobilePreferencesState(
     Atom.runtime(Layer.succeed(MobilePreferencesStore, completeService)),
   );
@@ -94,10 +98,12 @@ describe("mobile preferences state", () => {
   it.effect("shares one preference load across consumers", () =>
     Effect.gen(function* () {
       const load = vi.fn(() => Promise.resolve<Preferences>({ baseFontSize: 17 }));
+
       const state = makePreferencesState({
         load: Effect.promise(load),
         savePatch: (patch) => Effect.succeed(patch),
       });
+
       const registry = AtomRegistry.make();
       const unmountFirst = registry.mount(state.preferencesAtom);
       const unmountSecond = registry.mount(state.preferencesAtom);
@@ -119,10 +125,12 @@ describe("mobile preferences state", () => {
     Effect.gen(function* () {
       const pendingLoad = deferred<Preferences>();
       const savePatch = vi.fn((patch: Partial<Preferences>) => Effect.succeed(patch));
+
       const state = makePreferencesState({
         load: Effect.promise(() => pendingLoad.promise),
         savePatch,
       });
+
       const registry = AtomRegistry.make();
       const unmountPreferences = registry.mount(state.preferencesAtom);
       const unmountUpdate = registry.mount(state.updatePreferencesAtom);
@@ -138,6 +146,7 @@ describe("mobile preferences state", () => {
       const preferences = yield* AtomRegistry.getResult(registry, state.preferencesAtom, {
         suspendOnWaiting: true,
       });
+
       expect(preferences).toEqual({
         baseFontSize: 18,
         themeMode: "dark",
@@ -163,6 +172,7 @@ describe("mobile preferences state", () => {
         ),
         savePatch: (patch) => Effect.succeed(patch),
       });
+
       const registry = AtomRegistry.make();
       const unmount = registry.mount(state.preferencesAtom);
 
@@ -180,15 +190,18 @@ describe("mobile preferences state", () => {
   it.effect("does not roll back a newer optimistic write with the same value", () =>
     Effect.gen(function* () {
       let saveCount = 0;
+
       const state = makePreferencesState({
         load: Effect.succeed({ baseFontSize: 16, codeFontSize: 13 }),
         savePatch: (patch) => {
           saveCount += 1;
+
           return saveCount === 1
             ? Effect.fail(new MobilePreferencesSaveError({ cause: new Error("write failed") }))
             : Effect.succeed(patch);
         },
       });
+
       const registry = AtomRegistry.make();
       const unmountPreferences = registry.mount(state.preferencesAtom);
       const unmountUpdate = registry.mount(state.updatePreferencesAtom);
@@ -224,6 +237,7 @@ describe("mobile preferences state", () => {
         savePatch: () =>
           Effect.fail(new MobilePreferencesSaveError({ cause: new Error("write failed") })),
       });
+
       const registry = AtomRegistry.make();
       const unmountPreferences = registry.mount(state.preferencesAtom);
       const unmountUpdate = registry.mount(state.updatePreferencesAtom);
@@ -252,15 +266,18 @@ describe("mobile preferences state", () => {
   it.effect("rolls back to the last confirmed value after a later save fails", () =>
     Effect.gen(function* () {
       let saveCount = 0;
+
       const state = makePreferencesState({
         load: Effect.succeed({ baseFontSize: 16 }),
         savePatch: () => {
           saveCount += 1;
+
           return saveCount === 1
             ? Effect.succeed({ baseFontSize: 14 })
             : Effect.fail(new MobilePreferencesSaveError({ cause: new Error("write failed") }));
         },
       });
+
       const registry = AtomRegistry.make();
       const unmountPreferences = registry.mount(state.preferencesAtom);
       const unmountUpdate = registry.mount(state.updatePreferencesAtom);

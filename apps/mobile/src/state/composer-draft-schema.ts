@@ -75,6 +75,7 @@ export function normalizeDraft(draft: ComposerDraft | undefined): ComposerDraft 
   if (!draft) {
     return EMPTY_DRAFT;
   }
+
   return {
     ...draft,
     text: draft.text,
@@ -99,6 +100,7 @@ export function isEmptyDraft(draft: ComposerDraft): boolean {
 
 export function decodePersistedComposerDrafts(value: unknown): Record<string, ComposerDraft> {
   const parsed = decodePersistedComposerDraftsDocument(value);
+
   return Object.fromEntries(
     Object.entries(parsed.drafts).filter(([, draft]) => !isEmptyDraft(draft)),
   );

@@ -27,16 +27,21 @@ export function SelectableNode(props: {
 
 function collectTableRows(node: MarkdownNode): MarkdownNode[] {
   const rows: MarkdownNode[] = [];
+
   const visit = (child: MarkdownNode) => {
     if (child.type === "table_row") {
       rows.push(child);
+
       return;
     }
+
     for (const nested of child.children ?? []) {
       visit(nested);
     }
   };
+
   visit(node);
+
   return rows;
 }
 
@@ -47,6 +52,7 @@ export function NativeTable(props: {
   readonly onLinkPress?: (href: string) => void;
 }) {
   const rows = collectTableRows(props.node);
+
   return (
     <ScrollView horizontal bounces={false} showsHorizontalScrollIndicator={false}>
       <View
@@ -103,6 +109,7 @@ export function NativeMarkdownImage(props: {
 }) {
   const renderImage = useContext(MarkdownImageRendererContext);
   const href = props.node.href;
+
   if (!href) {
     return (
       <SelectableNode
@@ -120,6 +127,7 @@ export function NativeMarkdownImage(props: {
       alt: props.node.alt ?? null,
       title: props.node.title ?? null,
     });
+
     if (rendered != null) {
       return <>{rendered}</>;
     }
@@ -158,10 +166,12 @@ export function NativeMarkdownImage(props: {
 function inlineGroups(nodes: ReadonlyArray<MarkdownNode>): MarkdownNode[] {
   const groups: MarkdownNode[] = [];
   let inline: MarkdownNode[] = [];
+
   const flush = () => {
     if (inline.length === 0) {
       return;
     }
+
     groups.push({ type: "paragraph", children: inline });
     inline = [];
   };
@@ -174,7 +184,9 @@ function inlineGroups(nodes: ReadonlyArray<MarkdownNode>): MarkdownNode[] {
       inline.push(node);
     }
   }
+
   flush();
+
   return groups;
 }
 

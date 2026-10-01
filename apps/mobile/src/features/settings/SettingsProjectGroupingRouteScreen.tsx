@@ -20,6 +20,7 @@ import { SettingsSection } from "./components/SettingsSection";
 
 export function SettingsProjectGroupingRouteScreen() {
   const { t } = useMobileI18n();
+
   const groupingOptions: ReadonlyArray<{
     readonly mode: SidebarProjectGroupingMode;
     readonly label: string;
@@ -41,12 +42,14 @@ export function SettingsProjectGroupingRouteScreen() {
       description: t("Show every workspace as its own project."),
     },
   ];
+
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const checkmarkColor = useThemeColor("--color-icon");
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const preferencesReady = AsyncResult.isSuccess(preferencesResult) && !preferencesResult.waiting;
+
   const selectedMode = AsyncResult.isSuccess(preferencesResult)
     ? resolveMobileProjectGroupingSettings(preferencesResult.value).sidebarProjectGroupingMode
     : null;

@@ -34,16 +34,19 @@ interface AdaptiveWorkspaceContextValue {
 }
 
 const compactLayout = deriveLayout({ width: 0, height: 0 });
+
 const compactPanes = deriveWorkspacePaneLayout({
   layout: compactLayout,
   viewportWidth: 0,
   primarySidebarPreferredVisible: true,
   auxiliaryPanePreferredVisible: true,
 });
+
 const compactFileInspector = deriveFileInspectorPaneLayout({
   layout: compactLayout,
   viewportWidth: 0,
 });
+
 export const AdaptiveWorkspaceContext = createContext<AdaptiveWorkspaceContextValue>({
   layout: compactLayout,
   panes: compactPanes,
@@ -97,6 +100,7 @@ export function useRegisterWorkspaceInspector(render: (() => ReactNode) | undefi
     if (render === undefined) {
       return undefined;
     }
+
     return () => (
       <NavigationContext.Provider value={navigation}>
         <NavigationRouteContext.Provider value={route}>{render()}</NavigationRouteContext.Provider>
@@ -112,8 +116,10 @@ export function useRegisterWorkspaceInspector(render: (() => ReactNode) | undefi
   const syncRegistration = useCallback(() => {
     if (!focusedRef.current || wrappedRenderRef.current === undefined) {
       deactivateRef.current?.();
+
       return;
     }
+
     deactivateRef.current = registerWorkspaceInspector(wrappedRenderRef.current);
   }, [registerWorkspaceInspector]);
 
@@ -123,6 +129,7 @@ export function useRegisterWorkspaceInspector(render: (() => ReactNode) | undefi
     useCallback(() => {
       focusedRef.current = true;
       syncRegistration();
+
       return () => {
         focusedRef.current = false;
         syncRegistration();

@@ -38,29 +38,36 @@ import {
   workEntryStatus,
   workLogEntryIsToolLike,
 } from "./threadWorkLog";
+
 export type {
   ThreadFeedActivity,
   ThreadFeedEntry,
   ThreadFeedLatestTurn,
 } from "./threadActivityTypes";
+
 export {
   buildPendingUserInputAnswers,
   isPendingUserInputOptionSelected,
   setPendingUserInputCustomAnswer,
   togglePendingUserInputOptionSelection,
 } from "./pendingUserInputAnswers";
+
 export type { PendingUserInputDraftAnswer } from "./pendingUserInputAnswers";
+
 export { deriveGroupSpeakerLabels, deriveThreadFeedPresentation } from "./threadFeedPresentation";
 
 export type { PendingApproval, PendingUserInput };
+
 export { derivePendingApprovals, derivePendingUserInputs };
 
 function isEmptyMessage(entry: RawThreadFeedEntry): boolean {
   if (entry.type !== "message") {
     return false;
   }
+
   const hasText = entry.message.text.trim().length > 0;
   const hasAttachments = (entry.message.attachments ?? []).length > 0;
+
   return !hasText && !hasAttachments;
 }
 
@@ -126,6 +133,7 @@ export function deriveThreadFeedDelegations(
   if (!threadId) {
     return JSON.stringify(EMPTY_THREAD_FEED_DELEGATIONS);
   }
+
   return JSON.stringify(threadDelegations(snapshotDelegations ?? [], threadId));
 }
 
@@ -152,13 +160,17 @@ function withoutCardedDelegationActivities(
 ): ReadonlyArray<OrchestrationThreadActivity> {
   if (delegations.length === 0) return activities;
   const cardIds = new Set<string>(delegations.map((delegation) => delegation.delegationId));
+
   return activities.filter((activity) => {
     if (!activity.kind.startsWith("delegation.")) return true;
+
     const payload =
       activity.payload && typeof activity.payload === "object"
         ? (activity.payload as Record<string, unknown>)
         : null;
+
     const delegationId = payload?.delegationId;
+
     return typeof delegationId !== "string" || !cardIds.has(delegationId);
   });
 }
@@ -171,6 +183,7 @@ const activityFeedDerivations = new WeakMap<
     readonly workLogEntries: ReturnType<typeof deriveWorkLogEntries>;
   }
 >();
+
 const NO_FEED_DELEGATIONS: ReadonlyArray<AkeruDelegationRecord> = Object.freeze([]);
 
 function deriveActivityFeed(
@@ -178,7 +191,9 @@ function deriveActivityFeed(
   delegations: ReadonlyArray<AkeruDelegationRecord>,
 ) {
   const cached = activityFeedDerivations.get(activities);
+
   if (cached !== undefined && sameEntries(cached.delegations, delegations)) return cached;
+
   const derivation = {
     delegations,
     botStepMeters: buildBotStepMeters(activities),
@@ -186,7 +201,9 @@ function deriveActivityFeed(
       withoutCardedDelegationActivities(activities, delegations),
     ),
   };
+
   activityFeedDerivations.set(activities, derivation);
+
   return derivation;
 }
 
@@ -206,15 +223,18 @@ export function buildThreadFeed(
   },
 ): ThreadFeedEntry[] {
   const loadedMessages = options?.loadedMessages ?? thread.messages;
+
   const messages = options?.localMessages
     ? [...loadedMessages, ...options.localMessages]
     : loadedMessages;
+
   // Assistant replies to a channel-originated user message deliver back to that
   // provider; track the nearest preceding channel origin so the feed can label
   // delivery state without rescanning messages at render time.
   const channelProviderByMessageId = new Map<string, ChannelProvider>();
   {
     let lastChannelProvider: ChannelProvider | null = null;
+
     for (const message of messages) {
       if (message.role === "user") {
         lastChannelProvider = message.channelOrigin?.provider ?? null;
@@ -223,21 +243,27 @@ export function buildThreadFeed(
       }
     }
   }
+
   const oldestLoadedMessageCreatedAt =
     options?.loadedMessages !== undefined ? (loadedMessages[0]?.createdAt ?? null) : null;
+
   const { botStepMeters, workLogEntries } = deriveActivityFeed(
     thread.activities,
     options?.delegations ?? NO_FEED_DELEGATIONS,
   );
+
   const timed: Array<{ readonly at: number; readonly entry: RawThreadFeedEntry }> = [];
+
   for (const message of messages) {
     const entry = messageFeedEntry(
       message,
       message.turnId === null ? undefined : botStepMeters.get(message.turnId),
       channelProviderByMessageId.get(message.id),
     );
+
     timed.push({ at: Date.parse(entry.createdAt), entry });
   }
+
   for (const collapsed of workLogEntries) {
     if (
       options?.loadedMessages !== undefined &&
@@ -246,9 +272,11 @@ export function buildThreadFeed(
     ) {
       continue;
     }
+
     const entry = activityFeedEntry(collapsed);
     timed.push({ at: Date.parse(entry.createdAt), entry });
   }
+
   // Timestamps are parsed once above; sorting on numbers avoids allocating a
   // Date per comparison.
   timed.sort((left, right) => compareFeedTimes(left.at, right.at));
@@ -271,11 +299,13 @@ export function createThreadFeedBuilder() {
         readonly feed: ThreadFeedEntry[];
       }
     | undefined;
+
   return (
     thread: Pick<OrchestrationThread, "messages" | "activities">,
     options?: Parameters<typeof buildThreadFeed>[1],
   ): ThreadFeedEntry[] => {
     const delegations = options?.delegations ?? NO_FEED_DELEGATIONS;
+
     if (
       previous !== undefined &&
       previous.messages === thread.messages &&
@@ -286,6 +316,7 @@ export function createThreadFeedBuilder() {
     ) {
       return previous.feed;
     }
+
     const feed = buildThreadFeed(thread, options);
     previous = {
       messages: thread.messages,
@@ -295,6 +326,7 @@ export function createThreadFeedBuilder() {
       delegations,
       feed,
     };
+
     return feed;
   };
 }
@@ -304,9 +336,13 @@ function compareFeedTimes(left: number, right: number): number {
   if (left === right) return 0;
   const leftInvalid = Number.isNaN(left);
   const rightInvalid = Number.isNaN(right);
+
   if (leftInvalid && rightInvalid) return 0;
+
   if (leftInvalid) return -1;
+
   if (rightInvalid) return 1;
+
   return left < right ? -1 : 1;
 }
 
@@ -325,6 +361,7 @@ function messageFeedEntry(
   channelProvider: ChannelProvider | undefined,
 ): MessageFeedEntry {
   const cached = messageFeedEntryCache.get(message);
+
   if (
     cached !== undefined &&
     cached.channelProvider === channelProvider &&
@@ -332,6 +369,7 @@ function messageFeedEntry(
   ) {
     return cached;
   }
+
   const entry: MessageFeedEntry = {
     type: "message",
     id: message.id,
@@ -340,7 +378,9 @@ function messageFeedEntry(
     ...(channelProvider === undefined ? {} : { channelProvider }),
     ...(message.turnId === null ? {} : { botStepMeter }),
   };
+
   messageFeedEntryCache.set(message, entry);
+
   return entry;
 }
 
@@ -349,7 +389,9 @@ function botStepMetersEqual(
   right: BotStepMeterData | undefined,
 ): boolean {
   if (left === right) return true;
+
   if (left === undefined || right === undefined) return false;
+
   return (
     left.tokens === right.tokens &&
     left.costUsd === right.costUsd &&
@@ -372,19 +414,24 @@ const activityFeedEntryCache = new WeakMap<
 function activityFeedEntry(collapsed: CollapsedWorkLogEntry): ActivityFeedEntry {
   const key = collapsed.sources[collapsed.sources.length - 1]!;
   const cached = activityFeedEntryCache.get(key);
+
   if (cached !== undefined && sameEntries(cached.sources, collapsed.sources)) {
     return cached.entry;
   }
+
   const entry = toActivityFeedEntry(collapsed.entry);
   activityFeedEntryCache.set(key, { sources: collapsed.sources, entry });
+
   return entry;
 }
 
 function sameEntries<T>(left: ReadonlyArray<T>, right: ReadonlyArray<T>): boolean {
   if (left.length !== right.length) return false;
+
   for (let index = 0; index < left.length; index += 1) {
     if (left[index] !== right[index]) return false;
   }
+
   return true;
 }
 
@@ -392,6 +439,7 @@ function toActivityFeedEntry(entry: DerivedWorkLogEntry): ActivityFeedEntry {
   const summary = workEntryHeading(entry);
   const detail = workEntryPreview(entry);
   const getFullDetail = memoizeValue(() => buildWorkEntryExpandedBody(entry));
+
   const getCopyText = memoizeValue(() =>
     [summary, detail, getFullDetail()]
       .filter((value, index, values): value is string => {
@@ -399,6 +447,7 @@ function toActivityFeedEntry(entry: DerivedWorkLogEntry): ActivityFeedEntry {
       })
       .join("\n"),
   );
+
   return {
     type: "activity",
     id: entry.id,
@@ -431,9 +480,11 @@ export function unchangedPrefixLength(
 ): number {
   const length = Math.min(previous.length, next.length);
   let index = 0;
+
   while (index < length && previous[index] === next[index]) {
     index += 1;
   }
+
   return index;
 }
 
@@ -444,7 +495,9 @@ export function unchangedPrefixLength(
  */
 export function threadFeedEntriesEqual(previous: ThreadFeedEntry, next: ThreadFeedEntry): boolean {
   if (previous === next) return true;
+
   if (previous.id !== next.id || previous.createdAt !== next.createdAt) return false;
+
   switch (previous.type) {
     case "delegation":
       return (
@@ -500,6 +553,7 @@ function mergeDelegationCards(
   const rawMessages = [...messages].sort((left, right) =>
     left.createdAt.localeCompare(right.createdAt),
   );
+
   // Positions are indexes into `grouped`, the array the merge below walks.
   // Activity groups count as one row here even when they hold several
   // activities; counting them by length desyncs the two index spaces and the
@@ -513,6 +567,7 @@ function mergeDelegationCards(
 
   const delegationsByPosition = new Map<number, (ThreadFeedEntry & { type: "delegation" })[]>();
   const feedDelegations = delegations;
+
   const timelineEntries = botChatTimeline({
     messages: rawMessages.map((message) => ({
       id: message.id,
@@ -521,15 +576,19 @@ function mergeDelegationCards(
     })),
     delegations: feedDelegations,
   });
+
   let previousTimelineMessage:
     | Extract<(typeof timelineEntries)[number], { _tag: "Message" }>
     | undefined;
+
   for (const timelineEntry of timelineEntries) {
     if (timelineEntry._tag === "Message") {
       previousTimelineMessage = timelineEntry;
       continue;
     }
+
     if (timelineEntry._tag !== "Delegation") continue;
+
     const card: ThreadFeedEntry & { type: "delegation" } = {
       type: "delegation",
       id: `delegation:${timelineEntry.delegation.delegationId}`,
@@ -537,25 +596,30 @@ function mergeDelegationCards(
       delegation: timelineEntry.delegation,
       actions: delegationActions(timelineEntry.delegation, feedDelegations),
     };
+
     if (previousTimelineMessage === undefined) {
       // Cards before the first message (empty chat or end-fallback) lead the feed.
       delegationsByPosition.set(0, [...(delegationsByPosition.get(0) ?? []), card]);
       continue;
     }
+
     // The preceding message can be an empty row the grouping pass dropped;
     // anchor to the nearest earlier message that is still rendered, then to
     // the front of the feed.
     let position: number | undefined;
+
     for (
       let rawIndex = previousTimelineMessage.index;
       rawIndex >= 0 && position === undefined;
       rawIndex--
     ) {
       const rawMessage = rawMessages[rawIndex];
+
       if (rawMessage !== undefined) {
         position = rawPositionByMessageId.get(rawMessage.id);
       }
     }
+
     const insertAt = position === undefined ? 0 : position + 1;
     delegationsByPosition.set(insertAt, [...(delegationsByPosition.get(insertAt) ?? []), card]);
   }
@@ -564,9 +628,11 @@ function mergeDelegationCards(
   const merged: ThreadFeedEntry[] = [];
   grouped.forEach((entry, position) => {
     const cards = delegationsByPosition.get(position);
+
     if (cards) merged.push(...cards);
     merged.push(entry);
   });
   merged.push(...(delegationsByPosition.get(grouped.length) ?? []));
+
   return merged;
 }

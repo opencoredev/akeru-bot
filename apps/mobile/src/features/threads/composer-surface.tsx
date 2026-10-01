@@ -40,6 +40,7 @@ export function ComposerSurface(props: {
   const cardColor = useThemeColor("--color-card-translucent");
   const borderColor = useThemeColor("--color-border");
   const shadowColor = useThemeColor("--color-primary-shadow");
+
   // Drop shadow lives on a wrapper: `overflow: "hidden"` on the surface itself
   // (needed to clip content to the pill shape) would clip the shadow on iOS.
   const shadowStyle: ViewStyle = {

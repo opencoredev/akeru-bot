@@ -3,6 +3,7 @@ import { redactPairingCredential } from "./connection";
 import { authClientMetadata } from "./authClientMetadata";
 
 const mobilePlatform = vi.hoisted(() => ({ OS: "ios" as "ios" | "android" }));
+
 const mobileDevice = vi.hoisted(() => ({
   osVersion: "18.4.1",
   modelName: "iPhone 15 Pro",

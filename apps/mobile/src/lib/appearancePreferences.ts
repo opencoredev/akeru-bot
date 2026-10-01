@@ -1,8 +1,11 @@
 import { MOBILE_TYPOGRAPHY } from "./typography";
 
 export const DEFAULT_BASE_FONT_SIZE = MOBILE_TYPOGRAPHY.body.fontSize;
+
 export const MIN_BASE_FONT_SIZE = 11;
+
 export const MAX_BASE_FONT_SIZE = 22;
+
 export const BASE_FONT_SIZE_STEP = 1;
 
 /** User-configurable appearance preferences as stored. */
@@ -126,11 +129,13 @@ export function scaledTypographyLineHeight(
   baseFontSize: number,
 ): number {
   const scale = normalizeBaseFontSize(baseFontSize) / DEFAULT_BASE_FONT_SIZE;
+
   return Math.max(10, Math.round(role.lineHeight * scale));
 }
 
 export function resolveNativeMarkdownTypography(baseFontSize: number): NativeMarkdownTypography {
   const fontSizes = resolveMarkdownFontSizes(baseFontSize);
+
   return {
     fontSize: fontSizes.m,
     lineHeight: fontSizes.bodyLineHeight,
@@ -147,5 +152,6 @@ export function resolveNativeMarkdownTypography(baseFontSize: number): NativeMar
 
 export function stepBaseFontSize(current: number, direction: -1 | 1): number {
   const next = direction === -1 ? current - BASE_FONT_SIZE_STEP : current + BASE_FONT_SIZE_STEP;
+
   return normalizeBaseFontSize(next);
 }

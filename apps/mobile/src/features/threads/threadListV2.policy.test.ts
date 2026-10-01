@@ -42,6 +42,7 @@ describe("resolveThreadListV2SnoozeMenuSelection", () => {
   it("recomputes presets that remain available instead of using old timestamps", () => {
     const displayedPresets = resolveSnoozePresets(new Date(2026, 4, 8, 10));
     const selectedAt = new Date(2026, 4, 8, 10, 30);
+
     const selection = resolveThreadListV2SnoozeMenuSelection({
       event: "snooze:hour",
       displayedPresets,
@@ -49,6 +50,7 @@ describe("resolveThreadListV2SnoozeMenuSelection", () => {
     });
 
     expect(selection._tag).toBe("selected");
+
     if (selection._tag === "selected") {
       expect(selection.preset.snoozedUntil).toBe(
         new Date(selectedAt.getTime() + 60 * 60 * 1_000).toISOString(),
@@ -74,6 +76,7 @@ describe("resolveThreadListV2Status", () => {
         updatedAt: NOW,
       },
     });
+
     expect(resolveThreadListV2Status(thread)).toBe("approval");
   });
 
@@ -157,6 +160,7 @@ describe("resolveThreadListV2SnoozeGateExpiryMs", () => {
       title: "t",
       latestUserMessageAt: "2026-06-02T00:00:30.000Z",
     });
+
     expect(resolveThreadListV2SnoozeGateExpiryMs(thread, { now: "2026-06-02T00:01:00.000Z" })).toBe(
       Date.parse("2026-06-02T00:02:30.000Z"),
     );

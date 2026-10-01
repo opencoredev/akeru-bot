@@ -14,8 +14,10 @@ export function settingsInboxView(query: SettingsInboxQuery): SettingsInboxView 
   if (query.error !== null) {
     return { kind: "error", message: query.error };
   }
+
   if (query.data === null) {
     return { kind: "loading" };
   }
+
   return { kind: "ready", items: selectOpenBotInboxItems(query.data) };
 }

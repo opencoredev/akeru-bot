@@ -12,6 +12,7 @@ import { scopedThreadKey } from "./scopedEntities";
 import { deriveThreadFeedDelegations, type ThreadFeedDelegations } from "./threadActivity";
 
 const environmentId = EnvironmentId.make("env-1");
+
 const threadId = ThreadId.make("thread-1");
 
 const delegation = (id: string, parentThreadId: string): AkeruDelegationRecord => ({
@@ -60,6 +61,7 @@ describe("deriveThreadFeedDelegations", () => {
       EnvironmentId,
       ThreadId,
     ];
+
     expect(env).toBe(environmentId);
 
     const result = parse(deriveThreadFeedDelegations(thread, [delegation("d-1", "thread-1")]));

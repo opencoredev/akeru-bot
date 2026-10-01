@@ -6,14 +6,20 @@ import * as NodeURL from "node:url";
 import { getBuiltInSpriteSheet } from "@pierre/trees";
 
 const scriptDirectory = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
+
 const moduleDirectory = NodePath.resolve(scriptDirectory, "..");
+
 const repositoryRoot = NodePath.resolve(moduleDirectory, "../../../..");
+
 const outputDirectory = NodePath.join(moduleDirectory, "assets/file-icons");
+
 const generatedModulePath = NodePath.join(moduleDirectory, "src/markdownFileIcons.generated.ts");
+
 const webIconSource = NodeFS.readFileSync(
   NodePath.join(repositoryRoot, "apps/web/src/pierre-icons.ts"),
   "utf8",
 );
+
 const customSprite = webIconSource.match(/const T3_FILE_ICON_SPRITE = `([\s\S]*?)`;/)?.[1];
 
 if (!customSprite) {
@@ -87,10 +93,13 @@ const customIcons = {
 
 function symbolFromSprite(sprite, id) {
   const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
   const match = sprite.match(
     new RegExp(`<symbol id="${escapedId}"([^>]*)>([\\s\\S]*?)<\\/symbol>`),
   );
+
   if (!match) throw new Error(`Missing Pierre icon symbol: ${id}`);
+
   return {
     body: match[2],
     viewBox: match[1].match(/viewBox="([^"]+)"/)?.[1] ?? "0 0 16 16",
@@ -111,9 +120,11 @@ function renderIcon(token, symbol, color) {
 }
 
 NodeFS.rmSync(outputDirectory, { recursive: true, force: true });
+
 NodeFS.mkdirSync(outputDirectory, { recursive: true });
 
 const builtInSprite = getBuiltInSpriteSheet("complete");
+
 const builtInTokens = [...builtInSprite.matchAll(/<symbol id="file-tree-builtin-([^"]+)"/g)]
   .map((match) => match[1])
   .sort();
@@ -125,12 +136,15 @@ for (const token of builtInTokens) {
     colors[token] ?? colors.default,
   );
 }
+
 for (const [token, symbolId] of Object.entries(customIcons)) {
   renderIcon(token, symbolFromSprite(customSprite, symbolId), colors[token] ?? colors.default);
 }
 
 const tokens = [...new Set([...builtInTokens, ...Object.keys(customIcons)])].sort();
+
 const generatedSource = `import type { ImageSourcePropType } from "react-native";\n\nexport const MARKDOWN_FILE_ICON_SOURCES = {\n${tokens
   .map((token) => `  ${token}: require("../assets/file-icons/pierre_${token}.png"),`)
   .join("\n")}\n} as const satisfies Readonly<Record<string, ImageSourcePropType>>;\n`;
+
 NodeFS.writeFileSync(generatedModulePath, generatedSource);

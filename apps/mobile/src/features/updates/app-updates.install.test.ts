@@ -77,9 +77,11 @@ describe("runAppUpdateCheck install", () => {
 
   it("keeps the background install armed when the foreground prompt is declined", async () => {
     const client = makeAvailableUpdateClient();
+
     const { backgroundCallbacks, environment, foregroundStayCallbacks } = makeUpdateEnvironment({
       confirmInstallNow: vi.fn(async () => false),
     });
+
     const deferral = createAppUpdateDeferral();
 
     await runAppUpdateCheck({ client, deferral, environment });
@@ -111,9 +113,11 @@ describe("runAppUpdateCheck install", () => {
   it("re-arms instead of restarting when the app is no longer safely backgrounded", async () => {
     const client = makeAvailableUpdateClient();
     const safe = vi.fn(async () => false);
+
     const { backgroundCallbacks, environment } = makeUpdateEnvironment({
       isSafeToRestartInBackground: safe,
     });
+
     const deferral = createAppUpdateDeferral();
 
     await runAppUpdateCheck({ client, deferral, environment });
@@ -136,11 +140,13 @@ describe("runAppUpdateCheck install", () => {
 
   it("resets the deferral when the deferred restart fails", async () => {
     const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
+
     const client = makeAvailableUpdateClient({
       reloadAsync: vi.fn(async () => {
         throw new Error("reload rejected");
       }),
     });
+
     const { backgroundCallbacks, environment } = makeUpdateEnvironment();
     const deferral = createAppUpdateDeferral();
 
@@ -180,19 +186,23 @@ describe("runAppUpdateCheck install", () => {
       readonly isAvailable: boolean;
       readonly isRollBackToEmbedded: boolean;
     }) => void;
+
     const checkResult = new Promise<{
       readonly isAvailable: boolean;
       readonly isRollBackToEmbedded: boolean;
     }>((resolve) => {
       resolveCheck = resolve;
     });
+
     const client = makeUpdateClient({
       checkForUpdateAsync: vi.fn(() => checkResult),
     });
+
     const { environment } = makeUpdateEnvironment();
     const deferral = createAppUpdateDeferral();
 
     const backgroundCheck = runAppUpdateCheck({ client, deferral, environment });
+
     const manualCheck = runAppUpdateCheck({
       applyMode: "immediate",
       client,
@@ -212,13 +222,17 @@ describe("runAppUpdateCheck install", () => {
   it("runs a single restart when the deferred install races the foreground prompt", async () => {
     const client = makeAvailableUpdateClient();
     let releaseFlush!: () => void;
+
     const blockedFlush = new Promise<void>((resolve) => {
       releaseFlush = resolve;
     });
+
     const flushPendingWrites = vi.fn(async (): Promise<void> => {});
+
     const { backgroundCallbacks, environment, foregroundStayCallbacks } = makeUpdateEnvironment({
       flushPendingWrites,
     });
+
     const deferral = createAppUpdateDeferral();
 
     await runAppUpdateCheck({ client, deferral, environment });
@@ -239,11 +253,13 @@ describe("runAppUpdateCheck install", () => {
   it("holds the deferred restart and re-arms when the pre-restart flush fails", async () => {
     const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
     const client = makeAvailableUpdateClient();
+
     const { backgroundCallbacks, environment } = makeUpdateEnvironment({
       flushPendingWrites: vi.fn(async () => {
         throw new Error("disk full");
       }),
     });
+
     const deferral = createAppUpdateDeferral();
 
     await runAppUpdateCheck({ client, deferral, environment });
@@ -275,6 +291,7 @@ describe("runAppUpdateCheck install", () => {
 
   it("holds an automatic rollback restart when the flush fails and re-arms it", async () => {
     const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
+
     const client = makeUpdateClient({
       checkForUpdateAsync: vi.fn(async () => ({
         isAvailable: false,
@@ -285,9 +302,11 @@ describe("runAppUpdateCheck install", () => {
         isRollBackToEmbedded: true,
       })),
     });
+
     const flushPendingWrites = vi.fn(async (): Promise<void> => {
       throw new Error("storage unavailable");
     });
+
     const { backgroundCallbacks, environment } = makeUpdateEnvironment({ flushPendingWrites });
     const deferral = createAppUpdateDeferral();
 
@@ -308,6 +327,7 @@ describe("runAppUpdateCheck install", () => {
   it("still restarts a user-requested install when the flush fails", async () => {
     const reportError = vi.spyOn(console, "error").mockImplementation(() => {});
     const client = makeAvailableUpdateClient();
+
     const { environment } = makeUpdateEnvironment({
       flushPendingWrites: vi.fn(async () => {
         throw new Error("storage unavailable");
@@ -336,6 +356,7 @@ describe("runAppUpdateCheck install", () => {
         isRollBackToEmbedded: true,
       })),
     });
+
     const { environment } = makeUpdateEnvironment();
 
     await runAppUpdateCheck({ client, deferral: createAppUpdateDeferral(), environment });

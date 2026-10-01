@@ -40,11 +40,14 @@ function MarkdownTextPrimitiveChild({ style, children, ...rest }: MarkdownTextPr
 
   // Flatten the styles, and apply the root styles when needed
   const flattenedStyle = React.useMemo(() => flattenStyles(rootStyle, style), [rootStyle, style]);
+
   const contextValue = React.useMemo<[boolean, ViewStyle]>(
     () => [true, flattenedStyle],
     [flattenedStyle],
   );
+
   let childPosition = 0;
+
   const nativeChildren = React.Children.toArray(children).map((child) => {
     const position = childPosition;
     childPosition += 1;
@@ -52,11 +55,13 @@ function MarkdownTextPrimitiveChild({ style, children, ...rest }: MarkdownTextPr
     if (React.isValidElement(child)) {
       return child;
     }
+
     if (typeof child !== "string" && typeof child !== "number") {
       return null;
     }
 
     const text = child.toString();
+
     return (
       // @ts-expect-error The generated run props do not include inherited Text props.
       <T3MarkdownTextRunNativeComponent
@@ -98,6 +103,7 @@ function MarkdownTextPrimitiveInner(props: MarkdownTextPrimitiveProps) {
   if ((!props.selectable || !props.uiTextView) && !isAncestor) {
     return <RNText {...props} />;
   }
+
   return <MarkdownTextPrimitiveChild {...props} />;
 }
 
@@ -105,5 +111,6 @@ export function MarkdownTextPrimitive(props: MarkdownTextPrimitiveProps) {
   if (Platform.OS !== "ios") {
     return <RNText {...props} />;
   }
+
   return <MarkdownTextPrimitiveInner {...props} />;
 }

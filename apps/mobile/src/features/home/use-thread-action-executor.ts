@@ -13,6 +13,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { environmentSupportsThreadCapability } from "./environment-thread-capabilities";
 
 export type ThreadListAction = "archive" | "unarchive" | "delete" | "settle" | "unsettle";
+
 type Translate = ReturnType<typeof useMobileI18n>["t"];
 
 function actionFailureMessage(
@@ -21,13 +22,19 @@ function actionFailureMessage(
   t: Translate,
 ): string {
   const error = Cause.squash(cause);
+
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }
+
   if (action === "archive") return t("The chat could not be archived.");
+
   if (action === "unarchive") return t("The chat could not be unarchived.");
+
   if (action === "settle") return t("The chat could not be settled.");
+
   if (action === "unsettle") return t("The chat could not be un-settled.");
+
   return t("The chat could not be deleted.");
 }
 
@@ -37,9 +44,13 @@ export function selectionHaptic(): void {
 
 function actionFailureTitle(action: ThreadListAction, t: Translate): string {
   if (action === "archive") return t("Could not archive chat");
+
   if (action === "unarchive") return t("Could not unarchive chat");
+
   if (action === "settle") return t("Could not settle chat");
+
   if (action === "unsettle") return t("Could not un-settle chat");
+
   return t("Could not delete chat");
 }
 
@@ -58,12 +69,14 @@ export function useThreadActionExecutor(
   const executeAction = useCallback(
     async (action: ThreadListAction, thread: EnvironmentThreadShell) => {
       const key = scopedThreadKey(thread.environmentId, thread.id);
+
       if (inFlightThreadKeys.current.has(key)) {
         return false;
       }
 
       inFlightThreadKeys.current.add(key);
       selectionHaptic();
+
       try {
         if (
           (action === "settle" || action === "unsettle") &&
@@ -75,8 +88,10 @@ export function useThreadActionExecutor(
               "This environment's server does not support settling yet. Update the server to use Settle.",
             ),
           );
+
           return false;
         }
+
         // Settle may only target what effectiveSettled could classify as
         // settled: not starting/running sessions, not threads waiting on
         // approvals or user input. Anything else would hide live work.
@@ -85,8 +100,10 @@ export function useThreadActionExecutor(
             actionFailureTitle(action, t),
             t("This chat still needs attention. Resolve or interrupt it first, then try again."),
           );
+
           return false;
         }
+
         // Archive keeps its original, narrower guard: never interrupt a
         // thread mid-turn.
         if (
@@ -98,8 +115,10 @@ export function useThreadActionExecutor(
             actionFailureTitle(action, t),
             t("This chat is working. Interrupt it first, then try again."),
           );
+
           return false;
         }
+
         const result =
           action === "unsettle"
             ? await unsettleMutation({
@@ -118,16 +137,21 @@ export function useThreadActionExecutor(
                 environmentId: thread.environmentId,
                 input: { threadId: thread.id },
               });
+
         if (result._tag === "Failure") {
           Alert.alert(actionFailureTitle(action, t), actionFailureMessage(action, result.cause, t));
+
           return false;
         }
+
         // Settled threads stay in the live shell stream; only the archive
         // lifecycle still feeds the archived-snapshot surface.
         if (action === "archive" || action === "unarchive" || action === "delete") {
           refreshArchivedThreadsForEnvironment(thread.environmentId);
         }
+
         onCompleted?.(action, thread);
+
         return true;
       } finally {
         inFlightThreadKeys.current.delete(key);
@@ -151,12 +175,15 @@ export function useConfirmDeleteThread(
   executeAction: (action: ThreadListAction, thread: EnvironmentThreadShell) => Promise<boolean>,
 ) {
   const { t } = useMobileI18n();
+
   return useCallback(
     (thread: EnvironmentThreadShell) => {
       const title = t("Delete chat?");
+
       const message = t("“{title}” will be permanently deleted, including its terminal history.", {
         title: thread.title,
       });
+
       if (process.env.EXPO_OS === "ios") {
         Alert.alert(title, message, [
           { text: t("Cancel"), style: "cancel" },
@@ -168,8 +195,10 @@ export function useConfirmDeleteThread(
             },
           },
         ]);
+
         return;
       }
+
       showConfirmDialog({
         title,
         message,

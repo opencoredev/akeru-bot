@@ -11,6 +11,7 @@ import { makeActivity, makeThread } from "./threadActivity.test-support";
 describe("buildThreadFeed presentation", () => {
   it("keeps the first and terminal assistant messages visible around settled work", () => {
     const turnId = TurnId.make("turn-1");
+
     const thread = makeThread({
       id: ThreadId.make("thread-3"),
       projectId: ProjectId.make("project-1"),
@@ -84,6 +85,7 @@ describe("buildThreadFeed presentation", () => {
 
   it("folds assistant messages between the first and terminal messages", () => {
     const turnId = TurnId.make("turn-1");
+
     const thread = makeThread({
       id: ThreadId.make("thread-middle-message"),
       projectId: ProjectId.make("project-1"),
@@ -140,6 +142,7 @@ describe("buildThreadFeed presentation", () => {
   it("measures a steer-superseded turn from its user boundary through trailing work", () => {
     const firstTurnId = TurnId.make("turn-1");
     const secondTurnId = TurnId.make("turn-2");
+
     const thread = makeThread({
       id: ThreadId.make("thread-steered"),
       projectId: ProjectId.make("project-1"),
@@ -217,6 +220,7 @@ describe("buildThreadFeed presentation", () => {
 
   it("keeps an active turn expanded and classifies error-shaped tool output", () => {
     const turnId = TurnId.make("turn-running");
+
     const thread = makeThread({
       id: ThreadId.make("thread-4"),
       projectId: ProjectId.make("project-1"),
@@ -287,6 +291,7 @@ describe("buildThreadFeed presentation", () => {
       toolLike: true,
       status,
     });
+
     const feed: ThreadFeedEntry[] = [
       {
         type: "activity-group",
@@ -353,9 +358,11 @@ describe("quiet timeline: nested agents", () => {
     });
 
     const feed = buildThreadFeed(thread);
+
     const ids = feed.flatMap((entry) =>
       entry.type === "activity-group" ? entry.activities.map((row) => row.id) : [],
     );
+
     expect(ids).toContain("nested-done");
     expect(ids).not.toContain("shell-done");
   });

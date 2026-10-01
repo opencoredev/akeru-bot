@@ -48,9 +48,11 @@ function formatMessageTime(
   formatDate: (value: number, options: Intl.DateTimeFormatOptions) => string,
 ): string {
   const timestamp = Date.parse(input);
+
   if (Number.isNaN(timestamp)) {
     return "";
   }
+
   return formatDate(timestamp, MESSAGE_TIME_OPTIONS);
 }
 
@@ -58,8 +60,10 @@ function formatMessageTime(
 // remounts rows when they scroll back into view, and replaying an entrance for
 // old content would be its own kind of jank.
 const FRESH_ENTRY_WINDOW_MS = 3_000;
+
 function isFreshTimestamp(input: string): boolean {
   const timestamp = Date.parse(input);
+
   return Number.isFinite(timestamp) && Date.now() - timestamp < FRESH_ENTRY_WINDOW_MS;
 }
 
@@ -138,6 +142,7 @@ export function renderFeedEntry(
 
   if (entry.type === "delegation") {
     const botsById = props.botsById;
+
     return (
       <ThreadDelegationFeedCard
         environmentId={props.environmentId}
@@ -153,10 +158,12 @@ export function renderFeedEntry(
     const { message } = entry;
     const isUser = message.role === "user";
     const styles = isUser ? markdownStyles.user : markdownStyles.assistant;
+
     const timestampLabel = formatMessageTime(
       isUser ? message.createdAt : message.updatedAt,
       props.formatDate,
     );
+
     const attachments = message.attachments ?? [];
     // A bubble that sizes itself from its content cannot lay out a block whose
     // intrinsic width overflows `maxWidth`: Android positions the bubble's
@@ -164,10 +171,12 @@ export function renderFeedEntry(
     // is clamped, so the paragraphs around the block end up drawn on top of
     // each other. Pinning the width removes that pass.
     const hasWideBlock = hasWideMarkdownBlock(message.text, WIDE_MARKDOWN_BLOCK_OPTIONS);
+
     const assistantTurnStillInProgress =
       message.role === "assistant" &&
       props.unsettledTurnId !== null &&
       message.turnId === props.unsettledTurnId;
+
     const showAssistantMeta =
       message.role === "assistant" &&
       props.terminalAssistantMessageIds.has(message.id) &&
@@ -176,6 +185,7 @@ export function renderFeedEntry(
 
     if (isUser) {
       const enterAnimated = isFreshTimestamp(message.createdAt);
+
       return (
         <Animated.View
           className="mb-5 items-end"
@@ -249,9 +259,11 @@ export function renderFeedEntry(
     const enterAnimated = isFreshTimestamp(message.createdAt);
     const speakerBotId = props.speakerLabels.get(message.id) ?? null;
     const speakerBot = speakerBotId ? props.botsById?.get(speakerBotId) : undefined;
+
     const assistantMarkdown = message.streaming
       ? stabilizeStreamingMarkdown(message.text)
       : message.text;
+
     return (
       <Animated.View
         className={cn(showAssistantMeta ? "mb-5 px-1" : "mb-2 px-1")}
@@ -310,6 +322,7 @@ export function renderFeedEntry(
         {message.channelDelivery
           ? (() => {
               const delivery = channelDeliveryLabel(message.channelDelivery, entry.channelProvider);
+
               return delivery ? (
                 <NativeText
                   className={cn(
@@ -342,6 +355,7 @@ export function renderFeedEntry(
             </View>
             {(() => {
               const readAloud = replyPlaybackControlProps(props.replyPlayback, message);
+
               return readAloud ? <ReplyPlaybackControls {...readAloud} /> : null;
             })()}
           </View>
@@ -391,6 +405,7 @@ const WorkingTimelineRow = memo(function WorkingTimelineRow(props: {
     const intervalId = setInterval(() => {
       setNowMs(Date.now());
     }, 1_000);
+
     return () => clearInterval(intervalId);
   }, [props.startedAt]);
 
@@ -428,6 +443,7 @@ function UserMessageContent(props: {
   readonly renderImage: MarkdownImageRenderer;
 }) {
   const mentions = useSentMessageMentions(props.text, props.skills);
+
   if (hasNativeSelectableMarkdownText()) {
     return (
       <SelectableMarkdownText
@@ -440,6 +456,7 @@ function UserMessageContent(props: {
       />
     );
   }
+
   return (
     <Markdown
       options={{ gfm: true }}

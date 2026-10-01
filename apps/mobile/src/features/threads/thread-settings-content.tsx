@@ -22,7 +22,9 @@ import {
 import { useThreadSettingsPickerPresentation } from "./thread-settings-picker-context";
 
 const THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION = LinearTransition.duration(180);
+
 const THREAD_SETTINGS_OPTION_ENTER_TRANSITION = FadeIn.duration(140);
+
 const THREAD_SETTINGS_OPTION_EXIT_TRANSITION = FadeOut.duration(100);
 
 /** Compact row that opens a single-choice submenu panel. */
@@ -33,6 +35,7 @@ function DisclosureRow(props: {
   readonly isLast?: boolean;
 }) {
   const iconSubtle = useThemeColor("--color-icon-subtle");
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -63,6 +66,7 @@ function ChoiceRow(props: {
   readonly isLast: boolean;
 }) {
   const checkmarkColor = useThemeColor("--color-icon");
+
   return (
     <Pressable
       accessibilityLabel={props.description ? `${props.label}. ${props.description}` : props.label}
@@ -123,6 +127,7 @@ export function ThreadSettingsOptionsItem(props: {
   const { t } = useMobileI18n();
   const insets = useSafeAreaInsets();
   const session = useThreadSettingsSession();
+
   const bottomToolbarInset =
     Platform.OS === "ios" && NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED
       ? NATIVE_MAIL_SEARCH_TOOLBAR_CONTENT_INSET
@@ -156,6 +161,7 @@ export function ThreadSettingsOptionsItem(props: {
               </Animated.View>
             );
           }
+
           return (
             <Animated.View
               key={descriptor.id}
@@ -268,18 +274,23 @@ function DeleteBotSection() {
   const [deleting, setDeleting] = useState(false);
   const onDeleteBot = session.onDeleteBot;
   const botName = session.routinesRef?.botName;
+
   if (!onDeleteBot || !botName) return null;
 
   const deleteBot = async () => {
     setDeleting(true);
     const failure = await onDeleteBot();
     setDeleting(false);
+
     if (failure !== null) {
       Alert.alert(t("Could not delete {name}", { name: botName }), failure);
+
       return;
     }
+
     presentation.onClose();
   };
+
   const confirmDelete = () =>
     Alert.alert(
       t("Delete {name}? Its chats stay in your history. This cannot be undone.", {

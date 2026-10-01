@@ -16,7 +16,9 @@ import { AppText as Text } from "./AppText";
 import { OverlayPortal } from "./OverlayPortal";
 
 const MENU_WIDTH = 250;
+
 const SCREEN_MARGIN = 12;
+
 const ANCHOR_GAP = 6;
 
 // Anchor position is snapshotted in window coordinates when the menu opens;
@@ -123,18 +125,22 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
     if (anchor === null) {
       return;
     }
+
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       if (submenuDepth > 0) {
         setPath((current) => current.slice(0, -1));
       } else {
         close();
       }
+
       return true;
     });
+
     return () => subscription.remove();
   }, [anchor, close, submenuDepth]);
 
   const parent = path.length > 0 ? path[path.length - 1] : null;
+
   const levelActions = (parent?.subactions ?? props.actions).filter(
     (action) => !(action.attributes?.hidden ?? false),
   );
@@ -149,12 +155,14 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
           width: anchor.width,
           height: anchor.height,
         };
+
   const preferredLeft =
     local === null || overlay === null
       ? 0
       : local.x + local.width / 2 <= overlay.width / 2
         ? local.x
         : local.x + local.width - MENU_WIDTH;
+
   const left =
     overlay === null
       ? 0
@@ -162,15 +170,18 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
           Math.max(preferredLeft, SCREEN_MARGIN),
           overlay.width - MENU_WIDTH - SCREEN_MARGIN,
         );
+
   // The keyboard stays up while the menu is open (in-window overlay, no
   // focus change), so the space it covers is not usable — without this the
   // composer-pill menus "open down" into the IME and can't be tapped.
   const usableBottom =
     overlay === null ? 0 : overlay.height - (keyboardVisible ? keyboardHeight : 0);
+
   const spaceBelow =
     local === null || overlay === null
       ? 0
       : usableBottom - (local.y + local.height) - ANCHOR_GAP - SCREEN_MARGIN;
+
   const spaceAbove = local === null ? 0 : local.y - ANCHOR_GAP - SCREEN_MARGIN;
   const opensDown = spaceBelow >= 280 || spaceBelow >= spaceAbove;
   const maxHeight = Math.min(opensDown ? spaceBelow : spaceAbove, 480);
@@ -182,9 +193,12 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
     (action: MenuAction) => {
       if ((action.subactions?.length ?? 0) > 0) {
         setPath((current) => [...current, action]);
+
         return;
       }
+
       close();
+
       if (action.id !== undefined) {
         props.onPressAction?.({
           nativeEvent: { event: action.id },
@@ -276,6 +290,7 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
                     const destructive = action.attributes?.destructive ?? false;
                     const disabled = action.attributes?.disabled ?? false;
                     const hasSubmenu = (action.subactions?.length ?? 0) > 0;
+
                     return (
                       <Pressable
                         key={action.id ?? `${index}-${action.title}`}

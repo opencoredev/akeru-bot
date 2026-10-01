@@ -14,12 +14,14 @@ describe("incoming native shares", () => {
       value: "file:///shared/Screenshot.png",
       mimeType: "image/png",
     };
+
     const payloads: SharePayload[] = [
       { shareType: "text", value: "Please explain this error" },
       { shareType: "url", value: "https://example.com/issue/1" },
       { shareType: "text", value: "Please explain this error" },
       image,
     ];
+
     const resolvedImage: ResolvedSharePayload = {
       ...image,
       contentUri: image.value,
@@ -28,6 +30,7 @@ describe("incoming native shares", () => {
       contentSize: 3,
       originalName: "Screenshot.png",
     };
+
     const removeOwnedFile = vi.fn(() => Promise.resolve());
 
     const result = await buildIncomingShareDraft({
@@ -69,6 +72,7 @@ describe("incoming native shares", () => {
       value: "file:///shared/huge.png",
       mimeType: "image/png",
     };
+
     const readBase64 = vi.fn(async () => "unused");
     const removeOwnedFile = vi.fn(() => Promise.resolve());
 
@@ -102,6 +106,7 @@ describe("incoming native shares", () => {
       value: `file:///shared/${index}.png`,
       mimeType: "image/png",
     }));
+
     const removeOwnedFile = vi.fn(() => Promise.resolve());
     const readBase64 = vi.fn(async () => "YWJj");
 
@@ -127,6 +132,7 @@ describe("incoming native shares", () => {
       value: "content://shared/screenshot",
       mimeType: "image/png",
     };
+
     const resolvedPayloads: ResolvedSharePayload[] = [
       {
         ...duplicate,
@@ -145,9 +151,11 @@ describe("incoming native shares", () => {
         originalName: "second.png",
       },
     ];
+
     const readBase64 = vi.fn(async (uri: string) =>
       uri.includes("first") ? "Zmlyc3Q=" : "c2Vjb25k",
     );
+
     const removeOwnedFile = vi.fn(async () => undefined);
 
     const result = await buildIncomingShareDraft({

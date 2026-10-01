@@ -41,6 +41,7 @@ import {
  * provider headers remain user-collapsible.
  */
 const PRIMARY_PROVIDER_DRIVERS: ReadonlySet<string> = new Set(["claudeAgent", "codex"]);
+
 /**
  * Keep measured row changes stable, but let catalog mutations use the list's
  * native bounds so a filtered catalog that underflows returns to the top.
@@ -49,9 +50,13 @@ const THREAD_SETTINGS_MAINTAIN_VISIBLE_CONTENT_POSITION = {
   data: false,
   size: true,
 } as const;
+
 const THREAD_SETTINGS_CATALOG_LAYOUT_TRANSITION = LinearTransition.duration(180);
+
 const THREAD_SETTINGS_CATALOG_ENTER_TRANSITION = FadeIn.duration(140);
+
 const THREAD_SETTINGS_CATALOG_EXIT_TRANSITION = FadeOut.duration(120);
+
 function ModelRow(props: {
   readonly option: ModelOption;
   readonly selected: boolean;
@@ -62,6 +67,7 @@ function ModelRow(props: {
   const { t } = useMobileI18n();
   const checkmarkColor = useThemeColor("--color-icon");
   const disabledReason = props.option.disabledReason;
+
   return (
     <Pressable
       accessibilityLabel={props.option.label}
@@ -120,6 +126,7 @@ function ProviderHeader(props: {
   readonly onToggle: () => void;
 }) {
   const iconSubtle = useThemeColor("--color-icon-subtle");
+
   const content = (
     <>
       <ProviderIcon provider={props.driver} size={15} />
@@ -202,6 +209,7 @@ function ThreadSettingsModelListRow(props: {
   readonly isLast: boolean;
 }) {
   const session = useThreadSettingsSession();
+
   const onPress = useCallback(
     () => session.pressModel(props.option),
     [props.option, session.pressModel],
@@ -222,6 +230,7 @@ function ThreadSettingsProviderListHeader(props: {
   readonly provider: ThreadSettingsProviderCatalog;
 }) {
   const session = useThreadSettingsSession();
+
   const onToggle = useCallback(
     () => session.toggleProvider(props.provider.key),
     [props.provider.key, session.toggleProvider],
@@ -248,10 +257,13 @@ function useThreadSettingsCatalogItems(
         if (session.providerFilter !== null && group.providerKey !== session.providerFilter) {
           return [];
         }
+
         const driver = group.models[0]?.providerDriver;
+
         const catalogModels = session.showLegacy
           ? group.models
           : group.models.filter((model) => !model.isLegacy || session.isDisplayed(model));
+
         const visibleModels = catalogModels.filter((model) =>
           modelMatchesCatalogQuery({
             model,
@@ -259,9 +271,11 @@ function useThreadSettingsCatalogItems(
             query: session.searchQuery,
           }),
         );
+
         if (visibleModels.length === 0) {
           return [];
         }
+
         const isPrimary = driver !== undefined && PRIMARY_PROVIDER_DRIVERS.has(driver);
         // Staging a model must not change disclosure state. The applied model
         // stays stable for the lifetime of this picker (Save closes it), so it
@@ -269,11 +283,13 @@ function useThreadSettingsCatalogItems(
         const containsAppliedSelection = group.models.some(session.isApplied);
         const isNarrowed = session.providerFilter !== null || session.searchQuery.trim().length > 0;
         const collapsible = !isNarrowed;
+
         const collapsed = providerSectionIsCollapsed({
           defaultExpanded: isPrimary || containsAppliedSelection,
           hasExpansionOverride: session.providerExpansionOverrides.has(group.providerKey),
           isNarrowed,
         });
+
         const provider: ThreadSettingsProviderCatalog = {
           key: group.providerKey,
           driver,
@@ -283,6 +299,7 @@ function useThreadSettingsCatalogItems(
           modelCount: visibleModels.length,
           models: collapsed ? [] : visibleModels,
         };
+
         return [
           {
             kind: "provider" as const,
@@ -319,9 +336,12 @@ function ThreadSettingsMainContent(props: {
   const catalogItems = useThreadSettingsCatalogItems(session);
   const [animationsReady, setAnimationsReady] = useState(false);
   const nativeHeaderHeight = use(HeaderHeightContext) ?? 0;
+
   const hasActiveCatalogFilter =
     session.providerFilter !== null || session.searchQuery.trim().length > 0;
+
   const usesTransparentNativeHeader = Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED;
+
   const listItems = useMemo<ReadonlyArray<ThreadSettingsCatalogItem>>(
     () => [
       ...(catalogItems.length === 0 && hasActiveCatalogFilter
@@ -331,6 +351,7 @@ function ThreadSettingsMainContent(props: {
     ],
     [catalogItems, hasActiveCatalogFilter],
   );
+
   const renderCatalogItem = useCallback(
     (itemProps: LegendListRenderItemProps<ThreadSettingsCatalogItem>) => {
       const item = itemProps.item;
@@ -427,18 +448,23 @@ export function ThreadSettingsModelsScreen() {
   const hasCustomCatalogFilter = session.providerFilter !== null || session.showLegacy;
   const [saving, setSaving] = useState(false);
   const hasPendingChanges = session.pendingModel !== null || session.botUsageCapDirty;
+
   const commitAndClose = useCallback(async () => {
     if (!session.botUsageCapValid || saving) return;
     setSaving(true);
     const saved = await session.commitBotUsageCap();
     setSaving(false);
+
     if (!saved) {
       Alert.alert(t("Could not save bot settings"));
+
       return;
     }
+
     session.commitPendingModel();
     presentation.onClose();
   }, [presentation, saving, session, t]);
+
   const filterMenu = useMemo(
     () => ({
       title: t("Model filters"),
@@ -535,20 +561,25 @@ export function ThreadSettingsModelsScreen() {
             if (session.memoryThreadRef) {
               navigation.navigate("ThreadSettingsMemory", session.memoryThreadRef);
             }
+
             return;
           }
+
           if (submenu.kind === "routines") {
             if (session.routinesRef) {
               navigation.navigate("ThreadSettingsRoutines", session.routinesRef);
             }
+
             return;
           }
+
           const title =
             submenu.kind === "runtime"
               ? "Runtime"
               : (session.displayedDescriptors.find(
                   (descriptor) => descriptor.type === "select" && descriptor.id === submenu.id,
                 )?.label ?? "Option");
+
           navigation.navigate("ThreadSettingsChoice", { ...submenu, title });
         }}
       />

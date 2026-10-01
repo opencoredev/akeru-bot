@@ -9,15 +9,19 @@ import { createAppFocusSignalAtom } from "./appFocusSignal";
 function harness() {
   const listeners: Array<(status: AppStateStatus) => void> = [];
   let unsubscribed = 0;
+
   const atom = createAppFocusSignalAtom((listener) => {
     listeners.push(listener);
+
     return () => {
       unsubscribed += 1;
     };
   });
+
   const registry = AtomRegistry.make();
   const seen: number[] = [];
   const unmount = registry.subscribe(atom, (value) => seen.push(value), { immediate: true });
+
   return {
     seen,
     emit: (status: AppStateStatus) => {

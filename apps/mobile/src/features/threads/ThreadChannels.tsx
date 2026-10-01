@@ -31,13 +31,17 @@ export function ThreadChannels(props: {
   const snapshot = useAtomValue(environmentSnapshotAtom(props.environmentId));
   const sessionResult = useAtomValue(environmentSession.sessionStateAtom(props.environmentId));
   const session = Option.getOrNull(AsyncResult.value(sessionResult));
+
   const canManageChannels =
     session?.authenticated === true && session.scopes?.includes(AuthAccessWriteScope) === true;
+
   const changeProject = useAtomCommand(botEnvironment.channels.changeProject, {
     reportFailure: false,
   });
+
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const bot = snapshot?.bots.find((candidate) => candidate.id === props.botId);
+
   if (!bot?.channelBindings.length) return null;
   const projects = snapshot?.projects ?? [];
 
@@ -45,11 +49,14 @@ export function ThreadChannels(props: {
   const repair = async (binding: ChannelBinding, key: string, projectId: ProjectId) => {
     if (busyKey) return;
     setBusyKey(key);
+
     const result = await changeProject({
       environmentId: props.environmentId,
       input: { botId: binding.botId, provider: binding.provider, projectId },
     });
+
     setBusyKey(null);
+
     if (result._tag === "Failure") Alert.alert(t("Could not move channel to this project"));
   };
 
@@ -60,11 +67,13 @@ export function ThreadChannels(props: {
         const channel = channelBindingPresentation(binding, projects);
         const key = binding.connectionId ?? `${binding.provider}:${index}`;
         const needsProject = channelBindingNeedsProject(binding, projects);
+
         const warning = binding.failureCategory
           ? channelFailureReason(binding.failureCategory, binding.provider, t)
           : needsProject
             ? channel.warning
             : (binding.lastError ?? channel.warning);
+
         return (
           <View key={key} className="gap-1">
             <Text className="font-t3-medium text-xs text-foreground">

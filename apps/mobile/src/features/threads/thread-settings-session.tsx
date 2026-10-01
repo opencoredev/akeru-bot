@@ -63,12 +63,15 @@ const ExistingThreadSettingsRouteContext =
 /** Bridges the active thread's settings state into the root native sheet route. */
 export function ExistingThreadSettingsRouteProvider(props: { readonly children: ReactNode }) {
   const [session, setSession] = useState<ExistingThreadSettingsRouteSession | null>(null);
+
   const present = useCallback((nextSession: ExistingThreadSettingsRouteSession) => {
     setSession(nextSession);
   }, []);
+
   const clear = useCallback((ownerId: string) => {
     setSession((current) => (current?.ownerId === ownerId ? null : current));
   }, []);
+
   const value = useMemo(() => ({ session, present, clear }), [clear, present, session]);
 
   return (
@@ -80,11 +83,13 @@ export function ExistingThreadSettingsRouteProvider(props: { readonly children: 
 
 export function useExistingThreadSettingsRoutePresentation() {
   const value = use(ExistingThreadSettingsRouteContext);
+
   if (!value) {
     throw new Error(
       "useExistingThreadSettingsRoutePresentation must be used inside ExistingThreadSettingsRouteProvider.",
     );
   }
+
   return value;
 }
 
@@ -130,20 +135,27 @@ export function ThreadSettingsSessionProvider(
   const [showLegacyToggle, setShowLegacyToggle] = useState(false);
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
   const [providerExpansionOverrides, setProviderExpansionOverrides] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+
   const [pendingModel, setPendingModel] = useState<ModelOption | null>(null);
+
   const [botUsageCapInput, setBotUsageCapInput] = useState<string | undefined>(() =>
     props.botUsageCap === undefined ? undefined : (props.botUsageCap?.limit.toString() ?? ""),
   );
+
   const resolvedBotUsageCap =
     botUsageCapInput === undefined
       ? undefined
       : resolveBotUsageCapForProvider(botUsageCapInput, props.botUsageCapProviderDriver);
+
   const parsedBotUsageCap = resolvedBotUsageCap?.limit;
+
   const botUsageCapDirty =
     botUsageCapInput !== undefined && parsedBotUsageCap !== (props.botUsageCap?.limit ?? null);
+
   const botUsageCapValid = botUsageCapInput === undefined || parsedBotUsageCap !== undefined;
 
   const isApplied = useCallback(
@@ -152,6 +164,7 @@ export function ThreadSettingsSessionProvider(
       option.selection.model === props.selectedModel.model,
     [props.selectedModel],
   );
+
   // The list highlights the staged pick; Save turns it into the applied one.
   const isDisplayed = useCallback(
     (option: ModelOption) => (pendingModel ? option.key === pendingModel.key : isApplied(option)),
@@ -166,6 +179,7 @@ export function ThreadSettingsSessionProvider(
       null,
     [isApplied, pendingModel, props.providerGroups],
   );
+
   const canDelegate = displayedDriver === null || driverSupportsDelegation(displayedDriver);
 
   // While a model is staged, the settings rows describe and edit the staged
@@ -188,12 +202,14 @@ export function ThreadSettingsSessionProvider(
     () => props.providerGroups.some((group) => group.models.some((model) => model.isLegacy)),
     [props.providerGroups],
   );
+
   const commitPendingModel = useCallback(() => {
     if (pendingModel) {
       void Haptics.selectionAsync();
       props.onSelectModel(pendingModel);
     }
   }, [pendingModel, props.onSelectModel]);
+
   const commitBotUsageCap = useCallback(
     () =>
       botUsageCapInput === undefined || !botUsageCapDirty
@@ -205,9 +221,11 @@ export function ThreadSettingsSessionProvider(
   const applyOptionChange = useCallback(
     (id: string, value: string | boolean) => {
       const next = applyProviderOptionSelection(displayedDescriptors, { id, value });
+
       if (!next) {
         return;
       }
+
       if (pendingModel) {
         setPendingModel({
           ...pendingModel,
@@ -223,9 +241,11 @@ export function ThreadSettingsSessionProvider(
   const toggleProvider = useCallback((providerKey: string) => {
     setProviderExpansionOverrides((current) => {
       const next = new Set(current);
+
       if (!next.delete(providerKey)) {
         next.add(providerKey);
       }
+
       return next;
     });
   }, []);
@@ -315,8 +335,10 @@ export function ThreadSettingsSessionProvider(
 
 export function useThreadSettingsSession() {
   const value = use(ThreadSettingsSessionContext);
+
   if (!value) {
     throw new Error("useThreadSettingsSession must be used inside ThreadSettingsSessionProvider.");
   }
+
   return value;
 }

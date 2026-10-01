@@ -22,18 +22,23 @@ export function useAssetUrlState(
   resource: AssetResource | null,
 ): AssetUrlState {
   const preparedConnection = usePreparedConnection(environmentId);
+
   const result = useAtomValue(
     environmentId === null || resource === null
       ? EMPTY_ASSET_URL_ATOM
       : assetEnvironment.createUrl({ environmentId, input: { resource } }),
   );
+
   if (result._tag === "Failure") {
     return { _tag: "Failure" };
   }
+
   if (preparedConnection._tag === "None" || result._tag !== "Success") {
     return { _tag: "Loading" };
   }
+
   const url = resolveAssetUrl(preparedConnection.value.httpBaseUrl, result.value.relativeUrl);
+
   return url === null ? { _tag: "Failure" } : { _tag: "Success", url };
 }
 
@@ -42,5 +47,6 @@ export function useAssetUrl(
   resource: AssetResource | null,
 ): string | null {
   const state = useAssetUrlState(environmentId, resource);
+
   return state._tag === "Success" ? state.url : null;
 }

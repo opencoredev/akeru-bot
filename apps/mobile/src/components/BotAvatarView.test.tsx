@@ -2,12 +2,16 @@ import { Children, isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const hooks = vi.hoisted(() => ({ failedPath: null as string | null }));
+
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
   useState: (initial: unknown) => [hooks.failedPath ?? initial, () => {}],
 }));
+
 vi.mock("expo-image", () => ({ Image: "Image" }));
+
 vi.mock("react-native", () => ({ View: "View" }));
+
 vi.mock("react-native-svg", () => ({
   default: "Svg",
   Mask: "Mask",
@@ -31,10 +35,13 @@ type ElementProps = {
 function nodes(node: ReactNode): Array<{ type: unknown; props: ElementProps }> {
   return Children.toArray(node).flatMap((child) => {
     if (!isValidElement<ElementProps>(child)) return [];
+
     if (typeof child.type === "function") {
       const render = child.type as (props: ElementProps) => ReactNode;
+
       return nodes(render(child.props));
     }
+
     return [{ type: child.type, props: child.props }, ...nodes(child.props.children)];
   });
 }
@@ -48,6 +55,7 @@ const dataUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
 describe("BotAvatarView", () => {
   it("renders a stored image avatar from its asset path", () => {
     hooks.failedPath = null;
+
     const image = render({ kind: "image", assetPath: dataUrl, dithered: false }).find(
       (node) => node.type === "Image",
     );
@@ -75,9 +83,11 @@ describe("BotAvatarView", () => {
   it("tries a replacement image after the previous path failed", () => {
     hooks.failedPath = dataUrl;
     const replacement = "data:image/png;base64,cG5n";
+
     const image = render({ kind: "image", assetPath: replacement, dithered: false }).find(
       (node) => node.type === "Image",
     );
+
     expect(image?.props.source?.uri).toBe(replacement);
   });
 

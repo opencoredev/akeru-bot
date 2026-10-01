@@ -23,21 +23,27 @@ export interface PendingApprovalCardProps {
 
 export function PendingApprovalCard(props: PendingApprovalCardProps) {
   const { t } = useMobileI18n();
+
   const defaultOptions = [
     { decision: "accept", label: t("Allow once") },
     { decision: "acceptForSession", label: t("Allow session") },
     { decision: "decline", label: t("Decline") },
   ] satisfies ReadonlyArray<ProviderApprovalOption>;
+
   const feedbackOptions = [
     { decision: "decline", label: t("Cancel") },
   ] satisfies ReadonlyArray<ProviderApprovalOption>;
+
   const isProductFeedback = props.approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
+
   // A routine approval shows what the bot proposes, so it is never approved blind.
   const routine =
     props.approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
       ? routineApprovalSummary(props.approval.args, t)
       : null;
+
   const options = isProductFeedback ? feedbackOptions : (props.approval.options ?? defaultOptions);
+
   // Opaque for the same reason as PendingUserInputCard: nothing blurs the feed
   // behind this card, so a translucent surface bleeds messages through it.
   return (

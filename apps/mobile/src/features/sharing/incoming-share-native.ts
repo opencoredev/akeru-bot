@@ -6,6 +6,7 @@ function errorCode(error: unknown): string | null {
   if (typeof error !== "object" || error === null || !("code" in error)) {
     return null;
   }
+
   return typeof error.code === "string" ? error.code : null;
 }
 
@@ -29,8 +30,10 @@ export function createIncomingSharePayloadReader(input: {
     } catch (error) {
       if (input.platform === "ios" && errorCode(error) === IOS_APP_GROUP_UNAVAILABLE_ERROR_CODE) {
         isUnavailable = true;
+
         return [];
       }
+
       throw error;
     }
   };

@@ -14,10 +14,14 @@ const hooks = vi.hoisted(() => ({ slots: [] as unknown[], cursor: 0 }));
 vi.mock("react", async (importOriginal) => {
   const slot = <T,>(create: () => T): { value: T } => {
     const index = hooks.cursor++;
+
     if (!(index in hooks.slots)) hooks.slots[index] = { value: create() };
+
     return hooks.slots[index] as { value: T };
   };
+
   const actual = await importOriginal<typeof import("react")>();
+
   return {
     ...actual,
     memo: <T,>(component: T) => component,
@@ -27,13 +31,16 @@ vi.mock("react", async (importOriginal) => {
     useEffect: () => {},
     useState: <T,>(initial: T | (() => T)) => {
       const state = slot(() => (typeof initial === "function" ? (initial as () => T)() : initial));
+
       const set = (next: T | ((previous: T) => T)) => {
         state.value = typeof next === "function" ? (next as (previous: T) => T)(state.value) : next;
       };
+
       return [state.value, set];
     },
   };
 });
+
 vi.mock("react-native", () => ({
   ActivityIndicator: "ActivityIndicator",
   AccessibilityInfo: { announceForAccessibility: () => {} },
@@ -43,8 +50,10 @@ vi.mock("react-native", () => ({
   StyleSheet: { absoluteFill: {}, create: <T,>(styles: T) => styles },
   View: "View",
 }));
+
 vi.mock("react-native-reanimated", () => {
   const transition = { duration: () => transition };
+
   return {
     default: { View: "Animated.View" },
     FadeIn: transition,
@@ -54,63 +63,91 @@ vi.mock("react-native-reanimated", () => {
     LinearTransition: transition,
   };
 });
+
 vi.mock("react-native-image-viewing", () => ({ default: "ImageViewing" }));
+
 vi.mock("@react-navigation/native", () => ({
   StackActions: { push: vi.fn() },
   useFocusEffect: () => {},
   useNavigation: () => ({ dispatch: vi.fn(), addListener: () => () => {} }),
 }));
+
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
+
 vi.mock("../../components/AppSymbol", () => ({ SymbolView: "SymbolView" }));
+
 vi.mock("../../components/AppText", () => ({ AppText: "Text" }));
+
 vi.mock("../../components/ComposerAttachmentStrip", () => ({
   ComposerAttachmentStrip: "ComposerAttachmentStrip",
 }));
+
 vi.mock("../../components/GlassSurface", () => ({ GlassSurface: "GlassSurface" }));
+
 vi.mock("../../components/ComposerEditor", () => ({ ComposerEditor: "ComposerEditor" }));
+
 vi.mock("../../components/ComposerToolbar", () => ({
   ComposerInlineControl: "ComposerInlineControl",
   ComposerToolbarButton: "ComposerToolbarButton",
   ComposerToolbarRow: "ComposerToolbarRow",
   ComposerToolbarScroller: "ComposerToolbarScroller",
 }));
+
 vi.mock("../../components/ControlPill", () => ({ ControlPill: "ControlPill" }));
+
 vi.mock("../../components/ProviderIcon", () => ({ ProviderIcon: "ProviderIcon" }));
+
 vi.mock("../../lib/useThemeColor", () => ({ useThemeColor: () => "#000000" }));
+
 vi.mock("../../lib/i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useMobileI18n: () => ({ t: translator.translate, plural: translator.plural }) };
 });
+
 vi.mock("../../lib/modelOptions", () => ({
   buildModelOptions: () => [],
   groupByProvider: () => [],
   resolveModelSendBlock: () => null,
 }));
+
 vi.mock("../settings/appearance/useScaledTextRole", () => ({ useScaledTextRole: () => ({}) }));
+
 vi.mock("../settings/appearance/AppearancePreferencesProvider", () => ({
   useAppearancePreferences: () => ({ themeAppearance: "light" }),
 }));
+
 vi.mock("../../lib/providerOptions", () => ({ resolveProviderOptionDescriptors: () => [] }));
+
 vi.mock("../../state/use-composer-path-search", () => ({
   useComposerPathSearch: () => ({ entries: [], isPending: false }),
 }));
+
 vi.mock("../../state/bots", () => ({
   botEnvironment: { update: Symbol("update"), delete: Symbol("delete") },
   environmentBotsAtom: () => Symbol("bots"),
   environmentGroupsAtom: () => Symbol("groups"),
 }));
+
 vi.mock("./thread-list-v2-items", () => ({ providerBotName: () => "Codex" }));
+
 vi.mock("../../state/server", () => ({
   serverEnvironment: { subscriptionAuth: () => Symbol("subscriptionAuth") },
 }));
+
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: null }) }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("./ComposerCommandPopover", () => ({ ComposerCommandPopover: "ComposerCommandPopover" }));
+
 vi.mock("./ComposerMentionPopover", () => ({ ComposerMentionPopover: "ComposerMentionPopover" }));
+
 vi.mock("./ThreadSettingsSheet", () => ({
   useExistingThreadSettingsRoutePresentation: () => ({ present: vi.fn(), clear: vi.fn() }),
 }));
+
 vi.mock("./use-thread-settings-sheet-presentation", () => ({
   useThreadSettingsSheetRoute: () => ({
     isActive: false,
@@ -120,6 +157,7 @@ vi.mock("./use-thread-settings-sheet-presentation", () => ({
     onStackTransitionsFinished: vi.fn(),
   }),
 }));
+
 vi.mock("../../lib/useEnvironmentComposerDictation", () => ({
   useEnvironmentComposerDictation: () => ({
     status: "idle",
@@ -139,16 +177,23 @@ function findElement(node: unknown, accept: (element: Element) => boolean): Elem
   if (Array.isArray(node)) {
     for (const child of node) {
       const found = findElement(child, accept);
+
       if (found) return found;
     }
+
     return null;
   }
+
   if (!isValidElement<Record<string, unknown>>(node)) return null;
+
   if (accept(node)) return node;
+
   for (const value of Object.values(node.props)) {
     const found = findElement(value, accept);
+
     if (found) return found;
   }
+
   return null;
 }
 
@@ -177,6 +222,7 @@ const serverConfig = {
 function renderMenu(draftMessage: string, config: ServerConfig | null = serverConfig) {
   hooks.slots = [];
   hooks.cursor = 0;
+
   const props = {
     draftMessage,
     draftAttachments: [],
@@ -205,8 +251,10 @@ function renderMenu(draftMessage: string, config: ServerConfig | null = serverCo
     onUpdateRuntimeMode: vi.fn(),
     onReconnectEnvironment: vi.fn(),
   } satisfies ThreadComposerProps;
+
   const tree = (ThreadComposer as unknown as (props: ThreadComposerProps) => unknown)(props);
   const popover = findElement(tree, (element) => element.type === "ComposerCommandPopover");
+
   return {
     triggerKind: popover?.props.triggerKind,
     emptyText: popover?.props.emptyText,

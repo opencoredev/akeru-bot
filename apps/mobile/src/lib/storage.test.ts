@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
   let preferencesUpdatedAt = 0;
   let loadPreferencesFails = false;
   let savePreferencesFails = false;
+
   return {
     clear: () => {
       values.clear();
@@ -27,10 +28,12 @@ const mocks = vi.hoisted(() => {
     getItemAsync: vi.fn((key: string) => Promise.resolve(values.get(key) ?? null)),
     setItemAsync: vi.fn((key: string, value: string) => {
       values.set(key, value);
+
       return Promise.resolve();
     }),
     deleteItemAsync: vi.fn((key: string) => {
       values.delete(key);
+
       return Promise.resolve();
     }),
     database: {
@@ -44,9 +47,11 @@ const mocks = vi.hoisted(() => {
         if (sql.includes("PRAGMA user_version")) {
           return Promise.resolve({ user_version: 1 });
         }
+
         if (loadPreferencesFails) {
           return Promise.reject(new Error("database unavailable"));
         }
+
         return Promise.resolve(
           preferencesJson === null
             ? null
@@ -57,12 +62,15 @@ const mocks = vi.hoisted(() => {
         if (savePreferencesFails) {
           return Promise.reject(new Error("database unavailable"));
         }
+
         if (typeof payload === "string") {
           preferencesJson = payload;
         }
+
         if (typeof updatedAt === "number") {
           preferencesUpdatedAt = updatedAt;
         }
+
         return Promise.resolve();
       }),
     },
@@ -223,10 +231,12 @@ describe("mobile connection storage", () => {
   it("falls back to secure storage when SQLite cannot save preferences", async () => {
     mocks.setDatabaseFailures(true, true);
     await expect(savePreferencesPatch({ baseFontSize: 19 })).resolves.toEqual({ baseFontSize: 19 });
+
     const fallback = JSON.parse(mocks.getStoredValue("akeru.preferences.fallback") ?? "") as {
       readonly payload: string;
       readonly updatedAt: number;
     };
+
     expect(JSON.parse(fallback.payload)).toEqual({ baseFontSize: 19 });
     expect(fallback.updatedAt).toEqual(expect.any(Number));
   });

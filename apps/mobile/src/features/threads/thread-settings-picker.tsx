@@ -42,6 +42,7 @@ export function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresent
   const { t } = useMobileI18n();
   const solidSheetBackground = String(useThemeColor("--color-sheet-solid"));
   const foreground = String(useThemeColor("--color-foreground"));
+
   const presentation = useMemo(
     () => ({
       onClose: props.onClose,

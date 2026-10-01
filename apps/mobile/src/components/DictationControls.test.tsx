@@ -10,15 +10,19 @@ const state = vi.hoisted(() => ({
   refs: [] as Array<{ current: unknown }>,
   cursor: 0,
 }));
+
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
   useRef: (initialValue: unknown) => {
     const index = state.cursor++;
+
     if (!state.refs[index]) state.refs[index] = { current: initialValue };
+
     return state.refs[index];
   },
   useEffect: (effect: () => void | (() => void)) => effect(),
 }));
+
 vi.mock("react-native", () => ({
   View: "View",
   Pressable: "Pressable",
@@ -26,13 +30,18 @@ vi.mock("react-native", () => ({
   AccessibilityInfo: { announceForAccessibility: state.announce },
   Platform: state.platform,
 }));
+
 vi.mock("./AppText", () => ({ AppText: "Text" }));
+
 vi.mock("./AppSymbol", () => ({ SymbolView: "SymbolView" }));
+
 vi.mock("../lib/useThemeColor", () => ({ useThemeColor: (token: string) => token }));
+
 vi.mock("../lib/i18n", async () => {
   const { catalogRegistry, createTranslator } = await import("@akeru/client-runtime/i18n");
   const zhCN = await catalogRegistry["zh-CN"]!();
   const translators = { en: createTranslator("en"), "zh-CN": createTranslator("zh-CN", zhCN) };
+
   return { useMobileI18n: () => ({ t: translators[state.locale].translate }) };
 });
 
@@ -40,18 +49,25 @@ function find(node: ReactNode, key: string, value: unknown): Record<string, unkn
   if (Array.isArray(node)) {
     for (const child of node) {
       const result = find(child, key, value);
+
       if (result) return result;
     }
   }
+
   if (!isValidElement<Record<string, unknown>>(node)) return;
+
   if (node.props[key] === value) return node.props;
+
   return find(node.props.children as ReactNode, key, value);
 }
+
 const HINT =
   "Hold to dictate and release to finish, or activate to start and activate again to stop.";
+
 function render(props: DictationControlsProps) {
   state.cursor = 0;
   const tree = DictationControls(props);
+
   return {
     button: find(tree, "accessibilityHint", HINT) as ComponentProps<typeof View>,
     cancel: find(tree, "accessibilityLabel", "Cancel dictation") as
@@ -60,7 +76,9 @@ function render(props: DictationControlsProps) {
     status: find(tree, "accessibilityLiveRegion", "polite")!,
   };
 }
+
 const callbacks = () => ({ onStart: vi.fn(), onRelease: vi.fn(), onCancel: vi.fn() });
+
 const event = {} as Parameters<NonNullable<ComponentProps<typeof View>["onResponderGrant"]>>[0];
 
 beforeEach(() => {
@@ -167,9 +185,11 @@ describe("native DictationControls interaction handlers", () => {
     expect(retry.accessibilityLabel).toBe("Retry dictation");
     retry.onAccessibilityTap!();
     expect(handlers.onStart).toHaveBeenCalledTimes(1);
+
     const dismiss = find(tree, "accessibilityLabel", "Dismiss dictation error") as ComponentProps<
       typeof Pressable
     >;
+
     dismiss.onPress!(event);
     expect(handlers.onCancel).toHaveBeenCalledTimes(1);
   });
@@ -181,11 +201,13 @@ describe("native DictationControls interaction handlers", () => {
     expect(state.announce).toHaveBeenCalledWith("正在录制听写。");
     expect(find(recording, "accessibilityLabel", "停止听写")).toBeDefined();
     state.cursor = 0;
+
     const unavailable = DictationControls({
       status: "idle",
       unavailableReason: "No microphone",
       ...callbacks(),
     });
+
     // The provider reason stays verbatim inside the translated template.
     expect(find(unavailable, "accessibilityLiveRegion", "polite")!.children).toBe(
       "听写不可用：No microphone",
@@ -195,6 +217,7 @@ describe("native DictationControls interaction handlers", () => {
   it("explains a blocked send-slot mic instead of starting", () => {
     const handlers = callbacks();
     const onBlockedPress = vi.fn();
+
     const view = render({
       status: "idle",
       appearance: "send-slot",
@@ -202,6 +225,7 @@ describe("native DictationControls interaction handlers", () => {
       onBlockedPress,
       ...handlers,
     });
+
     view.button.onAccessibilityTap!();
     view.button.onResponderGrant!(event);
     expect(onBlockedPress).toHaveBeenCalledTimes(2);
@@ -213,14 +237,17 @@ describe("native DictationControls interaction handlers", () => {
 describe("send-slot dictation icon", () => {
   it("tints the idle and retry icons with the primary foreground and recording with white", () => {
     const handlers = callbacks();
+
     const icon = (status: DictationControlsProps["status"], name: string) => {
       state.cursor = 0;
+
       return find(
         DictationControls({ status, appearance: "send-slot", ...handlers }),
         "name",
         name,
       );
     };
+
     expect(icon("idle", "mic.fill")?.tintColor).toBe("--color-primary-foreground");
     expect(icon("failed", "arrow.clockwise")?.tintColor).toBe("--color-primary-foreground");
     expect(icon("recording", "mic.fill")?.tintColor).toBe("white");

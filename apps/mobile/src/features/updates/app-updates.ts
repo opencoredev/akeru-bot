@@ -14,7 +14,9 @@ import {
   installPendingAppUpdate,
   reportUpdateFailure,
 } from "./app-update-install";
+
 export { createAppUpdateDeferral } from "./app-update-types";
+
 export type {
   AppUpdateCheckState,
   AppUpdateClient,
@@ -43,6 +45,7 @@ interface Deferred {
 }
 
 const HIDDEN_UPDATE_TAP_COUNT = 5;
+
 let appUpdateCheckInFlight: AppUpdateCheckInFlight | undefined;
 
 /** Expo's development launcher reports updates as enabled even though its OTA APIs reject. */
@@ -59,12 +62,14 @@ export function registerHiddenUpdateTap(count: number): {
   readonly shouldCheck: boolean;
 } {
   const nextCount = count + 1;
+
   if (nextCount >= HIDDEN_UPDATE_TAP_COUNT) {
     return {
       nextCount: 0,
       shouldCheck: true,
     };
   }
+
   return {
     nextCount,
     shouldCheck: false,
@@ -73,19 +78,23 @@ export function registerHiddenUpdateTap(count: number): {
 
 export async function runAppUpdateCheck(options: AppUpdateCheckOptions = {}): Promise<void> {
   const client = options.client ?? Updates;
+
   if (!isAppUpdateCheckAvailable(client)) return;
 
   if (appUpdateCheckInFlight) {
     await observeAppUpdateCheck(appUpdateCheckInFlight, options);
+
     // A background-mode check in flight may have deferred the download this
     // caller explicitly asked to install; honor the explicit request now.
     if (options.applyMode === "immediate") {
       const deferral = options.deferral ?? appUpdateDeferral;
+
       if (deferral.pendingInstall) {
         const environment = options.environment ?? defaultAppUpdateEnvironment;
         await installPendingAppUpdate(client, environment, deferral, options);
       }
     }
+
     return;
   }
 
@@ -93,18 +102,23 @@ export async function runAppUpdateCheck(options: AppUpdateCheckOptions = {}): Pr
     failure: undefined,
     state: undefined,
   };
+
   const failureListeners = new Set<NonNullable<AppUpdateCheckOptions["onFailure"]>>();
   const stateListeners = new Set<NonNullable<AppUpdateCheckOptions["onStateChange"]>>();
+
   if (options.onFailure) failureListeners.add(options.onFailure);
+
   if (options.onStateChange) stateListeners.add(options.onStateChange);
 
   const deferred = createDeferred();
+
   const inFlight: AppUpdateCheckInFlight = {
     failureListeners,
     progress,
     promise: deferred.promise,
     stateListeners,
   };
+
   // Publish the operation before any state listener can synchronously re-enter.
   appUpdateCheckInFlight = inFlight;
 
@@ -121,6 +135,7 @@ export async function runAppUpdateCheck(options: AppUpdateCheckOptions = {}): Pr
       notifyListeners(stateListeners, state);
     },
   });
+
   void execution.then(deferred.resolve, deferred.reject);
 
   try {
@@ -135,10 +150,12 @@ export async function runAppUpdateCheck(options: AppUpdateCheckOptions = {}): Pr
 function createDeferred(): Deferred {
   let reject!: Deferred["reject"];
   let resolve!: Deferred["resolve"];
+
   const promise = new Promise<void>((resolvePromise, rejectPromise) => {
     resolve = () => resolvePromise();
     reject = rejectPromise;
   });
+
   return { promise, reject, resolve };
 }
 
@@ -146,6 +163,7 @@ function notifyListeners<A>(listeners: ReadonlySet<(value: A) => void>, value: A
   // A listener can synchronously subscribe another caller. Snapshot so that
   // caller receives only observeAppUpdateCheck's explicit current-value replay.
   const snapshot = Array.from(listeners);
+
   for (const listener of snapshot) listener(value);
 }
 
@@ -158,10 +176,13 @@ async function observeAppUpdateCheck(
 
   if (onFailure) {
     inFlight.failureListeners.add(onFailure);
+
     if (inFlight.progress.failure) onFailure(inFlight.progress.failure);
   }
+
   if (onStateChange) {
     inFlight.stateListeners.add(onStateChange);
+
     if (inFlight.progress.state) onStateChange(inFlight.progress.state);
   }
 
@@ -169,6 +190,7 @@ async function observeAppUpdateCheck(
     await inFlight.promise;
   } finally {
     if (onFailure) inFlight.failureListeners.delete(onFailure);
+
     if (onStateChange) inFlight.stateListeners.delete(onStateChange);
   }
 }
@@ -185,33 +207,42 @@ async function performAppUpdateCheck(
   // downloaded the update; restart into it without another network round trip.
   if (options.applyMode === "immediate" && deferral.pendingInstall) {
     await installPendingAppUpdate(client, environment, deferral, options);
+
     return;
   }
 
   setState("checking");
   const check = await settlePromise(() => client.checkForUpdateAsync());
+
   if (check._tag === "Failure") {
     reportUpdateFailure(check, "Could not check for updates.", options.onFailure);
     setState("idle");
+
     return;
   }
+
   // A rollback directive (`eas update:rollback`) arrives as isAvailable: false
   // with isRollBackToEmbedded: true. The running OTA still has to be dropped.
   if (!check.value.isAvailable && !check.value.isRollBackToEmbedded) {
     setState("current");
+
     return;
   }
 
   setState("downloading");
   const fetched = await settlePromise(() => client.fetchUpdateAsync());
+
   if (fetched._tag === "Failure") {
     reportUpdateFailure(fetched, "Could not download the update.", options.onFailure);
     setState("idle");
+
     return;
   }
+
   // isNew is always false for a rollback, so it cannot be the sole gate.
   if (!fetched.value.isNew && !fetched.value.isRollBackToEmbedded) {
     setState("current");
+
     return;
   }
 
@@ -225,6 +256,7 @@ async function performAppUpdateCheck(
       options,
       options.applyMode === "immediate",
     );
+
     if (outcome === "flush-failed") {
       // Only reachable for an automatic rollback: keep the state-bearing
       // runtime alive and retry like a deferred install. The fetched rollback
@@ -232,6 +264,7 @@ async function performAppUpdateCheck(
       setState("ready");
       armDeferredAppUpdateInstall(client, environment, deferral);
     }
+
     return;
   }
 
@@ -242,6 +275,7 @@ async function performAppUpdateCheck(
 async function defaultConfirmInstallNow(): Promise<boolean> {
   const { Alert } = await import("react-native");
   const { translateOutsideReact: translate } = await import("../../lib/i18n");
+
   return new Promise<boolean>((resolve) => {
     Alert.alert(
       translate("Update ready"),
@@ -264,16 +298,20 @@ async function defaultFlushPendingWrites(): Promise<void> {
     import("../../state/use-composer-drafts").then((drafts) => drafts.flushComposerDrafts()),
     import("../../state/thread-outbox").then((outbox) => outbox.flushThreadOutbox()),
   ]);
+
   const failed = results.find(
     (result): result is PromiseRejectedResult => result.status === "rejected",
   );
+
   if (failed) throw failed.reason;
 }
 
 async function defaultIsSafeToRestartInBackground(): Promise<boolean> {
   const { isForegroundHandoffActive } = await import("../../lib/foreground-handoff");
+
   if (isForegroundHandoffActive()) return false;
   const { AppState } = await import("react-native");
+
   return AppState.currentState === "background";
 }
 
@@ -284,6 +322,7 @@ function defaultOnNextBackground(apply: () => void, includeCurrent: boolean): vo
       subscription.remove();
       apply();
     });
+
     // The app may already have backgrounded while this module was loading;
     // the listener alone would then wait a whole extra foreground cycle.
     if (includeCurrent && AppState.currentState === "background") {
@@ -308,21 +347,25 @@ export const DEFERRED_INSTALL_PROMPT_AFTER_MS = 30 * 60 * 1000;
 function defaultOnForegroundStay(apply: () => void): void {
   void import("react-native").then(({ AppState }) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     const arm = () => {
       timer ??= setTimeout(() => {
         subscription.remove();
         apply();
       }, DEFERRED_INSTALL_PROMPT_AFTER_MS);
     };
+
     const disarm = () => {
       if (timer === undefined) return;
       clearTimeout(timer);
       timer = undefined;
     };
+
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") arm();
       else if (state === "background") disarm();
     });
+
     if (AppState.currentState === "active") arm();
   });
 }
@@ -343,6 +386,7 @@ export function createAppUpdateLaunchCheck(
   return () => {
     if (started || !isAppUpdateCheckAvailable(client)) return undefined;
     started = true;
+
     return runAppUpdateCheck({ client });
   };
 }
@@ -362,6 +406,7 @@ export function shouldRecheckAppUpdateOnForeground(
   pendingInstall: boolean,
 ): boolean {
   if (pendingInstall) return false;
+
   return (
     backgroundedAtMs !== null &&
     activeAtMs - backgroundedAtMs >= FOREGROUND_APP_UPDATE_RECHECK_AFTER_MS
@@ -382,15 +427,20 @@ export function createAppUpdateForegroundRecheck(
       AppState.addEventListener("change", (state) => {
         if (state === "background") {
           backgroundedAtMs = Date.now();
+
           return;
         }
+
         if (state !== "active") return;
+
         const shouldCheck = shouldRecheckAppUpdateOnForeground(
           backgroundedAtMs,
           Date.now(),
           deferral.pendingInstall,
         );
+
         backgroundedAtMs = null;
+
         if (shouldCheck) void runAppUpdateCheck({ client, deferral });
       });
     });

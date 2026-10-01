@@ -41,11 +41,13 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
   const queuedMessagesByThreadKeyAtom = Atom.make<
     Record<string, ReadonlyArray<QueuedThreadMessage>>
   >({}).pipe(Atom.keepAlive, Atom.withLabel("mobile:thread-outbox:queued-messages"));
+
   const warn =
     options.warn ??
     ((message: string, error: unknown) => {
       console.warn(message, error);
     });
+
   let loadPromise: Promise<boolean> | null = null;
   let mutationQueue: Promise<void> = Promise.resolve();
 
@@ -55,6 +57,7 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
       () => undefined,
       () => undefined,
     );
+
     return result;
   };
 
@@ -77,6 +80,7 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
         cause: persisted.unreadRecords,
       });
     }
+
     return persisted.messages;
   };
 
@@ -91,16 +95,20 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
     if (loadPromise !== null) {
       return loadPromise;
     }
+
     loadPromise = serialize(async () => {
       const persisted = await options.storage.load();
       reportUnreadOutboxRecords(persisted);
       setMessages([...persisted.messages, ...currentMessages()]);
+
       // A mixed load is not complete. Drop the cache so a later load, such as
       // drain after reconnect, can hydrate a file that becomes readable.
       if (persisted.unreadRecords.length > 0) {
         loadPromise = null;
+
         return false;
       }
+
       return true;
     }).catch((cause) => {
       loadPromise = null;
@@ -114,8 +122,10 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
           cause,
         }),
       );
+
       return false;
     });
+
     return loadPromise;
   };
 
@@ -128,6 +138,7 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
       ...currentMessages().filter((candidate) => candidate.messageId !== message.messageId),
       message,
     ]);
+
     return serialize(async () => {
       try {
         await options.storage.write(message);
@@ -162,9 +173,11 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
       const exists = currentMessages().some(
         (candidate) => candidate.messageId === message.messageId,
       );
+
       if (!exists) {
         return false;
       }
+
       try {
         await options.storage.write(message);
       } catch (cause) {
@@ -176,10 +189,12 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
           cause,
         });
       }
+
       setMessages([
         ...currentMessages().filter((candidate) => candidate.messageId !== message.messageId),
         message,
       ]);
+
       return true;
     });
 
@@ -196,6 +211,7 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
           cause,
         });
       }
+
       setMessages(
         currentMessages().filter((candidate) => candidate.messageId !== message.messageId),
       );
@@ -212,10 +228,13 @@ export function createThreadOutboxManager(options: ThreadOutboxManagerOptions) {
           cause,
         });
       });
+
       const readable = requireCompleteOutboxLoad(persisted, environmentId);
+
       const allMessages = flattenQueuedThreadMessages(
         groupQueuedThreadMessages([...readable, ...currentMessages()]),
       );
+
       const removedMessageIds = new Set<MessageId>();
 
       await Promise.all(

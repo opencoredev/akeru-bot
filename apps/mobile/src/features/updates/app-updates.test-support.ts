@@ -24,6 +24,7 @@ export function makeUpdateEnvironment(overrides: Partial<AppUpdateEnvironment> =
 } {
   const backgroundCallbacks: Array<() => void> = [];
   const foregroundStayCallbacks: Array<() => void> = [];
+
   return {
     backgroundCallbacks,
     foregroundStayCallbacks,

@@ -19,6 +19,7 @@ describe("Codex feedback pseudo-messages", () => {
       createdAt: "2026-08-23T00:00:00.000Z",
       status: "uploading" as const,
     };
+
     const entries = [codexFeedbackMessage(pending), codexFeedbackMessage(pending, "assistant")].map(
       (message) => ({
         type: "message" as const,
@@ -35,6 +36,7 @@ describe("Codex feedback pseudo-messages", () => {
       { ...pending, status: "sent", feedbackId: "codex-thread-1" },
       "assistant",
     );
+
     expect(completed.text).toContain("codex-thread-1");
   });
 });
@@ -72,11 +74,13 @@ describe("pending user input answers", () => {
     ).toEqual({ customAnswer: "", selectedOptionLabels: ["Node.js"] });
 
     const orders = togglePendingUserInputOptionSelection(multiSelectQuestion, undefined, "Orders");
+
     const ordersAndListings = togglePendingUserInputOptionSelection(
       multiSelectQuestion,
       orders,
       "Listings",
     );
+
     expect(ordersAndListings).toEqual({
       customAnswer: "",
       selectedOptionLabels: ["Orders", "Listings"],
@@ -90,6 +94,7 @@ describe("pending user input answers", () => {
       undefined,
       "  Orders  ",
     );
+
     expect(paddedOrders).toEqual({ customAnswer: "", selectedOptionLabels: ["Orders"] });
     expect(
       togglePendingUserInputOptionSelection(multiSelectQuestion, paddedOrders, "  Orders  "),
@@ -137,6 +142,7 @@ describe("pending approvals", () => {
       { decision: "acceptAlways", label: "Always allow Safari" },
       { decision: "accept", label: "Approve" },
     ];
+
     const activity = makeActivity({
       id: EventId.make("approval-safari"),
       kind: "approval.requested",
@@ -171,6 +177,7 @@ describe("pending approvals", () => {
       createdAt: "2026-08-24T00:00:00.000Z",
       payload: { requestId: "req-safari", requestKind: "mcp-elicitation" },
     });
+
     const resolved = makeActivity({
       id: EventId.make("approval-safari-resolved"),
       kind: "approval.resolved",

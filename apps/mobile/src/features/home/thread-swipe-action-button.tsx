@@ -13,9 +13,13 @@ import { AppText as Text } from "../../components/AppText";
 
 // Wide enough for the longest action label ("Unarchive").
 export const ACTION_ITEM_WIDTH = 58;
+
 const ACTION_CIRCLE_SIZE = 36;
+
 const ACTION_ICON_SIZE = 15;
+
 const COMPACT_ACTION_CIRCLE_SIZE = 28;
+
 const COMPACT_ACTION_ICON_SIZE = 13;
 
 export interface ThreadSwipeAction {
@@ -46,10 +50,12 @@ export function SwipeActionButton(props: {
 }) {
   const circleSize = props.compact ? COMPACT_ACTION_CIRCLE_SIZE : ACTION_CIRCLE_SIZE;
   const iconSize = props.compact ? COMPACT_ACTION_ICON_SIZE : ACTION_ICON_SIZE;
+
   const actionStyle = useAnimatedStyle(() => {
     const reveal = Math.max(-props.translation.value, 0);
     const entryProgress = interpolate(reveal, props.entryRange, [0, 1], Extrapolation.CLAMP);
     const stretch = Math.max(reveal - props.actionsWidth, 0);
+
     const fullSwipeProgress = interpolate(
       reveal,
       [props.actionsWidth, props.fullSwipeThreshold + 20],
@@ -69,6 +75,7 @@ export function SwipeActionButton(props: {
       ],
     };
   });
+
   const circleStyle = useAnimatedStyle(() => {
     const reveal = Math.max(-props.translation.value, 0);
     const stretch = props.stretchesOnFullSwipe ? Math.max(reveal - props.actionsWidth, 0) : 0;
@@ -78,9 +85,11 @@ export function SwipeActionButton(props: {
       width: circleSize + stretch,
     };
   });
+
   const iconStyle = useAnimatedStyle(() => {
     const reveal = Math.max(-props.translation.value, 0);
     const stretch = props.stretchesOnFullSwipe ? Math.max(reveal - props.actionsWidth, 0) : 0;
+
     const armedProgress = interpolate(
       reveal,
       [props.fullSwipeThreshold, props.fullSwipeThreshold + 20],
@@ -92,6 +101,7 @@ export function SwipeActionButton(props: {
       transform: [{ translateX: -stretch * (0.5 + armedProgress * 0.5) }],
     };
   });
+
   const labelStyle = useAnimatedStyle(() => {
     if (!props.stretchesOnFullSwipe) {
       return { opacity: 1 };
@@ -99,6 +109,7 @@ export function SwipeActionButton(props: {
 
     const reveal = Math.max(-props.translation.value, 0);
     const stretch = Math.max(reveal - props.actionsWidth, 0);
+
     return {
       opacity: interpolate(
         reveal,

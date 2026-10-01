@@ -16,6 +16,7 @@ export type RemoteClientConnectionState = EnvironmentConnectionPhase;
 
 export function redactPairingCredential(pairingUrl: string): string {
   const trimmed = pairingUrl.trim();
+
   try {
     return stripPairingTokenFromUrl(new URL(trimmed)).toString();
   } catch {

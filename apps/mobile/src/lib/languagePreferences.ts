@@ -8,6 +8,7 @@ export function normalizeLanguagePreference(value: unknown): string {
 
 export function resolveMobileLanguage(value: unknown, deviceLocales: readonly string[]) {
   const preference = normalizeLanguagePreference(value);
+
   return { preference, locale: resolveLocale(preference, deviceLocales) };
 }
 
@@ -19,6 +20,7 @@ export function resolveMobileLanguage(value: unknown, deviceLocales: readonly st
 export function readDeviceLocales(readPreferredLocales?: () => unknown): readonly string[] {
   try {
     const preferred = readPreferredLocales?.();
+
     if (
       Array.isArray(preferred) &&
       preferred.length > 0 &&
@@ -29,6 +31,7 @@ export function readDeviceLocales(readPreferredLocales?: () => unknown): readonl
   } catch {
     // Fall through to the resolved locale.
   }
+
   try {
     return [Intl.DateTimeFormat().resolvedOptions().locale];
   } catch {

@@ -212,6 +212,7 @@ describe("workspace connection status", () => {
         },
       ],
     });
+
     expect(workspaceConnectionStatusPresentation(reconnecting, t)).toEqual({
       label: "Reconnecting to Julius’s Mac mini…",
       showsProgress: true,

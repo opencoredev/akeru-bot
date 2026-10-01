@@ -39,6 +39,7 @@ const forbiddenPatterns: ReadonlyArray<{
 function* sourceFiles(dir: string): Generator<string> {
   for (const entry of NodeFS.readdirSync(dir, { withFileTypes: true })) {
     const full = NodePath.join(dir, entry.name);
+
     if (entry.isDirectory()) {
       yield* sourceFiles(full);
     } else if (/\.[cm]?[jt]sx?$/.test(entry.name) && !entry.name.endsWith(".d.ts")) {
@@ -50,12 +51,15 @@ function* sourceFiles(dir: string): Generator<string> {
 describe("Hermes ES2023 compatibility", () => {
   it("mobile-reachable sources avoid array/set/map methods Hermes lacks", () => {
     const offenders: string[] = [];
+
     for (const root of scannedRoots) {
       for (const file of sourceFiles(NodePath.join(repoRoot, root))) {
         if (file.endsWith(".test.ts") || file.endsWith(".test.tsx")) continue;
+
         const source = NodeFS.readFileSync(file, "utf8")
           .replace(/\/\/[^\n]*/g, "")
           .replace(/\/\*[\s\S]*?\*\//g, "");
+
         for (const { name, pattern } of forbiddenPatterns) {
           if (pattern.test(source)) {
             offenders.push(`${NodePath.relative(repoRoot, file)} uses ${name}`);
@@ -63,6 +67,7 @@ describe("Hermes ES2023 compatibility", () => {
         }
       }
     }
+
     expect(offenders).toEqual([]);
   });
 });

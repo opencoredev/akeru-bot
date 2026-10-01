@@ -22,15 +22,18 @@ export type ThreadSettingsPickerPresentation = {
 
 export const ThreadSettingsPickerStack =
   createNativeStackNavigator<ThreadSettingsPickerStackParams>();
+
 export const ThreadSettingsPickerPresentationContext =
   createContext<ThreadSettingsPickerPresentation | null>(null);
 
 export function useThreadSettingsPickerPresentation() {
   const value = use(ThreadSettingsPickerPresentationContext);
+
   if (!value) {
     throw new Error(
       "useThreadSettingsPickerPresentation must be used inside ThreadSettingsPickerNavigator.",
     );
   }
+
   return value;
 }

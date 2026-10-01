@@ -43,33 +43,39 @@ export function useThreadFeedFollow(input: {
   // momentum; only motion inside a session can break follow, so MVCP
   // compensations and programmatic scrolls never strand a follower.
   const userScrollSessionRef = useRef(false);
+
   const setEndFollow = useCallback(
     (enabled: boolean) => {
       if (endFollowEnabledRef.current === enabled) {
         return;
       }
+
       endFollowEnabledRef.current = enabled;
       setEndFollowEnabled(enabled);
       onEndFollowEnabledChange?.(enabled);
     },
     [onEndFollowEnabledChange],
   );
+
   const transitionEndFollow = useCallback(
     (event: ThreadFeedLiveFollowEvent) => {
       setEndFollow(resolveThreadFeedLiveFollow(endFollowEnabledRef.current, event));
     },
     [setEndFollow],
   );
+
   const reportHeaderMaterialVisibility = useCallback(
     (visible: boolean) => {
       if (headerMaterialVisibleRef.current === visible) {
         return;
       }
+
       headerMaterialVisibleRef.current = visible;
       onHeaderMaterialVisibilityChange?.(visible);
     },
     [onHeaderMaterialVisibilityChange],
   );
+
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       // anchorTopInset, not topContentInset: under automatic insets the list
@@ -84,6 +90,7 @@ export function useThreadFeedFollow(input: {
       // A live user-scroll session still wins even if the first scroll event
       // remains inside LegendList's at-end tolerance.
       const listState = listRef.current?.getState();
+
       if (listState) {
         transitionEndFollow({
           type: "scroll",
@@ -94,12 +101,14 @@ export function useThreadFeedFollow(input: {
     },
     [reportHeaderMaterialVisibility, anchorTopInset, listRef, transitionEndFollow],
   );
+
   const clearUserScrollSettle = useCallback(() => {
     if (userScrollSettleTimerRef.current !== null) {
       clearTimeout(userScrollSettleTimerRef.current);
       userScrollSettleTimerRef.current = null;
     }
   }, []);
+
   const onScrollBeginDrag = useCallback(() => {
     clearUserScrollSettle();
     userScrollSessionRef.current = true;
@@ -107,6 +116,7 @@ export function useThreadFeedFollow(input: {
     // maintainScrollAtEnd between touch-down and the drag leaving its threshold.
     transitionEndFollow({ type: "user-scroll-begin" });
   }, [clearUserScrollSettle, transitionEndFollow]);
+
   const finishUserScroll = useCallback(
     (releaseIsAtEnd?: boolean) => {
       clearUserScrollSettle();
@@ -123,6 +133,7 @@ export function useThreadFeedFollow(input: {
     },
     [clearUserScrollSettle, listRef, transitionEndFollow],
   );
+
   // Finger-lift velocity is not a reliable momentum signal: a gentle fling
   // can report zero and still decelerate. Give native momentum a short window
   // to announce itself; if it does, onMomentumScrollBegin cancels this fallback
@@ -133,11 +144,13 @@ export function useThreadFeedFollow(input: {
     const releaseIsAtEnd = listRef.current?.getState().isAtEnd ?? false;
     userScrollSettleTimerRef.current = setTimeout(() => finishUserScroll(releaseIsAtEnd), 160);
   }, [clearUserScrollSettle, finishUserScroll, listRef]);
+
   const onMomentumScrollBegin = useCallback(() => {
     if (userScrollSessionRef.current) {
       clearUserScrollSettle();
     }
   }, [clearUserScrollSettle]);
+
   const onMomentumScrollEnd = useCallback(() => {
     finishUserScroll();
   }, [finishUserScroll]);
@@ -169,6 +182,7 @@ export function useThreadFeedFollow(input: {
       if (foldSettleFrameRef.current !== null) {
         cancelAnimationFrame(foldSettleFrameRef.current);
       }
+
       if (foldSettleSecondFrameRef.current !== null) {
         cancelAnimationFrame(foldSettleSecondFrameRef.current);
       }
@@ -178,12 +192,15 @@ export function useThreadFeedFollow(input: {
   const suspendEndScrollMaintenanceForDisclosure = useCallback((anchorKey: string | null) => {
     disclosureAnchorKeyRef.current = anchorKey;
     setDisclosureToggleSettling(true);
+
     if (foldSettleFrameRef.current !== null) {
       cancelAnimationFrame(foldSettleFrameRef.current);
     }
+
     if (foldSettleSecondFrameRef.current !== null) {
       cancelAnimationFrame(foldSettleSecondFrameRef.current);
     }
+
     foldSettleFrameRef.current = requestAnimationFrame(() => {
       foldSettleSecondFrameRef.current = requestAnimationFrame(() => {
         disclosureAnchorKeyRef.current = null;
@@ -196,6 +213,7 @@ export function useThreadFeedFollow(input: {
 
   const shouldRestoreVisibleContentPosition = useCallback((entry: ThreadFeedEntry) => {
     const disclosureAnchorKey = disclosureAnchorKeyRef.current;
+
     return disclosureAnchorKey === null || entry.id === disclosureAnchorKey;
   }, []);
 

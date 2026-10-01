@@ -11,6 +11,7 @@ describe("sortThreadsForListV2", () => {
       { id: "newest", createdAt: "2026-06-01T12:00:00.000Z" },
       { id: "middle", createdAt: "2026-06-01T10:00:00.000Z" },
     ]);
+
     expect(sorted.map((thread) => thread.id)).toEqual(["newest", "middle", "oldest"]);
   });
 
@@ -24,6 +25,7 @@ describe("sortThreadsForListV2", () => {
       { id: "newest", createdAt: "2026-06-01T12:00:00.000Z" },
       { id: "middle", createdAt: "2026-06-01T10:00:00.000Z" },
     ]);
+
     expect(sorted.map((thread) => thread.id)).toEqual(["old-unsettled", "newest", "middle"]);
   });
 });
@@ -34,6 +36,7 @@ describe("buildThreadListV2Items", () => {
       id: ThreadId.make("linked"),
       title: "Linked pull request",
     });
+
     const layout = buildThreadListV2Items({
       threads: [thread],
       environmentId: null,
@@ -50,6 +53,7 @@ describe("buildThreadListV2Items", () => {
       id: ThreadId.make("linked-merged"),
       title: "Linked merged pull request",
     });
+
     const layout = buildThreadListV2Items({
       threads: [thread],
       environmentId: null,
@@ -63,6 +67,7 @@ describe("buildThreadListV2Items", () => {
 
   it("keeps a merged thread active", () => {
     const merged = makeThread({ id: ThreadId.make("merged"), title: "Merged" });
+
     const layout = buildThreadListV2Items({
       threads: [merged],
       environmentId: null,
@@ -131,6 +136,7 @@ describe("buildThreadListV2Items", () => {
       title: "Pinned merged pull request",
       pinnedAt: "2026-06-01T12:00:00.000Z",
     });
+
     const layout = buildThreadListV2Items({
       threads: [makeThread({ id: ThreadId.make("active"), title: "Active" }), merged],
       environmentId: null,
@@ -159,6 +165,7 @@ describe("buildThreadListV2Items", () => {
         assistantMessageId: null,
       },
     });
+
     const layout = buildThreadListV2Items({
       threads: [inactive],
       environmentId: null,
@@ -180,6 +187,7 @@ describe("buildThreadListV2Items", () => {
       title: "Pinned merged pull request",
       pinnedAt: "2026-06-01T12:00:00.000Z",
     });
+
     const layout = buildThreadListV2Items({
       threads: [merged],
       environmentId: null,
@@ -493,6 +501,7 @@ describe("buildThreadListV2Items", () => {
       id: ThreadId.make("content-match"),
       title: "Unrelated title",
     });
+
     const { items } = buildThreadListV2Items({
       threads: [thread],
       environmentId: null,
@@ -511,6 +520,7 @@ describe("buildThreadListV2Items", () => {
 
   it("scopes the flat list to one project", () => {
     const otherProjectId = ProjectId.make("project-2");
+
     const { items } = buildThreadListV2Items({
       threads: [
         makeThread({ id: ThreadId.make("included"), title: "Included" }),
@@ -531,6 +541,7 @@ describe("buildThreadListV2Items", () => {
 
   it("scopes the flat list to every environment member of a logical project", () => {
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
+
     const { items } = buildThreadListV2Items({
       threads: [
         makeThread({ id: ThreadId.make("local"), title: "Local" }),

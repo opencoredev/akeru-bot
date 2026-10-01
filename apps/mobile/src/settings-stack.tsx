@@ -25,6 +25,7 @@ function SettingsNavigationLayout({
   readonly routeName: string;
 }) {
   const { t } = useMobileI18n();
+
   const titles: Readonly<Record<string, string | undefined>> = {
     Settings: t("Settings"),
     SettingsEnvironments: t("Environments"),
@@ -37,7 +38,9 @@ function SettingsNavigationLayout({
     SettingsBotUsage: t("Bot usage"),
     SettingsProviderHealth: undefined,
   };
+
   const title = titles[routeName];
+
   return (
     <>
       {title === undefined ? null : <NativeStackScreenOptions options={{ title }} />}

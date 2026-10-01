@@ -52,6 +52,7 @@ export function MessageAttachmentFile(props: {
     _tag: "attachment",
     attachmentId: props.attachmentId,
   });
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -99,9 +100,12 @@ export function ThreadMarkdownImageView(props: {
           sourceHeight: sourceSize.height,
           availableWidth,
         });
+
   const failed = props.unavailable || (props.uri !== null && failedUri === props.uri);
+
   const placeholderWidth: ViewStyle["width"] =
     availableWidth > 0 ? Math.min(availableWidth, MARKDOWN_IMAGE_MAX_WIDTH) : "100%";
+
   const frameStyle: ViewStyle = displaySize ?? { width: placeholderWidth, aspectRatio: 16 / 9 };
 
   return (

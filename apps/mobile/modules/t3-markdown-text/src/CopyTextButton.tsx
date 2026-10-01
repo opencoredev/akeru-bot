@@ -42,9 +42,11 @@ export const CopyTextButton = memo(function CopyTextButton(props: {
       onPress={() => {
         copyTextWithHaptic(props.text);
         setCopied(true);
+
         if (resetTimeoutRef.current) {
           clearTimeout(resetTimeoutRef.current);
         }
+
         resetTimeoutRef.current = setTimeout(() => {
           setCopied(false);
           resetTimeoutRef.current = null;

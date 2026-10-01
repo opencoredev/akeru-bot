@@ -9,7 +9,9 @@ function normalizeDraftAnswer(value: string | undefined): string | null {
   if (typeof value !== "string") {
     return null;
   }
+
   const trimmed = value.trim();
+
   return trimmed.length > 0 ? trimmed : null;
 }
 
@@ -30,14 +32,17 @@ function resolvePendingUserInputAnswer(
   draft: PendingUserInputDraftAnswer | undefined,
 ): string | ReadonlyArray<string> | null {
   const customAnswer = normalizeDraftAnswer(draft?.customAnswer);
+
   if (customAnswer) {
     return customAnswer;
   }
 
   const selectedOptionLabels = normalizeSelectedOptionLabels(draft?.selectedOptionLabels);
+
   if (question.multiSelect) {
     return selectedOptionLabels.length > 0 ? selectedOptionLabels : null;
   }
+
   return selectedOptionLabels[0] ?? null;
 }
 
@@ -49,6 +54,7 @@ export function setPendingUserInputCustomAnswer(
     customAnswer.trim().length > 0
       ? undefined
       : normalizeSelectedOptionLabels(draft?.selectedOptionLabels);
+
   return {
     customAnswer,
     ...(selectedOptionLabels && selectedOptionLabels.length > 0 ? { selectedOptionLabels } : {}),
@@ -75,6 +81,7 @@ export function togglePendingUserInputOptionSelection(
 
   if (question.multiSelect) {
     const selectedOptionLabels = normalizeSelectedOptionLabels(draft?.selectedOptionLabels);
+
     const nextSelectedOptionLabels = selectedOptionLabels.includes(normalizedOptionLabel)
       ? selectedOptionLabels.filter((label) => label !== normalizedOptionLabel)
       : [...selectedOptionLabels, normalizedOptionLabel];
@@ -101,9 +108,11 @@ export function buildPendingUserInputAnswers(
 
   for (const question of questions) {
     const answer = resolvePendingUserInputAnswer(question, draftAnswers[question.id]);
+
     if (!answer) {
       return null;
     }
+
     answers[question.id] = answer;
   }
 

@@ -125,23 +125,29 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const [isFocused, setIsFocused] = useState(false);
   const settingsRoutePresentation = useExistingThreadSettingsRoutePresentation();
   const settingsOwnerId = scopedThreadKey(props.environmentId, props.selectedThread.id);
+
   const clearSettingsRouteSession = useCallback(
     () => settingsRoutePresentation.clear(settingsOwnerId),
     [settingsOwnerId, settingsRoutePresentation.clear],
   );
+
   const settingsSheetPresentation = useThreadSettingsSheetRoute({
     editorRef: inputRef,
     isEditorFocused: isFocused,
     routeName: "ThreadSettingsSheet",
     onDismissed: clearSettingsRouteSession,
   });
+
   const bots = useAtomValue(environmentBotsAtom(props.environmentId));
+
   const subscriptionAuth = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId: props.environmentId, input: {} }),
   );
+
   const subscriptionStatuses = subscriptionAuth.data?.providers;
   const bot = bots.find((candidate) => candidate.id === props.selectedThread.botId);
   const groups = useAtomValue(environmentGroupsAtom(props.environmentId));
+
   // Group chats address the group, direct chats the bot. Threads without a
   // configured bot still read as a named teammate: fall back to the provider
   // identity. Until either is known the caller's neutral placeholder stands
@@ -153,6 +159,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         (props.selectedThread.session?.providerInstanceId ??
           props.selectedThread.modelSelection.instanceId),
     )?.driver ?? null;
+
   const composerIdentity = resolveThreadIdentity({
     thread: props.selectedThread,
     bots,
@@ -160,11 +167,13 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     providerDriver: composerProviderDriver,
     providerName: providerBotName,
   });
+
   // Plain chats without a bot or group get no name prompt — the composer
   // placeholder stays neutral rather than echoing the chat title.
   const composerBotName = composerIdentity.isGroup
     ? composerIdentity.title
     : (bot?.name ?? providerBotName(composerProviderDriver));
+
   const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
   const deleteBot = useAtomCommand(botEnvironment.delete, { reportFailure: false });
   const wasExpandedBeforePreviewRef = useRef(false);
@@ -176,6 +185,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   // Opening and presentation count as active so the composer stays expanded
   // while focus moves between its native editor and the settings picker.
   const isExpanded = isFocused || settingsSheetPresentation.isActive;
+
   // The chat keeps its saved model even when it cannot run; Send stays off
   // and the reason shows above the composer until the provider is repaired.
   const sendBlock = useMemo(
@@ -188,7 +198,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       ),
     [props.serverConfig, props.selectedThread.modelSelection, subscriptionStatuses, t],
   );
+
   const canSend = hasContent && sendBlock === null;
+
   const sendBlockHint = sendBlock
     ? t("{title}. {description}", { title: sendBlock.title, description: sendBlock.description })
     : undefined;
@@ -210,12 +222,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
 
   const closePreview = useCallback(() => {
     setPreviewImageUri(null);
+
     if (wasExpandedBeforePreviewRef.current) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [inputRef]);
 
   const onEditorFocusChange = props.onEditorFocusChange;
+
   const handleFocus = useCallback(() => {
     setIsFocused(true);
     onEditorFocusChange?.(true);
@@ -225,27 +239,33 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     setIsFocused(false);
     onEditorFocusChange?.(false);
   }, [onEditorFocusChange]);
+
   const showStopAction =
     props.selectedThread.session?.status === "running" ||
     props.selectedThread.session?.status === "starting";
 
   const sendLabel =
     props.connectionState !== "connected" || props.queueCount > 0 ? "Queue" : "Send";
+
   const currentModelSelection = props.selectedThread.modelSelection;
   const currentRuntimeMode = props.selectedThread.runtimeMode;
+
   const connectionStatus = composerConnectionStatus({
     connectionError: props.connectionError,
     connectionState: props.connectionState,
     environmentLabel: props.environmentLabel,
     threadSyncPhase: props.threadSyncPhase,
   });
+
   const toolbarSurface = String(useThemeColor("--color-card"));
   const backdropSurface = String(useThemeColor("--color-screen"));
   const toolbarFadeOpaque = themeColorWithAlpha(toolbarSurface, 0.95);
   const toolbarFadeTransparent = themeColorWithAlpha(toolbarSurface, 0);
   const backdropGradient = `linear-gradient(to bottom, ${themeColorWithAlpha(backdropSurface, 0)} 0%, ${themeColorWithAlpha(backdropSurface, 0.6)} 55%, ${themeColorWithAlpha(backdropSurface, 0.9)} 100%)`;
+
   const selectedProviderStatus = useMemo(() => {
     if (!props.serverConfig) return null;
+
     return (
       props.serverConfig.providers.find(
         (p) => p.instanceId === props.selectedThread.modelSelection.instanceId,
@@ -260,6 +280,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   }));
 
   const [dictationGeneration, setDictationGeneration] = useState(0);
+
   const dictation = useEnvironmentComposerDictation({
     environmentId: props.environmentId,
     connected: props.connectionState === "connected",
@@ -273,13 +294,16 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       inputRef.current?.setSelection(next.selection);
     },
   });
+
   const showDictation = composerActionIsDictation({
     hasDraft: props.draftMessage.trim().length > 0 || props.draftAttachments.length > 0,
     status: dictation.status,
   });
+
   useEffect(() => {
     setDictationGeneration((generation) => generation + 1);
   }, [props.environmentId, props.selectedThread.id]);
+
   // The composer owns dictation, so focusing it and swapping the collapsed
   // control for the expanded one keeps recording. Only the collapsed Stop
   // action takes the slot away; dictation it hides is cancelled.
@@ -287,6 +311,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     dictation.status === "requesting" ||
     dictation.status === "recording" ||
     dictation.status === "transcribing";
+
   const dictationHidden = !isExpanded && showStopAction;
   const cancelDictation = dictation.onCancel;
   useEffect(() => {
@@ -296,14 +321,17 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const handleSelectionChange = useCallback((selection: ComposerEditorSelection) => {
     setComposerSelection(selection);
   }, []);
+
   useEffect(() => {
     const end = props.draftMessage.length;
     setComposerSelection((selection) => {
       const start = Math.min(selection.start, end);
       const selectionEnd = Math.min(selection.end, end);
+
       if (start === selection.start && selectionEnd === selection.end) {
         return selection;
       }
+
       return { start, end: selectionEnd };
     });
   }, [props.draftMessage.length]);
@@ -312,9 +340,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     if (composerSelection.start !== composerSelection.end) {
       return null;
     }
+
     return detectComposerTrigger(props.draftMessage, composerSelection.end);
   }, [composerSelection, props.draftMessage]);
+
   const mentionQuery = composerTrigger?.kind === "path" ? composerTrigger.query : null;
+
   const pathSearch = useComposerPathSearch({
     environmentId: props.environmentId,
     cwd: mentionQuery !== null && !isThreadMentionQuery(mentionQuery) ? props.projectCwd : null,
@@ -331,23 +362,29 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
 
   const handleSend = useCallback(async () => {
     const threadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
+
     if (inFlightThreadIdsRef.current.has(threadKey)) return;
     inFlightThreadIdsRef.current.add(threadKey);
+
     try {
       const messageId = await onSendMessage();
+
       if (messageId === null) {
         return;
       }
+
       setDictationGeneration((generation) => generation + 1);
     } finally {
       inFlightThreadIdsRef.current.delete(threadKey);
     }
   }, [onSendMessage, props.environmentId, props.selectedThread.id]);
+
   const handleCommandSelect = useCallback(
     (item: ComposerCommandItem) => {
       if (!composerTrigger) return;
 
       let replacement = "";
+
       if (item.type === "path") {
         replacement = `${serializeComposerFileLink(item.path)} `;
       } else if (item.type === "skill") {
@@ -358,6 +395,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         replacement = `/${item.command.name} `;
       } else {
         const token = composerMentionItemToken(item);
+
         if (token !== null) replacement = `${token} `;
       }
 
@@ -367,6 +405,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         composerTrigger.rangeEnd,
         replacement,
       );
+
       setComposerSelection({ start: result.cursor, end: result.cursor });
       onChangeDraftMessage(result.text);
     },
@@ -378,19 +417,23 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     () => buildModelOptions(props.serverConfig, currentModelSelection, subscriptionStatuses, t),
     [props.serverConfig, currentModelSelection, subscriptionStatuses, t],
   );
+
   const providerGroups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
+
   // An existing thread is bound to its harness: sessions can't move between
   // provider instances, so the picker only offers the thread's own group.
   const threadProviderGroups = useMemo(
     () => providerGroups.filter((group) => group.providerKey === currentModelSelection.instanceId),
     [providerGroups, currentModelSelection.instanceId],
   );
+
   const currentModelOption =
     modelOptions.find(
       (option) =>
         option.selection.instanceId === currentModelSelection.instanceId &&
         option.selection.model === currentModelSelection.model,
     ) ?? null;
+
   const providerOptionDescriptors = useMemo(
     () =>
       resolveProviderOptionDescriptors({
@@ -399,26 +442,34 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       }),
     [currentModelOption?.capabilities, currentModelSelection.options],
   );
+
   const updateBotUsageCap = useCallback(
     async (input: string) => {
       if (!bot) return false;
       const patch = buildBotUsageCapPatch(bot.id, input, currentModelOption?.providerDriver);
+
       if (!patch) return false;
       const result = await updateBot({ environmentId: props.environmentId, input: patch });
+
       return result._tag === "Success";
     },
     [bot, currentModelOption?.providerDriver, props.environmentId, updateBot],
   );
+
   const deleteThreadBot = useCallback(async () => {
     if (!bot) return t("The command failed.");
+
     const result = await deleteBot({
       environmentId: props.environmentId,
       input: { botId: bot.id },
     });
+
     if (result._tag !== "Failure") return null;
     const error = squashAtomCommandFailure(result);
+
     return error instanceof Error ? error.message : t("The command failed.");
   }, [bot, deleteBot, props.environmentId, t]);
+
   const settingsRouteSession = useMemo<ExistingThreadSettingsRouteSession>(
     () => ({
       ownerId: settingsOwnerId,
@@ -467,6 +518,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       updateBotUsageCap,
     ],
   );
+
   const openSettings = useCallback(() => {
     settingsRoutePresentation.present(settingsRouteSession);
     settingsSheetPresentation.open();

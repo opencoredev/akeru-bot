@@ -1,11 +1,14 @@
 import type { MarkdownNode } from "react-native-nitro-markdown/headless";
 import type { NativeMarkdownDocumentChunk } from "./nativeMarkdownTextTypes";
+
 export type { NativeMarkdownDocumentChunk, NativeMarkdownTextRun } from "./nativeMarkdownTextTypes";
+
 export {
   decorateSkillRuns,
   nativeMarkdownTextRuns,
   nativeMarkdownWithPreservedSoftBreaks,
 } from "./nativeMarkdownInlineRuns";
+
 export {
   nativeMarkdownDocumentRuns,
   nativeMarkdownListItemBlocks,
@@ -23,6 +26,7 @@ function containsRichBlock(node: MarkdownNode): boolean {
   ) {
     return true;
   }
+
   return (node.children ?? []).some(containsRichBlock);
 }
 
@@ -36,6 +40,7 @@ export function nativeMarkdownDocumentChunks(
     if (selectableNodes.length === 0) {
       return;
     }
+
     const first = selectableNodes[0];
     const last = selectableNodes.at(-1);
     chunks.push({
@@ -62,7 +67,9 @@ export function nativeMarkdownDocumentChunks(
       node: child,
     });
   }
+
   flushSelectable();
+
   return chunks;
 }
 
@@ -84,11 +91,14 @@ export function nativeMarkdownChunkSpacing(
   if (currentFirst?.type === "heading") {
     return 20;
   }
+
   if (previousLast?.type === "heading") {
     return 10;
   }
+
   if (previousLast?.type === "list" && currentFirst?.type === "list") {
     return 12;
   }
+
   return 14;
 }

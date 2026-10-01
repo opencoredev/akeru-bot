@@ -7,6 +7,7 @@ export function ResumeErrorSummary(props: {
   readonly context: ThreadErrorContext;
 }) {
   const { t } = useMobileI18n();
+
   if (!props.error && !props.context.unavailability) {
     return (
       <Text className="min-w-0 flex-1 text-sm text-foreground">
@@ -14,7 +15,9 @@ export function ResumeErrorSummary(props: {
       </Text>
     );
   }
+
   const presentation = presentThreadError(props.error ?? "", props.context, t);
+
   return (
     <View className="min-w-0 flex-1 gap-0.5">
       <Text className="text-sm font-semibold text-foreground">{presentation.title}</Text>

@@ -61,9 +61,11 @@ export function ComposerEditor({
     onChangeText,
     onSelectionChange,
   });
+
   const bodyText = useScaledTextRole("body");
   const fontFamily = useFontFamily("regular");
   const resolvedTextStyle = StyleSheet.flatten(textStyle) ?? {};
+
   return (
     <NativeView
       ref={editorDocument.nativeRef}

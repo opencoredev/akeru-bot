@@ -361,11 +361,13 @@ describe("nativeMarkdownDocumentChunks", () => {
         ],
       } satisfies MarkdownNode,
     };
+
     const firstList = {
       kind: "rich" as const,
       key: "list-1",
       node: { type: "list", children: [] } satisfies MarkdownNode,
     };
+
     const secondList = {
       kind: "rich" as const,
       key: "list-2",

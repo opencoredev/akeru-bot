@@ -22,6 +22,7 @@ import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 
 const THREAD_OUTBOX_SCHEMA_VERSION = 3;
+
 const THREAD_OUTBOX_MAX_RETRY_DELAY_MS = 16_000;
 
 const QueuedThreadCreationSchema = Schema.Struct({
@@ -54,6 +55,7 @@ export const QueuedThreadMessageSchema = Schema.Struct({
 });
 
 const decodeStoredQueuedThreadMessage = Schema.decodeUnknownSync(QueuedThreadMessageSchema);
+
 const encodeStoredQueuedThreadMessage = Schema.encodeUnknownSync(QueuedThreadMessageSchema);
 
 export interface QueuedThreadCreation {
@@ -114,6 +116,7 @@ export function encodeQueuedThreadMessage(message: QueuedThreadMessage): unknown
 
 export function decodeQueuedThreadMessage(value: unknown): QueuedThreadMessage {
   const { schemaVersion: _, ...message } = decodeStoredQueuedThreadMessage(value);
+
   return message;
 }
 
@@ -121,18 +124,22 @@ export function groupQueuedThreadMessages(
   messages: ReadonlyArray<QueuedThreadMessage>,
 ): Record<string, ReadonlyArray<QueuedThreadMessage>> {
   const deduplicated = new Map<MessageId, QueuedThreadMessage>();
+
   for (const message of messages) {
     deduplicated.set(message.messageId, message);
   }
 
   const grouped: Record<string, Array<QueuedThreadMessage>> = {};
+
   for (const message of deduplicated.values()) {
     const threadKey = scopedThreadKey(message.environmentId, message.threadId);
     (grouped[threadKey] ??= []).push(message);
   }
+
   for (const queue of Object.values(grouped)) {
     queue.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
+
   return grouped;
 }
 
@@ -161,14 +168,17 @@ export function resolveThreadOutboxDeliveryAction(input: {
     if (input.threadExists) {
       return "remove";
     }
+
     // Wait for the shell to be live before sending: until the thread list has
     // synchronized, a previously delivered creation whose cleanup failed would
     // look missing and get re-issued, duplicating the thread.
     return input.environmentConnected && input.shellStatus === "live" ? "send" : "wait";
   }
+
   if (!input.threadExists) {
     return input.shellStatus === "live" ? "remove" : "wait";
   }
+
   return input.environmentConnected ? "send" : "wait";
 }
 
@@ -180,9 +190,11 @@ export function isQueuedThreadCreationSendable(message: QueuedThreadMessage): bo
   if (!message.creation) {
     return false;
   }
+
   if (message.text.trim().length === 0 || message.modelSelection === undefined) {
     return false;
   }
+
   return message.creation.workspaceMode !== "worktree" || Boolean(message.creation.branch);
 }
 
@@ -190,9 +202,11 @@ function errorMessage(error: unknown): string | null {
   if (error instanceof Error) {
     return error.message;
   }
+
   if (typeof error === "object" && error !== null && "message" in error) {
     return typeof error.message === "string" ? error.message : null;
   }
+
   return typeof error === "string" ? error : null;
 }
 
@@ -221,6 +235,7 @@ export function shouldRetryThreadOutboxDelivery(error: unknown): boolean {
         break;
     }
   }
+
   return isTransportConnectionErrorMessage(errorMessage(error));
 }
 
@@ -231,6 +246,7 @@ export function threadOutboxHydrationRetryDelayMs(attempt: number): number | nul
 }
 
 export type ThreadOutboxCommandStage = "settings-sync" | "start-turn";
+
 export type ThreadOutboxFailureAction = "retry" | "discard";
 
 export function resolveThreadOutboxFailureAction(input: {
@@ -245,5 +261,6 @@ export function resolveThreadOutboxFailureAction(input: {
   ) {
     return "retry";
   }
+
   return "discard";
 }

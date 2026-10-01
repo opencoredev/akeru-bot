@@ -9,6 +9,7 @@ import { queuedMessage } from "./thread-outbox.test-support";
 describe("thread outbox manager", () => {
   it("serializes mutations even when an earlier mutation is slower", async () => {
     const registry = AtomRegistry.make();
+
     const manager = createThreadOutboxManager({
       registry,
       storage: {
@@ -17,8 +18,10 @@ describe("thread outbox manager", () => {
         remove: async () => undefined,
       },
     });
+
     const order: string[] = [];
     let releaseFirst!: () => void;
+
     const firstBlocked = new Promise<void>((resolve) => {
       releaseFirst = resolve;
     });
@@ -28,6 +31,7 @@ describe("thread outbox manager", () => {
       await firstBlocked;
       order.push("first:end");
     });
+
     const second = manager.serialize(async () => {
       order.push("second");
     });
@@ -42,23 +46,29 @@ describe("thread outbox manager", () => {
 
   it("holds the mutation queue while persisted messages are loading", async () => {
     const registry = AtomRegistry.make();
+
     const message = queuedMessage({
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
     });
+
     const stored = new Map([[message.messageId, message]]);
     let loadCalls = 0;
     let removeCalls = 0;
     let releaseInitialLoad!: () => void;
+
     const initialLoadBlocked = new Promise<void>((resolve) => {
       releaseInitialLoad = resolve;
     });
+
     const storage: ThreadOutboxStorage = {
       load: async () => {
         loadCalls += 1;
+
         if (loadCalls === 1) {
           await initialLoadBlocked;
         }
+
         return { messages: [...stored.values()], unreadRecords: [] };
       },
       write: async () => undefined,
@@ -67,6 +77,7 @@ describe("thread outbox manager", () => {
         stored.delete(candidate.messageId);
       },
     };
+
     const manager = createThreadOutboxManager({ registry, storage });
 
     const loading = manager.load();
@@ -89,12 +100,15 @@ describe("thread outbox manager", () => {
     const loadCause = new Error("storage unavailable");
     const warnings: Array<{ message: string; error: unknown }> = [];
     let loadCalls = 0;
+
     const manager = createThreadOutboxManager({
       registry,
       storage: {
         load: async () => {
           loadCalls += 1;
+
           if (loadCalls === 1) throw loadCause;
+
           return emptyThreadOutboxLoadResult();
         },
         write: async () => undefined,
@@ -127,6 +141,7 @@ describe("thread outbox manager", () => {
     const stored = new Map<MessageId, QueuedThreadMessage>();
     const removalCause = new Error("remove failed");
     let failRemoval = true;
+
     const storage: ThreadOutboxStorage = {
       load: async () => ({ messages: [...stored.values()], unreadRecords: [] }),
       write: async (message) => {
@@ -136,10 +151,13 @@ describe("thread outbox manager", () => {
         if (failRemoval) {
           throw removalCause;
         }
+
         stored.delete(message.messageId);
       },
     };
+
     const manager = createThreadOutboxManager({ registry, storage });
+
     const message = queuedMessage({
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
@@ -172,9 +190,11 @@ describe("thread outbox manager", () => {
   it("publishes an enqueued message before the durable write resolves", async () => {
     const registry = AtomRegistry.make();
     let releaseWrite!: () => void;
+
     const writeBlocked = new Promise<void>((resolve) => {
       releaseWrite = resolve;
     });
+
     const manager = createThreadOutboxManager({
       registry,
       storage: {
@@ -183,6 +203,7 @@ describe("thread outbox manager", () => {
         remove: async () => undefined,
       },
     });
+
     const message = queuedMessage({
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
@@ -204,6 +225,7 @@ describe("thread outbox manager", () => {
   it("rolls an enqueued message back out when the durable write fails", async () => {
     const registry = AtomRegistry.make();
     const writeCause = new Error("disk full");
+
     const manager = createThreadOutboxManager({
       registry,
       storage: {
@@ -214,6 +236,7 @@ describe("thread outbox manager", () => {
         remove: async () => undefined,
       },
     });
+
     const message = queuedMessage({
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
@@ -236,9 +259,11 @@ describe("thread outbox manager", () => {
     const registry = AtomRegistry.make();
     let failNextWrite = true;
     let releaseFirstWrite!: () => void;
+
     const firstWriteBlocked = new Promise<void>((resolve) => {
       releaseFirstWrite = resolve;
     });
+
     const manager = createThreadOutboxManager({
       registry,
       storage: {
@@ -253,10 +278,12 @@ describe("thread outbox manager", () => {
         remove: async () => undefined,
       },
     });
+
     const message = queuedMessage({
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
     });
+
     const retried = { ...message, text: "retried" };
 
     const first = manager.enqueue(message);
@@ -276,6 +303,7 @@ describe("thread outbox manager", () => {
 
   it("replaces an existing message when an enqueue retry uses the same id", async () => {
     const registry = AtomRegistry.make();
+
     const manager = createThreadOutboxManager({
       registry,
       storage: {
@@ -284,10 +312,12 @@ describe("thread outbox manager", () => {
         remove: async () => undefined,
       },
     });
+
     const message = queuedMessage({
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
     });
+
     const retried = { ...message, text: "retried" };
 
     await manager.enqueue(message);
@@ -302,6 +332,7 @@ describe("thread outbox manager", () => {
   it("updates a queued message in place but never resurrects a removed one", async () => {
     const registry = AtomRegistry.make();
     const stored = new Map<MessageId, QueuedThreadMessage>();
+
     const storage: ThreadOutboxStorage = {
       load: async () => ({ messages: [...stored.values()], unreadRecords: [] }),
       write: async (message) => {
@@ -311,7 +342,9 @@ describe("thread outbox manager", () => {
         stored.delete(message.messageId);
       },
     };
+
     const manager = createThreadOutboxManager({ registry, storage });
+
     const message = queuedMessage({
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",

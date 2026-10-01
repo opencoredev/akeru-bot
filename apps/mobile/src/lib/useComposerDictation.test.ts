@@ -7,12 +7,16 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const hooks = vi.hoisted(() => ({ slots: [] as unknown[], cursor: 0 }));
+
 vi.mock("react", async (importOriginal) => {
   const slot = <T>(create: () => T): { value: T } => {
     const index = hooks.cursor++;
+
     if (!(index in hooks.slots)) hooks.slots[index] = { value: create() };
+
     return hooks.slots[index] as { value: T };
   };
+
   return {
     ...(await importOriginal<typeof import("react")>()),
     useRef: <T>(current: T) => slot(() => ({ current })).value,
@@ -21,10 +25,12 @@ vi.mock("react", async (importOriginal) => {
     useEffect: (effect: () => void | (() => void)) => void effect(),
     useState: <T>(initial: () => T) => {
       const state = slot(initial);
+
       return [state.value, (next: T) => (state.value = next)];
     },
   };
 });
+
 vi.mock("./expoDictationCapture", () => ({ startExpoDictationCapture: vi.fn() }));
 
 import { useComposerDictation } from "./useComposerDictation";
@@ -48,10 +54,12 @@ describe("useComposerDictation", () => {
       text: "Please check ",
       selection: { start: 13, end: 13 },
     };
+
     const transcribe = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(new Error("Provider unavailable"))
       .mockResolvedValueOnce("the logs");
+
     const binding = {
       identity,
       connected: true,
@@ -74,8 +82,10 @@ describe("useComposerDictation", () => {
           }),
         }),
     };
+
     const render = () => {
       hooks.cursor = 0;
+
       return useComposerDictation(binding);
     };
 

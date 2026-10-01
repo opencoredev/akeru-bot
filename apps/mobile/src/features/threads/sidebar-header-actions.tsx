@@ -30,6 +30,7 @@ function FallbackHeaderButton(props: {
 
 export function SidebarHeaderActions(props: SidebarHeaderActionsProps) {
   const { t } = useMobileI18n();
+
   return (
     <View className="flex-row items-center gap-0.5">
       <FallbackHeaderButton

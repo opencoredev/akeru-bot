@@ -158,6 +158,7 @@ describe("routeAgentNotificationResponseOnce", () => {
   it("does not navigate twice when the initial and listener responses refer to one notification", () => {
     const handledResponseIds = new Set<string>();
     const navigations: Array<string> = [];
+
     const response = responseWithData({
       environmentId: "env",
       threadId: "thread",

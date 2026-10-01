@@ -1,4 +1,5 @@
 export { ComposerEditor } from "./T3ComposerEditor.native";
+
 export type {
   ComposerEditorHandle,
   ComposerEditorProps,

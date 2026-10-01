@@ -12,6 +12,7 @@ describe("mobile background activity", () => {
   it.effect("retains diagnostics demand only while the mobile subscription is active", () =>
     Effect.gen(function* () {
       const environmentId = EnvironmentId.make("mobile-environment");
+
       const release = yield* observeMobileBackgroundActivitySubscription({
         environmentId,
         method: WS_METHODS.subscribeResourceTelemetry,
@@ -29,6 +30,7 @@ describe("mobile background activity", () => {
     Effect.gen(function* () {
       const firstEnvironmentId = EnvironmentId.make("a");
       const secondEnvironmentId = EnvironmentId.make("a:diagnostics");
+
       const releaseFirst = yield* observeMobileBackgroundActivitySubscription({
         environmentId: firstEnvironmentId,
         method: WS_METHODS.subscribeResourceTelemetry,
@@ -45,6 +47,7 @@ describe("mobile background activity", () => {
   it.effect("returns a release handle when a retained-scope listener throws", () =>
     Effect.gen(function* () {
       const environmentId = EnvironmentId.make("throwing-listener-environment");
+
       const removeListener = onRetainedMobileBackgroundScopesChange(() => {
         throw new Error("listener failed");
       });
@@ -54,6 +57,7 @@ describe("mobile background activity", () => {
         method: WS_METHODS.subscribeResourceTelemetry,
         input: {},
       });
+
       expect(retainedMobileBackgroundScopes(environmentId)).toEqual([{ type: "diagnostics" }]);
 
       yield* release;

@@ -33,6 +33,7 @@ describe("thread outbox", () => {
       messageId: "message-2",
       createdAt: "2026-06-08T10:00:02.000Z",
     });
+
     const earlier = queuedMessage({
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
@@ -68,6 +69,7 @@ describe("thread outbox", () => {
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
     });
+
     const selectedMessage = {
       ...legacyMessage,
       modelSelection: {
@@ -214,6 +216,7 @@ describe("thread outbox", () => {
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
     });
+
     const creationMessage = {
       ...base,
       modelSelection: {
@@ -290,6 +293,7 @@ describe("thread outbox", () => {
       new Socket.SocketCloseError({ code: 1006 }),
       new Socket.SocketOpenError({ kind: "Timeout", cause: new Error("timeout") }),
     ];
+
     for (const reason of socketReasons) {
       const error = new RpcClientError.RpcClientError({ reason });
       expect(isTransportConnectionErrorMessage(error.message)).toBe(
@@ -297,6 +301,7 @@ describe("thread outbox", () => {
       );
       expect(shouldRetryThreadOutboxDelivery(error)).toBe(true);
     }
+
     expect(
       shouldRetryThreadOutboxDelivery(
         new RpcClientError.RpcClientError({

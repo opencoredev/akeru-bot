@@ -98,23 +98,31 @@ export function useComposerNativeDocument(input: {
     () => new Map(skills.map((skill) => [skill.name, skill.displayName?.trim() || skill.name])),
     [skills],
   );
+
   const tokens = useMemo(() => {
     const next = collectComposerInlineTokens(value, {
       preserveTrailingFrom: confirmedTokensRef.current,
     });
+
     confirmedTokensRef.current = next;
+
     return next;
   }, [value]);
+
   const mentionedThreadIds = useMemo(
     () => tokens.flatMap((token) => (token.type === "thread-mention" ? [token.value] : [])),
     [tokens],
   );
+
   const threadTitles = useThreadTitles(mentionedThreadIds);
+
   const mentionedBotIds = useMemo(
     () => tokens.flatMap((token) => (token.type === "bot-mention" ? [token.value] : [])),
     [tokens],
   );
+
   const botNames = useBotNames(mentionedBotIds);
+
   const tokensJson = useMemo(
     () =>
       JSON.stringify(
@@ -129,6 +137,7 @@ export function useComposerNativeDocument(input: {
       ),
     [botNames, skillLabels, threadTitles, tokens],
   );
+
   // Every render resolves against the snapshot history, so a render whose
   // (value, selection) lags the acknowledged native state is stamped behind
   // the native revision and rejected by the editor instead of re-applying a
@@ -139,14 +148,17 @@ export function useComposerNativeDocument(input: {
     mostRecentEventCount,
     nativeEventSnapshotsRef.current,
   );
+
   const acknowledgesLatestNativeEvent = isComposerNativeEcho(
     value,
     selection ?? null,
     mostRecentEventCount,
     nativeEventSnapshotsRef.current,
   );
+
   const isNativeEcho =
     controlledEventCount === mostRecentEventCount && acknowledgesLatestNativeEvent;
+
   const controlledDocumentJson = JSON.stringify({
     value,
     selection: isNativeEcho ? null : (selection ?? null),
@@ -154,6 +166,7 @@ export function useComposerNativeDocument(input: {
     mostRecentEventCount: controlledEventCount,
     isNativeEcho,
   });
+
   useEffect(() => {
     if (!acknowledgesLatestNativeEvent) return;
     nativeEventSnapshotsRef.current = pruneAcknowledgedComposerNativeEvents(
@@ -172,25 +185,30 @@ export function useComposerNativeDocument(input: {
       value,
     );
   }, [value, controlledEventCount, isNativeEcho, controlledDocumentJson]);
+
   const acceptNativeEvent = useCallback(
     (eventCount: number, nextValue: string, nextSelection: ComposerEditorSelection) => {
       const acknowledgedEventCount = acknowledgeComposerNativeEvent(
         mostRecentEventCountRef.current,
         eventCount,
       );
+
       if (acknowledgedEventCount === null) {
         return false;
       }
+
       mostRecentEventCountRef.current = acknowledgedEventCount;
       nativeEventSnapshotsRef.current.push({
         eventCount: acknowledgedEventCount,
         value: nextValue,
         selection: nextSelection,
       });
+
       return acknowledgedEventCount;
     },
     [],
   );
+
   const themeJson = JSON.stringify({
     text: String(textColor),
     placeholder: String(placeholderColor),
@@ -213,6 +231,7 @@ export function useComposerNativeDocument(input: {
         event.nativeEvent.value,
         event.nativeEvent.selection,
       );
+
       if (acknowledgedEventCount === false) return;
       onChangeText(event.nativeEvent.value);
       onSelectionChange?.(event.nativeEvent.selection);
@@ -225,7 +244,9 @@ export function useComposerNativeDocument(input: {
         event.nativeEvent.value,
         event.nativeEvent.selection,
       );
+
       if (acknowledgedEventCount === false) return;
+
       // A selection change can race a text mutation (Android emits it
       // mid-mutation, before the change event), so the payload can carry
       // post-edit text. It must reach the parent alongside the acknowledged
@@ -234,6 +255,7 @@ export function useComposerNativeDocument(input: {
       if (event.nativeEvent.value !== value) {
         onChangeText(event.nativeEvent.value);
       }
+
       onSelectionChange?.(event.nativeEvent.selection);
       setMostRecentEventCount(acknowledgedEventCount);
       forceNativeEventRender((sequence) => sequence + 1);

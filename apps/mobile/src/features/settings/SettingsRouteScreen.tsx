@@ -52,6 +52,7 @@ export function SettingsRouteScreen({ route }: StaticScreenProps<SettingsRoutePa
   const { t } = useMobileI18n();
   const navigation = useNavigation();
   const rawEnvironmentId = route.params?.environmentId;
+
   const environmentId =
     typeof rawEnvironmentId === "string"
       ? EnvironmentId.make(rawEnvironmentId)
@@ -102,6 +103,7 @@ function LocalSettingsRouteScreen({
   const { savedConnectionsById } = useSavedRemoteConnections();
   const connections = Object.values(savedConnectionsById);
   const environmentCount = connections.length;
+
   const settingsEnvironmentId = resolveSettingsEnvironmentId(
     environmentId,
     connections.map((connection) => connection.environmentId),
@@ -162,6 +164,7 @@ function ProviderSettingsSection({
 }) {
   const { t } = useMobileI18n();
   const navigation = useNavigation();
+
   return (
     <SettingsSection title={t("Providers")}>
       {environmentId === null ? (
@@ -209,7 +212,9 @@ function ErrorsSettingsSection({
 }) {
   const { t } = useMobileI18n();
   const navigation = useNavigation();
+
   if (environmentId === null) return null;
+
   return (
     <SettingsSection title={t("Health")}>
       <SettingsRow
@@ -231,7 +236,9 @@ function ErrorsSettingsSection({
 
 function AutomaticReadoutSettingsRow() {
   const session = useOptionalReplyPlayback();
+
   if (!session) return null;
+
   return (
     <View className="px-4 py-3">
       <ReplyReadoutPreference preference={session.preference} />
@@ -245,6 +252,7 @@ function PrivacySettingsSection({
   readonly environmentId: EnvironmentId | null;
 }) {
   if (environmentId === null) return null;
+
   return <EnvironmentPrivacySettingsSection environmentId={environmentId} />;
 }
 
@@ -256,6 +264,7 @@ function EnvironmentPrivacySettingsSection({
   const { t } = useMobileI18n();
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
+
   if (!settings) return null;
 
   const updateControl = (control: PrivacyControl, enabled: boolean) => {
@@ -299,6 +308,7 @@ function MemorySettingsSection({
   readonly environmentId: EnvironmentId | null;
 }) {
   if (environmentId === null) return null;
+
   return <EnvironmentMemorySettingsSection environmentId={environmentId} />;
 }
 
@@ -310,12 +320,15 @@ function EnvironmentMemorySettingsSection({
   const { t } = useMobileI18n();
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
+
   if (!settings) return null;
 
   const updateMemory = (memory: MemorySettingsPatch) => {
     void updateSettings({ environmentId, input: { patch: { memory } } });
   };
+
   const memory = settings.memory;
+
   const memoryHint = (description: MessageKey) =>
     memory.enabled ? t(description) : `${t(description)} ${t(MEMORY_SETTING_DISABLED_HINT)}`;
 
@@ -352,6 +365,7 @@ function EnvironmentMemorySettingsSection({
 
 function GeneralSettingsSection() {
   const { t } = useMobileI18n();
+
   return (
     <SettingsSection title={t("General")}>
       <SettingsRow icon="folder" label={t("Project Grouping")} target="SettingsProjectGrouping" />
@@ -374,6 +388,7 @@ function AppSettingsSection() {
   const variantLabel = variant === "production" ? "" : capitalize(variant);
   const versionLabel = variantLabel ? `${version} · ${variantLabel}` : version;
   const updateCheckAvailable = isAppUpdateCheckAvailable();
+
   const busy =
     updateState === "checking" || updateState === "downloading" || updateState === "restarting";
 
@@ -382,6 +397,7 @@ function AppSettingsSection() {
   useEffect(() => {
     if (updateState !== "current") return;
     const timer = setTimeout(() => setUpdateState("idle"), 3000);
+
     return () => clearTimeout(timer);
   }, [updateState]);
 
@@ -390,6 +406,7 @@ function AppSettingsSection() {
     // same frame would both get through. The ref closes that window.
     if (updateInFlight.current) return;
     updateInFlight.current = true;
+
     try {
       // The user asked for this restart by tapping the version row, so it may
       // apply immediately instead of prompting.
@@ -407,6 +424,7 @@ function AppSettingsSection() {
     if (!updateCheckAvailable || updateInFlight.current) return;
     const tap = registerHiddenUpdateTap(hiddenUpdateTapCount.current);
     hiddenUpdateTapCount.current = tap.nextCount;
+
     if (tap.shouldCheck) {
       void checkForUpdate();
     }
@@ -476,6 +494,7 @@ function capitalize(value: string): string {
 
 function ArchivedThreadsSettingsSection() {
   const { t } = useMobileI18n();
+
   return (
     <SettingsSection title={t("Chats")}>
       <SettingsRow icon="archivebox" label={t("Archived chats")} target="SettingsArchive" />

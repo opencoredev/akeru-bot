@@ -59,9 +59,11 @@ describe("buildThreadFeed", () => {
     });
 
     const feed = buildThreadFeed(thread);
+
     const byId = new Map(
       feed.flatMap((entry) => (entry.type === "message" ? [[entry.id, entry]] : [])),
     );
+
     expect(byId.get("assistant-plain")).not.toHaveProperty("channelProvider");
     expect(byId.get("assistant-telegram")).toEqual(
       expect.objectContaining({ channelProvider: "telegram" }),
@@ -71,6 +73,7 @@ describe("buildThreadFeed", () => {
 
   it("attaches bot step usage to its assistant message without a duplicate work row", () => {
     const turnId = TurnId.make("turn-bot");
+
     const thread = makeThread({
       id: ThreadId.make("thread-bot"),
       projectId: ProjectId.make("project-1"),
@@ -114,15 +117,18 @@ describe("buildThreadFeed", () => {
 
   it("keeps the selected feed stable across metadata and unrelated feedback updates", () => {
     const buildFeed = createThreadFeedBuilder();
+
     const thread = makeThread({
       id: ThreadId.make("thread-feed-memo"),
       projectId: ProjectId.make("project-1"),
       title: "Before",
     });
+
     const submissions = {
       selected: [],
       other: [],
     };
+
     const first = buildFeed(thread, { localMessages: submissions.selected });
     const updated = { ...submissions, other: [{ text: "Other chat feedback" }] };
     const renamed = { ...thread, title: "After" };
@@ -139,12 +145,14 @@ describe("buildThreadFeed", () => {
 
   it("reuses activity-derived step meters across message deltas and invalidates new activity", () => {
     const turnId = TurnId.make("turn-meter-cache");
+
     const payload = {
       botId: BotId.make("bot-meter-cache"),
       engine: { provider: "codex", model: "gpt-5.4" },
       tokens: 10,
       estimatedCost: { status: "available", usd: 0.01 },
     };
+
     const activity = makeActivity({
       id: EventId.make("meter-cache"),
       kind: "bot.step-usage.updated",
@@ -153,12 +161,15 @@ describe("buildThreadFeed", () => {
       turnId,
       payload,
     });
+
     const activities = [activity];
+
     const base = {
       id: ThreadId.make("thread-meter-cache"),
       projectId: ProjectId.make("project-1"),
       title: "Meter cache",
     };
+
     const message = {
       id: MessageId.make("meter-cache-reply"),
       role: "assistant" as const,
@@ -168,6 +179,7 @@ describe("buildThreadFeed", () => {
       createdAt: "2026-08-31T00:00:02.000Z",
       updatedAt: "2026-08-31T00:00:02.000Z",
     };
+
     const first = buildThreadFeed(makeThread({ ...base, activities, messages: [message] }));
     const delta = { ...message, text: "Working on it" };
     const second = buildThreadFeed(makeThread({ ...base, activities, messages: [delta] }));
@@ -177,9 +189,11 @@ describe("buildThreadFeed", () => {
     expect(secondReply?.botStepMeter).toBe(firstReply?.botStepMeter);
 
     const updated = { ...activity, payload: { ...payload, tokens: 20 } };
+
     const third = buildThreadFeed(
       makeThread({ ...base, activities: [updated], messages: [delta] }),
     );
+
     expect(third.find((entry) => entry.type === "message")?.botStepMeter).not.toBe(
       secondReply?.botStepMeter,
     );
@@ -187,6 +201,7 @@ describe("buildThreadFeed", () => {
 
   it("keeps unchanged rows referentially stable while a turn streams", () => {
     const turnId = TurnId.make("turn-stream");
+
     const user = {
       id: MessageId.make("user-stream"),
       role: "user" as const,
@@ -196,6 +211,7 @@ describe("buildThreadFeed", () => {
       createdAt: "2026-08-31T00:00:00.000Z",
       updatedAt: "2026-08-31T00:00:00.000Z",
     };
+
     const toolUpdated = makeActivity({
       id: EventId.make("stream-tool-updated"),
       kind: "tool.updated",
@@ -205,6 +221,7 @@ describe("buildThreadFeed", () => {
       turnId,
       payload: { title: "Run tests", itemType: "command_execution", detail: "bun run test" },
     });
+
     const assistant = {
       id: MessageId.make("assistant-stream"),
       role: "assistant" as const,
@@ -214,15 +231,19 @@ describe("buildThreadFeed", () => {
       createdAt: "2026-08-31T00:00:02.000Z",
       updatedAt: "2026-08-31T00:00:02.000Z",
     };
+
     const base = {
       id: ThreadId.make("thread-stream"),
       projectId: ProjectId.make("project-1"),
       title: "Streaming",
     };
+
     const first = buildThreadFeed(
       makeThread({ ...base, messages: [user, assistant], activities: [toolUpdated] }),
     );
+
     const grown = { ...assistant, text: "Working", updatedAt: "2026-08-31T00:00:03.000Z" };
+
     const second = buildThreadFeed(
       makeThread({ ...base, messages: [user, grown], activities: [toolUpdated] }),
     );
@@ -232,6 +253,7 @@ describe("buildThreadFeed", () => {
     const firstGroup = first[1];
     const secondGroup = second[1];
     expect(firstGroup?.type).toBe("activity-group");
+
     if (firstGroup?.type !== "activity-group" || secondGroup?.type !== "activity-group") return;
     expect(secondGroup.activities[0]).toBe(firstGroup.activities[0]);
     expect(second[2]).not.toBe(first[2]);
@@ -253,10 +275,13 @@ describe("buildThreadFeed", () => {
       summary: "Run tests completed",
       createdAt: "2026-08-31T00:00:01.500Z",
     });
+
     const third = buildThreadFeed(
       makeThread({ ...base, messages: [user, grown], activities: [toolUpdated, toolCompleted] }),
     );
+
     const thirdGroup = third[1];
+
     if (thirdGroup?.type !== "activity-group") throw new Error("expected activity group");
     expect(thirdGroup.activities).toHaveLength(1);
     expect(thirdGroup.activities[0]).not.toBe(firstGroup.activities[0]);
@@ -272,6 +297,7 @@ describe("buildThreadFeed", () => {
       status: "sent" as const,
       feedbackId: "codex-thread-1",
     };
+
     const laterMessage = {
       id: MessageId.make("later-server-message"),
       role: "assistant" as const,
@@ -281,6 +307,7 @@ describe("buildThreadFeed", () => {
       updatedAt: "2026-08-23T00:00:02.000Z",
       streaming: false,
     };
+
     const thread = makeThread({
       id: ThreadId.make("thread-feedback-ordering"),
       projectId: ProjectId.make("project-1"),
@@ -403,6 +430,7 @@ describe("buildThreadFeed", () => {
     expect(group).toMatchObject({
       type: "activity-group",
     });
+
     if (!group || group.type !== "activity-group") {
       return;
     }
@@ -427,6 +455,7 @@ describe("buildThreadFeed", () => {
 
   it("keeps MCP inputs available to expanded mobile work rows", () => {
     const turnId = TurnId.make("turn-mcp");
+
     const thread = makeThread({
       id: ThreadId.make("thread-mcp"),
       projectId: ProjectId.make("project-1"),
@@ -466,6 +495,7 @@ describe("buildThreadFeed", () => {
 
     const group = buildThreadFeed(thread)[0];
     expect(group).toMatchObject({ type: "activity-group" });
+
     if (!group || group.type !== "activity-group") {
       return;
     }
@@ -477,6 +507,7 @@ describe("buildThreadFeed", () => {
 
   it("defers large tool output expansion until a work row is opened or copied", () => {
     let serializedToolOutputs = 0;
+
     const activities = Array.from({ length: 5_000 }, (_, index) =>
       makeActivity({
         id: EventId.make(`large-tool-${index}`),
@@ -492,6 +523,7 @@ describe("buildThreadFeed", () => {
             item: {
               toJSON: () => {
                 serializedToolOutputs += 1;
+
                 return { output: "x".repeat(32_768) };
               },
             },
@@ -499,6 +531,7 @@ describe("buildThreadFeed", () => {
         },
       }),
     );
+
     const thread = makeThread({
       id: ThreadId.make("thread-large-tools"),
       projectId: ProjectId.make("project-1"),
@@ -511,6 +544,7 @@ describe("buildThreadFeed", () => {
 
     const group = feed[0];
     expect(group).toMatchObject({ type: "activity-group" });
+
     if (!group || group.type !== "activity-group") {
       return;
     }

@@ -28,6 +28,7 @@ export { snoozeWakeLabel };
  * unlabeled resting state.
  */
 export type ThreadListV2Status = "approval" | "input" | "working" | "failed" | "ready";
+
 export type ThreadListV2SwipeAction = "archive" | "settle" | "unsettle" | "snooze" | "unsnooze";
 
 export function resolveThreadListV2SnoozeMenuSelection(input: {
@@ -43,14 +44,17 @@ export function resolveThreadListV2SnoozeMenuSelection(input: {
   const currentPreset = resolveSnoozePresets(input.now).find(
     (candidate) => input.event === `snooze:${candidate.id}`,
   );
+
   if (currentPreset) return { _tag: "selected", preset: currentPreset };
 
   const displayedPreset = input.displayedPresets.find(
     (candidate) => input.event === `snooze:${candidate.id}`,
   );
+
   if (displayedPreset && Date.parse(displayedPreset.snoozedUntil) > input.now.getTime()) {
     return { _tag: "selected", preset: displayedPreset };
   }
+
   return { _tag: "expired" };
 }
 
@@ -68,11 +72,13 @@ export function resolveThreadListV2SwipeActions(input: {
   if (input.snoozed === true) {
     return { primary: "unsnooze", secondary: null };
   }
+
   const primary = input.settlementSupported
     ? input.variant === "slim"
       ? "unsettle"
       : "settle"
     : "archive";
+
   return {
     primary,
     secondary: input.snoozeSupported && input.snoozable ? "snooze" : null,
@@ -93,9 +99,12 @@ export function resolveThreadListV2SnoozeGateExpiryMs(
   options: { readonly now: string },
 ): number | null {
   if (thread.hasPendingApprovals || thread.hasPendingUserInput) return null;
+
   if (!hasQueuedTurnStart(thread, options)) return null;
   const messageAtMs = Date.parse(thread.latestUserMessageAt ?? "");
+
   if (Number.isNaN(messageAtMs)) return null;
+
   return messageAtMs + QUEUED_TURN_START_GRACE_MS;
 }
 
@@ -103,6 +112,7 @@ export function resolveThreadListV2SnoozeGateExpiryMs(
 // stays behind an explicit Show more. Shared by the compact Home list and
 // the iPad sidebar so both page identically.
 export const THREAD_LIST_V2_SETTLED_INITIAL_COUNT = 10;
+
 export const THREAD_LIST_V2_SETTLED_PAGE_COUNT = 25;
 
 export function resolveThreadListV2Status(
@@ -111,15 +121,19 @@ export function resolveThreadListV2Status(
   if (thread.hasPendingApprovals) {
     return "approval";
   }
+
   if (thread.hasPendingUserInput) {
     return "input";
   }
+
   if (thread.session?.status === "running" || thread.session?.status === "starting") {
     return "working";
   }
+
   if (thread.session?.status === "error") {
     return "failed";
   }
+
   return "ready";
 }
 
@@ -127,6 +141,7 @@ export function resolveThreadListV2Status(
     poison the whole ordering, so it sinks to the epoch instead. */
 function parseTimestampMs(isoDate: string): number {
   const parsed = Date.parse(isoDate);
+
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
@@ -136,8 +151,10 @@ function firstValidTimestampMs(...candidates: ReadonlyArray<string | null | unde
   for (const candidate of candidates) {
     if (candidate == null) continue;
     const parsed = Date.parse(candidate);
+
     if (!Number.isNaN(parsed)) return parsed;
   }
+
   return 0;
 }
 
@@ -257,6 +274,7 @@ export function buildThreadListV2ListItems(input: {
           : undefined,
     }),
   );
+
   const pendingItems = input.pendingTasks.map(
     (pendingTask, index): ThreadListV2ListItem => ({
       type: "v2-pending",
@@ -265,6 +283,7 @@ export function buildThreadListV2ListItems(input: {
       showPendingDivider: index === 0,
     }),
   );
+
   const snoozedCount = input.snoozedCount ?? 0;
   const snoozedShelfHeaderIndex = input.snoozedShelfHeaderIndex ?? null;
   const settledCount = input.settledCount ?? 0;
@@ -272,6 +291,7 @@ export function buildThreadListV2ListItems(input: {
   const activeEnd = snoozedShelfHeaderIndex ?? settledShelfHeaderIndex ?? threadItems.length;
   const snoozedEnd = settledShelfHeaderIndex ?? threadItems.length;
   const result: ThreadListV2ListItem[] = [...threadItems.slice(0, activeEnd), ...pendingItems];
+
   if (snoozedShelfHeaderIndex !== null && snoozedCount > 0) {
     result.push({
       type: "v2-snoozed-shelf",
@@ -281,6 +301,7 @@ export function buildThreadListV2ListItems(input: {
     });
     result.push(...threadItems.slice(snoozedShelfHeaderIndex, snoozedEnd));
   }
+
   if (settledShelfHeaderIndex !== null && settledCount > 0) {
     result.push({
       type: "v2-settled-shelf",
@@ -290,6 +311,7 @@ export function buildThreadListV2ListItems(input: {
     });
     result.push(...threadItems.slice(settledShelfHeaderIndex));
   }
+
   return result;
 }
 
@@ -333,6 +355,7 @@ export function buildThreadListV2Items(input: {
   const now = input.now ?? new Date().toISOString();
   const snoozeNow = input.snoozeNow ?? now;
   const query = input.searchQuery.trim().toLocaleLowerCase();
+
   const projectKeys = input.projectRefs
     ? new Set(input.projectRefs.map((ref) => `${ref.environmentId}:${ref.projectId}`))
     : null;
@@ -342,13 +365,16 @@ export function buildThreadListV2Items(input: {
   const settled: EnvironmentThreadShell[] = [];
   const snoozed: EnvironmentThreadShell[] = [];
   let nextSnoozeWakeAt: string | null = null;
+
   for (const thread of input.threads) {
     // Callers pass live (unarchived) shells; settled threads are among them
     // and partition into the tail via effectiveSettled.
     if (input.environmentId !== null && thread.environmentId !== input.environmentId) continue;
+
     if (projectKeys !== null && !projectKeys.has(`${thread.environmentId}:${thread.projectId}`)) {
       continue;
     }
+
     if (
       query.length > 0 &&
       !thread.title.toLocaleLowerCase().includes(query) &&
@@ -361,11 +387,14 @@ export function buildThreadListV2Items(input: {
     ) {
       continue;
     }
+
     const supportsSettlement = input.settlementEnvironmentIds?.has(thread.environmentId) ?? true;
     const supportsSnooze = input.snoozeEnvironmentIds?.has(thread.environmentId) ?? true;
+
     // Snooze outranks settlement and pinning until the thread wakes.
     if (supportsSnooze && effectiveSnoozed(thread, { now: snoozeNow })) {
       snoozed.push(thread);
+
       if (
         thread.snoozedUntil != null &&
         (nextSnoozeWakeAt === null ||
@@ -373,8 +402,10 @@ export function buildThreadListV2Items(input: {
       ) {
         nextSnoozeWakeAt = thread.snoozedUntil;
       }
+
       continue;
     }
+
     if (supportsSettlement && effectiveSettled(thread, { now })) {
       settled.push(thread);
     } else if (thread.pinnedAt != null) {
@@ -385,29 +416,38 @@ export function buildThreadListV2Items(input: {
   }
 
   const orderedActive = sortThreadsForListV2(active);
+
   const orderedSnoozed = [...snoozed].sort(
     (left, right) =>
       parseTimestampMs(left.snoozedUntil ?? "") - parseTimestampMs(right.snoozedUntil ?? ""),
   );
+
   const selectedThreadKey = input.selectedThreadKey ?? null;
+
   const visibleSnoozed =
     input.snoozedShelfExpanded === true
       ? orderedSnoozed
       : orderedSnoozed.filter(
           (thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey,
         );
+
   const orderedSettled = [...settled].sort(
     (left, right) =>
       firstValidTimestampMs(right.latestUserMessageAt, right.updatedAt) -
       firstValidTimestampMs(left.latestUserMessageAt, left.updatedAt),
   );
+
   const settledLimit = input.settledLimit ?? Number.POSITIVE_INFINITY;
+
   const pagedSettled =
     orderedSettled.length > settledLimit ? orderedSettled.slice(0, settledLimit) : orderedSettled;
+
   const selectedSettled = orderedSettled
     .slice(pagedSettled.length)
     .find((thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey);
+
   if (selectedSettled !== undefined) pagedSettled.push(selectedSettled);
+
   const visibleSettled =
     input.settledShelfExpanded !== false
       ? pagedSettled
@@ -416,6 +456,7 @@ export function buildThreadListV2Items(input: {
         );
 
   const items: ThreadListV2Item[] = [];
+
   for (const thread of sortPinnedThreadsByOrderKey(pinned)) {
     items.push({
       thread,
@@ -425,6 +466,7 @@ export function buildThreadListV2Items(input: {
       isLast: false,
     });
   }
+
   for (const thread of orderedActive) {
     items.push({
       thread,
@@ -434,7 +476,9 @@ export function buildThreadListV2Items(input: {
       isLast: false,
     });
   }
+
   const snoozedShelfHeaderIndex = orderedSnoozed.length > 0 ? items.length : null;
+
   for (const thread of visibleSnoozed) {
     items.push({
       thread,
@@ -444,7 +488,9 @@ export function buildThreadListV2Items(input: {
       isLast: false,
     });
   }
+
   const settledShelfHeaderIndex = orderedSettled.length > 0 ? items.length : null;
+
   for (const thread of visibleSettled) {
     items.push({
       thread,
@@ -454,10 +500,13 @@ export function buildThreadListV2Items(input: {
       isLast: false,
     });
   }
+
   const last = items.at(-1);
+
   if (last) {
     items[items.length - 1] = { ...last, isLast: true };
   }
+
   return {
     items,
     hiddenSettledCount: orderedSettled.length - pagedSettled.length,

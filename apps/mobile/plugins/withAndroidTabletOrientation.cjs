@@ -36,21 +36,26 @@ const ORIENTATION_ON_CREATE_CALL = `
 
 function insertAfter(contents, anchor, insertion, description) {
   const index = contents.indexOf(anchor);
+
   if (index === -1) {
     throw new Error(
       `withAndroidTabletOrientation: could not find ${description} in MainActivity — the Expo template changed; update the plugin anchors.`,
     );
   }
+
   const end = index + anchor.length;
+
   return contents.slice(0, end) + insertion + contents.slice(end);
 }
 
 module.exports = function withAndroidTabletOrientation(config) {
   return withMainActivity(config, (nextConfig) => {
     let contents = nextConfig.modResults.contents;
+
     if (nextConfig.modResults.language !== "kt") {
       throw new Error("withAndroidTabletOrientation: MainActivity must be Kotlin.");
     }
+
     if (contents.includes("SCREEN_ORIENTATION_FULL_USER")) {
       return nextConfig;
     }
@@ -75,6 +80,7 @@ module.exports = function withAndroidTabletOrientation(config) {
     );
 
     nextConfig.modResults.contents = contents;
+
     return nextConfig;
   });
 };

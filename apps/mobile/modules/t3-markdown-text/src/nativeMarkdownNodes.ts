@@ -8,6 +8,7 @@ export function nodeText(node: MarkdownNode): string {
   if (node.content !== undefined) {
     return node.content;
   }
+
   return (node.children ?? []).map(nodeText).join("");
 }
 

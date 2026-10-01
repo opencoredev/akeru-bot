@@ -26,6 +26,7 @@ const PROVIDER_BOT_NAMES: Record<string, string> = {
  */
 export function providerBotName(driver: string | null): string | null {
   if (!driver) return null;
+
   return PROVIDER_BOT_NAMES[driver] ?? driver.charAt(0).toUpperCase() + driver.slice(1);
 }
 

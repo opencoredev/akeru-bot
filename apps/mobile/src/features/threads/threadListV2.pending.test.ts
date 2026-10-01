@@ -51,6 +51,7 @@ describe("buildThreadListV2ListItems", () => {
       searchQuery: "",
       now: NOW,
     });
+
     const items = buildThreadListV2ListItems({
       items: activeOnly.items,
       pendingTasks: [makePendingTask("queued-1")],
@@ -95,6 +96,7 @@ describe("buildThreadListV2ListItems", () => {
       searchQuery: "",
       now: NOW,
     });
+
     const items = buildThreadListV2ListItems({
       items: snoozedLayout.items,
       pendingTasks: [makePendingTask("queued")],

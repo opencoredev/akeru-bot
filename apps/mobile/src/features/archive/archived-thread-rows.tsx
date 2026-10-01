@@ -49,9 +49,11 @@ export function ArchivedThreadRow(props: {
   const iconColor = useThemeColor("--color-icon-subtle");
   const separatorColor = useThemeColor("--color-separator");
   const timestamp = relativeTime(props.thread.archivedAt ?? props.thread.updatedAt);
+
   const subtitle = [props.environmentLabel, props.thread.branch].filter((part): part is string =>
     Boolean(part),
   );
+
   return (
     <ThreadSwipeable
       backgroundColor={cardColor}
@@ -126,6 +128,7 @@ export function ArchivedThreadRow(props: {
 
 export function ArchiveError(props: { readonly message: string; readonly onRetry: () => void }) {
   const { t } = useMobileI18n();
+
   return (
     <View className="rounded-[20px] border border-danger-border bg-danger p-4">
       <Text className="text-base font-t3-bold text-danger-foreground">

@@ -54,24 +54,31 @@ function overallConnectionState(
   if (environments.length === 0) {
     return "available";
   }
+
   if (networkStatus === "offline") {
     return "offline";
   }
+
   if (environments.some((environment) => environment.connectionState === "connected")) {
     return "connected";
   }
+
   if (environments.some((environment) => environment.connectionState === "reconnecting")) {
     return "reconnecting";
   }
+
   if (environments.some((environment) => environment.connectionState === "connecting")) {
     return "connecting";
   }
+
   if (environments.some((environment) => environment.connectionState === "error")) {
     return "error";
   }
+
   if (environments.some((environment) => environment.connectionState === "offline")) {
     return "offline";
   }
+
   return "available";
 }
 

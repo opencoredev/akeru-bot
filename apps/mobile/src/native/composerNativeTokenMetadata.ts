@@ -10,6 +10,7 @@ import { Image } from "react-native";
 
 function basename(path: string): string {
   const separator = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+
   return separator >= 0 ? path.slice(separator + 1) : path;
 }
 

@@ -12,7 +12,9 @@ import {
 } from "./composer-draft-schema";
 
 const COMPOSER_DRAFTS_DIRECTORY = "composer-drafts";
+
 const COMPOSER_DRAFTS_FILE = "drafts.json";
+
 const PERSIST_DEBOUNCE_MS = 200;
 
 export class ComposerDraftPersistenceError extends Schema.TaggedErrorClass<ComposerDraftPersistenceError>()(
@@ -35,9 +37,13 @@ export const composerDraftsAtom = Atom.make<Record<string, ComposerDraft>>({}).p
 );
 
 let loadPromise: Promise<void> | null = null;
+
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
 let persistRetryNeeded = false;
+
 let persistRevision = 0;
+
 const persistenceQueue = new SerializedAsyncQueue();
 
 /** Resets module-level state between test runs. */
@@ -45,6 +51,7 @@ export function resetComposerDraftsLoadState(): void {
   loadPromise = null;
   persistRetryNeeded = false;
   persistRevision = 0;
+
   if (persistTimer !== null) {
     clearTimeout(persistTimer);
     persistTimer = null;
@@ -59,19 +66,24 @@ async function getComposerDraftsFile() {
   const { Directory, File, Paths } = await import("expo-file-system");
   const directory = new Directory(Paths.document, COMPOSER_DRAFTS_DIRECTORY);
   directory.create({ idempotent: true, intermediates: true });
+
   return new File(directory, COMPOSER_DRAFTS_FILE);
 }
 
 async function loadPersistedComposerDrafts(): Promise<Record<string, ComposerDraft>> {
   let operation: ComposerDraftPersistenceError["operation"] = "open";
+
   try {
     const file = await getComposerDraftsFile();
+
     if (!file.exists) {
       return {};
     }
+
     operation = "read";
     const raw = await file.text();
     operation = "decode";
+
     return decodePersistedComposerDrafts(JSON.parse(raw) as unknown);
   } catch (cause) {
     throw new ComposerDraftPersistenceError({
@@ -85,16 +97,20 @@ async function loadPersistedComposerDrafts(): Promise<Record<string, ComposerDra
 
 async function writePersistedComposerDrafts(drafts: Record<string, ComposerDraft>): Promise<void> {
   let operation: ComposerDraftPersistenceError["operation"] = "open";
+
   try {
     const file = await getComposerDraftsFile();
     operation = "encode";
+
     const nonEmptyDrafts = Object.fromEntries(
       Object.entries(drafts).filter(([, draft]) => !isEmptyDraft(draft)),
     );
+
     const document = {
       schemaVersion: COMPOSER_DRAFTS_SCHEMA_VERSION,
       drafts: nonEmptyDrafts,
     } as const;
+
     const encoded = JSON.stringify(document);
     operation = "write";
     await writeFileAtomically(file, encoded);
@@ -117,17 +133,21 @@ export async function flushComposerDrafts(): Promise<void> {
   // Never land a pre-hydration snapshot: persisted state must merge into the
   // atoms first, or this write would clobber disk with partial data.
   ensureComposerDraftsLoaded();
+
   if (loadPromise !== null) {
     await loadPromise;
   }
+
   // An edit during an awaited write schedules another debounced write, so
   // keep landing snapshots until no debounce is pending after a queue drain.
   for (;;) {
     const revisionToFlush = persistRevision;
+
     while (persistTimer !== null || persistRetryNeeded) {
       if (persistTimer !== null) clearTimeout(persistTimer);
       persistTimer = null;
       persistRetryNeeded = false;
+
       try {
         await persistenceQueue.run(() =>
           writePersistedComposerDrafts(appAtomRegistry.get(composerDraftsAtom)),
@@ -137,9 +157,11 @@ export async function flushComposerDrafts(): Promise<void> {
         throw error;
       }
     }
+
     // Draining also waits for an already-fired debounce whose write is still
     // gated behind its own hydration await inside the queue.
     await persistenceQueue.run(() => Promise.resolve());
+
     // An edit can schedule its debounce while the drain sentinel is waiting
     // behind an older write. Its revision changes immediately, before that
     // later write enters the queue, so repeat until that edit is durable too.
@@ -151,9 +173,11 @@ export async function flushComposerDrafts(): Promise<void> {
 
 function schedulePersistComposerDrafts(): void {
   persistRevision += 1;
+
   if (persistTimer !== null) {
     clearTimeout(persistTimer);
   }
+
   persistTimer = setTimeout(() => {
     persistTimer = null;
     // The write enters the serialization queue before waiting on hydration,
@@ -178,16 +202,19 @@ export function ensureComposerDraftsLoaded(): void {
   if (loadPromise !== null) {
     return;
   }
+
   const loading = loadPersistedComposerDrafts().then((persistedDrafts) => {
     if (Object.keys(persistedDrafts).length === 0) {
       return;
     }
+
     const current = appAtomRegistry.get(composerDraftsAtom);
     appAtomRegistry.set(composerDraftsAtom, {
       ...persistedDrafts,
       ...current,
     });
   });
+
   loadPromise = loading;
   // Handle fire-and-forget hook loads without swallowing failures from the
   // write and cleanup callers that await this same promise. A later call retries.
@@ -210,6 +237,7 @@ export function ensureComposerDraftsLoaded(): void {
 /** Wait until persisted drafts have been merged into the in-memory composer state. */
 export async function waitForComposerDraftsLoaded(): Promise<void> {
   ensureComposerDraftsLoaded();
+
   if (loadPromise !== null) {
     await loadPromise;
   }
@@ -220,9 +248,11 @@ export function updateComposerDrafts(
 ): void {
   const current = appAtomRegistry.get(composerDraftsAtom);
   const next = update(current);
+
   if (next === current) {
     return;
   }
+
   appAtomRegistry.set(composerDraftsAtom, next);
   schedulePersistComposerDrafts();
 }

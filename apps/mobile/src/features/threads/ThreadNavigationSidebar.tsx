@@ -72,6 +72,7 @@ export function ThreadNavigationSidebar(props: ThreadNavigationSidebarProps) {
   if (Platform.OS !== "ios") {
     return <ThreadNavigationSidebarPane {...props} nativeChrome={false} />;
   }
+
   return <NativeSidebarContainer {...props} />;
 }
 
@@ -110,6 +111,7 @@ function ThreadNavigationSidebarPane(
   const searchBarRef = useRef<SearchBarCommands>(null);
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
   const sidebarScrollGesture = useMemo(() => Gesture.Native(), []);
+
   const {
     archiveThread,
     confirmDeleteThread,
@@ -122,8 +124,10 @@ function ThreadNavigationSidebarPane(
     movePinnedThread,
     regenerateThreadTitle,
   } = useThreadListActions();
+
   const pendingTasks = usePendingNewTasks();
   const { openPendingTask, confirmDeletePendingTask } = usePendingTaskListActions();
+
   const environments = useMemo(
     () =>
       Object.values(savedConnectionsById)
@@ -134,12 +138,15 @@ function ThreadNavigationSidebarPane(
         .sort((left, right) => left.label.localeCompare(right.label)),
     [savedConnectionsById],
   );
+
   const availableEnvironmentIds = useMemo(
     () => new Set(environments.map((environment) => environment.environmentId)),
     [environments],
   );
+
   const { options, setSelectedEnvironmentId } = useHomeListOptions(availableEnvironmentIds);
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
+
   const {
     threadSearch,
     threadSearchMatchByKey,
@@ -167,6 +174,7 @@ function ThreadNavigationSidebarPane(
     searchQuery: props.searchQuery,
     selectedThreadKey: props.selectedThreadKey ?? null,
   });
+
   const {
     settlement: settlementEnvironmentIds,
     snooze: snoozeEnvironmentIds,
@@ -174,12 +182,14 @@ function ThreadNavigationSidebarPane(
     pinReorder: pinReorderEnvironmentIds,
     titleRegeneration: titleRegenerationEnvironmentIds,
   } = capabilities;
+
   const {
     loaded: shelfPreferencesLoaded,
     settledShelfExpanded,
     toggleSettledShelf,
     toggleSnoozedShelf,
   } = shelves;
+
   const projectFilterOptions = useMemo(
     () =>
       projectScopes.map((scope) => ({
@@ -188,6 +198,7 @@ function ThreadNavigationSidebarPane(
       })),
     [projectScopes],
   );
+
   useEffect(() => {
     if (
       selectedProjectKey !== null &&
@@ -196,6 +207,7 @@ function ThreadNavigationSidebarPane(
       setSelectedProjectKey(null);
     }
   }, [projectFilterOptions, selectedProjectKey]);
+
   const listItems = useMemo<readonly SidebarListItem[]>(
     () =>
       settledShelfExpanded && hiddenSettledCount > 0
@@ -215,21 +227,25 @@ function ThreadNavigationSidebarPane(
   // hardcoded per-variant constants.
   const stickyHeaderHeight = measuredHeaderHeight ?? insets.top + SIDEBAR_STICKY_HEADER_HEIGHT;
   const topListInset = stickyHeaderHeight + 6;
+
   const handleStickyHeaderLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = Math.round(event.nativeEvent.layout.height);
     setMeasuredHeaderHeight((current) => (current === nextHeight ? current : nextHeight));
   }, []);
+
   const handleSwipeableWillOpen = useCallback((methods: SwipeableMethods) => {
     if (openSwipeableRef.current !== methods) {
       openSwipeableRef.current?.close();
       openSwipeableRef.current = methods;
     }
   }, []);
+
   const handleSwipeableClose = useCallback((methods: SwipeableMethods) => {
     if (openSwipeableRef.current === methods) {
       openSwipeableRef.current = null;
     }
   }, []);
+
   const handleSelectThread = useCallback(
     (thread: EnvironmentThreadShell) => {
       props.onSelectThread(thread);
@@ -237,12 +253,15 @@ function ThreadNavigationSidebarPane(
     },
     [props.onSelectThread],
   );
+
   const handleScrollBeginDrag = useCallback(() => {
     openSwipeableRef.current?.close();
   }, []);
+
   const { swipeEnabled, scrollGateHandlers } = useSwipeableScrollGate({
     onScrollBeginDrag: handleScrollBeginDrag,
   });
+
   // Project shells load after the first rows draw, so the maps they feed have
   // to bust the recycler's memoization — otherwise a row keeps the blank
   // favicon and fallback title it was first rendered with.
@@ -268,6 +287,7 @@ function ThreadNavigationSidebarPane(
       threadSearchMatchByKey,
     ],
   );
+
   const sidebarItemsAreEqual = useCallback(
     (previous: SidebarListItem, item: SidebarListItem): boolean => {
       if (previous.type === "v2-thread" && item.type === "v2-thread") {
@@ -280,42 +300,54 @@ function ThreadNavigationSidebarPane(
           previous.snoozeWakeLabelText === item.snoozeWakeLabelText
         );
       }
+
       if (previous.type === "v2-show-more" && item.type === "v2-show-more") {
         return previous.hiddenCount === item.hiddenCount;
       }
+
       if (previous.type === "v2-pending" && item.type === "v2-pending") {
         return (
           previous.pendingTask === item.pendingTask &&
           previous.showPendingDivider === item.showPendingDivider
         );
       }
+
       if (previous.type === "v2-snoozed-shelf" && item.type === "v2-snoozed-shelf") {
         return previous.count === item.count && previous.expanded === item.expanded;
       }
+
       if (previous.type === "v2-settled-shelf" && item.type === "v2-settled-shelf") {
         return previous.count === item.count && previous.expanded === item.expanded;
       }
+
       return false;
     },
     [],
   );
+
   const focusSearch = useCallback(() => {
     const focus = () => {
       if (props.nativeChrome) {
         searchBarRef.current?.focus();
+
         return;
       }
+
       searchInputRef.current?.focus();
     };
+
     if (!props.visible) {
       props.onRequestVisibility();
       setTimeout(focus, 240);
     } else {
       focus();
     }
+
     return true;
   }, [props.nativeChrome, props.onRequestVisibility, props.visible]);
+
   useHardwareKeyboardCommand("focusSearch", focusSearch);
+
   const renderListItem = useCallback(
     ({ item }: { readonly item: SidebarListItem }) => {
       switch (item.type) {
@@ -324,6 +356,7 @@ function ThreadNavigationSidebarPane(
             item.pendingTask.message.environmentId,
             item.pendingTask.creation.projectId,
           );
+
           return (
             <ThreadListV2PendingRow
               pendingTask={item.pendingTask}
@@ -342,9 +375,11 @@ function ThreadNavigationSidebarPane(
             />
           );
         }
+
         case "v2-thread": {
           const thread = item.item.thread;
           const scopeKey = scopedProjectKey(thread.environmentId, thread.projectId);
+
           return (
             <ThreadListV2Row
               thread={thread}
@@ -401,6 +436,7 @@ function ThreadNavigationSidebarPane(
               }
               canMovePinnedDown={(() => {
                 const index = arrangedPinnedKeys.indexOf(`${thread.environmentId}:${thread.id}`);
+
                 return index !== -1 && index < arrangedPinnedKeys.length - 1;
               })()}
               onSnoozeThread={snoozeThread}
@@ -416,6 +452,7 @@ function ThreadNavigationSidebarPane(
             />
           );
         }
+
         case "v2-snoozed-shelf":
           return (
             <ThreadListV2SnoozedShelfHeader
@@ -491,10 +528,13 @@ function ThreadNavigationSidebarPane(
       unsnoozeThread,
     ],
   );
+
   const filterCustomized = options.selectedEnvironmentId !== null || selectedProjectKey !== null;
+
   const filterIcon = filterCustomized
     ? "line.3.horizontal.decrease.circle.fill"
     : "line.3.horizontal.decrease.circle";
+
   const filterMenu = useMemo(
     () =>
       buildHomeListFilterMenu({
@@ -513,6 +553,7 @@ function ThreadNavigationSidebarPane(
       setSelectedEnvironmentId,
     ],
   );
+
   const nativeHeaderItems = useMemo(
     () =>
       createSidebarHeaderItems({
@@ -522,6 +563,7 @@ function ThreadNavigationSidebarPane(
       }),
     [filterIcon, filterMenu, props.onOpenSettings],
   );
+
   // Snoozed threads need no special case: the shelf header is a list row
   // even while collapsed.
   const listEmpty = (

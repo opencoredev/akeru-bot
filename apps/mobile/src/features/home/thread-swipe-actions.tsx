@@ -13,9 +13,11 @@ import {
   type ThreadSwipeAction,
 } from "./thread-swipe-action-button";
 import { SwipeableScrollGateContext } from "./swipeable-scroll-gate";
+
 export { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./swipeable-scroll-gate";
 
 export const THREAD_SWIPE_ACTIONS_WIDTH = ACTION_ITEM_WIDTH * 2;
+
 export const THREAD_SWIPE_SPRING = {
   damping: 26,
   mass: 0.7,
@@ -40,6 +42,7 @@ function resolveSecondaryAction(input: {
   readonly threadTitle: string;
 }): ThreadSwipeSecondaryAction | null {
   if (input.secondaryAction === null) return null;
+
   if (input.secondaryAction === undefined) {
     return {
       accessibilityLabel: input.t("Delete {title}", { title: input.threadTitle }),
@@ -52,7 +55,9 @@ function resolveSecondaryAction(input: {
       },
     };
   }
+
   const action = input.secondaryAction;
+
   return {
     ...action,
     backgroundColor: "#5856d6",
@@ -117,8 +122,10 @@ export function ThreadSwipeable(props: {
   const hasSecondaryAction = props.secondaryAction !== null;
   const actionsWidth = swipeActionsWidth(hasSecondaryAction);
   const fullSwipeThreshold = Math.max(actionsWidth + 44, props.fullSwipeWidth * 0.58);
+
   const fullSwipeAction =
     props.fullSwipeAction ?? (props.secondaryAction === undefined ? "delete" : "primary");
+
   const close = useCallback(() => swipeableRef.current?.close(), []);
   const gateEnabled = use(SwipeableScrollGateContext);
   const resetKey = props.resetKey;
@@ -126,13 +133,16 @@ export function ThreadSwipeable(props: {
     if (resetKey === undefined) {
       return;
     }
+
     fullSwipeArmedRef.current = false;
     swipeableRef.current?.reset();
   }, [resetKey]);
+
   const handleFullSwipeArmedChange = useCallback((armed: boolean) => {
     if (armed && !fullSwipeArmedRef.current) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
+
     fullSwipeArmedRef.current = armed;
   }, []);
 
@@ -153,6 +163,7 @@ export function ThreadSwipeable(props: {
       friction={1}
       onSwipeableClose={() => {
         fullSwipeArmedRef.current = false;
+
         if (swipeableRef.current) {
           props.onSwipeableClose?.(swipeableRef.current);
         }
@@ -164,14 +175,17 @@ export function ThreadSwipeable(props: {
       }}
       onSwipeableWillOpen={() => {
         const methods = swipeableRef.current;
+
         if (!methods) {
           return;
         }
 
         props.onSwipeableWillOpen?.(methods);
+
         if (fullSwipeArmedRef.current) {
           fullSwipeArmedRef.current = false;
           methods.close();
+
           if (fullSwipeAction === "primary") {
             props.primaryAction.onPress();
           } else {

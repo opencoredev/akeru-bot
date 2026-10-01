@@ -38,8 +38,10 @@ export function ArchivedThreadsHeader(props: {
   const searchIconColor = useThemeColor("--color-icon");
   const searchTextColor = useThemeColor("--color-foreground");
   const usesNativeChrome = Platform.OS === "ios";
+
   const usesCompactMailToolbar =
     Platform.OS === "ios" && width < 700 && NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED;
+
   const androidFilterActions = useMemo<MenuAction[]>(
     () => [
       {
@@ -80,9 +82,11 @@ export function ArchivedThreadsHeader(props: {
     ],
     [props.environments, props.selectedEnvironmentId, props.sortOrder, t],
   );
+
   const handleAndroidFilterAction = useCallback(
     (event: { nativeEvent: { event: string } }) => {
       const action = event.nativeEvent.event;
+
       if (action === "environment:all") {
         props.onEnvironmentChange(null);
       } else if (action.startsWith("environment:")) {
@@ -167,6 +171,7 @@ export function ArchivedThreadsHeader(props: {
       </>
     );
   }
+
   const archiveFilterMenu = {
     title: t("Archived chat options"),
     items: [

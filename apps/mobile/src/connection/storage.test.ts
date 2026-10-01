@@ -21,6 +21,7 @@ import {
 function makeStorage(initial: Readonly<Record<string, string>>) {
   const values = new Map(Object.entries(initial));
   const deleted: Array<string> = [];
+
   const storage = MobileSecureStorage.of({
     getItem: (key) => Effect.sync(() => values.get(key) ?? null),
     setItem: (key, value) =>
@@ -33,6 +34,7 @@ function makeStorage(initial: Readonly<Record<string, string>>) {
         values.delete(key);
       }),
   });
+
   return { deleted, storage, values };
 }
 
@@ -42,6 +44,7 @@ describe("mobile connection catalog storage", () => {
       const memory = makeStorage({
         [CONNECTION_CATALOG_KEY]: "{not-json",
       });
+
       const catalog = yield* make().pipe(
         Effect.provideService(MobileSecureStorage, memory.storage),
       );
@@ -56,6 +59,7 @@ describe("mobile connection catalog storage", () => {
       const memory = makeStorage({
         [LEGACY_CONNECTIONS_KEY]: JSON.stringify({ connections: [{ invalid: true }] }),
       });
+
       const catalog = yield* make().pipe(
         Effect.provideService(MobileSecureStorage, memory.storage),
       );
@@ -70,11 +74,13 @@ describe("mobile connection catalog storage", () => {
     Effect.gen(function* () {
       const raw = JSON.stringify({ schemaVersion: 1, targets: [], profiles: [], credentials: [] });
       const memory = makeStorage({ "t3code.connection-catalog.v1": raw });
+
       const storage = MobileSecureStorage.of({
         ...memory.storage,
         removeItem: (key) =>
           Effect.fail(new MobileSecureStorageError({ operation: "delete", key, cause: "locked" })),
       });
+
       const catalog = yield* make().pipe(Effect.provideService(MobileSecureStorage, storage));
 
       expect((yield* catalog.read).targets).toEqual([]);
@@ -101,6 +107,7 @@ describe("mobile connection catalog storage", () => {
           ],
         }),
       });
+
       const catalog = yield* make().pipe(
         Effect.provideService(MobileSecureStorage, memory.storage),
       );
@@ -133,6 +140,7 @@ describe("mobile connection catalog storage", () => {
           ],
         }),
       });
+
       const catalog = yield* make().pipe(
         Effect.provideService(MobileSecureStorage, memory.storage),
       );

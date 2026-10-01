@@ -14,6 +14,7 @@ import {
   NativeTable,
   SelectableNode,
 } from "./NativeMarkdownRichBlocks.ios";
+
 export { MarkdownImageRendererContext } from "./NativeMarkdownRenderContext";
 
 function NativeList(props: {
@@ -27,6 +28,7 @@ function NativeList(props: {
   const ordered = props.node.ordered ?? false;
   const start = props.node.start ?? 1;
   const nested = props.depth > 0;
+
   return (
     <View
       style={{
@@ -35,6 +37,7 @@ function NativeList(props: {
     >
       {(props.node.children ?? []).map((item, index) => {
         const taskMarker = item.type === "task_list_item";
+
         const marker = taskMarker
           ? item.checked
             ? "☑︎"
@@ -46,8 +49,10 @@ function NativeList(props: {
               : props.depth % 3 === 2
                 ? "▪︎"
                 : "•";
+
         const markerWidth = ordered ? 28 : taskMarker ? 20 : 18;
         const markerOffset = taskMarker ? 3 : ordered ? 0 : 2;
+
         return (
           <View
             key={nodeKey(item, index)}
@@ -106,6 +111,7 @@ export function NativeMarkdownBlock(props: {
   readonly compact?: boolean;
 }) {
   const depth = props.depth ?? 0;
+
   switch (props.node.type) {
     case "document":
       return (

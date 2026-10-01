@@ -16,16 +16,23 @@
 // fresh prebuild — which is how prod build 8 shipped without the logo.
 
 const path = require("path");
+
 const fs = require("fs");
+
 const { withDangerousMod, withXcodeProject } = require("expo/config-plugins");
+
 const { addWidgetAssetCatalog } = require("./lib/addWidgetAssetCatalog.cjs");
 
 const TARGET_NAME = "ExpoWidgetsTarget";
+
 const CATALOG_NAME = "Assets.xcassets";
+
 const IMAGE_SET = "AkeruIcon.imageset";
+
 const ICON_NAME = "AkeruIcon.png";
 
 const CATALOG_CONTENTS = JSON.stringify({ info: { author: "expo", version: 1 } }, null, 2) + "\n";
+
 const IMAGE_SET_CONTENTS =
   JSON.stringify(
     {
@@ -47,6 +54,7 @@ function withAssetFiles(config) {
       fs.writeFileSync(path.join(catalogDir, "Contents.json"), CATALOG_CONTENTS);
       fs.writeFileSync(path.join(imageSetDir, "Contents.json"), IMAGE_SET_CONTENTS);
       fs.copyFileSync(source, path.join(imageSetDir, ICON_NAME));
+
       return cfg;
     },
   ]);
@@ -55,6 +63,7 @@ function withAssetFiles(config) {
 function withAssetWiring(config) {
   return withXcodeProject(config, (cfg) => {
     addWidgetAssetCatalog(cfg.modResults, { targetName: TARGET_NAME });
+
     return cfg;
   });
 }

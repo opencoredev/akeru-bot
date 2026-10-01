@@ -26,8 +26,11 @@ type BotBlobShape =
 export type BotAvatarState = "idle" | "working" | "needs-you";
 
 const DEFAULT_BLOB_SHAPE: BotBlobShape = "circle";
+
 const DEFAULT_BLOB_COLOR = "#8E8E93";
+
 const DARK_EYES = "#161616";
+
 const LIGHT_EYES = "#FFFFFF";
 
 const BLOB_SHAPES: ReadonlyArray<BotBlobShape> = [
@@ -122,10 +125,13 @@ function relativeLuminance(hexColor: string): number | null {
     .slice(1)
     .match(/.{2}/g)
     ?.map((channel) => Number.parseInt(channel, 16) / 255);
+
   if (!channels || channels.length !== 3 || channels.some(Number.isNaN)) return null;
+
   const [red, green, blue] = channels.map((channel) =>
     channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
   ) as [number, number, number];
+
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
@@ -133,6 +139,7 @@ function relativeLuminance(hexColor: string): number | null {
 function resolveBlobColor(value: unknown): string {
   if (!isBotAvatarColor(value)) return DEFAULT_BLOB_COLOR;
   const color = value.toUpperCase();
+
   return LEGACY_BLOB_COLORS[color] ?? color;
 }
 
@@ -142,23 +149,30 @@ function resolveBlobColor(value: unknown): string {
  */
 function resolveBlobEyes(color: string): { kind: "cutout" } | { kind: "ink"; ink: string } {
   const luminance = isBotAvatarColor(color) ? relativeLuminance(color) : null;
+
   if (luminance === null) return { kind: "cutout" };
+
   if (luminance > 0.6) return { kind: "ink", ink: DARK_EYES };
+
   if (luminance < 0.02) return { kind: "ink", ink: LIGHT_EYES };
+
   return { kind: "cutout" };
 }
 
 /** A faint edge for light bodies that would otherwise fade into a light surface. */
 function resolveBlobOutline(color: string): string | null {
   const luminance = isBotAvatarColor(color) ? relativeLuminance(color) : null;
+
   return luminance !== null && luminance > 0.7 ? "rgba(0, 0, 0, 0.14)" : null;
 }
 
 function hashSeed(seed: string): number {
   let hash = 5381;
+
   for (let index = 0; index < seed.length; index += 1) {
     hash = ((hash << 5) + hash + seed.charCodeAt(index)) | 0;
   }
+
   return hash;
 }
 
@@ -169,6 +183,7 @@ export function resolveBlobRendering(avatar: BotAvatar | null | undefined): {
 } {
   if (avatar?.kind === "dither") {
     const hash = Math.abs(hashSeed(avatar.seed));
+
     return {
       shape: BLOB_SHAPES[hash % BLOB_SHAPES.length] ?? DEFAULT_BLOB_SHAPE,
       color:
@@ -176,9 +191,11 @@ export function resolveBlobRendering(avatar: BotAvatar | null | undefined): {
         DEFAULT_BLOB_COLOR,
     };
   }
+
   if (avatar?.kind !== "blob") {
     return { shape: DEFAULT_BLOB_SHAPE, color: DEFAULT_BLOB_COLOR };
   }
+
   return {
     shape: isBotBlobShape(avatar.shape) ? avatar.shape : DEFAULT_BLOB_SHAPE,
     color: resolveBlobColor(avatar.color),
@@ -190,6 +207,7 @@ function eyeTransform(shape: BotBlobShape, state: BotAvatarState, index: 0 | 1):
   const eye = EYES[index];
   const x = face.x + eye.x * face.scale;
   const y = face.y + eye.y * face.scale;
+
   return `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${eye.rotate}) scale(${face.scale.toFixed(3)} ${(EYE_HEIGHT[state] * face.scale).toFixed(3)})`;
 }
 
@@ -227,6 +245,7 @@ export function BotAvatarView(props: {
       <BotImageAvatar assetPath={props.avatar.assetPath} size={props.size} state={props.state} />
     );
   }
+
   return <BotBlobAvatar avatar={props.avatar} size={props.size} state={props.state} />;
 }
 
@@ -242,9 +261,11 @@ function BotImageAvatar(props: {
   readonly state?: BotAvatarState;
 }) {
   const [failedPath, setFailedPath] = useState<string | null>(null);
+
   if (failedPath === props.assetPath) {
     return <BotBlobAvatar avatar={null} size={props.size} state={props.state} />;
   }
+
   return (
     <View style={{ height: props.size, width: props.size }}>
       <BotBlobAvatar avatar={null} size={props.size} state={props.state} />
@@ -278,6 +299,7 @@ function BotBlobAvatar(props: {
   const outline = resolveBlobOutline(color);
   const body = BODY[shape];
   const maskId = `bot-eyes-${shape}-${color.slice(1)}-${state}`;
+
   return (
     <View style={{ height: props.size, width: props.size }}>
       <Svg height={props.size} viewBox="0 0 100 100" width={props.size}>
@@ -308,6 +330,7 @@ function BotBlobAvatar(props: {
  */
 export function seededBlobAvatar(seed: string): BotAvatar {
   const positive = Math.abs(hashSeed(seed));
+
   return {
     kind: "blob",
     shape: BLOB_SHAPES[positive % BLOB_SHAPES.length]!,

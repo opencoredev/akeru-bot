@@ -151,24 +151,30 @@ describe("delegation cards in the feed", () => {
       completedAt: at(4),
       canceledBy: "user" as const,
     };
+
     const original = { ...feedDelegation("d-1", 2, "turn-1", "user-1"), phase: canceledPhase };
+
     const retry = {
       ...feedDelegation("d-2", 11, "turn-2", "user-2"),
       retryOfDelegationId: original.delegationId,
       phase: canceledPhase,
     };
+
     const before = buildThreadFeed(feedThread(messages), { delegations: [original] });
     const feed = buildThreadFeed(feedThread(messages), { delegations: [original, retry] });
     const oldCard = before.find((entry) => entry.id === "delegation:d-1");
     const updatedCard = feed.find((entry) => entry.id === "delegation:d-1");
     expect(oldCard?.type).toBe("delegation");
     expect(updatedCard?.type).toBe("delegation");
+
     if (oldCard && updatedCard) {
       expect(threadFeedEntriesEqual(oldCard, updatedCard)).toBe(false);
     }
+
     const actions = Object.fromEntries(
       feed.flatMap((entry) => (entry.type === "delegation" ? [[entry.id, entry.actions]] : [])),
     );
+
     expect(actions).toEqual({ "delegation:d-1": [], "delegation:d-2": ["retry"] });
   });
 
@@ -193,9 +199,11 @@ describe("delegation cards in the feed", () => {
         }),
       ],
     };
+
     const feed = buildThreadFeed(thread, {
       delegations: [feedDelegation("d-1", 2, "turn-1", "user-1")],
     });
+
     const running = {
       turnId: TurnId.make("turn-3"),
       state: "running" as const,
@@ -206,6 +214,7 @@ describe("delegation cards in the feed", () => {
     const collapsed = deriveThreadFeedPresentation(feed, running, new Set()).map(
       (entry) => entry.id,
     );
+
     // The work log folds; the card does not join it.
     expect(collapsed).toContain("turn-fold:turn-1");
     expect(collapsed).not.toContain("turn-1-warning");
@@ -217,6 +226,7 @@ describe("delegation cards in the feed", () => {
       running,
       new Set([TurnId.make("turn-1")]),
     ).map((entry) => entry.id);
+
     expect(expanded).toContain("turn-1-warning");
     expect(expanded.filter((id) => id === "delegation:d-1")).toHaveLength(1);
   });
@@ -231,6 +241,7 @@ describe("delegation cards in the feed", () => {
         turnId: TurnId.make("turn-1"),
         payload: { delegationId },
       });
+
     const thread = {
       ...feedThread(messages.slice(0, 2)),
       activities: [deliveryActivity("carded", "d-1"), deliveryActivity("uncarded", "d-orphan")],
@@ -249,6 +260,7 @@ describe("delegation cards in the feed", () => {
       feedDelegation("d-2", 11, "turn-2", "user-2"),
       feedDelegation("d-3", 21, "turn-3", "user-3"),
     ];
+
     const thread = {
       ...feedThread(messages),
       activities: records.map((record, index) =>
@@ -262,7 +274,9 @@ describe("delegation cards in the feed", () => {
         }),
       ),
     };
+
     const feed = buildThreadFeed(thread, { delegations: records });
+
     const presented = deriveThreadFeedPresentation(
       feed,
       { turnId: TurnId.make("turn-3"), state: "running", startedAt: at(30), completedAt: null },
@@ -273,6 +287,7 @@ describe("delegation cards in the feed", () => {
       const cardIds = entries.flatMap((entry) =>
         entry.type === "delegation" ? [entry.delegation.delegationId] : [],
       );
+
       expect(cardIds).toEqual(["d-1", "d-2", "d-3"]);
       expect(entries.some((entry) => entry.id.startsWith("delivery-"))).toBe(false);
     }
@@ -289,6 +304,7 @@ describe("delegation cards in the feed", () => {
         progress: null,
       },
     };
+
     const failed = {
       ...feedDelegation("d-2", 11, "turn-2", "user-2"),
       phase: {
@@ -301,7 +317,9 @@ describe("delegation cards in the feed", () => {
         acknowledgedAt: null,
       },
     };
+
     const feed = buildThreadFeed(feedThread(messages), { delegations: [running, failed] });
+
     const actions = Object.fromEntries(
       feed.flatMap((entry) => (entry.type === "delegation" ? [[entry.id, entry.actions]] : [])),
     );
@@ -360,6 +378,7 @@ describe("delegation cards in the feed", () => {
       userMessage("user-3", 20),
       assistantMessage("bot-3", 22, "turn-3"),
     ];
+
     const thread = {
       ...feedThread(parityMessages),
       activities: [4, 5, 6].map((second, index) =>
@@ -372,6 +391,7 @@ describe("delegation cards in the feed", () => {
         }),
       ),
     };
+
     const delegations = [
       feedDelegation("d-1", 2, "turn-1", "user-1"),
       feedDelegation("d-2", 13, "turn-2", "user-2"),
@@ -386,6 +406,7 @@ describe("delegation cards in the feed", () => {
       })),
       delegations,
     });
+
     const feed = buildThreadFeed(thread, { delegations });
     const feedIds = feed.map((entry) => entry.id);
     const feedIdSet = new Set(feedIds);
@@ -393,20 +414,25 @@ describe("delegation cards in the feed", () => {
     const feedMessageIds = feed.flatMap((entry) => (entry.type === "message" ? [entry.id] : []));
 
     let previousMessageId: string | null = null;
+
     for (const entry of timeline) {
       if (entry._tag === "Message") {
         if (feedIdSet.has(entry.message.id)) {
           previousMessageId = entry.message.id;
         }
+
         continue;
       }
+
       if (entry._tag !== "Delegation") continue;
       const cardId = `delegation:${entry.delegation.delegationId}`;
       expect(feedIds).toContain(cardId);
       const cardIndex = feedIds.indexOf(cardId);
+
       if (previousMessageId !== null) {
         expect(cardIndex).toBeGreaterThan(feedIds.indexOf(previousMessageId));
       }
+
       // The card must appear before the next message row that survived
       // grouping — no message may leap ahead of its turn's card.
       const nextMessageId = feedMessageIds.find(
@@ -415,9 +441,11 @@ describe("delegation cards in the feed", () => {
           feedIds.indexOf(id) > feedIds.indexOf(previousMessageId) &&
           id !== previousMessageId,
       );
+
       if (nextMessageId !== undefined) {
         expect(cardIndex).toBeLessThan(feedIds.indexOf(nextMessageId));
       }
+
       previousMessageId = null;
     }
   });
@@ -427,6 +455,7 @@ describe("deriveGroupSpeakerLabels", () => {
   const at = (second: number) => `2026-09-25T11:00:${String(second).padStart(2, "0")}.000Z`;
   const mira = BotId.make("bot-mira");
   const ren = BotId.make("bot-ren");
+
   const message = (
     id: string,
     second: number,
@@ -443,6 +472,7 @@ describe("deriveGroupSpeakerLabels", () => {
     updatedAt: at(second),
     streaming: false,
   });
+
   const feedOf = (messages: OrchestrationThread["messages"]) =>
     buildThreadFeed(
       makeThread({

@@ -80,6 +80,7 @@ import { useThreadFeedFollow } from "./use-thread-feed-follow";
 // so its height is a constant; a drifted value costs one correction on
 // measure, not a persistent offset.
 const TURN_FOLD_HEIGHT = 56; // min-h-11 (44) + mb-3 (12)
+
 // The working row has no min-height clamp — its height follows the scaled
 // text-xs line height (see workingRowHeight in ThreadFeed).
 const WORKING_ROW_VERTICAL_EXTRAS = 24; // py-1 (8) + mb-4 (16)
@@ -121,6 +122,7 @@ export interface ThreadFeedProps {
 }
 
 const threadFeedKeyExtractor = (entry: ThreadFeedEntry) => entry.id;
+
 const threadFeedItemType = (entry: ThreadFeedEntry) =>
   entry.type === "message" ? `message:${entry.message.role}` : entry.type;
 
@@ -135,9 +137,11 @@ function sameMessages(
 
 function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
   if (left.size !== right.size) return false;
+
   for (const id of left) {
     if (!right.has(id)) return false;
   }
+
   return true;
 }
 
@@ -148,26 +152,34 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const environment = useEnvironmentPresentation(props.environmentId);
   // Activity-only feed updates keep the previous array so reply playback does not re-observe.
   const playbackMessagesRef = useRef<ReadonlyArray<PlaybackMessage>>([]);
+
   const playbackMessages = useMemo(() => {
     const next = props.feed.flatMap((entry) => (entry.type === "message" ? [entry.message] : []));
+
     if (sameMessages(playbackMessagesRef.current, next)) return playbackMessagesRef.current;
     playbackMessagesRef.current = next;
+
     return next;
   }, [props.feed]);
+
   const replySynthesis = useReplyPlaybackThread({
     environmentId: props.environmentId,
     threadId: props.threadId,
     messages: playbackMessages,
     connected: environment.presentation?.connection.phase === "connected",
   });
+
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousLatestTurnRef = useRef(props.latestTurn);
   const { width: windowWidth } = useWindowDimensions();
   const { appearance } = useAppearancePreferences();
+
   const [viewportWidth, setViewportWidth] = useState(() =>
     props.layoutVariant === "split" ? 0 : windowWidth,
   );
+
   const [viewportHeight, setViewportHeight] = useState(0);
+
   const [interactionState, setInteractionState] = useState<{
     readonly copiedRowId: string | null;
     readonly expandedWorkGroups: Record<string, boolean>;
@@ -179,29 +191,37 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     expandedWorkRows: {},
     expandedTurnIds: new Set(),
   });
+
   const { copiedRowId, expandedWorkGroups, expandedWorkRows, expandedTurnIds } = interactionState;
+
   const [expandedImage, setExpandedImage] = useState<{
     uri: string;
     headers?: Record<string, string>;
   } | null>(null);
+
   const horizontalPadding = props.layoutVariant === "split" ? 20 : 16;
+
   const contentHorizontalPadding = deriveCenteredContentHorizontalPadding({
     viewportWidth,
     maxContentWidth: props.contentMaxWidth ?? null,
     minimumPadding: horizontalPadding,
   });
+
   const contentWidth = Math.max(0, viewportWidth - contentHorizontalPadding * 2);
   const userBubbleMaxWidth = contentWidth * 0.85;
   const insets = useSafeAreaInsets();
   const topContentInset = props.contentTopInset ?? insets.top + IOS_NAV_BAR_HEIGHT;
   const bottomContentInset = props.contentBottomInset ?? 18;
+
   const usesNativeAutomaticInsets =
     props.usesAutomaticContentInsets === true && Platform.OS === "ios";
+
   const initialContentInset = deriveThreadFeedInitialContentInset({
     platform: Platform.OS,
     usesNativeAutomaticInsets,
     bottomContentInset,
   });
+
   // With automatic insets the header inset lives in UIKit's adjustedContentInset,
   // which LegendList's JS anchoring math cannot see — it measures the anchored
   // end space from the scroll view's frame top. Fold the header height back into
@@ -210,18 +230,22 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   // messages. Read the context directly (useHeaderHeight throws outside a
   // header-providing screen) and fall back to the standard iOS bar height.
   const navigationHeaderHeight = useContext(HeaderHeightContext);
+
   const anchorTopInset = usesNativeAutomaticInsets
     ? navigationHeaderHeight || insets.top + IOS_NAV_BAR_HEIGHT
     : topContentInset;
 
   const iconSubtleColor = useThemeColor("--color-icon-subtle");
   const userBubbleColor = useThemeColor("--color-user-bubble");
+
   const onMarkdownLinkPress = useCallback(
     (href: string) => {
       if (isAppDeepLink(href)) {
         const destination = resolveMobileSettingsDestination(href);
+
         if (destination === null) return;
         void Haptics.selectionAsync();
+
         if (destination.kind === "health") {
           navigation.navigate("SettingsSheet", {
             screen: "SettingsContent",
@@ -239,9 +263,12 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             params: { screen: destination.kind === "home" ? "Settings" : destination.screen },
           });
         }
+
         return;
       }
+
       const presentation = resolveMarkdownLinkPresentation(href);
+
       // Mobile has no workspace file viewer; file links stay inert.
       if (presentation.kind === "file") return;
 
@@ -251,9 +278,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     },
     [props.environmentId, navigation],
   );
+
   const renderMarkdownImage = useCallback<MarkdownImageRenderer>(
     (image) => {
       const imageSource = classifyMarkdownImageSource(image.href, props.workspaceRoot ?? null);
+
       if (imageSource._tag === "Direct") {
         return (
           <ThreadMarkdownImageView
@@ -265,9 +294,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           />
         );
       }
+
       if (imageSource._tag === "Blocked") {
         return <ThreadMarkdownImageUnavailable alt={image.alt} />;
       }
+
       return (
         <ThreadMarkdownImage
           environmentId={props.environmentId}
@@ -280,12 +311,14 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     },
     [props.environmentId, props.threadId, props.workspaceRoot],
   );
+
   const markdownStyles = useMarkdownStyles(onMarkdownLinkPress, renderMarkdownImage);
 
   // Thread identity is env-scoped: two environments can hold the same
   // ThreadId, and keying resets (or the list mount) on the bare id would
   // carry stale scroll/follow state across an environment switch.
   const feedThreadKey = scopedThreadKey(props.environmentId, props.threadId);
+
   const {
     endScrollMaintenanceActive,
     maintainVisibleContentPosition,
@@ -309,13 +342,16 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
 
   const expandedWorkGroupIds = useMemo(() => {
     const ids = new Set<string>();
+
     for (const [groupId, expanded] of Object.entries(expandedWorkGroups)) {
       if (expanded) {
         ids.add(groupId);
       }
     }
+
     return ids;
   }, [expandedWorkGroups]);
+
   const presentedFeed = useMemo(
     () =>
       deriveThreadFeedPresentation(
@@ -344,6 +380,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const listMountKey = `${feedThreadKey}:${props.feed.length === 0 ? "empty" : "filled"}`;
   useLayoutEffect(() => {
     const bottom = props.contentInsetEndAdjustment.value;
+
     if (bottom > 0) {
       props.listRef.current?.reportContentInset({ bottom });
     }
@@ -359,38 +396,50 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       ),
     [presentedFeed, props.anchorMessageId, anchorTopInset],
   );
+
   // Kept identity-stable while streaming: it is row render context, and a new Set would
   // repaint every visible row on each delta.
   const terminalAssistantMessageIdsRef = useRef<ReadonlySet<string>>(new Set());
+
   const terminalAssistantMessageIds = useMemo(() => {
     const terminalIdsByTurn = new Map<TurnId, string>();
+
     for (const entry of props.feed) {
       if (entry.type === "message" && entry.message.role === "assistant" && entry.message.turnId) {
         terminalIdsByTurn.set(entry.message.turnId, entry.message.id);
       }
     }
+
     const next = new Set(terminalIdsByTurn.values());
+
     if (sameIds(terminalAssistantMessageIdsRef.current, next)) {
       return terminalAssistantMessageIdsRef.current;
     }
+
     terminalAssistantMessageIdsRef.current = next;
+
     return next;
   }, [props.feed]);
+
   const unsettledTurnId =
     props.latestTurn &&
     (props.latestTurn.completedAt === null || props.latestTurn.state === "running")
       ? props.latestTurn.turnId
       : null;
+
   const speakerLabels = useMemo(
     () => deriveGroupSpeakerLabels(presentedFeed, props.speakerGroup ?? null),
     [presentedFeed, props.speakerGroup],
   );
+
   useEffect(() => {
     const previous = previousLatestTurnRef.current;
     previousLatestTurnRef.current = props.latestTurn;
+
     if (!props.latestTurn || !previous) {
       return;
     }
+
     if (props.latestTurn.turnId === previous.turnId) {
       if (previous.state === "running" && props.latestTurn.state === "interrupted") {
         const interruptedTurnId = props.latestTurn.turnId;
@@ -399,14 +448,18 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           expandedTurnIds: new Set(current.expandedTurnIds).add(interruptedTurnId),
         }));
       }
+
       return;
     }
+
     setInteractionState((current) => {
       if (!current.expandedTurnIds.has(previous.turnId)) {
         return current;
       }
+
       const next = new Set(current.expandedTurnIds);
       next.delete(previous.turnId);
+
       return { ...current, expandedTurnIds: next };
     });
   }, [props.latestTurn]);
@@ -425,9 +478,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       feedback: "selection",
     });
     setInteractionState((current) => ({ ...current, copiedRowId: rowId }));
+
     if (copyFeedbackTimeoutRef.current) {
       clearTimeout(copyFeedbackTimeoutRef.current);
     }
+
     copyFeedbackTimeoutRef.current = setTimeout(() => {
       setInteractionState((current) =>
         current.copiedRowId === rowId ? { ...current, copiedRowId: null } : current,
@@ -469,11 +524,13 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       suspendEndScrollMaintenanceForDisclosure(`turn-fold:${turnId}`);
       setInteractionState((current) => {
         const next = new Set(current.expandedTurnIds);
+
         if (next.has(turnId)) {
           next.delete(turnId);
         } else {
           next.add(turnId);
         }
+
         return { ...current, expandedTurnIds: next };
       });
     },
@@ -494,6 +551,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const workingRowHeight =
     WORKING_ROW_VERTICAL_EXTRAS +
     scaledTypographyLineHeight(MOBILE_TYPOGRAPHY.label, appearance.baseFontSize);
+
   const getFixedItemSize = useCallback(
     (entry: ThreadFeedEntry) => {
       switch (entry.type) {
@@ -572,11 +630,14 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       replySynthesis,
     ],
   );
+
   const renderItem = useCallback(
     (info: { item: ThreadFeedEntry; index: number }) => renderFeedEntry(info, feedRenderContext),
     [feedRenderContext],
   );
+
   const loadEarlier = props.loadEarlier;
+
   const listHeader = useMemo(
     () => (
       <>
@@ -597,6 +658,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     ),
     [loadEarlier, props.botId, props.environmentId, t, topContentInset, usesNativeAutomaticInsets],
   );
+
   const listContentContainerStyle = useMemo(
     () => ({ paddingTop: 12, paddingHorizontal: contentHorizontalPadding }),
     [contentHorizontalPadding],

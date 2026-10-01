@@ -15,6 +15,7 @@ import {
   type ArchivedThreadsHeaderEnvironment,
 } from "./ArchivedThreadsHeader";
 import { ArchiveError, ArchivedThreadRow, ProjectGroupLabel } from "./archived-thread-rows";
+
 export type { ArchivedThreadsHeaderEnvironment } from "./ArchivedThreadsHeader";
 
 type ArchivedThreadListItem =
@@ -53,6 +54,7 @@ export function ArchivedThreadsScreen(props: {
   const archiveScrollGesture = useMemo(() => Gesture.Native(), []);
   const { t } = useMobileI18n();
   const refreshTint = useThemeColor("--color-icon");
+
   const environmentLabelsById = useMemo(
     () =>
       new Map(
@@ -60,8 +62,10 @@ export function ArchivedThreadsScreen(props: {
       ),
     [props.environments],
   );
+
   const listItems = useMemo<ReadonlyArray<ArchivedThreadListItem>>(() => {
     const items: ArchivedThreadListItem[] = [];
+
     for (const group of props.groups) {
       const environmentLabel = environmentLabelsById.get(group.project.environmentId) ?? null;
       items.push({
@@ -82,21 +86,27 @@ export function ArchivedThreadsScreen(props: {
         });
       });
     }
+
     return items;
   }, [environmentLabelsById, props.groups]);
+
   const handleSwipeableWillOpen = useCallback((methods: SwipeableMethods) => {
     if (openSwipeableRef.current && openSwipeableRef.current !== methods) {
       openSwipeableRef.current.close();
     }
+
     openSwipeableRef.current = methods;
   }, []);
+
   const handleSwipeableClose = useCallback((methods: SwipeableMethods) => {
     if (openSwipeableRef.current === methods) {
       openSwipeableRef.current = null;
     }
   }, []);
+
   const isInitialLoad = props.isLoading && props.groups.length === 0 && props.error === null;
   const isFiltered = props.searchQuery.trim().length > 0 || props.selectedEnvironmentId !== null;
+
   const renderListItem = useCallback(
     ({ item }: { item: ArchivedThreadListItem }) => {
       if (item.kind === "project") {
@@ -129,6 +139,7 @@ export function ArchivedThreadsScreen(props: {
       onUnarchiveThread,
     ],
   );
+
   const listEmptyComponent = useMemo(() => {
     if (isInitialLoad) {
       return (

@@ -26,6 +26,7 @@ export function useNewTaskShareImport(input: {
 }) {
   const { plural, t } = useMobileI18n();
   const navigation = useNavigation();
+
   const {
     consumeShare,
     getShare,
@@ -33,6 +34,7 @@ export function useNewTaskShareImport(input: {
     releaseShareReservation,
     reserveShare,
   } = useIncomingShare();
+
   const [importingShareKey, setImportingShareKey] = useState<string | null>(null);
   const [isCancellingShareImport, setIsCancellingShareImport] = useState(false);
   const [cancelledIncomingShareId, setCancelledIncomingShareId] = useState<string | null>(null);
@@ -49,24 +51,29 @@ export function useNewTaskShareImport(input: {
   const isImportingShare = importingShareKey !== null;
   const alertedUnavailableIncomingShareIdRef = useRef<string | null>(null);
   const incomingShare = input.incomingShareId ? getShare(input.incomingShareId) : null;
+
   const isIncomingShareTransferPending = Boolean(
     incomingShare && cancelledIncomingShareId !== input.incomingShareId,
   );
+
   const hasImportedIncomingShare = Boolean(
     input.incomingShareId &&
     input.draftKey &&
     getComposerDraftSnapshot(input.draftKey).importedShareIds?.includes(input.incomingShareId),
   );
+
   const isIncomingShareUnavailable = Boolean(
     input.incomingShareId &&
     !isIncomingShareInboxLoading &&
     !incomingShare &&
     !hasImportedIncomingShare,
   );
+
   const isIncomingShareReady =
     !input.incomingShareId ||
     (hasImportedIncomingShare && !incomingShare) ||
     isIncomingShareUnavailable;
+
   useEffect(() => {
     if (cancelledIncomingShareId === input.incomingShareId) {
       navigation.goBack();
@@ -76,7 +83,9 @@ export function useNewTaskShareImport(input: {
     if (!shareImportMountedRef.current) {
       startedShareImportKeyRef.current = null;
     }
+
     shareImportMountedRef.current = true;
+
     return () => {
       shareImportMountedRef.current = false;
       activeShareImportTokenRef.current = null;
@@ -90,11 +99,13 @@ export function useNewTaskShareImport(input: {
     const destinationProject = input.selectedProject;
     const initialEnvironmentId = input.initialEnvironmentId;
     const initialProjectId = input.initialProjectId;
+
     const selectedProjectMatchesRoute =
       !initialEnvironmentId ||
       !initialProjectId ||
       (destinationProject?.environmentId === initialEnvironmentId &&
         destinationProject.id === initialProjectId);
+
     if (
       !shareId ||
       !draftKey ||
@@ -104,7 +115,9 @@ export function useNewTaskShareImport(input: {
     ) {
       return;
     }
+
     const importKey = `${shareId}:${draftKey}`;
+
     if (
       startedShareImportKeyRef.current === importKey ||
       cancellingShareImportKeyRef.current === importKey
@@ -122,15 +135,19 @@ export function useNewTaskShareImport(input: {
           ),
         );
       }
+
       return;
     }
 
     if (alertedUnavailableIncomingShareIdRef.current === shareId) {
       alertedUnavailableIncomingShareIdRef.current = null;
     }
+
     startedShareImportKeyRef.current = importKey;
+
     const draftBackup =
       shareImportDraftBackupRef.current.get(importKey) ?? getComposerDraftSnapshot(draftKey);
+
     shareImportDraftBackupRef.current.set(importKey, draftBackup);
     const importToken = Symbol(importKey);
     let didReserveShare = false;
@@ -143,6 +160,7 @@ export function useNewTaskShareImport(input: {
         projectId: String(destinationProject.id),
       });
       didReserveShare = true;
+
       if (
         !shareImportMountedRef.current ||
         activeShareImportTokenRef.current !== importToken ||
@@ -151,12 +169,15 @@ export function useNewTaskShareImport(input: {
       ) {
         return;
       }
+
       needsDraftRestore = true;
+
       const { skippedAttachmentCount } = await mergeComposerDraftContent(draftKey, {
         text: incomingShare.text,
         attachments: incomingShare.attachments,
         sourceShareId: shareId,
       });
+
       if (
         !shareImportMountedRef.current ||
         activeShareImportTokenRef.current !== importToken ||
@@ -167,11 +188,15 @@ export function useNewTaskShareImport(input: {
         // in this project instead of copying into a second project draft.
         return;
       }
+
       await consumeShare(shareId);
+
       if (!shareImportMountedRef.current || activeShareImportTokenRef.current !== importToken) {
         return;
       }
+
       const warnings = [...incomingShare.warnings];
+
       if (skippedAttachmentCount > 0) {
         warnings.push(
           plural(skippedAttachmentCount, {
@@ -181,15 +206,18 @@ export function useNewTaskShareImport(input: {
           }),
         );
       }
+
       if (warnings.length > 0) {
         Alert.alert(t("Some shared content was skipped"), warnings.join("\n"));
       }
+
       shareImportDraftBackupRef.current.delete(importKey);
     })()
       .catch((error) => {
         if (!shareImportMountedRef.current || activeShareImportTokenRef.current !== importToken) {
           return;
         }
+
         Alert.alert(
           t("Could not import shared content"),
           error instanceof Error ? error.message : t("The shared content could not be saved."),
@@ -202,23 +230,28 @@ export function useNewTaskShareImport(input: {
                   if (!shareImportMountedRef.current) {
                     return;
                   }
+
                   // Latch synchronously before restoring the draft. The
                   // restore publishes atom state and can re-run the import
                   // effect before React commits the cancelling state update.
                   cancellingShareImportKeyRef.current = importKey;
                   setIsCancellingShareImport(true);
+
                   try {
                     if (needsDraftRestore) {
                       await restoreComposerDraftSnapshot(draftKey, draftBackup);
                       needsDraftRestore = false;
                     }
+
                     if (didReserveShare) {
                       await releaseShareReservation(shareId, {
                         environmentId: String(destinationProject.environmentId),
                         projectId: String(destinationProject.id),
                       });
                     }
+
                     shareImportDraftBackupRef.current.delete(importKey);
+
                     if (shareImportMountedRef.current) {
                       setIsCancellingShareImport(false);
                       setCancelledIncomingShareId(shareId);
@@ -227,6 +260,7 @@ export function useNewTaskShareImport(input: {
                     if (!shareImportMountedRef.current) {
                       return;
                     }
+
                     Alert.alert(
                       t("Could not cancel import"),
                       cancelError instanceof Error
@@ -250,6 +284,7 @@ export function useNewTaskShareImport(input: {
                     );
                   }
                 };
+
                 void cancelImport();
               },
             },
@@ -267,6 +302,7 @@ export function useNewTaskShareImport(input: {
           // release the synchronous start latch so this transfer can retry.
           startedShareImportKeyRef.current = null;
         }
+
         if (shareImportMountedRef.current && activeShareImportTokenRef.current === importToken) {
           activeShareImportTokenRef.current = null;
           setImportingShareKey(null);

@@ -71,17 +71,21 @@ export function NewTaskDraftScreen(props: {
   const keyboardOpenedOffset = Math.max(0, controlsBottomPadding - 8);
   const { projectScopes, selectedProject, selectedProjectKey, setProject } = flow;
   const { connectedEnvironments } = useRemoteConnectionStatus();
+
   const selectedEnvironmentServerConfig = useEnvironmentServerConfig(
     selectedProject?.environmentId ?? null,
   );
+
   const environmentConnected =
     selectedProject !== null &&
     connectedEnvironments.find(
       (environment) => environment.environmentId === selectedProject.environmentId,
     )?.connectionState === "connected";
+
   const promptInputRef = useRef<ComposerEditorHandle>(null);
   const promptSelectionRef = useRef({ start: flow.prompt.length, end: flow.prompt.length });
   const [dictationGeneration, setDictationGeneration] = useState(0);
+
   const dictation = useEnvironmentComposerDictation({
     environmentId: selectedProject?.environmentId ?? null,
     connected: environmentConnected,
@@ -91,6 +95,7 @@ export function NewTaskDraftScreen(props: {
     getDraft: () => {
       const end = flow.prompt.length;
       const { start, end: selectionEnd } = promptSelectionRef.current;
+
       return {
         text: flow.prompt,
         selection: { start: Math.min(start, end), end: Math.min(selectionEnd, end) },
@@ -102,16 +107,20 @@ export function NewTaskDraftScreen(props: {
       promptInputRef.current?.setSelection(next.selection);
     },
   });
+
   const showDictation = composerActionIsDictation({
     hasDraft: flow.prompt.trim().length > 0 || flow.attachments.length > 0,
     status: dictation.status,
   });
+
   const [isComposerFocused, setIsComposerFocused] = useState(false);
+
   const settingsSheetPresentation = useThreadSettingsSheetRoute({
     editorRef: promptInputRef,
     isEditorFocused: isComposerFocused,
     routeName: "ThreadSettings",
   });
+
   useEffect(() => {
     if (Platform.OS !== "ios") {
       return;
@@ -127,6 +136,7 @@ export function NewTaskDraftScreen(props: {
     };
   }, [navigation]);
   const [isReturningToProjectPicker, setIsReturningToProjectPicker] = useState(false);
+
   const {
     isImportingShare,
     isCancellingShareImport,
@@ -139,9 +149,11 @@ export function NewTaskDraftScreen(props: {
     draftKey: flow.draftKey,
     selectedProject,
   });
+
   useEffect(() => {
     setDictationGeneration((generation) => generation + 1);
   }, [flow.draftKey, selectedProject?.environmentId]);
+
   const requestedInitialProjectAvailable = Boolean(
     props.initialProjectRef?.environmentId &&
     props.initialProjectRef.projectId &&
@@ -151,8 +163,10 @@ export function NewTaskDraftScreen(props: {
         project.id === props.initialProjectRef?.projectId,
     ),
   );
+
   const isProjectPickerReturnActive =
     isReturningToProjectPicker && !requestedInitialProjectAvailable;
+
   usePreventRemove(
     (isIncomingShareTransferPending && !isProjectPickerReturnActive) || isCancellingShareImport,
     () => undefined,
@@ -168,10 +182,13 @@ export function NewTaskDraftScreen(props: {
     if (!isReturningToProjectPicker) {
       return;
     }
+
     if (requestedInitialProjectAvailable) {
       setIsReturningToProjectPicker(false);
+
       return;
     }
+
     // Let usePreventRemove commit its disabled state before replacing this
     // route, otherwise the transfer guard can swallow the fallback action.
     const frame = requestAnimationFrame(() => {
@@ -179,6 +196,7 @@ export function NewTaskDraftScreen(props: {
         StackActions.replace("NewTask", { incomingShareId: props.incomingShareId }),
       );
     });
+
     return () => cancelAnimationFrame(frame);
   }, [
     isReturningToProjectPicker,
@@ -193,12 +211,15 @@ export function NewTaskDraftScreen(props: {
     if (!props.pendingTaskId || editingPendingTask?.messageId === props.pendingTaskId) {
       return;
     }
+
     // Attempt each pending task once: after it is delivered or deleted the
     // editing session legitimately ends, and re-running must not navigate.
     if (attemptedPendingTaskIdRef.current === props.pendingTaskId) {
       return;
     }
+
     attemptedPendingTaskIdRef.current = props.pendingTaskId;
+
     if (!beginEditingPendingTask(props.pendingTaskId)) {
       // The queued task no longer exists (sent or deleted before opening).
       navigation.dispatch(StackActions.replace("NewTask"));
@@ -207,6 +228,7 @@ export function NewTaskDraftScreen(props: {
 
   useEffect(() => {
     if (!props.pendingTaskId) return;
+
     return () => {
       // Allow a later navigation for the same pending task to re-hydrate it.
       attemptedPendingTaskIdRef.current = null;
@@ -232,12 +254,15 @@ export function NewTaskDraftScreen(props: {
     if (props.pendingTaskId) {
       return;
     }
+
     if (lastInitialProjectRefRef.current !== props.initialProjectRef) {
       lastInitialProjectRefRef.current = props.initialProjectRef;
       appliedInitialProjectKeyRef.current = null;
     }
+
     const initialEnvironmentId = props.initialProjectRef?.environmentId;
     const initialProjectId = props.initialProjectRef?.projectId;
+
     if (initialEnvironmentId && initialProjectId) {
       const directProject =
         projects.find(
@@ -249,17 +274,22 @@ export function NewTaskDraftScreen(props: {
         // Apply the route's project once. Re-applying on every change would
         // instantly revert environment/project switches made in the picker.
         const directProjectKey = `${directProject.environmentId}:${directProject.id}`;
+
         if (appliedInitialProjectKeyRef.current === directProjectKey) {
           return;
         }
+
         appliedInitialProjectKeyRef.current = directProjectKey;
+
         if (
           selectedProject?.environmentId === directProject.environmentId &&
           selectedProject.id === directProject.id
         ) {
           return;
         }
+
         setProject(directProject);
+
         return;
       }
 
@@ -269,15 +299,19 @@ export function NewTaskDraftScreen(props: {
         // can choose an available destination.
         setIsReturningToProjectPicker(true);
       }
+
       return;
     }
 
     const selection = resolveDraftProjectSelection(selectedProjectKey, projects, projectScopes);
+
     if (selection.kind === "preserve") {
       return;
     }
+
     if (selection.kind === "select") {
       setProject(selection.project);
+
       return;
     }
 
@@ -298,11 +332,14 @@ export function NewTaskDraftScreen(props: {
     flow.environments.find(
       (environment) => environment.environmentId === flow.selectedEnvironmentId,
     )?.environmentLabel ?? "Environment";
+
   async function handlePickImages(): Promise<void> {
     if (isIncomingShareTransferPending) {
       return;
     }
+
     const result = await pickComposerImages({ existingCount: flow.attachments.length });
+
     if (result.images.length > 0) {
       flow.appendAttachments(result.images);
     }
@@ -315,6 +352,7 @@ export function NewTaskDraftScreen(props: {
           uris,
           existingCount: flow.attachments.length,
         });
+
         if (images.length > 0) {
           flow.appendAttachments(images);
         }
@@ -328,10 +366,13 @@ export function NewTaskDraftScreen(props: {
   async function handleStart(): Promise<void> {
     const selectedProject = flow.selectedProject;
     const draftKey = flow.draftKey;
+
     if (!selectedProject || !draftKey) {
       return;
     }
+
     const draft = getComposerDraftSnapshot(draftKey);
+
     // Snapshot read keeps just-typed selector state; the availability gate
     // still applies so a stored selection on a disabled provider falls back
     // to the flow's resolved model.
@@ -341,6 +382,7 @@ export function NewTaskDraftScreen(props: {
         draft.modelSelection ?? null,
         flow.subscriptionStatuses,
       ) ?? flow.selectedModel;
+
     const runtimeMode = draft.runtimeMode ?? flow.runtimeMode;
     const initialMessageText = draft.text.trim();
 
@@ -365,11 +407,15 @@ export function NewTaskDraftScreen(props: {
             createdAt: editingPendingTask.createdAt,
           }
         : makeTurnCommandMetadata();
+
       const message = flow.buildPendingTaskMessage(metadata);
+
       if (!message) {
         return;
       }
+
       flow.setSubmitting(true);
+
       try {
         await enqueueThreadOutboxMessage(message);
       } catch (error) {
@@ -377,21 +423,26 @@ export function NewTaskDraftScreen(props: {
           t("Could not queue chat"),
           error instanceof Error ? error.message : t("The chat could not be saved to the outbox."),
         );
+
         return;
       } finally {
         flow.setSubmitting(false);
       }
+
       if (editingPendingTask) {
         flow.finishEditingPendingTask();
       } else {
         setDictationGeneration((generation) => generation + 1);
         clearComposerDraftContent(draftKey, { clearWorkspaceSelection: true });
       }
+
       navigation.getParent()?.goBack();
+
       return;
     }
 
     flow.setSubmitting(true);
+
     const result = await createProjectThread({
       project: selectedProject,
       modelSelection,
@@ -414,6 +465,7 @@ export function NewTaskDraftScreen(props: {
           }
         : {}),
     });
+
     flow.setSubmitting(false);
 
     if (result._tag === "Failure") {
@@ -424,6 +476,7 @@ export function NewTaskDraftScreen(props: {
           error instanceof Error ? error.message : t("The chat could not be started."),
         );
       }
+
       return;
     }
 
@@ -433,11 +486,13 @@ export function NewTaskDraftScreen(props: {
       } catch (error) {
         console.warn("[new-task] failed to remove delivered pending task", error);
       }
+
       flow.finishEditingPendingTask();
     } else {
       setDictationGeneration((generation) => generation + 1);
       clearComposerDraftContent(draftKey, { clearWorkspaceSelection: true });
     }
+
     navigation.dispatch(
       StackActions.replace("Thread", {
         environmentId: String(result.value.environmentId),
@@ -463,6 +518,7 @@ export function NewTaskDraftScreen(props: {
 
   const isAndroid = Platform.OS === "android";
   const isDarkMode = colorScheme === "dark";
+
   const canStart =
     Boolean(flow.selectedProject) &&
     Boolean(flow.selectedModel) &&
@@ -470,6 +526,7 @@ export function NewTaskDraftScreen(props: {
     isIncomingShareReady &&
     !isImportingShare &&
     !flow.submitting;
+
   const promptEditor = (
     <ComposerEditor
       ref={promptInputRef}
@@ -504,24 +561,31 @@ export function NewTaskDraftScreen(props: {
   const closeNewTask = () => {
     void KeyboardController.dismiss({ animated: true });
     const parentNavigation = navigation.getParent();
+
     if (parentNavigation) {
       parentNavigation.goBack();
+
       return;
     }
+
     navigation.goBack();
   };
+
   const chooseProject = () => {
     if (isIncomingShareTransferPending) {
       return;
     }
+
     promptInputRef.current?.blur();
     void KeyboardController.dismiss({ animated: true });
     navigation.dispatch(StackActions.push("NewTask", { incomingShareId: props.incomingShareId }));
   };
+
   const openEnvironmentPicker = () => {
     if (isIncomingShareTransferPending) {
       return;
     }
+
     promptInputRef.current?.blur();
     void KeyboardController.dismiss({ animated: true });
     navigation.dispatch(StackActions.push("NewTaskEnvironment"));
@@ -531,6 +595,7 @@ export function NewTaskDraftScreen(props: {
   const [projectLinePrefix = "", projectLineSuffix = ""] = t("in {project}?", {
     project: "{project}",
   }).split("{project}");
+
   const hero = (
     <View className="items-center gap-6 px-6" testID="new-task-hero">
       <View className="w-full items-center gap-1.5">
@@ -583,6 +648,7 @@ export function NewTaskDraftScreen(props: {
       />
     </View>
   );
+
   const heroViewport = (
     <View className="flex-1" collapsable={false}>
       <ScrollView

@@ -49,6 +49,7 @@ export async function pickComposerImages(input: { readonly existingCount: number
   readonly error: string | null;
 }> {
   const remainingSlots = PROVIDER_SEND_TURN_MAX_ATTACHMENTS - input.existingCount;
+
   if (remainingSlots <= 0) {
     return {
       images: [],
@@ -57,6 +58,7 @@ export async function pickComposerImages(input: { readonly existingCount: number
   }
 
   let imagePicker: Awaited<ReturnType<typeof loadImagePicker>>;
+
   try {
     imagePicker = await loadImagePicker();
   } catch (error) {
@@ -71,6 +73,7 @@ export async function pickComposerImages(input: { readonly existingCount: number
   // backgrounded; the guard keeps background-triggered restarts away mid-pick.
   const endHandoff = beginForegroundHandoff();
   let result: Awaited<ReturnType<typeof imagePicker.launchImageLibraryAsync>>;
+
   try {
     result = await imagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
@@ -95,22 +98,26 @@ export async function pickComposerImages(input: { readonly existingCount: number
 
   for (const asset of result.assets) {
     const mimeType = asset.mimeType?.toLowerCase();
+
     if (!mimeType?.startsWith("image/")) {
       error = `Unsupported file type for '${asset.fileName ?? "image"}'.`;
       continue;
     }
+
     if (!isProviderSendTurnSupportedImageMimeType(mimeType)) {
       error = `'${asset.fileName ?? "image"}' is not a supported image type. Attach GIF, JPEG, PNG, or WebP images.`;
       continue;
     }
 
     const base64 = asset.base64;
+
     if (!base64) {
       error = `Failed to read '${asset.fileName ?? "image"}'.`;
       continue;
     }
 
     const sizeBytes = asset.fileSize ?? estimateBase64ByteSize(base64);
+
     if (sizeBytes <= 0 || sizeBytes > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
       error = `'${asset.fileName ?? "image"}' exceeds the 10 MB attachment limit.`;
       continue;
@@ -139,6 +146,7 @@ export async function pasteComposerClipboard(input: { readonly existingCount: nu
   readonly error: string | null;
 }> {
   let clipboard: Awaited<ReturnType<typeof loadClipboard>>;
+
   try {
     clipboard = await loadClipboard();
   } catch (error) {
@@ -159,7 +167,9 @@ export async function pasteComposerClipboard(input: { readonly existingCount: nu
         error: `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} images per message.`,
       };
     }
+
     const image = await clipboard.getImageAsync({ format: "png" });
+
     if (!image) {
       return {
         images: [],
@@ -170,6 +180,7 @@ export async function pasteComposerClipboard(input: { readonly existingCount: nu
 
     const base64 = image.data.split(",")[1] ?? "";
     const sizeBytes = estimateBase64ByteSize(base64);
+
     if (sizeBytes <= 0 || sizeBytes > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
       return {
         images: [],
@@ -197,6 +208,7 @@ export async function pasteComposerClipboard(input: { readonly existingCount: nu
 
   if (await clipboard.hasStringAsync()) {
     const text = await clipboard.getStringAsync();
+
     return {
       images: [],
       text: text.length > 0 ? text : null,
@@ -213,6 +225,7 @@ export async function pasteComposerClipboard(input: { readonly existingCount: nu
 
 function mimeTypeFromUri(uri: string): string {
   const ext = uri.split(".").pop()?.toLowerCase();
+
   switch (ext) {
     case "png":
       return "image/png";
@@ -233,10 +246,13 @@ function mimeTypeFromUri(uri: string): string {
 export function isOwnedPastedImageUri(uri: string): boolean {
   try {
     const url = new URL(uri);
+
     if (url.protocol !== "file:") {
       return false;
     }
+
     const segments = url.pathname.split("/").filter(Boolean);
+
     return (
       segments.at(-2) === OWNED_PASTED_IMAGE_DIRECTORY && segments.at(-1)?.endsWith(".png") === true
     );
@@ -255,16 +271,20 @@ export async function convertPastedImagesToAttachments(input: {
 
   for (const [index, uri] of input.uris.entries()) {
     const ownedTemporaryFile = isOwnedPastedImageUri(uri);
+
     try {
       if (index >= Math.max(0, remainingSlots)) {
         continue;
       }
+
       const file = new File(uri);
       const base64 = await file.base64();
       const sizeBytes = estimateBase64ByteSize(base64);
+
       if (sizeBytes <= 0 || sizeBytes > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
         continue;
       }
+
       const mimeType = mimeTypeFromUri(uri);
       results.push({
         id: uuidv4(),
@@ -281,6 +301,7 @@ export async function convertPastedImagesToAttachments(input: {
       if (ownedTemporaryFile) {
         try {
           const file = new File(uri);
+
           if (file.exists) {
             file.delete();
           }

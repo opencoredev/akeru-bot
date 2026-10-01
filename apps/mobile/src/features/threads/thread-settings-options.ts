@@ -40,6 +40,7 @@ export function selectableChoices(
   descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
 ) {
   const injected = new Set(descriptor.promptInjectedValues ?? []);
+
   return descriptor.options.filter(
     (option) => !injected.has(option.id) && !HIDDEN_EFFORT_OPTION_IDS.has(option.id),
   );

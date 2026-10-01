@@ -30,11 +30,13 @@ function environmentIdsWithCapability(
   capability: ThreadCapability,
 ): ReadonlySet<EnvironmentId> {
   const supported = new Set<EnvironmentId>();
+
   for (const [environmentId, config] of serverConfigs) {
     if (config.environment.capabilities[capability] === true) {
       supported.add(environmentId);
     }
   }
+
   return supported;
 }
 
@@ -75,6 +77,7 @@ export function useThreadListV2Projection(input: {
   readonly selectedThreadKey: string | null;
 }) {
   const { selectedEnvironmentId, selectedProjectKey, searchQuery } = input;
+
   const searchEnvironmentIds = useMemo(
     () =>
       selectedEnvironmentId === null
@@ -90,16 +93,21 @@ export function useThreadListV2Projection(input: {
           : [],
     [input.searchEnvironments, selectedEnvironmentId],
   );
+
   const threadSearch = useThreadSearch(searchEnvironmentIds, searchQuery);
+
   const threadSearchMatchByKey = useMemo(() => {
     const matches = new Map<string, EnvironmentThreadSearchMatch>();
+
     for (const match of threadSearch.matches) {
       if (match.source === "user" || match.source === "assistant") {
         matches.set(threadSearchMatchKey(match), match);
       }
     }
+
     return matches;
   }, [threadSearch.matches]);
+
   const matchedThreadKeys = useMemo(
     () => new Set(threadSearch.matches.map(threadSearchMatchKey)),
     [threadSearch.matches],
@@ -114,20 +122,27 @@ export function useThreadListV2Projection(input: {
       }),
     [input.projectGroupingMode, input.projects, selectedEnvironmentId],
   );
+
   const projectCwdByKey = useMemo(() => {
     const map = new Map<string, string>();
+
     for (const project of input.projects) {
       map.set(scopedProjectKey(project.environmentId, project.id), project.workspaceRoot);
     }
+
     return map;
   }, [input.projects]);
+
   const projectByKey = useMemo(() => {
     const map = new Map<string, EnvironmentProject>();
+
     for (const project of input.projects) {
       map.set(scopedProjectKey(project.environmentId, project.id), project);
     }
+
     return map;
   }, [input.projects]);
+
   const selectedProjectScope = useMemo(
     () =>
       selectedProjectKey === null
@@ -143,6 +158,7 @@ export function useThreadListV2Projection(input: {
           ) ?? null),
     [projectScopes, selectedProjectKey],
   );
+
   // Scope order is irrelevant here: scopes are only looked up by project key.
   const projectTitleByProjectKey = useMemo(
     () =>
@@ -159,6 +175,7 @@ export function useThreadListV2Projection(input: {
       ),
     [projectScopes],
   );
+
   const selectedProjectRefs = useMemo(
     () =>
       selectedProjectScope === null
@@ -176,16 +193,20 @@ export function useThreadListV2Projection(input: {
   const [settledVisibleCount, setSettledVisibleCount] = useState(
     THREAD_LIST_V2_SETTLED_INITIAL_COUNT,
   );
+
   const settledResetKey = `${selectedEnvironmentId ?? "all"}:${selectedProjectKey ?? "all"}:${searchQuery.trim()}`;
   const lastSettledResetKeyRef = useRef(settledResetKey);
+
   if (lastSettledResetKeyRef.current !== settledResetKey) {
     lastSettledResetKeyRef.current = settledResetKey;
     setSettledVisibleCount(THREAD_LIST_V2_SETTLED_INITIAL_COUNT);
   }
+
   const showMoreSettled = useCallback(
     () => setSettledVisibleCount((count) => count + THREAD_LIST_V2_SETTLED_PAGE_COUNT),
     [],
   );
+
   const shelves = useThreadListV2ShelfPreferences();
   const { settledShelfExpanded, snoozedShelfExpanded } = shelves;
   // A minute clock lets a queued turn leave its short adoption grace period
@@ -199,12 +220,14 @@ export function useThreadListV2Projection(input: {
     // Refresh immediately because the mount-time value can be hours old.
     setNowMinute(new Date().toISOString().slice(0, 16));
     const id = setInterval(() => setNowMinute(new Date().toISOString().slice(0, 16)), 60_000);
+
     return () => clearInterval(id);
   }, []);
   // Threads on servers without the settlement capability never classify as
   // settled (the user could neither un-settle nor pin them).
   const serverConfigs = useAtomValue(environmentServerConfigsAtom);
   const capabilities = useThreadCapabilityEnvironmentIds(serverConfigs);
+
   // Canonical arranged pinned order (reorder-capable threads only) for the
   // Move up/down position flags. Computed from all shells, not the rendered
   // list, so search/scope filtering never disables or misdirects a move.
@@ -217,8 +240,10 @@ export function useThreadListV2Projection(input: {
           capabilities.pinReorder.has(thread.environmentId),
       ),
     );
+
     return pinned.map((thread) => `${thread.environmentId}:${thread.id}`);
   }, [capabilities.pinReorder, input.threads]);
+
   const layout = useMemo(() => {
     // Settled threads are live shells; archived threads keep their original
     // "hidden from lists" meaning.
@@ -252,15 +277,18 @@ export function useThreadListV2Projection(input: {
     matchedThreadKeys,
     selectedProjectScope,
   ]);
+
   // Re-partition the moment the earliest snooze expires (clamped to the
   // signed-32-bit setTimeout range; far-future wakes re-arm at the clamp).
   const nextSnoozeWakeAt = layout.nextSnoozeWakeAt;
   useEffect(() => {
     if (nextSnoozeWakeAt === null) return;
     const wakeAtMs = Date.parse(nextSnoozeWakeAt);
+
     if (Number.isNaN(wakeAtMs)) return;
     const delayMs = Math.min(Math.max(0, wakeAtMs - Date.now()) + 50, 2_147_483_647);
     const id = setTimeout(() => bumpSnoozeWakeTick((tick) => tick + 1), delayMs);
+
     return () => clearTimeout(id);
     // snoozeWakeTick must re-arm the timer even when nextSnoozeWakeAt is
     // unchanged: after a clamped fire (wake beyond the 32-bit setTimeout
@@ -271,6 +299,7 @@ export function useThreadListV2Projection(input: {
   // while their environment is offline. Same environment scope and search
   // filter as the list itself.
   const pendingSearchQuery = searchQuery.trim().toLocaleLowerCase();
+
   const visiblePendingTasks = useMemo(
     () =>
       input.pendingTasks.filter(
@@ -286,6 +315,7 @@ export function useThreadListV2Projection(input: {
       ),
     [input.pendingTasks, selectedEnvironmentId, selectedProjectRefs, pendingSearchQuery],
   );
+
   const listItems = useMemo(
     () =>
       buildThreadListV2ListItems({

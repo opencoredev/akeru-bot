@@ -36,6 +36,7 @@ export function ControlPill(props: {
     activatedOnPressInRef.current = true;
     props.onPress?.();
   };
+
   const handlePressOut = () => {
     // Pressability invokes onPressOut immediately before onPress on release.
     // Defer the reset so onPress can identify the same physical gesture.
@@ -43,10 +44,12 @@ export function ControlPill(props: {
       activatedOnPressInRef.current = false;
     }, 0);
   };
+
   const handlePress = () => {
     if (activatedOnPressInRef.current) {
       return;
     }
+
     props.onPress?.();
   };
 
@@ -54,6 +57,7 @@ export function ControlPill(props: {
   const iconSubtle = useThemeColor("--color-icon-subtle");
   const primaryFg = useThemeColor("--color-primary-foreground");
   const dangerFg = useThemeColor("--color-danger-foreground");
+
   const iconTintColor =
     variant === "primary"
       ? props.disabled
@@ -65,6 +69,7 @@ export function ControlPill(props: {
 
   const isCircle =
     variant === "circle" || variant === "danger" || (variant === "primary" && !props.label);
+
   const containerClassName = cn(
     isCircle
       ? "h-11 w-11 items-center justify-center rounded-full"
@@ -80,6 +85,7 @@ export function ControlPill(props: {
         : "bg-subtle",
     props.className,
   );
+
   const labelClassName = cn(
     "text-center text-xs font-t3-bold",
     variant === "primary"
@@ -130,6 +136,7 @@ export function ControlPillMenu(
     // so its own tap handling still works.
     if (props.shouldOpenOnLongPress && isValidElement(props.children)) {
       const child = props.children as ReactElement<{ onLongPress?: () => void }>;
+
       return (
         <AndroidAnchoredMenu
           actions={props.actions}
@@ -149,6 +156,7 @@ export function ControlPillMenu(
         </AndroidAnchoredMenu>
       );
     }
+
     return (
       <AndroidAnchoredMenu
         actions={props.actions}
@@ -164,6 +172,7 @@ export function ControlPillMenu(
 
   const { className: _className, ...menuProps } = props;
   let children = menuProps.children;
+
   // In long-press mode the wrapped pressable still receives the touch (the
   // patched MenuView button is touch-transparent) and RN's Fabric touch
   // handler is never cancelled by the in-tree UIContextMenuInteraction, so a
@@ -179,6 +188,7 @@ export function ControlPillMenu(
       delayLongPress: child.props.delayLongPress ?? 350,
     });
   }
+
   return (
     <MenuView {...menuProps} themeVariant={isDarkMode ? "dark" : "light"}>
       {children}

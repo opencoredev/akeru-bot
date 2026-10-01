@@ -39,20 +39,27 @@ export async function installAppUpdate(
   const setState = options.onStateChange ?? (() => {});
   setState("restarting");
   const flushed = await settlePromise(() => environment.flushPendingWrites());
+
   if (flushed._tag === "Failure") {
     reportUpdateFailure(flushed, "Could not save pending state.", undefined);
+
     if (!userRequested) {
       deferral.installInProgress = false;
+
       return "flush-failed";
     }
   }
+
   const reloaded = await settlePromise(() => client.reloadAsync());
+
   if (reloaded._tag === "Failure") {
     reportUpdateFailure(reloaded, "Downloaded, but could not restart the app.", options.onFailure);
     setState("idle");
     deferral.installInProgress = false;
+
     return "restart-failed";
   }
+
   return "installed";
 }
 
@@ -64,6 +71,7 @@ export async function installPendingAppUpdate(
   options: AppUpdateCheckOptions,
 ): Promise<void> {
   const outcome = await installAppUpdate(client, environment, deferral, options, true);
+
   if (outcome === "restart-failed") {
     // Let later checks re-arm the install; the downloaded update still
     // applies at the next cold start regardless.
@@ -96,7 +104,9 @@ async function promptDeferredAppUpdateInstall(
 ): Promise<void> {
   if (!deferral.pendingInstall || deferral.installInProgress) return;
   const installNow = await settlePromise(() => environment.confirmInstallNow());
+
   if (installNow._tag !== "Success" || !installNow.value) return;
+
   // A backgrounding while the alert was up may have started the deferred
   // restart already; the stale accept must not start a second one.
   if (!deferral.pendingInstall || deferral.installInProgress) return;
@@ -123,19 +133,24 @@ async function applyDeferredAppUpdateInstall(
   deferral.installInProgress = true;
   const flushed = await settlePromise(() => environment.flushPendingWrites());
   const safe = await settlePromise(() => environment.isSafeToRestartInBackground());
+
   if (flushed._tag === "Failure" || safe._tag !== "Success" || !safe.value) {
     if (flushed._tag === "Failure") {
       // Nothing is lost yet: keep the state-bearing runtime alive and retry
       // the flush at the next backgrounding instead of restarting over it.
       reportUpdateFailure(flushed, "Could not save pending state.", undefined);
     }
+
     deferral.installInProgress = false;
     // This attempt already ran in the current background session; retrying
     // before a fresh transition would just loop over the same failure.
     scheduleDeferredAppUpdateInstall(client, environment, deferral, false);
+
     return;
   }
+
   const reloaded = await settlePromise(() => client.reloadAsync());
+
   if (reloaded._tag === "Failure") {
     reportUpdateFailure(reloaded, "Downloaded, but could not restart the app.", undefined);
     deferral.installInProgress = false;
@@ -152,6 +167,7 @@ export function reportUpdateFailure(
 ): void {
   if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
   const error = squashAtomCommandFailure(result);
+
   if (isAppUpdateUnavailableError(error)) return;
 
   reportAtomCommandResult(result, { label: "app update check" });
@@ -161,5 +177,6 @@ export function reportUpdateFailure(
 function isAppUpdateUnavailableError(error: unknown): boolean {
   if (typeof error !== "object" || error === null || !("code" in error)) return false;
   const code = error.code;
+
   return typeof code === "string" && UPDATE_CHECK_UNAVAILABLE_ERROR_CODES.has(code);
 }

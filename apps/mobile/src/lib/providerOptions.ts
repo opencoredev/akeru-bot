@@ -16,6 +16,7 @@ export function resolveProviderOptionDescriptors(input: {
   if (!input.capabilities) {
     return [];
   }
+
   return getProviderOptionDescriptors({
     caps: input.capabilities,
     selections: input.selections,
@@ -34,7 +35,9 @@ export function providerOptionValueLabels(
     if (descriptor.type === "boolean") {
       return descriptor.currentValue ? [descriptor.label] : [];
     }
+
     const label = getProviderOptionCurrentLabel(descriptor);
+
     return label ? [label] : [];
   });
 }
@@ -49,9 +52,11 @@ export function applyProviderOptionSelection(
   change: ProviderOptionSelection,
 ): ReadonlyArray<ProviderOptionSelection> | null {
   const descriptor = descriptors.find((candidate) => candidate.id === change.id);
+
   if (!descriptor) {
     return null;
   }
+
   if (
     (descriptor.type === "boolean" && typeof change.value !== "boolean") ||
     (descriptor.type === "select" &&

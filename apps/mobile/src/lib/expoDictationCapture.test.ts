@@ -19,6 +19,7 @@ const native = vi.hoisted(() => ({
   statusRemove: vi.fn(),
   appRemove: vi.fn(),
 }));
+
 vi.mock("expo-audio", () => ({
   AudioQuality: { MEDIUM: 64 },
   IOSOutputFormat: { MPEG4AAC: "aac " },
@@ -33,10 +34,12 @@ vi.mock("expo-audio", () => ({
       addListener(_event: string, listener: typeof native.emitStatus) {
         if (native.listenerFails) throw new Error("listener registration failed");
         native.emitStatus = listener;
+
         return { remove: native.statusRemove };
       }
       prepareToRecordAsync(options: unknown) {
         this.uri = "file:///cache/recording.m4a";
+
         return native.prepare(options);
       }
       record() {
@@ -53,6 +56,7 @@ vi.mock("expo-audio", () => ({
     },
   },
 }));
+
 vi.mock("expo-file-system", () => ({
   File: class {
     constructor(readonly uri: string) {}
@@ -70,10 +74,12 @@ vi.mock("expo-file-system", () => ({
     }
   },
 }));
+
 vi.mock("react-native", () => ({
   AppState: {
     addEventListener: (_event: string, listener: typeof native.emitApp) => {
       native.emitApp = listener;
+
       return { remove: native.appRemove };
     },
   },
@@ -83,6 +89,7 @@ import { DICTATION_RECORDING, startExpoDictationCapture } from "./expoDictationC
 
 function start(signal = new AbortController().signal) {
   const onError = vi.fn();
+
   return {
     onError,
     capture: startExpoDictationCapture({ signal, limits: DEFAULT_DICTATION_LIMITS, onError }),

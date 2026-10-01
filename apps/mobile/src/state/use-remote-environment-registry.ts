@@ -45,12 +45,14 @@ function toSavedConnection(
   const active = Option.getOrNull(prepared);
   const httpBaseUrl = active?.httpBaseUrl ?? displayUrl;
   const socketUrl = active?.socketUrl ?? "";
+
   const wsBaseUrl =
     socketUrl === ""
       ? displayUrl.startsWith("https://")
         ? displayUrl.replace(/^https:/, "wss:")
         : displayUrl.replace(/^http:/, "ws:")
       : new URL(socketUrl).origin;
+
   const authorization = active?.httpAuthorization ?? null;
 
   return {
@@ -66,6 +68,7 @@ function toSavedConnection(
 
 const savedConnectionsByIdAtom = Atom.make((get) => {
   const presentationById = get(environmentPresentations.presentationsAtom);
+
   return Object.fromEntries(
     [...presentationById.entries()].map(([environmentId, presentation]) => [
       environmentId,
@@ -105,9 +108,11 @@ export function useSavedRemoteConnection(
 ): SavedRemoteConnection | null {
   const { presentation } = useEnvironmentPresentation(environmentId);
   const prepared = usePreparedConnection(environmentId);
+
   if (environmentId === null || presentation === null) {
     return null;
   }
+
   return toSavedConnection(projectEnvironmentPresentation(environmentId, presentation), prepared);
 }
 
@@ -116,15 +121,18 @@ export function useRemoteEnvironmentRuntime(
 ): EnvironmentRuntimeState | null {
   const { presentation } = useEnvironmentPresentation(environmentId);
   const serverConfig = useEnvironmentServerConfig(environmentId);
+
   if (environmentId === null || presentation === null) {
     return null;
   }
+
   return toRuntimeState(projectEnvironmentPresentation(environmentId, presentation), serverConfig);
 }
 
 export function useRemoteConnectionStatus() {
   const workspace = useWorkspaceState();
   const pendingConnectionError = useAtomValue(pendingConnectionErrorAtom);
+
   const connectedEnvironments = useMemo<ReadonlyArray<ConnectedEnvironmentSummary>>(
     () =>
       workspace.environments.map((environment) => ({
@@ -162,14 +170,18 @@ export function useRemoteConnections() {
       const nextPairingUrl = pairingUrl ?? connectionPairingUrl;
       setPendingConnectionError(null);
       const result = await controller.connectPairingUrl(nextPairingUrl);
+
       if (AsyncResult.isFailure(result)) {
         const error = Cause.squash(result.cause);
+
         const message =
           error instanceof Error ? error.message : "Failed to pair with the environment.";
+
         setPendingConnectionError(message);
       } else {
         appAtomRegistry.set(connectionPairingUrlAtom, "");
       }
+
       return result;
     },
     [connectionPairingUrl, controller],
@@ -179,6 +191,7 @@ export function useRemoteConnections() {
     (environmentId: EnvironmentId) => controller.retryEnvironment(environmentId),
     [controller],
   );
+
   const onUpdateEnvironment = useCallback(
     (
       environmentId: EnvironmentId,
@@ -192,9 +205,11 @@ export function useRemoteConnections() {
       const environment = connectedEnvironments.find(
         (candidate) => candidate.environmentId === environmentId,
       );
+
       if (!environment) {
         return;
       }
+
       Alert.alert(
         t("Remove environment?"),
         t("Disconnect and forget {label} on this device.", {

@@ -237,10 +237,12 @@ describe("mobile model options", () => {
       instanceId: ProviderInstanceId.make("codex"),
       model: "gpt-5.6-sol",
     };
+
     const disabled = {
       instanceId: ProviderInstanceId.make("claudeAgent"),
       model: "claude-sonnet-5",
     };
+
     const removed = {
       instanceId: ProviderInstanceId.make("codex_personal"),
       model: "gpt-5.6-sol",
@@ -299,6 +301,7 @@ describe("resolveModelSendBlock", () => {
         ...patch,
       },
     ]);
+
   const selection = { instanceId: ProviderInstanceId.make("claudeAgent"), model: "claude-opus" };
 
   it("blocks Send with the provider, what failed, and the next step", () => {
@@ -306,16 +309,19 @@ describe("resolveModelSendBlock", () => {
       claude({ auth: { status: "unauthenticated" }, unavailability: "missing-login" }),
       selection,
     );
+
     expect(block).toMatchObject({ title: "Claude is not connected", action: "providers" });
   });
 
   it("explains the block in the active interface language", async () => {
     const zh = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
+
     const block = resolveModelSendBlock(
       claude({ auth: { status: "unauthenticated" }, unavailability: "missing-login" }),
       selection,
       zh.t,
     );
+
     expect(block).toMatchObject({ title: "Claude 未连接", action: "providers" });
   });
 
@@ -323,6 +329,7 @@ describe("resolveModelSendBlock", () => {
     const block = resolveModelSendBlock(claude({ models: [{ slug: "other", name: "Other" }] }), {
       ...selection,
     });
+
     expect(block?.title).toBe("claude-opus is not available on Claude");
   });
 
@@ -343,6 +350,7 @@ describe("resolveModelSendBlock", () => {
         dependentRoutines: [],
       },
     ];
+
     expect(resolveModelSendBlock(claude({}), selection, undefined, disconnected)?.title).toBe(
       "Claude is not connected",
     );

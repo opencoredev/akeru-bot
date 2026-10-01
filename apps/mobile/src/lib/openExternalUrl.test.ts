@@ -49,9 +49,11 @@ describe("tryOpenExternalUrl", () => {
     );
     expect(attributes).not.toHaveProperty("url");
     expect(attributes).not.toHaveProperty("cause");
+
     const diagnosticText = [message, ...Object.values(attributes as Record<string, unknown>)]
       .map(String)
       .join("\n");
+
     expect(diagnosticText).not.toContain("token=secret");
     expect(diagnosticText).not.toContain("browser-unavailable-secret-sentinel");
   });

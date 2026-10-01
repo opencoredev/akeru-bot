@@ -48,9 +48,11 @@ export function SelectableMarkdownText({
       html: true,
       math: false,
     });
+
     const document = preserveSoftBreaks
       ? nativeMarkdownWithPreservedSoftBreaks(parsedDocument)
       : parsedDocument;
+
     return nativeMarkdownDocumentChunks(document).map((chunk) =>
       chunk.kind === "selectable"
         ? {

@@ -13,6 +13,8 @@ export function ImageGenerationSummary({
   const settings =
     useAtomValue(serverEnvironment.settingsValueAtom(environmentId))?.imageGeneration ??
     DEFAULT_SERVER_SETTINGS.imageGeneration;
+
   const query = useEnvironmentQuery(serverEnvironment.imageProviders({ environmentId, input: {} }));
+
   return <ImageGenerationSummaryView settings={settings} query={query} onRetry={query.refresh} />;
 }
