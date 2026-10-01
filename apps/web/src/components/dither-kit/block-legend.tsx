@@ -19,7 +19,7 @@ import { rgb, seedOfColor } from "./palette";
 export function BlockLegend({
   config,
   values,
-  valueFormatter = (v) => String(v),
+  valueFormatter = String,
   align = "start",
   className,
 }: {
