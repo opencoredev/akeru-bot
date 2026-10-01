@@ -61,6 +61,7 @@ function currentNetworkStatus(): "unknown" | "offline" | "online" {
   if (typeof navigator === "undefined") {
     return "unknown";
   }
+
   return navigator.onLine ? "online" : "offline";
 }
 
@@ -73,6 +74,7 @@ const connectivityLayer = Connectivity.layer({
         const offline = () => Queue.offerUnsafe(queue, "offline");
         window.addEventListener("online", online);
         window.addEventListener("offline", offline);
+
         return { online, offline };
       }),
       ({ online, offline }) =>
@@ -93,7 +95,9 @@ const wakeupsLayer = Wakeups.layer({
             Queue.offerUnsafe(queue, "application-active");
           }
         };
+
         document.addEventListener("visibilitychange", listener);
+
         return listener;
       }),
       (listener) =>
@@ -107,6 +111,7 @@ const wakeupsLayer = Wakeups.layer({
 function clientMetadata() {
   const desktop = window.desktopBridge !== undefined;
   const platform = navigator.platform.trim();
+
   return {
     label: desktop ? "Akeru Bot Desktop" : "Akeru Bot Web",
     deviceType: "desktop" as const,
@@ -118,12 +123,14 @@ function clientMetadata() {
 
 function sshPreparationError(cause: unknown) {
   const message = cause instanceof Error ? cause.message : String(cause);
+
   if (message.toLowerCase().includes("cancel")) {
     return new ConnectionBlockedError({
       reason: "authentication",
       detail: message,
     });
   }
+
   return new ConnectionTransientError({
     reason: "remote-unavailable",
     detail: `Could not prepare the SSH environment: ${message}`,
@@ -140,21 +147,26 @@ export const provisionDesktopSshEnvironment = Effect.fn(
       }),
     catch: sshPreparationError,
   });
+
   const pairingToken = bootstrap.pairingToken;
+
   if (pairingToken === null) {
     return yield* new ConnectionBlockedError({
       reason: "authentication",
       detail: "The SSH environment did not issue a pairing credential.",
     });
   }
+
   const descriptor = yield* Effect.tryPromise({
     try: () => bridge.fetchSshEnvironmentDescriptor(bootstrap.httpBaseUrl),
     catch: sshPreparationError,
   });
+
   const access = yield* Effect.tryPromise({
     try: () => bridge.bootstrapSshBearerSession(bootstrap.httpBaseUrl, pairingToken),
     catch: sshPreparationError,
   });
+
   return {
     environmentId: descriptor.environmentId,
     label: descriptor.label,
@@ -169,6 +181,7 @@ const capabilitiesLayer = Layer.effectContext(
       metadata: clientMetadata(),
       scopes: AuthStandardClientScopes,
     });
+
     const primaryAuth = PrimaryEnvironmentAuth.of({
       bearerToken: Effect.tryPromise({
         try: readDesktopPrimaryBearerToken,
@@ -179,25 +192,30 @@ const capabilitiesLayer = Layer.effectContext(
           }),
       }).pipe(Effect.map(Option.fromNullishOr)),
     });
+
     const ssh = SshEnvironmentGateway.of({
       provision: Effect.fn("web.connectionPlatform.ssh.provision")(function* (target) {
         const bridge = window.desktopBridge;
+
         if (bridge === undefined) {
           return yield* new ConnectionBlockedError({
             reason: "unsupported",
             detail: "SSH environments are only available in the desktop app.",
           });
         }
+
         return yield* provisionDesktopSshEnvironment(bridge, target);
       }),
       prepare: Effect.fn("web.connectionPlatform.ssh.prepare")(function* (input) {
         const bridge = window.desktopBridge;
+
         if (bridge === undefined) {
           return yield* new ConnectionBlockedError({
             reason: "unsupported",
             detail: "SSH environments are only available in the desktop app.",
           });
         }
+
         const bootstrap = yield* Effect.tryPromise({
           try: () =>
             bridge.ensureSshEnvironment(input.target, {
@@ -205,17 +223,20 @@ const capabilitiesLayer = Layer.effectContext(
             }),
           catch: sshPreparationError,
         });
+
         if (bootstrap.pairingToken === null) {
           return yield* new ConnectionBlockedError({
             reason: "authentication",
             detail: "The SSH environment did not issue a pairing credential.",
           });
         }
+
         const access = yield* Effect.tryPromise({
           try: () =>
             bridge.bootstrapSshBearerSession(bootstrap.httpBaseUrl, bootstrap.pairingToken!),
           catch: sshPreparationError,
         });
+
         return {
           bootstrap,
           bearerToken: access.access_token,
@@ -223,9 +244,11 @@ const capabilitiesLayer = Layer.effectContext(
       }),
       disconnect: Effect.fn("web.connectionPlatform.ssh.disconnect")(function* (target) {
         const bridge = window.desktopBridge;
+
         if (bridge === undefined) {
           return;
         }
+
         yield* Effect.tryPromise({
           try: () => bridge.disconnectSshEnvironment(target),
           catch: (cause) =>
@@ -250,6 +273,7 @@ const loadPrimaryConnectionRegistration = Effect.fn(
   const descriptor = yield* fetchRemoteEnvironmentDescriptor({
     httpBaseUrl: resolved.target.httpBaseUrl,
   }).pipe(Effect.provide(primaryEnvironmentHttpLayer), Effect.mapError(mapRemoteEnvironmentError));
+
   return new PrimaryConnectionRegistration({
     target: new PrimaryConnectionTarget({
       environmentId: descriptor.environmentId,
@@ -276,18 +300,23 @@ const loadSecondaryConnectionRegistration = Effect.fn(
       detail: `Desktop-local backend ${entry.id} is not ready yet.`,
     });
   }
+
   const httpBaseUrl = entry.httpBaseUrl;
   const wsBaseUrl = entry.wsBaseUrl;
+
   const descriptor = yield* fetchRemoteEnvironmentDescriptor({ httpBaseUrl }).pipe(
     Effect.mapError(mapRemoteEnvironmentError),
   );
+
   const issuedAtEpochMs = yield* Clock.currentTimeMillis;
+
   const access = yield* bootstrapRemoteBearerSession({
     httpBaseUrl,
     credential: entry.bootstrapToken,
     scopes: AuthStandardClientScopes,
     clientMetadata: clientMetadata(),
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
+
   // Keep the desktop pool's stable backend id in the connection id. The
   // descriptor environment id still scopes projects and RPC state, while the
   // backend id lets desktop-only operations (notably the WSL folder picker)
@@ -297,6 +326,7 @@ const loadSecondaryConnectionRegistration = Effect.fn(
   // e.g. "WSL: Ubuntu") over the generic descriptor label, so consumers can show
   // a meaningful name without recovering it from the bootstrap list later.
   const label = entry.label || descriptor.label;
+
   return {
     registration: new BearerConnectionRegistration({
       target: new BearerConnectionTarget({
@@ -322,6 +352,7 @@ const loadSecondaryConnectionRegistration = Effect.fn(
 // the bridge, so the renderer polls; successful registrations are cached by a
 // signature of their endpoint + token until bearer credentials approach expiry.
 const PLATFORM_POLL_INTERVAL = "3 seconds";
+
 const SECONDARY_BEARER_REFRESH_SKEW_MS = 5_000;
 
 export function secondaryBearerExpiresAtEpochMs(
@@ -407,6 +438,7 @@ export function secondaryRegistrationsToRetainAfterTopologyRead(
   if (topologyRead._tag === "Success") {
     return new Map();
   }
+
   return new Map(
     [...previous].filter(
       ([, cached]) => cached.expiresAtEpochMs !== undefined && nowEpochMs < cached.expiresAtEpochMs,
@@ -430,10 +462,12 @@ const platformConnectionSourceLayer = Layer.effect(
       const registrations: Array<PlatformConnectionRegistration> = [];
 
       const primaryTopologyRead = readPrimaryEnvironmentTargetResult();
+
       const retainedPrimary = primaryRegistrationToRetainAfterTopologyRead(
         previous,
         primaryTopologyRead,
       );
+
       if (retainedPrimary !== undefined) {
         next.set(PRIMARY_LOCAL_ENVIRONMENT_ID, retainedPrimary);
         registrations.push(retainedPrimary.registration);
@@ -447,6 +481,7 @@ const platformConnectionSourceLayer = Layer.effect(
         const primaryTarget = primaryTopologyRead.target;
         const signature = `primary|${primaryTarget.target.httpBaseUrl}|${primaryTarget.target.wsBaseUrl}`;
         const cached = previous.get(PRIMARY_LOCAL_ENVIRONMENT_ID);
+
         if (
           cached !== undefined &&
           canReuseCachedPlatformRegistration(cached, signature, nowEpochMs)
@@ -460,6 +495,7 @@ const platformConnectionSourceLayer = Layer.effect(
             ),
             Effect.option,
           );
+
           if (Option.isSome(built)) {
             const cacheEntry = { signature, registration: built.value };
             next.set(PRIMARY_LOCAL_ENVIRONMENT_ID, cacheEntry);
@@ -469,6 +505,7 @@ const platformConnectionSourceLayer = Layer.effect(
       }
 
       const topologyRead = readDesktopSecondaryBootstrapsResult();
+
       for (const [id, cached] of secondaryRegistrationsToRetainAfterTopologyRead(
         previous,
         topologyRead,
@@ -486,6 +523,7 @@ const platformConnectionSourceLayer = Layer.effect(
         for (const bootstrap of topologyRead.bootstraps) {
           const signature = `${bootstrap.httpBaseUrl}|${bootstrap.wsBaseUrl}|${bootstrap.bootstrapToken ?? ""}`;
           const cached = previous.get(bootstrap.id);
+
           if (
             cached !== undefined &&
             canReuseCachedPlatformRegistration(cached, signature, nowEpochMs)
@@ -494,6 +532,7 @@ const platformConnectionSourceLayer = Layer.effect(
             registrations.push(cached.registration);
             continue;
           }
+
           const built = yield* loadSecondaryConnectionRegistration(bootstrap).pipe(
             Effect.tapError((error) =>
               Effect.logWarning("Could not connect a desktop-local backend.", {
@@ -503,6 +542,7 @@ const platformConnectionSourceLayer = Layer.effect(
             ),
             Effect.option,
           );
+
           if (Option.isSome(built)) {
             const cacheEntry = { signature, ...built.value };
             next.set(bootstrap.id, cacheEntry);
@@ -518,6 +558,7 @@ const platformConnectionSourceLayer = Layer.effect(
       }
 
       yield* Ref.set(cacheRef, next);
+
       return registrations as ReadonlyArray<PlatformConnectionRegistration>;
     }).pipe(Effect.provide(FetchHttpClient.layer));
 
@@ -547,6 +588,7 @@ const rpcRequestObserverLayer = Layer.succeed(
         nextObservedRpcRequestId += 1;
         const requestId = `${environmentId}:${nextObservedRpcRequestId}`;
         trackRpcRequestSent(requestId, method, `${method} · ${environmentId}`);
+
         return Effect.sync(() => {
           acknowledgeRpcRequest(requestId);
         });

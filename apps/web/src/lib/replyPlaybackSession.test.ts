@@ -14,6 +14,7 @@ describe("web reply playback synthesis", () => {
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });
+
     expect(session.synthesisFor("environment")).toEqual({
       available: true,
       provider: "openai",
@@ -29,6 +30,7 @@ describe("web reply playback synthesis", () => {
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });
+
     expect(session.synthesisFor("environment")).toEqual({
       available: true,
       provider: "openai",
@@ -39,12 +41,14 @@ describe("web reply playback synthesis", () => {
 
   it("leaves replies from another environment unavailable", async () => {
     const synthesize = vi.fn();
+
     const session = createWebReplyPlaybackSession({
       environmentId: "primary" as never,
       voice: { enabled: true, provider: "composed" },
       synthesize,
       cancel: vi.fn(),
     });
+
     expect(session.synthesisFor("remote")).toMatchObject({ available: false });
     expect(session.synthesisFor("primary")).toMatchObject({ available: true });
     session.dispose();
@@ -55,12 +59,14 @@ describe("web reply playback synthesis", () => {
       enabled: true,
       provider: "composed",
     };
+
     const session = createWebReplyPlaybackSession({
       environmentId: "primary" as never,
       voice: () => voice as never,
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });
+
     const listener = vi.fn();
     session.subscribeSynthesis(listener);
     voice = { ...voice, synthesisVoices: { openai: "nova" } };

@@ -13,6 +13,7 @@ function requireConfirmation(confirmation: Promise<boolean> | undefined): Promis
   if (!confirmation) {
     throw new Error("Expected a registered confirmation host.");
   }
+
   return confirmation;
 }
 
@@ -28,6 +29,7 @@ describe("confirm dialog coordinator", () => {
 
   it("resolves a displayed confirmation and waits for its close transition", async () => {
     const unregister = registerConfirmDialogHost();
+
     const confirmation = requireConfirmation(
       requestConfirmDialog("Delete this thread?", {
         variant: "destructive",
@@ -106,6 +108,7 @@ describe("confirm dialog coordinator", () => {
 
     expect(readConfirmDialogState()).toEqual({ status: "idle" });
     unregister();
+
     return expect(confirmation).resolves.toBe(true);
   });
 });

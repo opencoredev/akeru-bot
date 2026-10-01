@@ -25,6 +25,7 @@ describe("custom theme library", () => {
         colors: { canvas: "#07152f" },
       },
     ]);
+
     let storageHandler: ((event: StorageEvent) => void) | undefined;
     vi.stubGlobal("window", {
       addEventListener: (type: string, listener: (event: StorageEvent) => void) => {
@@ -89,6 +90,7 @@ describe("custom theme library", () => {
 
   it("atomically replaces an imported collection and removes stale variants", () => {
     const collection = { id: "open-vsx:demo.theme", label: "Demo Theme" };
+
     const personalTheme = {
       id: "personal",
       label: "Personal",
@@ -96,6 +98,7 @@ describe("custom theme library", () => {
       colors: { canvas: "#111111", futureRole: "hsl(10 20% 30%)" },
       futureMetadata: { version: 2 },
     };
+
     const stored = new Map<string, string>([
       [
         CUSTOM_THEMES_STORAGE_KEY,
@@ -118,6 +121,7 @@ describe("custom theme library", () => {
         ]),
       ],
     ]);
+
     const setItem = vi.fn((key: string, value: string) => stored.set(key, value));
     vi.stubGlobal("window", {
       localStorage: {
@@ -130,12 +134,14 @@ describe("custom theme library", () => {
     invalidateCustomThemes();
     const expectedCollection = getStoredCustomThemeCollection(collection.id);
     getCustomThemes();
+
     const concurrentlyAddedTheme = {
       id: "other-tab",
       label: "Other Tab",
       appearance: "dark",
       colors: { canvas: "#222222" },
     };
+
     stored.set(
       CUSTOM_THEMES_STORAGE_KEY,
       JSON.stringify([
@@ -143,6 +149,7 @@ describe("custom theme library", () => {
         concurrentlyAddedTheme,
       ]),
     );
+
     const replacement = [
       {
         ...parseThemeFile({
@@ -184,6 +191,7 @@ describe("custom theme library", () => {
 
   it("replaces collection entries even when their stored collection label is malformed", () => {
     const collection = { id: "open-vsx:demo.theme", label: "Demo Theme" };
+
     const stored = new Map<string, string>([
       [
         CUSTOM_THEMES_STORAGE_KEY,
@@ -198,6 +206,7 @@ describe("custom theme library", () => {
         ]),
       ],
     ]);
+
     vi.stubGlobal("window", {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
@@ -207,6 +216,7 @@ describe("custom theme library", () => {
     });
 
     invalidateCustomThemes();
+
     const replacement = {
       ...parseThemeFile({
         version: THEME_FILE_VERSION,
@@ -227,6 +237,7 @@ describe("custom theme library", () => {
 
   it("canonicalizes explicit writes without migrating untouched themes", () => {
     const stored = new Map<string, string>();
+
     const untouchedTheme = {
       id: "legacy",
       label: "Legacy",
@@ -234,6 +245,7 @@ describe("custom theme library", () => {
       colors: { accent: "#5b6cff", futureRole: "hsl(10 20% 30%)" },
       futureMetadata: { version: 2 },
     };
+
     stored.set(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify([untouchedTheme]));
     vi.stubGlobal("window", {
       localStorage: {
@@ -244,6 +256,7 @@ describe("custom theme library", () => {
     });
 
     invalidateCustomThemes();
+
     const createdTheme = installCustomTheme(
       parseThemeFile({
         version: THEME_FILE_VERSION,
@@ -254,6 +267,7 @@ describe("custom theme library", () => {
         sidebarArtwork: true,
       }),
     );
+
     const updatedTheme = updateCustomTheme({
       ...createdTheme,
       label: "Aurora Night",
@@ -288,6 +302,7 @@ describe("custom theme library", () => {
 
   it("removes multiple custom themes atomically while preserving unrelated entries", () => {
     const collection = { id: "open-vsx:demo.theme", label: "Demo Theme" };
+
     const personalTheme = {
       id: "personal",
       label: "Personal",
@@ -295,6 +310,7 @@ describe("custom theme library", () => {
       colors: { canvas: "#111111", futureRole: "hsl(10 20% 30%)" },
       futureMetadata: { version: 2 },
     };
+
     const stored = new Map<string, string>([
       [
         CUSTOM_THEMES_STORAGE_KEY,
@@ -317,6 +333,7 @@ describe("custom theme library", () => {
         ]),
       ],
     ]);
+
     const setItem = vi.fn((key: string, value: string) => stored.set(key, value));
     vi.stubGlobal("window", {
       localStorage: {
@@ -345,16 +362,21 @@ describe("custom theme library", () => {
       colors: { accent: "#5b6cff" },
       futureMetadata: true,
     };
+
     let storedThemes = JSON.stringify([legacyTheme]);
     let readCount = 0;
+
     const setItem = vi.fn((_key: string, value: string) => {
       storedThemes = value;
     });
+
     vi.stubGlobal("window", {
       localStorage: {
         getItem: () => {
           readCount += 1;
+
           if (readCount > 1) throw new Error("transient read failure");
+
           return storedThemes;
         },
         setItem,
@@ -444,12 +466,14 @@ describe("custom theme library", () => {
 
   it("collapses duplicate raw entries when their theme is explicitly updated", () => {
     const stored = new Map<string, string>();
+
     const theme = {
       id: "aurora",
       label: "Aurora",
       appearance: "light",
       colors: { accent: "#5b6cff" },
     };
+
     const untouchedTheme = { id: "future", malformed: true, metadata: { version: 2 } };
     stored.set(
       CUSTOM_THEMES_STORAGE_KEY,

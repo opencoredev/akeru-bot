@@ -43,6 +43,7 @@ function isSameLineOverIndentedCode(
 
   const nodeStart = node.position?.start;
   const parentStart = parent.position?.start;
+
   if (
     nodeStart?.line === undefined ||
     nodeStart.offset === undefined ||
@@ -53,6 +54,7 @@ function isSameLineOverIndentedCode(
   }
 
   const sourceCharacter = markdown[nodeStart.offset];
+
   return sourceCharacter !== "`" && sourceCharacter !== "~";
 }
 
@@ -67,6 +69,7 @@ function parseRecoveredMarkdown(value: string, parser: MarkdownParser): Recovere
   const paragraph = blocks?.[0];
   const children = paragraph?.type === "paragraph" ? paragraph.children : undefined;
   const first = children?.[0];
+
   if (
     !blocks ||
     !children ||
@@ -78,6 +81,7 @@ function parseRecoveredMarkdown(value: string, parser: MarkdownParser): Recovere
   }
 
   const firstValue = first.value.slice(INLINE_PARSE_PREFIX.length);
+
   return {
     blocks: [
       {
@@ -95,6 +99,7 @@ function blocksFromIndentedCode(node: MarkdownAstNode, parser: MarkdownParser): 
   const value = typeof node.value === "string" ? node.value.trim() : "";
   const recovered = parseRecoveredMarkdown(value, parser);
   const first = recovered.blocks[0];
+
   return {
     ...recovered,
     blocks:
@@ -117,21 +122,27 @@ function attachListItemIndentationNormalizer(this: MarkdownParser) {
     if (typeof file.value !== "string") {
       return;
     }
+
     const markdown = file.value;
 
     const visit = (node: MarkdownAstNode, source: string) => {
       if (!node.children) {
         return;
       }
+
       node.children = node.children.flatMap((child) => {
         if (isSameLineOverIndentedCode(child, node, source)) {
           const recovered = blocksFromIndentedCode(child, this);
+
           for (const block of recovered.blocks) {
             visit(block, recovered.source);
           }
+
           return recovered.blocks;
         }
+
         visit(child, source);
+
         return [child];
       });
     };

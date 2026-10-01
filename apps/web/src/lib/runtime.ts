@@ -9,6 +9,7 @@ import * as PrimaryEnvironmentHttpClient from "../environments/primary/httpClien
 import { primaryEnvironmentHttpLayer } from "../environments/primary/httpLayer";
 
 const httpClientLayer = remoteHttpClientLayer((input, init) => globalThis.fetch(input, init));
+
 const browserCryptoLayer = Layer.succeed(
   Crypto.Crypto,
   Crypto.make({
@@ -17,10 +18,12 @@ const browserCryptoLayer = Layer.succeed(
       Effect.promise(async () => {
         const input = new Uint8Array(data.length);
         input.set(data);
+
         return new Uint8Array(await globalThis.crypto.subtle.digest(algorithm, input.buffer));
       }),
   }),
 );
+
 type RuntimeLayerSource =
   | typeof httpClientLayer
   | typeof browserCryptoLayer

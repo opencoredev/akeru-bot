@@ -93,6 +93,7 @@ describe("composerDraftStore terminal contexts", () => {
         partialize: (state: ReturnType<typeof useComposerDraftStore.getState>) => unknown;
       };
     };
+
     const persistedState = persistApi.getOptions().partialize(useComposerDraftStore.getState()) as {
       draftsByThreadKey?: Record<string, { terminalContexts?: Array<Record<string, unknown>> }>;
     };
@@ -123,6 +124,7 @@ describe("composerDraftStore terminal contexts", () => {
         ) => ReturnType<typeof useComposerDraftStore.getState>;
       };
     };
+
     const mergedState = persistApi.getOptions().merge(
       {
         draftsByThreadId: {
@@ -169,6 +171,7 @@ describe("composerDraftStore terminal contexts", () => {
         ) => ReturnType<typeof useComposerDraftStore.getState>;
       };
     };
+
     const mergedState = persistApi.getOptions().merge(
       {
         draftsByThreadId: {
@@ -195,6 +198,7 @@ describe("composerDraftStore terminal contexts", () => {
 describe("composerDraftStore element contexts", () => {
   const threadId = ThreadId.make("thread-element");
   const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
+
   const baseSelection = {
     pageUrl: "https://example.com/dashboard",
     pageTitle: "Dashboard",
@@ -230,10 +234,12 @@ describe("composerDraftStore element contexts", () => {
   it("dedupes by selector + tag + componentName + pageUrl signature", () => {
     const store = useComposerDraftStore.getState();
     expect(store.addElementContext(threadRef, baseSelection)).toBe(true);
+
     const second = store.addElementContext(threadRef, {
       ...baseSelection,
       htmlPreview: "<button>Save 2</button>",
     });
+
     expect(second).toBe(false);
     expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.elementContexts).toHaveLength(1);
   });
@@ -262,17 +268,21 @@ describe("composerDraftStore element contexts", () => {
 
   it("persists element contexts via the partializer (round-trippable)", () => {
     useComposerDraftStore.getState().addElementContext(threadRef, baseSelection);
+
     const persistApi = useComposerDraftStore.persist as unknown as {
       getOptions: () => {
         partialize: (state: ReturnType<typeof useComposerDraftStore.getState>) => unknown;
       };
     };
+
     const persisted = persistApi.getOptions().partialize(useComposerDraftStore.getState()) as {
       draftsByThreadKey?: Record<string, { elementContexts?: Array<Record<string, unknown>> }>;
     };
+
     const entry =
       persisted.draftsByThreadKey?.[threadKeyFor(threadId, TEST_ENVIRONMENT_ID)]
         ?.elementContexts?.[0];
+
     expect(entry).toMatchObject({
       pageUrl: baseSelection.pageUrl,
       tagName: baseSelection.tagName,
@@ -301,6 +311,7 @@ describe("composerDraftStore retired review comments", () => {
         ) => ReturnType<typeof useComposerDraftStore.getState>;
       };
     };
+
     const mergedState = persistApi.getOptions().merge(
       {
         draftsByThreadId: {

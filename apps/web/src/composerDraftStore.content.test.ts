@@ -40,6 +40,7 @@ describe("composerDraftStore addImages", () => {
       sizeBytes: 12,
       lastModified: 12345,
     });
+
     const duplicate = makeImage({
       id: "img-2",
       previewUrl: "blob:duplicate",
@@ -65,6 +66,7 @@ describe("composerDraftStore addImages", () => {
       sizeBytes: 9,
       lastModified: 777,
     });
+
     const duplicateLater = makeImage({
       id: "img-b",
       previewUrl: "blob:b",
@@ -87,6 +89,7 @@ describe("composerDraftStore addImages", () => {
       id: "img-shared",
       previewUrl: "blob:shared",
     });
+
     const duplicateSameUrl = makeImage({
       id: "img-shared",
       previewUrl: "blob:shared",
@@ -122,6 +125,7 @@ describe("composerDraftStore clearComposerContent", () => {
       id: "img-optimistic",
       previewUrl: "blob:optimistic",
     });
+
     useComposerDraftStore.getState().addImage(threadRef, first);
 
     useComposerDraftStore.getState().clearComposerContent(threadRef);
@@ -212,6 +216,7 @@ describe("composerDraftStore syncPersistedAttachments", () => {
       id: "img-persisted",
       previewUrl: "blob:persisted",
     });
+
     useComposerDraftStore.getState().addImage(threadRef, image);
     setLocalStorageItem(
       COMPOSER_DRAFT_STORAGE_KEY,

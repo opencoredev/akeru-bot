@@ -55,18 +55,24 @@ export function createDraftIdentityActions(
 
     getDraftSessionByLogicalProjectKey: (logicalProjectKey) => {
       const normalizedLogicalProjectKey = logicalProjectDraftKey(logicalProjectKey);
+
       if (normalizedLogicalProjectKey.length === 0) {
         return null;
       }
+
       const draftId =
         get().logicalProjectDraftThreadKeyByLogicalProjectKey[normalizedLogicalProjectKey];
+
       if (!draftId) {
         return null;
       }
+
       const draftThread = get().draftThreadsByThreadKey[draftId];
+
       if (!draftThread || isDraftThreadPromoting(draftThread)) {
         return null;
       }
+
       return toProjectDraftSession(DraftId.make(draftId), draftThread);
     },
 
@@ -76,14 +82,17 @@ export function createDraftIdentityActions(
 
     getDraftSessionByProjectRef: (projectRef) => {
       const state = get();
+
       // Mapped drafts win: a project can also own older unmapped drafts
       // (invested ones left behind by a remap), but "the" draft for a
       // project is the one new-thread flows currently target.
       for (const draftId of Object.values(state.logicalProjectDraftThreadKeyByLogicalProjectKey)) {
         const draftThread = state.draftThreadsByThreadKey[draftId];
+
         if (!draftThread || isDraftThreadPromoting(draftThread)) {
           continue;
         }
+
         if (
           draftThread.projectId === projectRef.projectId &&
           draftThread.environmentId === projectRef.environmentId
@@ -91,10 +100,12 @@ export function createDraftIdentityActions(
           return toProjectDraftSession(DraftId.make(draftId), draftThread);
         }
       }
+
       for (const [draftId, draftThread] of Object.entries(state.draftThreadsByThreadKey)) {
         if (isDraftThreadPromoting(draftThread)) {
           continue;
         }
+
         if (
           draftThread.projectId === projectRef.projectId &&
           draftThread.environmentId === projectRef.environmentId
@@ -102,6 +113,7 @@ export function createDraftIdentityActions(
           return toProjectDraftSession(DraftId.make(draftId), draftThread);
         }
       }
+
       return null;
     },
 
@@ -116,6 +128,7 @@ export function createDraftIdentityActions(
           return draftSession;
         }
       }
+
       return null;
     },
 
@@ -123,6 +136,7 @@ export function createDraftIdentityActions(
       if (typeof threadRef === "string") {
         return get().getDraftSession(DraftId.make(threadRef));
       }
+
       return get().getDraftSessionByRef(threadRef);
     },
 
@@ -142,13 +156,17 @@ export function createDraftIdentityActions(
 
     setLogicalProjectDraftThreadId: (logicalProjectKey, projectRef, draftId, options) => {
       const normalizedLogicalProjectKey = logicalProjectDraftKey(logicalProjectKey);
+
       if (normalizedLogicalProjectKey.length === 0 || draftId.length === 0) {
         return;
       }
+
       set((state) => {
         const existingThread = state.draftThreadsByThreadKey[draftId];
+
         const previousThreadKeyForLogicalProject =
           state.logicalProjectDraftThreadKeyByLogicalProjectKey[normalizedLogicalProjectKey];
+
         const nextDraftThread = createDraftThreadState(
           projectRef,
           options?.threadId ?? existingThread?.threadId ?? ThreadId.make(draftId),
@@ -156,23 +174,30 @@ export function createDraftIdentityActions(
           existingThread,
           options,
         );
+
         const hasSameLogicalMapping = previousThreadKeyForLogicalProject === draftId;
+
         if (hasSameLogicalMapping && draftThreadsEqual(existingThread, nextDraftThread)) {
           return state;
         }
+
         const nextLogicalProjectDraftThreadKeyByLogicalProjectKey: Record<string, string> = {
           ...state.logicalProjectDraftThreadKeyByLogicalProjectKey,
           [normalizedLogicalProjectKey]: draftId,
         };
+
         const nextDraftThreadsByThreadKey: Record<string, DraftThreadState> = {
           ...state.draftThreadsByThreadKey,
           [draftId]: nextDraftThread,
         };
+
         let nextDraftsByThreadKey = state.draftsByThreadKey;
+
         const previousDraftThread =
           previousThreadKeyForLogicalProject === undefined
             ? undefined
             : nextDraftThreadsByThreadKey[previousThreadKeyForLogicalProject];
+
         // A remap only garbage-collects the previous draft when the user
         // never invested content in it. A draft with typed text or
         // attachments stays alive unmapped — the sidebar draft rows list
@@ -189,11 +214,13 @@ export function createDraftIdentityActions(
           !composerDraftHasUserContent(state.draftsByThreadKey[previousThreadKeyForLogicalProject])
         ) {
           delete nextDraftThreadsByThreadKey[previousThreadKeyForLogicalProject];
+
           if (state.draftsByThreadKey[previousThreadKeyForLogicalProject] !== undefined) {
             nextDraftsByThreadKey = { ...state.draftsByThreadKey };
             delete nextDraftsByThreadKey[previousThreadKeyForLogicalProject];
           }
         }
+
         return {
           draftsByThreadKey: nextDraftsByThreadKey,
           draftThreadsByThreadKey: nextDraftThreadsByThreadKey,
@@ -214,43 +241,53 @@ export function createDraftIdentityActions(
 
     setDraftThreadContext: (threadRef, options) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const existing = state.draftThreadsByThreadKey[threadKey];
+
         if (!existing) {
           return state;
         }
+
         const nextProjectRef = options.projectRef ?? {
           environmentId: existing.environmentId,
           projectId: existing.projectId,
         };
+
         if (nextProjectRef.projectId.length === 0 || nextProjectRef.environmentId.length === 0) {
           return state;
         }
+
         // Mirrors createDraftThreadState: a project/environment change
         // drops machine-specific context (branch, worktree path) but
         // keeps the user's env mode and start-from-origin intent.
         const projectChanged =
           nextProjectRef.environmentId !== existing.environmentId ||
           nextProjectRef.projectId !== existing.projectId;
+
         const nextWorktreePath =
           options.worktreePath === undefined
             ? projectChanged
               ? null
               : existing.worktreePath
             : (options.worktreePath ?? null);
+
         const nextBranch =
           options.branch === undefined
             ? projectChanged
               ? null
               : existing.branch
             : (options.branch ?? null);
+
         const nextStartFromOrigin =
           options.startFromOrigin === undefined
             ? existing.startFromOrigin
             : options.startFromOrigin;
+
         const nextDraftThread: DraftThreadState = {
           threadId: existing.threadId,
           environmentId: nextProjectRef.environmentId,
@@ -269,6 +306,7 @@ export function createDraftIdentityActions(
           startFromOrigin: nextStartFromOrigin,
           promotedTo: existing.promotedTo ?? null,
         };
+
         const isUnchanged =
           nextDraftThread.environmentId === existing.environmentId &&
           nextDraftThread.projectId === existing.projectId &&
@@ -281,9 +319,11 @@ export function createDraftIdentityActions(
           nextDraftThread.envMode === existing.envMode &&
           nextDraftThread.startFromOrigin === existing.startFromOrigin &&
           scopedThreadRefsEqual(nextDraftThread.promotedTo, existing.promotedTo);
+
         if (isUnchanged) {
           return state;
         }
+
         return {
           draftThreadsByThreadKey: {
             ...state.draftThreadsByThreadKey,
@@ -306,29 +346,36 @@ export function createDraftIdentityActions(
               draftThread.environmentId === projectRef.environmentId,
           )
           .map(([threadKey]) => threadKey);
+
         if (matchingThreadKeys.length === 0) {
           return state;
         }
+
         let nextState = {
           draftsByThreadKey: state.draftsByThreadKey,
           draftThreadsByThreadKey: state.draftThreadsByThreadKey,
           logicalProjectDraftThreadKeyByLogicalProjectKey:
             state.logicalProjectDraftThreadKeyByLogicalProjectKey,
         };
+
         for (const threadKey of matchingThreadKeys) {
           nextState = removeDraftThreadReferences(nextState, threadKey);
         }
+
         return nextState;
       });
     },
 
     clearProjectDraftThreadById: (projectRef, threadRef) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const draftThread = state.draftThreadsByThreadKey[threadKey];
+
         if (
           !draftThread ||
           draftThread.projectId !== projectRef.projectId ||
@@ -336,25 +383,32 @@ export function createDraftIdentityActions(
         ) {
           return state;
         }
+
         return removeDraftThreadReferences(state, threadKey);
       });
     },
 
     markDraftThreadPromoting: (threadRef, promotedTo) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
+
       if (!threadKey) {
         return;
       }
+
       set((state) => {
         const existing = state.draftThreadsByThreadKey[threadKey];
+
         if (!existing) {
           return state;
         }
+
         const nextPromotedTo =
           promotedTo ?? scopeThreadRef(existing.environmentId, existing.threadId);
+
         if (scopedThreadRefsEqual(existing.promotedTo, nextPromotedTo)) {
           return state;
         }
+
         return {
           draftThreadsByThreadKey: {
             ...state.draftThreadsByThreadKey,
@@ -369,32 +423,42 @@ export function createDraftIdentityActions(
 
     finalizePromotedDraftThread: (threadRef) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const existing = state.draftThreadsByThreadKey[threadKey];
+
         if (!isDraftThreadPromoting(existing)) {
           return state;
         }
+
         return removeDraftThreadReferences(state, threadKey);
       });
     },
 
     clearDraftThread: (threadRef) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const hasDraftThread = state.draftThreadsByThreadKey[threadKey] !== undefined;
+
         const hasLogicalProjectMapping = Object.values(
           state.logicalProjectDraftThreadKeyByLogicalProjectKey,
         ).includes(threadKey);
+
         const hasComposerDraft = state.draftsByThreadKey[threadKey] !== undefined;
+
         if (!hasDraftThread && !hasLogicalProjectMapping && !hasComposerDraft) {
           return state;
         }
+
         return removeDraftThreadReferences(state, threadKey);
       });
     },

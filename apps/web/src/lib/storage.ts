@@ -12,6 +12,7 @@ export interface DebouncedStorage<R = unknown> extends StateStorage<R> {
 
 export function createMemoryStorage(): StateStorage {
   const store = new Map<string, string>();
+
   return {
     getItem: (name) => store.get(name) ?? null,
     setItem: (name, value) => {
@@ -44,6 +45,7 @@ export function createDebouncedStorage(
   debounceMs: number = 300,
 ): DebouncedStorage {
   const resolvedStorage = resolveStorage(baseStorage);
+
   const debouncedSetItem = new Debouncer(
     (name: string, value: string) => {
       resolvedStorage.setItem(name, value);

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 function createStorage(overrides: Partial<Storage> = {}): Storage {
   const store = new Map<string, string>();
+
   return {
     clear: () => store.clear(),
     getItem: (key) => store.get(key) ?? null,
@@ -33,6 +34,7 @@ describe("theme failure handling", () => {
         throw new Error("storage remove blocked");
       },
     });
+
     vi.stubGlobal("window", { localStorage: storage });
     const { readThemePreference, writeThemePreference } = await import("./useTheme");
 
@@ -91,6 +93,7 @@ describe("theme failure handling", () => {
       if (key === "akeru:theme") throw new Error("storage quota exceeded");
       setItem(key, value);
     };
+
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.doMock("react", () => ({
       useCallback: <A>(callback: A) => callback,
@@ -182,9 +185,11 @@ describe("theme failure handling", () => {
 
   it("retries a failed storage read only after a relevant storage event", async () => {
     const cause = new Error("persistent storage failure");
+
     const themeGetItem = vi.fn((): string | null => {
       throw cause;
     });
+
     const getItem = vi.fn((key: string) => (key === "akeru:theme" ? themeGetItem() : null));
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     let readSnapshot: (() => unknown) | undefined;
@@ -199,6 +204,7 @@ describe("theme failure handling", () => {
       ) => {
         subscribeToTheme = subscribe;
         readSnapshot = getSnapshot;
+
         return getSnapshot();
       },
     }));
@@ -245,6 +251,7 @@ describe("theme failure handling", () => {
       () => undefined,
       (failure: unknown) => failure,
     );
+
     expect(error).toBeInstanceOf(DesktopThemeSyncError);
     expect(error).toMatchObject({ theme: "dark", cause });
 
@@ -264,6 +271,7 @@ describe("theme failure handling", () => {
         errorTag: "DesktopThemeSyncError",
       }),
     );
+
     for (const [, attributes] of errorLog.mock.calls) {
       expect(attributes).not.toHaveProperty("cause");
       expect(JSON.stringify(attributes)).not.toContain(cause.message);
@@ -274,6 +282,7 @@ describe("theme failure handling", () => {
 describe("legacy key cleanup", () => {
   function legacyThrowingStorage(initial: Record<string, string> = {}): Storage {
     const store = new Map(Object.entries(initial));
+
     return createStorage({
       getItem: (key) => store.get(key) ?? null,
       setItem: (key, value) => {
@@ -341,6 +350,7 @@ describe("legacy key cleanup", () => {
     const storage = legacyThrowingStorage({
       "akeru:theme-halves:v1": JSON.stringify({ light: "ocean" }),
     });
+
     mockReactStore();
     vi.stubGlobal("window", {
       localStorage: storage,
@@ -359,6 +369,7 @@ describe("legacy key cleanup", () => {
     const storage = legacyThrowingStorage({
       "t3code:theme-halves:v1": JSON.stringify({ dark: "grove" }),
     });
+
     mockReactStore();
     vi.stubGlobal("window", {
       localStorage: storage,
@@ -382,6 +393,7 @@ describe("legacy key cleanup", () => {
       "akeru:theme-halves:v1": JSON.stringify({ light: "ocean" }),
       "t3code:theme-halves:v1": JSON.stringify({ dark: "ember" }),
     });
+
     mockReactStore();
     vi.stubGlobal("window", {
       localStorage: storage,
@@ -399,6 +411,7 @@ describe("legacy key cleanup", () => {
     const storage = legacyThrowingStorage({
       "akeru:theme-halves:v1": JSON.stringify({ light: "ocean" }),
     });
+
     mockReactStore();
     vi.stubGlobal("window", {
       localStorage: storage,

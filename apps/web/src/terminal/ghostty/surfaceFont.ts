@@ -55,6 +55,7 @@ export function ensureTerminalSymbolsFont(): Promise<void> {
       // Locally installed fallback faces still apply.
     }
   })();
+
   return symbolsFontLoad;
 }
 
@@ -63,9 +64,13 @@ function quoteTerminalFontFamilies(list: string): string {
     .split(",")
     .map((name) => {
       const bare = name.trim();
+
       if (bare.length === 0) return "";
+
       if (/^(['"]).*\1$/.test(bare)) return bare;
+
       if (/^[a-zA-Z][a-zA-Z0-9-]*$/.test(bare)) return bare;
+
       return `"${bare.replaceAll('"', "")}"`;
     })
     .filter((name) => name.length > 0)
@@ -74,6 +79,7 @@ function quoteTerminalFontFamilies(list: string): string {
 
 function uncheckedTerminalFontFamily(family?: string): string {
   const custom = family === undefined ? "" : quoteTerminalFontFamilies(family);
+
   return custom.length === 0
     ? DEFAULT_TERMINAL_FONT_FAMILY
     : `${custom}, ${TERMINAL_GLYPH_FALLBACKS}`;
@@ -83,11 +89,14 @@ export function terminalFontFamily(family?: string): string {
   // Quote non-ident names ("3270 Nerd Font", "M+ 1m"): an unquoted one makes
   // the whole canvas font string invalid and the assignment silently no-ops.
   const custom = family === undefined ? "" : quoteTerminalFontFamilies(family);
+
   if (custom.length === 0) return DEFAULT_TERMINAL_FONT_FAMILY;
+
   // The grid places the cursor and selection on one cell advance, so a
   // proportional face would draw its text narrower than its own cells. Refuse
   // it here rather than render a ragged grid with a stranded cursor.
   if (!isMonospaceFamily(custom)) return DEFAULT_TERMINAL_FONT_FAMILY;
+
   // A custom face keeps the glyph fallbacks so prompt symbols stay covered.
   return uncheckedTerminalFontFamily(custom);
 }
@@ -102,8 +111,10 @@ export async function loadTerminalFontFamily(
   },
 ): Promise<string> {
   const candidate = uncheckedTerminalFontFamily(family);
+
   const load =
     environment?.load ?? ((font: string, text: string) => document.fonts.load(font, text));
+
   try {
     await Promise.all(
       TERMINAL_FONT_LOAD_VARIANTS.map((variant) =>
@@ -113,10 +124,12 @@ export async function loadTerminalFontFamily(
   } catch {
     // The fixed-width fallback stack remains available if a face cannot load.
   }
+
   return (environment?.resolve ?? terminalFontFamily)(family);
 }
 
 export function terminalFontSize(size?: number): number {
   if (size === undefined || !Number.isFinite(size)) return DEFAULT_TERMINAL_FONT_SIZE;
+
   return Math.max(MIN_TERMINAL_FONT_SIZE, Math.min(MAX_TERMINAL_FONT_SIZE, Math.round(size)));
 }

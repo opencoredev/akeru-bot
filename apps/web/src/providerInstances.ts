@@ -121,6 +121,7 @@ export function providerInstanceAvailabilityReason(
   model?: string | null,
 ): ProviderAvailabilityReason | null {
   if (entry && !entry.enabled) return "disabled";
+
   return providerAvailabilityReason(entry?.snapshot, model);
 }
 
@@ -138,7 +139,9 @@ export function providerInstanceUnavailability(
   } = {},
 ): (ProviderAvailabilityPresentation & { readonly reason: ProviderAvailabilityReason }) | null {
   const reason = providerInstanceAvailabilityReason(entry, options.model);
+
   if (!reason) return null;
+
   return {
     reason,
     ...presentProviderUnavailability(
@@ -164,6 +167,7 @@ export function providerInstanceUnavailableReason(
   } = {},
 ): string | null {
   const presentation = providerInstanceUnavailability(entry, options);
+
   return presentation ? joinProviderUnavailability(presentation, options.t) : null;
 }
 
@@ -177,7 +181,9 @@ export function providerInstancePickerBlockReason(
   t?: ProviderAvailabilityTranslate,
 ): string | null {
   const reason = providerInstanceAvailabilityReason(entry);
+
   if (!reason || reason === "temporary-failure") return null;
+
   return providerInstanceUnavailableReason(entry, { t });
 }
 
@@ -197,6 +203,7 @@ export function providerInstancePickerBlockReason(
  */
 function humanizeInstanceId(instanceId: ProviderInstanceId): string {
   const words: string[] = [];
+
   for (const token of instanceId
     .replace(/[_-]+/g, " ")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -204,6 +211,7 @@ function humanizeInstanceId(instanceId: ProviderInstanceId): string {
     if (token.length === 0) continue;
     words.push(token.charAt(0).toUpperCase() + token.slice(1));
   }
+
   return words.join(" ");
 }
 
@@ -222,15 +230,19 @@ export function shouldShowInstanceBadge(
 ): boolean {
   if (entry.accentColor) return true;
   let sharedDriverCount = 0;
+
   for (const candidate of entries) {
     if (candidate.driverKind === entry.driverKind && ++sharedDriverCount > 1) return true;
   }
+
   return false;
 }
 
 export function normalizeProviderAccentColor(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
+
   if (!trimmed) return undefined;
+
   return /^#[0-9a-fA-F]{6}$/u.test(trimmed) ? trimmed : undefined;
 }
 
@@ -258,13 +270,17 @@ function resolveInstanceDisplayName(
 ): string {
   const trimmedSnapshotName = snapshot.displayName?.trim();
   const kindLabel = driverKindLabel(driverKind);
+
   if (trimmedSnapshotName && trimmedSnapshotName !== kindLabel) {
     return trimmedSnapshotName;
   }
+
   if (!isDefault) {
     const humanized = humanizeInstanceId(instanceId);
+
     if (humanized.length > 0) return humanized;
   }
+
   return trimmedSnapshotName || kindLabel;
 }
 
@@ -284,6 +300,7 @@ export function deriveProviderInstanceEntries(
     const defaultId = defaultInstanceIdForDriver(driverKind);
     const isDefault = instanceId === defaultId;
     const displayName = resolveInstanceDisplayName(snapshot, instanceId, driverKind, isDefault);
+
     return {
       instanceId,
       driverKind,
@@ -315,6 +332,7 @@ export function deriveProviderEntriesByEnvironment(
   providersByEnvironment: Iterable<readonly [string, ReadonlyArray<ServerProvider>]>,
 ): ReadonlyMap<string, ReadonlyMap<string, ProviderInstanceEntry>> {
   const byEnvironment = new Map<string, ReadonlyMap<string, ProviderInstanceEntry>>();
+
   for (const [environmentId, providers] of providersByEnvironment) {
     byEnvironment.set(
       environmentId,
@@ -325,6 +343,7 @@ export function deriveProviderEntriesByEnvironment(
       ),
     );
   }
+
   return byEnvironment;
 }
 
@@ -348,11 +367,13 @@ export function applyProviderInstanceSettings(
 
   return entries.map((entry) => {
     const explicitInstance = settings.providerInstances?.[entry.instanceId];
+
     const enabled = explicitInstance
       ? resolveProviderInstanceEnabled(explicitInstance)
       : entry.isDefault
         ? (legacyProviders[entry.driverKind]?.enabled ?? entry.enabled)
         : false;
+
     return enabled === entry.enabled ? entry : { ...entry, enabled };
   });
 }
@@ -372,20 +393,25 @@ export function sortProviderInstanceEntries(
   // semantics for kinds whose default instance is absent (unusual but
   // possible during the migration).
   const byKind = new Map<ProviderDriverKind, ProviderInstanceEntry[]>();
+
   for (const entry of entries) {
     const bucket = byKind.get(entry.driverKind);
+
     if (bucket) {
       bucket.push(entry);
     } else {
       byKind.set(entry.driverKind, [entry]);
     }
   }
+
   const sorted: ProviderInstanceEntry[] = [];
+
   for (const bucket of byKind.values()) {
     const defaults = bucket.filter((entry) => entry.isDefault);
     const customs = bucket.filter((entry) => !entry.isDefault);
     sorted.push(...defaults, ...customs);
   }
+
   return sorted;
 }
 
@@ -423,7 +449,9 @@ export function getDefaultProviderInstanceModel(
   instanceId: ProviderInstanceId,
 ): string | undefined {
   const entry = getProviderInstanceEntry(providers, instanceId);
+
   if (!entry) return undefined;
+
   return (
     entry.models.find((model) => model.isDefault && !model.isCustom)?.slug ??
     entry.models.find((model) => !model.isCustom)?.slug ??
@@ -448,10 +476,12 @@ export function resolveSelectableProviderInstanceEntry(
 ): ProviderInstanceEntry | undefined {
   if (instanceId !== undefined) {
     const requested = entries.find((entry) => entry.instanceId === instanceId);
+
     if (requested && isSelectableProviderInstanceEntry(requested)) {
       return requested;
     }
   }
+
   return (
     entries.find(isProviderInstancePickerReady) ??
     entries.find((entry) => isSelectableProviderInstanceEntry(entry) && entry.status !== "error")
@@ -469,6 +499,7 @@ export function resolveSelectableProviderInstance(
   instanceId: ProviderInstanceId | undefined,
 ): ProviderInstanceId | undefined {
   const entries = deriveProviderInstanceEntries(providers);
+
   return resolveSelectableProviderInstanceEntry(entries, instanceId)?.instanceId;
 }
 
@@ -483,9 +514,12 @@ export function resolveDefaultProviderModelSelection(
   selection: ModelSelection | null | undefined,
 ): ModelSelection | null {
   const instanceId = resolveSelectableProviderInstance(providers, selection?.instanceId);
+
   if (instanceId === undefined) return null;
+
   if (selection?.instanceId === instanceId) return selection;
   const model = getDefaultProviderInstanceModel(providers, instanceId);
+
   return model ? { instanceId, model } : null;
 }
 
@@ -501,8 +535,10 @@ export function resolveProviderDriverKindForInstanceSelection(
   selection: ProviderInstanceId | ProviderDriverKind | null | undefined,
 ): ProviderDriverKind | undefined {
   const matchedEntry = entries.find((entry) => entry.instanceId === selection);
+
   if (matchedEntry) {
     return matchedEntry.driverKind;
   }
+
   return undefined;
 }

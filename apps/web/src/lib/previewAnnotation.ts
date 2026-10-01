@@ -24,38 +24,50 @@ export function buildPreviewAnnotationPrompt(annotation: PreviewAnnotationPayloa
   lines.push(`Id: ${annotation.id}`);
   const title = annotation.pageTitle?.trim() || annotation.pageUrl.trim() || "Preview";
   lines.push(`Page: ${title}`);
+
   if (annotation.comment.trim()) lines.push(`Comment: ${annotation.comment.trim()}`);
   const targets: string[] = [];
+
   if (annotation.elements.length > 0) {
     targets.push(
       `${annotation.elements.length} selected element${annotation.elements.length === 1 ? "" : "s"}`,
     );
   }
+
   if (annotation.regions.length > 0) {
     targets.push(
       `${annotation.regions.length} marked region${annotation.regions.length === 1 ? "" : "s"}`,
     );
   }
+
   if (annotation.strokes.length > 0) {
     targets.push(
       `${annotation.strokes.length} drawing${annotation.strokes.length === 1 ? "" : "s"}`,
     );
   }
+
   if (targets.length > 0) lines.push(`Targets: ${targets.join(", ")}.`);
+
   if (annotation.styleChanges.length > 0) {
     lines.push("Requested visual changes:");
+
     for (const change of annotation.styleChanges) {
       lines.push(`- ${change.property}: ${change.previousValue || "(unset)"} → ${change.value}`);
     }
   }
+
   if (annotation.screenshot) {
     lines.push("Screenshot omitted because local pixel redaction is unavailable.");
   }
+
   const elementContexts = annotation.elements
     .map((target) => normalizeElementContextSelection(target.element))
     .filter((context) => context !== null);
+
   const elementBlock = buildElementContextBlock(elementContexts);
+
   if (elementBlock) lines.push(elementBlock);
+
   return redactSensitiveText(["<preview_annotation>", ...lines, "</preview_annotation>"].join("\n"))
     .value;
 }
@@ -66,11 +78,13 @@ export function appendPreviewAnnotationPrompt(
 ): string {
   const annotationText = buildPreviewAnnotationPrompt(annotation);
   const trimmed = prompt.trim();
+
   return trimmed ? `${trimmed}\n\n${annotationText}` : annotationText;
 }
 
 export function extractTrailingPreviewAnnotation(prompt: string): ExtractedPreviewAnnotation {
   const match = TRAILING_PREVIEW_ANNOTATION_BLOCK_PATTERN.exec(prompt);
+
   if (!match) return { promptText: prompt, annotation: null };
   const body = match[1] ?? "";
   const lines = body.split("\n");
@@ -81,6 +95,7 @@ export function extractTrailingPreviewAnnotation(prompt: string): ExtractedPrevi
   const styleHeadingIndex = lines.indexOf("Requested visual changes:");
   const linesAfterStyleHeading = lines.slice(styleHeadingIndex + 1);
   const elementContextIndex = linesAfterStyleHeading.indexOf("<element_context>");
+
   const styleChanges =
     styleHeadingIndex < 0
       ? []
@@ -88,6 +103,7 @@ export function extractTrailingPreviewAnnotation(prompt: string): ExtractedPrevi
           .slice(0, elementContextIndex < 0 ? undefined : elementContextIndex)
           .filter((line) => line.startsWith("- "))
           .map((line) => line.slice(2));
+
   return {
     promptText: prompt.slice(0, match.index).replace(/\n+$/, ""),
     annotation: {

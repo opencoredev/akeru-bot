@@ -29,6 +29,7 @@ import { commitViewportAndAspectRatio } from "./browserDeviceToolbarState";
 import { ScreenRotationIcon } from "./ScreenRotationIcon";
 
 const RESPONSIVE_VALUE = "responsive";
+
 const SELECT_ITEMS = [
   { value: RESPONSIVE_VALUE, label: "Responsive" },
   ...PREVIEW_VIEWPORT_PRESETS.map((preset) => ({ value: preset.id, label: preset.label })),
@@ -50,21 +51,26 @@ export function BrowserDeviceToolbar({
   onChange,
 }: Props) {
   const [pending, setPending] = useState(false);
+
   const [customSize, setCustomSize] = useState<{
     readonly width: string;
     readonly height: string;
   } | null>(null);
+
   const presentedSize = customSize ?? {
     width: String(setting.width),
     height: String(setting.height),
   };
+
   const selectedValue =
     setting._tag === "preset" &&
     PREVIEW_VIEWPORT_PRESETS.some((preset) => preset.id === setting.presetId)
       ? setting.presetId
       : RESPONSIVE_VALUE;
+
   const customWidth = Number(presentedSize.width);
   const customHeight = Number(presentedSize.height);
+
   const customValid =
     Number.isInteger(customWidth) &&
     Number.isInteger(customHeight) &&
@@ -88,8 +94,10 @@ export function BrowserDeviceToolbar({
   const applyCustomSize = () => {
     if (!customValid || (customWidth === setting.width && customHeight === setting.height)) {
       setCustomSize(null);
+
       return;
     }
+
     apply({ _tag: "freeform", width: customWidth, height: customHeight });
   };
 
@@ -99,7 +107,9 @@ export function BrowserDeviceToolbar({
         width: axis === "width" ? value : (current?.width ?? String(setting.width)),
         height: axis === "height" ? value : (current?.height ?? String(setting.height)),
       };
+
       const numeric = Number(value);
+
       if (
         aspectRatio === null ||
         !Number.isInteger(numeric) ||
@@ -108,6 +118,7 @@ export function BrowserDeviceToolbar({
       ) {
         return next;
       }
+
       const resized = resizeFreeformViewport(
         setting,
         axis === "width"
@@ -117,18 +128,23 @@ export function BrowserDeviceToolbar({
         axis === "width" ? "east" : "south",
         aspectRatio,
       );
+
       return { width: String(resized.width), height: String(resized.height) };
     });
   };
 
   const selectViewport = (value: string | null) => {
     if (!value) return;
+
     if (value === RESPONSIVE_VALUE) {
       if (setting._tag === "freeform") return;
       apply({ _tag: "freeform", width: setting.width, height: setting.height });
+
       return;
     }
+
     const preset = PREVIEW_VIEWPORT_PRESETS.find((candidate) => candidate.id === value);
+
     if (!preset) return;
     apply(
       resolvePreviewViewport({ mode: "preset", preset: preset.id }),
@@ -139,9 +155,11 @@ export function BrowserDeviceToolbar({
   const rotate = () => {
     const hasCustomSize =
       customValid && (customWidth !== setting.width || customHeight !== setting.height);
+
     const source = hasCustomSize
       ? ({ _tag: "freeform", width: customWidth, height: customHeight } as const)
       : setting;
+
     apply(
       { ...source, width: source.height, height: source.width },
       aspectRatio === null ? null : 1 / aspectRatio,
@@ -161,8 +179,10 @@ export function BrowserDeviceToolbar({
       data-browser-device-toolbar
       onBlur={(event) => {
         const nextTarget = event.relatedTarget;
+
         if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
         const eventTarget = event.target;
+
         if (
           (nextTarget instanceof HTMLElement &&
             nextTarget.closest('[data-slot="select-positioner"]')) ||
@@ -171,6 +191,7 @@ export function BrowserDeviceToolbar({
         ) {
           return;
         }
+
         applyCustomSize();
       }}
     >

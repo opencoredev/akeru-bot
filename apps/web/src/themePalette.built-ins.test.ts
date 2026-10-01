@@ -133,6 +133,7 @@ describe("built-in palettes", () => {
         expect(colors).not.toBeNull();
         expect(contrastRatio(colors!.text, colors!.canvas)).toBeGreaterThanOrEqual(4.5);
         expect(contrastRatio(colors!.textMuted, colors!.canvas)).toBeGreaterThanOrEqual(4.5);
+
         if (theme !== T3_CHAT_THEME && theme !== AKERU_PAPER_THEME) {
           expect(contrastRatio(colors!.textMuted, colors!.canvas)).toBeLessThan(5.5);
           expect(contrastRatio(colors!.textMuted, colors!.canvas)).toBeCloseTo(
@@ -140,6 +141,7 @@ describe("built-in palettes", () => {
             1,
           );
         }
+
         expect(contrastRatio(colors!.accentForeground, colors!.accent)).toBeGreaterThanOrEqual(4.5);
         expect(
           contrastRatio(colors!.toolbarControlForeground, colors!.toolbarControl),
@@ -159,6 +161,7 @@ describe("built-in palettes", () => {
         );
       }
     }
+
     expect(themeAllowsSidebarArtwork("my-custom-theme")).toBe(false);
   });
 
@@ -182,10 +185,12 @@ describe("built-in palettes", () => {
       appearance: "light",
       colors: { canvas: "#f8fbff" },
     };
+
     const storedThemes = JSON.stringify([
       ...BUILT_IN_THEME_IDS.map((id) => ({ ...customTheme, id })),
       customTheme,
     ]);
+
     const setItem = vi.fn();
     vi.stubGlobal("window", {
       localStorage: {
@@ -195,11 +200,14 @@ describe("built-in palettes", () => {
       },
     });
     invalidateCustomThemes();
+
     try {
       expect(getCustomThemes().map((theme) => theme.id)).toEqual([customTheme.id]);
+
       for (const theme of BUILT_IN_THEMES) {
         expect(getThemeDefinition(theme.id)).toEqual(theme);
       }
+
       expect(setItem).not.toHaveBeenCalled();
     } finally {
       invalidateCustomThemes();

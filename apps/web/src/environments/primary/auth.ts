@@ -33,6 +33,7 @@ const PrimaryEnvironmentRequestOperation = Schema.Literals([
   "revoke-client-session",
   "revoke-other-client-sessions",
 ]);
+
 type PrimaryEnvironmentRequestOperation = typeof PrimaryEnvironmentRequestOperation.Type;
 
 export class PrimaryEnvironmentRequestError extends Schema.TaggedErrorClass<PrimaryEnvironmentRequestError>()(
@@ -52,6 +53,7 @@ export class PrimaryEnvironmentRequestError extends Schema.TaggedErrorClass<Prim
     readonly sessionId?: string;
   }): PrimaryEnvironmentRequestError {
     const status = readHttpApiStatus(input.cause) ?? 500;
+
     return new PrimaryEnvironmentRequestError({
       operation: input.operation,
       status,
@@ -149,8 +151,11 @@ type ServerAuthGateState =
     };
 
 let bootstrapPromise: Promise<ServerAuthGateState> | null = null;
+
 let resolvedAuthenticatedGateState: ServerAuthGateState | null = null;
+
 const AUTH_SESSION_ESTABLISH_TIMEOUT_MS = 2_000;
+
 const AUTH_SESSION_ESTABLISH_STEP_MS = 100;
 
 export function peekPairingTokenFromUrl(): string | null {
@@ -160,18 +165,23 @@ export function peekPairingTokenFromUrl(): string | null {
 export function stripPairingTokenFromUrl() {
   const url = new URL(window.location.href);
   const next = stripPairingTokenUrl(url);
+
   if (next.toString() === url.toString()) {
     return;
   }
+
   window.history.replaceState({}, document.title, next.toString());
 }
 
 export function takePairingTokenFromUrl(): string | null {
   const token = peekPairingTokenFromUrl();
+
   if (!token) {
     return null;
   }
+
   stripPairingTokenFromUrl();
+
   return token;
 }
 
@@ -181,6 +191,7 @@ function getDesktopBootstrapCredential(): string | null {
   // primary entry is fine even when the WSL backend is also registered.
   const bootstraps = window.desktopBridge?.getLocalEnvironmentBootstraps() ?? [];
   const primary = bootstraps.find((entry) => entry.id === PRIMARY_LOCAL_ENVIRONMENT_ID);
+
   return typeof primary?.bootstrapToken === "string" && primary.bootstrapToken.length > 0
     ? primary.bootstrapToken
     : null;
@@ -207,6 +218,7 @@ function readHttpApiStatus(error: unknown): number | null {
   if (isEnvironmentHttpCommonError(error)) {
     return readEnvironmentHttpErrorStatus(error);
   }
+
   return HttpClientError.isHttpClientError(error) && error.response !== undefined
     ? error.response.status
     : null;
@@ -247,6 +259,7 @@ async function exchangeBootstrapCredential(credential: string): Promise<AuthBrow
           cause: error,
         });
       }
+
       throw PrimaryEnvironmentRequestError.fromCause({
         operation: "exchange-bootstrap-credential",
         cause: error,
@@ -260,11 +273,13 @@ async function waitForAuthenticatedSessionAfterBootstrap(): Promise<AuthSessionS
 
   while (true) {
     const session = await fetchSessionState();
+
     if (session.authenticated) {
       return session;
     }
 
     const elapsedMs = Date.now() - startedAt;
+
     if (elapsedMs >= AUTH_SESSION_ESTABLISH_TIMEOUT_MS) {
       throw new PrimaryEnvironmentAuthSessionTimeoutError({
         timeoutMs: AUTH_SESSION_ESTABLISH_TIMEOUT_MS,
@@ -277,11 +292,14 @@ async function waitForAuthenticatedSessionAfterBootstrap(): Promise<AuthSessionS
 }
 
 const TRANSIENT_BOOTSTRAP_STATUS_CODES = new Set([502, 503, 504]);
+
 const BOOTSTRAP_RETRY_TIMEOUT_MS = 15_000;
+
 const BOOTSTRAP_RETRY_STEP_MS = 500;
 
 export async function retryTransientBootstrap<T>(operation: () => Promise<T>): Promise<T> {
   const startedAt = Date.now();
+
   while (true) {
     try {
       return await operation();
@@ -320,11 +338,13 @@ function isTransientBootstrapError(error: unknown): boolean {
 async function bootstrapServerAuth(): Promise<ServerAuthGateState> {
   const pairingCredential = takePairingTokenFromUrl();
   const currentSession = await fetchSessionState();
+
   if (currentSession.authenticated && !pairingCredential) {
     return { status: "authenticated" };
   }
 
   const bootstrapCredential = pairingCredential ?? getDesktopBootstrapCredential();
+
   if (!bootstrapCredential) {
     return {
       status: "requires-auth",
@@ -335,6 +355,7 @@ async function bootstrapServerAuth(): Promise<ServerAuthGateState> {
   try {
     await exchangeBootstrapCredential(bootstrapCredential);
     await waitForAuthenticatedSessionAfterBootstrap();
+
     return { status: "authenticated" };
   } catch (error) {
     return {
@@ -347,6 +368,7 @@ async function bootstrapServerAuth(): Promise<ServerAuthGateState> {
 
 export async function submitServerAuthCredential(credential: string): Promise<void> {
   const trimmedCredential = credential.trim();
+
   if (!trimmedCredential) {
     throw new PrimaryEnvironmentPairingCredentialRequiredError({
       providedLength: credential.length,
@@ -364,6 +386,7 @@ export async function createServerPairingCredential(input?: {
   readonly scopes?: ReadonlyArray<AuthEnvironmentScope>;
 }): Promise<AuthPairingCredentialResult> {
   const trimmedLabel = input?.label?.trim();
+
   try {
     return await runPrimaryHttp(
       PrimaryEnvironmentHttpClient.pipe(
@@ -393,11 +416,13 @@ export async function listServerPairingLinks(): Promise<ReadonlyArray<ServerPair
         Effect.flatMap((client) => client.auth.pairingLinks({ headers: {} })),
       ),
     );
+
     return pairingLinks.map((pairingLink) => {
       const timestamps = {
         createdAt: DateTime.formatIso(pairingLink.createdAt),
         expiresAt: DateTime.formatIso(pairingLink.expiresAt),
       };
+
       if (pairingLink.label === undefined) {
         return {
           id: pairingLink.id,
@@ -408,6 +433,7 @@ export async function listServerPairingLinks(): Promise<ReadonlyArray<ServerPair
           expiresAt: timestamps.expiresAt,
         };
       }
+
       return {
         id: pairingLink.id,
         credential: pairingLink.credential,
@@ -451,6 +477,7 @@ export async function listServerClientSessions(): Promise<
         Effect.flatMap((client) => client.auth.clients({ headers: {} })),
       ),
     );
+
     return clientSessions.map((clientSession) => ({
       sessionId: clientSession.sessionId,
       subject: clientSession.subject,
@@ -499,6 +526,7 @@ export async function revokeOtherServerClientSessions(): Promise<number> {
         Effect.flatMap((client) => client.auth.revokeOtherClients({ headers: {} })),
       ),
     );
+
     return result.revokedCount;
   } catch (error) {
     throw PrimaryEnvironmentRequestError.fromCause({
@@ -519,11 +547,13 @@ export async function resolveInitialServerAuthGateState(): Promise<ServerAuthGat
 
   const nextPromise = bootstrapServerAuth();
   bootstrapPromise = nextPromise;
+
   return nextPromise
     .then((result) => {
       if (result.status === "authenticated") {
         resolvedAuthenticatedGateState = result;
       }
+
       return result;
     })
     .finally(() => {
@@ -540,6 +570,7 @@ export async function resolveInitialServerAuthGateState(): Promise<ServerAuthGat
 export async function reauthenticatePrimaryEnvironment(): Promise<ServerAuthGateState> {
   resolvedAuthenticatedGateState = null;
   bootstrapPromise = null;
+
   return resolveInitialServerAuthGateState();
 }
 

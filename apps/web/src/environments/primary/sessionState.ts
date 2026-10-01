@@ -20,14 +20,18 @@ export function refreshPrimarySessionState(): void {
 
 export function usePrimarySessionState() {
   const result = useAtomValue(primarySessionStateAtom);
+
   const refresh = useCallback(() => {
     refreshPrimarySessionState();
   }, []);
+
   let error: string | null = null;
+
   if (result._tag === "Failure") {
     const cause = Cause.squash(result.cause);
     error = cause instanceof Error ? cause.message : "Could not read environment session.";
   }
+
   return {
     data: Option.getOrNull(AsyncResult.value(result)),
     error,

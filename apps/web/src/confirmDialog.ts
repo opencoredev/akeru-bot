@@ -23,14 +23,20 @@ type PendingConfirmation = {
 };
 
 const idleState: ConfirmDialogState = { status: "idle" };
+
 let state: ConfirmDialogState = idleState;
+
 let activeConfirmation: PendingConfirmation | null = null;
+
 let queuedConfirmations: PendingConfirmation[] = [];
+
 let registeredHostCount = 0;
+
 const listeners = new Set<() => void>();
 
 function publish(next: ConfirmDialogState): void {
   state = next;
+
   for (const listener of listeners) {
     listener();
   }
@@ -38,9 +44,11 @@ function publish(next: ConfirmDialogState): void {
 
 function resolvePendingConfirmations(confirmed: boolean): void {
   activeConfirmation?.resolve(confirmed);
+
   for (const confirmation of queuedConfirmations) {
     confirmation.resolve(confirmed);
   }
+
   activeConfirmation = null;
   queuedConfirmations = [];
 }
@@ -51,6 +59,7 @@ export function readConfirmDialogState(): ConfirmDialogState {
 
 export function subscribeConfirmDialog(listener: () => void): () => void {
   listeners.add(listener);
+
   return () => {
     listeners.delete(listener);
   };
@@ -93,8 +102,10 @@ export function requestConfirmDialog(
       confirmLabel: options?.confirmLabel ?? null,
       resolve,
     } satisfies PendingConfirmation;
+
     if (activeConfirmation || state.status === "closing") {
       queuedConfirmations.push(pending);
+
       return;
     }
 
@@ -128,8 +139,10 @@ export function completeConfirmDialogClose(): void {
   if (state.status !== "closing") return;
 
   const next = queuedConfirmations.shift();
+
   if (!next) {
     publish(idleState);
+
     return;
   }
 

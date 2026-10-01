@@ -17,6 +17,8 @@ export const Route = createFileRoute("/settings/channels/$channel")({
 
 function ChannelSettingsRoute() {
   const { channel } = Route.useParams();
+
   if (!isChannelProvider(channel)) return null;
+
   return <ChannelDetailPage key={channel} provider={channel} />;
 }

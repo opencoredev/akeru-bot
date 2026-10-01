@@ -24,10 +24,13 @@ function readGithubAlert(node: MarkdownAstNode): void {
   if (node.type !== "blockquote") return;
   const paragraph = node.children?.[0];
   const text = paragraph?.children?.[0];
+
   if (paragraph?.type !== "paragraph" || text?.type !== "text" || typeof text.value !== "string") {
     return;
   }
+
   const match = GITHUB_ALERT_MARKER.exec(text.value);
+
   if (!match?.[1]) return;
 
   const remainder = text.value.slice(match[0].length);
@@ -35,6 +38,7 @@ function readGithubAlert(node: MarkdownAstNode): void {
   // is ambiguous: `[!NOTE]\n**bold**` parses as [text "[!NOTE]\n", strong] — next-line content
   // in a sibling — while `[!NOTE]*aside*` parses the same way minus the newline.
   const markerEndsItsLine = match[0].endsWith("\n");
+
   if (remainder.length > 0) {
     // The quote continues on the next line inside the same text node: keep the paragraph,
     // shed the marker line.
@@ -43,6 +47,7 @@ function readGithubAlert(node: MarkdownAstNode): void {
     // The marker was the whole text node — a marker-only paragraph, or a marker line whose
     // next line starts as a sibling inline. Drop the node, and the paragraph if it empties.
     paragraph.children?.shift();
+
     if (paragraph.children?.length === 0) {
       node.children?.shift();
     }
@@ -67,6 +72,7 @@ export function remarkGithubAlerts() {
       node.children?.forEach(visit);
       readGithubAlert(node);
     };
+
     visit(tree);
   };
 }

@@ -15,9 +15,11 @@ describe("Ghostty ABI lifecycle", () => {
     const out = call("ghostty_wasm_alloc_u8_array", 8);
     expect(call("ghostty_build_info", 10, out)).toBe(0);
     const view = new DataView(memory.buffer, out, 8);
+
     const embeddedRevision = new TextDecoder().decode(
       new Uint8Array(memory.buffer, view.getUint32(0, true), view.getUint32(4, true)),
     );
+
     call("ghostty_wasm_free_u8_array", out, 8);
     expect(embeddedRevision).toBe(pinnedVersion.trim());
   });
@@ -27,12 +29,15 @@ describe("Ghostty ABI lifecycle", () => {
     const jsonPointer = call("ghostty_type_json");
     const jsonBytes = new Uint8Array(memory.buffer, jsonPointer);
     const jsonEnd = jsonBytes.indexOf(0);
+
     const layouts = JSON.parse(new TextDecoder().decode(jsonBytes.subarray(0, jsonEnd))) as Record<
       string,
       { size: number }
     >;
+
     const optionsSize = layouts.GhosttyTerminalOptions?.size;
     expect(optionsSize).toBe(8);
+
     if (optionsSize === undefined) throw new Error("GhosttyTerminalOptions layout is missing");
 
     for (let iteration = 0; iteration < 25; iteration += 1) {

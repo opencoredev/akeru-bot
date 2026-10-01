@@ -18,12 +18,14 @@ export function getThemePreviewSidebarArtwork(): boolean | null {
 
 export function subscribeToThemePreview(listener: () => void): () => void {
   themePreviewListeners.add(listener);
+
   return () => themePreviewListeners.delete(listener);
 }
 
 function setThemePreviewSidebarArtwork(next: boolean | null): void {
   if (themePreviewSidebarArtwork === next) return;
   themePreviewSidebarArtwork = next;
+
   for (const listener of themePreviewListeners) listener();
 }
 
@@ -102,6 +104,7 @@ export const THEME_PREVIEW_ID = "__preview";
 export function applyThemeColorPreview(colors: ThemeColors, appearance: ThemeAppearance): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
+
   if (!root?.style) return;
 
   // Drafts become user-controlled themes when saved, so their preview keeps
@@ -109,6 +112,7 @@ export function applyThemeColorPreview(colors: ThemeColors, appearance: ThemeApp
   setThemePreviewSidebarArtwork(false);
   root.dataset.themeId = THEME_PREVIEW_ID;
   root.classList.toggle("dark", appearance === "dark");
+
   for (const [role, value] of Object.entries(colors) as Array<[ThemeColorRole, string]>) {
     // A half-typed hex keeps the last good value instead of blanking the role.
     if (isThemeColor(value)) root.style.setProperty(APP_THEME_VARIABLES[role], value);
@@ -119,6 +123,7 @@ export function applyThemePalette(theme: ThemePreference, appearance?: ThemeAppe
   if (typeof document === "undefined") return;
 
   const root = document.documentElement;
+
   if (!root?.style) return;
 
   setThemePreviewSidebarArtwork(null);
@@ -128,13 +133,16 @@ export function applyThemePalette(theme: ThemePreference, appearance?: ThemeAppe
     root.dataset.themeId = palette.id;
     const mode = appearance ?? legacyThemeMode(theme) ?? palette.appearance;
     const colors = getThemeColorsForMode(palette, mode) ?? palette.colors;
+
     for (const [role, value] of Object.entries(colors) as Array<[ThemeColorRole, string]>) {
       root.style.setProperty(APP_THEME_VARIABLES[role], value);
     }
+
     return;
   }
 
   delete root.dataset.themeId;
+
   for (const variable of Object.values(APP_THEME_VARIABLES)) {
     root.style.removeProperty(variable);
   }

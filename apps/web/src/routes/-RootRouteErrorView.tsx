@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { useI18n } from "../i18n";
 
 type Translate = (message: string, params?: TranslationParams) => string;
+
 const english: Translate = createTranslator("en").translate;
 
 function reloadApp() {
@@ -25,6 +26,7 @@ interface RootRouteErrorViewProps extends ErrorComponentProps {
  */
 export function TranslatedRootRouteErrorView(props: RootRouteErrorViewProps) {
   const { t } = useI18n();
+
   return <RootRouteErrorView {...props} t={t} />;
 }
 

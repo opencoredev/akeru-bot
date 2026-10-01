@@ -24,6 +24,7 @@ describe("shortcutLabelForCommand", () => {
         whenAst: whenNot(whenIdentifier("terminalFocus")),
       },
     ]);
+
     assert.strictEqual(
       shortcutLabelForCommand(bindings, "terminal.split", {
         platform: "Linux",

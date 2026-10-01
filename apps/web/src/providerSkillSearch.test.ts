@@ -44,6 +44,7 @@ describe("searchProviderSkills", () => {
       makeSkill({ name: "building-native-ui", displayName: "Building Native Ui" }),
       makeSkill({ name: "ui", displayName: "Ui" }),
     ];
+
     const withIcons = plain.map((skill, index) => ({
       ...skill,
       icon: ["🌐", "🧱", "/icons/ui.png"][index],

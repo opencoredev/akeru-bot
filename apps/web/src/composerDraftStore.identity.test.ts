@@ -471,6 +471,7 @@ describe("composerDraftStore project draft thread mapping", () => {
       branch: "main",
       worktreePath: "/tmp/main-worktree",
     });
+
     const runtimeUndefinedOptions = {
       branch: undefined,
       worktreePath: undefined,
@@ -478,6 +479,7 @@ describe("composerDraftStore project draft thread mapping", () => {
       branch?: string | null;
       worktreePath?: string | null;
     };
+
     store.setProjectDraftThreadId(projectRef, draftId, runtimeUndefinedOptions);
 
     expect(useComposerDraftStore.getState().getDraftThread(draftId)).toMatchObject({
@@ -497,6 +499,7 @@ describe("composerDraftStore project draft thread mapping", () => {
       worktreePath: null,
       envMode: "worktree",
     });
+
     const runtimeUndefinedOptions = {
       branch: undefined,
       worktreePath: undefined,
@@ -506,6 +509,7 @@ describe("composerDraftStore project draft thread mapping", () => {
       worktreePath?: string | null;
       envMode?: "local" | "worktree";
     };
+
     store.setProjectDraftThreadId(projectRef, draftId, runtimeUndefinedOptions);
 
     expect(useComposerDraftStore.getState().getDraftThread(draftId)).toMatchObject({

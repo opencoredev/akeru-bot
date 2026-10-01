@@ -47,6 +47,7 @@ const RAW_CELL_DATA = {
 
 function blend(foreground: GhosttyColor, background: GhosttyColor): GhosttyColor {
   const channel = (front: number, back: number) => Math.floor((front * 155 + back * 100) / 255);
+
   return {
     r: channel(foreground.r, background.r),
     g: channel(foreground.g, background.g),
@@ -64,14 +65,18 @@ function blend(foreground: GhosttyColor, background: GhosttyColor): GhosttyColor
 export function ghosttyCellText(codepointView: DataView, graphemeLength: number): string {
   const CHUNK_SIZE = 4_096;
   let text = "";
+
   for (let start = 0; start < graphemeLength; start += CHUNK_SIZE) {
     const count = Math.min(CHUNK_SIZE, graphemeLength - start);
     const codes = new Array<number>(count);
+
     for (let index = 0; index < count; index += 1) {
       codes[index] = codepointView.getUint32((start + index) * 4, true);
     }
+
     text += String.fromCodePoint(...codes);
   }
+
   return text;
 }
 
@@ -116,6 +121,7 @@ export class GhosttySnapshotReader {
     }
 
     const dirtyRows = new Set<number>();
+
     if (dirty !== 0) {
       assertGhosttySuccess(
         "ghostty_render_state_get(row iterator)",
@@ -128,19 +134,23 @@ export class GhosttySnapshotReader {
       );
       const iterator = this.runtime.readPointer(this.rowIteratorSlot);
       let rowIndex = 0;
+
       while (
         rowIndex < rowCount &&
         this.runtime.call("ghostty_render_state_row_iterator_next", iterator) !== 0
       ) {
         const rowDirty = dirty === 2 || this.getRowBool(iterator, ROW_DATA.dirty);
+
         if (rowDirty) {
           this.rows[rowIndex] = this.readRow(iterator, cols, foreground, background);
           dirtyRows.add(rowIndex);
           this.runtime.bytes(this.scratch, 1)[0] = 0;
           this.runtime.call("ghostty_render_state_row_set", iterator, 0, this.scratch);
         }
+
         rowIndex += 1;
       }
+
       this.runtime.view(this.scratch, 4).setUint32(0, 0, true);
       this.runtime.call("ghostty_render_state_set", this.renderState, 0, this.scratch);
     }
@@ -196,6 +206,7 @@ export class GhosttySnapshotReader {
     );
     const cellsIterator = this.runtime.readPointer(this.rowCellsSlot);
     const cells: GhosttyCell[] = [];
+
     while (
       cells.length < cols &&
       this.runtime.call("ghostty_render_state_row_cells_next", cellsIterator) !== 0
@@ -212,15 +223,20 @@ export class GhosttySnapshotReader {
         this.style,
       );
       const inverse = this.runtime.readField(this.style, "GhosttyStyle", "inverse") !== 0;
+
       if (inverse) [foreground, background] = [background, foreground];
+
       if (this.runtime.readField(this.style, "GhosttyStyle", "faint") !== 0) {
         foreground = blend(foreground, background);
       }
+
       const graphemeLength = this.getCellU32(cellsIterator, CELL_DATA.graphemesLength);
       let text = "";
+
       if (graphemeLength > 0) {
         const bufferSize = graphemeLength * 4;
         const codepoints = this.runtime.alloc(bufferSize);
+
         if (
           this.runtime.call(
             "ghostty_render_state_row_cells_get",
@@ -234,9 +250,12 @@ export class GhosttySnapshotReader {
           const codepointView = this.runtime.view(codepoints, bufferSize);
           text = ghosttyCellText(codepointView, graphemeLength);
         }
+
         this.runtime.free(codepoints, bufferSize);
       }
+
       let wide = 0;
+
       if (text.length === 0 && cells.at(-1)?.text.length) {
         assertGhosttySuccess(
           "ghostty_render_state_row_cells_get(raw)",
@@ -255,6 +274,7 @@ export class GhosttySnapshotReader {
         );
         wide = this.runtime.view(this.scratch + 8, 4).getUint32(0, true);
       }
+
       cells.push({
         text,
         wide,
@@ -269,7 +289,9 @@ export class GhosttySnapshotReader {
         selected: this.getCellBool(cellsIterator, CELL_DATA.selected),
       });
     }
+
     while (cells.length < cols) cells.push(this.emptyCell(defaultForeground, defaultBackground));
+
     return {
       cells,
       text: cells
@@ -287,6 +309,7 @@ export class GhosttySnapshotReader {
       "ghostty_render_state_get",
       this.runtime.call("ghostty_render_state_get", this.renderState, data, this.scratch),
     );
+
     return this.runtime.view(this.scratch, 2).getUint16(0, true);
   }
 
@@ -296,6 +319,7 @@ export class GhosttySnapshotReader {
       "ghostty_render_state_get",
       this.runtime.call("ghostty_render_state_get", this.renderState, data, this.scratch),
     );
+
     return this.runtime.view(this.scratch, 4).getUint32(0, true);
   }
 
@@ -305,22 +329,26 @@ export class GhosttySnapshotReader {
       "ghostty_render_state_get",
       this.runtime.call("ghostty_render_state_get", this.renderState, data, this.scratch),
     );
+
     return this.runtime.bytes(this.scratch, 1)[0] !== 0;
   }
 
   private getColor(data: number, fallback: GhosttyColor): GhosttyColor {
     this.runtime.bytes(this.scratch, 3).fill(0);
+
     const result = this.runtime.call(
       "ghostty_render_state_get",
       this.renderState,
       data,
       this.scratch,
     );
+
     return result === GHOSTTY_SUCCESS ? this.readColor(this.scratch) : fallback;
   }
 
   private getRowBool(iterator: number, data: number): boolean {
     this.runtime.bytes(this.scratch, 1)[0] = 0;
+
     return (
       this.runtime.call("ghostty_render_state_row_get", iterator, data, this.scratch) ===
         GHOSTTY_SUCCESS && this.runtime.bytes(this.scratch, 1)[0] !== 0
@@ -329,17 +357,20 @@ export class GhosttySnapshotReader {
 
   private getCellU32(iterator: number, data: number): number {
     this.runtime.bytes(this.scratch, 4).fill(0);
+
     const result = this.runtime.call(
       "ghostty_render_state_row_cells_get",
       iterator,
       data,
       this.scratch,
     );
+
     return result === GHOSTTY_SUCCESS ? this.runtime.view(this.scratch, 4).getUint32(0, true) : 0;
   }
 
   private getCellBool(iterator: number, data: number): boolean {
     this.runtime.bytes(this.scratch, 1)[0] = 0;
+
     return (
       this.runtime.call("ghostty_render_state_row_cells_get", iterator, data, this.scratch) ===
         GHOSTTY_SUCCESS && this.runtime.bytes(this.scratch, 1)[0] !== 0
@@ -348,17 +379,20 @@ export class GhosttySnapshotReader {
 
   private getCellColor(iterator: number, data: number, fallback: GhosttyColor): GhosttyColor {
     this.runtime.bytes(this.scratch, 3).fill(0);
+
     const result = this.runtime.call(
       "ghostty_render_state_row_cells_get",
       iterator,
       data,
       this.scratch,
     );
+
     return result === GHOSTTY_SUCCESS ? this.readColor(this.scratch) : fallback;
   }
 
   private readColor(pointer: number): GhosttyColor {
     const bytes = this.runtime.bytes(pointer, 3);
+
     return { r: bytes[0] ?? 0, g: bytes[1] ?? 0, b: bytes[2] ?? 0 };
   }
 

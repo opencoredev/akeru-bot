@@ -48,10 +48,15 @@ const CLIENT_SETTINGS_PERSISTENCE_ERROR_SCOPE = "[CLIENT_SETTINGS]";
 type UnifiedSettingsPatch = ServerSettingsPatch & ClientSettingsPatch;
 
 const clientSettingsListeners = new Set<() => void>();
+
 const clientSettingsHydrationListeners = new Set<() => void>();
+
 let clientSettingsSnapshot = DEFAULT_CLIENT_SETTINGS;
+
 let clientSettingsHydrated = false;
+
 let clientSettingsHydrationPromise: Promise<void> | null = null;
+
 let clientSettingsHydrationGeneration = 0;
 
 function emitClientSettingsChange() {
@@ -79,6 +84,7 @@ function setClientSettingsHydrated(nextHydrated: boolean): void {
   if (clientSettingsHydrated === nextHydrated) {
     return;
   }
+
   clientSettingsHydrated = nextHydrated;
   emitClientSettingsHydrationChange();
 }
@@ -102,8 +108,10 @@ function subscribeClientSettings(listener: () => void): () => void {
     window.addEventListener("storage", onClientSettingsStorage);
   clientSettingsListeners.add(listener);
   void hydrateClientSettings();
+
   return () => {
     clientSettingsListeners.delete(listener);
+
     if (clientSettingsListeners.size === 0)
       window.removeEventListener("storage", onClientSettingsStorage);
   };
@@ -116,6 +124,7 @@ function getClientSettingsHydratedSnapshot(): boolean {
 function subscribeClientSettingsHydration(listener: () => void): () => void {
   clientSettingsHydrationListeners.add(listener);
   void hydrateClientSettings();
+
   return () => {
     clientSettingsHydrationListeners.delete(listener);
   };
@@ -125,17 +134,21 @@ async function hydrateClientSettings(): Promise<void> {
   if (clientSettingsHydrated) {
     return;
   }
+
   if (clientSettingsHydrationPromise) {
     return clientSettingsHydrationPromise;
   }
 
   const hydrationGeneration = clientSettingsHydrationGeneration;
+
   const nextHydration = (async () => {
     try {
       const persistedSettings = await ensureLocalApi().persistence.getClientSettings();
+
       if (hydrationGeneration !== clientSettingsHydrationGeneration) {
         return;
       }
+
       if (persistedSettings) {
         replaceClientSettingsSnapshot({ ...DEFAULT_CLIENT_SETTINGS, ...persistedSettings });
       }
@@ -156,6 +169,7 @@ async function hydrateClientSettings(): Promise<void> {
       clientSettingsHydrationPromise = null;
     }
   });
+
   clientSettingsHydrationPromise = hydrationPromise;
 
   return clientSettingsHydrationPromise;
@@ -184,6 +198,7 @@ function splitPatch(patch: UnifiedSettingsPatch): {
 } {
   const serverPatch: Record<string, unknown> = {};
   const clientPatch: Record<string, unknown> = {};
+
   for (const [key, value] of Object.entries(patch)) {
     if (SERVER_SETTINGS_KEYS.has(key)) {
       serverPatch[key] = value;
@@ -191,6 +206,7 @@ function splitPatch(patch: UnifiedSettingsPatch): {
       clientPatch[key] = value;
     }
   }
+
   return {
     serverPatch: serverPatch as ServerSettingsPatch,
     clientPatch: clientPatch as ClientSettingsPatch,
@@ -260,6 +276,7 @@ export function useClientSettings<T = ClientSettings>(
   selector?: (settings: ClientSettings) => T,
 ): T {
   const settings = useClientSettingsValue();
+
   return useMemo(() => (selector ? selector(settings) : (settings as T)), [selector, settings]);
 }
 
@@ -271,6 +288,7 @@ export function resolveEnvironmentIdentificationMode(input: {
 }): EnvironmentIdentificationMode {
   // Avoid briefly rendering the default artwork before a persisted pill/none choice loads.
   if (!input.settingsHydrated) return "none";
+
   // Artwork palettes are maintained for built-ins only. Keep an explicit
   // "none", but use the theme-aware pill for user-controlled palettes.
   return input.paletteThemeActive && !input.paletteThemeAllowsArtwork && input.mode === "artwork"
@@ -282,13 +300,16 @@ export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMod
   const settingsHydrated = useClientSettingsHydrated();
   const mode = useClientSettingsValue().environmentIdentificationMode;
   const { resolvedTheme, theme, themeHalves } = useTheme();
+
   const previewSidebarArtwork = useSyncExternalStore(
     subscribeToThemePreview,
     getThemePreviewSidebarArtwork,
     () => null,
   );
+
   const activeTheme = resolveThemeHalf(theme, themeHalves, resolvedTheme);
   const activeThemeDefinition = getThemeDefinition(activeTheme);
+
   return resolveEnvironmentIdentificationMode({
     mode,
     settingsHydrated,
@@ -303,6 +324,7 @@ export function useEnvironmentSettings<T = UnifiedSettings>(
   selector?: (settings: UnifiedSettings) => T,
 ): T {
   const serverSettings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
+
   return useMergedSettings(serverSettings ?? DEFAULT_SERVER_SETTINGS, selector);
 }
 
@@ -324,6 +346,7 @@ function useUpdateSettingsTarget(environmentId: EnvironmentId | null) {
     serverEnvironment.updateSettings,
     "server settings update",
   );
+
   const updateSettings = useCallback(
     (patch: UnifiedSettingsPatch) => {
       const { serverPatch, clientPatch } = splitPatch(patch);
@@ -336,6 +359,7 @@ function useUpdateSettingsTarget(environmentId: EnvironmentId | null) {
           });
         }
       }
+
       if (Object.keys(clientPatch).length > 0) {
         persistClientSettings({
           ...getClientSettingsSnapshot(),

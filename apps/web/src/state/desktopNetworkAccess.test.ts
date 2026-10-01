@@ -15,17 +15,21 @@ const serverExposureState: DesktopServerExposureState = {
 };
 
 const advertisedEndpoints: ReadonlyArray<AdvertisedEndpoint> = [];
+
 const serverExposureLoadCause = new Error("exposure failed");
+
 const advertisedEndpointsLoadCause = new Error("endpoints failed");
 
 describe("desktopNetworkAccessState", () => {
   it("retains the loaded snapshot when the settings screen remounts", async () => {
     const getServerExposureState = vi.fn(async () => serverExposureState);
     const getAdvertisedEndpoints = vi.fn(async () => advertisedEndpoints);
+
     const atom = createDesktopNetworkAccessStateAtom(() => ({
       getAdvertisedEndpoints,
       getServerExposureState,
     }));
+
     const registry = AtomRegistry.make();
 
     const unmount = registry.mount(atom);
@@ -69,11 +73,13 @@ describe("desktopNetworkAccessState", () => {
       getAdvertisedEndpoints: testCase.getAdvertisedEndpoints,
       getServerExposureState: testCase.getServerExposureState,
     }));
+
     const registry = AtomRegistry.make();
     registry.mount(atom);
 
     await vi.waitFor(() => expect(AsyncResult.isFailure(registry.get(atom))).toBe(true));
     const result = registry.get(atom);
+
     if (!AsyncResult.isFailure(result)) throw new Error("Expected network access load to fail.");
 
     expect(Cause.squash(result.cause)).toEqual(

@@ -10,10 +10,12 @@ afterEach(() => vi.restoreAllMocks());
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
   });
+
   return { promise, resolve, reject };
 }
 
@@ -23,6 +25,7 @@ function fixture(captureResult?: Promise<Blob>) {
     text: "Keep this",
     selection: { start: 9, end: 9 },
   };
+
   const cancel = vi.fn();
   const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
   vi.mocked(startDictationCapture).mockResolvedValue({
@@ -32,6 +35,7 @@ function fixture(captureResult?: Promise<Blob>) {
   });
   vi.spyOn(performance, "now").mockReturnValueOnce(100).mockReturnValue(200);
   const transcribe = vi.fn(async () => "spoken words");
+
   const session = createBrowserDictationSession(
     {
       transcribe,
@@ -41,6 +45,7 @@ function fixture(captureResult?: Promise<Blob>) {
     },
     { maxAudioBytes: 1024, maxRecordingMs: 1000 },
   );
+
   return { session, transcribe, cancel, draft: () => draft };
 }
 
@@ -72,9 +77,11 @@ describe("browser dictation boundary", () => {
     const f = fixture(captureResult.promise);
     await f.session.start(f.draft());
     const changed = deferred<void>();
+
     const unsubscribe = f.session.subscribe(() => {
       if (f.session.status === "error") changed.resolve();
     });
+
     captureResult.reject(new Error("Microphone devices changed."));
     await changed.promise;
     expect(f.session.status).toBe("error");

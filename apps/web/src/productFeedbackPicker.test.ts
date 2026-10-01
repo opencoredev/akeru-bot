@@ -27,14 +27,18 @@ class TestElement {
   remove() {
     if (!this.parentElement) return;
     const index = this.parentElement.children.indexOf(this);
+
     if (index >= 0) this.parentElement.children.splice(index, 1);
     this.parentElement = null;
   }
 
   getAttribute(name: string) {
     if (name === "data-component") return this.dataset.component ?? null;
+
     if (name === "data-source") return this.dataset.source ?? null;
+
     if (name === "data-feedback-target") return this.dataset.feedbackTarget ?? null;
+
     return this.attributes.get(name) ?? null;
   }
 
@@ -58,14 +62,17 @@ class TestElement {
 
   closest(selector: string): TestElement | null {
     let current: TestElement | null = this;
+
     while (current) {
       if (selector === "[data-component]" && current.dataset.component) return current;
+
       if (
         selector === "[data-akeru-feedback-ui]" &&
         current.dataset.akeruFeedbackUi !== undefined
       ) {
         return current;
       }
+
       if (
         selector === "button, a, [role], [data-feedback-target], [data-component]" &&
         (current.tagName === "BUTTON" ||
@@ -76,6 +83,7 @@ class TestElement {
       ) {
         return current;
       }
+
       if (
         selector.includes(",") &&
         (["INPUT", "TEXTAREA", "SELECT", "OPTION"].includes(current.tagName) ||
@@ -86,8 +94,10 @@ class TestElement {
       ) {
         return current;
       }
+
       current = current.parentElement;
     }
+
     return null;
   }
 
@@ -109,6 +119,7 @@ class TestDocument {
   createElement(tagName: string) {
     const element = new TestElement(tagName.toUpperCase());
     element.ownerDocument = this;
+
     return element;
   }
 

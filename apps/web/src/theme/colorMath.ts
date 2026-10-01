@@ -35,6 +35,7 @@ export function parseThemeColor(value: unknown): ParsedThemeColor | null {
   if (typeof value !== "string") return null;
   const input = value.trim();
   const parsed = parse(input);
+
   if (!parsed) return null;
   const color = convertToOklch(parsed);
   const lightness = color.l ?? 0;
@@ -43,7 +44,9 @@ export function parseThemeColor(value: unknown): ParsedThemeColor | null {
   // CSS missing components behave as zero outside interpolation. Culori omits
   // a `none` alpha from its parsed object, so distinguish it from omitted alpha.
   const alpha = /\/\s*none\s*\)$/i.test(input) ? 0 : (color.alpha ?? 1);
+
   if (![lightness, chroma, hue, alpha].every(Number.isFinite)) return null;
+
   return {
     color: {
       L: Math.min(1, Math.max(0, lightness)),
@@ -56,12 +59,14 @@ export function parseThemeColor(value: unknown): ParsedThemeColor | null {
 
 function formatThemeColorNumber(value: number, precision: number): string {
   const rounded = Math.abs(value) < 10 ** -precision / 2 ? 0 : value;
+
   return rounded.toFixed(precision).replace(/(?:\.0+|(?:(\.[0-9]*?)0+))$/, "$1");
 }
 
 export function formatOklchThemeColor(color: ThemeOklch, alpha = 1): string {
   const normalizedHue = color.C < 0.0000005 ? 0 : ((color.h % 360) + 360) % 360;
   const body = `${formatThemeColorNumber(color.L, 6)} ${formatThemeColorNumber(color.C, 6)} ${formatThemeColorNumber(normalizedHue, 3)}`;
+
   return alpha < 1 ? `oklch(${body} / ${formatThemeColorNumber(alpha, 4)})` : `oklch(${body})`;
 }
 
@@ -71,6 +76,7 @@ export function formatOklchThemeColor(color: ThemeOklch, alpha = 1): string {
  */
 export function toCanonicalThemeColor(value: unknown): string | null {
   const parsed = parseThemeColor(value);
+
   return parsed ? formatOklchThemeColor(parsed.color, parsed.alpha) : null;
 }
 
@@ -78,18 +84,23 @@ export function toCanonicalThemeColor(value: unknown): string | null {
 export function themeColorToHex(value: string): string | null {
   const color = parseThemeColor(value);
   const parsed = color ? { rgb: themeOklchToRgb(color.color), alpha: color.alpha } : null;
+
   if (!parsed) return null;
 
   const opaque = themeRgbToHexColor(parsed.rgb);
+
   if (parsed.alpha >= 1) return opaque;
+
   const alpha = Math.round(parsed.alpha * 255)
     .toString(16)
     .padStart(2, "0");
+
   return `${opaque}${alpha}`;
 }
 
 export function parseThemeRgbColor(value: string, fallback: ThemeRgbColor): ThemeRgbColor {
   const parsed = parseThemeColor(value);
+
   return parsed ? themeOklchToRgb(parsed.color) : fallback;
 }
 
@@ -120,6 +131,7 @@ export function themeRgbToHsl(color: ThemeRgbColor): ThemeHslColor {
 
   const saturation = delta / (1 - Math.abs(2 * lightness - 1));
   let hue = 0;
+
   if (max === red) hue = ((green - blue) / delta) % 6;
   else if (max === green) hue = (blue - red) / delta + 2;
   else hue = (red - green) / delta + 4;
@@ -133,6 +145,7 @@ export function themeHslToRgb(color: ThemeHslColor): ThemeRgbColor {
   const hueSector = hue / 60;
   const secondary = chroma * (1 - Math.abs((hueSector % 2) - 1));
   const match = color.l - chroma / 2;
+
   const [red, green, blue] =
     hueSector < 1
       ? [chroma, secondary, 0]
@@ -164,6 +177,7 @@ export function mixThemeRgbColors(
 export function themeRelativeLuminance(color: ThemeRgbColor): number {
   const linearize = (channel: number) => {
     const normalized = channel / 255;
+
     return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
   };
 
@@ -175,11 +189,13 @@ export function themeRelativeLuminance(color: ThemeRgbColor): number {
 
 function srgbChannelToLinear(channel: number): number {
   const c = channel / 255;
+
   return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
 function linearChannelToSrgb(channel: number): number {
   const c = channel <= 0.0031308 ? channel * 12.92 : 1.055 * channel ** (1 / 2.4) - 0.055;
+
   return Math.round(Math.min(1, Math.max(0, c)) * 255);
 }
 
@@ -193,6 +209,7 @@ export function themeRgbToOklch(color: ThemeRgbColor): ThemeOklch {
   const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
   const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
   const bb = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+
   return { L, C: Math.hypot(a, bb), h: (Math.atan2(bb, a) * 180) / Math.PI };
 }
 
@@ -203,6 +220,7 @@ function oklchToRgbUnclamped({ L, C, h }: ThemeOklch): { r: number; g: number; b
   const l = (L + 0.3963377774 * a + 0.2158037573 * bb) ** 3;
   const m = (L - 0.1055613458 * a - 0.0638541728 * bb) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * bb) ** 3;
+
   return {
     r: 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
     g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
@@ -214,30 +232,37 @@ function oklchToRgbUnclamped({ L, C, h }: ThemeOklch): { r: number; g: number; b
 function mapThemeOklchToSrgbGamut(color: ThemeOklch): ThemeOklch {
   const isInGamut = (C: number) => {
     const linear = oklchToRgbUnclamped({ ...color, C });
+
     return [linear.r, linear.g, linear.b].every(
       (channel) => channel >= -0.0001 && channel <= 1.0001,
     );
   };
+
   if (isInGamut(color.C)) return color;
 
   let low = 0;
   let high = color.C;
   const chromaResolution = 0.000001;
+
   const steps = Math.max(
     1,
     Math.ceil(Math.log2(Math.max(color.C, chromaResolution)) - Math.log2(chromaResolution)),
   );
+
   for (let step = 0; step < steps; step += 1) {
     const mid = (low + high) / 2;
+
     if (isInGamut(mid)) low = mid;
     else high = mid;
   }
+
   return { ...color, C: low };
 }
 
 /** Convert to sRGB after applying the palette engine's gamut mapping. */
 export function themeOklchToRgb(color: ThemeOklch): ThemeRgbColor {
   const linear = oklchToRgbUnclamped(mapThemeOklchToSrgbGamut(color));
+
   return {
     r: linearChannelToSrgb(linear.r),
     g: linearChannelToSrgb(linear.g),
@@ -259,11 +284,14 @@ export function solveOklchLightness(
   let low = direction === "lighter" ? base.L : 0;
   let high = direction === "lighter" ? 1 : base.L;
   let candidate = { ...base };
+
   if (themeContrastRatio(themeOklchToRgb(candidate), against) >= minContrast) return candidate;
+
   for (let step = 0; step < 18; step += 1) {
     const mid = (low + high) / 2;
     candidate = { ...base, L: mid };
     const contrast = themeContrastRatio(themeOklchToRgb(candidate), against);
+
     if (contrast >= minContrast) {
       if (direction === "lighter") high = mid;
       else low = mid;
@@ -272,6 +300,7 @@ export function solveOklchLightness(
       else high = mid;
     }
   }
+
   return { ...base, L: direction === "lighter" ? high : low };
 }
 
@@ -280,5 +309,6 @@ export function themeContrastRatio(first: ThemeRgbColor, second: ThemeRgbColor):
   const secondLuminance = themeRelativeLuminance(second);
   const lighter = Math.max(firstLuminance, secondLuminance);
   const darker = Math.min(firstLuminance, secondLuminance);
+
   return (lighter + 0.05) / (darker + 0.05);
 }

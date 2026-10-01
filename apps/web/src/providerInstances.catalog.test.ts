@@ -12,6 +12,7 @@ describe("applyProviderInstanceSettings", () => {
     const entries = deriveProviderInstanceEntries([
       provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
     ]);
+
     const [entry] = applyProviderInstanceSettings(entries, {
       providerInstances: {
         [ProviderInstanceId.make("codex")]: {
@@ -32,6 +33,7 @@ describe("applyProviderInstanceSettings", () => {
         instanceId: "claude_work",
       }),
     ]);
+
     const [entry] = applyProviderInstanceSettings(entries, {
       providerInstances: {},
       providers: {} as never,
@@ -47,6 +49,7 @@ describe("deriveProviderInstanceEntries", () => {
       provider: ProviderDriverKind.make("codex"),
       instanceId: "codex_personal",
     });
+
     const [entry] = deriveProviderInstanceEntries([snapshot]);
 
     expect(entry?.instanceId).toBe("codex_personal");

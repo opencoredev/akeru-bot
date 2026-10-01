@@ -24,19 +24,24 @@ export function useAssetUrlState(
   resource: AssetResource,
 ): AssetUrlState {
   const preparedConnection = usePreparedConnection(environmentId);
+
   const result = useAtomValue(
     assetEnvironment.createUrl({
       environmentId,
       input: { resource },
     }),
   );
+
   if (result._tag === "Failure") {
     return { _tag: "Failure" };
   }
+
   if (preparedConnection._tag === "None" || result._tag !== "Success") {
     return { _tag: "Loading" };
   }
+
   const url = resolveAssetUrl(preparedConnection.value.httpBaseUrl, result.value.relativeUrl);
+
   return url === null
     ? { _tag: "Failure" }
     : {
@@ -51,9 +56,11 @@ export function useAssetUrlState(
 
 export function useAssetUrl(environmentId: EnvironmentId, resource: AssetResource): string | null {
   const result = useAssetUrlState(environmentId, resource);
+
   if (result._tag !== "Success") {
     return null;
   }
+
   return result.url;
 }
 
@@ -62,12 +69,14 @@ export function useAssetUrls(
   resources: ReadonlyArray<AssetResource>,
 ): ReadonlyArray<string | null> {
   const preparedConnection = usePreparedConnection(environmentId);
+
   const results = useAtomValue(
     assetEnvironment.createUrls({
       environmentId,
       resources,
     }),
   );
+
   return useMemo(
     () =>
       preparedConnection._tag === "None"

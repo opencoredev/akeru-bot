@@ -93,6 +93,7 @@ describe("applyTerminalCopyEvent", () => {
         this.selectionEnd = this.value.length;
       },
     };
+
     primeTerminalCopyInput(input, "git status");
     expect(applyTerminalCopyEvent("git status", null)).toEqual({
       preventDefault: false,
@@ -115,6 +116,7 @@ describe("primeTerminalCopyInput", () => {
         this.selectionEnd = this.value.length;
       },
     };
+
     primeTerminalCopyInput(input, "git status");
     expect(input.value).toBe("git status");
     expect(input.selectionStart).toBe(0);

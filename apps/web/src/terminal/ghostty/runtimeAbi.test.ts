@@ -11,9 +11,11 @@ describe("Ghostty ABI trampoline", () => {
       decodeWasmDataUrl(wasmDataUrl).buffer as ArrayBuffer,
       { env: { log: () => {} } },
     );
+
     const main = mainResult instanceof WebAssembly.Instance ? mainResult : mainResult.instance;
     const memory = main.exports.memory as WebAssembly.Memory;
     let reply = "";
+
     const trampolineResult = await WebAssembly.instantiate(
       decodeWasmDataUrl(writePtyWasmDataUrl).buffer as ArrayBuffer,
       {
@@ -24,10 +26,12 @@ describe("Ghostty ABI trampoline", () => {
         },
       },
     );
+
     const trampoline =
       trampolineResult instanceof WebAssembly.Instance
         ? trampolineResult
         : trampolineResult.instance;
+
     const table = main.exports.__indirect_function_table as WebAssembly.Table;
     const callbackIndex = table.length;
     table.grow(1, trampoline.exports.ghostty_write_pty as CallableFunction);

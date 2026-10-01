@@ -69,11 +69,13 @@ describe("terminalWheelDeltaRows", () => {
   it("accumulates fractional pixel deltas across events", () => {
     let remainder = 0;
     let scrolled = 0;
+
     for (let index = 0; index < 4; index += 1) {
       const result = terminalWheelDeltaRows({ deltaY: 5, deltaMode: 0 }, 16, 24, remainder);
       remainder = result.remainder;
       scrolled += result.rows;
     }
+
     expect(scrolled).toBe(1);
     expect(remainder).toBeCloseTo(4 / 16);
   });

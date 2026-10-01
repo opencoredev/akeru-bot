@@ -19,6 +19,7 @@ export function useAtomQueryRunner<T, A, E>(
   return useCallback(
     (target: T) => {
       const atom = family(target);
+
       return executeAtomQuery(registry, atom, {
         label: explicitLabel ?? atom.label?.[0] ?? "atom query",
         reportFailure,

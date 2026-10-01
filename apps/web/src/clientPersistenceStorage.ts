@@ -3,6 +3,7 @@ import { ClientSettingsSchema, type ClientSettings } from "@akeru/contracts";
 import { getFirstLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
 
 export const CLIENT_SETTINGS_STORAGE_KEY = "akeru:client-settings:v1";
+
 // Pre-rebrand key, kept so existing installs keep their client settings.
 export const LEGACY_CLIENT_SETTINGS_STORAGE_KEY = "t3code:client-settings:v1";
 
@@ -28,6 +29,7 @@ export function writeBrowserClientSettings(settings: ClientSettings): void {
   }
 
   setLocalStorageItem(CLIENT_SETTINGS_STORAGE_KEY, settings, ClientSettingsSchema);
+
   try {
     window.localStorage.removeItem(LEGACY_CLIENT_SETTINGS_STORAGE_KEY);
   } catch {

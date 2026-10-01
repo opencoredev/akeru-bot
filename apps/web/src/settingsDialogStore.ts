@@ -82,6 +82,7 @@ export function openSettings(
 export function useSettingsEnvironmentId(): EnvironmentId | null {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const environmentId = useSettingsDialogStore((state) => state.environmentId);
+
   return environmentId ?? primaryEnvironmentId;
 }
 
@@ -119,7 +120,9 @@ export const LEGACY_SETTINGS_SECTIONS: Readonly<
 export function settingsSectionFromPathname(pathname: string): SettingsSection {
   const slug = pathname.replace(/^\/settings\/?/, "").split("/")[0] ?? "";
   const legacy = LEGACY_SETTINGS_SECTIONS[slug];
+
   if (legacy) return legacy.section;
+
   return (SETTINGS_SECTIONS as readonly string[]).includes(slug)
     ? (slug as SettingsSection)
     : DEFAULT_SETTINGS_SECTION;
@@ -132,5 +135,6 @@ export function useSettingsChannelProvider(): readonly [
 ] {
   const provider = useSettingsDialogStore((state) => state.channelProvider);
   const setProvider = useSettingsDialogStore((state) => state.setChannelProvider);
+
   return [provider, setProvider];
 }

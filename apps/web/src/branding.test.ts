@@ -11,6 +11,7 @@ afterEach(() => {
 
   if (originalWindow === undefined) {
     Reflect.deleteProperty(globalThis, "window");
+
     return;
   }
 

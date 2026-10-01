@@ -34,12 +34,16 @@ describe("shouldBlinkTerminalCursor", () => {
 describe("terminal font resolution", () => {
   it("validates the requested face after its styles load", async () => {
     let loaded = false;
+
     const load = vi.fn(async () => {
       loaded = true;
+
       return [];
     });
+
     const resolve = vi.fn(() => {
       expect(loaded).toBe(true);
+
       return DEFAULT_TERMINAL_FONT_FAMILY;
     });
 

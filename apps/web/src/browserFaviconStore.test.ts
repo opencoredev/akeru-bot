@@ -3,6 +3,7 @@ import { EnvironmentId, ProjectId, ThreadId } from "@akeru/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("~/state/entities", () => ({ useThreadShell: () => null }));
+
 vi.mock("~/state/session", () => ({ usePreparedConnection: () => ({ _tag: "None" }) }));
 
 import {
@@ -22,9 +23,13 @@ import {
 } from "./browserFaviconLogic";
 
 const environmentId = EnvironmentId.make("env-1");
+
 const projectRef = scopeProjectRef(environmentId, ProjectId.make("project-1"));
+
 const threadRef = { environmentId, threadId: ThreadId.make("thread-1") };
+
 const PNG = "data:image/png;base64,AAAA";
+
 const favicon = (pageUrl: string, capturedAt: number, dataUrl = PNG) => ({
   pageUrl,
   capturedAt,
@@ -59,6 +64,7 @@ describe("browser favicon store", () => {
       EnvironmentId.make("env-2"),
       ProjectId.make("project-1"),
     );
+
     const otherProject = scopeProjectRef(environmentId, ProjectId.make("project-2"));
     recordFaviconForProject(projectRef, favicon("http://localhost:3000/", 1), null);
     recordFaviconForProject(otherEnvironment, favicon("http://localhost:3000/", 2), null);
@@ -91,9 +97,11 @@ describe("browser favicon store", () => {
 
   it("finds a persisted IPv6 environment icon without a live connection", () => {
     recordFaviconForProject(projectRef, favicon("http://[fd00::1]:3000/app", 5), "fd00::1");
+
     const migrated = migratePersistedBrowserFaviconState({
       byKey: useBrowserFaviconStore.getState().byKey,
     }).byKey;
+
     expect(lookupFavicon(migrated, projectRef, "http://[fd00::1]:3000/app", null)).toBe(PNG);
   });
 
@@ -116,14 +124,17 @@ describe("browser favicon store", () => {
       "192.168.64.4",
     );
     const byKey = useBrowserFaviconStore.getState().byKey;
+
     for (const host of ["192.168.64.2", "192.168.64.3", "192.168.64.4"]) {
       expect(lookupFavicon(byKey, projectRef, `http://${host}:3000/`, null)).toBe(newerPng);
     }
+
     expect(byKey["env-1:project-1 http://localhost:3000"]?.capturedAt).toBe(20);
   });
 
   it("evicts an icon and its exact host aliases atomically", () => {
     recordFaviconForProject(projectRef, favicon("http://192.168.64.2:3000/", 100), "192.168.64.2");
+
     for (let index = 1; index < BROWSER_FAVICON_MAX_ENTRIES; index += 1) {
       recordFaviconForProject(
         projectRef,
@@ -131,6 +142,7 @@ describe("browser favicon store", () => {
         null,
       );
     }
+
     expect(
       lookupFavicon(
         useBrowserFaviconStore.getState().byKey,
@@ -230,6 +242,7 @@ describe("browser favicon store", () => {
         );
       }
     }
+
     const pending = useBrowserFaviconStore.getState().pendingByThreadKey;
     expect(Object.keys(pending)).toHaveLength(20);
     expect(Object.values(pending).every((byOrigin) => Object.keys(byOrigin).length === 10)).toBe(
@@ -240,6 +253,7 @@ describe("browser favicon store", () => {
   it("sanitizes hydrated state while preserving actions and transient pending data", () => {
     recordFaviconForThread(threadRef, favicon("http://localhost:3000/", 1), null, undefined);
     const current = useBrowserFaviconStore.getState();
+
     const merged = mergeBrowserFaviconState(
       {
         byKey: {
@@ -251,6 +265,7 @@ describe("browser favicon store", () => {
       },
       current,
     );
+
     expect(merged.byKey).toEqual({
       "env-1:project-1 http://localhost:3000": { dataUrl: PNG, capturedAt: 2 },
     });

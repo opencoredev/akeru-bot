@@ -11,10 +11,14 @@ import { randomUUID } from "./lib/utils";
 import type { ProductFeedbackDraft } from "./productFeedbackStore";
 
 const INSTALL_TOKEN_STORAGE_KEY = "akeru.product-feedback.install-token.v1";
+
 const INSTALL_TOKEN_MAX_AGE_MS = 30 * 86_400_000;
+
 const INSTALL_TOKEN_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 const decodeProductFeedbackReceipt = Schema.decodeUnknownExit(ProductFeedbackReceipt);
+
 const decodeProductFeedbackRejection = Schema.decodeUnknownExit(ProductFeedbackRejection);
 
 interface StoredInstallToken {
@@ -29,10 +33,13 @@ function newInstallToken(): StoredInstallToken {
 export function readOrRotateProductFeedbackInstallToken(force = false): string {
   let stored: StoredInstallToken | null = null;
   const current = Date.now();
+
   try {
     const raw = globalThis.localStorage?.getItem(INSTALL_TOKEN_STORAGE_KEY);
+
     if (raw) {
       const value: unknown = JSON.parse(raw);
+
       if (
         typeof value === "object" &&
         value !== null &&
@@ -51,14 +58,17 @@ export function readOrRotateProductFeedbackInstallToken(force = false): string {
   } catch {
     stored = null;
   }
+
   if (force || !stored || current - stored.createdAt >= INSTALL_TOKEN_MAX_AGE_MS) {
     stored = newInstallToken();
+
     try {
       globalThis.localStorage?.setItem(INSTALL_TOKEN_STORAGE_KEY, JSON.stringify(stored));
     } catch {
       // Private browsing and storage quotas must not block feedback submission.
     }
   }
+
   return stored.token;
 }
 
@@ -68,6 +78,7 @@ export function buildProductFeedbackSubmission(input: {
   readonly turnstileToken?: string | undefined;
 }): ProductFeedbackSubmission {
   const feedback = input.draft.feedback.trim().slice(0, PRODUCT_FEEDBACK_TEXT_MAX_CHARS);
+
   return {
     schemaVersion: 1,
     feedback,
@@ -99,17 +110,22 @@ export async function submitProductFeedback(
       headers: { "content-type": "application/json" },
       body: JSON.stringify(submission),
     });
+
     const body: unknown = await response.json();
+
     if (response.ok) {
       const decoded = decodeProductFeedbackReceipt(body);
+
       if (Exit.isSuccess(decoded)) return { ok: true, receipt: decoded.value };
     } else {
       const decoded = decodeProductFeedbackRejection(body);
+
       if (Exit.isSuccess(decoded)) return { ok: false, rejection: decoded.value };
     }
   } catch {
     // The bounded message below is the only network detail shown to the user.
   }
+
   return {
     ok: false,
     rejection: {

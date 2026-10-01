@@ -99,17 +99,20 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
       merge: (persistedState, currentState) => {
         const normalizedPersisted =
           normalizeCurrentPersistedComposerDraftStoreState(persistedState);
+
         const draftsByThreadKey = Object.fromEntries(
           Object.entries(normalizedPersisted.draftsByThreadKey).map(([threadKey, draft]) => [
             threadKey,
             toHydratedThreadDraft(draft),
           ]),
         );
+
         const draftThreadsByThreadKey = Object.fromEntries(
           Object.entries(normalizedPersisted.draftThreadsByThreadKey).map(
             ([threadKey, draftThread]) => [threadKey, toHydratedDraftThreadState(draftThread)],
           ),
         ) as Record<string, DraftThreadState>;
+
         return {
           ...currentState,
           draftsByThreadKey,
@@ -132,6 +135,7 @@ export function beginBackgroundDraftSubmissionByRef(threadRef: ScopedThreadRef):
     if (state.backgroundSubmissionThreadKeys[threadKey]) {
       return state;
     }
+
     return {
       backgroundSubmissionThreadKeys: {
         ...state.backgroundSubmissionThreadKeys,
@@ -147,14 +151,17 @@ export function clearBackgroundDraftSubmissionByRef(threadRef: ScopedThreadRef):
     if (!state.backgroundSubmissionThreadKeys[threadKey]) {
       return state;
     }
+
     const backgroundSubmissionThreadKeys = { ...state.backgroundSubmissionThreadKeys };
     delete backgroundSubmissionThreadKeys[threadKey];
+
     return { backgroundSubmissionThreadKeys };
   });
 }
 
 export function useBackgroundDraftSubmissionPending(threadRef: ScopedThreadRef | null): boolean {
   const threadKey = threadRef ? scopedThreadKey(threadRef) : null;
+
   return useComposerDraftStore(
     (state) => threadKey !== null && state.backgroundSubmissionThreadKeys[threadKey] === true,
   );
@@ -169,11 +176,13 @@ export function clearComposerDraftsEnvironment(environmentId: EnvironmentId): vo
         removedThreadKeys.add(threadKey);
       }
     }
+
     for (const threadKey of Object.keys(state.draftsByThreadKey)) {
       if (parseScopedThreadKey(threadKey)?.environmentId === environmentId) {
         removedThreadKeys.add(threadKey);
       }
     }
+
     for (const [logicalProjectKey, threadKey] of Object.entries(
       state.logicalProjectDraftThreadKeyByLogicalProjectKey,
     )) {
@@ -189,21 +198,26 @@ export function clearComposerDraftsEnvironment(environmentId: EnvironmentId): vo
           !removedThreadKeys.has(threadKey),
       ),
     ) as Record<string, string>;
+
     const nextDraftThreads = Object.fromEntries(
       Object.entries(state.draftThreadsByThreadKey).filter(
         ([threadKey, draftThread]) =>
           draftThread.environmentId !== environmentId && !removedThreadKeys.has(threadKey),
       ),
     ) as Record<string, DraftThreadState>;
+
     const nextDrafts = Object.fromEntries(
       Object.entries(state.draftsByThreadKey).filter(([threadKey, draft]) => {
         if (!removedThreadKeys.has(threadKey)) {
           return true;
         }
+
         revokeDraftThreadPreviewUrls(draft);
+
         return false;
       }),
     ) as Record<string, ComposerThreadDraftState>;
+
     const nextBackgroundSubmissionThreadKeys = Object.fromEntries(
       Object.entries(state.backgroundSubmissionThreadKeys).filter(
         ([threadKey]) => parseScopedThreadKey(threadKey)?.environmentId !== environmentId,
@@ -232,6 +246,7 @@ export function useComposerDraftModelState(
   return useComposerDraftStore(
     useShallow((state) => {
       const draft = getComposerDraftState(state, threadRef);
+
       return draft
         ? {
             activeProvider: draft.activeProvider,
@@ -292,14 +307,17 @@ export function useEffectiveComposerModelState(input: {
 export function markPromotedDraftThread(threadId: ThreadId): void {
   const store = useComposerDraftStore.getState();
   const draftThreadTargets: ComposerThreadTarget[] = [];
+
   for (const [draftId, draftThread] of Object.entries(store.draftThreadsByThreadKey)) {
     if (draftThread.threadId === threadId) {
       draftThreadTargets.push(DraftId.make(draftId));
     }
   }
+
   if (draftThreadTargets.length === 0) {
     return;
   }
+
   for (const draftThreadTarget of draftThreadTargets) {
     store.markDraftThreadPromoting(draftThreadTarget);
   }
@@ -307,6 +325,7 @@ export function markPromotedDraftThread(threadId: ThreadId): void {
 
 export function markPromotedDraftThreadByRef(threadRef: ScopedThreadRef): void {
   const draftStore = useComposerDraftStore.getState();
+
   for (const [draftId, draftThread] of Object.entries(draftStore.draftThreadsByThreadKey)) {
     if (
       draftThread.environmentId === threadRef.environmentId &&
@@ -331,19 +350,23 @@ export function markPromotedDraftThreadsByRef(serverThreadRefs: Iterable<ScopedT
 
 export function finalizePromotedDraftThreadByRef(threadRef: ScopedThreadRef): void {
   const draftStore = useComposerDraftStore.getState();
+
   for (const [draftId, draftThread] of Object.entries(draftStore.draftThreadsByThreadKey)) {
     const promotedRef = draftThread.promotedTo;
+
     const matches = promotedRef
       ? promotedRef.environmentId === threadRef.environmentId &&
         promotedRef.threadId === threadRef.threadId
       : draftThread.environmentId === threadRef.environmentId &&
         draftThread.threadId === threadRef.threadId;
+
     if (matches) {
       const target = DraftId.make(draftId);
       draftStore.markDraftThreadPromoting(target, threadRef);
       draftStore.finalizePromotedDraftThread(target);
     }
   }
+
   clearBackgroundDraftSubmissionByRef(threadRef);
 }
 

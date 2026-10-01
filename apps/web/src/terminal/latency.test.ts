@@ -119,12 +119,14 @@ describe("terminal latency harness", () => {
   it("bounds state and report resets the window", () => {
     const r = new TerminalLatencyRecorder();
     r.onGlyphPaint(0, paint(""));
+
     for (let i = 0; i < 700; i++) {
       r.onKeypress(i * 4, "a");
       r.onByteArrival(i * 4 + 1, "a");
       r.onGlyphPaint(i * 4 + 2, paint("a"));
       r.onGlyphPaint(i * 4 + 3, paint(""));
     }
+
     expect(r.samples.length).toBeLessThanOrEqual(512);
     expect(r.report()).toContain("n=512");
     expect(r.samples).toHaveLength(0);
@@ -144,6 +146,7 @@ describe("terminal latency harness", () => {
       { keypressToGlyphMs: 8, byteArrivalToGlyphMs: 3 },
       { byteArrivalToGlyphMs: 5 },
     ]);
+
     expect(report.keypressToGlyph.count).toBe(2);
     expect(report.byteArrivalToGlyph.p95).toBe(5);
     expect(formatLatencyReport("headless", [{ byteArrivalToGlyphMs: 1 }])).toContain(

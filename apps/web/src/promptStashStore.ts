@@ -5,8 +5,10 @@ import { PersistedComposerImageAttachment } from "./composerDraftStore";
 import { createMemoryStorage, type StateStorage } from "./lib/storage";
 
 export const PROMPT_STASH_STORAGE_KEY = "akeru:prompt-stash:v2";
+
 // The v2 payload lived under the `t3code:` prefix before the rebrand.
 const LEGACY_PROMPT_STASH_STORAGE_KEY_V2 = "t3code:prompt-stash:v2";
+
 /**
  * v1 bucketed entries into per-provider-instance queues and stored a model
  * selection with each prompt. The stash is provider-agnostic now, so the old
@@ -14,9 +16,11 @@ const LEGACY_PROMPT_STASH_STORAGE_KEY_V2 = "t3code:prompt-stash:v2";
  * silently hold megabytes of the origin's ~5MB localStorage quota forever.
  */
 const LEGACY_PROMPT_STASH_STORAGE_KEY = "t3code:prompt-stash:v1";
+
 const PROMPT_STASH_STORAGE_VERSION = 2;
 
 export const MAX_STASH_ENTRIES = 20;
+
 /**
  * Budget for an entry's serialized attachment payload. localStorage is a
  * ~5MB origin-wide quota shared with the composer draft store, so oversized
@@ -56,11 +60,13 @@ const StashEntrySchema = Schema.Struct({
    */
   pendingImageCount: Schema.optionalKey(Schema.Number),
 });
+
 export type PromptStashEntry = typeof StashEntrySchema.Type;
 
 const PersistedPromptStashState = Schema.Struct({
   entries: Schema.Array(StashEntrySchema),
 });
+
 type PersistedPromptStashState = typeof PersistedPromptStashState.Type;
 
 const decodePersistedPromptStashState = Schema.decodeUnknownSync(PersistedPromptStashState);
@@ -81,6 +87,7 @@ function clearOrphanedPendingImages(
   return entries.map((entry) => {
     if (!entry.pendingImageCount) return entry;
     const lostCount = entry.pendingImageCount;
+
     return {
       ...entry,
       pendingImageCount: 0,
@@ -109,14 +116,17 @@ export function partitionStashAttachments(
   const kept: PersistedComposerImageAttachment[] = [];
   const droppedNames: string[] = [];
   let usedChars = 0;
+
   for (const attachment of attachments) {
     if (usedChars + attachment.dataUrl.length > MAX_STASH_ENTRY_ATTACHMENT_CHARS) {
       droppedNames.push(attachment.name);
       continue;
     }
+
     usedChars += attachment.dataUrl.length;
     kept.push(attachment);
   }
+
   return { kept, droppedNames };
 }
 
@@ -138,6 +148,7 @@ function resolveBaseStorage(): { storage: StateStorage; durable: boolean } {
   } catch {
     // Fall through to the in-memory store.
   }
+
   return { storage: createMemoryStorage(), durable: false };
 }
 
@@ -166,9 +177,11 @@ function persistEntries(entries: ReadonlyArray<PromptStashEntry>): {
         state: { entries },
       }),
     );
+
     return { written: true, durable: storageIsDurable };
   } catch (error) {
     console.error("[PROMPT-STASH] Could not persist stash (storage quota?).", error);
+
     return { written: false, durable: false };
   }
 }
@@ -177,10 +190,13 @@ function persistEntries(entries: ReadonlyArray<PromptStashEntry>): {
 function readPersistedEntries(): ReadonlyArray<PromptStashEntry> | null {
   try {
     const raw = baseStashStorage.getItem(PROMPT_STASH_STORAGE_KEY);
+
     if (typeof raw !== "string" || raw.length === 0) return null;
     const parsed: unknown = JSON.parse(raw);
     const state = (parsed as { state?: unknown } | null)?.state;
+
     if (!state) return null;
+
     return clearOrphanedPendingImages(decodePersistedPromptStashState(state).entries);
   } catch {
     return null;
@@ -231,28 +247,34 @@ export const usePromptStashStore = create<PromptStashStoreState>()((set, get) =>
     const nextEntries = [entry, ...get().entries];
     const evicted = nextEntries.length > MAX_STASH_ENTRIES ? (nextEntries.pop() ?? null) : null;
     const { written, durable } = persistEntries(nextEntries);
+
     // A rejected write must not leave the entry visible either: the caller
     // keeps the composer intact on failure, so a stashed copy would
     // duplicate the prompt. Eviction likewise only sticks on success.
     if (!written) {
       return { evicted: null, written: false, durable: false };
     }
+
     set(() => ({ entries: nextEntries }));
+
     return { evicted, written: true, durable };
   },
   takeEntry: (entryId) => {
     const entries = get().entries;
     const entry = entries.find((candidate) => candidate.id === entryId) ?? null;
+
     if (!entry) return { entry: null, durable: true };
     const nextEntries = entries.filter((candidate) => candidate.id !== entryId);
     const { durable } = persistEntries(nextEntries);
     set(() => ({ entries: nextEntries }));
+
     return { entry, durable };
   },
   finalizeEntryImages: (entryId, images) => {
     const entries = get().entries;
     const index = entries.findIndex((candidate) => candidate.id === entryId);
     const existing = index === -1 ? undefined : entries[index];
+
     // Restored or deleted mid-encode: nothing to attach to.
     if (!existing) return { attached: false, durable: true };
     const nextEntries = [...entries];
@@ -265,6 +287,7 @@ export const usePromptStashStore = create<PromptStashStoreState>()((set, get) =>
     };
     const { durable } = persistEntries(nextEntries);
     set(() => ({ entries: nextEntries }));
+
     return { attached: true, durable };
   },
 }));
@@ -274,19 +297,24 @@ export const usePromptStashStore = create<PromptStashStoreState>()((set, get) =>
 {
   try {
     baseStashStorage.removeItem(LEGACY_PROMPT_STASH_STORAGE_KEY);
+
     // Read-through migration for the pre-rebrand v2 payload.
     if (baseStashStorage.getItem(PROMPT_STASH_STORAGE_KEY) == null) {
       const legacyRaw = baseStashStorage.getItem(LEGACY_PROMPT_STASH_STORAGE_KEY_V2);
+
       if (typeof legacyRaw === "string") {
         baseStashStorage.setItem(PROMPT_STASH_STORAGE_KEY, legacyRaw);
       }
     }
+
     baseStashStorage.removeItem(LEGACY_PROMPT_STASH_STORAGE_KEY_V2);
   } catch {
     // Purging the v1 payload is best-effort; a storage policy that rejects
     // the delete must not take down module init.
   }
+
   const persisted = readPersistedEntries();
+
   if (persisted) {
     usePromptStashStore.setState({ entries: persisted });
   }

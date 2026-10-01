@@ -138,6 +138,7 @@ describe("split/new/close terminal shortcuts", () => {
       },
       { shortcut: modShortcut("j"), command: "terminal.toggle" },
     ]);
+
     assert.isTrue(
       isTerminalSplitShortcut(event({ key: "\\", ctrlKey: true }), keybindings, {
         platform: "Win32",

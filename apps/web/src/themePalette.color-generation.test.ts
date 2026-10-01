@@ -29,6 +29,7 @@ describe("theme color generation", () => {
     expect(dark.secondaryLabel).toBe(dark.textMuted);
     expect(contrastRatio(light.accentForeground, light.accent)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(dark.accentForeground, dark.accent)).toBeGreaterThanOrEqual(4.5);
+
     // Status colors fall back to T3 Code's standard red and amber rather than
     // the flagship palette's, so no generated theme inherits a brand tint.
     const channels = (value: string) =>
@@ -37,6 +38,7 @@ describe("theme color generation", () => {
         number,
         number,
       ];
+
     for (const colors of [light, dark]) {
       const [errorRed, errorGreen, errorBlue] = channels(colors.error);
       // Red leads by a wide margin; the old default was a pink whose blue sat
@@ -51,6 +53,7 @@ describe("theme color generation", () => {
       expect(warnRed).toBeGreaterThan(warnBlue);
       expect(warnGreen).toBeGreaterThan(warnBlue);
     }
+
     expect(asHex(dark.error)).not.toBe(asHex(darkDefaults.error));
   });
 
@@ -64,6 +67,7 @@ describe("theme color generation", () => {
       ["light", "#111827", "#8ab4f8"],
       ["dark", "#f5ecf5", "#a84370"],
     ];
+
     for (const [appearance, canvas, accent] of seeds) {
       const colors = createVividThemeColors(appearance, canvas, accent);
       // Exact seeds are honored.
@@ -105,6 +109,7 @@ describe("theme color generation", () => {
       createManagedThemeColors("light", "#0d1117", "#69b1ff", { exactSeeds: true }),
       createManagedThemeColors("dark", "#fdfdfd", "#c2571b", { exactSeeds: true }),
     ];
+
     for (const colors of inverted) {
       expect(contrastRatio(colors.errorForeground, colors.errorSurface)).toBeGreaterThanOrEqual(
         4.5,
@@ -143,6 +148,7 @@ describe("theme color generation", () => {
     expect(themeColorToHex(theme.colors.terminalSelection)).toBe("#663399");
     expect(theme.colors.terminalScrollbar).toBe("oklch(0 0 0 / 0)");
     expect(themeColorToHex(theme.colors.terminalScrollbarHover)).toBe("#0a141e00");
+
     for (const role of [
       "error",
       "warning",

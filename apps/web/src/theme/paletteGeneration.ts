@@ -67,8 +67,10 @@ function standardStatusColors(canvas: ThemeRgbColor): {
   const appearance: ThemeAppearance = themeRelativeLuminance(canvas) < 0.179 ? "dark" : "light";
   const standard = STANDARD_STATUS_COLORS[appearance];
   const surfaceMix = appearance === "dark" ? 0.16 : 0.08;
+
   const surfaceOf = (value: string) =>
     mixThemeRgbColors(canvas, parseThemeRgbColor(value, canvas), surfaceMix);
+
   // The standard foregrounds are tuned against the unthemed canvas; on a
   // tinted one they can fall just short, so lightness is nudged until the
   // pair clears 4.5 while the hue stays standard.
@@ -82,8 +84,10 @@ function standardStatusColors(canvas: ThemeRgbColor): {
         appearance === "dark" ? "lighter" : "darker",
       ),
     );
+
   const errorSurface = surfaceOf(standard.error);
   const warningSurface = surfaceOf(standard.warning);
+
   return {
     error: toCanonicalThemeColor(standard.error)!,
     errorForeground: readableOn(standard.errorForeground, errorSurface),
@@ -106,10 +110,12 @@ export function createVividThemeColors(
   accentValue: string,
 ): ThemeColors {
   const defaults = getDefaultThemeColors(appearance);
+
   const canvasRgb = parseThemeRgbColor(
     backgroundValue,
     appearance === "dark" ? { r: 24, g: 15, b: 27 } : { r: 250, g: 245, b: 250 },
   );
+
   const accentRgb = parseThemeRgbColor(accentValue, { r: 168, g: 67, b: 112 });
   const canvas = themeRgbToOklch(canvasRgb);
   const accent = themeRgbToOklch(accentRgb);
@@ -127,6 +133,7 @@ export function createVividThemeColors(
     C: chroma,
     h: hue,
   });
+
   const themeColor = (color: ThemeOklch) => themeOklchToThemeColor(color);
 
   // Text carries a whisper of the accent hue instead of falling back to a
@@ -136,6 +143,7 @@ export function createVividThemeColors(
     C: Math.min(0.035, accent.C * 0.25),
     h: hue,
   };
+
   const text = solveOklchLightness(textBase, canvasRgb, 7, dark ? "lighter" : "darker");
   const textRgb = themeOklchToRgb(text);
   const textMutedRgb = standardMutedThemeText(canvasRgb, textRgb);
@@ -147,6 +155,7 @@ export function createVividThemeColors(
     C: Math.max(accent.C * 0.9, 0.06),
     h: (hue + 50) % 360,
   };
+
   const actionRgb = themeOklchToRgb(action);
   const actionForeground = readableThemeForeground(actionRgb);
   const accentForeground = readableThemeForeground(accentRgb);
@@ -174,6 +183,7 @@ export function createVividThemeColors(
     themeOklchToThemeColor(
       solveOklchLightness(textBase, surfaceRgb, 4.6, dark ? "lighter" : "darker"),
     );
+
   const mutedForeground = foregroundOn(mutedRgb);
   const placeholder = foregroundOn(surfaceRaisedRgb);
 
@@ -240,6 +250,7 @@ export function createVividThemeColors(
 function readableThemeForeground(background: ThemeRgbColor): ThemeRgbColor {
   const lightContrast = themeContrastRatio(background, THEME_LIGHT_FOREGROUND);
   const darkContrast = themeContrastRatio(background, THEME_DARK_FOREGROUND);
+
   if (Math.max(lightContrast, darkContrast) >= 4.5) {
     return lightContrast >= darkContrast ? THEME_LIGHT_FOREGROUND : THEME_DARK_FOREGROUND;
   }
@@ -257,6 +268,7 @@ function readableThemeText(
   minimumRatio: number,
 ): ThemeRgbColor {
   const softened = mixThemeRgbColors(foreground, background, amount);
+
   if (themeContrastRatio(softened, background) >= minimumRatio) return softened;
 
   // Find the quietest point between the requested mix and the primary
@@ -266,9 +278,11 @@ function readableThemeText(
   let readable = foreground;
   let lowerAmount = 0;
   let upperAmount = amount;
+
   for (let index = 0; index < 12; index += 1) {
     const candidateAmount = (lowerAmount + upperAmount) / 2;
     const candidate = mixThemeRgbColors(foreground, background, candidateAmount);
+
     if (themeContrastRatio(candidate, background) >= minimumRatio) {
       readable = candidate;
       lowerAmount = candidateAmount;
@@ -276,6 +290,7 @@ function readableThemeText(
       upperAmount = candidateAmount;
     }
   }
+
   return readable;
 }
 
@@ -294,6 +309,7 @@ function standardMutedThemeText(
     themeRelativeLuminance(background) < 0.179
       ? STANDARD_DARK_MUTED_CONTRAST
       : STANDARD_LIGHT_MUTED_CONTRAST;
+
   return readableThemeText(background, foreground, 1, target);
 }
 
@@ -302,7 +318,9 @@ function managedThemeBackground(value: string, appearance: ThemeAppearance): The
     value,
     appearance === "dark" ? { r: 24, g: 15, b: 27 } : { r: 250, g: 245, b: 250 },
   );
+
   const hsl = themeRgbToHsl(selected);
+
   return themeHslToRgb({
     h: hsl.h,
     // A background tint should support the selected mode, not turn the whole
@@ -322,19 +340,26 @@ function managedThemeAccent(
 ): ThemeRgbColor {
   const selected = parseThemeRgbColor(value, { r: 168, g: 67, b: 112 });
   const hsl = themeRgbToHsl(selected);
+
   const preferredLightness =
     appearance === "dark"
       ? Math.min(0.72, Math.max(0.42, hsl.l))
       : Math.min(0.58, Math.max(0.35, hsl.l));
+
   const lightnessRange: readonly [number, number] =
     appearance === "dark" ? [0.42, 0.82] : [0.22, 0.58];
+
   const saturation = Math.min(hsl.s, 0.82);
+
   const candidates = Array.from({ length: 61 }, (_, index) => {
     const lightness =
       lightnessRange[0] + ((lightnessRange[1] - lightnessRange[0]) * index) / (61 - 1);
+
     const color = themeHslToRgb({ h: hsl.h, s: saturation, l: lightness });
+
     return { color, lightness, contrast: themeContrastRatio(color, background) };
   });
+
   // Leave a little room for browser color conversion at render time.
   const readableCandidates = candidates.filter((candidate) => candidate.contrast >= 4.7);
   const pool = readableCandidates.length > 0 ? readableCandidates : candidates;
@@ -342,6 +367,7 @@ function managedThemeAccent(
   return pool.reduce((best, candidate) => {
     const distance = Math.abs(candidate.lightness - preferredLightness);
     const bestDistance = Math.abs(best.lightness - preferredLightness);
+
     return distance < bestDistance ||
       (distance === bestDistance && candidate.contrast > best.contrast)
       ? candidate
@@ -365,15 +391,18 @@ export function createManagedThemeColors(
   },
 ): ThemeColors {
   const defaults = getDefaultThemeColors(appearance);
+
   const canvas = options?.exactSeeds
     ? parseThemeRgbColor(
         backgroundValue,
         appearance === "dark" ? { r: 24, g: 15, b: 27 } : { r: 250, g: 245, b: 250 },
       )
     : managedThemeBackground(backgroundValue, appearance);
+
   const accent = options?.exactSeeds
     ? parseThemeRgbColor(accentValue, { r: 168, g: 67, b: 112 })
     : managedThemeAccent(accentValue, appearance, canvas);
+
   const text = readableThemeForeground(canvas);
   const textMuted = standardMutedThemeText(canvas, text);
   // The top bar is part of the main panel, not a separate chrome layer: it
@@ -396,6 +425,7 @@ export function createManagedThemeColors(
   // a whisper of the text tint — and the terminal sits on the canvas itself.
   const codeBackground = mixThemeRgbColors(canvas, text, appearance === "dark" ? 0.06 : 0.025);
   const terminalBackground = canvas;
+
   const messageActionHover = mixThemeRgbColors(
     accent,
     accentForeground === THEME_LIGHT_FOREGROUND || accentForeground === THEME_WHITE_FOREGROUND
@@ -408,6 +438,7 @@ export function createManagedThemeColors(
   // palette's brand color, so generated themes carry their own identity in
   // update pills and banners. Error and warning stay semantic defaults.
   const updateSurface = mixThemeRgbColors(canvas, accent, appearance === "dark" ? 0.32 : 0.16);
+
   const updateForeground = mixThemeRgbColors(
     accent,
     appearance === "dark" ? THEME_WHITE_FOREGROUND : THEME_BLACK_FOREGROUND,
@@ -514,6 +545,7 @@ export function updateThemeColorFamily(
   value: string,
 ): ThemeColors {
   const parsedSelected = parseThemeColor(value);
+
   if (!parsedSelected) return { ...colors, [role]: value };
   const normalized = formatOklchThemeColor(parsedSelected.color, parsedSelected.alpha);
 
@@ -521,15 +553,19 @@ export function updateThemeColorFamily(
     colors.canvas,
     appearance === "dark" ? { r: 24, g: 15, b: 27 } : { r: 250, g: 245, b: 250 },
   );
+
   const selected = themeOklchToRgb(parsedSelected.color);
+
   const selectedOn = (background: ThemeRgbColor) =>
     mixThemeRgbColors(background, selected, parsedSelected.alpha);
+
   const selectedOnCanvas = selectedOn(canvas);
   const accent = parseThemeRgbColor(colors.accent, { r: 168, g: 67, b: 112 });
   const canvasIsDark = themeRelativeLuminance(canvas) < 0.179;
   const terminalIsDark = themeRelativeLuminance(selectedOnCanvas) < 0.179;
   const colorOf = (color: ThemeRgbColor) => themeRgbToThemeColor(color);
   const foregroundOn = (background: ThemeRgbColor) => colorOf(readableThemeForeground(background));
+
   const selectedToneOn = (background: ThemeRgbColor) =>
     themeOklchToThemeColor(
       solveOklchLightness(
@@ -539,8 +575,10 @@ export function updateThemeColorFamily(
         themeRelativeLuminance(background) < 0.179 ? "lighter" : "darker",
       ),
     );
+
   const statusColors = () => {
     const surface = mixThemeRgbColors(canvas, selectedOnCanvas, canvasIsDark ? 0.16 : 0.08);
+
     return {
       foreground: selectedToneOn(surface),
       surface: colorOf(surface),
@@ -597,6 +635,7 @@ export function updateThemeColorFamily(
       };
     case "accent": {
       const updateSurface = mixThemeRgbColors(canvas, selectedOnCanvas, canvasIsDark ? 0.32 : 0.16);
+
       return {
         ...colors,
         accent: normalized,
@@ -608,13 +647,17 @@ export function updateThemeColorFamily(
         terminalCursor: normalized,
       };
     }
+
     case "messageAction": {
       const actionForeground = readableThemeForeground(selectedOnCanvas);
+
       const towardOpposite =
         actionForeground === THEME_LIGHT_FOREGROUND || actionForeground === THEME_WHITE_FOREGROUND
           ? THEME_BLACK_FOREGROUND
           : THEME_WHITE_FOREGROUND;
+
       const actionHover = mixThemeRgbColors(selected, towardOpposite, 0.12);
+
       return {
         ...colors,
         messageAction: normalized,
@@ -625,6 +668,7 @@ export function updateThemeColorFamily(
         ),
       };
     }
+
     case "messageSurface":
       return {
         ...colors,
@@ -646,6 +690,7 @@ export function updateThemeColorFamily(
     case "sidebarRowSelected": {
       const sidebar = parseThemeRgbColor(colors.sidebar, canvas);
       const selectedOnSidebar = selectedOn(sidebar);
+
       return {
         ...colors,
         sidebarRowHover: colorOf(mixThemeRgbColors(sidebar, selectedOnSidebar, 0.5)),
@@ -653,8 +698,10 @@ export function updateThemeColorFamily(
         sidebarRowSelected: normalized,
       };
     }
+
     case "terminalBackground": {
       const terminalForeground = readableThemeForeground(selectedOnCanvas);
+
       return {
         ...colors,
         terminalBackground: normalized,
@@ -670,8 +717,10 @@ export function updateThemeColorFamily(
         ),
       };
     }
+
     case "error": {
       const status = statusColors();
+
       return {
         ...colors,
         error: normalized,
@@ -679,8 +728,10 @@ export function updateThemeColorFamily(
         errorSurface: status.surface,
       };
     }
+
     case "warning": {
       const status = statusColors();
+
       return {
         ...colors,
         warning: normalized,
@@ -688,6 +739,7 @@ export function updateThemeColorFamily(
         warningSurface: status.surface,
       };
     }
+
     default:
       return { ...colors, [role]: normalized };
   }

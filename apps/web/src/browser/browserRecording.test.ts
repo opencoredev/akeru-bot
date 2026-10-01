@@ -12,6 +12,7 @@ const {
   surfaceState,
 } = vi.hoisted(() => {
   const events: string[] = [];
+
   type Frame = {
     readonly tabId: string;
     readonly data: string;
@@ -19,17 +20,21 @@ const {
     readonly height: number;
     readonly receivedAt: string;
   };
+
   const frameSubscription: { listener: ((frame: Frame) => void) | null } = {
     listener: null,
   };
+
   const surfaceState = {
     byTabId: {} as Record<string, unknown>,
   };
+
   return {
     events,
     frameSubscription,
     onFrame: vi.fn((listener: (frame: Frame) => void) => {
       frameSubscription.listener = listener;
+
       return () => {
         if (frameSubscription.listener === listener) frameSubscription.listener = null;
       };
@@ -49,12 +54,14 @@ const {
     })),
     startScreencast: vi.fn(async (tabId: string) => {
       events.push("start-screencast");
+
       const surface = surfaceState.byTabId[tabId] as
         | {
             readonly content?: { readonly width: number; readonly height: number };
             readonly rect?: { readonly width: number; readonly height: number };
           }
         | undefined;
+
       const size = surface?.content ?? surface?.rect;
       frameSubscription.listener?.({
         tabId,
@@ -117,6 +124,7 @@ class FakeMediaRecorder {
 
   stop(): void {
     this.state = "inactive";
+
     for (const listener of this.listeners.get("stop") ?? []) {
       if (typeof listener === "function") listener(new Event("stop"));
       else listener.handleEvent(new Event("stop"));
@@ -148,6 +156,7 @@ describe("browser recording", () => {
     vi.clearAllMocks();
     vi.stubGlobal("window", globalThis);
     vi.stubGlobal("MediaRecorder", FakeMediaRecorder as unknown as typeof MediaRecorder);
+
     class ImmediateImage {
       private loadListener: EventListenerOrEventListenerObject | undefined;
 
@@ -157,10 +166,12 @@ describe("browser recording", () => {
 
       set src(_value: string) {
         const event = new Event("load");
+
         if (typeof this.loadListener === "function") this.loadListener(event);
         else this.loadListener?.handleEvent(event);
       }
     }
+
     vi.stubGlobal("Image", ImmediateImage as unknown as typeof Image);
     vi.stubGlobal("document", {
       createElement: () => ({
@@ -209,10 +220,12 @@ describe("browser recording", () => {
     });
 
     const startPromise = startBrowserRecording("recording-tab");
+
     const rejection = expect(startPromise).rejects.toMatchObject({
       operation: "wait-first-frame",
       tabId: "recording-tab",
     });
+
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(BROWSER_RECORDING_FIRST_FRAME_SIZE_TIMEOUT_MS);
 
@@ -225,15 +238,18 @@ describe("browser recording", () => {
     const drawImage = vi.fn();
     const fillRect = vi.fn();
     let capturedStreamSize: { readonly width: number; readonly height: number } | undefined;
+
     const canvas = {
       width: 0,
       height: 0,
       captureStream: () => {
         capturedStreamSize = { width: canvas.width, height: canvas.height };
+
         return {};
       },
       getContext: () => ({ drawImage, fillRect, fillStyle: "" }),
     };
+
     vi.stubGlobal("document", {
       createElement: () => canvas,
     });
@@ -271,6 +287,7 @@ describe("browser recording", () => {
 
   it("draws the newest decoded frames without starving behind decode latency", async () => {
     const drawImage = vi.fn();
+
     class DeferredImage {
       static readonly instances: DeferredImage[] = [];
       private loadListener: EventListenerOrEventListenerObject | undefined;
@@ -287,10 +304,12 @@ describe("browser recording", () => {
 
       finishLoading(): void {
         const event = new Event("load");
+
         if (typeof this.loadListener === "function") this.loadListener(event);
         else this.loadListener?.handleEvent(event);
       }
     }
+
     vi.stubGlobal("Image", DeferredImage as unknown as typeof Image);
     vi.stubGlobal("document", {
       createElement: () => ({
@@ -332,10 +351,12 @@ describe("browser recording", () => {
       environmentId: EnvironmentId.make("environment-recording"),
       threadId: ThreadId.make("thread-recording-first"),
     };
+
     const secondThreadRef = {
       environmentId: EnvironmentId.make("environment-recording"),
       threadId: ThreadId.make("thread-recording-second"),
     };
+
     surfaceState.byTabId = {
       ...surfaceState.byTabId,
       "recording-tab-2": {
@@ -371,6 +392,7 @@ describe("browser recording", () => {
       environmentId: EnvironmentId.make("environment-recording"),
       threadId: ThreadId.make("thread-recording-scoped"),
     };
+
     const runtimeTabId = previewRuntimeTabId(threadRef, "epoch-a", "tab_1");
     surfaceState.byTabId = {
       [runtimeTabId]: {
@@ -440,6 +462,7 @@ describe("browser recording", () => {
       await new Promise<void>((resolve) => {
         finishStoppingScreencast = resolve;
       });
+
       return undefined;
     });
 
@@ -461,6 +484,7 @@ describe("browser recording", () => {
       await new Promise<void>((resolve) => {
         finishStoppingScreencast = resolve;
       });
+
       return undefined;
     });
 
@@ -543,10 +567,12 @@ describe("browser recording", () => {
     await vi.waitFor(() => expect(startScreencast).toHaveBeenCalledOnce());
 
     const stopPromise = stopBrowserRecording("recording-tab");
+
     const rejectedStop = expect(stopPromise).rejects.toMatchObject({
       operation: "stop-screencast",
       tabId: "recording-tab",
     });
+
     expect(stopScreencast).not.toHaveBeenCalled();
     await expect(startBrowserRecording("recording-tab")).rejects.toBeInstanceOf(
       BrowserRecordingConflictError,
@@ -584,6 +610,7 @@ describe("browser recording", () => {
       operation: "wait-startup",
       tabId: "recording-tab",
     });
+
     await vi.advanceTimersByTimeAsync(BROWSER_RECORDING_STARTUP_SETTLE_TIMEOUT_MS);
 
     await rejection;

@@ -43,10 +43,12 @@ describe("shortcutModifierState", () => {
 
   it("preserves the current object when modifier values do not change", () => {
     const initialState = emptyState();
+
     const nextState = shortcutModifierStateAfterKeyboardEvent(
       initialState,
       keyboardEventLike("keyup", { key: "Shift" }),
     );
+
     expect(nextState).toBe(initialState);
   });
 
@@ -119,6 +121,7 @@ describe("shortcutModifierState", () => {
       emptyState(),
       keyboardEventLike("keydown", { key: "Enter", metaKey: true }),
     );
+
     expect(state).toEqual(emptyState());
   });
 
@@ -129,10 +132,12 @@ describe("shortcutModifierState", () => {
       altKey: false,
       shiftKey: false,
     };
+
     const state = shortcutModifierStateAfterKeyboardEvent(
       heldMeta,
       keyboardEventLike("keydown", { key: "a", metaKey: false }),
     );
+
     expect(state).toEqual(emptyState());
   });
 });

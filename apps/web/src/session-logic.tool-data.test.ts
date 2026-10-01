@@ -34,6 +34,7 @@ describe("work log tool data", () => {
       status: "completed",
       result: { content: [{ type: "text", text: "attached" }] },
     };
+
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
         id: "mcp-tool-done",
@@ -69,6 +70,7 @@ describe("work log tool data", () => {
         },
       ],
     };
+
     const [entry] = deriveWorkLogEntries([
       makeActivity({
         id: "plugin-search-done",
@@ -93,6 +95,7 @@ describe("work log tool data", () => {
       arguments: { interactiveOnly: true },
       status: "completed",
     };
+
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
         id: "mcp-tool-progress",

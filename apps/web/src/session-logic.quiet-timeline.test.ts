@@ -45,8 +45,10 @@ describe("deriveWorkLogEntries context window handling", () => {
 describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
   it("N concurrent subagents produce exactly N lifecycle rows, zero attributed tool rows", () => {
     const activities: OrchestrationThreadActivity[] = [];
+
     for (let agent = 0; agent < 5; agent += 1) {
       const taskId = `task-${agent}`;
+
       // Progress ticks (several per agent) + attributed tool rows.
       for (let tick = 0; tick < 4; tick += 1) {
         activities.push(
@@ -68,6 +70,7 @@ describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
           }),
         );
       }
+
       activities.push(
         makeActivity({
           kind: "task.completed",
@@ -120,6 +123,7 @@ describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
         sequence: 3,
       }),
     ]);
+
     const spawnRows = entries.filter((entry) => entry.agentSpawn !== undefined);
     expect(spawnRows).toHaveLength(1);
     expect(spawnRows[0]!.agentSpawn!.workflowId).toBe("wf-1");
@@ -136,6 +140,7 @@ describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
         payload: { itemType: "command_execution", command: "ls" },
       }),
     ]);
+
     expect(entries).toHaveLength(1);
   });
 
@@ -158,6 +163,7 @@ describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
         turnId: "turn-spawn",
       }),
     ]);
+
     // Not suppressed outright (a Codex fleet's rows are ALL bypassed and
     // still need a CTA anchor) — but never more than the batch's single row.
     expect(entries).toHaveLength(1);
@@ -173,6 +179,7 @@ describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
         payload: { taskId: "sh-1", taskType: "local_bash", timelineBypass: true },
       }),
     ]);
+
     expect(entries).toHaveLength(0);
   });
 
@@ -191,6 +198,7 @@ describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
         payload: { taskId: "task-1", toolName: "Read" },
       }),
     ]);
+
     expect(entries).toHaveLength(0);
   });
 });
@@ -213,6 +221,7 @@ describe("rerun workflows", () => {
         sequence: 2,
       }),
     ]);
+
     const spawnRows = entries.filter((entry) => entry.agentSpawn !== undefined);
     expect(spawnRows).toHaveLength(2);
     expect(spawnRows.map((row) => row.agentSpawn!.agentTaskIds)).toEqual([
@@ -248,6 +257,7 @@ describe("rerun workflows", () => {
         sequence: 3,
       }),
     ]);
+
     const spawnRows = entries.filter((entry) => entry.agentSpawn !== undefined);
     expect(spawnRows.map((row) => row.agentSpawn!.workflowId)).toEqual(["wf-run1", "wf-run2"]);
     expect(spawnRows.map((row) => row.turnId)).toEqual(["turn-1", "turn-2"]);

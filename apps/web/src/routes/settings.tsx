@@ -8,6 +8,7 @@ export const Route = createFileRoute("/settings")({
     if (context.authGateState.status !== "authenticated") {
       throw redirect({ to: "/pair", replace: true });
     }
+
     if (location.pathname === "/settings") {
       throw redirect({
         to: "/settings/$section",

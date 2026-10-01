@@ -5,6 +5,7 @@ export function isTerminalCopyShortcut(
   platform = navigator.platform,
 ) {
   if (event.key.toLowerCase() !== "c") return false;
+
   return isMacPlatform(platform) ? event.metaKey : event.ctrlKey;
 }
 
@@ -18,6 +19,7 @@ export function primeTerminalCopyInput(
   selection: string,
 ): void {
   input.value = selection;
+
   if (selection.length === 0) return;
   input.select();
 }
@@ -45,7 +47,9 @@ export function applyTerminalCopyEvent(
   if (selection.length === 0 || !clipboardData) {
     return { preventDefault: false, claimWriteFallback: false };
   }
+
   clipboardData.setData("text/plain", selection);
+
   return { preventDefault: true, claimWriteFallback: true };
 }
 
@@ -54,10 +58,13 @@ export function isTerminalPasteShortcut(
   platform = navigator.platform,
 ) {
   const key = event.key.toLowerCase();
+
   if (key === "insert" && !isMacPlatform(platform)) {
     return event.shiftKey && !event.ctrlKey && !event.metaKey;
   }
+
   if (key !== "v") return false;
+
   return isMacPlatform(platform) ? event.metaKey : event.ctrlKey && event.shiftKey;
 }
 
@@ -98,6 +105,7 @@ export function resolveTerminalMouseData(
   previousMotionData: string,
 ): { readonly send: boolean; readonly nextMotionData: string } {
   const nextMotionData = action === "motion" ? data : "";
+
   return {
     send: data.length > 0 && (action !== "motion" || data !== previousMotionData),
     nextMotionData,
@@ -128,13 +136,16 @@ export function terminalWheelDeltaRows(
       : event.deltaMode === 2
         ? event.deltaY * viewportRows * cellHeight
         : event.deltaY;
+
   const total = remainder + pixels / cellHeight;
   const rows = Math.trunc(total);
+
   return { rows, remainder: total - rows };
 }
 
 export function terminalWheelArrowData(rows: number, applicationCursorKeys: boolean): string {
   if (rows === 0) return "";
+
   const sequence =
     rows < 0
       ? applicationCursorKeys
@@ -143,6 +154,7 @@ export function terminalWheelArrowData(rows: number, applicationCursorKeys: bool
       : applicationCursorKeys
         ? "\u001bOB"
         : "\u001b[B";
+
   return sequence.repeat(Math.abs(rows));
 }
 
@@ -187,6 +199,7 @@ export function advanceTerminalSelectionClickSequence(
     previous !== null &&
     event.timeStamp - previous.time <= 500 &&
     Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= 4;
+
   return {
     count: repeats ? (previous.count >= 3 ? 1 : previous.count + 1) : 1,
     time: event.timeStamp,

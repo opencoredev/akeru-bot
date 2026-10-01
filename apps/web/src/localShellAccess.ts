@@ -32,8 +32,10 @@ export function isLocalShellTarget(input: {
   readonly isDesktopRenderer: boolean;
 }): boolean {
   const { target } = input;
+
   // No catalog entry: keep exec behavior rather than guessing.
   if (target === null) return true;
+
   if (target._tag === "PrimaryConnectionTarget") {
     // The desktop app manages its own primary backend, so it is always on
     // this machine even when its URL is not loopback (wsl-only mode binds
@@ -41,8 +43,10 @@ export function isLocalShellTarget(input: {
     // browser runs on the serving machine; a tailnet/LAN URL means remote.
     if (input.isDesktopRenderer) return true;
     const hostname = parseHostname(target.httpBaseUrl);
+
     return hostname !== null && isLoopbackHostname(hostname);
   }
+
   return isDesktopLocalConnectionTarget(target);
 }
 
@@ -51,6 +55,7 @@ export function useLocalShellAccess(environmentId: EnvironmentId | null): LocalS
 
   return useMemo(() => {
     if (presentation === null) return UNRESOLVED;
+
     return {
       isLocal: isLocalShellTarget({
         target: presentation.entry.target,

@@ -65,8 +65,10 @@ describe("Ghostty ABI selection", () => {
       new DataView(memory.buffer, ref, 12).setUint32(0, 12, true);
       expect(call("ghostty_terminal_grid_ref", terminal, point, ref)).toBe(0);
       free(point, 24);
+
       return ref;
     };
+
     const start = gridRefAt(0, 0);
     const end = gridRefAt(4, 1);
     const selection = alloc(32);
@@ -117,9 +119,11 @@ describe("Ghostty ABI selection", () => {
     const { memory, call, alloc, free, createTerminal } = await makeGhosttyAbiFixture();
 
     const { terminal, dispose } = createTerminal(80, 24);
+
     const input = new TextEncoder().encode(
       "\u001b[?1000h\u001b[?1006h\u001b]8;;https://t3.codes/docs\u001b\\linked\u001b]8;;\u001b\\ plain",
     );
+
     const inputPointer = alloc(input.length);
     new Uint8Array(memory.buffer, inputPointer, input.length).set(input);
     call("ghostty_terminal_vt_write", terminal, inputPointer, input.length);
@@ -238,6 +242,7 @@ describe("Ghostty ABI selection", () => {
     call("ghostty_mouse_encoder_setopt_from_terminal", mouseEncoder, terminal);
     const mouseSize = alloc(36);
     const mouseSizeView = new DataView(memory.buffer, mouseSize, 36);
+
     for (const [offset, value] of [
       [0, 36],
       [4, 800],
@@ -247,6 +252,7 @@ describe("Ghostty ABI selection", () => {
     ] as const) {
       mouseSizeView.setUint32(offset, value, true);
     }
+
     call("ghostty_mouse_encoder_setopt", mouseEncoder, 2, mouseSize);
     call("ghostty_mouse_event_set_action", mouseEvent, 0);
     call("ghostty_mouse_event_set_button", mouseEvent, 1);

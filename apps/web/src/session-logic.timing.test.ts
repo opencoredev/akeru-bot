@@ -168,7 +168,9 @@ describe("session activity performance", () => {
         },
       }),
     );
+
     deriveWorkLogEntries(activities);
+
     const updatedActivities = [
       ...activities,
       makeActivity({

@@ -14,28 +14,36 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: () => ({ voice: mocks.voice }),
 }));
+
 vi.mock("~/state/server", () => ({
   primaryServerSettingsAtom: "settings",
   serverEnvironment: { synthesizeVoice: "synthesize", cancelVoice: "cancel" },
 }));
+
 vi.mock("~/state/use-atom-command", () => ({ useAtomCommand: () => mocks.command }));
+
 vi.mock("~/state/environments", () => ({
   usePrimaryEnvironmentId: () => mocks.primaryEnvironmentId,
   useEnvironmentConnectionState: () => ({ data: null }),
 }));
+
 vi.mock("../components/voice/VoiceCall", () => ({ voiceEnvironmentConnectionLost: () => false }));
+
 vi.mock("../components/chat/ReplyPlaybackProvider", () => ({
   useOptionalReplyPlayback: () => mocks.session,
 }));
+
 vi.mock("@akeru/client-runtime/voice", () => ({
   synthesizeVoiceChunks: async () => [
     { _tag: "Success", value: { audioBase64: "", mimeType: "audio/mpeg" } },
   ],
 }));
+
 vi.mock("./replyPlaybackAudio", () => ({
   createBrowserReplyAudio: () => {
     const audio = { play: vi.fn(async () => {}), pause: vi.fn(), dispose: vi.fn() };
     mocks.audio.push(audio);
+
     return audio;
   },
 }));
@@ -50,7 +58,9 @@ const reply = {
   text: "Stored answer",
   updatedAt: "2026-09-08T00:00:00.000Z",
 };
+
 const enabledVoice = { enabled: true, provider: "composed" };
+
 let renders = 0;
 
 function Chat(props: { environmentId: string; threadId: string | null }) {
@@ -62,11 +72,14 @@ function Chat(props: { environmentId: string; threadId: string | null }) {
     messages: [reply],
     mediaBlocked: false,
   });
+
   return null;
 }
 
 let root: Root;
+
 const listeners = { addEventListener() {}, removeEventListener() {} };
+
 // Components here render nothing, so the DOM only needs a document and a container.
 class TestNode {
   readonly nodeName = "DIV";
@@ -79,7 +92,9 @@ class TestNode {
     readonly ownerDocument: TestNode | null = null,
   ) {}
 }
+
 const testDocument = new TestNode(9);
+
 const createTestRoot = () => createRoot(new TestNode(1, testDocument) as never);
 
 beforeEach(() => {
@@ -126,10 +141,13 @@ describe("web reply playback thread", () => {
 
   it("settles after the chat context is cleared under a mounted subscriber", async () => {
     const snapshots = new Set<unknown>();
+
     function Subscriber({ session }: { session: ReplyPlaybackSession }) {
       snapshots.add(useSyncExternalStore(session.subscribeSynthesis, session.getSynthesisSnapshot));
+
       return null;
     }
+
     await render("primary");
     const session = mocks.session!;
     const subscriberRoot = createTestRoot();

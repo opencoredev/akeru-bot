@@ -57,6 +57,7 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
     const presentations = get(environmentPresentations.presentationsAtom);
 
     const statuses: EnvironmentUsageStatus[] = [];
+
     for (const [environmentId, presentation] of presentations) {
       const result = get(serverEnvironment.usageSummary({ environmentId, input }));
       statuses.push({
@@ -67,6 +68,7 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
         summary: Option.getOrNull(AsyncResult.value(result)),
       });
     }
+
     return statuses;
   }).pipe(Atom.withLabel(`web-usage:window:${windowKey}`)),
 );
@@ -97,6 +99,7 @@ export function useUsage(input: UsageSummaryInput = makeWindow(USAGE_LOOKBACK_DA
       input.untilTime,
     ],
   );
+
   const atom = usageByWindowAtom(windowKey);
   const environments = useAtomValue(atom);
 
@@ -105,6 +108,7 @@ export function useUsage(input: UsageSummaryInput = makeWindow(USAGE_LOOKBACK_DA
   // environment's query so the button always rescans.
   const refresh = useCallback(() => {
     const input = JSON.parse(windowKey) as UsageSummaryInput;
+
     for (const environment of environments) {
       appAtomRegistry.refresh(
         serverEnvironment.usageSummary({ environmentId: environment.environmentId, input }),
@@ -124,10 +128,12 @@ export function useUsage(input: UsageSummaryInput = makeWindow(USAGE_LOOKBACK_DA
             },
           ],
     );
+
     return mergeUsage(answered, USAGE_CONTRACT_VERSION);
   }, [environments]);
 
   const answeredCount = environments.filter((environment) => environment.summary !== null).length;
+
   const stillReporting = environments.filter(
     (environment) => environment.summary === null && environment.error === null,
   ).length;

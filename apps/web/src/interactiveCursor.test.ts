@@ -9,6 +9,7 @@ describe("interactive pointer cursor", () => {
   it.effect("gives clickable controls a pointer cursor from the shared base rule", () =>
     Effect.gen(function* () {
       const css = yield* readAppStyles;
+
       const rule = css.match(
         /\/\* Clickable controls use the pointer cursor[\s\S]*?cursor:\s*pointer;/,
       )?.[0];

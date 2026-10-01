@@ -25,12 +25,15 @@ export function createBrowserDictationSession(
           },
           captureDependencies,
         );
+
         void capture.result.catch(onError);
         const startedAt = performance.now();
+
         return {
           stop: async () => {
             const stoppedAt = performance.now();
             const blob = await capture.release();
+
             return {
               bytes: new Uint8Array(await blob.arrayBuffer()),
               mediaType: blob.type,
@@ -56,8 +59,10 @@ export function browserDictationCaptureReason(
   if (scope.isSecureContext === false) {
     return "The browser only opens the microphone on HTTPS pages. Open this page over HTTPS.";
   }
+
   if (typeof scope.navigator?.mediaDevices?.getUserMedia !== "function" || !scope.MediaRecorder) {
     return "This browser can't record audio.";
   }
+
   return null;
 }

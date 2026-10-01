@@ -6,6 +6,7 @@ import { makeActivity } from "./session-logic.test-support";
 describe("derivePendingApprovals", () => {
   it("carries command arguments from the matching tool activity", () => {
     const args = { command: 'printf "hi\\n"', cwd: null };
+
     const approvals = derivePendingApprovals([
       makeActivity({
         kind: "tool.started",
@@ -28,6 +29,7 @@ describe("derivePendingApprovals", () => {
 
   it("keeps feedback tool arguments for the editable draft", () => {
     const args = { feedback: "The button is unresponsive." };
+
     const approvals = derivePendingApprovals([
       makeActivity({
         kind: "approval.requested",
@@ -121,6 +123,7 @@ describe("derivePendingApprovals", () => {
       { decision: "acceptAlways", label: "Always allow Safari" },
       { decision: "accept", label: "Approve" },
     ];
+
     const activities = [
       makeActivity({
         kind: "approval.requested",

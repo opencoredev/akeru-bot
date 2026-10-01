@@ -27,6 +27,7 @@ import {
 } from "../themePalette";
 
 type Theme = ThemePreference;
+
 type ThemeSnapshot = {
   theme: Theme;
   systemDark: boolean;
@@ -38,9 +39,13 @@ type ThemeSnapshot = {
 type DesktopThemeBridge = Pick<DesktopBridge, "setTheme">;
 
 const STORAGE_KEY = "akeru:theme";
+
 const LEGACY_STORAGE_KEY = "t3code:theme";
+
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
+
 const DEFAULT_THEME = "akeru-paper";
+
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   theme: DEFAULT_THEME,
   systemDark: false,
@@ -57,6 +62,7 @@ export function readThemeHalves(): ThemeHalves | null {
 
 function readStoredThemeHalves(): ThemeHalves | null {
   if (typeof window === "undefined") return null;
+
   try {
     return parseThemeHalves(
       window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ??
@@ -71,6 +77,7 @@ function readStoredThemeHalves(): ThemeHalves | null {
  * could not be removed, so the legacy fallback in readStoredThemeHalves cannot revive it. */
 function clearStoredThemeHalves(): void {
   removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
+
   if (window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY) === null) {
     window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
   } else {
@@ -81,7 +88,9 @@ function clearStoredThemeHalves(): void {
 function themeHalvesSignature(halves: ThemeHalves | null): string {
   return `${halves?.light ?? ""}|${halves?.dark ?? ""}`;
 }
+
 const THEME_COLOR_META_NAME = "theme-color";
+
 const DYNAMIC_THEME_COLOR_SELECTOR = `meta[name="${THEME_COLOR_META_NAME}"][data-dynamic-theme-color="true"]`;
 
 export class ThemeStorageError extends Schema.TaggedErrorClass<ThemeStorageError>()(
@@ -115,14 +124,20 @@ export class DesktopThemeSyncError extends Schema.TaggedErrorClass<DesktopThemeS
 export const isDesktopThemeSyncError = Schema.is(DesktopThemeSyncError);
 
 let listeners: Array<() => void> = [];
+
 let lastSnapshot: ThemeSnapshot | null = null;
+
 let snapshotStale = true;
+
 let lastDesktopTheme: "light" | "dark" | "system" | null = null;
+
 let lastAppliedTheme: ThemeSnapshot | null = null;
+
 let themeStorageReadFailure: ThemeStorageError | null = null;
 
 function emitChange() {
   snapshotStale = true;
+
   for (const listener of listeners) listener();
 }
 
@@ -141,7 +156,9 @@ function readStoredFollowSystem(theme: Theme): boolean {
     const raw =
       window.localStorage.getItem(THEME_FOLLOW_SYSTEM_STORAGE_KEY) ??
       window.localStorage.getItem(LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY);
+
     if (raw === "true") return true;
+
     if (raw === "false") return false;
   } catch {
     // Fall back to the legacy theme value when the separate preference is unavailable.
@@ -160,6 +177,7 @@ export function readAppearanceModePreference(theme: Theme): ThemePreferenceMode 
       const raw =
         window.localStorage.getItem(THEME_APPEARANCE_MODE_STORAGE_KEY) ??
         window.localStorage.getItem(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
+
       if (isThemePreferenceMode(raw)) return raw;
     } catch {
       // Fall back to the legacy preference below when storage is unavailable.
@@ -167,11 +185,13 @@ export function readAppearanceModePreference(theme: Theme): ThemePreferenceMode 
   }
 
   if (readStoredFollowSystem(theme)) return "system";
+
   return getThemePreferenceMode(theme) ?? "light";
 }
 
 function writeAppearanceModePreference(appearanceMode: ThemePreferenceMode): void {
   if (typeof window === "undefined") return;
+
   try {
     // The legacy follow-system flag is read-only migration input now; the
     // mode key is the single source of truth.
@@ -183,12 +203,14 @@ function writeAppearanceModePreference(appearanceMode: ThemePreferenceMode): voi
       cause,
     });
   }
+
   removeLegacyStorageKey(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
 }
 
 export function readThemePreference(): Theme {
   if (typeof window === "undefined") return DEFAULT_THEME_SNAPSHOT.theme;
   let raw: string | null;
+
   try {
     raw =
       window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
@@ -199,14 +221,17 @@ export function readThemePreference(): Theme {
       cause,
     });
   }
+
   if (raw !== null && isKnownThemePreference(raw)) {
     return raw === "system" ? DEFAULT_THEME : canonicalThemePreference(raw);
   }
+
   return DEFAULT_THEME_SNAPSHOT.theme;
 }
 
 export function writeThemePreference(theme: Theme): void {
   if (typeof window === "undefined") return;
+
   try {
     window.localStorage.setItem(STORAGE_KEY, theme);
     themeStorageReadFailure = null;
@@ -218,6 +243,7 @@ export function writeThemePreference(theme: Theme): void {
       cause,
     });
   }
+
   removeLegacyStorageKey(LEGACY_STORAGE_KEY);
 }
 
@@ -225,6 +251,7 @@ function getStored(): Theme {
   if (themeStorageReadFailure !== null) {
     return DEFAULT_THEME_SNAPSHOT.theme;
   }
+
   try {
     return readThemePreference();
   } catch (cause) {
@@ -235,18 +262,21 @@ function getStored(): Theme {
           storageKey: STORAGE_KEY,
           cause,
         });
+
     themeStorageReadFailure = error;
     console.error(error.message, {
       operation: error.operation,
       storageKey: error.storageKey,
       ...safeErrorLogAttributes(error),
     });
+
     return DEFAULT_THEME_SNAPSHOT.theme;
   }
 }
 
 function ensureThemeColorMetaTag(): HTMLMetaElement {
   let element = document.querySelector<HTMLMetaElement>(DYNAMIC_THEME_COLOR_SELECTOR);
+
   if (element) {
     return element;
   }
@@ -255,11 +285,13 @@ function ensureThemeColorMetaTag(): HTMLMetaElement {
   element.name = THEME_COLOR_META_NAME;
   element.setAttribute("data-dynamic-theme-color", "true");
   document.head.append(element);
+
   return element;
 }
 
 function normalizeThemeColor(value: string | null | undefined): string | null {
   const normalizedValue = value?.trim().toLowerCase();
+
   if (
     !normalizedValue ||
     normalizedValue === "transparent" ||
@@ -283,27 +315,35 @@ function resolveBrowserChromeSurface(): HTMLElement {
 export function syncBrowserChromeTheme() {
   if (typeof document === "undefined" || typeof getComputedStyle === "undefined") return;
   const rootStyles = getComputedStyle(document.documentElement);
+
   const themeChromeColor = document.documentElement.dataset.themeId
     ? normalizeThemeColor(rootStyles.getPropertyValue("--app-chrome-background"))
     : null;
+
   const surfaceColor = normalizeThemeColor(
     getComputedStyle(resolveBrowserChromeSurface()).backgroundColor,
   );
+
   const fallbackColor = normalizeThemeColor(getComputedStyle(document.body).backgroundColor);
   const backgroundColor = themeChromeColor ?? surfaceColor ?? fallbackColor;
+
   if (!backgroundColor) return;
 
   document.documentElement.style.backgroundColor = backgroundColor;
   document.body.style.backgroundColor = backgroundColor;
+
   // Update every theme-color meta so any element another layer added (for
   // example a media-scoped one) carries the resolved color too.
   const themeColorMetas = document.querySelectorAll<HTMLMetaElement>(
     `meta[name="${THEME_COLOR_META_NAME}"]`,
   );
+
   if (themeColorMetas.length === 0) {
     ensureThemeColorMetaTag().setAttribute("content", backgroundColor);
+
     return;
   }
+
   for (const element of themeColorMetas) {
     element.setAttribute("content", backgroundColor);
   }
@@ -315,6 +355,7 @@ function applyTheme(theme: Theme, suppressTransitions = false) {
   const followSystem = appearanceMode === "system";
   const systemDark = followSystem ? getSystemDark() : false;
   const themeHalves = readStoredThemeHalves();
+
   if (
     lastAppliedTheme?.theme === theme &&
     lastAppliedTheme.systemDark === systemDark &&
@@ -323,12 +364,14 @@ function applyTheme(theme: Theme, suppressTransitions = false) {
     themeHalvesSignature(lastAppliedTheme.themeHalves) === themeHalvesSignature(themeHalves)
   ) {
     syncDesktopTheme(theme, followSystem, appearanceMode);
+
     return;
   }
 
   if (suppressTransitions) {
     document.documentElement.classList.add("no-transitions");
   }
+
   const resolvedAppearance = resolveThemeAppearance(
     theme,
     systemDark,
@@ -336,12 +379,14 @@ function applyTheme(theme: Theme, suppressTransitions = false) {
     appearanceMode,
     themeHalves,
   );
+
   applyThemePalette(resolveThemeHalf(theme, themeHalves, resolvedAppearance), resolvedAppearance);
   const isDark = resolvedAppearance === "dark";
   document.documentElement.classList.toggle("dark", isDark);
   lastAppliedTheme = { theme, systemDark, followSystem, appearanceMode, themeHalves };
   syncBrowserChromeTheme();
   syncDesktopTheme(theme, followSystem, appearanceMode);
+
   if (suppressTransitions) {
     // Force a reflow so the no-transitions class takes effect before removal
     // oxlint-disable-next-line no-unused-expressions
@@ -375,6 +420,7 @@ export function syncDesktopTheme(
   const bridge = window.desktopBridge;
   const halves = readStoredThemeHalves();
   const desktopTheme = resolveDesktopTheme(theme, followSystem, appearanceMode, halves);
+
   if (!bridge || typeof bridge.setTheme !== "function" || lastDesktopTheme === desktopTheme) {
     return;
   }
@@ -385,10 +431,12 @@ export function syncDesktopTheme(
       const error = isDesktopThemeSyncError(cause)
         ? cause
         : new DesktopThemeSyncError({ theme, cause });
+
       console.error(error.message, {
         theme: error.theme,
         ...safeErrorLogAttributes(error),
       });
+
       if (lastDesktopTheme === desktopTheme) {
         lastDesktopTheme = null;
       }
@@ -403,6 +451,7 @@ if (typeof document !== "undefined" && typeof window !== "undefined") {
 
 function getSnapshot(): ThemeSnapshot {
   if (typeof window === "undefined") return DEFAULT_THEME_SNAPSHOT;
+
   // Reading the preference hits localStorage, so only recompute after a
   // change was signalled; useTheme consumers call this on every render.
   if (!snapshotStale && lastSnapshot) return lastSnapshot;
@@ -425,6 +474,7 @@ function getSnapshot(): ThemeSnapshot {
   }
 
   lastSnapshot = { theme, systemDark, followSystem, appearanceMode, themeHalves };
+
   return lastSnapshot;
 }
 
@@ -434,6 +484,7 @@ function getServerSnapshot() {
 
 function handleSystemAppearanceChange() {
   const storedTheme = getStored();
+
   if (readAppearanceModePreference(storedTheme) === "system") applyTheme(storedTheme, true);
   emitChange();
 }
@@ -470,6 +521,7 @@ let removeWindowListeners: (() => void) | null = null;
 
 function subscribe(listener: () => void): () => void {
   if (typeof window === "undefined") return () => {};
+
   listeners.push(listener);
 
   // The system-preference and cross-tab listeners are shared by all
@@ -486,6 +538,7 @@ function subscribe(listener: () => void): () => void {
 
   return () => {
     listeners = listeners.filter((l) => l !== listener);
+
     if (listeners.length === 0) {
       removeWindowListeners?.();
       removeWindowListeners = null;
@@ -507,18 +560,22 @@ export function useTheme() {
 
   const setTheme = useCallback((next: Theme): boolean => {
     if (typeof window === "undefined") return false;
+
     try {
       // Preserve the current mode before replacing a legacy or inferred theme
       // preference. Otherwise a fresh System preference is re-inferred from
       // the new theme's base appearance, which can switch a dark UI to light.
       writeAppearanceModePreference(readAppearanceModePreference(getStored()));
+
       // Choosing a whole theme replaces any automatic-mode mix. The mix is
       // captured first so a failed preference write can put it back instead
       // of erasing it or leaving it attached to the new theme.
       const previousHalvesRaw =
         window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ??
         window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY);
+
       clearStoredThemeHalves();
+
       try {
         writeThemePreference(next);
       } catch (cause) {
@@ -529,6 +586,7 @@ export function useTheme() {
             // Storage is failing wholesale; the outer handler reports it.
           }
         }
+
         throw cause;
       }
     } catch (cause) {
@@ -540,21 +598,26 @@ export function useTheme() {
             theme: next,
             cause,
           });
+
       console.error(error.message, {
         operation: error.operation,
         storageKey: error.storageKey,
         theme: next,
         ...safeErrorLogAttributes(error),
       });
+
       return false;
     }
+
     applyTheme(next, true);
     emitChange();
+
     return true;
   }, []);
 
   const setAppearanceMode = useCallback((nextAppearanceMode: ThemePreferenceMode): boolean => {
     if (typeof window === "undefined") return false;
+
     try {
       writeAppearanceModePreference(nextAppearanceMode);
     } catch (cause) {
@@ -565,27 +628,33 @@ export function useTheme() {
             storageKey: THEME_APPEARANCE_MODE_STORAGE_KEY,
             cause,
           });
+
       console.error(error.message, {
         operation: error.operation,
         storageKey: error.storageKey,
         ...safeErrorLogAttributes(error),
       });
+
       return false;
     }
+
     themeStorageReadFailure = null;
     applyTheme(getStored(), true);
     emitChange();
+
     return true;
   }, []);
 
   const setFollowSystem = useCallback(
     (nextFollowSystem: boolean): boolean => {
       const currentMode = readAppearanceModePreference(theme);
+
       const nextMode = nextFollowSystem
         ? "system"
         : currentMode === "system"
           ? (getThemePreferenceMode(theme) ?? "light")
           : currentMode;
+
       return setAppearanceMode(nextMode);
     },
     [setAppearanceMode, theme],
@@ -594,11 +663,14 @@ export function useTheme() {
   const setThemeHalf = useCallback(
     (appearance: ThemeAppearance, themeId: string | null): boolean => {
       if (typeof window === "undefined") return false;
+
       try {
         const current = readStoredThemeHalves() ?? {};
         const next: { light?: string; dark?: string } = { ...current };
+
         if (themeId === null) delete next[appearance];
         else next[appearance] = themeId;
+
         if (next.light === undefined && next.dark === undefined) {
           clearStoredThemeHalves();
         } else {
@@ -610,16 +682,20 @@ export function useTheme() {
           storageKey: THEME_HALVES_STORAGE_KEY,
           cause,
         });
+
         console.error(error.message, {
           operation: error.operation,
           storageKey: error.storageKey,
           ...safeErrorLogAttributes(error),
         });
+
         return false;
       }
+
       removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
       applyTheme(getStored(), true);
       emitChange();
+
       return true;
     },
     [],
@@ -627,6 +703,7 @@ export function useTheme() {
 
   const clearThemeHalves = useCallback((): boolean => {
     if (typeof window === "undefined") return false;
+
     try {
       clearStoredThemeHalves();
     } catch (cause) {
@@ -635,15 +712,19 @@ export function useTheme() {
         storageKey: THEME_HALVES_STORAGE_KEY,
         cause,
       });
+
       console.error(error.message, {
         operation: error.operation,
         storageKey: error.storageKey,
         ...safeErrorLogAttributes(error),
       });
+
       return false;
     }
+
     applyTheme(getStored(), true);
     emitChange();
+
     return true;
   }, []);
 

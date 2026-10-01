@@ -35,6 +35,7 @@ describe("stored theme preferences", () => {
       appearance: "light",
       colors: { canvas: "#f8fbff" },
     });
+
     vi.stubGlobal("window", {
       localStorage: {
         getItem: (key: string) =>
@@ -42,6 +43,7 @@ describe("stored theme preferences", () => {
       },
     });
     invalidateCustomThemes();
+
     try {
       expect(resolveThemeAppearance("paper", true, true)).toBe("light");
       const halves = { dark: GROVE_THEME.id };
@@ -84,6 +86,7 @@ describe("stored theme preferences", () => {
       expect(isKnownThemePreference(legacy)).toBe(true);
       expect(canonicalThemePreference(legacy)).toBe(theme.id);
     }
+
     // The dark-variant alias keeps its raw form: it still carries a mode hint.
     expect(canonicalThemePreference("t3-chat-dark")).toBe("t3-chat-dark");
     // A stored mix that predates the rename resolves to the new ids.
@@ -97,6 +100,7 @@ describe("stored theme preferences", () => {
     for (const preference of ["light", "dark", "system", T3_CHAT_THEME.id, GROVE_THEME.id]) {
       expect(isKnownThemePreference(preference)).toBe(true);
     }
+
     expect(isKnownThemePreference(`${GROVE_THEME.id}:dark`)).toBe(false);
     expect(isKnownThemePreference("missing-theme")).toBe(false);
   });
@@ -113,6 +117,7 @@ describe("stored theme preferences", () => {
       { id: "light", label: "Reserved", appearance: "light", colors: {} },
       { id: "aurora", label: "Duplicate", appearance: "dark", colors: {} },
     ]);
+
     const setItem = vi.fn();
     vi.stubGlobal("window", {
       localStorage: {
@@ -145,6 +150,7 @@ describe("stored theme preferences", () => {
     const stored = new Map<string, string>([
       [LEGACY_CUSTOM_THEMES_STORAGE_KEY, JSON.stringify([])],
     ]);
+
     const removeItem = vi.fn((key: string) => stored.delete(key));
     vi.stubGlobal("window", {
       localStorage: {
@@ -154,6 +160,7 @@ describe("stored theme preferences", () => {
       },
     });
     invalidateCustomThemes();
+
     try {
       installCustomTheme(
         parseThemeFile({
@@ -177,6 +184,7 @@ describe("stored theme preferences", () => {
     const stored = new Map<string, string>([
       [LEGACY_CUSTOM_THEMES_STORAGE_KEY, JSON.stringify([])],
     ]);
+
     vi.stubGlobal("window", {
       localStorage: {
         getItem: (key: string) => stored.get(key) ?? null,
@@ -187,6 +195,7 @@ describe("stored theme preferences", () => {
       },
     });
     invalidateCustomThemes();
+
     try {
       const theme = installCustomTheme(
         parseThemeFile({
@@ -197,6 +206,7 @@ describe("stored theme preferences", () => {
           colors: { canvas: "#fafafa" },
         }),
       );
+
       expect(theme.id).toBe("resilient-save");
       expect(getCustomThemes().map((entry) => entry.id)).toEqual(["resilient-save"]);
     } finally {

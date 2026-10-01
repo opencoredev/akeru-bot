@@ -58,21 +58,27 @@ export function createDraftContentActions(
   return {
     setPrompt: (threadRef, prompt) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
+
         const nextDraft: ComposerThreadDraftState = {
           ...existing,
           prompt,
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
@@ -80,12 +86,15 @@ export function createDraftContentActions(
     setTerminalContexts: (threadRef, contexts) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
       const threadId = resolveComposerThreadId(get(), threadRef);
+
       if (!threadKey || !threadId) {
         return;
       }
+
       const normalizedContexts = normalizeTerminalContextsForThread(threadId, contexts);
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
+
         const nextDraft: ComposerThreadDraftState = {
           ...existing,
           prompt: ensureInlineTerminalContextPlaceholders(
@@ -94,12 +103,15 @@ export function createDraftContentActions(
           ),
           terminalContexts: normalizedContexts,
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
@@ -107,42 +119,54 @@ export function createDraftContentActions(
     addImage: (threadRef, image) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
       const threadId = resolveComposerThreadId(get(), threadRef);
+
       if (!threadKey || !threadId) {
         return;
       }
+
       get().addImages(typeof threadRef === "string" ? DraftId.make(threadKey) : threadRef, [image]);
     },
 
     addImages: (threadRef, images) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0 || images.length === 0) {
         return;
       }
+
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
         const existingIds = new Set(existing.images.map((image) => image.id));
+
         const existingDedupKeys = new Set(
           existing.images.map((image) => composerImageDedupKey(image)),
         );
+
         const acceptedPreviewUrls = new Set(existing.images.map((image) => image.previewUrl));
         const dedupedIncoming: ComposerImageAttachment[] = [];
+
         for (const image of images) {
           const dedupKey = composerImageDedupKey(image);
+
           if (existingIds.has(image.id) || existingDedupKeys.has(dedupKey)) {
             // Avoid revoking a blob URL that's still referenced by an accepted image.
             if (!acceptedPreviewUrls.has(image.previewUrl)) {
               revokeObjectPreviewUrl(image.previewUrl);
             }
+
             continue;
           }
+
           dedupedIncoming.push(image);
           existingIds.add(image.id);
           existingDedupKeys.add(dedupKey);
           acceptedPreviewUrls.add(image.previewUrl);
         }
+
         if (dedupedIncoming.length === 0) {
           return state;
         }
+
         return {
           draftsByThreadKey: {
             ...state.draftsByThreadKey,
@@ -157,22 +181,30 @@ export function createDraftContentActions(
 
     removeImage: (threadRef, imageId) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       const existing = get().draftsByThreadKey[threadKey];
+
       if (!existing) {
         return;
       }
+
       const removedImage = existing.images.find((image) => image.id === imageId);
+
       if (removedImage) {
         revokeObjectPreviewUrl(removedImage.previewUrl);
       }
+
       set((state) => {
         const current = state.draftsByThreadKey[threadKey];
+
         if (!current) {
           return state;
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...current,
           images: current.images.filter((image) => image.id !== imageId),
@@ -181,12 +213,15 @@ export function createDraftContentActions(
             (attachment) => attachment.id !== imageId,
           ),
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
@@ -194,25 +229,32 @@ export function createDraftContentActions(
     insertTerminalContext: (threadRef, prompt, context, index) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
       const threadId = resolveComposerThreadId(get(), threadRef);
+
       if (!threadKey || !threadId) {
         return false;
       }
+
       let inserted = false;
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
         const normalizedContext = normalizeTerminalContextForThread(threadId, context);
+
         if (!normalizedContext) {
           return state;
         }
+
         const dedupKey = terminalContextDedupKey(normalizedContext);
+
         if (
           existing.terminalContexts.some((entry) => entry.id === normalizedContext.id) ||
           existing.terminalContexts.some((entry) => terminalContextDedupKey(entry) === dedupKey)
         ) {
           return state;
         }
+
         inserted = true;
         const boundedIndex = Math.max(0, Math.min(existing.terminalContexts.length, index));
+
         const nextDraft: ComposerThreadDraftState = {
           ...existing,
           prompt,
@@ -222,6 +264,7 @@ export function createDraftContentActions(
             ...existing.terminalContexts.slice(boundedIndex),
           ],
         };
+
         return {
           draftsByThreadKey: {
             ...state.draftsByThreadKey,
@@ -229,15 +272,18 @@ export function createDraftContentActions(
           },
         };
       });
+
       return inserted;
     },
 
     addTerminalContext: (threadRef, context) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
       const threadId = resolveComposerThreadId(get(), threadRef);
+
       if (!threadKey || !threadId) {
         return;
       }
+
       get().addTerminalContexts(
         typeof threadRef === "string" ? DraftId.make(threadKey) : threadRef,
         [context],
@@ -247,18 +293,23 @@ export function createDraftContentActions(
     addTerminalContexts: (threadRef, contexts) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
       const threadId = resolveComposerThreadId(get(), threadRef);
+
       if (!threadKey || !threadId || contexts.length === 0) {
         return;
       }
+
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
+
         const acceptedContexts = normalizeTerminalContextsForThread(threadId, [
           ...existing.terminalContexts,
           ...contexts,
         ]).slice(existing.terminalContexts.length);
+
         if (acceptedContexts.length === 0) {
           return state;
         }
+
         return {
           draftsByThreadKey: {
             ...state.draftsByThreadKey,
@@ -277,48 +328,62 @@ export function createDraftContentActions(
 
     removeTerminalContext: (threadRef, contextId) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0 || contextId.length === 0) {
         return;
       }
+
       set((state) => {
         const current = state.draftsByThreadKey[threadKey];
+
         if (!current) {
           return state;
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...current,
           terminalContexts: current.terminalContexts.filter((context) => context.id !== contextId),
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
 
     clearTerminalContexts: (threadRef) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const current = state.draftsByThreadKey[threadKey];
+
         if (!current || current.terminalContexts.length === 0) {
           return state;
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...current,
           terminalContexts: [],
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
@@ -326,21 +391,26 @@ export function createDraftContentActions(
     addElementContext: (threadRef, selection) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
       const threadId = resolveComposerThreadId(get(), threadRef);
+
       if (!threadKey || !threadId) return false;
       let accepted = false;
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
         const dedupKey = elementContextDedupKey(selection);
+
         if (existing.elementContexts.some((entry) => elementContextDedupKey(entry) === dedupKey)) {
           return state;
         }
+
         accepted = true;
+
         const draft: ElementContextDraft = {
           ...selection,
           id: newElementContextId(),
           threadId,
           pickedAt: new Date().toISOString(),
         };
+
         return {
           draftsByThreadKey: {
             ...state.draftsByThreadKey,
@@ -351,82 +421,105 @@ export function createDraftContentActions(
           },
         };
       });
+
       return accepted;
     },
 
     setElementContexts: (threadRef, contexts) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
+
       if (!threadKey) return;
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
+
         const nextDraft: ComposerThreadDraftState = {
           ...existing,
           elementContexts: [...contexts],
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
 
     removeElementContext: (threadRef, contextId) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0 || contextId.length === 0) return;
       set((state) => {
         const current = state.draftsByThreadKey[threadKey];
+
         if (!current) return state;
         const filtered = current.elementContexts.filter((entry) => entry.id !== contextId);
+
         if (filtered.length === current.elementContexts.length) return state;
+
         const nextDraft: ComposerThreadDraftState = {
           ...current,
           elementContexts: filtered,
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
 
     clearElementContexts: (threadRef) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) return;
       set((state) => {
         const current = state.draftsByThreadKey[threadKey];
+
         if (!current || current.elementContexts.length === 0) return state;
+
         const nextDraft: ComposerThreadDraftState = {
           ...current,
           elementContexts: [],
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
 
     addPreviewAnnotation: (threadRef, annotation) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
+
       if (!threadKey) return;
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
+
         const nextAnnotations = existing.previewAnnotations.filter(
           (entry) => entry.id !== annotation.id,
         );
+
         const compactAnnotation: PreviewAnnotationPayload = {
           ...annotation,
           screenshot: annotation.screenshot ? { ...annotation.screenshot, dataUrl: "" } : null,
         };
+
         return {
           draftsByThreadKey: {
             ...state.draftsByThreadKey,
@@ -441,9 +534,11 @@ export function createDraftContentActions(
 
     setPreviewAnnotations: (threadRef, annotations) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
+
       if (!threadKey) return;
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
+
         return {
           draftsByThreadKey: {
             ...state.draftsByThreadKey,
@@ -455,14 +550,19 @@ export function createDraftContentActions(
 
     removePreviewAnnotation: (threadRef, annotationId) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
+
       if (!threadKey || !annotationId) return;
       set((state) => {
         const current = state.draftsByThreadKey[threadKey];
+
         if (!current) return state;
+
         const previewAnnotations = current.previewAnnotations.filter(
           (entry) => entry.id !== annotationId,
         );
+
         if (previewAnnotations.length === current.previewAnnotations.length) return state;
+
         const nextDraft = {
           ...current,
           previewAnnotations,
@@ -474,49 +574,63 @@ export function createDraftContentActions(
             (imageId) => imageId !== annotationId,
           ),
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) delete nextDraftsByThreadKey[threadKey];
         else nextDraftsByThreadKey[threadKey] = nextDraft;
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
 
     clearPersistedAttachments: (threadRef) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const current = state.draftsByThreadKey[threadKey];
+
         if (!current) {
           return state;
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...current,
           persistedAttachments: [],
           nonPersistedImageIds: [],
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
 
     syncPersistedAttachments: (threadRef, attachments) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef);
+
       if (!threadKey) {
         return;
       }
+
       const attachmentIdSet = new Set(attachments.map((attachment) => attachment.id));
       set((state) => {
         const current = state.draftsByThreadKey[threadKey];
+
         if (!current) {
           return state;
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...current,
           // Stage attempted attachments so persist middleware can try writing them.
@@ -525,12 +639,15 @@ export function createDraftContentActions(
             (id) => !attachmentIdSet.has(id),
           ),
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
       Promise.resolve().then(() => {
@@ -540,14 +657,18 @@ export function createDraftContentActions(
 
     clearComposerContent: (threadRef) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const current = state.draftsByThreadKey[threadKey];
+
         if (!current) {
           return state;
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...current,
           prompt: "",
@@ -558,29 +679,37 @@ export function createDraftContentActions(
           elementContexts: [],
           previewAnnotations: [],
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
 
     clearComposerPromptAndImages: (threadRef) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const current = state.draftsByThreadKey[threadKey];
+
         if (!current) {
           return state;
         }
+
         for (const image of current.images) {
           revokeObjectPreviewUrl(image.previewUrl);
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...current,
           prompt: ensureInlineTerminalContextPlaceholders("", current.terminalContexts.length),
@@ -588,12 +717,15 @@ export function createDraftContentActions(
           nonPersistedImageIds: [],
           persistedAttachments: [],
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
@@ -601,15 +733,20 @@ export function createDraftContentActions(
     moveComposerPromptAndImages: (from, to) => {
       const fromKey = resolveComposerDraftKey(get(), from) ?? "";
       const toKey = resolveComposerDraftKey(get(), to) ?? "";
+
       if (fromKey.length === 0 || toKey.length === 0 || fromKey === toKey) {
         return;
       }
+
       set((state) => {
         const source = state.draftsByThreadKey[fromKey];
+
         if (!source) {
           return state;
         }
+
         const destination = state.draftsByThreadKey[toKey] ?? createEmptyThreadDraft();
+
         // Inline placeholders reference the source's terminal contexts,
         // which stay behind; re-anchor the moved prompt to whatever
         // contexts the destination already holds.
@@ -617,6 +754,7 @@ export function createDraftContentActions(
           stripInlineTerminalContextPlaceholders(source.prompt),
           destination.terminalContexts.length,
         );
+
         const nextDestination: ComposerThreadDraftState = {
           ...destination,
           prompt: movedPrompt,
@@ -630,6 +768,7 @@ export function createDraftContentActions(
             ...source.persistedAttachments,
           ],
         };
+
         // Same clearing shape as clearComposerPromptAndImages, but the
         // preview URLs are NOT revoked: the images moved and their blobs
         // are still referenced from the destination.
@@ -640,17 +779,21 @@ export function createDraftContentActions(
           nonPersistedImageIds: [],
           persistedAttachments: [],
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextSource)) {
           delete nextDraftsByThreadKey[fromKey];
         } else {
           nextDraftsByThreadKey[fromKey] = nextSource;
         }
+
         if (shouldRemoveDraft(nextDestination)) {
           delete nextDraftsByThreadKey[toKey];
         } else {
           nextDraftsByThreadKey[toKey] = nextDestination;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },

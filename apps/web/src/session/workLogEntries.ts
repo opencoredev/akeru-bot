@@ -48,9 +48,11 @@ function isAgentTaskStartedActivity(activity: OrchestrationThreadActivity): bool
     activity.payload && typeof activity.payload === "object"
       ? (activity.payload as Record<string, unknown>)
       : null;
+
   if (!payload || typeof payload.taskId !== "string") {
     return false;
   }
+
   return !isBackgroundTaskActivity(payload);
 }
 
@@ -59,14 +61,17 @@ function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean
     activity.payload && typeof activity.payload === "object"
       ? (activity.payload as Record<string, unknown>)
       : null;
+
   if (!payload) {
     return false;
   }
+
   const isTaskRow =
     activity.kind === "task.started" ||
     activity.kind === "task.progress" ||
     activity.kind === "task.updated" ||
     activity.kind === "task.completed";
+
   // Task rows classify by the server stamp: a subagent's own background
   // shell (agentId + "background") is agent-internal, but a nested AGENT
   // (agentId + "agent") stays visible so its rows can anchor a spawn CTA
@@ -77,18 +82,23 @@ function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean
   // spawn point.
   if (isTaskRow) {
     const ownedByAgent = typeof payload.agentId === "string" && payload.agentId.trim().length > 0;
+
     if (ownedByAgent || payload.timelineBypass === true) {
       const isAgentTaskRow =
         activity.kind !== "task.updated" &&
         typeof payload.taskId === "string" &&
         !isBackgroundTaskActivity(payload);
+
       return !isAgentTaskRow;
     }
+
     return false;
   }
+
   if (payload.timelineBypass === true) {
     return true;
   }
+
   // Non-task rows (attributed tool activity) owned by an agent are internal.
   return typeof payload.agentId === "string" && payload.agentId.trim().length > 0;
 }
@@ -98,23 +108,33 @@ export function deriveWorkLogEntries(
 ): WorkLogEntry[] {
   const ordered = [...activities].toSorted(compareActivitiesByOrder);
   const entries: DerivedWorkLogEntry[] = [];
+
   for (const activity of ordered) {
     if (activity.kind === "tool.started") continue;
+
     // Agent task.started rows are CTA seeds: they carry the true spawn turn,
     // which is the batch key (completions of background subagents arrive
     // under later synthetic turns and must not start new batches). They
     // collapse into the batch's single CTA row, never render standalone.
     if (activity.kind === "task.started" && !isAgentTaskStartedActivity(activity)) continue;
+
     if (activity.kind === "task.updated") continue;
+
     if (activity.kind === "tool.progress") continue;
+
     if (activity.kind === "context-window.updated") continue;
+
     if (activity.summary === "Checkpoint captured") continue;
+
     // Silent-run state drives the status line; it is not work the bot did.
     if (isSilentRunActivity(activity)) continue;
+
     if (isPlanBoundaryToolActivity(activity)) continue;
+
     if (isAgentInternalActivity(activity)) continue;
     entries.push(toDerivedWorkLogEntry(activity));
   }
+
   return collapseDerivedWorkLogEntries(entries);
 }
 
@@ -127,6 +147,7 @@ function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): bool
     activity.payload && typeof activity.payload === "object"
       ? (activity.payload as Record<string, unknown>)
       : null;
+
   return typeof payload?.detail === "string" && payload.detail.startsWith("ExitPlanMode:");
 }
 
@@ -136,7 +157,9 @@ function extractWorkLogToolLifecycleStatus(
   if (!payload) {
     return undefined;
   }
+
   const s = payload.status;
+
   if (
     s === "inProgress" ||
     s === "completed" ||
@@ -146,29 +169,36 @@ function extractWorkLogToolLifecycleStatus(
   ) {
     return s;
   }
+
   return undefined;
 }
 
 function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWorkLogEntry {
   const cachedEntry = derivedWorkLogEntryByActivity.get(activity);
+
   if (cachedEntry) {
     return cachedEntry;
   }
+
   const payload =
     activity.payload && typeof activity.payload === "object"
       ? (activity.payload as Record<string, unknown>)
       : null;
+
   const commandPreview = extractToolCommand(payload);
   const changedFiles = extractChangedFiles(payload);
   const title = extractToolTitle(payload);
+
   const isTaskActivity =
     activity.kind === "task.started" ||
     activity.kind === "task.progress" ||
     activity.kind === "task.completed";
+
   const taskSummary =
     isTaskActivity && typeof payload?.summary === "string" && payload.summary.length > 0
       ? payload.summary
       : null;
+
   const taskDetailAsLabel =
     isTaskActivity &&
     !taskSummary &&
@@ -176,7 +206,9 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     payload.detail.length > 0
       ? payload.detail
       : null;
+
   const taskLabel = taskSummary || taskDetailAsLabel;
+
   const detail = isTaskActivity
     ? !taskDetailAsLabel &&
       payload &&
@@ -185,7 +217,9 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
       ? stripTrailingExitCode(payload.detail).output
       : null
     : extractToolDetail(payload, title ?? activity.summary);
+
   const toolCallId = isTaskActivity ? null : extractToolCallId(payload);
+
   const entry: DerivedWorkLogEntry = {
     id: activity.id,
     createdAt: activity.createdAt,
@@ -199,56 +233,74 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
           : activity.tone,
     sourceActivityKind: activity.kind,
   };
+
   const itemType = extractWorkLogItemType(payload);
   const requestKind = extractWorkLogRequestKind(payload);
+
   if (detail) {
     entry.detail = detail;
   }
+
   if (commandPreview.command) {
     entry.command = commandPreview.command;
   }
+
   if (commandPreview.rawCommand) {
     entry.rawCommand = commandPreview.rawCommand;
   }
+
   if (changedFiles.length > 0) {
     entry.changedFiles = changedFiles;
   }
+
   if (title) {
     entry.toolTitle = title;
   }
+
   if (itemType === "mcp_tool_call") {
     const data = asRecord(payload?.data);
+
     if (data?.item !== undefined) {
       entry.toolData = data.item;
     }
   } else if (itemType === "dynamic_tool_call") {
     const data = asRecord(payload?.data);
+
     if (isPluginSearchResult(data?.result)) {
       entry.toolData = data.result;
     }
   }
+
   if (itemType) {
     entry.itemType = itemType;
   }
+
   if (requestKind) {
     entry.requestKind = requestKind;
   }
+
   if (toolCallId) {
     entry.toolCallId = toolCallId;
   }
+
   let toolLifecycleStatus = extractWorkLogToolLifecycleStatus(payload);
+
   if (!toolLifecycleStatus && activity.kind === "tool.completed") {
     toolLifecycleStatus = "completed";
   }
+
   if (toolLifecycleStatus) {
     entry.toolLifecycleStatus = toolLifecycleStatus;
   }
+
   if (isTaskActivity && typeof payload?.taskId === "string" && payload.taskId.length > 0) {
     entry.taskId = payload.taskId;
   }
+
   if (isTaskActivity && typeof payload?.role === "string" && payload.role.length > 0) {
     entry.agentRole = payload.role;
   }
+
   if (
     isTaskActivity &&
     (payload?.taskType === "local_workflow" ||
@@ -256,14 +308,19 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   ) {
     entry.isWorkflowCoordinator = true;
   }
+
   if (isTaskActivity && payload && isBackgroundTaskActivity(payload)) {
     entry.isBackgroundTask = true;
   }
+
   const collapseKey = deriveToolLifecycleCollapseKey(entry);
+
   if (collapseKey) {
     entry[workLogCollapseKey] = collapseKey;
   }
+
   derivedWorkLogEntryByActivity.set(activity, entry);
+
   return entry;
 }
 
@@ -275,15 +332,19 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
 function agentSpawnGroupKey(entry: DerivedWorkLogEntry): string {
   const taskId = entry.taskId ?? "";
   const workflowSlot = taskId.indexOf(":wf:");
+
   if (workflowSlot !== -1) {
     return `wf:${taskId.slice(0, workflowSlot)}`;
   }
+
   if (entry.agentSpawn?.workflowId) {
     return `wf:${entry.agentSpawn.workflowId}`;
   }
+
   if (entry.isWorkflowCoordinator) {
     return `wf:${taskId}`;
   }
+
   // No turn id means no batch signal at all: fall back to one group per
   // task. Unrelated turn-less spawns (separate fleets whose rows lost their
   // turn) must not collapse into one immortal "direct:no-turn" CTA
@@ -300,6 +361,7 @@ function toolLifecycleCollapseMapKey(entry: DerivedWorkLogEntry): string | undef
   ) {
     return undefined;
   }
+
   return entry.toolCallId ? `tool:${entry.turnId ?? "no-turn"}:${entry.toolCallId}` : undefined;
 }
 
@@ -320,6 +382,7 @@ function collapseDerivedWorkLogEntries(
   // rows (live-test finding, thread 7ac7ef05).
   const groupKeyByTaskId = new Map<string, string>();
   const toolLifecycleRowIndex = new Map<string, number>();
+
   for (const entry of entries) {
     const isTaskRow =
       entry.taskId !== undefined &&
@@ -327,19 +390,25 @@ function collapseDerivedWorkLogEntries(
       (entry.sourceActivityKind === "task.started" ||
         entry.sourceActivityKind === "task.progress" ||
         entry.sourceActivityKind === "task.completed");
+
     if (isTaskRow && entry.taskId !== undefined) {
       const rememberedKey = groupKeyByTaskId.get(entry.taskId);
       const groupKey = rememberedKey ?? agentSpawnGroupKey(entry);
+
       if (rememberedKey === undefined) {
         groupKeyByTaskId.set(entry.taskId, groupKey);
       }
+
       const workflowId = groupKey.startsWith("wf:") ? groupKey.slice(3) : null;
       const existingIndex = spawnRowIndex.get(groupKey);
+
       if (existingIndex !== undefined) {
         const existing = collapsed[existingIndex]!;
+
         const agentTaskIds = existing.agentSpawn?.agentTaskIds.includes(entry.taskId)
           ? existing.agentSpawn.agentTaskIds
           : [...(existing.agentSpawn?.agentTaskIds ?? []), entry.taskId];
+
         collapsed[existingIndex] = {
           ...mergeDerivedWorkLogEntries(existing, entry),
           // The CTA row keeps the group's ANCHOR identity, not the last
@@ -357,6 +426,7 @@ function collapseDerivedWorkLogEntries(
         };
         continue;
       }
+
       spawnRowIndex.set(groupKey, collapsed.length);
       collapsed.push({
         ...entry,
@@ -364,11 +434,15 @@ function collapseDerivedWorkLogEntries(
       });
       continue;
     }
+
     const lifecycleKey = toolLifecycleCollapseMapKey(entry);
+
     if (lifecycleKey !== undefined) {
       const matchingLifecycleIndex = toolLifecycleRowIndex.get(lifecycleKey);
+
       const matchingEntry =
         matchingLifecycleIndex === undefined ? undefined : collapsed[matchingLifecycleIndex];
+
       if (
         matchingLifecycleIndex !== undefined &&
         matchingEntry &&
@@ -377,24 +451,32 @@ function collapseDerivedWorkLogEntries(
         collapsed[matchingLifecycleIndex] = mergeDerivedWorkLogEntries(matchingEntry, entry);
         continue;
       }
+
       toolLifecycleRowIndex.delete(lifecycleKey);
     }
+
     const previous = collapsed.at(-1);
+
     if (previous && shouldCollapseToolLifecycleEntries(previous, entry)) {
       const previousIndex = collapsed.length - 1;
       const previousKey = toolLifecycleCollapseMapKey(previous);
+
       if (previousKey !== undefined) toolLifecycleRowIndex.delete(previousKey);
       const merged = mergeDerivedWorkLogEntries(previous, entry);
       collapsed[previousIndex] = merged;
       const mergedKey = toolLifecycleCollapseMapKey(merged);
+
       if (mergedKey !== undefined) toolLifecycleRowIndex.set(mergedKey, previousIndex);
       continue;
     }
+
     collapsed.push(entry);
+
     if (lifecycleKey !== undefined) {
       toolLifecycleRowIndex.set(lifecycleKey, collapsed.length - 1);
     }
   }
+
   return collapsed;
 }
 
@@ -408,21 +490,26 @@ function shouldCollapseToolLifecycleEntries(
   ) {
     return false;
   }
+
   if (next.sourceActivityKind !== "tool.updated" && next.sourceActivityKind !== "tool.completed") {
     return false;
   }
+
   if (previous.turnId !== next.turnId) {
     return false;
   }
+
   if (previous.sourceActivityKind === "tool.completed") {
     return false;
   }
+
   if (
     previous[workLogCollapseKey] !== undefined &&
     previous[workLogCollapseKey] === next[workLogCollapseKey]
   ) {
     return true;
   }
+
   return (
     previous.toolCallId !== undefined &&
     next.toolCallId === undefined &&
@@ -447,6 +534,7 @@ function mergeDerivedWorkLogEntries(
   const toolCallId = next.toolCallId ?? previous.toolCallId;
   const toolLifecycleStatus = next.toolLifecycleStatus ?? previous.toolLifecycleStatus;
   const toolData = next.toolData ?? previous.toolData;
+
   return {
     ...previous,
     ...next,
@@ -469,9 +557,11 @@ function mergeChangedFiles(
   next: ReadonlyArray<string> | undefined,
 ): string[] {
   const merged = [...(previous ?? []), ...(next ?? [])];
+
   if (merged.length === 0) {
     return [];
   }
+
   return [...new Set(merged)];
 }
 
@@ -484,21 +574,26 @@ function deriveToolLifecycleCollapseKey(entry: DerivedWorkLogEntry): string | un
   ) {
     return `task${entry.taskId}`;
   }
+
   if (
     entry.sourceActivityKind !== "tool.updated" &&
     entry.sourceActivityKind !== "tool.completed"
   ) {
     return undefined;
   }
+
   if (entry.toolCallId) {
     return `tool:${entry.turnId ?? "no-turn"}:${entry.toolCallId}`;
   }
+
   const normalizedLabel = normalizeCompactToolLabel(entry.toolTitle ?? entry.label);
   const detail = entry.detail?.trim() ?? "";
   const itemType = entry.itemType ?? "";
+
   if (normalizedLabel.length === 0 && detail.length === 0 && itemType.length === 0) {
     return undefined;
   }
+
   return [itemType, normalizedLabel, detail].join("\u001f");
 }
 
@@ -517,12 +612,14 @@ function compareActivitiesByOrder(
   }
 
   const createdAtComparison = left.createdAt.localeCompare(right.createdAt);
+
   if (createdAtComparison !== 0) {
     return createdAtComparison;
   }
 
   const lifecycleRankComparison =
     compareActivityLifecycleRank(left.kind) - compareActivityLifecycleRank(right.kind);
+
   if (lifecycleRankComparison !== 0) {
     return lifecycleRankComparison;
   }
@@ -534,11 +631,14 @@ function compareActivityLifecycleRank(kind: string): number {
   if (kind.endsWith(".started") || kind === "tool.started") {
     return 0;
   }
+
   if (kind.endsWith(".progress") || kind.endsWith(".updated")) {
     return 1;
   }
+
   if (kind.endsWith(".completed") || kind.endsWith(".resolved")) {
     return 2;
   }
+
   return 1;
 }

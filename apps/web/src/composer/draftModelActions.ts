@@ -38,15 +38,18 @@ export function createDraftModelActions(
         if (!normalized) {
           return state;
         }
+
         const nextMap: Partial<Record<ProviderInstanceId, ModelSelection>> = {
           ...state.stickyModelSelectionByProvider,
           [normalized.instanceId]: normalized,
         };
+
         if (Equal.equals(state.stickyModelSelectionByProvider, nextMap)) {
           return state.stickyActiveProvider === normalized.instanceId
             ? state
             : { stickyActiveProvider: normalized.instanceId };
         }
+
         return {
           stickyModelSelectionByProvider: nextMap,
           stickyActiveProvider: normalized.instanceId,
@@ -56,18 +59,23 @@ export function createDraftModelActions(
 
     applyStickyState: (threadRef) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const stickyMap = state.stickyModelSelectionByProvider;
         const stickyActiveProvider = state.stickyActiveProvider;
+
         if (Object.keys(stickyMap).length === 0 && stickyActiveProvider === null) {
           return state;
         }
+
         const existing = state.draftsByThreadKey[threadKey];
         const base = existing ?? createEmptyThreadDraft();
         const nextMap = { ...base.modelSelectionByProvider };
+
         for (const [provider, selection] of Object.entries(stickyMap)) {
           if (selection) {
             // Iteration key comes from the instance-keyed sticky map,
@@ -81,42 +89,53 @@ export function createDraftModelActions(
             };
           }
         }
+
         if (
           Equal.equals(base.modelSelectionByProvider, nextMap) &&
           base.activeProvider === stickyActiveProvider
         ) {
           return state;
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...base,
           modelSelectionByProvider: nextMap,
           activeProvider: stickyActiveProvider,
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
 
     setModelSelection: (threadRef, modelSelection, opts) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       const normalized = normalizeModelSelection(modelSelection);
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey];
+
         if (!existing && normalized === null) {
           return state;
         }
+
         const base = existing ?? createEmptyThreadDraft();
         const nextMap = { ...base.modelSelectionByProvider };
+
         if (normalized) {
           const current = nextMap[normalized.instanceId];
+
           if (normalized.options !== undefined || opts?.replaceOptions) {
             // Explicit options provided (or the caller passed a complete
             // snapshot whose absent options mean "no options") → use the
@@ -131,46 +150,58 @@ export function createDraftModelActions(
             );
           }
         }
+
         const nextActiveProvider = normalized?.instanceId ?? base.activeProvider;
+
         if (
           Equal.equals(base.modelSelectionByProvider, nextMap) &&
           base.activeProvider === nextActiveProvider
         ) {
           return state;
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...base,
           modelSelectionByProvider: nextMap,
           activeProvider: nextActiveProvider,
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
 
     setModelOptions: (threadRef, modelOptions) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey];
+
         if (!existing && (!modelOptions || Object.keys(modelOptions).length === 0)) {
           return state;
         }
+
         const base = existing ?? createEmptyThreadDraft();
         const nextMap = { ...base.modelSelectionByProvider };
+
         for (const provider of ["codex", "claudeAgent", "opencode"] as const) {
           if (!modelOptions || !(provider in modelOptions)) continue;
           const opts = modelOptions[provider];
           const driverKind = ProviderDriverKind.make(provider);
           const instanceKey = defaultInstanceIdForDriver(driverKind);
           const current = nextMap[instanceKey];
+
           if (opts && opts.length > 0) {
             nextMap[instanceKey] = createModelSelection(
               instanceKey,
@@ -182,37 +213,48 @@ export function createDraftModelActions(
             nextMap[instanceKey] = rest as ModelSelection;
           }
         }
+
         if (Equal.equals(base.modelSelectionByProvider, nextMap)) {
           return state;
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...base,
           modelSelectionByProvider: nextMap,
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },
 
     setProviderModelOptions: (threadRef, provider, nextProviderOptions, options) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       const normalizedProvider = normalizeProviderDriverKind(provider);
+
       if (normalizedProvider === null) {
         return;
       }
+
       const instanceKey = options?.instanceId ?? defaultInstanceIdForDriver(normalizedProvider);
+
       const fallbackModel =
         normalizeModelSlug(options?.model, normalizedProvider) ??
         DEFAULT_MODEL_BY_PROVIDER[normalizedProvider] ??
         DEFAULT_MODEL;
+
       const providerOpts =
         nextProviderOptions && nextProviderOptions.length > 0 ? nextProviderOptions : undefined;
 
@@ -223,6 +265,7 @@ export function createDraftModelActions(
         // Update the map entry for this provider
         const nextMap = { ...base.modelSelectionByProvider };
         const currentForProvider = nextMap[instanceKey];
+
         if (providerOpts) {
           nextMap[instanceKey] = createModelSelection(
             instanceKey,
@@ -237,12 +280,15 @@ export function createDraftModelActions(
         // Handle sticky persistence
         let nextStickyMap = state.stickyModelSelectionByProvider;
         let nextStickyActiveProvider = state.stickyActiveProvider;
+
         if (options?.persistSticky === true) {
           nextStickyMap = { ...state.stickyModelSelectionByProvider };
+
           const stickyBase =
             nextStickyMap[instanceKey] ??
             base.modelSelectionByProvider[instanceKey] ??
             createModelSelection(instanceKey, fallbackModel);
+
           if (providerOpts) {
             nextStickyMap[instanceKey] = createModelSelection(
               instanceKey,
@@ -253,6 +299,7 @@ export function createDraftModelActions(
             const { options: _, ...rest } = stickyBase;
             nextStickyMap[instanceKey] = rest as ModelSelection;
           }
+
           nextStickyActiveProvider = options.instanceId
             ? instanceKey
             : (base.activeProvider ?? instanceKey);
@@ -271,7 +318,9 @@ export function createDraftModelActions(
           ...(options?.instanceId ? { activeProvider: instanceKey } : {}),
           modelSelectionByProvider: nextMap,
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
@@ -292,29 +341,38 @@ export function createDraftModelActions(
 
     setRuntimeMode: (threadRef, runtimeMode) => {
       const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+
       if (threadKey.length === 0) {
         return;
       }
+
       const nextRuntimeMode = isRuntimeMode(runtimeMode) ? runtimeMode : null;
       set((state) => {
         const existing = state.draftsByThreadKey[threadKey];
+
         if (!existing && nextRuntimeMode === null) {
           return state;
         }
+
         const base = existing ?? createEmptyThreadDraft();
+
         if (base.runtimeMode === nextRuntimeMode) {
           return state;
         }
+
         const nextDraft: ComposerThreadDraftState = {
           ...base,
           runtimeMode: nextRuntimeMode,
         };
+
         const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
         if (shouldRemoveDraft(nextDraft)) {
           delete nextDraftsByThreadKey[threadKey];
         } else {
           nextDraftsByThreadKey[threadKey] = nextDraft;
         }
+
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
     },

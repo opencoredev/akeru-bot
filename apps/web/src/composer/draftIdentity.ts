@@ -33,6 +33,7 @@ export function normalizeDraftThreadEnvMode(
   if (value === "local" || value === "worktree") {
     return value;
   }
+
   return fallbackWorktreePath ? "worktree" : "local";
 }
 
@@ -54,6 +55,7 @@ function composerTargetKey(target: ScopedThreadRef | DraftId): string {
   if (typeof target === "string") {
     return target.trim();
   }
+
   return scopedThreadKey(target);
 }
 
@@ -69,12 +71,15 @@ export function normalizeLegacyComposerStorageKey(
   },
 ): string {
   const parsedThreadRef = parseScopedThreadKey(threadKeyOrId);
+
   if (parsedThreadRef) {
     return composerTargetKey(parsedThreadRef);
   }
+
   if (options?.environmentId) {
     return composerTargetKey(scopeThreadRef(options.environmentId, threadKeyOrId as ThreadId));
   }
+
   return threadKeyOrId;
 }
 
@@ -93,8 +98,10 @@ function normalizeComposerTarget(
 ): ComposerThreadTarget | null {
   if (typeof target === "string") {
     const draftId = target.trim();
+
     return draftId.length > 0 ? DraftId.make(draftId) : null;
   }
+
   return target;
 }
 
@@ -103,14 +110,18 @@ export function resolveComposerDraftKey(
   target: ComposerThreadTarget,
 ): string | null {
   const normalizedTarget = normalizeComposerTarget(state, target);
+
   if (!normalizedTarget) {
     return null;
   }
+
   if (typeof normalizedTarget !== "string") {
     const scopedKey = composerTargetKey(normalizedTarget);
+
     if (state.draftsByThreadKey[scopedKey]) {
       return scopedKey;
     }
+
     for (const [draftId, draftSession] of Object.entries(state.draftThreadsByThreadKey)) {
       if (
         draftSession.environmentId === normalizedTarget.environmentId &&
@@ -119,9 +130,12 @@ export function resolveComposerDraftKey(
         return draftId;
       }
     }
+
     return scopedKey;
   }
+
   const threadKey = composerTargetKey(normalizedTarget);
+
   return threadKey.length > 0 ? threadKey : null;
 }
 
@@ -130,12 +144,15 @@ export function resolveComposerThreadId(
   target: ComposerThreadTarget,
 ): ThreadId | null {
   const normalizedTarget = normalizeComposerTarget(state, target);
+
   if (!normalizedTarget) {
     return null;
   }
+
   if (typeof normalizedTarget !== "string") {
     return normalizedTarget.threadId;
   }
+
   return state.draftThreadsByThreadKey[normalizedTarget]?.threadId ?? null;
 }
 
@@ -144,9 +161,11 @@ export function getComposerDraftState(
   target: ComposerThreadTarget,
 ): ComposerThreadDraftState | null {
   const threadKey = resolveComposerDraftKey(state, target);
+
   if (!threadKey) {
     return null;
   }
+
   return state.draftsByThreadKey[threadKey] ?? null;
 }
 
@@ -191,22 +210,26 @@ export function createDraftThreadState(
     existingThread !== undefined &&
     (existingThread.environmentId !== projectRef.environmentId ||
       existingThread.projectId !== projectRef.projectId);
+
   const nextWorktreePath =
     options?.worktreePath === undefined
       ? projectChanged
         ? null
         : (existingThread?.worktreePath ?? null)
       : (options.worktreePath ?? null);
+
   const nextBranch =
     options?.branch === undefined
       ? projectChanged
         ? null
         : (existingThread?.branch ?? null)
       : (options.branch ?? null);
+
   const nextStartFromOrigin =
     options?.startFromOrigin === undefined
       ? (existingThread?.startFromOrigin ?? false)
       : options.startFromOrigin;
+
   return {
     threadId,
     environmentId: projectRef.environmentId,
@@ -233,6 +256,7 @@ export function scopedThreadRefsEqual(
   if (!left || !right) {
     return left === right;
   }
+
   return left.environmentId === right.environmentId && left.threadId === right.threadId;
 }
 
@@ -280,10 +304,13 @@ export function removeDraftThreadReferences(
       ([, draftThreadKey]) => draftThreadKey !== threadKey,
     ),
   ) as Record<string, string>;
+
   const { [threadKey]: _removedDraftThread, ...restDraftThreadsByThreadKey } =
     state.draftThreadsByThreadKey;
+
   const { [threadKey]: removedComposerDraft, ...restDraftsByThreadKey } = state.draftsByThreadKey;
   revokeDraftThreadPreviewUrls(removedComposerDraft);
+
   return {
     draftsByThreadKey: restDraftsByThreadKey,
     draftThreadsByThreadKey: restDraftThreadsByThreadKey,

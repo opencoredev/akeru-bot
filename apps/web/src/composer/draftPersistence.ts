@@ -66,10 +66,13 @@ export function migratePersistedComposerDraftStoreState(
   if (!persistedState || typeof persistedState !== "object") {
     return EMPTY_PERSISTED_DRAFT_STORE_STATE;
   }
+
   const candidate = persistedState as LegacyPersistedComposerDraftStoreState;
   const rawDraftMap = candidate.draftsByThreadKey ?? candidate.draftsByThreadId;
+
   const rawDraftThreadsByThreadId =
     candidate.draftThreadsByThreadKey ?? candidate.draftThreadsByThreadId;
+
   const rawProjectDraftThreadIdByProjectKey =
     candidate.logicalProjectDraftThreadKeyByLogicalProjectKey ??
     candidate.projectDraftThreadKeyByProjectKey ??
@@ -78,31 +81,38 @@ export function migratePersistedComposerDraftStoreState(
 
   // Migrate sticky state from v2 (dual) to v3 (consolidated)
   const stickyModelOptions = normalizeProviderModelOptions(candidate.stickyModelOptions) ?? {};
+
   const normalizedStickyModelSelection = normalizeModelSelection(candidate.stickyModelSelection, {
     provider: candidate.stickyProvider ?? "codex",
     model: candidate.stickyModel,
     modelOptions: stickyModelOptions,
   });
+
   const nextStickyModelOptions = legacyMergeModelSelectionIntoProviderModelOptions(
     normalizedStickyModelSelection,
     stickyModelOptions,
   );
+
   const stickyModelSelection = legacySyncModelSelectionOptions(
     normalizedStickyModelSelection,
     nextStickyModelOptions,
   );
+
   const stickyModelSelectionByProvider = legacyToModelSelectionByProvider(
     stickyModelSelection,
     nextStickyModelOptions,
   );
+
   const stickyActiveProvider = normalizeProviderInstanceId(candidate.stickyProvider) ?? null;
 
   const { draftThreadsByThreadKey, logicalProjectDraftThreadKeyByLogicalProjectKey } =
     normalizePersistedDraftThreads(rawDraftThreadsByThreadId, rawProjectDraftThreadIdByProjectKey);
+
   const draftsByThreadKey = normalizePersistedDraftsByThreadId(
     rawDraftMap,
     draftThreadsByThreadKey,
   );
+
   return {
     draftsByThreadKey,
     draftThreadsByThreadKey,
@@ -123,6 +133,7 @@ export function partializeComposerDraftStoreState(
   const mappedDraftKeys = new Set(
     Object.values(state.logicalProjectDraftThreadKeyByLogicalProjectKey),
   );
+
   const keptSessionKeys = new Set(
     Object.entries(state.draftThreadsByThreadKey)
       .filter(
@@ -133,20 +144,25 @@ export function partializeComposerDraftStoreState(
       )
       .map(([threadKey]) => threadKey),
   );
+
   const persistedDraftsByThreadKey: DeepMutable<
     PersistedComposerDraftStoreState["draftsByThreadKey"]
   > = {};
+
   for (const [threadKey, draft] of Object.entries(state.draftsByThreadKey)) {
     if (typeof threadKey !== "string" || threadKey.length === 0) {
       continue;
     }
+
     // Composer content keyed to a dropped draft session goes with it.
     // Server-thread keys have no session entry and are unaffected.
     if (state.draftThreadsByThreadKey[threadKey] !== undefined && !keptSessionKeys.has(threadKey)) {
       continue;
     }
+
     const hasModelData =
       Object.keys(draft.modelSelectionByProvider).length > 0 || draft.activeProvider !== null;
+
     if (
       draft.prompt.length === 0 &&
       draft.persistedAttachments.length === 0 &&
@@ -159,6 +175,7 @@ export function partializeComposerDraftStoreState(
     ) {
       continue;
     }
+
     const persistedDraft: DeepMutable<PersistedComposerThreadDraftState> = {
       prompt: draft.prompt,
       attachments: draft.persistedAttachments,
@@ -210,17 +227,22 @@ export function partializeComposerDraftStoreState(
       ...(draft.runtimeMode ? { runtimeMode: draft.runtimeMode } : {}),
       ...(draft.interactionMode ? { interactionMode: draft.interactionMode } : {}),
     };
+
     persistedDraftsByThreadKey[threadKey] = persistedDraft;
   }
+
   const persistedDraftThreadsByThreadKey: DeepMutable<
     PersistedComposerDraftStoreState["draftThreadsByThreadKey"]
   > = {};
+
   for (const [threadKey, draftThread] of Object.entries(state.draftThreadsByThreadKey)) {
     if (!keptSessionKeys.has(threadKey)) {
       continue;
     }
+
     persistedDraftThreadsByThreadKey[threadKey] = draftThread;
   }
+
   return {
     draftsByThreadKey: persistedDraftsByThreadKey,
     draftThreadsByThreadKey: persistedDraftThreadsByThreadKey,
@@ -239,7 +261,9 @@ export function normalizeCurrentPersistedComposerDraftStoreState(
   if (!persistedState || typeof persistedState !== "object") {
     return EMPTY_PERSISTED_DRAFT_STORE_STATE;
   }
+
   const normalizedPersistedState = persistedState as LegacyPersistedComposerDraftStoreState;
+
   const { draftThreadsByThreadKey, logicalProjectDraftThreadKeyByLogicalProjectKey } =
     normalizePersistedDraftThreads(
       normalizedPersistedState.draftThreadsByThreadKey ??
@@ -253,6 +277,7 @@ export function normalizeCurrentPersistedComposerDraftStoreState(
   // Handle both v3 (modelSelectionByProvider) and v2/legacy formats
   let stickyModelSelectionByProvider: Partial<Record<ProviderInstanceId, ModelSelection>> = {};
   let stickyActiveProvider: ProviderInstanceId | null = null;
+
   if (
     normalizedPersistedState.stickyModelSelectionByProvider &&
     typeof normalizedPersistedState.stickyModelSelectionByProvider === "object"
@@ -268,6 +293,7 @@ export function normalizeCurrentPersistedComposerDraftStoreState(
     // Legacy migration path
     const stickyModelOptions =
       normalizeProviderModelOptions(normalizedPersistedState.stickyModelOptions) ?? {};
+
     const normalizedStickyModelSelection = normalizeModelSelection(
       normalizedPersistedState.stickyModelSelection,
       {
@@ -276,14 +302,17 @@ export function normalizeCurrentPersistedComposerDraftStoreState(
         modelOptions: stickyModelOptions,
       },
     );
+
     const nextStickyModelOptions = legacyMergeModelSelectionIntoProviderModelOptions(
       normalizedStickyModelSelection,
       stickyModelOptions,
     );
+
     const stickyModelSelection = legacySyncModelSelectionOptions(
       normalizedStickyModelSelection,
       nextStickyModelOptions,
     );
+
     stickyModelSelectionByProvider = legacyToModelSelectionByProvider(
       stickyModelSelection,
       nextStickyModelOptions,
@@ -307,14 +336,17 @@ function readPersistedAttachmentIdsFromStorage(threadKey: string): string[] {
   if (threadKey.length === 0) {
     return [];
   }
+
   try {
     const persisted = getLocalStorageItem(
       COMPOSER_DRAFT_STORAGE_KEY,
       PersistedComposerDraftStoreStorage,
     );
+
     if (!persisted || persisted.version !== COMPOSER_DRAFT_STORAGE_VERSION) {
       return [];
     }
+
     return (persisted.state.draftsByThreadKey[threadKey]?.attachments ?? []).map(
       (attachment) => attachment.id,
     );
@@ -337,38 +369,49 @@ export function verifyPersistedAttachments(
   ) => void,
 ): void {
   let persistedIdSet = new Set<string>();
+
   try {
     composerDebouncedStorage.flush();
     persistedIdSet = new Set(readPersistedAttachmentIdsFromStorage(threadKey));
   } catch {
     persistedIdSet = new Set();
   }
+
   set((state) => {
     const current = state.draftsByThreadKey[threadKey];
+
     if (!current) {
       return state;
     }
+
     const imageIdSet = new Set(current.images.map((image) => image.id));
+
     const persistedAttachments = attachments.filter(
       (attachment) => imageIdSet.has(attachment.id) && persistedIdSet.has(attachment.id),
     );
+
     const nonPersistedImageIds: string[] = [];
+
     for (const image of current.images) {
       if (!persistedIdSet.has(image.id)) {
         nonPersistedImageIds.push(image.id);
       }
     }
+
     const nextDraft: ComposerThreadDraftState = {
       ...current,
       persistedAttachments,
       nonPersistedImageIds,
     };
+
     const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+
     if (shouldRemoveDraft(nextDraft)) {
       delete nextDraftsByThreadKey[threadKey];
     } else {
       nextDraftsByThreadKey[threadKey] = nextDraft;
     }
+
     return { draftsByThreadKey: nextDraftsByThreadKey };
   });
 }
@@ -379,26 +422,34 @@ function hydratePersistedComposerImageAttachment(
   const commaIndex = attachment.dataUrl.indexOf(",");
   const header = commaIndex === -1 ? attachment.dataUrl : attachment.dataUrl.slice(0, commaIndex);
   const payload = commaIndex === -1 ? "" : attachment.dataUrl.slice(commaIndex + 1);
+
   if (payload.length === 0) {
     return null;
   }
+
   try {
     const isBase64 = header.includes(";base64");
+
     if (!isBase64) {
       const decodedText = decodeURIComponent(payload);
+
       const inferredMimeType =
         header.startsWith("data:") && header.includes(";")
           ? header.slice("data:".length, header.indexOf(";"))
           : attachment.mimeType;
+
       return new File([decodedText], attachment.name, {
         type: inferredMimeType || attachment.mimeType,
       });
     }
+
     const binary = atob(payload);
     const bytes = new Uint8Array(binary.length);
+
     for (let index = 0; index < binary.length; index += 1) {
       bytes[index] = binary.charCodeAt(index);
     }
+
     return new File([bytes], attachment.name, { type: attachment.mimeType });
   } catch {
     return null;
@@ -410,6 +461,7 @@ export function hydrateImagesFromPersisted(
 ): ComposerImageAttachment[] {
   return attachments.flatMap((attachment) => {
     const file = hydratePersistedComposerImageAttachment(attachment);
+
     if (!file) return [];
 
     return [
@@ -432,6 +484,7 @@ export function toHydratedThreadDraft(
   // The persisted draft is already in v3 shape (migration handles older formats)
   const modelSelectionByProvider: Partial<Record<ProviderInstanceId, ModelSelection>> =
     persistedDraft.modelSelectionByProvider ?? {};
+
   const activeProvider = normalizeProviderInstanceId(persistedDraft.activeProvider) ?? null;
 
   return {

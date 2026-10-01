@@ -26,7 +26,9 @@ import {
 } from "./previewStateStore";
 
 const environmentId = "env-1" as EnvironmentId;
+
 const ref = scopeThreadRef(environmentId, ThreadId.make("thread-1"));
+
 const otherRef = scopeThreadRef(environmentId, ThreadId.make("thread-2"));
 
 const makeSnapshot = (overrides: Partial<PreviewSessionSnapshot> = {}): PreviewSessionSnapshot => ({
@@ -46,7 +48,9 @@ type PreviewEventDraft = PreviewEvent extends infer Event
   : never;
 
 const serverEpoch = "server-a";
+
 let nextServerRevision = 0;
+
 const applyPreviewServerEvent = (eventRef: typeof ref, event: PreviewEventDraft): void => {
   nextServerRevision += 1;
   applyPreviewServerEventImpl(eventRef, {
@@ -129,6 +133,7 @@ describe("previewStateStore (single-tab)", () => {
     });
     const state = readThreadPreviewState(ref);
     expect(state.snapshot?.navStatus._tag).toBe("Success");
+
     if (state.snapshot?.navStatus._tag === "Success") {
       expect(state.snapshot.navStatus.url).toBe("http://localhost:5173/about");
     }
@@ -230,10 +235,12 @@ describe("previewStateStore (single-tab)", () => {
 
   it("optimistically removes a session before the server close event arrives", () => {
     const first = makeSnapshot({ tabId: "tab_a" });
+
     const second = makeSnapshot({
       tabId: "tab_b",
       updatedAt: "2026-01-01T00:00:01.000Z",
     });
+
     applyPreviewServerSnapshot(ref, first);
     applyPreviewServerSnapshot(ref, second);
 
@@ -335,6 +342,7 @@ describe("previewStateStore (single-tab)", () => {
   it("does not publish duplicate desktop browser state", () => {
     const snapshot = makeSnapshot();
     applyPreviewServerSnapshot(ref, snapshot);
+
     const overlay = {
       hasWebContents: true,
       canGoBack: true,
@@ -352,7 +360,9 @@ describe("previewStateStore (single-tab)", () => {
         capturedAt: 1,
       },
     };
+
     let updateCount = 0;
+
     const unsubscribe = subscribeThreadPreviewState(ref, () => {
       updateCount += 1;
     });
@@ -392,10 +402,12 @@ describe("previewStateStore (single-tab)", () => {
 
   it("updates a background snapshot without changing the active tab", () => {
     const background = makeSnapshot({ tabId: "tab_a" });
+
     const active = makeSnapshot({
       tabId: "tab_b",
       updatedAt: "2026-01-01T00:00:01.000Z",
     });
+
     applyPreviewServerSnapshot(ref, background);
     applyPreviewServerSnapshot(ref, active);
 
@@ -404,6 +416,7 @@ describe("previewStateStore (single-tab)", () => {
       viewport: { _tag: "freeform" as const, width: 900, height: 700 },
       updatedAt: "2026-01-01T00:00:02.000Z",
     };
+
     updatePreviewServerSnapshot(ref, resized);
 
     const state = readThreadPreviewState(ref);
@@ -414,10 +427,12 @@ describe("previewStateStore (single-tab)", () => {
 
   it("reconciles an authoritative session list without focusing a background tab", () => {
     const active = makeSnapshot({ tabId: "tab_a" });
+
     const stale = makeSnapshot({
       tabId: "tab_stale",
       updatedAt: "2026-01-01T00:00:01.000Z",
     });
+
     applyPreviewServerSnapshot(ref, stale);
     applyPreviewServerSnapshot(ref, active);
     applyPreviewDesktopState(ref, stale.tabId, {
@@ -527,6 +542,7 @@ describe("previewStateStore (single-tab)", () => {
       navStatus: { _tag: "Success", url: "https://old.example", title: "Old" },
       updatedAt: "2026-01-01T00:00:02.000Z",
     });
+
     applyPreviewServerEventImpl(ref, {
       type: "opened",
       threadId: "thread-1",
@@ -550,10 +566,12 @@ describe("previewStateStore (single-tab)", () => {
       controller: "none",
       favicon: null,
     });
+
     const restarted = makeSnapshot({
       navStatus: { _tag: "Success", url: "https://new.example", title: "New" },
       updatedAt: "2026-01-01T00:00:01.000Z",
     });
+
     reconcilePreviewServerSessions(ref, {
       sessions: [restarted],
       serverEpoch: "server-b",
@@ -603,6 +621,7 @@ describe("previewStateStore (single-tab)", () => {
     for (let i = 0; i < __testing.RECENT_URL_LIMIT + 5; i += 1) {
       rememberPreviewUrl(ref, `http://localhost:${5000 + i}/`);
     }
+
     const state = readThreadPreviewState(ref);
     expect(state.recentlySeenUrls.length).toBeLessThanOrEqual(__testing.RECENT_URL_LIMIT);
     expect(state.recentlySeenUrls[0]).toBe(

@@ -10,12 +10,14 @@ function GroupThreadRouteView() {
   const { groupId } = Route.useParams();
   const navigate = Route.useNavigate();
   const environmentId = usePrimaryEnvironmentId();
+
   const { group, bots } = useRosterStore(
     useShallow((state) => ({
       group: state.groups.find((candidate) => candidate.id === groupId) ?? null,
       bots: state.bots,
     })),
   );
+
   return (
     <>
       <GroupThreadLanding groupId={groupId} />

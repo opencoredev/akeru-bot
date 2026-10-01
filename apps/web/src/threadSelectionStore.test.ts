@@ -4,9 +4,13 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { useThreadSelectionStore } from "./threadSelectionStore";
 
 const THREAD_A = ThreadId.make("thread-a");
+
 const THREAD_B = ThreadId.make("thread-b");
+
 const THREAD_C = ThreadId.make("thread-c");
+
 const THREAD_D = ThreadId.make("thread-d");
+
 const THREAD_E = ThreadId.make("thread-e");
 
 const ORDERED = [THREAD_A, THREAD_B, THREAD_C, THREAD_D, THREAD_E] as const;

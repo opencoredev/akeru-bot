@@ -52,6 +52,7 @@ describe("partitionStashAttachments", () => {
       sizeBytes: 10,
       dataUrl: "x".repeat(10),
     };
+
     const huge = {
       id: "b",
       name: "huge.png",
@@ -59,6 +60,7 @@ describe("partitionStashAttachments", () => {
       sizeBytes: MAX_STASH_ENTRY_ATTACHMENT_CHARS,
       dataUrl: "x".repeat(MAX_STASH_ENTRY_ATTACHMENT_CHARS),
     };
+
     const alsoSmall = {
       id: "c",
       name: "also-small.png",
@@ -66,6 +68,7 @@ describe("partitionStashAttachments", () => {
       sizeBytes: 10,
       dataUrl: "x".repeat(10),
     };
+
     const { kept, droppedNames } = partitionStashAttachments([small, huge, alsoSmall]);
     expect(kept.map((attachment) => attachment.id)).toEqual(["a", "c"]);
     expect(droppedNames).toEqual(["huge.png"]);
@@ -79,6 +82,7 @@ describe("partitionStashAttachments", () => {
       sizeBytes: MAX_STASH_ENTRY_ATTACHMENT_CHARS,
       dataUrl: "x".repeat(MAX_STASH_ENTRY_ATTACHMENT_CHARS),
     };
+
     const { kept, droppedNames } = partitionStashAttachments([exact]);
     expect(kept).toHaveLength(1);
     expect(droppedNames).toEqual([]);
@@ -104,9 +108,11 @@ describe("promptStashStore", () => {
 
   it("evicts the oldest entry past the cap and returns it", () => {
     const store = usePromptStashStore.getState();
+
     for (let index = 0; index < MAX_STASH_ENTRIES; index += 1) {
       expect(store.stashEntry(makeEntry({ id: `entry-${index}` })).evicted).toBeNull();
     }
+
     const { evicted } = store.stashEntry(makeEntry({ id: "overflow" }));
     expect(evicted?.id).toBe("entry-0");
     const entries = usePromptStashStore.getState().entries;

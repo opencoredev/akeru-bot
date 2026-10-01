@@ -41,6 +41,7 @@ describe("uiStateStore pure functions", () => {
 
   it("marks a completed thread unread using the server completion timestamp", () => {
     const threadId = ThreadId.make("thread-1");
+
     const initialState = makeUiState({
       threadLastVisitedAtById: {
         [threadId]: "2026-02-25T12:35:00.000Z",
@@ -204,6 +205,7 @@ describe("parsePersistedState", () => {
       expandedProjectCwds: ["/repo/a"],
       projectOrderCwds: ["/repo/b", "/repo/a"],
     });
+
     const projectAKey = legacyProjectCwdPreferenceKey("/repo/a");
     const projectBKey = legacyProjectCwdPreferenceKey("/repo/b");
 
@@ -233,6 +235,7 @@ describe("parsePersistedState", () => {
 
 function createLocalStorageStub(): Storage {
   const store = new Map<string, string>();
+
   return {
     clear: () => {
       store.clear();
@@ -287,6 +290,7 @@ describe("uiStateStore persistence", () => {
     const persisted = JSON.parse(
       localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
     ) as PersistedUiState;
+
     expect(persisted).toEqual({
       projectExpandedById: {
         logical: false,
@@ -319,6 +323,7 @@ describe("uiStateStore persistence", () => {
     const persisted = JSON.parse(
       localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
     ) as PersistedUiState;
+
     expect(resolveProjectExpanded(persisted.projectExpandedById ?? {}, ["unknown"])).toBe(true);
   });
 });

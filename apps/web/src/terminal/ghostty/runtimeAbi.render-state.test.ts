@@ -13,8 +13,10 @@ describe("Ghostty ABI render-state", () => {
     const blinking = () => {
       expect(call("ghostty_render_state_update", renderState, terminal)).toBe(0);
       expect(call("ghostty_render_state_get", renderState, 12, scratch)).toBe(0);
+
       return new DataView(memory.buffer, scratch, 4).getUint8(0) !== 0;
     };
+
     const write = (data: string) => {
       const bytes = new TextEncoder().encode(data);
       const pointer = alloc(bytes.length);
@@ -22,6 +24,7 @@ describe("Ghostty ABI render-state", () => {
       call("ghostty_terminal_vt_write", terminal, pointer, bytes.length);
       call("ghostty_wasm_free_u8_array", pointer, bytes.length);
     };
+
     const setDefaultCursorBlink = (blink: boolean) => {
       const value = alloc(1);
       new Uint8Array(memory.buffer, value, 1)[0] = blink ? 1 : 0;
@@ -62,9 +65,11 @@ describe("Ghostty ABI render-state", () => {
   it("reports and scrolls the viewport with Ghostty's scrollbar state", async () => {
     const { memory, call, alloc, createTerminal } = await makeGhosttyAbiFixture();
     const { terminal, dispose } = createTerminal(80, 10, 1_000);
+
     const input = new TextEncoder().encode(
       Array.from({ length: 50 }, (_, index) => `${index + 1}\r\n`).join(""),
     );
+
     const inputPointer = alloc(input.length);
     new Uint8Array(memory.buffer, inputPointer, input.length).set(input);
     call("ghostty_terminal_vt_write", terminal, inputPointer, input.length);

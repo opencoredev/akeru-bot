@@ -12,6 +12,7 @@ export const BUILT_IN_THEME_DEFINITIONS: ReadonlyArray<ThemeDefinition> = BUILT_
 
 export function getThemeDefinition(theme: ThemePreference): ThemeDefinition | null {
   const themeId = themeIdFromPreference(theme);
+
   return (
     BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === themeId) ??
     getCustomThemes().find((definition) => definition.id === themeId) ??
@@ -22,6 +23,7 @@ export function getThemeDefinition(theme: ThemePreference): ThemeDefinition | nu
 /** Artwork palettes are reviewed alongside built-ins; user themes always use the pill fallback. */
 export function themeAllowsSidebarArtwork(theme: ThemePreference): boolean {
   const themeId = themeIdFromPreference(theme);
+
   return (
     BUILT_IN_THEME_DEFINITIONS.find((definition) => definition.id === themeId)?.sidebarArtwork ===
     true
@@ -33,6 +35,7 @@ export function getThemeColorsForMode(
   mode: ThemeAppearance,
 ): ThemeColors | null {
   if (mode === theme.appearance) return theme.colors;
+
   return theme.variants?.[mode] ?? null;
 }
 
@@ -42,9 +45,12 @@ export function getThemeModes(theme: ThemeDefinition): ReadonlyArray<ThemeAppear
 
 export function getThemePreferenceMode(theme: ThemePreference): ThemeAppearance | null {
   if (theme === "system") return null;
+
   if (theme === "light" || theme === "dark") return theme;
   const legacyMode = legacyThemeMode(theme);
+
   if (legacyMode) return legacyMode;
+
   return getThemeDefinition(theme)?.appearance ?? null;
 }
 
@@ -55,5 +61,6 @@ export function themeIdFromName(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
+
   return normalized || "custom-theme";
 }

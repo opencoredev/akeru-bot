@@ -20,6 +20,7 @@ export function makeActivity(overrides: {
   // Fixtures model post-ingestion rows: ingestion stamps agentKind on every
   // task.* payload. Pass an explicit agentKind to model legacy rows.
   const rawPayload = overrides.payload ?? {};
+
   const payload =
     overrides.kind?.startsWith("task.") && !("agentKind" in rawPayload)
       ? {
@@ -30,6 +31,7 @@ export function makeActivity(overrides: {
           }),
         }
       : rawPayload;
+
   return {
     id: EventId.make(overrides.id ?? `activity-${nextActivityId++}`),
     createdAt: overrides.createdAt ?? "2026-02-23T00:00:00.000Z",

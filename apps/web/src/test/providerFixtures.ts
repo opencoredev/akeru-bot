@@ -5,6 +5,7 @@ import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@ak
  * resolution deterministic in composer and bot engine tests.
  */
 export const composerTestInstanceId = ProviderInstanceId.make("codex");
+
 export const composerTestModelName = "Launchbar Model";
 
 export function makeComposerTestProvider(): ServerProvider {

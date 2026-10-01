@@ -83,6 +83,7 @@ export function composerDraftHasUserContent(
   if (!draft) {
     return false;
   }
+
   return (
     draft.prompt.trim().length > 0 ||
     draft.images.length > 0 ||

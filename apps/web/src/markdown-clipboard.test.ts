@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { serializeRenderedMarkdownFragment } from "./markdown-clipboard";
 
 const TEXT_NODE = 3;
+
 const ELEMENT_NODE = 1;
 
 class FakeText {
@@ -34,6 +35,7 @@ class FakeElement {
 
   append(...children: Array<FakeElement | FakeText>): this {
     this.childNodes.push(...children);
+
     return this;
   }
 
@@ -52,6 +54,7 @@ function asNode(element: FakeElement): Node {
 
 function shikiCodeLine(text: string): FakeElement {
   const token = new FakeElement("SPAN").append(new FakeText(text));
+
   return new FakeElement("SPAN", ["line"]).append(token);
 }
 
@@ -70,6 +73,7 @@ describe("serializeRenderedMarkdownFragment", () => {
       new FakeElement("CODE").append(new FakeText("git status")),
       new FakeText(" first"),
     );
+
     const container = new FakeElement("DIV").append(paragraph);
 
     expect(serializeRenderedMarkdownFragment(asNode(container))).toBe("run `git status` first");
@@ -79,6 +83,7 @@ describe("serializeRenderedMarkdownFragment", () => {
     const code = new FakeElement("CODE").append(
       shikiCodeLine("git show-ref --verify refs/remotes/origin/opt/deploy/dev"),
     );
+
     const container = new FakeElement("DIV").append(code);
 
     expect(serializeRenderedMarkdownFragment(asNode(container))).toBe(

@@ -22,6 +22,7 @@ export function terminalContentOriginY(
 ): number {
   if (!anchorBottom) return padding;
   const slack = mountHeight - padding * 2 - rows * cellHeight;
+
   return padding + Math.max(0, slack);
 }
 
@@ -38,13 +39,17 @@ export function terminalScrollbarGeometry(
   const total = Math.max(0, state.total);
   const len = Math.max(0, Math.min(state.len, total));
   const maxOffset = Math.max(0, total - len);
+
   if (trackHeight <= 0 || len <= 0 || maxOffset === 0) return null;
+
   const thumbHeight = Math.min(
     trackHeight,
     Math.max(MIN_SCROLLBAR_THUMB_HEIGHT, (trackHeight * len) / total),
   );
+
   const travel = Math.max(0, trackHeight - thumbHeight);
   const offset = Math.max(0, Math.min(state.offset, maxOffset));
+
   return {
     thumbHeight,
     thumbTop: travel * (offset / maxOffset),
@@ -59,10 +64,13 @@ export function terminalScrollbarOffsetAtPointer(
   pointerOffset: number,
 ): number {
   const geometry = terminalScrollbarGeometry(state, trackHeight);
+
   if (geometry === null) return 0;
   const travel = Math.max(0, trackHeight - geometry.thumbHeight);
+
   if (travel === 0) return 0;
   const thumbTop = Math.max(0, Math.min(pointerY - pointerOffset, travel));
+
   return Math.round((thumbTop / travel) * geometry.maxOffset);
 }
 
@@ -79,9 +87,11 @@ export function terminalGridCellAt(options: {
   const { bounds, clientX, clientY, cols, rows, metrics, padding, originY } = options;
   const gridX = clientX - bounds.left - padding;
   const gridY = clientY - bounds.top - originY;
+
   if (gridX < 0 || gridY < 0 || gridX >= cols * metrics.width || gridY >= rows * metrics.height) {
     return null;
   }
+
   return {
     x: Math.floor(gridX / metrics.width),
     y: Math.floor(gridY / metrics.height),
@@ -90,14 +100,17 @@ export function terminalGridCellAt(options: {
 
 function terminalRowText(row: GhosttySnapshot["rowData"][number], trimRight: boolean): string {
   const text = row.cells.map((cell) => cell.text || " ").join("");
+
   return trimRight ? text.trimEnd() : text;
 }
 
 function terminalColumnOffset(row: GhosttySnapshot["rowData"][number], column: number): number {
   let offset = 0;
+
   for (let cellIndex = 0; cellIndex < column; cellIndex += 1) {
     offset += row.cells[cellIndex]?.text.length || 1;
   }
+
   return offset;
 }
 
@@ -117,8 +130,10 @@ export interface TerminalLinkWithRange {
 function terminalColumnAtOffset(row: GhosttySnapshot["rowData"][number], offset: number): number {
   for (let column = 0; column < row.cells.length; column += 1) {
     const nextOffset = terminalColumnOffset(row, column + 1);
+
     if (offset < nextOffset) return column;
   }
+
   return Math.max(0, row.cells.length - 1);
 }
 
@@ -129,21 +144,27 @@ export function terminalLinkAtPositionWithRange(
 ): TerminalLinkWithRange | null {
   const wrappedLine = collectWrappedTerminalLinkLine(rowIndex + 1, (index) => {
     const row = rows[index];
+
     if (!row) return null;
+
     return {
       isWrapped: row.isWrapContinuation,
       translateToString: (trimRight = false) => terminalRowText(row, trimRight),
     };
   });
+
   if (!wrappedLine) return null;
   // Only viewport rows are available: a wrapped line whose head scrolled above
   // the viewport would resolve a truncated match into a wrong link.
   const firstSegment = wrappedLine.segments[0];
+
   if (firstSegment && rows[firstSegment.bufferLineNumber - 1]?.isWrapContinuation) {
     return null;
   }
+
   const segment = wrappedLine.segments.find((value) => value.bufferLineNumber === rowIndex + 1);
   const row = rows[rowIndex];
+
   if (!segment || !row) return null;
   const lastSegment = wrappedLine.segments.at(-1);
   const lastRow = lastSegment ? rows[lastSegment.bufferLineNumber - 1] : undefined;
@@ -151,19 +172,25 @@ export function terminalLinkAtPositionWithRange(
   // still wraps onward, its continuation is outside the viewport.
   const continuesBelowViewport = lastRow !== undefined && lastRow.wrapsToNext;
   const offset = segment.startIndex + terminalColumnOffset(row, column);
+
   for (const match of extractTerminalLinks(wrappedLine.text)) {
     if (offset >= match.start && offset < match.end) {
       // A truncated tail must not activate as a complete link.
       if (match.end === wrappedLine.text.length && continuesBelowViewport) return null;
+
       const startSegment = wrappedLine.segments.find(
         (value) => match.start >= value.startIndex && match.start < value.endIndex,
       );
+
       const endSegment = wrappedLine.segments.find(
         (value) => match.end - 1 >= value.startIndex && match.end - 1 < value.endIndex,
       );
+
       const startRow = startSegment ? rows[startSegment.bufferLineNumber - 1] : undefined;
       const endRow = endSegment ? rows[endSegment.bufferLineNumber - 1] : undefined;
+
       if (!startSegment || !endSegment || !startRow || !endRow) return null;
+
       return {
         text: match.text,
         range: {
@@ -179,6 +206,7 @@ export function terminalLinkAtPositionWithRange(
       };
     }
   }
+
   return null;
 }
 

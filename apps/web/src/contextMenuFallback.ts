@@ -123,9 +123,11 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
 
 function createIconElement(name: string, tone: "neutral" | "destructive"): SVGSVGElement | null {
   const paths = ICON_PATHS[name];
+
   if (!paths || typeof document.createElementNS !== "function") {
     return null;
   }
+
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("xmlns", SVG_NS);
   svg.setAttribute("viewBox", "0 0 24 24");
@@ -140,26 +142,33 @@ function createIconElement(name: string, tone: "neutral" | "destructive"): SVGSV
       ? "size-4.5 shrink-0 sm:size-4"
       : "size-4.5 shrink-0 text-muted-foreground sm:size-4",
   );
+
   for (const node of paths) {
     const child = document.createElementNS(SVG_NS, node.tag);
+
     for (const [key, value] of Object.entries(node.attrs)) {
       child.setAttribute(key, value);
     }
+
     svg.appendChild(child);
   }
+
   return svg;
 }
 
 function clampMenuPosition(menu: HTMLDivElement, preferredLeft: number, preferredTop: number) {
   const rect = menu.getBoundingClientRect();
+
   const left = Math.min(
     Math.max(4, preferredLeft),
     Math.max(4, window.innerWidth - rect.width - 4),
   );
+
   const top = Math.min(
     Math.max(4, preferredTop),
     Math.max(4, window.innerHeight - rect.height - 4),
   );
+
   menu.style.left = `${left}px`;
   menu.style.top = `${top}px`;
 }
@@ -168,17 +177,21 @@ function isNodeWithinMenuStack(target: EventTarget | null, menuStack: readonly H
   if (typeof Node !== "undefined" && target instanceof Node) {
     return menuStack.some((menu) => menu.contains(target));
   }
+
   if (!target || typeof target !== "object") {
     return false;
   }
 
   let current: unknown = target;
+
   while (current && typeof current === "object") {
     if (menuStack.includes(current as HTMLDivElement)) {
       return true;
     }
+
     current = (current as { parent?: unknown }).parent;
   }
+
   return false;
 }
 
@@ -208,6 +221,7 @@ export function showContextMenuFallback<T extends string>(
   return new Promise<T | null>((resolve) => {
     const previouslyFocusedElement =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
     const menuStack: HTMLDivElement[] = [];
     const submenuTriggerStack: Array<HTMLButtonElement | undefined> = [];
     let isDisposed = false;
@@ -219,20 +233,26 @@ export function showContextMenuFallback<T extends string>(
       if (isDisposed) {
         return;
       }
+
       isDisposed = true;
+
       if (activeContextMenuDismiss === dismiss) {
         activeContextMenuDismiss = null;
       }
+
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("contextmenu", onContextMenu, true);
       const shouldRestoreFocus = isNodeWithinMenuStack(document.activeElement, menuStack);
+
       for (const menu of menuStack) {
         menu.remove();
       }
+
       if (shouldRestoreFocus && previouslyFocusedElement?.isConnected) {
         previouslyFocusedElement.focus({ preventScroll: true });
       }
+
       resolve(result);
     };
 
@@ -247,6 +267,7 @@ export function showContextMenuFallback<T extends string>(
       if (!canDismissFromPointer || isNodeWithinMenuStack(event.target, menuStack)) {
         return;
       }
+
       cleanup(null);
     };
 
@@ -254,6 +275,7 @@ export function showContextMenuFallback<T extends string>(
       if (!canDismissFromPointer || isNodeWithinMenuStack(event.target, menuStack)) {
         return;
       }
+
       event.preventDefault();
       cleanup(null);
     };
@@ -309,6 +331,7 @@ export function showContextMenuFallback<T extends string>(
         }
 
         const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+
         const isLeafDestructive =
           !hasChildren && (item.destructive === true || item.id === ("delete" as T));
 
@@ -316,8 +339,10 @@ export function showContextMenuFallback<T extends string>(
         button.type = "button";
         const isDisabled = item.disabled === true;
         button.disabled = isDisabled;
+
         const rowBase =
           "flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1 text-left outline-none transition-colors sm:min-h-7 sm:text-sm min-h-8 text-base";
+
         button.className = isDisabled
           ? `${rowBase} pointer-events-none cursor-not-allowed text-muted-foreground opacity-64`
           : isLeafDestructive
@@ -325,9 +350,11 @@ export function showContextMenuFallback<T extends string>(
             : `${rowBase} text-foreground hover:bg-accent hover:text-accent-foreground`;
         button.style.cssText =
           "display:flex;width:100%;min-height:1.75rem;align-items:center;gap:0.5rem;border:0;border-radius:var(--radius-sm);background:transparent;padding:0.25rem 0.5rem;color:var(--contrast-foreground);font-family:var(--font-sans,system-ui,sans-serif);font-size:0.875rem;line-height:1.25rem;text-align:left;cursor:default;";
+
         if (isLeafDestructive) {
           button.style.color = "var(--destructive-foreground)";
         }
+
         if (isDisabled) {
           button.style.color = "var(--contrast-muted-foreground)";
           button.style.opacity = "0.64";
@@ -336,6 +363,7 @@ export function showContextMenuFallback<T extends string>(
 
         if (typeof item.icon === "string") {
           const icon = createIconElement(item.icon, isLeafDestructive ? "destructive" : "neutral");
+
           if (icon) {
             button.appendChild(icon);
           }
@@ -350,6 +378,7 @@ export function showContextMenuFallback<T extends string>(
           button.setAttribute("aria-haspopup", "menu");
           button.setAttribute("aria-expanded", "false");
           const chevron = createIconElement("chevron-right", "neutral");
+
           if (chevron) {
             chevron.setAttribute(
               "class",
@@ -364,6 +393,7 @@ export function showContextMenuFallback<T extends string>(
         if (!isDisabled) {
           let isHovered = false;
           let isFocused = false;
+
           const updateHighlight = () => {
             const isHighlighted = isHovered || isFocused;
             button.style.background = isHighlighted
@@ -379,6 +409,7 @@ export function showContextMenuFallback<T extends string>(
                 ? "var(--destructive-foreground)"
                 : "var(--contrast-foreground)";
           };
+
           button.addEventListener("mouseenter", () => {
             button.focus({ preventScroll: true });
             isHovered = true;
@@ -406,19 +437,24 @@ export function showContextMenuFallback<T extends string>(
               button.setAttribute("aria-expanded", "true");
 
               const childMenu = menuStack[level + 1];
+
               if (!childMenu) {
                 return;
               }
+
               const childRect = childMenu.getBoundingClientRect();
+
               if (childRect.right > window.innerWidth) {
                 clampMenuPosition(childMenu, rect.left - childRect.width - 4, rect.top);
               }
+
               if (focusFirstItem) {
                 [...childMenu.querySelectorAll<HTMLButtonElement>("button")]
                   .find((childButton) => !childButton.disabled)
                   ?.focus();
               }
             };
+
             button.addEventListener("mouseenter", () => {
               openSubmenu();
             });
@@ -458,12 +494,14 @@ export function showContextMenuFallback<T extends string>(
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("contextmenu", onContextMenu, true);
     openMenu(items, position?.x ?? 0, position?.y ?? 0, 0);
+
     // Only one fallback menu can be open at a time: a new show must dismiss
     // any prior one, or its DOM and listeners leak and close() can only ever
     // reach the newest menu.
     if (activeContextMenuDismiss) {
       activeContextMenuDismiss();
     }
+
     activeContextMenuDismiss = dismiss;
 
     requestAnimationFrame(() => {

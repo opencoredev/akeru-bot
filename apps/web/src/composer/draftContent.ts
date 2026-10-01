@@ -18,11 +18,14 @@ export function normalizeTerminalContextForThread(
 ): TerminalContextDraft | null {
   const terminalId = context.terminalId.trim();
   const terminalLabel = context.terminalLabel.trim();
+
   if (terminalId.length === 0 || terminalLabel.length === 0) {
     return null;
   }
+
   const lineStart = Math.max(1, Math.floor(context.lineStart));
   const lineEnd = Math.max(lineStart, Math.floor(context.lineEnd));
+
   return {
     ...context,
     threadId,
@@ -44,13 +47,17 @@ export function normalizeTerminalContextsForThread(
 
   for (const context of contexts) {
     const normalizedContext = normalizeTerminalContextForThread(threadId, context);
+
     if (!normalizedContext) {
       continue;
     }
+
     const dedupKey = terminalContextDedupKey(normalizedContext);
+
     if (existingIds.has(normalizedContext.id) || existingDedupKeys.has(dedupKey)) {
       continue;
     }
+
     normalizedContexts.push(normalizedContext);
     existingIds.add(normalizedContext.id);
     existingDedupKeys.add(dedupKey);
@@ -78,9 +85,11 @@ export function revokeObjectPreviewUrl(previewUrl: string): void {
   if (typeof URL === "undefined") {
     return;
   }
+
   if (!previewUrl.startsWith("blob:")) {
     return;
   }
+
   URL.revokeObjectURL(previewUrl);
 }
 
@@ -88,6 +97,7 @@ export function revokeDraftThreadPreviewUrls(draft: ComposerThreadDraftState | u
   if (!draft) {
     return;
   }
+
   for (const image of draft.images) {
     revokeObjectPreviewUrl(image.previewUrl);
   }

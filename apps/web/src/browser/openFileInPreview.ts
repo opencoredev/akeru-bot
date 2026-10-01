@@ -42,6 +42,7 @@ export async function openUrlInPreview<E>(input: {
     environmentId: input.threadRef.environmentId,
     input: { threadId: input.threadRef.threadId, url: input.url },
   });
+
   return mapAtomCommandResult(result, (snapshot) => {
     applyPreviewServerSnapshot(input.threadRef, snapshot);
     rememberPreviewUrl(input.threadRef, input.url);
@@ -68,6 +69,7 @@ export async function openFileInPreview<AssetError, PreviewError>(input: {
       ),
     );
   }
+
   const assetResult = await input.createAssetUrl({
     environmentId: input.threadRef.environmentId,
     input: {
@@ -78,15 +80,19 @@ export async function openFileInPreview<AssetError, PreviewError>(input: {
       },
     },
   });
+
   if (assetResult._tag === "Failure") {
     return AsyncResult.failure(assetResult.cause);
   }
+
   const assetUrl = resolveAssetUrl(input.httpBaseUrl, assetResult.value.relativeUrl);
+
   if (assetUrl === null) {
     return AsyncResult.failure(
       Cause.die(new Error("The environment returned an invalid asset URL.")),
     );
   }
+
   return openUrlInPreview({
     threadRef: input.threadRef,
     url: assetUrl,

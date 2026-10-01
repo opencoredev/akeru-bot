@@ -12,6 +12,7 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { previewBridge } from "~/components/preview/previewBridge";
 
 const PREVIEW_CONFIG_STALE_TIME_MS = 5 * 60_000;
+
 const PREVIEW_CONFIG_IDLE_TTL_MS = 10 * 60_000;
 
 export class PreviewWebviewBridgeUnavailableError extends Schema.TaggedErrorClass<PreviewWebviewBridgeUnavailableError>()(
@@ -39,6 +40,7 @@ export const PreviewWebviewConfigError = Schema.Union([
   PreviewWebviewBridgeUnavailableError,
   PreviewWebviewConfigLoadError,
 ]);
+
 export type PreviewWebviewConfigError = typeof PreviewWebviewConfigError.Type;
 
 type PreviewConfigBridge = Pick<DesktopPreviewBridge, "getPreviewConfig">;
@@ -72,5 +74,6 @@ export function usePreviewWebviewConfig(
   environmentId: EnvironmentId,
 ): DesktopPreviewWebviewConfig | null {
   const result = useAtomValue(previewWebviewConfigAtom(environmentId));
+
   return Option.getOrNull(AsyncResult.value(result));
 }

@@ -38,12 +38,15 @@ export function toSelections(
   options: Record<string, string | boolean | undefined> | undefined,
 ): ReadonlyArray<ProviderOptionSelection> {
   const result: Array<ProviderOptionSelection> = [];
+
   if (!options) return result;
+
   for (const [id, value] of Object.entries(options)) {
     if (typeof value === "string" || typeof value === "boolean") {
       result.push({ id, value });
     }
   }
+
   return result;
 }
 
@@ -51,11 +54,13 @@ function selectionsByProvider(
   options: Partial<Record<ProviderDriverKind, Record<string, string | boolean | undefined>>>,
 ): ProviderOptionSelectionsByProvider {
   const result: ProviderOptionSelectionsByProvider = {};
+
   for (const [provider, bag] of Object.entries(options) as Array<
     [ProviderDriverKind, Record<string, string | boolean | undefined>]
   >) {
     result[provider] = toSelections(bag);
   }
+
   return result;
 }
 
@@ -71,10 +76,12 @@ export function makeImage(input: {
   const mimeType = input.mimeType ?? "image/png";
   const sizeBytes = input.sizeBytes ?? 4;
   const lastModified = input.lastModified ?? 1_700_000_000_000;
+
   const file = new File([new Uint8Array(sizeBytes).fill(1)], name, {
     type: mimeType,
     lastModified,
   });
+
   return {
     type: "image",
     id: input.id,
@@ -143,6 +150,7 @@ export function threadKeyFor(
   if (environmentId === LEGACY_TEST_ENVIRONMENT_ID) {
     return threadId;
   }
+
   return scopedThreadKey(scopeThreadRef(environmentId, threadId));
 }
 
@@ -151,6 +159,7 @@ export function draftFor(
   environmentId: EnvironmentId = LEGACY_TEST_ENVIRONMENT_ID,
 ) {
   const store = useComposerDraftStore.getState().draftsByThreadKey;
+
   return store[threadKeyFor(threadId, environmentId)] ?? store[threadId] ?? undefined;
 }
 
@@ -164,6 +173,7 @@ export function draftByKey(key: string) {
 
 export function createMockStorage() {
   const store = new Map<string, string>();
+
   return {
     getItem: vi.fn((name: string) => store.get(name) ?? null),
     setItem: vi.fn((name: string, value: string) => {

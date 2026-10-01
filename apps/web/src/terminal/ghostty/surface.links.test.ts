@@ -16,6 +16,7 @@ describe("terminalLinkAtColumn", () => {
       cell(""),
       ...Array.from("https://t3.codes", (character) => cell(character)),
     ];
+
     const row: GhosttyRow = {
       cells,
       text: cells
@@ -42,6 +43,7 @@ describe("terminalLinkAtColumn", () => {
       isWrapContinuation,
       wrapsToNext,
     });
+
     const rows = [
       row("https://example.", false),
       row("com/reference", true),
@@ -69,6 +71,7 @@ describe("terminalLinkAtColumn", () => {
       isWrapContinuation,
       wrapsToNext,
     });
+
     // The head of the wrapped line scrolled above the viewport.
     const headCut = [row("ple.com/missing", true), row("head", true)];
     expect(terminalLinkAtPosition(headCut, 0, 4)).toBeNull();
@@ -78,6 +81,7 @@ describe("terminalLinkAtColumn", () => {
     // A partial bottom row is provably complete and still resolves.
     const complete = [row("https://t3.codes", false), row("", false)];
     expect(terminalLinkAtPosition(complete, 0, 8)).toBe("https://t3.codes");
+
     // A wide grapheme earlier in the row must not break truncation detection:
     // the soft-wrap flag decides, not string-length-versus-cell-count.
     const wideFull: GhosttyRow = {
@@ -90,7 +94,9 @@ describe("terminalLinkAtColumn", () => {
       isWrapContinuation: false,
       wrapsToNext: true,
     };
+
     expect(terminalLinkAtPosition([wideFull], 0, 8)).toBeNull();
+
     // Unwritten trailing cells prove the bottom row is complete.
     const unwrittenTail: GhosttyRow = {
       cells: [
@@ -102,6 +108,7 @@ describe("terminalLinkAtColumn", () => {
       isWrapContinuation: false,
       wrapsToNext: false,
     };
+
     expect(terminalLinkAtPosition([unwrittenTail], 0, 8)).toBe("https://t3.codes");
   });
 });
@@ -126,11 +133,13 @@ describe("advanceTerminalSelectionClickSequence", () => {
       clientY: 30,
       timeStamp: 1_000,
     });
+
     const second = advanceTerminalSelectionClickSequence(first, {
       clientX: 22,
       clientY: 29,
       timeStamp: 1_200,
     });
+
     const third = advanceTerminalSelectionClickSequence(second, {
       clientX: 21,
       clientY: 31,

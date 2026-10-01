@@ -18,13 +18,16 @@ import {
 } from "./themePalette";
 
 const THEME_STORAGE_KEY = "akeru:theme";
+
 // A custom theme that omits chrome falls back to the runtime default, so the
 // boot copy of that default stays derived from the real palette.
 const DEFAULT_DARK_CHROME = getDefaultThemeColors("dark").chrome;
 
 const bootScript = (() => {
   const match = indexHtml.match(/<script>([\s\S]*?)<\/script>/);
+
   if (!match?.[1]) throw new Error("Could not find the inline boot script in index.html");
+
   return match[1];
 })();
 
@@ -44,12 +47,14 @@ function runBootScript(options: {
 }): BootResult {
   const classes = new Set<string>();
   const bootVariables: Record<string, string> = {};
+
   const meta = {
     content: null as string | null,
     setAttribute(_name: string, value: string) {
       this.content = value;
     },
   };
+
   const documentElement = {
     dataset: {} as Record<string, string | undefined>,
     classList: {
@@ -57,8 +62,10 @@ function runBootScript(options: {
       remove: (name: string) => void classes.delete(name),
       toggle: (name: string, force?: boolean) => {
         const next = force ?? !classes.has(name);
+
         if (next) classes.add(name);
         else classes.delete(name);
+
         return next;
       },
     },
@@ -69,14 +76,17 @@ function runBootScript(options: {
       },
     },
   };
+
   const fakeDocument = {
     documentElement,
     querySelectorAll: (selector: string) => (selector === 'meta[name="theme-color"]' ? [meta] : []),
   };
+
   const fakeWindow = {
     localStorage: {
       getItem: (key: string): string | null => {
         if (options.storageThrows) throw new Error("storage blocked");
+
         return options.storage?.[key] ?? null;
       },
     },
@@ -110,11 +120,13 @@ function runtimeResolvedAppearance(
     matchMedia: () => ({ matches: prefersDark }),
   });
   invalidateCustomThemes();
+
   try {
     const raw = storage[THEME_STORAGE_KEY] ?? null;
     const theme = raw !== null && isKnownThemePreference(raw) ? raw : "system";
     const followRaw = storage[THEME_FOLLOW_SYSTEM_STORAGE_KEY] ?? null;
     const appearanceRaw = storage[THEME_APPEARANCE_MODE_STORAGE_KEY] ?? null;
+
     const appearanceMode =
       appearanceRaw === "light" || appearanceRaw === "dark" || appearanceRaw === "system"
         ? appearanceRaw
@@ -125,7 +137,9 @@ function runtimeResolvedAppearance(
             : theme === "system"
               ? "system"
               : null;
+
     const followSystem = appearanceMode === "system";
+
     return resolveThemeAppearance(theme, prefersDark, followSystem, appearanceMode ?? undefined);
   } finally {
     vi.unstubAllGlobals();
@@ -140,6 +154,7 @@ const AURORA_DUAL = {
   colors: { canvas: "#f8fbff", text: "#10243d", accent: "#5b6cff" },
   variants: { dark: { canvas: "#101827", text: "#eef5ff", accent: "#7c93ff" } },
 };
+
 const CHARCOAL_DARK_ONLY = {
   id: "charcoal",
   label: "Charcoal",
@@ -294,6 +309,7 @@ describe("index.html boot script", () => {
       storage: { [THEME_STORAGE_KEY]: "akeru-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
       prefersDark: true,
     });
+
     expect(chat.themeId).toBe("akeru-chat");
     expect(chat.themeSelected).toBe("true");
     expect(chat.isDark).toBe(true);
@@ -303,6 +319,7 @@ describe("index.html boot script", () => {
       storage: { [THEME_STORAGE_KEY]: "t3-chat", [THEME_FOLLOW_SYSTEM_STORAGE_KEY]: "true" },
       prefersDark: true,
     });
+
     expect(legacyChat.themeId).toBe("akeru-chat");
     expect(legacyChat.themeSelected).toBe("true");
 
@@ -314,6 +331,7 @@ describe("index.html boot script", () => {
       },
       prefersDark: true,
     });
+
     expect(aurora.themeId).toBe("aurora");
     expect(aurora.isDark).toBe(true);
     expect(aurora.backgroundColor).toBe(DEFAULT_DARK_CHROME);
@@ -328,6 +346,7 @@ describe("index.html boot script", () => {
       text: "oklch(2e-1 0 0 / 9e-1)",
       accent: "oklch(6.2e-1 0.2 2.8e2)",
     };
+
     const boot = runBootScript({
       storage: {
         [THEME_STORAGE_KEY]: "scientific",
@@ -357,6 +376,7 @@ describe("index.html boot script", () => {
       text: "rebeccapurple",
       accent: "color(display-p3 0.36 0.42 1)",
     };
+
     const boot = runBootScript({
       storage: {
         [THEME_STORAGE_KEY]: "legacy-css",
@@ -385,9 +405,11 @@ describe("index.html boot script", () => {
     for (const theme of BUILT_IN_THEMES) {
       // The boot script resolves every built-in from a light base appearance.
       expect(theme.appearance).toBe("light");
+
       for (const mode of ["light", "dark"] as const) {
         const colors = getThemeColorsForMode(theme, mode);
         expect(colors).not.toBeNull();
+
         const boot = runBootScript({
           storage: {
             [THEME_STORAGE_KEY]: theme.id,
@@ -395,6 +417,7 @@ describe("index.html boot script", () => {
           },
           prefersDark: mode === "dark",
         });
+
         expect(boot.themeId).toBe(theme.id);
         expect(boot.isDark).toBe(mode === "dark");
         expect(boot.bootVariables["--boot-background"]).toBe(colors!.canvas);
@@ -445,6 +468,7 @@ describe("index.html boot script", () => {
       },
       prefersDark: true,
     });
+
     expect(boot.isDark).toBe(true);
     expect(boot.themeId).toBe(GROVE_THEME.id);
   });
@@ -458,6 +482,7 @@ describe("index.html boot script", () => {
       },
       prefersDark: true,
     });
+
     expect(boot.isDark).toBe(true);
     expect(boot.themeId).toBe(GROVE_THEME.id);
     expect(boot.themeSelected).toBe("true");
@@ -475,6 +500,7 @@ describe("index.html boot script", () => {
       },
       prefersDark: true,
     });
+
     expect(boot.isDark).toBe(true);
     expect(boot.themeId).toBe(GROVE_THEME.id);
     expect(boot.bootVariables["--boot-background"]).toBe(
@@ -491,6 +517,7 @@ describe("index.html boot script", () => {
       },
       prefersDark: true,
     });
+
     expect(boot.themeId).toBe("akeru-chat");
     expect(boot.isDark).toBe(true);
   });
@@ -542,6 +569,7 @@ describe("index.html boot script", () => {
       storage: { [THEME_STORAGE_KEY]: "gone-theme" },
       prefersDark: true,
     });
+
     expect(boot.themeId).toBeUndefined();
     expect(boot.themeSelected).toBeUndefined();
     expect(boot.isDark).toBe(true);

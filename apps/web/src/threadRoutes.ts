@@ -30,12 +30,15 @@ export function resolveThreadRouteRenderState(input: {
   if (!input.bootstrapComplete) {
     return "loading";
   }
+
   if (input.serverThreadDetailExists || input.draftThreadExists) {
     return "ready";
   }
+
   if (input.serverThreadDetailDeleted) {
     return "missing";
   }
+
   return input.serverThreadShellExists ? "loading" : "missing";
 }
 
@@ -96,8 +99,10 @@ export function resolveActiveThreadRouteRef(
   if (target?.kind === "server") {
     return target.threadRef;
   }
+
   if (target?.kind !== "draft" || !draftThread?.promotedTo) {
     return null;
   }
+
   return draftThread.promotedTo;
 }

@@ -35,6 +35,7 @@ describe("Pierre file icons", () => {
 
   it("ships every custom icon referenced by the extended resolver", () => {
     const customIconNames = new Set(Object.values(T3_PIERRE_ICONS.byFileName));
+
     for (const iconName of customIconNames) {
       assert.include(T3_PIERRE_ICONS.spriteSheet, `id="${iconName}"`);
     }

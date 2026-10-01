@@ -8,6 +8,7 @@ import {
 } from "./modelOrdering";
 
 const CODEX_WORK_ID = ProviderInstanceId.make("codex_work");
+
 const CLAUDE_ID = ProviderInstanceId.make("claudeAgent");
 
 describe("model ordering", () => {
@@ -35,6 +36,7 @@ describe("model ordering", () => {
       { instanceId: CODEX_WORK_ID, slug: "crest-alpha" },
       { instanceId: CLAUDE_ID, slug: "claude-opus-4-6" },
     ];
+
     const favoriteKeys = [
       providerModelKey(CODEX_WORK_ID, "gpt-5.5"),
       providerModelKey(CLAUDE_ID, "claude-opus-4-6"),

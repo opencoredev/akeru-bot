@@ -64,6 +64,7 @@ describe("theme files", () => {
       ...T3_CHAT_THEME,
       colors: { ...T3_CHAT_THEME.colors, accent: "hsl(263 70% 58%)" },
     });
+
     expect(JSON.parse(serialized)).toMatchObject({
       version: THEME_FILE_VERSION,
       id: T3_CHAT_THEME.id,
@@ -84,6 +85,7 @@ describe("theme files", () => {
       }),
       collection: { id: "open-vsx:demo.theme", label: "Demo Theme" },
     };
+
     const serialized = serializeThemeFile(theme);
     expect(JSON.parse(serialized)).toMatchObject({
       version: THEME_FILE_VERSION,

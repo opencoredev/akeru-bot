@@ -169,6 +169,7 @@ describe("providerInstanceUnavailableReason", () => {
         models: [model("gpt-5.5")],
       }),
     ]);
+
     expect(providerInstanceUnavailableReason(entry, { model: "gpt-5.5" })).toBeNull();
     expect(providerInstanceUnavailableReason(entry, { model: "retired-model" })).toMatch(
       /retired-model is not available on/,
