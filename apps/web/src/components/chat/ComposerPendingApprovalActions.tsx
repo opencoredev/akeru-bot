@@ -24,6 +24,7 @@ interface ComposerPendingApprovalActionsProps {
 }
 
 const APPROVAL_ACTION_CLASS_NAME = "font-medium";
+
 type Translate = ReturnType<typeof useI18n>["t"];
 
 function defaultApprovalOptions(t: Translate): ReadonlyArray<ProviderApprovalOption> {
@@ -41,6 +42,7 @@ function routineApprovalOptions(t: Translate): ReadonlyArray<ProviderApprovalOpt
     { decision: "decline", label: t("Don't create") },
   ];
 }
+
 const APPROVAL_ACCEPT_CLASS_NAME =
   " bg-foreground text-background [:active,[data-pressed]]:bg-foreground/80 [:hover,[data-pressed]]:bg-foreground/90";
 
@@ -50,9 +52,11 @@ function commandApprovalOptions(
 ): ReadonlyArray<ProviderApprovalOption> {
   const autoReview = options.find((option) => option.decision === "acceptAlways");
   const session = options.find((option) => option.decision === "acceptForSession");
+
   const once =
     options.find((option) => option.decision === "accept") ??
     ({ decision: "accept", label: t("Allow once") } as const);
+
   const never =
     options.find((option) => option.decision === "decline") ??
     options.find((option) => option.decision === "cancel") ??
@@ -80,6 +84,7 @@ export const ComposerPendingApprovalActions = memo(function ComposerPendingAppro
   const { t } = useI18n();
   const options = providedOptions ?? defaultApprovalOptions(t);
   const isRoutine = toolName === AKERU_CREATE_ROUTINE_TOOL_NAME;
+
   const visibleOptions = isRoutine
     ? routineApprovalOptions(t)
     : toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME
@@ -92,6 +97,7 @@ export const ComposerPendingApprovalActions = memo(function ComposerPendingAppro
     <>
       {visibleOptions.map((option) => {
         const isAutoReview = requestKind === "command" && option.decision === "acceptAlways";
+
         return (
           <Button
             key={option.decision}

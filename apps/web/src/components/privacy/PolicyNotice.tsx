@@ -45,6 +45,7 @@ export function PolicyNotice() {
   const hydrated = useClientSettingsHydrated();
   const settings = useClientSettings();
   const updateSettings = useUpdateClientSettings();
+
   const open = shouldShowPolicyNotice({
     hydrated,
     isDesktop: isElectron,

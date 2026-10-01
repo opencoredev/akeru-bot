@@ -39,12 +39,15 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
   const { provider, model, models, modelOptions, promptInjectionState = "none" } = input;
   const caps = getProviderModelCapabilities(models, model, provider);
   const descriptors = getProviderOptionDescriptors({ caps, selections: modelOptions });
+
   const primarySelectDescriptor = descriptors.find(
     (descriptor): descriptor is Extract<(typeof descriptors)[number], { type: "select" }> =>
       descriptor.type === "select",
   );
+
   const primaryValue = getProviderOptionCurrentValue(primarySelectDescriptor ?? null);
   const promptEffort = typeof primaryValue === "string" ? primaryValue : null;
+
   const ultrathinkActive =
     (primarySelectDescriptor?.promptInjectedValues?.length ?? 0) > 0 &&
     promptInjectionState === "ultrathink";

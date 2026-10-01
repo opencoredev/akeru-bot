@@ -59,6 +59,7 @@ describe("ComposerPendingUserInputPanel", () => {
       ...prompt,
       questions: [{ ...prompt.questions[0]!, multiSelect: true }],
     };
+
     const markup = renderToStaticMarkup(
       <ComposerPendingUserInputPanel
         pendingUserInputs={[multiSelectPrompt]}

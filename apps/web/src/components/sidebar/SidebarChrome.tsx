@@ -68,10 +68,12 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   const { t } = useI18n();
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
+
   const backdropVariant = resolveSidebarStageBackdropVariant(
     stageLabel,
     environmentIdentificationMode === "artwork",
   );
+
   const pillLabel =
     environmentIdentificationMode === "pill"
       ? resolveEnvironmentIdentificationPillLabel(stageLabel)
@@ -125,6 +127,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 });
 
 const PLUGIN_CATALOG = loadCatalog();
+
 const COMPUTER_USE_SERVER_ID = "builtin-computer-use";
 
 export interface ActiveComputerUseControl {
@@ -140,7 +143,9 @@ export function findActiveComputerUseControl(input: {
   const server = input.mcpServers.find(
     (candidate) => candidate.id === COMPUTER_USE_SERVER_ID && candidate.enabled,
   );
+
   if (!server) return null;
+
   for (const thread of input.threads) {
     if (
       !thread.session ||
@@ -150,11 +155,15 @@ export function findActiveComputerUseControl(input: {
     ) {
       continue;
     }
+
     const botId = thread.respondingBotId ?? thread.botId;
     const bot = input.bots.find((candidate) => candidate.id === botId);
+
     if (!bot || bot.disabledMcpServerIds.includes(server.id)) continue;
+
     return { threadId: thread.id, botName: bot.name };
   }
+
   return null;
 }
 
@@ -168,11 +177,13 @@ export function formatEnabledPluginStatus(
   plural: Pluralize = englishTranslator.plural,
 ): string {
   if (enabledCount === 0) return t("No plugins enabled");
+
   return plural(enabledCount, { one: "{count} plugin enabled", other: "{count} plugins enabled" });
 }
 
 export function formatEnabledPluginBadge(enabledCount: number): string | null {
   if (enabledCount === 0) return null;
+
   return enabledCount > 99 ? "99+" : String(enabledCount);
 }
 
@@ -181,9 +192,11 @@ export function summarizeEnabledPlugins(
   catalog: readonly PluginDefinition[] = PLUGIN_CATALOG,
 ): { readonly enabledPlugins: readonly PluginDefinition[]; readonly enabledCount: number } {
   const enabledIds = new Set<string>(
-    servers.filter((server) => server.enabled).map((server) => server.id),
+    servers.flatMap((server) => (server.enabled ? [server.id] : [])),
   );
+
   const installations = resolveCatalogInstallations(servers, catalog);
+
   const enabledPluginIds = new Set(
     installations.flatMap((installation) =>
       installation.kind === "catalog" && enabledIds.has(installation.serverId)
@@ -191,6 +204,7 @@ export function summarizeEnabledPlugins(
         : [],
     ),
   );
+
   return {
     enabledPlugins: catalog.filter((plugin) => enabledPluginIds.has(plugin.id)),
     enabledCount:
@@ -268,6 +282,7 @@ function SidebarPluginButton({
 function SidebarPluginSummary({ onClick }: { readonly onClick: () => void }) {
   const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
+
   if (!environmentId) {
     return (
       <SidebarPluginButton
@@ -277,6 +292,7 @@ function SidebarPluginSummary({ onClick }: { readonly onClick: () => void }) {
       />
     );
   }
+
   return <SidebarPluginSummaryForEnvironment environmentId={environmentId} onClick={onClick} />;
 }
 
@@ -290,6 +306,7 @@ function ComputerUseControlForEnvironment({
   const stopSession = useAtomCommand(threadEnvironment.stopSession);
   const disableServer = useAtomCommand(mcpServerEnvironment.disable);
   const [pending, setPending] = useState(false);
+
   const control = snapshot
     ? findActiveComputerUseControl({
         threads: snapshot.threads,
@@ -297,23 +314,28 @@ function ComputerUseControlForEnvironment({
         mcpServers: snapshot.mcpServers ?? [],
       })
     : null;
+
   if (!control) return null;
 
   const stop = async () => {
     setPending(true);
+
     try {
       await stopSession({ environmentId, input: { threadId: control.threadId } });
     } finally {
       setPending(false);
     }
   };
+
   const revoke = async () => {
     setPending(true);
+
     try {
       const stopped = await stopSession({
         environmentId,
         input: { threadId: control.threadId },
       });
+
       if (stopped._tag === "Success") {
         await disableServer({
           environmentId,
@@ -326,9 +348,9 @@ function ComputerUseControlForEnvironment({
   };
 
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5" role="status">
+    <div className="rounded-xl border border-warning/30 bg-warning-surface p-2.5" role="status">
       <div className="flex items-center gap-2 text-xs font-medium">
-        <span className="size-2 rounded-full bg-amber-500" aria-hidden="true" />
+        <span className="size-2 rounded-full bg-warning" aria-hidden="true" />
         <span className="min-w-0 truncate">
           {t("{name} controls this Mac", { name: control.botName })}
         </span>
@@ -355,6 +377,7 @@ function ComputerUseControlForEnvironment({
 
 function ComputerUseControl() {
   const environmentId = usePrimaryEnvironmentId();
+
   return environmentId ? <ComputerUseControlForEnvironment environmentId={environmentId} /> : null;
 }
 
@@ -410,21 +433,26 @@ export function SidebarUtilityItem({
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   const { t } = useI18n();
   const { isMobile, setOpenMobile } = useSidebar();
+
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) setOpenMobile(false);
   }, [isMobile, setOpenMobile]);
+
   const handlePluginsClick = useCallback(() => {
     closeMobileSidebar();
     openPlugins();
   }, [closeMobileSidebar]);
+
   const handleSettingsClick = useCallback(() => {
     closeMobileSidebar();
     openSettings();
   }, [closeMobileSidebar]);
+
   const handleUsageClick = useCallback(() => {
     closeMobileSidebar();
     openUsage();
   }, [closeMobileSidebar]);
+
   const handleFeedbackClick = useCallback(() => {
     closeMobileSidebar();
     openProductFeedback();

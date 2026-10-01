@@ -6,6 +6,7 @@ const HEIGHT_TRANSITION_FALLBACK_MS = 250;
 
 export function AnimatedHeight({ children }: { readonly children: ReactNode }) {
   const contentRef = useRef<HTMLDivElement>(null);
+
   const [heightState, setHeightState] = useState<{
     readonly height: number | null;
     readonly isClipping: boolean;
@@ -13,16 +14,19 @@ export function AnimatedHeight({ children }: { readonly children: ReactNode }) {
 
   useEffect(() => {
     if (!heightState.isClipping) return;
+
     const timeoutId = window.setTimeout(() => {
       setHeightState((currentState) =>
         currentState.isClipping ? { ...currentState, isClipping: false } : currentState,
       );
     }, HEIGHT_TRANSITION_FALLBACK_MS);
+
     return () => window.clearTimeout(timeoutId);
   }, [heightState.height, heightState.isClipping]);
 
   useLayoutEffect(() => {
     const element = contentRef.current;
+
     if (!element) return;
     let firstFrameId: number | null = null;
     let secondFrameId: number | null = null;
@@ -31,22 +35,26 @@ export function AnimatedHeight({ children }: { readonly children: ReactNode }) {
       const nextHeight = Math.ceil(element.scrollHeight || element.getBoundingClientRect().height);
       setHeightState((currentState) => {
         if (currentState.height === nextHeight) return currentState;
+
         return {
           height: nextHeight,
           isClipping: currentState.height !== null,
         };
       });
     };
+
     const cancelPendingFrames = () => {
       if (firstFrameId !== null) {
         window.cancelAnimationFrame(firstFrameId);
         firstFrameId = null;
       }
+
       if (secondFrameId !== null) {
         window.cancelAnimationFrame(secondFrameId);
         secondFrameId = null;
       }
     };
+
     const updateHeightAfterPaint = () => {
       cancelPendingFrames();
       updateHeight();
@@ -63,6 +71,7 @@ export function AnimatedHeight({ children }: { readonly children: ReactNode }) {
     updateHeightAfterPaint();
     const resizeObserver = new ResizeObserver(updateHeightAfterPaint);
     resizeObserver.observe(element);
+
     return () => {
       resizeObserver.disconnect();
       cancelPendingFrames();

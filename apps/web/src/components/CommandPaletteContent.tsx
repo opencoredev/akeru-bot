@@ -35,6 +35,7 @@ export function CommandPaletteContent({
   ...commandProps
 }: CommandPaletteContentProps) {
   const { t } = useI18n();
+
   return (
     <div className="contents" data-testid={testId}>
       <Command {...commandProps}>

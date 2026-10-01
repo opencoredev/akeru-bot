@@ -12,11 +12,14 @@ const effects = vi.hoisted(() => ({
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
+
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useRef: reactHookHarness.useRef,
@@ -24,18 +27,22 @@ vi.mock("react", async (importOriginal) => {
     useEffect: (effect: () => void | (() => void), deps: readonly unknown[]) => {
       const index = effects.cursor++;
       const previous = effects.slots[index];
+
       if (previous && deps.every((dep, i) => Object.is(dep, previous.deps[i]))) return;
       previous?.cleanup?.();
       effects.slots[index] = { deps, cleanup: effect() };
     },
   };
 });
+
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
 
 const callbacks = () => ({ onStart: vi.fn(), onRelease: vi.fn(), onCancel: vi.fn() });
+
 function render(props: DictationControlsProps) {
   hooks.beginRender();
   effects.cursor = 0;
@@ -43,12 +50,14 @@ function render(props: DictationControlsProps) {
   const button = visitElements(tree, (element) => element.type === "button")!;
   const cancel = visitElements(tree, (element) => element.props.children === "Cancel dictation");
   const status = visitElements(tree, (element) => element.props.role === "status")!;
+
   return {
     button: button.props as ComponentProps<"button">,
     cancel: cancel?.props as ComponentProps<"button"> | undefined,
     status: status.props,
   };
 }
+
 const pointerEvent = (pointerId = 1) =>
   ({
     pointerId,
@@ -57,6 +66,7 @@ const pointerEvent = (pointerId = 1) =>
     preventDefault: vi.fn(),
     currentTarget: { setPointerCapture: vi.fn() },
   }) as unknown as PointerEvent<HTMLButtonElement>;
+
 const click = (detail: number) => ({ detail }) as MouseEvent<HTMLButtonElement>;
 
 beforeEach(() => {
@@ -171,11 +181,13 @@ describe("DictationControls", () => {
 
   it("explains unavailability and blocks new starts", () => {
     const handlers = callbacks();
+
     const view = render({
       status: "idle",
       unavailableReason: "Microphone unavailable",
       ...handlers,
     });
+
     view.button.onPointerDown!(pointerEvent());
     view.button.onClick!(click(0));
     expect(handlers.onStart).not.toHaveBeenCalled();
@@ -203,10 +215,12 @@ describe("DictationControls", () => {
     hooks.beginRender();
     effects.cursor = 0;
     const tree = DictationControls({ status: "recording", appearance: "send-slot", ...handlers });
+
     const cancel = visitElements(
       tree,
       (element) => element.type === "button" && element.props["aria-label"] === "Cancel dictation",
     )!;
+
     (cancel.props as ComponentProps<"button">).onClick!(click(1));
     expect(handlers.onCancel).toHaveBeenCalledTimes(1);
     expect(handlers.onRelease).not.toHaveBeenCalled();
@@ -217,16 +231,20 @@ describe("DictationControls", () => {
     hooks.beginRender();
     effects.cursor = 0;
     const tree = DictationControls({ status: "failed", appearance: "send-slot", ...handlers });
+
     const retry = visitElements(tree, (element) => element.type === "button")!
       .props as ComponentProps<"button">;
+
     expect(retry["aria-label"]).toBe("Retry dictation");
     retry.onClick!(click(0));
     expect(handlers.onStart).toHaveBeenCalledTimes(1);
+
     const dismiss = visitElements(
       tree,
       (element) =>
         element.type === "button" && element.props["aria-label"] === "Dismiss dictation error",
     )!;
+
     (dismiss.props as ComponentProps<"button">).onClick!(click(1));
     expect(handlers.onCancel).toHaveBeenCalledTimes(1);
   });
@@ -234,6 +252,7 @@ describe("DictationControls", () => {
   it("lets a blocked send-slot mic explain itself instead of starting", () => {
     const handlers = callbacks();
     const onBlockedPress = vi.fn();
+
     const view = render({
       status: "idle",
       appearance: "send-slot",
@@ -241,6 +260,7 @@ describe("DictationControls", () => {
       onBlockedPress,
       ...handlers,
     });
+
     expect(view.button.disabled).toBe(false);
     expect(view.button["aria-disabled"]).toBe(true);
     view.button.onPointerDown!(pointerEvent());

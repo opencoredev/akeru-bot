@@ -36,6 +36,7 @@ export function previewAutomationDefaultViewport(
   snapshot: PreviewSessionSnapshot,
 ): PreviewViewportSetting | null {
   const viewport = snapshot.viewport ?? FILL_PREVIEW_VIEWPORT;
+
   return !reusedExistingTab && viewport._tag === "fill"
     ? DEFAULT_PREVIEW_AUTOMATION_VIEWPORT
     : null;

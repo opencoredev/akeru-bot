@@ -41,6 +41,7 @@ describe.each(DRIVER_KINDS)("buildComposerProviderMenuItems for %s", (kind) => {
       catalog,
       showSkillsInSlashMenu: true,
     });
+
     expect(items.map((item) => item.id)).toEqual([`skill:${kind}:deploy`]);
     expect(items[0]?.provider).toBe(kind);
     expect(items[0] && composerProviderMenuItemText(items[0])).toBe("$deploy ");
@@ -52,6 +53,7 @@ describe.each(DRIVER_KINDS)("buildComposerProviderMenuItems for %s", (kind) => {
       catalog,
       showSkillsInSlashMenu: true,
     });
+
     expect(items.map((item) => item.label)).toEqual(["/compact", "/skill:review", "/skill:deploy"]);
     expect(items[0] && composerProviderMenuItemText(items[0])).toBe("/compact ");
     expect(items.every((item) => item.provider === kind)).toBe(true);
@@ -63,6 +65,7 @@ describe.each(DRIVER_KINDS)("buildComposerProviderMenuItems for %s", (kind) => {
       catalog,
       showSkillsInSlashMenu: false,
     });
+
     expect(items.map((item) => item.label)).toEqual(["/compact", "/review"]);
   });
 });

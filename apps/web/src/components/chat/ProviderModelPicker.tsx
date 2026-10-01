@@ -59,6 +59,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
 
   const activeInstanceId = props.activeInstanceId;
   const selectedInstanceOptions = props.modelOptionsByInstance.get(activeInstanceId) ?? [];
+
   // If the current slug belongs to a different instance (for example after
   // a provider switch or disable), prefer the active instance's first
   // option so the trigger icon and label stay in sync instead of showing
@@ -66,7 +67,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const selectedModel =
     selectedInstanceOptions.find((option) => option.slug === props.model) ??
     selectedInstanceOptions[0];
+
   const triggerTitle = selectedModel ? getTriggerDisplayModelName(selectedModel) : props.model;
+
   const triggerLabel = selectedModel?.unavailable
     ? t("{model} is no longer offered by this provider. Choose another model.", {
         model: triggerTitle,
@@ -74,7 +77,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     : selectedModel
       ? getTriggerDisplayModelLabel(selectedModel)
       : props.model;
+
   const { getModelDisabledReason } = props;
+
   const getDisabledReason = useCallback(
     (instanceId: ProviderInstanceId, model: string) =>
       getModelDisabledReason?.(instanceId, model) ??
@@ -85,11 +90,13 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         : null),
     [getModelDisabledReason, props.modelOptionsByInstance, t],
   );
+
   const showInstanceBadge =
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
 
   const setIsMenuOpen = (open: boolean) => {
     props.onOpenChange?.(open);
+
     if (props.open === undefined) {
       setUncontrolledIsMenuOpen(open);
     }
@@ -108,6 +115,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
 
     documentElement.style.overscrollBehavior = "contain";
     body.style.overflow = "hidden";
+
     if (scrollbarWidth > 0) {
       body.style.paddingRight = `${scrollbarWidth}px`;
     }
@@ -115,16 +123,20 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     const shouldAllowOverlayScroll = (target: EventTarget | null) => {
       return target instanceof Element && target.closest("[data-model-picker-content]");
     };
+
     const preventBackgroundWheel = (event: WheelEvent) => {
       if (shouldAllowOverlayScroll(event.target)) {
         return;
       }
+
       event.preventDefault();
     };
+
     const preventBackgroundTouchMove = (event: TouchEvent) => {
       if (shouldAllowOverlayScroll(event.target)) {
         return;
       }
+
       event.preventDefault();
     };
 
@@ -155,8 +167,10 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       onOpenChange={(open) => {
         if (props.disabled) {
           setIsMenuOpen(false);
+
           return;
         }
+
         setIsMenuOpen(open);
       }}
     >

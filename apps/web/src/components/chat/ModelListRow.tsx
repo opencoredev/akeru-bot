@@ -41,6 +41,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
 }) {
   const { t } = useI18n();
   const ProviderIcon = PROVIDER_ICON_BY_PROVIDER[props.driverKind] ?? null;
+
   const providerLabel = props.model.subProvider
     ? `${props.providerDisplayName} · ${props.model.subProvider}`
     : props.providerDisplayName;

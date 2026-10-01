@@ -1,5 +1,7 @@
 "use client";
 
+import { usePreviewCapture } from "./usePreviewCapture";
+
 import { scopedThreadKey } from "@akeru/client-runtime/environment";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import {
@@ -11,6 +13,7 @@ import {
 import { normalizePreviewUrl } from "@akeru/shared/preview";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
 import {
   BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT,
   recordVisitForThread,
@@ -26,38 +29,34 @@ import {
   updatePreviewServerSnapshot,
   useThreadPreviewState,
 } from "~/previewStateStore";
-import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
 import { useEnvironmentHttpBaseUrl } from "~/state/environments";
 import { previewEnvironment } from "~/state/preview";
 import { useAtomCommand } from "~/state/use-atom-command";
 
-import { previewBridge } from "./previewBridge";
-import { subscribePreviewAction } from "./previewActionBus";
-import { openPreviewSession } from "./openPreviewSession";
-import { PreviewChromeRow } from "./PreviewChromeRow";
-import { PreviewEmptyState } from "./PreviewEmptyState";
-import { PreviewMoreMenu } from "./PreviewMoreMenu";
+import { browserResponsiveViewportForToggle, useBrowserDefaults } from "~/browser/browserDefaults";
+import {
+  findActiveBrowserRecordingRuntimeTabId,
+  useActiveBrowserRecordingTabIds,
+} from "~/browser/browserRecording";
+import { BrowserSurfaceSlot } from "~/browser/BrowserSurfaceSlot";
+import { useBrowserSurfaceStore } from "~/browser/browserSurfaceStore";
 import {
   commitBrowserViewportChange,
   subscribeBrowserViewportChange,
 } from "~/browser/browserViewportActions";
-import { browserResponsiveViewportForToggle, useBrowserDefaults } from "~/browser/browserDefaults";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
-import { PreviewUnreachable } from "./PreviewUnreachable";
-import { revealInFileExplorerLabel } from "./fileExplorerLabel";
+import { toastManager } from "~/components/ui/toast";
+import { AgentBrowserCursor } from "./AgentBrowserCursor";
+import { openPreviewSession } from "./openPreviewSession";
+import { subscribePreviewAction } from "./previewActionBus";
+import { previewBridge } from "./previewBridge";
+import { PreviewChromeRow } from "./PreviewChromeRow";
+import { PreviewEmptyState } from "./PreviewEmptyState";
 import { shouldShowPreviewEmptyState } from "./previewEmptyStateLogic";
-import { BrowserSurfaceSlot } from "~/browser/BrowserSurfaceSlot";
-import { useBrowserSurfaceStore } from "~/browser/browserSurfaceStore";
+import { PreviewMoreMenu } from "./PreviewMoreMenu";
+import { PreviewUnreachable } from "./PreviewUnreachable";
 import { usePreviewSession } from "./usePreviewSession";
 import { ZoomIndicator } from "./ZoomIndicator";
-import { AgentBrowserCursor } from "./AgentBrowserCursor";
-import {
-  findActiveBrowserRecordingRuntimeTabId,
-  startBrowserRecording,
-  stopBrowserRecording,
-  useActiveBrowserRecordingTabIds,
-} from "~/browser/browserRecording";
-import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 
 interface Props {
   threadRef: ScopedThreadRef;
@@ -93,16 +92,20 @@ export function PreviewView({
   const threadRefRef = useRef(threadRef);
   threadRefRef.current = threadRef;
   const previewState = useThreadPreviewState(threadRef);
+
   const recentHistoryEntries = useThreadRecentHistory(
     threadRef,
     BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT,
   );
+
   const addPreviewAnnotation = useComposerDraftStore((store) => store.addPreviewAnnotation);
   const addImage = useComposerDraftStore((store) => store.addImage);
   const environmentHttpBaseUrl = useEnvironmentHttpBaseUrl(threadRef.environmentId);
+
   const environmentHostname = environmentHttpBaseUrl
     ? new URL(environmentHttpBaseUrl).hostname
     : null;
+
   const open = useAtomCommand(previewEnvironment.open);
   const resize = useAtomCommand(previewEnvironment.resize, "preview viewport resize");
 
@@ -110,21 +113,25 @@ export function PreviewView({
 
   useEffect(() => {
     isMountedRef.current = true;
+
     return () => {
       isMountedRef.current = false;
     };
   }, []);
 
   const tabId = requestedTabId ?? previewState.activeTabId;
+
   const runtimeTabId = tabId
     ? previewRuntimeTabId(threadRef, previewState.serverEpoch, tabId)
     : null;
+
   const recordingRuntimeTabId =
     tabId && runtimeTabId
       ? activeRecordingTabIds.has(runtimeTabId)
         ? runtimeTabId
         : findActiveBrowserRecordingRuntimeTabId(threadRef, tabId)
       : null;
+
   const snapshot = tabId ? (previewState.sessions[tabId] ?? null) : null;
   const desktopOverlay = tabId ? (previewState.desktopByTabId[tabId] ?? null) : null;
   const navStatus = snapshot?.navStatus ?? { _tag: "Idle" as const };
@@ -138,6 +145,7 @@ export function PreviewView({
   const controller = desktopOverlay?.controller ?? "none";
   const viewport = snapshot?.viewport ?? FILL_PREVIEW_VIEWPORT;
   const browserDefaults = useBrowserDefaults();
+
   const panelRect = useBrowserSurfaceStore((state) =>
     runtimeTabId ? (state.byTabId[runtimeTabId]?.rect ?? null) : null,
   );
@@ -159,9 +167,12 @@ export function PreviewView({
         // The bridge mirrors the resolved URL back to the server.
         await previewBridge.navigate(runtimeTabId, resolvedUrl);
         rememberPreviewUrl(threadRef, resolvedUrl);
+
         return true;
       }
+
       const result = await openPreviewSession({ openPreview: open, threadRef, url: resolvedUrl });
+
       return result._tag === "Success";
     },
     [open, runtimeTabId, threadRef],
@@ -171,6 +182,7 @@ export function PreviewView({
     async (next: string) => {
       try {
         const normalized = normalizePreviewUrl(next);
+
         if (await navigateToResolvedUrl(normalized)) {
           recordVisitForThread(threadRef, normalized);
         }
@@ -185,6 +197,7 @@ export function PreviewView({
     async (next: string) => {
       try {
         const resolved = resolveDiscoveredServerUrl(threadRef.environmentId, next);
+
         if (await navigateToResolvedUrl(resolved)) {
           recordVisitForThread(threadRef, next);
         }
@@ -214,6 +227,7 @@ export function PreviewView({
   const handleViewportChange = useCallback(
     async (nextViewport: PreviewViewportSetting) => {
       if (!tabId) return;
+
       const result = await resize({
         environmentId: threadRef.environmentId,
         input: {
@@ -222,6 +236,7 @@ export function PreviewView({
           viewport: nextViewport,
         },
       });
+
       if (result._tag === "Failure") {
         const error = squashAtomCommandFailure(result);
         toastManager.add({
@@ -231,6 +246,7 @@ export function PreviewView({
         });
         throw error;
       }
+
       updatePreviewServerSnapshot(threadRef, result.value);
     },
     [resize, tabId, threadRef],
@@ -238,8 +254,10 @@ export function PreviewView({
 
   const handleToggleDeviceToolbar = () => {
     if (!runtimeTabId) return;
+
     if (viewport._tag !== "fill") {
       void commitBrowserViewportChange(runtimeTabId, FILL_PREVIEW_VIEWPORT).catch(() => undefined);
+
       return;
     }
 
@@ -255,6 +273,7 @@ export function PreviewView({
 
   useEffect(() => {
     if (!runtimeTabId) return;
+
     return subscribeBrowserViewportChange(runtimeTabId, handleViewportChange);
   }, [handleViewportChange, runtimeTabId]);
 
@@ -273,9 +292,11 @@ export function PreviewView({
 
   const handleNativePictureInPicture = useCallback(() => {
     if (!previewBridge || !runtimeTabId) return;
+
     const operation = desktopOverlay?.pictureInPicture
       ? previewBridge.pictureInPicture.close
       : previewBridge.pictureInPicture.open;
+
     void operation(runtimeTabId).catch((error) => {
       toastManager.add({
         type: "error",
@@ -285,251 +306,22 @@ export function PreviewView({
     });
   }, [desktopOverlay?.pictureInPicture, runtimeTabId]);
 
-  const handleCapture = useCallback(
-    (record: boolean) => {
-      if (!previewBridge || !runtimeTabId || !tabId) return;
-      const bridge = previewBridge;
-      if (recordingRuntimeTabId) {
-        void stopBrowserRecording(recordingRuntimeTabId).then(
-          (artifact) => {
-            if (!artifact) return;
-            let pathCopied = false;
-            let toastId: ReturnType<typeof toastManager.add>;
-
-            const copyPath = () => {
-              if (!navigator.clipboard?.writeText) {
-                toastManager.update(
-                  toastId,
-                  stackedThreadToast({
-                    type: "error",
-                    title: "Unable to copy recording path",
-                    description: "Clipboard API unavailable.",
-                    actionProps: revealAction,
-                  }),
-                );
-                return;
-              }
-
-              void navigator.clipboard.writeText(artifact.path).then(
-                () => {
-                  pathCopied = true;
-                  updateRecordingToast();
-                  window.setTimeout(() => {
-                    pathCopied = false;
-                    updateRecordingToast();
-                  }, 2_000);
-                },
-                (error) => {
-                  toastManager.update(
-                    toastId,
-                    stackedThreadToast({
-                      type: "error",
-                      title: "Unable to copy recording path",
-                      description: error instanceof Error ? error.message : "An error occurred.",
-                      actionProps: revealAction,
-                    }),
-                  );
-                },
-              );
-            };
-
-            const revealAction = {
-              children: revealInFileExplorerLabel(navigator.platform),
-              onClick: () => void bridge.revealArtifact(artifact.path),
-            };
-            const updateRecordingToast = () => {
-              toastManager.update(
-                toastId,
-                stackedThreadToast({
-                  type: "success",
-                  title: "Recording saved",
-                  actionProps: revealAction,
-                  data: {
-                    secondaryActionProps: {
-                      children: pathCopied ? "Copied!" : "Copy path",
-                      disabled: pathCopied,
-                      onClick: copyPath,
-                    },
-                    secondaryActionVariant: "outline",
-                  },
-                }),
-              );
-            };
-
-            toastId = toastManager.add(
-              stackedThreadToast({
-                type: "success",
-                title: "Recording saved",
-                actionProps: revealAction,
-                data: {
-                  secondaryActionProps: {
-                    children: "Copy path",
-                    onClick: copyPath,
-                  },
-                  secondaryActionVariant: "outline",
-                },
-              }),
-            );
-          },
-          (error) => {
-            toastManager.add({
-              type: "error",
-              title: "Unable to stop recording",
-              description: error instanceof Error ? error.message : "An error occurred.",
-            });
-          },
-        );
-        return;
-      }
-      if (record) {
-        void startBrowserRecording(runtimeTabId, threadRef, tabId).catch((error) => {
-          toastManager.add({
-            type: "error",
-            title: "Unable to start recording",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          });
-        });
-        return;
-      }
-      void bridge.captureScreenshot(runtimeTabId).then(
-        (artifact) => {
-          const revealAction = {
-            children: revealInFileExplorerLabel(navigator.platform),
-            onClick: () => void bridge.revealArtifact(artifact.path),
-          };
-          let pathCopied = false;
-          let imageCopied = false;
-          let toastId: ReturnType<typeof toastManager.add>;
-
-          const updateScreenshotToast = (
-            type: "success" | "error" = "success",
-            title = "Screenshot saved",
-            description?: string,
-          ) => {
-            toastManager.update(
-              toastId,
-              stackedThreadToast({
-                type,
-                title,
-                description,
-                actionProps: {
-                  children: imageCopied ? "Copied!" : "Copy image",
-                  disabled: imageCopied,
-                  onClick: copyImage,
-                },
-                data: {
-                  additionalActions: [
-                    {
-                      id: "copy-path",
-                      props: {
-                        children: pathCopied ? "Copied!" : "Copy path",
-                        disabled: pathCopied,
-                        onClick: copyPath,
-                      },
-                    },
-                  ],
-                  secondaryActionProps: {
-                    ...revealAction,
-                  },
-                  secondaryActionVariant: "outline",
-                },
-              }),
-            );
-          };
-
-          const copyPath = () => {
-            if (!navigator.clipboard?.writeText) {
-              updateScreenshotToast(
-                "error",
-                "Unable to copy screenshot path",
-                "Clipboard API unavailable.",
-              );
-              return;
-            }
-
-            void navigator.clipboard.writeText(artifact.path).then(
-              () => {
-                pathCopied = true;
-                updateScreenshotToast();
-                window.setTimeout(() => {
-                  pathCopied = false;
-                  updateScreenshotToast();
-                }, 2_000);
-              },
-              (error) => {
-                updateScreenshotToast(
-                  "error",
-                  "Unable to copy screenshot path",
-                  error instanceof Error ? error.message : "An error occurred.",
-                );
-              },
-            );
-          };
-
-          const copyImage = () => {
-            void bridge.copyArtifactToClipboard(artifact.path).then(
-              () => {
-                imageCopied = true;
-                updateScreenshotToast();
-                window.setTimeout(() => {
-                  imageCopied = false;
-                  updateScreenshotToast();
-                }, 2_000);
-              },
-              (error) => {
-                updateScreenshotToast(
-                  "error",
-                  "Unable to copy screenshot",
-                  error instanceof Error ? error.message : "An error occurred.",
-                );
-              },
-            );
-          };
-
-          toastId = toastManager.add(
-            stackedThreadToast({
-              type: "success",
-              title: "Screenshot saved",
-              actionProps: {
-                children: "Copy image",
-                onClick: copyImage,
-              },
-              data: {
-                additionalActions: [
-                  {
-                    id: "copy-path",
-                    props: {
-                      children: "Copy path",
-                      onClick: copyPath,
-                    },
-                  },
-                ],
-                secondaryActionProps: {
-                  ...revealAction,
-                },
-                secondaryActionVariant: "outline",
-              },
-            }),
-          );
-        },
-        (error) => {
-          toastManager.add({
-            type: "error",
-            title: "Unable to capture screenshot",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          });
-        },
-      );
-    },
-    [recordingRuntimeTabId, runtimeTabId, tabId, threadRef],
-  );
+  const handleCapture = usePreviewCapture({
+    recordingRuntimeTabId,
+    runtimeTabId,
+    tabId,
+    threadRef,
+  });
 
   const handlePickElement = useCallback(() => {
     if (!previewBridge || !runtimeTabId) return;
+
     if (pickActiveRef.current) {
       void previewBridge.cancelPickElement(runtimeTabId).catch(() => undefined);
+
       return;
     }
+
     // Snapshot whatever the user was focused on (typically the chat
     // composer textarea or the chrome-row pick button) BEFORE main steals
     // focus into the guest webContents. We restore it when the pick
@@ -537,21 +329,25 @@ export function PreviewView({
     // every pick they'd have to click back into the textarea.
     const previouslyFocused =
       typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null;
+
     pickActiveRef.current = true;
     setPickActive(true);
     void (async () => {
       try {
         const result = await previewBridge.pickElement(runtimeTabId);
+
         if (!result) return;
         const { annotation, submission } = result;
         addPreviewAnnotation(threadRef, annotation);
         let screenshotFile: File | null = null;
+
         try {
           screenshotFile = await previewAnnotationScreenshotFile(annotation);
         } catch {
           // The structured annotation is still sendable when converting its
           // optional screenshot into a composer attachment fails.
         }
+
         const image =
           screenshotFile && annotation.screenshot
             ? ({
@@ -564,9 +360,11 @@ export function PreviewView({
                 file: screenshotFile,
               } satisfies ComposerImageAttachment)
             : null;
+
         if (image) {
           addImage(threadRef, image);
         }
+
         if (submission === "send") {
           onSendAnnotation?.(annotation, image);
         }
@@ -574,9 +372,11 @@ export function PreviewView({
         // Picker failed (e.g. webview navigated). Treat as silent cancel.
       } finally {
         pickActiveRef.current = false;
+
         // Avoid `setState on unmounted component` if the panel/thread closed
         // while the pick was in flight.
         if (isMountedRef.current) setPickActive(false);
+
         // Best-effort: restore focus to whatever the user had before the
         // pick stole it into the guest webContents. Skip if the previously-
         // focused element was unmounted or is no longer focusable.
@@ -602,9 +402,11 @@ export function PreviewView({
     return () => {
       if (!pickActiveRef.current) return;
       pickActiveRef.current = false;
+
       if (previewBridge && runtimeTabId) {
         void previewBridge.cancelPickElement(runtimeTabId).catch(() => undefined);
       }
+
       if (isMountedRef.current) setPickActive(false);
     };
   }, [runtimeTabId]);
@@ -613,22 +415,28 @@ export function PreviewView({
   // URL-aware handler regardless of whether the panel is currently mounted.
   useEffect(() => {
     if (!visible) return;
+
     return subscribePreviewAction((action) => {
       switch (action) {
         case "refresh":
           handleRefresh();
+
           return;
         case "focus-url":
           setFocusUrlNonce((value) => (value ?? 0) + 1);
+
           return;
         case "zoom-in":
           handleZoomIn();
+
           return;
         case "zoom-out":
           handleZoomOut();
+
           return;
         case "reset-zoom":
           handleResetZoom();
+
           return;
         case "toggle-panel":
           return;

@@ -23,8 +23,10 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
   onToggleMenu: () => void;
 }) {
   const { t } = useI18n();
+
   if (props.count === 0) return null;
   const inline = props.placement === "inline";
+
   const count = (
     <ComposerBanner.Count
       key={props.pulseKey}

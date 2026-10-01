@@ -44,12 +44,15 @@ export function buildComposerProviderMenuItems(input: {
 }): ProviderMenuItem[] {
   const { trigger, catalog, t = englishTranslate } = input;
   const provider = catalog?.provider;
+
   if (!provider) return [];
+
   if (trigger.kind === "slash-command") {
     const slashMenuSkills = getProviderSkillsForSlashMenu(
       catalog.skills,
       input.showSkillsInSlashMenu,
     );
+
     const commandItems = getProviderSlashCommandsForSlashMenu(
       catalog.slashCommands,
       slashMenuSkills,
@@ -63,6 +66,7 @@ export function buildComposerProviderMenuItems(input: {
         description: command.description ?? command.input?.hint ?? t("Run provider command"),
       }),
     );
+
     const skillItems = slashMenuSkills.map(
       (skill): ProviderMenuItem => ({
         id: `skill:${provider}:${skill.name}`,
@@ -76,11 +80,13 @@ export function buildComposerProviderMenuItems(input: {
           (skill.scope ? t("{scope} skill", { scope: skill.scope }) : ""),
       }),
     );
+
     return searchSlashCommandItems(
       [...commandItems, ...skillItems],
       trigger.query.trim().toLowerCase(),
     );
   }
+
   if (trigger.kind === "skill") {
     return searchProviderSkills(catalog.skills, trigger.query).map((skill) => ({
       id: `skill:${provider}:${skill.name}`,
@@ -94,6 +100,7 @@ export function buildComposerProviderMenuItems(input: {
         (skill.scope ? t("{scope} skill", { scope: skill.scope }) : t("Run provider skill")),
     }));
   }
+
   return [];
 }
 

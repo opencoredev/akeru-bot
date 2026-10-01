@@ -86,6 +86,7 @@ export function PreviewChromeRow({
   useEffect(() => {
     if (focusUrlNonce == null) return;
     const node = inputRef.current;
+
     if (!node) return;
     node.focus();
   }, [focusUrlNonce]);
@@ -93,6 +94,7 @@ export function PreviewChromeRow({
   const submit = (event?: FormEvent | KeyboardEvent) => {
     event?.preventDefault();
     const next = draft.trim();
+
     if (next.length === 0) return;
     onSubmit(next);
     inputRef.current?.blur();
@@ -182,6 +184,7 @@ export function PreviewChromeRow({
                   }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") submit(event);
+
                     if (event.key === "Escape") {
                       event.preventDefault();
                       setDraft(url);

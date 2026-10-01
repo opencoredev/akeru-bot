@@ -73,7 +73,9 @@ export function ReplyMessageBody({
   readonly sourceMessageId?: string | null;
 }) {
   const reply = parseReplyPrompt(text);
+
   if (!reply) return <p className="whitespace-pre-wrap">{text}</p>;
+
   return (
     <div className="space-y-2">
       <ReplyReference

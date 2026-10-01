@@ -35,6 +35,7 @@ import {
 
 export function PairingPendingSurface() {
   const environment = usePrimaryEnvironmentSummary();
+
   return <PairingPanel environment={environment} status={{ kind: "checking" }} />;
 }
 
@@ -53,9 +54,11 @@ export function pairingErrorFromUnknown(error: unknown): PairingError {
   if (isPrimaryEnvironmentPairingCredentialRejectedError(error)) {
     return { kind: "rejected" };
   }
+
   if (isPrimaryEnvironmentPairingCredentialRequiredError(error)) {
     return { kind: "missing-token", message: error.message };
   }
+
   return pairingErrorFromMessage(errorMessageFromUnknown(error));
 }
 
@@ -77,9 +80,11 @@ export function PairingRouteSurface({
   const environment = usePrimaryEnvironmentSummary();
   const autoPairTokenRef = useRef<string | null>(peekPairingTokenFromUrl());
   const [credential, setCredential] = useState(() => autoPairTokenRef.current ?? "");
+
   const [pairingError, setPairingError] = useState<PairingError | null>(() =>
     initialErrorMessage ? pairingErrorFromMessage(initialErrorMessage) : null,
   );
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const autoSubmitAttemptedRef = useRef(false);
   const submittingRef = useRef(false);
@@ -102,8 +107,10 @@ export function PairingRouteSurface({
 
       if (submitError) {
         setPairingError(submitError);
+
         // A link opened while this one was in flight waited in the address bar.
         if (hashOptionsRef.current) takePairingHash(hashOptionsRef.current);
+
         return;
       }
 
@@ -124,6 +131,7 @@ export function PairingRouteSurface({
 
   useEffect(() => {
     const token = autoPairTokenRef.current;
+
     if (!token || autoSubmitAttemptedRef.current) {
       return;
     }
@@ -145,11 +153,14 @@ export function PairingRouteSurface({
         void submitCredential(token);
       },
     };
+
     hashOptionsRef.current = options;
+
     return listenForPairingHash(window, options);
   }, [submitCredential]);
 
   const supportedMethodsNote = describeSupportedMethods(auth.bootstrapMethods);
+
   const status: PairingPanelStatus = isSubmitting
     ? { kind: "submitting" }
     : pairingError?.kind === "rejected"
@@ -192,9 +203,11 @@ export function HostedPairingRouteSurface() {
   const { t } = useI18n();
   const connect = useAtomCommand(connectPairing, { reportFailure: false });
   const requestRef = useRef(readHostedPairingLink(window.location.href));
+
   const [status, setStatus] = useState<PairingPanelStatus>(() =>
     requestRef.current ? { kind: "checking" } : { kind: "incomplete" },
   );
+
   const startedRef = useRef(false);
   const pairingRef = useRef(false);
   const hashOptionsRef = useRef<PairingHashOptions<HostedPairingRequest> | null>(null);
@@ -204,10 +217,13 @@ export function HostedPairingRouteSurface() {
     pairingRef.current = true;
     setStatus({ kind: "submitting" });
     let next: PairingPanelStatus = { kind: "checking" };
+
     try {
       next = await runHostedPairing(requestRef.current, async (input) => {
         const result = await connect(input);
+
         if (result._tag === "Success") return { ok: true };
+
         return {
           ok: false,
           message: `${errorMessageFromUnknown(squashAtomCommandFailure(result))} ${t(
@@ -219,6 +235,7 @@ export function HostedPairingRouteSurface() {
     } finally {
       pairingRef.current = false;
     }
+
     // A link opened while this one was in flight waited in the address bar.
     if (next.kind === "failed" && hashOptionsRef.current) takePairingHash(hashOptionsRef.current);
   }, [connect, t]);
@@ -227,6 +244,7 @@ export function HostedPairingRouteSurface() {
     if (startedRef.current) return;
     startedRef.current = true;
     stripPairingTokenFromUrl();
+
     if (requestRef.current) void pair();
   }, [pair]);
 
@@ -242,11 +260,14 @@ export function HostedPairingRouteSurface() {
         void pair();
       },
     };
+
     hashOptionsRef.current = options;
+
     return listenForPairingHash(window, options);
   }, [pair]);
 
   const request = requestRef.current;
+
   return (
     <PairingPanel
       environment={{ name: request?.label || null, address: request?.host ?? null }}
@@ -285,6 +306,7 @@ export function PairingTokenForm({
   readonly tokenLabel: string;
 }) {
   const { t } = useI18n();
+
   return (
     <form className="space-y-3" onSubmit={onSubmit}>
       <div className="space-y-1.5">
@@ -352,6 +374,7 @@ function usePrimaryEnvironmentSummary(): PairingEnvironmentSummary {
     if (name) {
       return;
     }
+
     let cancelled = false;
     resolveInitialPrimaryEnvironmentDescriptor().then(
       (descriptor) => {
@@ -361,6 +384,7 @@ function usePrimaryEnvironmentSummary(): PairingEnvironmentSummary {
       },
       () => undefined,
     );
+
     return () => {
       cancelled = true;
     };

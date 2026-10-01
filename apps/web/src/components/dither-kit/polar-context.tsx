@@ -67,23 +67,28 @@ const PolarChartContext = createContext<PolarChartContextValue | null>(null);
 
 export function usePolarChart() {
   const ctx = use(PolarChartContext);
+
   if (!ctx) {
     throw new Error("Polar chart parts must be used within a polar chart root.");
   }
+
   return ctx;
 }
 
 /** Boundary guard for polar parts (`<Pie>`, `<Radar>`). */
 export function usePolarPart(part: string, kind: "pie" | "radar") {
   const ctx = use(PolarChartContext);
+
   if (!ctx) {
     throw new Error(`<${part} /> must be used within ${ROOT_OF[kind]}.`);
   }
+
   if (ctx.chartType !== kind) {
     throw new Error(
       `<${part} /> is not valid inside ${ROOT_OF[ctx.chartType]} — it belongs in ${ROOT_OF[kind]}.`,
     );
   }
+
   return ctx;
 }
 
@@ -139,11 +144,13 @@ export function usePolarController({
   const [cursorX, setCursorX] = useState(0);
   const [cursorY, setCursorY] = useState(0);
   const [isMouseInChart, setMouseInChart] = useState(false);
+
   // Stable (only wraps two useState setters) so the value keeps its identity.
   const setCursor = useCallback((px: number, py: number) => {
     setCursorX(px);
     setCursorY(py);
   }, []);
+
   const [variants, setVariants] = useState<Record<string, AreaVariant>>({});
 
   // useCallback for the same reason as registerSeries in chart-context.tsx:
@@ -152,11 +159,13 @@ export function usePolarController({
   const registerVariant = useCallback((key: string, variant: AreaVariant) => {
     setVariants((prev) => (prev[key] === variant ? prev : { ...prev, [key]: variant }));
   }, []);
+
   const unregisterVariant = useCallback((key: string) => {
     setVariants((prev) => {
       if (!(key in prev)) return prev;
       const next = { ...prev };
       delete next[key];
+
       return next;
     });
   }, []);
@@ -173,6 +182,7 @@ export function usePolarController({
   // The root spreads margins fresh every render; pin a stable object off the
   // four numbers so it doesn't, on its own, invalidate the value.
   const { top: mTop, right: mRight, bottom: mBottom, left: mLeft } = margins;
+
   const stableMargins = useMemo(
     () => ({ top: mTop, right: mRight, bottom: mBottom, left: mLeft }),
     [mTop, mRight, mBottom, mLeft],
@@ -189,6 +199,7 @@ export function usePolarController({
 
   // Stable so `common` and the value stay stable; re-created only on config.
   const seedOf = useCallback((key: string) => seedOfColor(config[key]?.color ?? "grey"), [config]);
+
   // "*" is the pie-wide variant set by <Pie>; radar registers per series key.
   const variantOf = useCallback(
     (key: string) => variants[key] ?? variants["*"] ?? "gradient",
@@ -206,12 +217,15 @@ export function usePolarController({
   const radar = useMemo(() => {
     if (chartType !== "radar") return null;
     let max = 0;
+
     for (const row of data) {
       for (const key of configKeys) {
         const v = Number(row[key]) || 0;
+
         if (v > max) max = v;
       }
     }
+
     return { axes: radarAxes(data, nameKey), max: max || 1 };
   }, [chartType, data, configKeys, nameKey]);
 
@@ -221,8 +235,10 @@ export function usePolarController({
     const tooltipLeft = Math.max(48, Math.min(plotWidth + mLeft - 48, cursorX));
     const tooltipTop = Math.max(mTop + 44, cursorY);
     const emphasis = selectedDataKey ?? focusDataKey;
+
     if (chartType === "pie" && pie) {
       const names = pie.map((s) => s.name);
+
       return {
         names,
         tooltipTop,
@@ -238,7 +254,9 @@ export function usePolarController({
         heading: (i) => pie[i]?.name ?? null,
         itemsAt: (i) => {
           const s = pie[i];
+
           if (!s) return [];
+
           return [
             {
               name: s.name,
@@ -251,6 +269,7 @@ export function usePolarController({
         },
       };
     }
+
     // radar
     return {
       names: configKeys,
@@ -268,6 +287,7 @@ export function usePolarController({
       itemsAt: (i) =>
         configKeys.map((name) => {
           const raw = data[i]?.[name];
+
           return {
             name,
             label: config[name]?.label ?? name,

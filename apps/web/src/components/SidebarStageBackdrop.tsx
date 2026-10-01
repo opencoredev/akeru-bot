@@ -6,6 +6,7 @@ import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { primaryServerConfigAtom } from "../state/server";
 
 export type SidebarStageBackdropVariant = "dev";
+
 export type EnvironmentIdentificationPillLabel = "Dev";
 
 // A wide viewBox keeps the 96-unit art height at a fixed scale while sidebar resizing reveals
@@ -18,7 +19,9 @@ export function resolveSidebarStageBackdropVariant(
 ): SidebarStageBackdropVariant | null {
   if (!enabled) return null;
   const normalized = stageLabel.trim().toLowerCase();
+
   if (normalized === "dev") return "dev";
+
   return null;
 }
 
@@ -32,7 +35,9 @@ export function resolveEnvironmentIdentificationPillLabel(
   stageLabel: string,
 ): EnvironmentIdentificationPillLabel | null {
   const normalized = stageLabel.trim().toLowerCase();
+
   if (normalized === "dev") return "Dev";
+
   return null;
 }
 

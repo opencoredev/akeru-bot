@@ -53,6 +53,7 @@ describe("scoreModelPickerSearch", () => {
       },
       "copilot opus",
     );
+
     const fuzzyScore = scoreModelPickerSearch(
       {
         driverKind: "opencode",
@@ -78,6 +79,7 @@ describe("scoreModelPickerSearch", () => {
       },
       "opu",
     );
+
     const nonFavoriteScore = scoreModelPickerSearch(
       {
         driverKind: "cursor",
@@ -102,6 +104,7 @@ describe("scoreModelPickerSearch", () => {
       },
       "opus 4.7",
     );
+
     const nonFavoriteExactScore = scoreModelPickerSearch(
       {
         driverKind: "cursor",

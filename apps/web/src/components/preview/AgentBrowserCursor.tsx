@@ -50,6 +50,7 @@ function AgentBrowserCursorEvent(props: {
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setActive(false), CURSOR_ACTIVE_MS);
+
     return () => window.clearTimeout(timeout);
   }, []);
 

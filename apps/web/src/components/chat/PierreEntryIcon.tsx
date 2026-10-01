@@ -66,6 +66,7 @@ export const PierreEntryIcon = memo(function PierreEntryIcon(props: {
   className?: string;
 }) {
   useInsertionEffect(ensurePierreIconSprite, []);
+
   const icon = useMemo(
     () => resolvePierreIconForEntry(props.pathValue, props.kind),
     [props.kind, props.pathValue],
@@ -80,6 +81,7 @@ export const PierreEntryIcon = memo(function PierreEntryIcon(props: {
   }
 
   const colors = ICON_COLORS[icon.token ?? "default"] ?? ICON_COLORS.default;
+
   return (
     <svg
       aria-hidden="true"

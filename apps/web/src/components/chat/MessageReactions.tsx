@@ -25,9 +25,11 @@ export function MessageReactions({
 }) {
   const { t } = useI18n();
   const counts = new Map<string, number>();
+
   for (const reaction of reactions) {
     counts.set(reaction.emoji, (counts.get(reaction.emoji) ?? 0) + 1);
   }
+
   if (counts.size === 0) return null;
 
   return (
@@ -37,6 +39,7 @@ export function MessageReactions({
     >
       {[...counts].map(([emoji, count]) => {
         const mine = selectedEmoji === emoji;
+
         const label = (
           <>
             {emoji}
@@ -45,10 +48,12 @@ export function MessageReactions({
             ) : null}
           </>
         );
+
         const className = cn(
           "inline-flex min-h-8 items-center gap-1 rounded-full border px-2.5 py-1 text-lg leading-none [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]",
           mine ? "border-primary/40 bg-primary/10" : "border-border/80 bg-background/70",
         );
+
         if (!onToggle || reactionOptionFromEmoji(emoji) === null) {
           return (
             <span className={className} data-reaction-emoji={emoji} key={emoji}>
@@ -56,6 +61,7 @@ export function MessageReactions({
             </span>
           );
         }
+
         return (
           <button
             aria-label={

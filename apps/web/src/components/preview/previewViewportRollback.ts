@@ -10,6 +10,7 @@ export function shouldRollbackPreviewViewport(
   currentServerEpoch: string | null,
 ): boolean {
   const requestedKey = browserViewportSettingKey(requested);
+
   return (
     currentServerEpoch === operationServerEpoch &&
     browserViewportSettingKey(latest) === requestedKey &&

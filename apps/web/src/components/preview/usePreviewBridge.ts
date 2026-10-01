@@ -45,13 +45,18 @@ export function usePreviewBridge(input: {
   const reportStatus = useAtomCommand(previewEnvironment.reportStatus, "preview status report");
   const bridge = previewBridge;
   const threadKey = scopedThreadKey(threadRef);
+
   const stableThreadRef = useMemo(() => {
     const parsed = parseScopedThreadKey(threadKey);
+
     if (!parsed) throw new Error(`Invalid scoped thread key: ${threadKey}`);
+
     return parsed;
   }, [threadKey]);
+
   const projectRef = useFaviconProjectRefForThread(stableThreadRef);
   const preparedConnection = usePreparedConnection(stableThreadRef.environmentId);
+
   const environmentHostname = Option.isSome(preparedConnection)
     ? new URL(preparedConnection.value.httpBaseUrl).hostname
     : undefined;
@@ -61,17 +66,22 @@ export function usePreviewBridge(input: {
   const lastReportedUrl = useRef<string | null>(null);
   const lastReportedKind = useRef<DesktopPreviewTabState["navStatus"]["kind"] | null>(null);
   const lastDesktopNavStatus = useRef<DesktopPreviewTabState["navStatus"] | null>(null);
+
   const handleStateChange = useEffectEvent(
     (changedTabId: string, state: DesktopPreviewTabState): void => {
       if (changedTabId !== runtimeTabId) return;
+
       if (shouldClearBrowserPointer(lastDesktopNavStatus.current, state.navStatus)) {
         clearBrowserPointer(runtimeTabId);
       }
+
       lastDesktopNavStatus.current = state.navStatus;
       applyPreviewDesktopState(stableThreadRef, tabId, projectDesktopState(state));
+
       if (state.favicon) {
         recordFaviconForThread(stableThreadRef, state.favicon, projectRef, environmentHostname);
       }
+
       const reported = buildReportInput({
         threadId: stableThreadRef.threadId,
         tabId,
@@ -79,6 +89,7 @@ export function usePreviewBridge(input: {
         lastReportedUrl: lastReportedUrl.current,
         lastReportedKind: lastReportedKind.current,
       });
+
       if (!reported) return;
       lastReportedUrl.current = reported.lastReportedUrl;
       lastReportedKind.current = reported.lastReportedKind;
@@ -88,11 +99,13 @@ export function usePreviewBridge(input: {
       });
     },
   );
+
   useEffect(() => {
     if (!bridge || typeof window === "undefined") return;
     lastReportedUrl.current = null;
     lastReportedKind.current = null;
     lastDesktopNavStatus.current = null;
+
     return bridge.onStateChange(handleStateChange);
   }, [bridge, runtimeTabId, stableThreadRef, tabId]);
   useEffect(() => {
@@ -106,13 +119,17 @@ function shouldClearBrowserPointer(
   current: DesktopPreviewTabState["navStatus"],
 ): boolean {
   if (!previous) return false;
+
   if (current.kind === "Loading" && previous.kind !== "Loading") return true;
+
   if (current.kind === "Idle" || previous.kind === "Idle") return false;
+
   return current.url !== previous.url;
 }
 
 export function projectDesktopState(state: DesktopPreviewTabState): DesktopPreviewOverlay {
   const navOrigin = state.navStatus.kind === "Idle" ? null : originOf(state.navStatus.url);
+
   return {
     hasWebContents: state.webContentsId !== null,
     canGoBack: state.canGoBack,
@@ -151,6 +168,7 @@ function buildReportInput(args: {
 } | null {
   const { threadId, tabId, state, lastReportedUrl, lastReportedKind } = args;
   const status = state.navStatus;
+
   if (status.kind === "Idle") return null;
 
   // Skip if we've already reported the same kind+url. LoadFailed always
@@ -159,6 +177,7 @@ function buildReportInput(args: {
     status.kind !== "LoadFailed" &&
     status.kind === lastReportedKind &&
     status.url === lastReportedUrl;
+
   if (sameAsLast) return null;
 
   const base = {
@@ -167,6 +186,7 @@ function buildReportInput(args: {
     canGoBack: state.canGoBack,
     canGoForward: state.canGoForward,
   };
+
   if (status.kind === "LoadFailed") {
     return {
       input: {
@@ -183,6 +203,7 @@ function buildReportInput(args: {
       lastReportedKind: "LoadFailed",
     };
   }
+
   return {
     input: {
       ...base,

@@ -41,24 +41,31 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
  * sticks in localStorage until `?sidebar=places`.
  */
 const EXPERIMENT = "places";
+
 const STORAGE_KEY = "akeru:sidebar-experiment";
+
 const RAIL_WIDTH = 60;
+
 const PANEL_WIDTH = 296;
 
 function readExperiment(): boolean {
   const param = new URLSearchParams(window.location.search).get("sidebar");
+
   if (param !== null) window.localStorage.setItem(STORAGE_KEY, param);
+
   return (window.localStorage.getItem(STORAGE_KEY) ?? EXPERIMENT) === EXPERIMENT;
 }
 
 /** Resolved once per page load; switching layouts is a reload. */
 export function useSidebarExperiment(): boolean {
   const [enabled] = useState(readExperiment);
+
   return enabled;
 }
 
 /** Rail plus panel use a fixed width; resizing is ignored while experimenting. */
 export const EXPERIMENTAL_SIDEBAR_WIDTH = RAIL_WIDTH + PANEL_WIDTH;
+
 /** Full-page places such as Plugins show only the rail. */
 export const EXPERIMENTAL_RAIL_ONLY_WIDTH = RAIL_WIDTH;
 
@@ -78,14 +85,18 @@ export function ExperimentalSidebar() {
   const onPlugins = isRailOnlyPath(pathname);
   // Collapsing hides the panel and keeps the rail; picking a place brings it back.
   const { state: sidebarState, setOpen: setSidebarOpen } = useSidebar();
+
   const revealPanel = () => {
     if (sidebarState === "collapsed") setSidebarOpen(true);
   };
+
   const choosePlace = (next: Place) => {
     setPlace(next);
     revealPanel();
+
     if (onSettings || onPlugins) void navigate({ to: "/" });
   };
+
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const { resolvedTheme, setAppearanceMode } = useTheme();
   const nextAppearance = resolvedTheme === "dark" ? "light" : "dark";
@@ -93,6 +104,7 @@ export function ExperimentalSidebar() {
   // Only rail switches animate; the first paint of the panel stays still.
   const panelSwitched = useChangedSinceMount(panel);
   const { t } = useI18n();
+
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden">
       <nav
@@ -151,6 +163,7 @@ export function ExperimentalSidebar() {
             active={onSettings}
             onClick={() => {
               revealPanel();
+
               if (!onSettings) openSettings();
             }}
           />
@@ -267,10 +280,12 @@ function useLiveBots() {
   const { bots, pinnedItems } = useRosterStore(
     useShallow((state) => ({ bots: state.bots, pinnedItems: state.pinnedItems })),
   );
+
   return useMemo(() => {
     const live = bots.filter((bot) => bot.archivedAt === null);
     // Pinned bots lead, in pin order; everything else keeps roster order.
     const pinnedIds = pinnedItems.filter((item) => item.kind === "bot").map((item) => item.id);
+
     return [
       ...pinnedIds.flatMap((id) => live.filter((bot) => bot.id === id)),
       ...live.filter((bot) => !pinnedIds.includes(bot.id)),
@@ -285,6 +300,7 @@ function RoutinesPanel() {
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const { t } = useI18n();
   const routines = (snapshot?.routines ?? []).filter((routine) => routine.lifecycle !== "deleted");
+
   return (
     <>
       <PanelHeader title={t("Routines")} />
@@ -297,14 +313,17 @@ function RoutinesPanel() {
           <ul className="flex flex-col gap-0.5">
             {routines.map((routine) => {
               const bot = bots.find((candidate) => candidate.id === routine.botId);
+
               const time = routine.nextRunAt
                 ? formatRosterTimestamp(routine.nextRunAt, timestampFormat)
                 : null;
+
               const when = !routine.enabled
                 ? t("Paused")
                 : time
                   ? t("Next {time}", { time })
                   : t("Not scheduled");
+
               return (
                 <PanelRow
                   key={routine.id}
@@ -330,5 +349,6 @@ function RoutinesPanel() {
 
 function useEnvironmentSnapshot() {
   const environmentId = usePrimaryEnvironmentId();
+
   return useAtomValue(environmentSnapshotAtom(environmentId ?? ("" as never)));
 }

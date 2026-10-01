@@ -40,6 +40,7 @@ function textOf(node: ReactNode): string {
 }
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
+
 vi.mock("../../state/entities", () => ({
   useThreadShell: () => mocks.shell,
   readEnvironmentSupportsPinning: () => true,
@@ -47,12 +48,16 @@ vi.mock("../../state/entities", () => ({
   readEnvironmentSupportsSnooze: () => true,
   readEnvironmentSupportsTitleRegeneration: () => true,
 }));
+
 vi.mock("../../hooks/useChatActions", () => ({ useChatActions: () => mocks.actions }));
+
 vi.mock("../../hooks/useNowMinute", () => ({ useNowMinute: () => "2026-09-27T12:00" }));
+
 vi.mock("../../uiStateStore", () => ({
   useUiStateStore: (select: (state: unknown) => unknown) =>
     select({ threadLastVisitedAtById: mocks.visited, markThreadVisited: vi.fn() }),
 }));
+
 vi.mock("../ui/menu", () => ({
   Menu: ({ children }: { children: ReactNode }) => children,
   MenuPopup: ({ children }: { children: ReactNode }) => children,
@@ -62,13 +67,16 @@ vi.mock("../ui/menu", () => ({
   MenuTrigger: () => null,
   MenuSubTrigger: (props: Item & { children: ReactNode }) => {
     mocks.subTriggers.set(textOf(props.children), props);
+
     return null;
   },
   MenuItem: (props: Item & { children: ReactNode }) => {
     mocks.items.set(textOf(props.children), props);
+
     return null;
   },
 }));
+
 vi.mock("../ui/tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => children,
   // Renders the trigger element itself, so the pinned mark shows up in markup.
@@ -113,6 +121,7 @@ function shell(overrides: Partial<OrchestrationThreadShell> = {}): Orchestration
 function render(props: Parameters<typeof ChatActionsMenu>[0] = { threadRef }): string {
   mocks.items.clear();
   mocks.subTriggers.clear();
+
   return renderToStaticMarkup(<ChatActionsMenu {...props} />);
 }
 
@@ -121,6 +130,7 @@ beforeEach(() => {
   mocks.visited = {
     [`${threadRef.environmentId}:${threadRef.threadId}`]: "2026-09-27T10:01:00.000Z",
   };
+
   for (const action of Object.values(mocks.actions)) action.mockReset();
 });
 
@@ -269,6 +279,7 @@ describe("buildChatPaletteActions", () => {
       now: "2026-09-27T12:00:00.000Z",
       supports: { settlement: true, snooze: true, pinning: true, titleRegeneration: true },
     });
+
     return buildChatPaletteActions({
       threadRef,
       state,

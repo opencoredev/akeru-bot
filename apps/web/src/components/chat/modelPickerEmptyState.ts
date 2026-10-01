@@ -15,11 +15,15 @@ export function modelPickerEmptyMessage(
   t: Translate = englishTranslator.translate,
 ): string {
   const query = input.searchQuery.trim();
+
   if (query) return t("No models match “{query}”.", { query });
+
   if (input.selectedInstanceId === "favorites") {
     return t("No favorite models yet. Star a model to add it here.");
   }
+
   if (!input.selectedInstanceModelsLoaded) return t("Loading models…");
+
   return input.hasAnyModels
     ? t("No models available for this provider.")
     : t("No models available. Check your provider connection in Settings.");

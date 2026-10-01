@@ -28,10 +28,12 @@ describe("SkillInlineText", () => {
     const markup = renderToStaticMarkup(
       <SkillInlineText text="$review-follow-up $deploy" skills={skills} />,
     );
+
     const iconClass = INLINE_SKILL_CHIP_ICON_CLASS_NAME.replaceAll("&", "&amp;").replaceAll(
       ">",
       "&gt;",
     );
+
     const emojiIcon = `<span aria-hidden="true" class="${iconClass}">🔧</span>`;
     const fallbackIcon = `<span aria-hidden="true" class="${iconClass}"><svg`;
 

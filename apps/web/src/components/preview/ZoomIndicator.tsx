@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 
 const HIDE_AFTER_MS = 1500;
+
 const ZOOM_EPSILON = 0.001;
 
 interface Props {
@@ -25,11 +26,13 @@ export function ZoomIndicator({ zoomFactor }: Props) {
     if (Math.abs(lastFactorRef.current - zoomFactor) < ZOOM_EPSILON) return;
     lastFactorRef.current = zoomFactor;
     setVisible(true);
+
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
       setVisible(false);
       timerRef.current = null;
     }, HIDE_AFTER_MS);
+
     return () => {
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);

@@ -22,10 +22,14 @@ export function dispatchPreviewAction(action: PreviewAction): void {
 
 export function subscribePreviewAction(listener: (action: PreviewAction) => void): () => void {
   if (typeof window === "undefined") return () => {};
+
   const handler = (event: Event) => {
     const detail = (event as CustomEvent<PreviewAction>).detail;
+
     if (typeof detail === "string") listener(detail);
   };
+
   window.addEventListener(EVENT_NAME, handler);
+
   return () => window.removeEventListener(EVENT_NAME, handler);
 }

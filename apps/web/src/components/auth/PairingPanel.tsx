@@ -57,6 +57,7 @@ function pairingGrants(t: Translate) {
 /** Splits a message around one `{placeholder}` so JSX can fill the gap. */
 function splitAround(message: string): [string, string] {
   const [before = "", after = ""] = message.split("\u0000");
+
   return [before, after];
 }
 
@@ -143,22 +144,27 @@ export function PairingPanel({
   readonly children?: ReactNode;
 }) {
   const { t } = useI18n();
+
   const { icon, tone, title, description } = describeStatus(
     status,
     environment.name,
     readyDescription ?? t("Paste the pairing token from your link to connect."),
     t,
   );
+
   const [footerBefore, footerAfter] = splitAround(
     t("Treat pairing links like passwords. You can remove this browser later in {location}.", {
       location: "\u0000",
     }),
   );
+
   const [runBefore, runAfter] = splitAround(
     t("On the server, run {command}", { command: "\u0000" }),
   );
+
   const showGrants =
     status.kind === "checking" || status.kind === "ready" || status.kind === "submitting";
+
   const hasEnvironment = environment.name !== null || environment.address !== null;
 
   return (

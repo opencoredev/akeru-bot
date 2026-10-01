@@ -32,6 +32,7 @@ export function ProviderSkillIcon(props: {
   className?: string;
 }) {
   const textIcon = resolveProviderSkillTextIcon(props.skill);
+
   if (textIcon) {
     return (
       <span aria-hidden="true" className={props.className} data-skill-icon="own">
@@ -39,7 +40,9 @@ export function ProviderSkillIcon(props: {
       </span>
     );
   }
+
   const Icon = SKILL_SOURCE_ICON_BY_KIND[resolveProviderSkillSourceKind(props.skill)];
+
   return (
     <span aria-hidden="true" className={props.className} data-skill-icon="source">
       {/* text-current keeps the host tint; menu rows otherwise mute bare svgs. */}

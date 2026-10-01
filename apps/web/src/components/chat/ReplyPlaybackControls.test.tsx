@@ -11,16 +11,21 @@ const identity = {
   voice: "voice",
   provider: "provider",
 };
+
 const request = { identity, text: "Stored text", automatic: false };
+
 function setup() {
   const controller = createReplyPlaybackController(async () => ({
     play: async () => {},
     pause: () => {},
     dispose: () => {},
   }));
+
   controller.setContext({ ...identity, connected: true, mediaBlocked: false });
+
   const render = () =>
     renderToStaticMarkup(<ReplyPlaybackControls controller={controller} request={request} />);
+
   return { controller, render };
 }
 
@@ -44,6 +49,7 @@ describe("reply playback controls", () => {
   });
   it("discloses unavailable synthesis and skipped content", () => {
     const { controller } = setup();
+
     const markup = renderToStaticMarkup(
       <ReplyPlaybackControls
         controller={controller}
@@ -52,6 +58,7 @@ describe("reply playback controls", () => {
         disclosure="Code blocks and images are skipped."
       />,
     );
+
     expect(markup).toContain("disabled");
     expect(markup).toContain("Choose a speech provider in voice settings.");
     expect(markup).toContain("Code blocks and images are skipped.");

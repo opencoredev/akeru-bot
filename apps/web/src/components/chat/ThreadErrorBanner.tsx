@@ -11,6 +11,7 @@ import { ProviderRepairAction } from "./ProviderUnavailableNotice";
 
 export function threadErrorFeedbackDraft(error: string): string {
   const presentation = presentThreadError(error);
+
   return `A request failed in a bot chat.\n\n${presentation.title}\n${presentation.description}`;
 }
 
@@ -61,6 +62,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
   const { t } = useI18n();
   const [locallyDismissedKey, setLocallyDismissedKey] = useState<string | null>(null);
   const bannerKey = getThreadErrorBannerKey(threadKey, error);
+
   if (
     !error ||
     bannerKey === locallyDismissedKey ||
@@ -70,6 +72,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
   }
 
   const presentation = presentThreadError(error, context, t);
+
   const dismiss = () => {
     dismissThreadErrorBannerForSession(bannerKey);
     setLocallyDismissedKey(bannerKey);

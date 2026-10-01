@@ -13,6 +13,7 @@ export function XAxis({
   maxTicks?: number;
 }) {
   const ctx = useChartPart("XAxis");
+
   if (!ctx.ready) return null;
 
   const step = Math.max(1, Math.ceil(ctx.dataLength / maxTicks));
@@ -24,6 +25,7 @@ export function XAxis({
         if (i % step !== 0) return null;
         const raw = dataKey ? row[dataKey] : i;
         const label = tickFormatter ? tickFormatter(raw, i) : String(raw ?? "");
+
         return (
           <text
             // biome-ignore lint/suspicious/noArrayIndexKey: index is the stable x position

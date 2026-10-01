@@ -13,6 +13,7 @@ export function YAxis({
   tickMargin?: number;
 }) {
   const ctx = useChartPart("YAxis");
+
   if (!ctx.ready) return null;
 
   return (

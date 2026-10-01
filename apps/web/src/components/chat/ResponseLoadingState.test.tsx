@@ -9,6 +9,7 @@ import {
 } from "./ResponseLoadingState";
 
 const NOW = new Date("2026-09-15T18:00:00.000Z");
+
 const since = (elapsedMs: number) => new Date(NOW.getTime() - elapsedMs).toISOString();
 
 describe("ResponseLoadingState", () => {

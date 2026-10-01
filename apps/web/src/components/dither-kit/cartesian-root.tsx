@@ -56,6 +56,7 @@ export type CartesianChartProps<TData extends Row> = {
 /** Which render layer a composed part targets — defaults to the front SVG. */
 function layerOf(node: ReactNode): "back" | "dom" | "svg" {
   if (!isValidElement(node) || typeof node.type === "string") return "svg";
+
   return (node.type as { chartLayer?: "back" | "dom" }).chartLayer ?? "svg";
 }
 
@@ -119,6 +120,7 @@ export function CartesianRoot<TData extends Row>({
   const domChildren: ReactNode[] = [];
   Children.forEach(children, (child) => {
     const layer = layerOf(child);
+
     if (layer === "back") backChildren.push(child);
     else if (layer === "dom") domChildren.push(child);
     else svgChildren.push(child);
@@ -126,6 +128,7 @@ export function CartesianRoot<TData extends Row>({
 
   const onMove = (clientX: number) => {
     const el = ref.current;
+
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const px = clientX - rect.left - margins.left;

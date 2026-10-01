@@ -144,6 +144,7 @@ describe("ComposerCommandMenu", () => {
     const [reviewRow = "", deployRow = ""] = markup.split(
       'data-composer-item-id="skill:codex:deploy"',
     );
+
     expect(reviewRow).toContain('<span aria-hidden="true" class="flex size-[1.6em]');
     expect(reviewRow).toContain('data-skill-icon="own">🔍</span>');
     expect(reviewRow).not.toContain("lucide-user-round");

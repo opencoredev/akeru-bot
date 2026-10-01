@@ -189,6 +189,7 @@ function Row({
     "data-composer-banner-row": "true",
     "data-composer-banner-layout": layout,
   };
+
   return useRender({
     defaultTagName: "div",
     render,

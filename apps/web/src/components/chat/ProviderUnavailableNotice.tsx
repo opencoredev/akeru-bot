@@ -14,6 +14,7 @@ import { Button } from "../ui/button";
 import { SettingsLinkChip } from "./SettingsLinkChip";
 
 const PROVIDERS_HREF = settingsDeepLinkHref("providers");
+
 const PROVIDERS_DESTINATION = parseSettingsDeepLink(PROVIDERS_HREF);
 
 /** The Settings > Providers chip shown wherever reconnecting a provider fixes a failure. */
@@ -25,7 +26,9 @@ export function ProviderSettingsChip({
   readonly className?: string;
 }) {
   const { t } = useI18n();
+
   if (!PROVIDERS_DESTINATION) return null;
+
   return (
     <SettingsLinkChip
       href={PROVIDERS_HREF}
@@ -53,9 +56,11 @@ export function ProviderRepairAction({
   readonly onOpenUsage?: (() => void) | undefined;
 }) {
   const { t } = useI18n();
+
   if (action === "providers") {
     return <ProviderSettingsChip environmentId={environmentId} />;
   }
+
   if (action === "usage" && onOpenUsage) {
     return (
       <Button size="xs" type="button" variant="outline" onClick={onOpenUsage}>
@@ -63,6 +68,7 @@ export function ProviderRepairAction({
       </Button>
     );
   }
+
   return null;
 }
 
@@ -131,6 +137,7 @@ export function ProviderUnavailableLine({
   readonly onOpenUsage?: (() => void) | undefined;
 }) {
   const { t } = useI18n();
+
   const action =
     presentation.action === "providers" ? (
       <Button
@@ -146,6 +153,7 @@ export function ProviderUnavailableLine({
         {t("Bot settings")}
       </Button>
     ) : null;
+
   return (
     <div
       id={id}

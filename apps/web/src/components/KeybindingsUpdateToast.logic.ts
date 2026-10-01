@@ -23,6 +23,7 @@ export function createKeybindingsUpdateToastController(input: {
       }
 
       const issue = event.payload.issues.find((entry) => entry.kind.startsWith("keybindings."));
+
       if (issue) {
         return {
           _tag: "InvalidConfiguration",
@@ -31,6 +32,7 @@ export function createKeybindingsUpdateToastController(input: {
       }
 
       const currentTime = now();
+
       if (
         lastSuccessToastAt !== null &&
         currentTime - lastSuccessToastAt < KEYBINDINGS_SUCCESS_TOAST_COOLDOWN_MS
@@ -39,6 +41,7 @@ export function createKeybindingsUpdateToastController(input: {
       }
 
       lastSuccessToastAt = currentTime;
+
       return { _tag: "Success" };
     },
   };

@@ -12,6 +12,7 @@ import { getComposerPromptInjectionState, getComposerProviderState } from "./com
 // vary only the descriptor shape per scenario.
 
 const PROVIDER: ProviderDriverKind = ProviderDriverKind.make("codex");
+
 const MODEL = "test-model";
 
 function selectDescriptor(
@@ -20,6 +21,7 @@ function selectDescriptor(
   promptInjectedValues?: ReadonlyArray<string>,
 ): Extract<ProviderOptionDescriptor, { type: "select" }> {
   const defaultId = options.find((option) => option.isDefault)?.id;
+
   return {
     id,
     label: id,

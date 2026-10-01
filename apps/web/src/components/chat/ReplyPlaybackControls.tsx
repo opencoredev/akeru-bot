@@ -23,15 +23,18 @@ export function ReplyPlaybackControls({
   disclosure,
 }: ReplyPlaybackControlsProps) {
   const { t } = useI18n();
+
   const snapshot = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
     controller.getSnapshot,
   );
+
   const state =
     snapshot.status !== "idle" && sameReplyPlaybackIdentity(snapshot.identity, request.identity)
       ? snapshot.status
       : "idle";
+
   const label =
     state === "loading"
       ? t("Preparing audio")
@@ -42,12 +45,14 @@ export function ReplyPlaybackControls({
           : state === "error"
             ? t("Retry readout")
             : t("Read aloud");
+
   const activate = () => {
     if (state === "playing") controller.pause();
     else if (state === "paused") void controller.resume();
     else if (state === "error") void controller.retry();
     else void controller.start(request);
   };
+
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1" aria-label={t("Reply playback")}>
       <Button

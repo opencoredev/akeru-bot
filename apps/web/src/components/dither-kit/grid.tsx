@@ -11,6 +11,7 @@ export function Grid({
   strokeDasharray?: string;
 }) {
   const ctx = useChartPart("Grid");
+
   if (!ctx.ready) return null;
   const { width } = ctx.plot;
 

@@ -7,18 +7,22 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button } from "../ui/button";
 
 const DISMISS_TRANSITION_MS = 220;
+
 const frontExitStyle = {
   opacity: 0,
   transform: "translate3d(0, 4rem, 0)",
 } satisfies CSSProperties;
+
 const stackedExitStyle = {
   opacity: 0,
   transform: "translate3d(0, 7rem, 0)",
 } satisfies CSSProperties;
+
 const restingStyle = {
   opacity: 1,
   transform: "none",
 } satisfies CSSProperties;
+
 const exitTransitionStyle = {
   transition: `transform ${DISMISS_TRANSITION_MS}ms ease-in, opacity ${DISMISS_TRANSITION_MS}ms ease-in`,
 } satisfies CSSProperties;
@@ -58,6 +62,7 @@ interface ComposerBannerStackProps {
 export function ComposerBannerStack({ className, items }: ComposerBannerStackProps) {
   const [requestedExitingItemId, setExitingItemId] = useState<string | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const exitingItemId =
     requestedExitingItemId !== null && items.some((item) => item.id === requestedExitingItemId)
       ? requestedExitingItemId
@@ -76,9 +81,11 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
   }
 
   const frontItem = items[0];
+
   if (!frontItem) {
     return null;
   }
+
   const stackedItems = items.slice(1);
   const hasStack = stackedItems.length > 0;
   const showCollapsedStackCap = hasStack && exitingItemId !== frontItem.id;
@@ -88,10 +95,13 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
     if (!item.onDismiss || exitingItemId) {
       return;
     }
+
     setExitingItemId(item.id);
+
     if (dismissTimeoutRef.current) {
       clearTimeout(dismissTimeoutRef.current);
     }
+
     dismissTimeoutRef.current = setTimeout(() => {
       dismissTimeoutRef.current = null;
       item.onDismiss?.();
@@ -195,6 +205,7 @@ function ComposerBannerStackAlert({
 }) {
   const { t } = useI18n();
   const dismissOnly = item.onDismiss && !item.actions;
+
   const visualVariant =
     item.variant === "info" || item.variant === "success" ? "default" : item.variant;
 

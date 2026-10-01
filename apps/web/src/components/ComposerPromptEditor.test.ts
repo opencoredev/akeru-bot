@@ -33,10 +33,13 @@ describe("registerComposerInlineTokenPaste", () => {
     vi.stubGlobal("ClipboardEvent", TestClipboardEvent);
     const editor = createEditor();
     const mention = "[improve-deploy-error-logging.md](.changeset/improve-deploy-error-logging.md)";
+
     const plainTextFallback = vi.fn(() => {
       const selection = $getSelection();
+
       if (!$isRangeSelection(selection)) return false;
       selection.insertText(mention);
+
       return true;
     });
 
@@ -78,10 +81,13 @@ describe("registerComposerInlineTokenPaste", () => {
   ])("leaves scoped package command %s to the plain-text paste fallback", (command) => {
     vi.stubGlobal("ClipboardEvent", TestClipboardEvent);
     const editor = createEditor();
+
     const plainTextFallback = vi.fn((event: ClipboardEvent) => {
       const selection = $getSelection();
+
       if (!$isRangeSelection(selection)) return false;
       selection.insertText(event.clipboardData?.getData("text/plain") ?? "");
+
       return true;
     });
 

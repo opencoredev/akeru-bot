@@ -41,13 +41,17 @@ function chooseRepresentativeProvider(
   if (!current) {
     return candidate;
   }
+
   const defaultInstanceId = defaultInstanceIdForDriver(candidate.driver);
+
   if (candidate.instanceId === defaultInstanceId) {
     return candidate;
   }
+
   if (current.instanceId === defaultInstanceId) {
     return current;
   }
+
   return candidate.checkedAt.localeCompare(current.checkedAt) >= 0 ? candidate : current;
 }
 
@@ -66,6 +70,7 @@ function dedupeProvidersByDriver<T extends ServerProvider>(providers: ReadonlyAr
 
 function getProviderUpdatedTitle(provider: Pick<ServerProvider, "driver" | "version">): string {
   const providerName = PROVIDER_DISPLAY_NAMES[provider.driver] ?? provider.driver;
+
   return provider.version
     ? `${providerName} updated: ${formatVersion(provider.version)}`
     : `${providerName} updated`;
@@ -82,6 +87,7 @@ function getProviderFailedUpdateTitle(
 ): string {
   const providerName = PROVIDER_DISPLAY_NAMES[provider.driver] ?? provider.driver;
   const attemptedVersion = provider.versionAdvisory?.latestVersion;
+
   return attemptedVersion
     ? `${providerName} ${formatVersion(attemptedVersion)} update failed`
     : `${providerName} update failed`;
@@ -119,19 +125,24 @@ export function hasOneClickUpdateProviderCandidate(
   }
 
   const driverProviders = providers.filter((provider) => provider.driver === candidate.driver);
+
   if (driverProviders.length === 0) {
     return false;
   }
 
   const updateCommands = new Set<string>();
+
   for (const provider of driverProviders) {
     if (!isProviderUpdateCandidate(provider)) {
       continue;
     }
+
     const advisory = provider.versionAdvisory;
+
     if (!advisory || advisory.canUpdate !== true || advisory.updateCommand === null) {
       return false;
     }
+
     updateCommands.add(advisory.updateCommand);
   }
 
@@ -151,9 +162,11 @@ export function formatProviderList(providers: ReadonlyArray<Pick<ServerProvider,
   const names = providers.map(
     (provider) => PROVIDER_DISPLAY_NAMES[provider.driver] ?? provider.driver,
   );
+
   if (names.length <= 2) {
     return names.join(" and ");
   }
+
   return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
@@ -166,22 +179,28 @@ function isRecentTerminalProvider(
   visibleAfterIso: string | undefined,
 ): boolean {
   const status = provider.updateState?.status;
+
   if (status !== "failed" && status !== "unchanged" && status !== "succeeded") {
     return false;
   }
+
   if (visibleAfterIso === undefined) {
     return true;
   }
+
   const finishedAt = getUpdateFinishedAt(provider);
+
   return finishedAt !== null && finishedAt >= visibleAfterIso;
 }
 
 function latestFinishedAtForProviders(providers: ReadonlyArray<ServerProvider>): string | null {
   return providers.reduce<string | null>((latest, provider) => {
     const finishedAt = getUpdateFinishedAt(provider);
+
     if (finishedAt === null) {
       return latest;
     }
+
     return latest === null || finishedAt > latest ? finishedAt : latest;
   }, null);
 }
@@ -197,10 +216,13 @@ export function getProviderUpdateSidebarPillView(
 ): ProviderUpdateSidebarPillView | null {
   const dedupedProviders = dedupeProvidersByDriver(providers);
   const activeProviders = dedupedProviders.filter(isProviderUpdateActive);
+
   if (activeProviders.length > 0) {
     const activeProvider = activeProviders[0]!;
+
     const activeProviderName =
       PROVIDER_DISPLAY_NAMES[activeProvider.driver] ?? activeProvider.driver;
+
     return {
       key: `loading:${activeProviders
         .map((provider) => `${provider.driver}:${provider.updateState?.status ?? "idle"}`)
@@ -221,11 +243,13 @@ export function getProviderUpdateSidebarPillView(
   const recentTerminalProviders = dedupedProviders.filter((provider) =>
     isRecentTerminalProvider(provider, options?.visibleAfterIso),
   );
+
   const terminalCandidates: ProviderUpdateSidebarPillView[] = [];
 
   const failedProviders = recentTerminalProviders.filter(
     (provider) => provider.updateState?.status === "failed",
   );
+
   if (failedProviders.length > 0) {
     const failedProvider = failedProviders[0]!;
     terminalCandidates.push({
@@ -249,10 +273,13 @@ export function getProviderUpdateSidebarPillView(
   const unchangedProviders = recentTerminalProviders.filter(
     (provider) => provider.updateState?.status === "unchanged",
   );
+
   if (unchangedProviders.length > 0) {
     const unchangedProvider = unchangedProviders[0]!;
+
     const unchangedProviderName =
       PROVIDER_DISPLAY_NAMES[unchangedProvider.driver] ?? unchangedProvider.driver;
+
     terminalCandidates.push({
       key: `unchanged:${unchangedProviders
         .map(
@@ -276,6 +303,7 @@ export function getProviderUpdateSidebarPillView(
   const succeededProviders = recentTerminalProviders.filter(
     (provider) => provider.updateState?.status === "succeeded",
   );
+
   if (succeededProviders.length > 0) {
     const succeededProvider = succeededProviders[0]!;
     terminalCandidates.push({
@@ -305,14 +333,17 @@ export function getProviderUpdateSidebarPillView(
             : left.tone === "warning"
               ? unchangedProviders
               : succeededProviders;
+
         const rightProviders =
           right.tone === "error"
             ? failedProviders
             : right.tone === "warning"
               ? unchangedProviders
               : succeededProviders;
+
         const leftFinishedAt = latestFinishedAtForProviders(leftProviders) ?? "";
         const rightFinishedAt = latestFinishedAtForProviders(rightProviders) ?? "";
+
         return rightFinishedAt.localeCompare(leftFinishedAt);
       })
       .find((candidate) => !options?.dismissedKeys?.has(candidate.key)) ?? null
@@ -322,9 +353,11 @@ export function getProviderUpdateSidebarPillView(
 function getFailedProviderUpdateDescription(providers: ReadonlyArray<ServerProvider>): string {
   if (providers.length === 1) {
     const provider = providers[0]!;
+
     if (provider.updateState?.message) {
       return provider.updateState.message;
     }
   }
+
   return `${formatProviderList(providers)} failed to update. Check provider settings for details.`;
 }

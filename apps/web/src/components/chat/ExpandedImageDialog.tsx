@@ -33,9 +33,11 @@ interface ExpandedImageDialogProps {
 /** Returns a reveal action when the environment can show a stored attachment in its file manager. */
 function useRevealAttachment(environmentId: EnvironmentId | undefined) {
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId ?? null));
+
   const revealAttachment = useAtomCommand(shellEnvironment.revealAttachment, {
     reportFailure: false,
   });
+
   if (
     environmentId === undefined ||
     serverConfig?.shellRevealInFileManager !== true ||
@@ -43,14 +45,17 @@ function useRevealAttachment(environmentId: EnvironmentId | undefined) {
   ) {
     return null;
   }
+
   const label =
     serverConfig.shellRevealInFileManagerKind === undefined
       ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os)
       : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind);
+
   return {
     label,
     reveal: async (attachmentId: string) => {
       const result = await revealAttachment({ environmentId, input: { attachmentId } });
+
       if (result._tag === "Failure") throw new Error("The environment could not show the image.");
     },
   };
@@ -63,6 +68,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
 }: ExpandedImageDialogProps) {
   const { t } = useI18n();
   const reveal = useRevealAttachment(environmentId);
+
   const runAction = useCallback((title: string, action: () => Promise<void>) => {
     action().catch((error: unknown) =>
       toastManager.add({
@@ -72,8 +78,10 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
       }),
     );
   }, []);
+
   const openImage = (item: ExpandedImageItem) =>
     window.open(item.src, "_blank", "noopener,noreferrer");
+
   const [imageOffset, setImageOffset] = useState(0);
   const index = (preview.index + imageOffset + preview.images.length) % preview.images.length;
 
@@ -87,25 +95,33 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
         event.preventDefault();
         event.stopPropagation();
         onClose();
+
         return;
       }
+
       if (preview.images.length <= 1) return;
+
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         event.stopPropagation();
         navigateImage(-1);
+
         return;
       }
+
       if (event.key !== "ArrowRight") return;
       event.preventDefault();
       event.stopPropagation();
       navigateImage(1);
     };
+
     window.addEventListener("keydown", onKeyDown);
+
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [navigateImage, onClose, preview.images.length]);
 
   const item = preview.images[index];
+
   if (!item) return null;
 
   return (

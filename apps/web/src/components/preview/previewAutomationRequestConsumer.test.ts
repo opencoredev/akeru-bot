@@ -20,9 +20,13 @@ import {
 } from "./previewAutomationRequestConsumer";
 
 const environmentId = EnvironmentId.make("environment-1");
+
 const threadId = ThreadId.make("thread-1");
+
 const tabId = PreviewTabId.make("tab-1");
+
 const clientId = "client-1";
+
 const connectionId = "connection-1";
 
 const request = (
@@ -60,9 +64,11 @@ describe("previewAutomationRequestConsumer", () => {
         connectionId,
       }),
     );
+
     const handleRequest = vi.fn(async () => undefined);
     const respond = vi.fn(async () => undefined);
     const state = consumerState(handleRequest);
+
     const consumerAtom = createPreviewAutomationRequestConsumerAtom({
       requestsAtom,
       clientId,
@@ -72,6 +78,7 @@ describe("previewAutomationRequestConsumer", () => {
       respond,
       label: "test:preview-automation-connected",
     });
+
     const registry = AtomRegistry.make();
 
     registry.mount(consumerAtom);
@@ -90,9 +97,11 @@ describe("previewAutomationRequestConsumer", () => {
         connectionId: "connection-2",
       }),
     );
+
     const handleRequest = vi.fn(async () => undefined);
     const respond = vi.fn(async () => undefined);
     const state = consumerState(handleRequest);
+
     const consumerAtom = createPreviewAutomationRequestConsumerAtom({
       requestsAtom,
       clientId,
@@ -102,6 +111,7 @@ describe("previewAutomationRequestConsumer", () => {
       respond,
       label: "test:preview-automation-stale-generation",
     });
+
     const registry = AtomRegistry.make();
 
     registry.mount(consumerAtom);
@@ -120,14 +130,19 @@ describe("previewAutomationRequestConsumer", () => {
     const requestsAtom = Atom.make<AsyncResult.AsyncResult<PreviewAutomationStreamEvent, Error>>(
       AsyncResult.initial<PreviewAutomationStreamEvent, Error>(false),
     );
+
     const handleRequest = vi.fn(async (value: PreviewAutomationRequest) => ({
       requestId: value.requestId,
     }));
+
     const responses: PreviewAutomationResponse[] = [];
+
     const respond = vi.fn(async (response: PreviewAutomationResponse) => {
       responses.push(response);
     });
+
     const state = consumerState(handleRequest);
+
     const consumerAtom = createPreviewAutomationRequestConsumerAtom({
       requestsAtom,
       clientId,
@@ -137,6 +152,7 @@ describe("previewAutomationRequestConsumer", () => {
       respond,
       label: "test:preview-automation-consumer",
     });
+
     const registry = AtomRegistry.make();
     registry.mount(consumerAtom);
 
@@ -156,10 +172,12 @@ describe("previewAutomationRequestConsumer", () => {
     const requestsAtom = Atom.make<AsyncResult.AsyncResult<PreviewAutomationStreamEvent, Error>>(
       AsyncResult.initial<PreviewAutomationStreamEvent, Error>(false),
     );
+
     const firstHandler = vi.fn(async () => "first");
     const secondHandler = vi.fn(async () => "second");
     const respond = vi.fn(async (_response: PreviewAutomationResponse) => undefined);
     const state = consumerState(firstHandler);
+
     const consumerAtom = createPreviewAutomationRequestConsumerAtom({
       requestsAtom,
       clientId,
@@ -169,6 +187,7 @@ describe("previewAutomationRequestConsumer", () => {
       respond,
       label: "test:preview-automation-latest-handler",
     });
+
     const registry = AtomRegistry.make();
     registry.mount(consumerAtom);
 
@@ -188,8 +207,10 @@ describe("previewAutomationRequestConsumer", () => {
     const requestsAtom = Atom.make(
       AsyncResult.success<PreviewAutomationStreamEvent, Error>(requestEvent("request-ready")),
     );
+
     const respond = vi.fn(async (_response: PreviewAutomationResponse) => undefined);
     const state = consumerState(async () => undefined);
+
     const consumerAtom = createPreviewAutomationRequestConsumerAtom({
       requestsAtom,
       clientId,
@@ -199,6 +220,7 @@ describe("previewAutomationRequestConsumer", () => {
       respond,
       label: "test:preview-automation-initial-request",
     });
+
     const registry = AtomRegistry.make();
 
     registry.mount(consumerAtom);
@@ -326,6 +348,7 @@ describe("previewAutomationRequestConsumer", () => {
 
   it("correlates unexpected failures without exposing cause details", () => {
     const cause = new Error("private bridge token: preview-secret");
+
     const context = {
       requestId: "request-2",
       operation: "snapshot" as const,
@@ -333,6 +356,7 @@ describe("previewAutomationRequestConsumer", () => {
       threadId,
       tabId,
     };
+
     const response = serializePreviewAutomationError(cause, context);
 
     expect(response).toEqual({
@@ -354,10 +378,13 @@ describe("previewAutomationRequestConsumer", () => {
     const requestsAtom = Atom.make<AsyncResult.AsyncResult<PreviewAutomationStreamEvent, Error>>(
       AsyncResult.initial<PreviewAutomationStreamEvent, Error>(false),
     );
+
     const responses: PreviewAutomationResponse[] = [];
+
     const state = consumerState(async () => {
       throw new Error("desktop IPC secret: do-not-return");
     });
+
     const consumerAtom = createPreviewAutomationRequestConsumerAtom({
       requestsAtom,
       clientId,
@@ -369,6 +396,7 @@ describe("previewAutomationRequestConsumer", () => {
       },
       label: "test:preview-automation-failure-boundary",
     });
+
     const registry = AtomRegistry.make();
     registry.mount(consumerAtom);
 

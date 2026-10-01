@@ -10,6 +10,7 @@ import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
  */
 export function detailsToggleInsetClass(detailsPanelOpen: boolean | undefined): string | null {
   if (detailsPanelOpen === undefined) return null;
+
   return detailsPanelOpen
     ? "max-[980px]:pr-[calc(var(--workspace-controls-right)+var(--workspace-titlebar-control-size)+var(--workspace-titlebar-control-gap))]!"
     : "pr-[calc(var(--workspace-controls-right)+var(--workspace-titlebar-control-size)+var(--workspace-titlebar-control-gap))]!";

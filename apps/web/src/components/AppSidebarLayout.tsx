@@ -54,6 +54,7 @@ const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
 
 function subscribeToViewportWidth(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
+
   return () => window.removeEventListener("resize", onChange);
 }
 
@@ -69,6 +70,7 @@ function readInitialThreadSidebarWidth(): number {
     );
   } catch (error) {
     console.error("Could not read persisted thread sidebar width.", error);
+
     return resolveInitialThreadSidebarWidth(null, window.innerWidth);
   }
 }
@@ -88,12 +90,14 @@ function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
+
       if (
         event.target instanceof HTMLElement &&
         event.target.closest("[data-keybinding-capture]")
       ) {
         return;
       }
+
       if (resolveShortcutCommand(event, keybindings) !== "sidebar.toggle") return;
 
       event.preventDefault();
@@ -103,6 +107,7 @@ function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean 
 
     // Capture before focused editors consume commands such as Mod+B for rich-text formatting.
     window.addEventListener("keydown", onKeyDown, true);
+
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, toggleSidebar]);
 
@@ -150,6 +155,7 @@ function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean 
 // zero-project state while the environment snapshot reconnects.
 function ProjectProjectionRetention() {
   useProjects();
+
   return null;
 }
 
@@ -165,21 +171,27 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   // that would otherwise refresh a render-time snapshot.
   const viewportWidth = useSyncExternalStore(subscribeToViewportWidth, readViewportWidth);
   const sidebarMaximumWidth = resolveThreadSidebarMaximumWidth(viewportWidth);
+
   const resetSidebarWidth = () => {
     try {
       removeLocalStorageItem(THREAD_SIDEBAR_WIDTH_STORAGE_KEY);
     } catch (error) {
       console.error("Could not clear persisted thread sidebar width.", error);
     }
+
     setSidebarWidth(resolveInitialThreadSidebarWidth(null, viewportWidth));
   };
+
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(() => {
     const getWindowFullscreenState = window.desktopBridge?.getWindowFullscreenState;
+
     return isMacosDesktop && typeof getWindowFullscreenState === "function"
       ? getWindowFullscreenState()
       : false;
   });
+
   const sidebarExperiment = useSidebarExperiment();
+
   const sidebarProviderStyle = {
     "--sidebar-width": `${
       sidebarExperiment
@@ -198,8 +210,10 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isMacosDesktop) return;
     const bridge = window.desktopBridge;
+
     if (!bridge) return;
     const { getWindowFullscreenState, onWindowFullscreenStateChange } = bridge;
+
     if (
       typeof getWindowFullscreenState !== "function" ||
       typeof onWindowFullscreenStateChange !== "function"
@@ -209,11 +223,13 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
 
     const unsubscribe = onWindowFullscreenStateChange(setIsWindowFullscreen);
     setIsWindowFullscreen(getWindowFullscreenState());
+
     return unsubscribe;
   }, [isMacosDesktop]);
 
   useEffect(() => {
     const onMenuAction = window.desktopBridge?.onMenuAction;
+
     if (typeof onMenuAction !== "function") {
       return;
     }

@@ -54,9 +54,12 @@ interface ShowExternalLinkContextMenuOptions {
 
 export function resolveExternalWebLinkHost(href: string | undefined): string | null {
   if (!href) return null;
+
   try {
     const url = new URL(href);
+
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+
     return url.hostname || null;
   } catch {
     return null;
@@ -74,10 +77,12 @@ export async function showExternalLinkContextMenu({
   reportFailure,
 }: ShowExternalLinkContextMenuOptions): Promise<void> {
   let action: ExternalLinkContextMenuAction | null;
+
   try {
     action = await showContextMenu(externalLinkContextMenuItems({ canOpenInPreview }), position);
   } catch (cause) {
     reportFailure("show-link-context-menu", cause);
+
     return;
   }
 

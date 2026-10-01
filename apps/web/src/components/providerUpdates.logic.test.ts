@@ -11,10 +11,13 @@ import {
 } from "./providerUpdates.logic";
 
 const checkedAt = "2026-04-23T10:00:00.000Z";
+
 const sessionStartedAt = "2026-04-23T09:59:00.000Z";
+
 const laterCheckedAt = "2026-04-23T10:01:00.000Z";
 
 const driver = (value: string) => ProviderDriverKind.make(value);
+
 const instanceId = (value: string) => ProviderInstanceId.make(value);
 
 function provider(input: {
@@ -354,6 +357,7 @@ describe("provider update logic", () => {
     const successView = getProviderUpdateSidebarPillView(providers, {
       visibleAfterIso: sessionStartedAt,
     });
+
     expect(successView).toMatchObject({
       key: "succeeded:codex:2026-04-23T10:01:00.000Z:Provider updated.",
       tone: "success",
@@ -364,6 +368,7 @@ describe("provider update logic", () => {
       visibleAfterIso: sessionStartedAt,
       dismissedKeys: new Set(["succeeded:codex:2026-04-23T10:01:00.000Z:Provider updated."]),
     });
+
     expect(failureView).toMatchObject({
       key: "failed:claudeAgent:2026-04-23T10:00:00.000Z:Update command exited with code 1.",
       tone: "error",
