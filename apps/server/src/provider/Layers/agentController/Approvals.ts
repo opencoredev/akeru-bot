@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ProviderApprovalDecision } from "@akeru/contracts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
@@ -20,7 +21,7 @@ import * as Effect from "effect/Effect";
 
 import { akeruActionNeedsApproval } from "../../AkeruMastraHarness.ts";
 
-import { makePendingWaiters } from "../../PendingWaiters.ts";
+import type { PendingWaiters } from "../../PendingWaiters.ts";
 
 import { isMemoryToolId } from "../../AkeruToolRuntime.ts";
 
@@ -42,19 +43,15 @@ export function createApprovals(deps: {
     operation: string,
     providerInstanceId: ProviderInstanceId,
   ) => ProviderValidationError;
-  readonly pendingRoutineRequests: ReturnType<
-    typeof makePendingWaiters<
-      {
-        readonly threadId: string;
-        readonly input: AkeruCreateRoutineInput;
-        readonly timezone: string;
-      },
-      unknown,
-      Error
-    >
-  > extends Effect.Effect<infer A, infer _E, infer _R>
-    ? A
-    : never;
+  readonly pendingRoutineRequests: PendingWaiters<
+    {
+      readonly threadId: string;
+      readonly input: AkeruCreateRoutineInput;
+      readonly timezone: string;
+    },
+    unknown,
+    Error
+  >;
   readonly turnStillWaiting: (threadId: string, active: ActiveSession) => boolean;
   readonly publish: (event: ProviderRuntimeEvent) => void;
   readonly baseEvent: (
@@ -295,7 +292,7 @@ export function createApprovals(deps: {
       },
     );
 
-    if (admitted._tag === "Stale") {
+    if (Predicate.isTagged(admitted, "Stale")) {
       return yield* new AgentControllerRuntimeError({
         operation: "respondToRequest",
         detail: `Stale pending approval request: ${input.requestId}. The bot turn has ended. Send the request again.`,
@@ -401,7 +398,7 @@ export function createApprovals(deps: {
         },
       );
 
-      if (admitted._tag === "Stale") {
+      if (Predicate.isTagged(admitted, "Stale")) {
         return yield* new AgentControllerRuntimeError({
           operation: "respondToUserInput",
           detail: `Unknown pending user-input request: ${input.requestId}. The bot turn has ended. Send the request again.`,

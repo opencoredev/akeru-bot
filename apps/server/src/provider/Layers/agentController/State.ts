@@ -1,3 +1,4 @@
+import type { AkeruPluginRuntimeOptions } from "../../AkeruCatalogToolHandlers.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
 
@@ -13,7 +14,6 @@ import {
   type ProviderSession,
   ThreadId,
   type AkeruMemoryThreadAccess,
-  type OrchestrationCommand,
   type OrchestrationReadModel,
 } from "@akeru/contracts";
 import * as Deferred from "effect/Deferred";
@@ -146,5 +146,5 @@ export interface LegacyResourceIdentity {
 /** Orchestration access for temporary workers and delegation. */
 export interface WorkerOrchestration {
   readonly readSnapshot: () => Promise<OrchestrationReadModel>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+  readonly dispatch: AkeruPluginRuntimeOptions["dispatch"];
 }

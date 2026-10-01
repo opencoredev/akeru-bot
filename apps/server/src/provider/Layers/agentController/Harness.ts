@@ -39,9 +39,10 @@ import {
   BotUsageLedger,
 } from "../../../usage/BotUsageLedger.ts";
 import { SubscriptionAuthService } from "../../../subscription-auth/service.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Session composition root constructs a harness with the resolved bot and provider configuration.
 import { makeAkeruMastraHarness } from "../../AkeruMastraHarness.ts";
 
-import { AKERU_ROUTINE_REVIEW_TIMEOUT, makePendingWaiters } from "../../PendingWaiters.ts";
+import { AKERU_ROUTINE_REVIEW_TIMEOUT, type PendingWaiters } from "../../PendingWaiters.ts";
 
 import { AkeruSessionResources } from "../../AkeruSessionResources.ts";
 
@@ -73,19 +74,15 @@ export function createHarness(deps: {
   readonly sessionResources: AkeruSessionResources;
   readonly orchestrationEngine: Option.Option<OrchestrationEngineService["Service"]>;
   readonly routineDispatcher: RoutineDraftDispatcher["Service"] | undefined;
-  readonly pendingRoutineRequests: ReturnType<
-    typeof makePendingWaiters<
-      {
-        readonly threadId: string;
-        readonly input: AkeruCreateRoutineInput;
-        readonly timezone: string;
-      },
-      unknown,
-      Error
-    >
-  > extends Effect.Effect<infer A, infer _E, infer _R>
-    ? A
-    : never;
+  readonly pendingRoutineRequests: PendingWaiters<
+    {
+      readonly threadId: string;
+      readonly input: AkeruCreateRoutineInput;
+      readonly timezone: string;
+    },
+    unknown,
+    Error
+  >;
   readonly publishSessionState: (
     threadId: ThreadId,
     active: ActiveSession,

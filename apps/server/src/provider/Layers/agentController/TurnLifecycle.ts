@@ -25,9 +25,9 @@ import { type AkeruChannelRuntime } from "../../AkeruChannelRuntime.ts";
 import { type AkeruBotStateRuntime } from "../../AkeruBotStateRuntime.ts";
 import { AkeruMemoryTurnHarness, type AkeruMemoryTurn } from "../../AkeruMemoryTurnHarness.ts";
 import { type AkeruDelegationChildOutcome } from "../../AkeruDelegationRuntime.ts";
-import { makeAkeruWorkerRuntime } from "../../AkeruWorkerRuntime.ts";
+import type { AkeruWorkerRuntime } from "../../AkeruWorkerRuntime.ts";
 
-import { makePendingWaiters } from "../../PendingWaiters.ts";
+import type { PendingWaiters } from "../../PendingWaiters.ts";
 import {
   createAkeruPluginRuntime,
   type AkeruPluginRuntimeOptions,
@@ -51,19 +51,15 @@ export function createTurnLifecycle(deps: {
   readonly runPromise: AkeruRuntimeSeam["runPromise"];
   readonly forkPromise: AkeruRuntimeSeam["forkPromise"];
   readonly fork: AkeruRuntimeSeam["fork"];
-  readonly pendingRoutineRequests: ReturnType<
-    typeof makePendingWaiters<
-      {
-        readonly threadId: string;
-        readonly input: AkeruCreateRoutineInput;
-        readonly timezone: string;
-      },
-      unknown,
-      Error
-    >
-  > extends Effect.Effect<infer A, infer _E, infer _R>
-    ? A
-    : never;
+  readonly pendingRoutineRequests: PendingWaiters<
+    {
+      readonly threadId: string;
+      readonly input: AkeruCreateRoutineInput;
+      readonly timezone: string;
+    },
+    unknown,
+    Error
+  >;
   readonly creatingRoutineReviews: Map<string, string>;
   readonly publish: (event: ProviderRuntimeEvent) => void;
   readonly baseEvent: (
@@ -129,13 +125,7 @@ export function createTurnLifecycle(deps: {
     turn: ActiveTurn,
   ) => void;
   readonly resolveChildWaiter: (threadId: ThreadId, outcome: AkeruDelegationChildOutcome) => void;
-  readonly workerRuntime: ReturnType<typeof makeAkeruWorkerRuntime> extends Effect.Effect<
-    infer A,
-    infer _E,
-    infer _R
-  >
-    ? A
-    : never;
+  readonly workerRuntime: AkeruWorkerRuntime;
   readonly wired: () => {
     readonly channelRuntime?: AkeruChannelRuntime;
     readonly pluginRuntime?: ReturnType<typeof createAkeruPluginRuntime>;

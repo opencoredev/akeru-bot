@@ -10,7 +10,6 @@ import {
   ThreadId,
   type AkeruDelegationAccessGrant,
   type AkeruDelegationRecord,
-  type OrchestrationCommand,
   type OrchestrationReadModel,
 } from "@akeru/contracts";
 
@@ -27,7 +26,7 @@ import {
   type AkeruDelegationChildOutcome,
 } from "../../AkeruDelegationRuntime.ts";
 
-import { AKERU_CHILD_WAIT_DEFAULT_TIMEOUT, makePendingWaiters } from "../../PendingWaiters.ts";
+import { AKERU_CHILD_WAIT_DEFAULT_TIMEOUT, type PendingWaiters } from "../../PendingWaiters.ts";
 import {
   createAkeruPluginRuntime,
   type AkeruPluginRuntimeOptions,
@@ -53,11 +52,7 @@ export function createDelegation(deps: {
     readonly workerOrchestration?: WorkerOrchestration;
   };
   readonly sessions: Map<string, ActiveSession>;
-  readonly childWaiters: ReturnType<
-    typeof makePendingWaiters<null, AkeruDelegationChildOutcome>
-  > extends Effect.Effect<infer A, infer _E, infer _R>
-    ? A
-    : never;
+  readonly childWaiters: PendingWaiters<null, AkeruDelegationChildOutcome, never>;
   readonly legacyProviderBridge: LegacyProviderBridge["Service"];
   readonly publish: (event: ProviderRuntimeEvent) => void;
   readonly failureDetail: (cause: unknown) => string;
@@ -106,7 +101,7 @@ export function createDelegation(deps: {
 
   const makeDelegationRuntime = (input: {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;
-    readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+    readonly dispatch: AkeruPluginRuntimeOptions["dispatch"];
   }) =>
     createAkeruDelegationRuntime({
       ...input,

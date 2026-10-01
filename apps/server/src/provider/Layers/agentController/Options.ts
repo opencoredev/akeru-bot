@@ -1,7 +1,7 @@
+import { runImageGenerationTool } from "../../../image-generation/ImageGenerationRuntime.ts";
 import { createMcpManager } from "@mastra/code-sdk/mcp/index";
 
 import { Workspace } from "@mastra/core/workspace";
-import { ThreadId } from "@akeru/contracts";
 
 import * as Effect from "effect/Effect";
 
@@ -55,5 +55,8 @@ export interface AgentControllerLiveOptions {
    * Overrides the image generation entry for tests. Defaults to
    * `runImageGenerationTool`, which calls the active ImageGenerationRuntime.
    */
-  readonly generateImage?: (threadId: ThreadId, input: unknown) => Effect.Effect<unknown>;
+  readonly generateImage?: (
+    threadId: Parameters<typeof runImageGenerationTool>[0],
+    input: Parameters<typeof runImageGenerationTool>[1],
+  ) => Effect.Effect<unknown>;
 }

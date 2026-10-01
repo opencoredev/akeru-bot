@@ -1,3 +1,7 @@
+import { readProtocolRecord } from "../ProtocolJson.ts";
+import * as Match from "effect/Match";
+import { omitNullToolFields } from "./Policy.ts";
+import * as Predicate from "effect/Predicate";
 import type { McpManager } from "@mastra/code-sdk/mcp/index";
 import { akeruToolCategory } from "../../AkeruMastraHarness.ts";
 import type { AkeruToolRuntime } from "../../AkeruToolRuntime.ts";
@@ -19,8 +23,6 @@ import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
 } from "@akeru/contracts";
 
-import * as Effect from "effect/Effect";
-
 import { ServerConfig } from "../../../config.ts";
 
 import { persistAkeruPreviewSnapshot } from "../../AkeruPreviewSnapshotAttachment.ts";
@@ -30,7 +32,7 @@ import { akeruActionNeedsApproval, criticalAkeruAction } from "../../AkeruMastra
 import { type AkeruChannelRuntime } from "../../AkeruChannelRuntime.ts";
 import { type AkeruBotStateRuntime } from "../../AkeruBotStateRuntime.ts";
 
-import { makeAkeruWorkerRuntime } from "../../AkeruWorkerRuntime.ts";
+import type { AkeruWorkerRuntime } from "../../AkeruWorkerRuntime.ts";
 
 import {
   createAkeruPluginRuntime,
@@ -74,7 +76,7 @@ export function createEvents(deps: {
   ) => void;
   readonly sessionResources: AkeruSessionResources;
   readonly APPROVAL_FREE_MASTRA_TOOL_NAMES: ReadonlySet<string>;
-  readonly omitNullToolFields: (input: unknown) => unknown;
+  readonly omitNullToolFields: typeof omitNullToolFields;
   readonly mcpToolNeedsApproval: (manager: McpManager | undefined, toolName: string) => boolean;
   readonly permissionPolicy: (
     runtimeMode: RuntimeMode,
@@ -96,13 +98,7 @@ export function createEvents(deps: {
     readonly delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"];
     readonly workerOrchestration?: WorkerOrchestration;
   };
-  readonly workerRuntime: ReturnType<typeof makeAkeruWorkerRuntime> extends Effect.Effect<
-    infer A,
-    infer _E,
-    infer _R
-  >
-    ? A
-    : never;
+  readonly workerRuntime: AkeruWorkerRuntime;
   readonly approvalDetail: (toolName: string, action: string | null, oneUse: boolean) => string;
   readonly sessionFailureDetail: (
     active: Pick<ActiveSession, "mcpServerIds">,
@@ -134,14 +130,12 @@ export function createEvents(deps: {
     state: "ready" | "running" | "waiting" | "stopped" | "error",
     reason?: string,
   ) => {
-    active.status =
-      state === "running"
-        ? "running"
-        : state === "error"
-          ? "error"
-          : state === "stopped"
-            ? "closed"
-            : "ready";
+    active.status = Match.value(state).pipe(
+      Match.when("running", () => "running" as const),
+      Match.when("error", () => "error" as const),
+      Match.when("stopped", () => "closed" as const),
+      Match.orElse(() => "ready" as const),
+    );
     deps.publish({
       ...baseEvent(threadId, active, active.activeTurn?.turnId),
       type: "session.state.changed",
@@ -537,29 +531,27 @@ export function createEvents(deps: {
         turn.waiting = true;
         publishSessionState(threadId, active, "waiting");
 
-        const suspendPayload =
-          event.suspendPayload && typeof event.suspendPayload === "object"
-            ? (event.suspendPayload as Record<string, unknown>)
-            : {};
+        const suspendPayload = readProtocolRecord(event.suspendPayload) ?? {};
 
         const question =
-          typeof suspendPayload.question === "string" && suspendPayload.question.trim()
+          Predicate.isString(suspendPayload.question) && suspendPayload.question.trim()
             ? suspendPayload.question.trim()
             : `Input required for ${event.toolName}`;
 
         const options = Array.isArray(suspendPayload.options)
           ? suspendPayload.options.flatMap((option) => {
-              if (!option || typeof option !== "object") return [];
-              const value = option as Record<string, unknown>;
+              const value = readProtocolRecord(option);
 
-              if (typeof value.label !== "string" || !value.label.trim()) return [];
+              if (!value) return [];
+
+              if (!Predicate.isString(value.label) || !value.label.trim()) return [];
               const label = value.label.trim();
 
               return [
                 {
                   label,
                   description:
-                    typeof value.description === "string" && value.description.trim()
+                    Predicate.isString(value.description) && value.description.trim()
                       ? value.description.trim()
                       : label,
                 },
@@ -630,11 +622,11 @@ export function createEvents(deps: {
         deps.finishTurn(
           threadId,
           active,
-          event.reason === "aborted"
-            ? "interrupted"
-            : event.reason === "error"
-              ? "failed"
-              : "completed",
+          Match.value(event.reason).pipe(
+            Match.when("aborted", () => "interrupted" as const),
+            Match.when("error", () => "failed" as const),
+            Match.orElse(() => "completed" as const),
+          ),
         );
 
         return;
