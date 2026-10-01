@@ -108,10 +108,12 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
                 >
                   <div
                     className="absolute inset-y-0 start-0 rounded-md opacity-75"
+                    /* oxlint-disable shadcn/no-inline-styles -- Remaining-share width and provider palette color are runtime data. */
                     style={{
                       width: `${left}%`,
                       backgroundColor: `var(--color-${presentation.color}-500, var(--foreground))`,
                     }}
+                    /* oxlint-enable shadcn/no-inline-styles */
                   />
                   <div className="absolute inset-0 bg-[repeating-linear-gradient(135deg,transparent_0,transparent_4px,var(--border)_4px,var(--border)_5px)] opacity-30" />
                 </div>

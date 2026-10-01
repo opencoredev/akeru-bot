@@ -350,6 +350,7 @@ export function UsageProviderChart({
             <span
               key={tick}
               className="absolute right-0 -translate-y-1/2 text-[10px] text-muted-foreground tabular-nums"
+              // oxlint-disable-next-line shadcn/no-inline-styles -- Axis tick position computed from the chart scale.
               style={{ top: `${(toY(tick) / VIEW_HEIGHT) * 100}%` }}
             >
               {tick === 0 ? "0" : format(tick)}
@@ -427,11 +428,7 @@ export function UsageProviderChart({
           {hoveredPeriod === undefined ? null : (
             <div
               ref={tooltipRef}
-              className="surface-glass pointer-events-none absolute z-10 min-w-36 max-w-full rounded-xl border border-border/50 px-2.5 py-2 text-xs shadow-lg"
-              style={{
-                left: "var(--usage-tooltip-left, 0px)",
-                top: "var(--usage-tooltip-top, 0px)",
-              }}
+              className="surface-glass pointer-events-none absolute top-(--usage-tooltip-top,0px) left-(--usage-tooltip-left,0px) z-10 min-w-36 max-w-full rounded-xl border border-border/50 px-2.5 py-2 text-xs shadow-lg"
             >
               <div className="mb-1 text-muted-foreground">{formatTooltipPeriod(hoveredPeriod)}</div>
               {providers.map((provider) => {
