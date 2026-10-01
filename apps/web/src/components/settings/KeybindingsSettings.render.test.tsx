@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const fixtures = vi.hoisted(() => ({
-  keybindings: [] as ResolvedKeybindingsConfig,
-}));
+const fixtures = vi.hoisted(() => {
+  const keybindings: ResolvedKeybindingsConfig = [];
+  return { keybindings };
+});
 
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => (atom === "keybindings" ? fixtures.keybindings : null),
