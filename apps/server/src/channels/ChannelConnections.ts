@@ -430,7 +430,7 @@ export const changeChannelProject = (
             binding.status === "connected" && binding.projectId && binding.projectId !== projectId
               ? startOn(binding.projectId).pipe(
                   Effect.as(true),
-                  Effect.catch(() => Effect.succeed(false)),
+                  Effect.orElseSucceed(() => false),
                 )
               : Effect.succeed(false);
 
@@ -449,7 +449,7 @@ export const changeChannelProject = (
                       ...(category ? { failureCategory: category } : {}),
                     }).pipe(Effect.ignoreCause);
 
-                    return yield* Effect.fail(cause);
+                    return yield* cause;
                   }),
             ),
           );
@@ -560,18 +560,21 @@ export const restoreConnectedChannels = (
                   (project) => project.id === binding.projectId && project.deletedAt === null,
                 );
 
-                yield* Effect.gen(function* () {
-                  yield* replaceBinding(ctx, {
-                    ...binding,
-                    status: projectMissing ? "blocked" : "failed",
-                    connectedAt: null,
-                    lastAttemptAt: yield* deps.nowIso,
-                    lastError: projectMissing
-                      ? "The selected project is unavailable. Choose another project."
-                      : channelFailureMessage("restore"),
-                    failureCategory: "restore",
-                  });
-                }).pipe(Effect.ignoreCause);
+                yield* deps.nowIso.pipe(
+                  Effect.flatMap((lastAttemptAt) =>
+                    replaceBinding(ctx, {
+                      ...binding,
+                      status: projectMissing ? "blocked" : "failed",
+                      connectedAt: null,
+                      lastAttemptAt,
+                      lastError: projectMissing
+                        ? "The selected project is unavailable. Choose another project."
+                        : channelFailureMessage("restore"),
+                      failureCategory: "restore",
+                    }),
+                  ),
+                  Effect.ignoreCause,
+                );
               }
 
               return yield* failWith("Channel restore failed.");

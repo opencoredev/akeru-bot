@@ -199,14 +199,17 @@ export const dispatchInboundChannelMessage = (
         );
 
         if (binding) {
-          yield* Effect.gen(function* () {
-            yield* replaceBinding(ctx, {
-              ...binding,
-              status: "blocked",
-              lastAttemptAt: yield* deps.nowIso,
-              lastError: "The selected project is unavailable. Choose another project.",
-            });
-          }).pipe(Effect.ignoreCause);
+          yield* deps.nowIso.pipe(
+            Effect.flatMap((lastAttemptAt) =>
+              replaceBinding(ctx, {
+                ...binding,
+                status: "blocked",
+                lastAttemptAt,
+                lastError: "The selected project is unavailable. Choose another project.",
+              }),
+            ),
+            Effect.ignoreCause,
+          );
         }
 
         return yield* failWith("The channel project is unavailable.");
