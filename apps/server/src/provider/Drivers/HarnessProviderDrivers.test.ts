@@ -107,6 +107,26 @@ const cases = [
   { driver: driverCase(GrokDriver), provider: "xai", name: "Grok", key: "XAI_API_KEY" },
 ] as const;
 
+// Ambient provider keys would count as explicit credentials and mask saved-credential readiness.
+for (const name of [
+  "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "CLAUDE_CODE_OAUTH_TOKEN",
+  "XAI_API_KEY",
+]) {
+  vi.stubEnv(name, "");
+}
+
+const undefinedValuePaths = (value: unknown, path = "$"): string[] =>
+  value === undefined
+    ? [path]
+    : value !== null && typeof value === "object"
+      ? Object.entries(value).flatMap(([key, child]) =>
+          undefinedValuePaths(child, `${path}.${key}`),
+        )
+      : [];
+
 it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
   for (const { driver, provider, name, key } of cases) {
     describe(name, () => {
@@ -301,6 +321,9 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
               auth: { status: "authenticated" },
             });
             expect(after.message).toBeUndefined();
+            // The RPC transport rejects present-but-undefined keys as non-JSON.
+            expect(undefinedValuePaths(before)).toEqual([]);
+            expect(undefinedValuePaths(after)).toEqual([]);
             expect(after.models).toEqual(
               expect.arrayContaining([
                 expect.objectContaining({ slug: "custom-model", isCustom: true }),

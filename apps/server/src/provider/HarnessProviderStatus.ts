@@ -85,7 +85,7 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
     yield* auth.reload();
     yield* manifest.refreshInBackground;
     const current = yield* manifest.current;
-    const draft = yield* input.draft;
+    const { message: _draftMessage, ...draft } = yield* input.draft;
     const message = harnessCredentialIssue(
       input.driver,
       input.connection,
@@ -153,7 +153,7 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
         checkedAt: DateTime.formatIso(yield* DateTime.now),
         status: !draft.enabled ? "disabled" : message ? "warning" : "ready",
         auth: { status: message ? "unauthenticated" : "authenticated" },
-        message: draft.enabled ? message : undefined,
+        ...(draft.enabled && message ? { message } : {}),
         models:
           input.driver === "grok"
             ? models.map((model) =>
