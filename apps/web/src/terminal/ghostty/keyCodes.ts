@@ -221,6 +221,7 @@ let keyboardLayoutMapPromise: Promise<GhosttyKeyboardLayoutMap | undefined> | un
 export function loadGhosttyKeyboardLayoutMap(): Promise<GhosttyKeyboardLayoutMap | undefined> {
   if (keyboardLayoutMapPromise) return keyboardLayoutMapPromise;
 
+  // SAFETY: The optional Keyboard Map API is absent from DOM typings; missing navigator or keyboard is handled below.
   const browserNavigator = globalThis.navigator as
     | (Navigator & {
         readonly keyboard?: {

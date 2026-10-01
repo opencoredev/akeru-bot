@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import ghosttyWasmUrl from "./vendor/ghostty-vt.wasm?url";
 import ghosttyWritePtyWasmUrl from "./vendor/ghostty-write-pty.wasm?url&no-inline";
@@ -17,6 +18,20 @@ interface TypeLayout {
 }
 
 type TypeLayouts = Readonly<Record<string, TypeLayout>>;
+
+const decodeTypeLayouts = Schema.decodeUnknownSync(
+  Schema.Record(
+    Schema.String,
+    Schema.Struct({
+      size: Schema.Number,
+      align: Schema.Number,
+      fields: Schema.Record(
+        Schema.String,
+        Schema.Struct({ offset: Schema.Number, size: Schema.Number, type: Schema.String }),
+      ),
+    }),
+  ),
+);
 
 const textDecoder = new TextDecoder();
 
@@ -42,7 +57,9 @@ export class GhosttyRuntime {
     let end = jsonPointer;
 
     while (end < bytes.length && bytes[end] !== 0) end += 1;
-    this.layouts = JSON.parse(textDecoder.decode(bytes.subarray(jsonPointer, end))) as TypeLayouts;
+    this.layouts = decodeTypeLayouts(
+      JSON.parse(textDecoder.decode(bytes.subarray(jsonPointer, end))),
+    );
   }
 
   static async load(): Promise<GhosttyRuntime> {
@@ -82,6 +99,7 @@ export class GhosttyRuntime {
       throw new Error(`libghostty-vt export is unavailable: ${name}`);
     }
 
+    // SAFETY: The bundled Ghostty ABI exports numeric functions; isFunction excludes memory, tables, and globals.
     return (fn as WasmFunction)(...args);
   }
 

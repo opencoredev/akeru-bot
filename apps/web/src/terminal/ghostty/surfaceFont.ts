@@ -106,7 +106,7 @@ export async function loadTerminalFontFamily(
   family: string | undefined,
   size: number,
   environment?: {
-    readonly load: (font: string, text: string) => Promise<unknown>;
+    readonly load: (font: string, text: string) => Promise<ReadonlyArray<FontFace> | void>;
     readonly resolve: (family: string | undefined) => string;
   },
 ): Promise<string> {

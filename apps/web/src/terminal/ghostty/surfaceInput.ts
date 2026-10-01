@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { isMacPlatform } from "../../lib/utils";
 
 export function isTerminalCopyShortcut(
@@ -43,7 +44,7 @@ export function clearPrimedTerminalCopyInput(
 export function applyTerminalCopyEvent(
   selection: string,
   clipboardData: { setData: (type: string, data: string) => void } | null | undefined,
-): { preventDefault: boolean; claimWriteFallback: boolean } {
+) {
   if (selection.length === 0 || !clipboardData) {
     return { preventDefault: false, claimWriteFallback: false };
   }
@@ -103,7 +104,7 @@ export function resolveTerminalMouseData(
   action: TerminalMouseAction,
   data: string,
   previousMotionData: string,
-): { readonly send: boolean; readonly nextMotionData: string } {
+) {
   const nextMotionData = action === "motion" ? data : "";
 
   return {
@@ -116,7 +117,7 @@ export function resolveTerminalMouseTrackingState(
   previousTracking: boolean,
   tracking: boolean,
   motionData: string,
-): { readonly tracking: boolean; readonly motionData: string } {
+) {
   return {
     tracking,
     motionData: previousTracking === tracking ? motionData : "",
@@ -128,14 +129,13 @@ export function terminalWheelDeltaRows(
   cellHeight: number,
   viewportRows: number,
   remainder: number,
-): { readonly rows: number; readonly remainder: number } {
+) {
   // deltaMode: 0 pixels, 1 lines, 2 pages.
-  const pixels =
-    event.deltaMode === 1
-      ? event.deltaY * cellHeight
-      : event.deltaMode === 2
-        ? event.deltaY * viewportRows * cellHeight
-        : event.deltaY;
+  const pixels = Match.value(event.deltaMode).pipe(
+    Match.when(1, () => event.deltaY * cellHeight),
+    Match.when(2, () => event.deltaY * viewportRows * cellHeight),
+    Match.orElse(() => event.deltaY),
+  );
 
   const total = remainder + pixels / cellHeight;
   const rows = Math.trunc(total);

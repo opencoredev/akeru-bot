@@ -128,6 +128,7 @@ export class GhosttyTerminalSurface {
     fontFamily: string,
     options: GhosttyTerminalSurfaceOptions,
   ) {
+    // oxlint-disable-next-line typescript/no-this-alias -- Adapter getters need the live surface owner because getter this is the adapter itself.
     const surface = this;
     this.mount = mount;
     this.canvas = canvas;

@@ -17,6 +17,30 @@ export interface GhosttyCellRange {
   readonly end: { readonly x: number; readonly y: number };
 }
 
+type CellMeasurementContext = {
+  font: string;
+  measureText: (
+    text: string,
+  ) => Pick<TextMetrics, "width" | "actualBoundingBoxAscent" | "actualBoundingBoxDescent">;
+};
+
+type SnapshotDrawingContext = Pick<
+  CanvasRenderingContext2D,
+  | "beginPath"
+  | "clip"
+  | "fillRect"
+  | "fillStyle"
+  | "fillText"
+  | "font"
+  | "rect"
+  | "resetTransform"
+  | "restore"
+  | "save"
+  | "strokeRect"
+  | "strokeStyle"
+  | "textBaseline"
+> & { readonly canvas: Pick<HTMLCanvasElement, "width" | "height"> };
+
 const DEFAULT_SELECTION_BACKGROUND = "rgba(72, 122, 191, 0.35)";
 
 function cssColor(color: GhosttyColor): string {
@@ -67,7 +91,7 @@ function fontForCell(cell: GhosttyCell, fontSize: number, fontFamily: string): s
 }
 
 export function measureGhosttyCell(
-  context: CanvasRenderingContext2D,
+  context: CellMeasurementContext,
   fontSize: number,
   fontFamily: string,
 ): GhosttyCellMetrics {
@@ -91,7 +115,7 @@ export function terminalGridSize(
   height: number,
   metrics: GhosttyCellMetrics,
   padding: number,
-): { cols: number; rows: number } {
+) {
   return {
     cols: Math.max(1, Math.floor((width - padding * 2) / metrics.width)),
     rows: Math.max(1, Math.floor((height - padding * 2) / metrics.height)),
@@ -99,7 +123,7 @@ export function terminalGridSize(
 }
 
 export function renderGhosttySnapshot(options: {
-  readonly context: CanvasRenderingContext2D;
+  readonly context: SnapshotDrawingContext;
   readonly snapshot: GhosttySnapshot;
   readonly metrics: GhosttyCellMetrics;
   readonly fontSize: number;

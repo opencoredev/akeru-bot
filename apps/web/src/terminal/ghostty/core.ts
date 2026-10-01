@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import {
   type GhosttyKeyboardLayoutMap,
@@ -478,7 +479,11 @@ export class GhosttyTerminalCore {
     this.runtime.call(
       "ghostty_mouse_event_set_action",
       this.mouseEvent,
-      input.action === "press" ? 0 : input.action === "release" ? 1 : 2,
+      Match.value(input.action).pipe(
+        Match.when("press", () => 0),
+        Match.when("release", () => 1),
+        Match.orElse(() => 2),
+      ),
     );
 
     if (input.button === null) {

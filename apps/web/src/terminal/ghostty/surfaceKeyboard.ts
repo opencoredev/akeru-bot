@@ -276,6 +276,7 @@ export class SurfaceKeyboardController {
   };
 
   readonly onInput = (event: Event) => {
+    // SAFETY: The input listener receives browser InputEvent payloads; composition and input handling share this DOM adapter.
     const inputEvent = event as InputEvent;
 
     if (this.composing || inputEvent.isComposing) return;
