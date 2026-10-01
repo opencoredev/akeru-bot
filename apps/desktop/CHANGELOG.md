@@ -1,5 +1,24 @@
 ## @akeru/desktop@0.0.41
 
+## 0.2.0
+
+### Patch Changes
+
+- [#289](https://github.com/opencoredev/akeru-bot/pull/289) [`cedae46`](https://github.com/opencoredev/akeru-bot/commit/cedae46081f9aeff6274210b234b66ec0047225e) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Use Akeru Bot's package identity for packaged Electron safe storage instead of the legacy T3 Code keychain service.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Group chats now explain why a bot cannot be removed yet and ask before deleting a group. Groups hold bots only for now: the unused group people settings are gone, and person membership is deferred while its contracts and commands stay in place.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Mobile: group chats show the group name and member avatars in the roster, thread header, and composer instead of the provider name. The home header no longer shows a global "Reconnecting" banner while another environment is connected, the Bot inbox screen uses its own title, and the Provider connections row has an icon on Android.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Rename the preview browser's Electron session partition to `persist:akeru-preview-` and strip both `akeru/` and legacy `t3code/` tokens from its User-Agent.
+
+- Updated dependencies [[`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad), [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad), [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad), [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad), [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad)]:
+  - @akeru/contracts@0.2.0
+  - @akeru/client-runtime@0.0.3
+  - @akeru/shared@0.0.3
+  - @akeru/ssh@0.0.3
+  - @akeru/tailscale@0.0.3
+
 ## 0.1.1
 
 ### Patch Changes

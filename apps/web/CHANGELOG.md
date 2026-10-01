@@ -1,5 +1,146 @@
 ## @akeru/web@0.0.41
 
+## 0.2.0
+
+### Minor Changes
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Archive a bot from its roster menu and restore it from Archived. An empty roster now shows a Create bot prompt.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - While a bot works, the chat shows a small pixel meter with the current step and elapsed time. You can change a bot's model from the composer, and routine runs appear as notes in the bot's chat.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Type `@` in the composer to mention the preview browser or another chat. A chat mention gives the bot a short excerpt of that chat's recent turns, and `@browser` asks the bot to use the preview browser when bot browser access is on. Bots that share a name both appear in the menu, and picking one routes the message to that bot.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Hold the microphone in an empty chat composer to dictate a message on web, desktop, and mobile. Akeru transcribes through the environment's voice provider and inserts the text at the cursor without sending it.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Memory now lists durable facts by chat, bot, or project scope, with their source, approval state, and replaced value, on desktop, web, and mobile. Durable facts can be exported per scope, and importing them asks you to choose a version for each conflict before anything changes.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Add Image generation settings with separate ChatGPT and Grok rows, honest health tests, a default provider and fallback order, and a per-bot image provider choice. Mobile shows the saved setup.
+
+- [#296](https://github.com/opencoredev/akeru-bot/pull/296) [`268ea1a`](https://github.com/opencoredev/akeru-bot/commit/268ea1a3feb0f6713b3dfde8e6b4e72242e77877) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Bot avatars are now flat shapes in a brighter palette, with slanted eyes cut out of the body. Bots on an older preset color move to the matching new one. A working bot sways, glances down at its work, and turns its face around its body now and then. Pointing at a bot widens its eyes and makes them follow the pointer. Resting bots stay still apart from an occasional blink or glance, and all motion respects your reduced-motion setting. Dithered avatars are gone: the picker no longer offers generated identicons or a dither filter, and bots that had one now show a shape.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Desktop setup now asks what you want your bot to help with and shows a short plan based on your answer. The last step drafts your first message from that plan. After you send it, setup waits until your bot has started, plays a short one-time celebration, and opens the chat with your message already there. With reduced motion turned on, the plan appears right away and the celebration is skipped.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Settings > Providers now says which subscription or key unlocks each provider, whether that subscription includes API access, the limits each provider publishes, what this environment has saved, and one next step. A provider shows Ready only after a request to it succeeds. Mobile Settings shows the same information, in English and Simplified Chinese.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Routines open into a detail view with their schedule, latest run, instructions, and workspace. A bot's shared browser capture expands with Open and collapses with Esc.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The `$` skill menu shows each skill's own emoji, falling back to the glyph for where the skill came from. Selected skills appear as a larger tinted chip with the same emoji, in the composer and in sent messages, and still send as `$name`. The mobile command menu shows the emoji too.
+
+### Patch Changes
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep group chat send available when a configured member can reply.
+
+- [#291](https://github.com/opencoredev/akeru-bot/pull/291) [`5ff172b`](https://github.com/opencoredev/akeru-bot/commit/5ff172b8d6ed1c67d4d75988860e122a58289282) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep independent chats responsive during provider setup and workspace refreshes, and avoid repeated work during streaming updates.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Checklists with two or more tasks in chat now show a static progress summary, such as "2 of 3 done".
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Diff and patch code blocks in chat now render as change cards with added and removed lines tinted and a count of changed lines.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Streaming answers in chat no longer flash a half-typed code fence, table, list marker, or heading underline. The partial line appears once it can render the way the finished message will.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Show the voice connection settings labels in English and Chinese without a missing-translation error.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Allow specialist mentions without a boss and exclude disabled providers from group send availability.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The command palette lists bots first and keeps chats and projects above commands when you search, so a matching chat is no longer buried under commands.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Show mobile remote health controls in English and Chinese without missing labels.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep file locations and their explanations visible in bot failure messages.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep routine notes current in an open chat and show the speaker after each note.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Queue group chat follow-ups while the first message is being accepted, preserving one conversation.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The Plugins directory shows listed integrations while verification is pending, with their connection status visible.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - In a group chat, an @mention of a name that two bots share no longer picks one of them at random. The composer explains the clash and holds the message until one bot is renamed.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The group sidebar now reads a removal hint only on the remove buttons it explains, suggests creating a bot when every bot is already in the group, and shows that state as a note under Add bot instead of in the picker.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Hosted pairing links only pair when the token is in the link's fragment. A link that sends the token in the query string is refused.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - A hosted pairing link that names the address serving the page now signs in to that address, so **Open app** opens the app instead of asking to pair again.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The hosted pairing page reads the link again when the complete link is opened in the same tab, instead of still saying it is incomplete.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Image generation settings now show loading and unavailable states with a retry instead of an empty history, and Connect opens the right provider sign-in for the same environment. Mobile shows the same provider details as desktop, and the bot editor marks image providers that are off or not connected.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep a newly created bot's pending chat until it appears in the environment roster.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep delegated child work from replacing a bot or group's latest chat.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Refresh open chat date and time labels after the device timezone changes.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Report terminal paint latency for the latest unkeyed arrival when earlier output was overwritten.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Allow group chats to use a configured bot or project provider when the app default is empty.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The command palette finds each group's current chat in one pass, so opening it stays fast with a long group chat history.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Command palette chat search lists chats you can open before chats from another environment, so those never push an openable chat out of the results.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The command palette's search box now says it searches commands and chats.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Command palette chat results from another environment show their bot or group name, read from that environment's roster.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Command palette results always match what you typed, so pressing Enter right after typing no longer runs a result from the previous search.
+
+- [#300](https://github.com/opencoredev/akeru-bot/pull/300) [`72865f7`](https://github.com/opencoredev/akeru-bot/commit/72865f7b06c8737ad32e52e215bcac5a6a3a8d43) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Smoother streaming in chats: bot replies update the conversation once per batch instead of once per token, and typing a message no longer re-renders the whole chat.
+
+- [#299](https://github.com/opencoredev/akeru-bot/pull/299) [`5ae2952`](https://github.com/opencoredev/akeru-bot/commit/5ae2952e4ee70f753863dda1f8fb0783a978f20b) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Smoother web chats: long conversations stop re-rendering on every update, and working-bot animations use far less GPU.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep a bot's saved provider selection unavailable instead of showing a different provider as selected.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Clickable controls now show the pointer cursor everywhere in the app, including checkboxes, radios, labels, tabs, menu items, and file inputs. Disabled controls keep the default cursor.
+
+- [#292](https://github.com/opencoredev/akeru-bot/pull/292) [`0693f24`](https://github.com/opencoredev/akeru-bot/commit/0693f24f28145a5fc7cfe32563c5b9a11f8467a7) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Reposition Akeru Bot's public messaging as an open-source, self-hosted Grok Bot alternative.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Settings > Providers, chat table and code controls, file links, notifications, and the sidebar now translate to Simplified Chinese.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep routine creation and run notes in bot chats after the routine is deleted.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Failed chat requests now show a short explanation and a next step instead of the raw error, with the technical details one click away. The mobile resume card shows the same summary.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep a bot's saved unavailable provider visible in the composer so users can choose a working model.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Show deleted routine history as read-only chat notes instead of opening an unrelated Routines panel.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The roster task chip keeps its own shape on a hovered or selected bot row instead of blending into the row background.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Roster previews now read chat markdown the way the chat renders it, so code samples, URLs, and odd characters in a message stay intact in the preview line.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The bot roster now shows the bot's current chat title as a task chip between its name and the timestamp.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The bot roster stays blank until its first snapshot arrives, instead of briefly saying "No bots yet" right after pairing.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep literal image examples inside code spans in long chat previews.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Screen readers no longer hear a doubled period before "Open Routines" on routine receipts.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Dialog backdrops are more opaque and no longer blur the whole window, and selected and disabled states share one color across the app.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Settings chips in chat can now open Bot channels, Browser, Plugins, Sandbox, and Privacy. On mobile, in-app links no longer reach the system browser, and chips without a matching mobile screen open Settings.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Settings groups its sections by task and shows a loading skeleton, the sidebar footer labels its links, Featured plugins show what they do, and the usage table scrolls on narrow windows.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Ignore archived group members when checking provider availability and give a clear mention hint when the boss cannot reply.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Load recent routine notes first and fetch older notes on demand in bot chats.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - A Settings link in chat that Akeru does not recognize now shows as plain text instead of a link that could open outside the app.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Show new chat, channel, pairing, and settings labels in English and Chinese.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - The sidebar update button now matches the other sidebar icons. Download progress draws inside the icon instead of around the whole button, the "update available" dot is gone, and the button uses the shared control radius.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Explain when an archived new bot can no longer open its first chat, and clear the pending handoff.
+
+- Updated dependencies [[`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad), [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad), [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad), [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad), [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad)]:
+  - @akeru/contracts@0.2.0
+  - @akeru/client-runtime@0.0.3
+  - @akeru/shared@0.0.3
+
 ## 0.1.1
 
 ### Patch Changes

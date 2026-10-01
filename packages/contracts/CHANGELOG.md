@@ -1,5 +1,21 @@
 ## @akeru/contracts@0.0.41
 
+## 0.2.0
+
+### Minor Changes
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Add authenticated computer observation and takeover contracts for remote bot workspaces.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Adds the remaining typed Akeru catalog contracts and Mastra handler hooks for web access, image generation, and MCP account lifecycle mutations.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Provider skills now carry an optional per-skill icon. Codex reports the icon paths from its skill interface metadata, Claude reads an `icon` key from SKILL.md frontmatter, and Grok forwards the icon from `grok inspect`. OpenCode reports no icon field and Kimi For Coding has no skill-loading mechanism, so those catalogs stay icon-less by design. Clients fall back to the existing source-kind badge when a skill has no icon.
+
+### Patch Changes
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep delegation updates readable by clients using the previous wire format.
+
+- [#322](https://github.com/opencoredev/akeru-bot/pull/322) [`630de12`](https://github.com/opencoredev/akeru-bot/commit/630de12aeb4fe350ec957af323566a31aa85ebad) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Share one placeholder chat title between the server and the clients, so a chat that has not been named yet is hidden consistently instead of each surface matching its own literal.
+
 ## 0.1.1
 
 ## 0.1.0
