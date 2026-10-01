@@ -41,7 +41,7 @@ export function detectCliRunner(entryPath: string): CliRunner | null {
  * is resolved away before our process starts, so re-derive it from the
  * running version.
  */
-export function suggestedPackageSpec(version: string): string {
+export function suggestedPackageSpec(_version: string): string {
   return "akeru-bot";
 }
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   HostProcessExecutablePath,
   HostProcessPlatform,
@@ -13,7 +14,6 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-
 import * as ProcessRunner from "../processRunner.ts";
 import {
   ensurePinnedRuntimeInstalled,
@@ -28,340 +28,15 @@ import {
   serviceStateHasPendingUpdate,
   type ServiceState,
 } from "./serviceProtocol.ts";
-
-const BOOT_SERVICE_NAME = "akeru-bot";
-export const BOOT_SERVICE_UNIT_FILE = `${BOOT_SERVICE_NAME}.service`;
-// `.service` suffix keeps the label distinct from the desktop app's bundle id
-// (dev.leodoes.akeru), so launchd and TCC records never collide.
-export const BOOT_SERVICE_LAUNCHD_LABEL = "dev.leodoes.akeru.service";
-export const BOOT_SERVICE_PLIST_FILE = `${BOOT_SERVICE_LAUNCHD_LABEL}.plist`;
-export const BOOT_SERVICE_UNIT_ENV = "AKERU_BOOT_SERVICE_UNIT";
-
-/**
- * Names Akeru installs used before the rename. T3 Code uses the same names, so
- * install only retires a legacy unit that runs this base dir's launcher; see
- * {@link isOwnedLegacyBootServiceUnit}.
- */
-export const LEGACY_BOOT_SERVICE_UNIT_FILE = "t3code.service";
-export const LEGACY_BOOT_SERVICE_LAUNCHD_LABEL = "com.t3tools.t3code.service";
-
-/** systemd expands `%` specifiers, including in unquoted append-log paths. */
-export function escapeSystemdSpecifiers(value: string): string {
-  return value.replaceAll("%", "%%");
-}
-
-export function quoteSystemdValue(value: string): string {
-  const escaped = escapeSystemdSpecifiers(value);
-  return /[\s"'\\]/.test(escaped)
-    ? `"${escaped.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
-    : escaped;
-}
-
-export interface BootServicePlan {
-  readonly nodePath: string;
-  readonly launcherPath: string;
-  readonly baseDir: string;
-  readonly logPath: string;
-  readonly unitPath: string;
-}
-
-/**
- * A legacy-named unit belongs to this install only when it launches this base
- * dir's service launcher. A T3 Code install points at its own `~/.t3` runtime,
- * so it never matches and is left untouched.
- */
-export function isOwnedLegacyBootServiceUnit(contents: string, launcherPath: string): boolean {
-  return (
-    contents.includes(quoteSystemdValue(launcherPath)) ||
-    contents.includes(`<string>${escapeXmlText(launcherPath)}</string>`)
-  );
-}
-
-/** Pure renderer: service units cannot rely on the user's shell or PATH. */
-export function renderBootServiceUnit(plan: BootServicePlan): string {
-  // The user manager has no reliable network-online target; server networking retries itself.
-  return [
-    "[Unit]",
-    "Description=Akeru Bot server",
-    "StartLimitIntervalSec=300",
-    "StartLimitBurst=5",
-    "",
-    "[Service]",
-    "Type=simple",
-    "WorkingDirectory=%h",
-    `Environment=AKERU_HOME=${quoteSystemdValue(plan.baseDir)}`,
-    `Environment=${BOOT_SERVICE_UNIT_ENV}=${BOOT_SERVICE_UNIT_FILE}`,
-    `ExecStart=${quoteSystemdValue(plan.nodePath)} ${quoteSystemdValue(plan.launcherPath)}`,
-    // Let the launcher mark an explicit stop before it signals the server.
-    // systemd still SIGKILLs the whole cgroup if graceful shutdown times out.
-    "KillMode=mixed",
-    // Agent tool calls run as children of the server, so they share this cgroup.
-    // With the systemd default of OOMPolicy=stop, the kernel killing one greedy
-    // child stops the whole unit: the server, every live agent, and the user's
-    // connection. Keep running and let Restart=always cover the main process.
-    "OOMPolicy=continue",
-    "Restart=always",
-    "RestartSec=5",
-    `StandardOutput=append:${escapeSystemdSpecifiers(plan.logPath)}`,
-    `StandardError=append:${escapeSystemdSpecifiers(plan.logPath)}`,
-    "",
-    "[Install]",
-    "WantedBy=default.target",
-    "",
-  ].join("\n");
-}
-
-/** Plist values are emitted as XML text nodes; only these three need escaping. */
-export function escapeXmlText(value: string): string {
-  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-}
-
-/** Pure renderer: launch agents cannot rely on the user's shell or PATH. */
-export function renderBootServicePlist(
-  plan: BootServicePlan,
-  options: { readonly homeDir: string; readonly environmentPath: string },
-): string {
-  // KeepAlive + ThrottleInterval mirror Restart=always + RestartSec=5. launchd
-  // has no StartLimitBurst analog; a hard crash loop respawns every 5s forever.
-  // ExitTimeOut 90 matches systemd's default TimeoutStopSec. A plain stop
-  // completes within the launcher's 5s child grace, but a stop that queues
-  // behind an in-flight update transition can take much longer; launchd's
-  // system-defined default (5s on current macOS) would SIGKILL the launcher
-  // (and, with it, the process group) mid-handoff.
-  // ProcessType Interactive opts out of background-job resource throttling.
-  // AbandonProcessGroup stays at its default (false): launchd reaps leftover
-  // process-group members only when the launcher itself exits — the analog of
-  // KillMode=mixed's final cgroup kill — and not when the launcher restarts its
-  // child, so agent children survive server updates.
-  return [
-    `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">`,
-    `<plist version="1.0">`,
-    `<dict>`,
-    `  <key>Label</key>`,
-    `  <string>${BOOT_SERVICE_LAUNCHD_LABEL}</string>`,
-    `  <key>ProgramArguments</key>`,
-    `  <array>`,
-    `    <string>${escapeXmlText(plan.nodePath)}</string>`,
-    `    <string>${escapeXmlText(plan.launcherPath)}</string>`,
-    `  </array>`,
-    `  <key>EnvironmentVariables</key>`,
-    `  <dict>`,
-    `    <key>PATH</key>`,
-    `    <string>${escapeXmlText(options.environmentPath)}</string>`,
-    `    <key>AKERU_HOME</key>`,
-    `    <string>${escapeXmlText(plan.baseDir)}</string>`,
-    `    <key>${BOOT_SERVICE_UNIT_ENV}</key>`,
-    `    <string>${BOOT_SERVICE_PLIST_FILE}</string>`,
-    `  </dict>`,
-    `  <key>WorkingDirectory</key>`,
-    `  <string>${escapeXmlText(options.homeDir)}</string>`,
-    `  <key>RunAtLoad</key>`,
-    `  <true/>`,
-    `  <key>KeepAlive</key>`,
-    `  <true/>`,
-    `  <key>ThrottleInterval</key>`,
-    `  <integer>5</integer>`,
-    `  <key>ExitTimeOut</key>`,
-    `  <integer>90</integer>`,
-    `  <key>ProcessType</key>`,
-    `  <string>Interactive</string>`,
-    `  <key>StandardOutPath</key>`,
-    `  <string>${escapeXmlText(plan.logPath)}</string>`,
-    `  <key>StandardErrorPath</key>`,
-    `  <string>${escapeXmlText(plan.logPath)}</string>`,
-    `</dict>`,
-    `</plist>`,
-    ``,
-  ].join("\n");
-}
-
-export interface BootServiceStep {
-  readonly step: string;
-  readonly command: string;
-  readonly args: ReadonlyArray<string>;
-  /**
-   * Non-zero exit is logged and ignored. Reserved for steps whose common
-   * failures (not loaded, already enabled) leave a state a later strict step
-   * either tolerates or fails loudly on.
-   */
-  readonly optional?: boolean;
-  /** Override the ProcessRunner default (60s) for steps that block longer. */
-  readonly timeout?: Duration.Input;
-}
-
-/**
- * Stop commands block until the service manager gives up: 90s by default for
- * systemd's TimeoutStopSec, and ExitTimeOut=90 in the rendered plist. This
- * must stay above both, or the runner cancels the stop mid-shutdown and the
- * next step races a still-loaded service.
- */
-const STOP_STEP_TIMEOUT = Duration.seconds(120);
-
-/**
- * Platform service-manager integration as data: paths, a pure renderer, and
- * the command steps each flow runs. install/uninstall/status consume this and
- * never branch on platform.
- */
-export interface BootServiceManager {
-  readonly kind: "systemd" | "launchd";
-  readonly unitPath: string;
-  readonly render: (plan: BootServicePlan) => string;
-  /** Before rewriting files, when a unit is already installed. */
-  readonly stop: ReadonlyArray<BootServiceStep>;
-  /** After files are written. The last entry starts the service. */
-  readonly activate: ReadonlyArray<BootServiceStep>;
-  /** Best-effort recovery after a failed repair of an installed service. */
-  readonly restart: ReadonlyArray<BootServiceStep>;
-  /** Uninstall, before the unit file is removed. */
-  readonly deactivate: ReadonlyArray<BootServiceStep>;
-  /** Uninstall, after the unit file is removed. */
-  readonly finalize: ReadonlyArray<BootServiceStep>;
-}
-
-export function systemdManager(input: {
-  readonly path: Path.Path;
-  readonly homeDir: string;
-  /** Defaults to the current unit name; the legacy name is used only to retire old units. */
-  readonly unitFile?: string;
-}): BootServiceManager {
-  const unitFile = input.unitFile ?? BOOT_SERVICE_UNIT_FILE;
-  const unitPath = input.path.join(input.homeDir, ".config", "systemd", "user", unitFile);
-  return {
-    kind: "systemd",
-    unitPath,
-    render: renderBootServiceUnit,
-    stop: [
-      {
-        step: "stopping the installed service",
-        command: "systemctl",
-        args: ["--user", "stop", unitFile],
-        timeout: STOP_STEP_TIMEOUT,
-      },
-    ],
-    activate: [
-      {
-        step: "reloading systemd user units",
-        command: "systemctl",
-        args: ["--user", "daemon-reload"],
-      },
-      {
-        step: "enabling the service",
-        command: "systemctl",
-        args: ["--user", "enable", unitFile],
-      },
-      { step: "enabling lingering for this user", command: "loginctl", args: ["enable-linger"] },
-      // Start last. No administrative state write occurs after this succeeds.
-      {
-        step: "starting the service",
-        command: "systemctl",
-        args: ["--user", "restart", unitFile],
-      },
-    ],
-    restart: [
-      {
-        step: "restarting the service after a failed update",
-        command: "systemctl",
-        args: ["--user", "restart", unitFile],
-      },
-    ],
-    deactivate: [
-      {
-        step: "stopping the service",
-        command: "systemctl",
-        args: ["--user", "disable", "--now", unitFile],
-        timeout: STOP_STEP_TIMEOUT,
-      },
-    ],
-    finalize: [
-      {
-        step: "reloading systemd user units",
-        command: "systemctl",
-        args: ["--user", "daemon-reload"],
-      },
-    ],
-  };
-}
-
-export function launchdManager(input: {
-  readonly path: Path.Path;
-  readonly homeDir: string;
-  readonly uid: number;
-  readonly environmentPath: string;
-  /** Defaults to the current label; the legacy label is used only to retire old agents. */
-  readonly label?: string;
-}): BootServiceManager {
-  const label = input.label ?? BOOT_SERVICE_LAUNCHD_LABEL;
-  const unitPath = input.path.join(input.homeDir, "Library", "LaunchAgents", `${label}.plist`);
-  const domainTarget = `gui/${input.uid}`;
-  const serviceTarget = `${domainTarget}/${label}`;
-  // bootout/enable are optional: they fail on not-loaded states that are fine
-  // to proceed from. The strict `bootstrap` runs last and is also the start:
-  // loading a RunAtLoad/KeepAlive plist starts the job, so a separate
-  // kickstart would kill and restart a server it just booted. A lingering job
-  // that survived bootout, or a gui domain with nobody logged in at the
-  // screen (SSH install), makes bootstrap fail the flow loudly rather than
-  // silently keeping a stale server.
-  return {
-    kind: "launchd",
-    unitPath,
-    render: (plan) =>
-      renderBootServicePlist(plan, {
-        homeDir: input.homeDir,
-        environmentPath: input.environmentPath,
-      }),
-    // Without --wait, bootout returns in milliseconds while the job drains
-    // for up to ExitTimeOut, and a bootstrap during the drain fails EIO.
-    // --wait (present on modern macOS, absent from the man page) blocks until
-    // the job is removed from the domain; STOP_STEP_TIMEOUT outlives it.
-    stop: [
-      {
-        step: "stopping the installed launch agent",
-        command: "launchctl",
-        args: ["bootout", "--wait", serviceTarget],
-        optional: true,
-        timeout: STOP_STEP_TIMEOUT,
-      },
-    ],
-    activate: [
-      // A persisted `launchctl disable` override refuses bootstrap; clear it.
-      {
-        step: "enabling the launch agent",
-        command: "launchctl",
-        args: ["enable", serviceTarget],
-        optional: true,
-      },
-      // Start last. No administrative state write occurs after this succeeds.
-      {
-        step: "starting the service",
-        command: "launchctl",
-        args: ["bootstrap", domainTarget, unitPath],
-      },
-    ],
-    restart: [
-      {
-        step: "restarting the service after a failed update",
-        command: "launchctl",
-        args: ["bootstrap", domainTarget, unitPath],
-      },
-    ],
-    // No `launchctl disable` here: a persisted override would sabotage a
-    // later reinstall. Removing the plist is what stops the next login load.
-    // A bootout that fails for a reason other than "not loaded" leaves the
-    // job running until logout; the failure is in the boot-service log.
-    deactivate: [
-      {
-        step: "stopping the service",
-        command: "launchctl",
-        args: ["bootout", "--wait", serviceTarget],
-        optional: true,
-        timeout: STOP_STEP_TIMEOUT,
-      },
-    ],
-    finalize: [],
-  };
-}
-
+import {
+  LEGACY_BOOT_SERVICE_UNIT_FILE,
+  LEGACY_BOOT_SERVICE_LAUNCHD_LABEL,
+  type BootServicePlan,
+  type BootServiceStep,
+  type BootServiceManager,
+} from "./bootServiceTypes.ts";
+import { isOwnedLegacyBootServiceUnit, systemdManager } from "./bootServiceSystemd.ts";
+import { launchdManager } from "./bootServiceLaunchd.ts";
 /** Undefined means this host cannot run the background service. */
 export function selectBootServiceManager(input: {
   readonly platform: NodeJS.Platform;
@@ -662,7 +337,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
           ),
     }).pipe(
       Effect.mapError((error) =>
-        error._tag === "PinnedRuntimeInstallError"
+        Predicate.isTagged(error, "PinnedRuntimeInstallError")
           ? new BootServiceCommandError({
               step: error.step,
               exitCode: error.exitCode,
@@ -807,3 +482,20 @@ export const layer = (input: {
   readonly cliVersion: string;
   readonly host?: BootServiceHost;
 }) => Layer.effect(BootService, make(input));
+export { BOOT_SERVICE_UNIT_FILE } from "./bootServiceTypes.ts";
+export { BOOT_SERVICE_LAUNCHD_LABEL } from "./bootServiceTypes.ts";
+export { BOOT_SERVICE_PLIST_FILE } from "./bootServiceTypes.ts";
+export { BOOT_SERVICE_UNIT_ENV } from "./bootServiceTypes.ts";
+export { LEGACY_BOOT_SERVICE_UNIT_FILE } from "./bootServiceTypes.ts";
+export { LEGACY_BOOT_SERVICE_LAUNCHD_LABEL } from "./bootServiceTypes.ts";
+export { escapeSystemdSpecifiers } from "./bootServiceSystemd.ts";
+export { quoteSystemdValue } from "./bootServiceSystemd.ts";
+export type { BootServicePlan } from "./bootServiceTypes.ts";
+export { isOwnedLegacyBootServiceUnit } from "./bootServiceSystemd.ts";
+export { renderBootServiceUnit } from "./bootServiceSystemd.ts";
+export { escapeXmlText } from "./bootServiceLaunchd.ts";
+export { renderBootServicePlist } from "./bootServiceLaunchd.ts";
+export type { BootServiceStep } from "./bootServiceTypes.ts";
+export type { BootServiceManager } from "./bootServiceTypes.ts";
+export { systemdManager } from "./bootServiceSystemd.ts";
+export { launchdManager } from "./bootServiceLaunchd.ts";

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   ServerSelfUpdateError,
   type ServerSelfUpdateCapability,
@@ -283,7 +284,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
             ),
       }).pipe(
         Effect.mapError((error) =>
-          error._tag === "PinnedRuntimePreflightBlockedError"
+          Predicate.isTagged(error, "PinnedRuntimePreflightBlockedError")
             ? failWith(error.reason, error)
             : failWith(`Could not prepare akeru-bot@${targetVersion}.`, error),
         ),
@@ -295,7 +296,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
         .pipe(
           Effect.mapError((error) =>
             failWith(
-              error._tag === "ServiceLauncherRejectedError"
+              Predicate.isTagged(error, "ServiceLauncherRejectedError")
                 ? error.reason
                 : "Could not ask the service launcher to activate the prepared update.",
               error,
