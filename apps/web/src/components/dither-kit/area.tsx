@@ -80,7 +80,7 @@ function CartesianSeries({
     <>
       {hitPath && (
         // biome-ignore lint/a11y/noStaticElementInteractions: progressive enhancement; the Legend offers the same toggle accessibly
-        <path d={hitPath} fill="transparent" style={{ cursor: "pointer" }} onClick={onClick} />
+        <path d={hitPath} fill="transparent" className="cursor-pointer" onClick={onClick} />
       )}
       <SeriesContext value={{ dataKey, seed, dimmed }}>{children}</SeriesContext>
     </>

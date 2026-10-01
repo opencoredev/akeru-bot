@@ -57,23 +57,23 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
       {props.statusDotClassName ? (
         <span
           className={cn(
-            "pointer-events-none absolute -left-0.5 -top-0.5 z-10 size-2 rounded-full",
+            "pointer-events-none absolute -left-0.5 -top-0.5 z-10 size-2 rounded-full indicator-ring",
             props.statusDotClassName,
           )}
-          style={{ boxShadow: `0 0 0 2px ${indicatorBackground}` }}
+          style={{ "--indicator-background": indicatorBackground }}
           aria-hidden
         />
       ) : null}
       {props.showBadge ? (
         <span
           className={cn(
-            "pointer-events-none absolute right-0 bottom-0 z-10 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border px-0.5 text-8px font-semibold leading-none shadow-sm",
+            "pointer-events-none absolute right-0 bottom-0 z-10 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border indicator-border px-0.5 text-8px font-semibold leading-none shadow-sm",
             props.accentColor
               ? "bg-(--provider-accent) text-white"
               : "bg-card text-muted-foreground",
             props.badgeClassName,
           )}
-          style={{ borderColor: indicatorBackground }}
+          style={{ "--indicator-background": indicatorBackground }}
           aria-hidden
         >
           {badgeContent === "initials" ? providerInstanceInitials(props.displayName) : null}

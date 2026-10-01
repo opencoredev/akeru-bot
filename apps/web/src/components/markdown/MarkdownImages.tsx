@@ -15,6 +15,12 @@ const CHAT_MARKDOWN_WORKSPACE_IMAGE_CLASS_NAME = cn(
   "my-1 block! rounded-lg border border-border/40",
 );
 
+// Workspace images with known dimensions reserve their box before loading.
+const CHAT_MARKDOWN_KNOWN_SIZE_IMAGE_CLASS_NAME = cn(
+  "h-auto w-(--image-width) max-h-120 max-w-(--image-max-width) aspect-(--image-aspect) object-contain",
+  "my-1 block! rounded-lg border border-border/40",
+);
+
 export function ChatMarkdownImageFallback(props: { readonly alt: string }) {
   const { t } = useI18n();
 
@@ -62,10 +68,9 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
 
   const sizeStyle = knownSize
     ? {
-        width: knownSize.width,
-        height: "auto" as const,
-        aspectRatio: `${knownSize.width} / ${knownSize.height}`,
-        maxWidth: `min(100%, 30rem, ${(30 * knownSize.width) / knownSize.height}rem)`,
+        "--image-width": `${knownSize.width}px`,
+        "--image-aspect": `${knownSize.width} / ${knownSize.height}`,
+        "--image-max-width": `min(100%, 30rem, ${(30 * knownSize.width) / knownSize.height}rem)`,
       }
     : undefined;
 
@@ -75,7 +80,11 @@ export const ChatMarkdownWorkspaceImage = memo(function ChatMarkdownWorkspaceIma
       alt={props.alt}
       loading="lazy"
       draggable={false}
-      className={CHAT_MARKDOWN_WORKSPACE_IMAGE_CLASS_NAME}
+      className={
+        knownSize
+          ? CHAT_MARKDOWN_KNOWN_SIZE_IMAGE_CLASS_NAME
+          : CHAT_MARKDOWN_WORKSPACE_IMAGE_CLASS_NAME
+      }
       style={sizeStyle}
       onError={() => setFailedUrl(assetUrl.url)}
     />

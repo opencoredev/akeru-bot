@@ -108,10 +108,10 @@ export function PreviewPanelShell(props: {
         isInline
           ? props.maximized
             ? "flex-1 border-l border-border"
-            : "shrink-0 border-l border-border"
+            : "w-(--preview-panel-width) shrink-0 border-l border-border"
           : "w-full",
       )}
-      style={isInline && !props.maximized ? { width: `${width}px` } : undefined}
+      style={isInline && !props.maximized ? { "--preview-panel-width": `${width}px` } : undefined}
       data-preview-panel-mode={props.mode}
       data-preview-panel-maximized={props.maximized ? "true" : "false"}
     >

@@ -132,8 +132,8 @@ describe("ChatMarkdown workspace images", () => {
 
     const html = render("![shot](.t3/workspace-image.svg)");
 
-    expect(html).toContain("width:720px");
-    expect(html).toContain("aspect-ratio:720 / 1400");
+    expect(html).toContain("--image-width:720px");
+    expect(html).toContain("--image-aspect:720 / 1400");
   });
 
   it("never passes a workspace source to a raw image when thread context is unavailable", () => {

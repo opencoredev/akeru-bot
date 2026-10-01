@@ -283,13 +283,32 @@ export function HostedBrowserWebview(props: {
   return (
     <div
       ref={wrapperRef}
-      className="fixed overflow-hidden bg-muted/35"
-      style={{ ...wrapperStyle, overscrollBehavior: "contain" }}
+      className={cn(
+        "fixed top-(--wrapper-top) left-(--wrapper-left) z-(--wrapper-z) h-(--wrapper-height) w-(--wrapper-width) rounded-(--wrapper-radius) overflow-hidden overscroll-contain bg-muted/35",
+        wrapperStyle.pointerEvents === "none" ? "pointer-events-none" : "pointer-events-auto",
+        wrapperStyle.visibility === "hidden" && "invisible",
+        wrapperStyle.visibility === "visible" && "visible",
+      )}
+      style={{
+        "--wrapper-left": `${wrapperStyle.left}px`,
+        "--wrapper-top": `${wrapperStyle.top}px`,
+        "--wrapper-width": `${wrapperStyle.width}px`,
+        "--wrapper-height": `${wrapperStyle.height}px`,
+        "--wrapper-z": wrapperStyle.zIndex,
+        "--wrapper-radius":
+          wrapperStyle.borderRadius === undefined ? undefined : `${wrapperStyle.borderRadius}px`,
+      }}
       onScroll={syncContentPresentation}
       data-preview-rendering={renderingActive ? "active" : "suspended"}
       data-preview-viewport={runtimeTabId}
     >
-      <div className="relative" style={{ width: layout.canvasWidth, height: layout.canvasHeight }}>
+      <div
+        className="relative h-(--canvas-height) w-(--canvas-width)"
+        style={{
+          "--canvas-width": `${layout.canvasWidth}px`,
+          "--canvas-height": `${layout.canvasHeight}px`,
+        }}
+      >
         {deviceToolbarVisible && effectiveViewport._tag !== "fill" ? (
           <BrowserDeviceToolbar
             setting={effectiveViewport}
@@ -327,16 +346,16 @@ export function HostedBrowserWebview(props: {
           aria-hidden={active ? undefined : true}
           tabIndex={active && presentation.interactive ? undefined : -1}
           className={cn(
-            "absolute flex overflow-hidden bg-background",
+            "absolute top-(--viewport-top) left-(--viewport-left) flex h-(--viewport-height) w-(--viewport-width) origin-top-left transform-(--viewport-transform) overflow-hidden bg-background",
             active && !layout.fillsPanel && "ring-1 ring-border/70 shadow-sm",
           )}
           style={{
-            left: layout.viewportX,
-            top: layout.viewportY,
-            width: layout.viewportWidth / layout.viewportScale,
-            height: layout.viewportHeight / layout.viewportScale,
-            transform: layout.viewportScale < 1 ? `scale(${layout.viewportScale})` : undefined,
-            transformOrigin: "top left",
+            "--viewport-left": `${layout.viewportX}px`,
+            "--viewport-top": `${layout.viewportY}px`,
+            "--viewport-width": `${layout.viewportWidth / layout.viewportScale}px`,
+            "--viewport-height": `${layout.viewportHeight / layout.viewportScale}px`,
+            "--viewport-transform":
+              layout.viewportScale < 1 ? `scale(${layout.viewportScale})` : undefined,
           }}
         />
         {active && effectiveViewport._tag !== "fill" && !fittedSourceViewport ? (
@@ -349,10 +368,10 @@ export function HostedBrowserWebview(props: {
             />
             {activeDrag ? (
               <div
-                className="pointer-events-none absolute z-40 -translate-x-1/2 rounded-md border border-border/80 bg-background/95 px-2 py-1 text-11px font-medium tabular-nums text-foreground shadow-md backdrop-blur-sm"
+                className="pointer-events-none absolute top-(--drag-label-top) left-(--drag-label-left) z-40 -translate-x-1/2 rounded-md border border-border/80 bg-background/95 px-2 py-1 text-11px font-medium tabular-nums text-foreground shadow-md backdrop-blur-sm"
                 style={{
-                  left: layout.viewportX + layout.viewportWidth / 2,
-                  top: layout.viewportY + 10,
+                  "--drag-label-left": `${layout.viewportX + layout.viewportWidth / 2}px`,
+                  "--drag-label-top": `${layout.viewportY + 10}px`,
                 }}
                 aria-hidden="true"
               >

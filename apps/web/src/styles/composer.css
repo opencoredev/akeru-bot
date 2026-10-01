@@ -620,3 +620,21 @@
     --composer-banner-icon-column: --spacing(6);
   }
 }
+
+/* Banner stack dismissal. The stack sets --banner-dismiss-duration from the
+   same constant that times the removal. */
+@utility composer-banner-dismissal {
+  transition:
+    transform var(--banner-dismiss-duration) ease-in,
+    opacity var(--banner-dismiss-duration) ease-in;
+}
+
+@utility composer-banner-exit-front {
+  opacity: 0;
+  transform: translate3d(0, 4rem, 0);
+}
+
+@utility composer-banner-exit-stacked {
+  opacity: 0;
+  transform: translate3d(0, 7rem, 0);
+}

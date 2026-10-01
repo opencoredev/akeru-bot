@@ -2,6 +2,8 @@
 
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { cn } from "~/lib/utils";
+
 const HEIGHT_TRANSITION_FALLBACK_MS = 250;
 
 export function AnimatedHeight({ children }: { readonly children: ReactNode }) {
@@ -81,11 +83,14 @@ export function AnimatedHeight({ children }: { readonly children: ReactNode }) {
   return (
     <div
       data-slot="animated-height"
-      className="transition-height duration-200 ease-out motion-reduce:transition-none"
+      className={cn(
+        "transition-height duration-200 ease-out motion-reduce:transition-none",
+        heightState.height !== null && "h-(--animated-height)",
+        heightState.height !== null &&
+          (heightState.isClipping ? "overflow-hidden" : "overflow-visible"),
+      )}
       style={
-        heightState.height === null
-          ? undefined
-          : { height: heightState.height, overflow: heightState.isClipping ? "hidden" : "visible" }
+        heightState.height === null ? undefined : { "--animated-height": `${heightState.height}px` }
       }
       onTransitionEnd={(event) => {
         if (event.target !== event.currentTarget || event.propertyName !== "height") return;

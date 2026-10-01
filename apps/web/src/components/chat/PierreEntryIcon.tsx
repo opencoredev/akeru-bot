@@ -87,8 +87,8 @@ export const PierreEntryIcon = memo(function PierreEntryIcon(props: {
       aria-hidden="true"
       data-pierre-icon={icon.name}
       data-icon-token={icon.token}
-      className={cn("size-4 shrink-0", props.className)}
-      style={{ color: colors?.[props.theme === "light" ? 0 : 1] }}
+      className={cn("size-4 shrink-0 text-(--icon-color)", props.className)}
+      style={{ "--icon-color": colors?.[props.theme === "light" ? 0 : 1] }}
       viewBox="0 0 16 16"
     >
       <use href={`#${icon.name}`} />

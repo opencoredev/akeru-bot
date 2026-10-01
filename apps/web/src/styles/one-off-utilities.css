@@ -102,3 +102,44 @@
 @utility stroke-current-faint {
   stroke: color-mix(in srgb, currentColor 22%, transparent);
 }
+
+/* Low-resolution canvas scaled up without smoothing. */
+@utility image-pixelated {
+  image-rendering: pixelated;
+}
+
+/* Dither chart bloom canvas. Charts set --bloom-opacity, and --bloom-filter and
+   --bloom-blend while bloom is on; unset values fall back to none and normal. */
+@utility dither-bloom-layer {
+  filter: var(--bloom-filter);
+  opacity: var(--bloom-opacity);
+  mix-blend-mode: var(--bloom-blend);
+  transition: opacity 220ms ease;
+}
+
+/* Provider status dot and badge cut out of the surface behind them, from
+   --indicator-background. */
+@utility indicator-ring {
+  box-shadow: 0 0 0 2px var(--indicator-background);
+}
+
+@utility indicator-border {
+  border-color: var(--indicator-background);
+}
+
+/* Color swatch filled from --swatch. The selected swatch adds a ring with a
+   card-colored gap. */
+@utility swatch-fill {
+  background-color: var(--swatch);
+}
+
+@utility swatch-ring {
+  box-shadow:
+    inset 0 0 0 2px var(--card),
+    0 0 0 2px var(--swatch);
+}
+
+/* Chart marks that fade in once the entrance has drawn. */
+@utility transition-entrance-fade {
+  transition: opacity 300ms ease;
+}

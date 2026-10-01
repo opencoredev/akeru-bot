@@ -44,6 +44,7 @@ import {
   useSidebar,
   useSidebarVisibility,
 } from "./ui/sidebar";
+import { SIDEBAR_WIDTH_ICON } from "./ui/sidebarContext";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { DesktopOnboarding } from "./onboarding/DesktopOnboarding";
 
@@ -191,11 +192,12 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         : sidebarWidth
     }px`,
     // Collapsed, the experiment keeps its full rail.
-    ...(sidebarExperiment ? { "--sidebar-width-icon": `${EXPERIMENTAL_RAIL_ONLY_WIDTH}px` } : {}),
-    ...(isMacosDesktop && !isWindowFullscreen
-      ? { "--workspace-controls-left": MACOS_TRAFFIC_LIGHTS_LEFT_INSET }
-      : {}),
-  } as CSSProperties;
+    "--sidebar-width-icon": sidebarExperiment
+      ? `${EXPERIMENTAL_RAIL_ONLY_WIDTH}px`
+      : SIDEBAR_WIDTH_ICON,
+    "--workspace-controls-left":
+      isMacosDesktop && !isWindowFullscreen ? MACOS_TRAFFIC_LIGHTS_LEFT_INSET : undefined,
+  } satisfies CSSProperties;
 
   useEffect(() => {
     if (!isMacosDesktop) return;

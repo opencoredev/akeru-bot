@@ -245,26 +245,27 @@ export function BarCanvas() {
   const bloom = bloomLayerStyle(ctx.bloom, bloomActive);
 
   const pos = {
-    left: ctx.margins.left,
-    top: ctx.margins.top,
-    width,
-    height,
+    "--plot-left": `${ctx.margins.left}px`,
+    "--plot-top": `${ctx.margins.top}px`,
+    "--plot-width": `${width}px`,
+    "--plot-height": `${height}px`,
   } as const;
 
   return (
     <>
       <canvas
         ref={canvasRef}
-        className="pointer-events-none absolute"
-        style={{ ...pos, imageRendering: "pixelated" }}
+        className="pointer-events-none absolute top-(--plot-top) left-(--plot-left) h-(--plot-height) w-(--plot-width) image-pixelated"
+        style={pos}
       />
       <canvas
         ref={bloomRef}
-        className="pointer-events-none absolute"
+        className="pointer-events-none absolute top-(--plot-top) left-(--plot-left) h-(--plot-height) w-(--plot-width) dither-bloom-layer"
         style={{
           ...pos,
-          transition: "opacity 220ms ease",
-          ...(bloom ?? { opacity: 0 }),
+          "--bloom-filter": bloom?.filter,
+          "--bloom-opacity": bloom?.opacity ?? 0,
+          "--bloom-blend": bloom?.mixBlendMode,
         }}
       />
     </>

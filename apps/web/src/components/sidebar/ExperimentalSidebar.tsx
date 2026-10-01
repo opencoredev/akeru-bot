@@ -109,8 +109,8 @@ export function ExperimentalSidebar() {
     <div className="flex h-full min-h-0 w-full overflow-hidden">
       <nav
         aria-label={t("Main")}
-        className="flex h-full shrink-0 flex-col items-center pb-3"
-        style={{ width: RAIL_WIDTH }}
+        className="flex h-full w-(--rail-width) shrink-0 flex-col items-center pb-3"
+        style={{ "--rail-width": `${RAIL_WIDTH}px` }}
       >
         {/* macOS desktop keeps the full titlebar height clear for the traffic
             lights. Elsewhere the first icon centers on the panel title row. */}
@@ -170,8 +170,8 @@ export function ExperimentalSidebar() {
       {/* The panel is a raised card; its row tokens are re-based on the card surface. */}
       {/* Fixed width so collapsing clips the panel instead of squeezing its rows. */}
       <div
-        className={cn("flex shrink-0 py-2 pr-2", onPlugins && "hidden")}
-        style={{ width: PANEL_WIDTH }}
+        className={cn("flex w-(--panel-width) shrink-0 py-2 pr-2", onPlugins && "hidden")}
+        style={{ "--panel-width": `${PANEL_WIDTH}px` }}
       >
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sidebar-border/70 bg-sidebar shadow-(--shell-card-shadow) sidebar-shell-card">
           <div

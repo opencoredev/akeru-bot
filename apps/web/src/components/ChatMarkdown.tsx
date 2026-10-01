@@ -155,6 +155,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
 
     return (
       <MarkdownList node={node}>
+        {/* oxlint-disable-next-line shadcn/no-inline-styles -- forwards the markdown element's own style alongside the measured gutter var */}
         <ol {...props} start={start} style={gutterStyle ? { ...style, ...gutterStyle } : style} />
       </MarkdownList>
     );

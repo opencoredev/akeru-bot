@@ -82,12 +82,14 @@ export function Tooltip({
             {items.map((item) => (
               <div
                 key={item.name}
-                className="flex items-center gap-1.5 font-mono text-11px text-popover-foreground tabular-nums"
-                style={{ opacity: item.dimmed ? 0.4 : 1 }}
+                className={cn(
+                  "flex items-center gap-1.5 font-mono text-11px text-popover-foreground tabular-nums",
+                  item.dimmed ? "opacity-40" : "opacity-100",
+                )}
               >
                 <span
-                  className="size-2 rounded-1px"
-                  style={{ backgroundColor: rgb(item.seed.fill) }}
+                  className="size-2 rounded-1px swatch-fill"
+                  style={{ "--swatch": rgb(item.seed.fill) }}
                 />
                 <span className="text-muted-foreground">{item.label}</span>
                 <span className="ml-auto pl-2 text-foreground">

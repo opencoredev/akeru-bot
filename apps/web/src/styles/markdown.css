@@ -142,6 +142,7 @@
 
 .chat-markdown .chat-markdown-task-progress-fill {
   display: block;
+  width: var(--task-progress);
   height: 100%;
   border-radius: inherit;
   background: var(--success);

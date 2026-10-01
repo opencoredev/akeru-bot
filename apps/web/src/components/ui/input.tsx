@@ -47,6 +47,7 @@ function Input({
 
   if (nativeInput) {
     const { style, onValueChange: _onValueChange, ...nativeInputProps } = props;
+    // oxlint-disable-next-line shadcn/no-inline-styles -- primitive forwards the caller's style prop to the native input
     const nativeStyle = typeof style === "function" ? undefined : style;
 
     inputElement = (

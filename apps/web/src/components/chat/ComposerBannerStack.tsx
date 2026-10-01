@@ -8,23 +8,8 @@ import { Button } from "../ui/button";
 
 const DISMISS_TRANSITION_MS = 220;
 
-const frontExitStyle = {
-  opacity: 0,
-  transform: "translate3d(0, 4rem, 0)",
-} satisfies CSSProperties;
-
-const stackedExitStyle = {
-  opacity: 0,
-  transform: "translate3d(0, 7rem, 0)",
-} satisfies CSSProperties;
-
-const restingStyle = {
-  opacity: 1,
-  transform: "none",
-} satisfies CSSProperties;
-
-const exitTransitionStyle = {
-  transition: `transform ${DISMISS_TRANSITION_MS}ms ease-in, opacity ${DISMISS_TRANSITION_MS}ms ease-in`,
+const dismissalStyle = {
+  "--banner-dismiss-duration": `${DISMISS_TRANSITION_MS}ms`,
 } satisfies CSSProperties;
 
 // The collapsed cap peeking above the front banner is the only hint that more
@@ -122,25 +107,23 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
         {showCollapsedStackCap && firstStackedItem ? (
           <div
             className={cn(
-              "pointer-events-none absolute inset-x-0 -top-3 z-0 mx-auto h-3 rounded-t-2xl",
+              "pointer-events-none absolute inset-x-0 -top-3 z-0 mx-auto h-3 w-24/25 rounded-t-2xl",
               "chat-composer-banner-stack-cap border border-b-0 shadow-peek",
               stackCapBorderClass[firstStackedItem.variant],
               "transition-opacity duration-150 ease-out",
               "group-hover/banner-stack:opacity-0 group-focus-within/banner-stack:opacity-0",
             )}
-            style={{ width: "96%" }}
             aria-hidden="true"
           />
         ) : null}
         <div
           className={cn(
-            "relative z-10",
-            exitingItemId === frontItem.id ? "pointer-events-none" : null,
+            "relative z-10 composer-banner-dismissal",
+            exitingItemId === frontItem.id
+              ? "pointer-events-none composer-banner-exit-front"
+              : "opacity-100 transform-none",
           )}
-          style={{
-            ...exitTransitionStyle,
-            ...(exitingItemId === frontItem.id ? frontExitStyle : restingStyle),
-          }}
+          style={dismissalStyle}
         >
           <ComposerBannerStackAlert
             item={frontItem}
@@ -169,11 +152,13 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
                 {stackedItems.map((item) => (
                   <div
                     key={item.id}
-                    className={cn(exitingItemId === item.id ? "pointer-events-none" : null)}
-                    style={{
-                      ...exitTransitionStyle,
-                      ...(exitingItemId === item.id ? stackedExitStyle : restingStyle),
-                    }}
+                    className={cn(
+                      "composer-banner-dismissal",
+                      exitingItemId === item.id
+                        ? "pointer-events-none composer-banner-exit-stacked"
+                        : "opacity-100 transform-none",
+                    )}
+                    style={dismissalStyle}
                   >
                     <ComposerBannerStackAlert
                       item={item}

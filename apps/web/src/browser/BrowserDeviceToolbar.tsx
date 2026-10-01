@@ -172,8 +172,11 @@ export function BrowserDeviceToolbar({
 
   return (
     <div
-      className="sticky left-0 top-0 z-50 flex items-center gap-0.5 overflow-x-auto border-b border-border/70 bg-background/95 px-1.5 shadow-xs backdrop-blur-md scrollbar-none [&::-webkit-scrollbar]:hidden"
-      style={{ width, height: BROWSER_DEVICE_TOOLBAR_HEIGHT }}
+      className="sticky left-0 top-0 z-50 flex h-(--toolbar-height) w-(--toolbar-width) items-center gap-0.5 overflow-x-auto border-b border-border/70 bg-background/95 px-1.5 shadow-xs backdrop-blur-md scrollbar-none [&::-webkit-scrollbar]:hidden"
+      style={{
+        "--toolbar-width": `${width}px`,
+        "--toolbar-height": `${BROWSER_DEVICE_TOOLBAR_HEIGHT}px`,
+      }}
       role="toolbar"
       aria-label="Browser device toolbar"
       data-browser-device-toolbar

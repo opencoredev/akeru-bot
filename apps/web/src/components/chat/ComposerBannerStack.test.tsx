@@ -80,7 +80,7 @@ describe("ComposerBannerStack", () => {
     expect(markup).toContain("text-xs");
     expect(markup).toContain('data-composer-banner-drawer="true"');
     expect(markup).toContain('data-variant="warning"');
-    expect(markup).toContain("transform:none");
+    expect(markup).toContain("transform-none");
     expect(markup).not.toContain("will-change:transform");
   });
   it("applies item-specific surface and action layout classes", () => {

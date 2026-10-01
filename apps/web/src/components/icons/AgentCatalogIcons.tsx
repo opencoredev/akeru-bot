@@ -13,7 +13,7 @@ export const Gemini: Icon = (props) => (
       x="0"
       y="0"
       maskUnits="userSpaceOnUse"
-      style={{ maskType: "alpha" }}
+      className="mask-type-alpha"
     >
       <path
         fill="var(--color-brand-gemini-blue)"

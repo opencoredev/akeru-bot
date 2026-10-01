@@ -119,6 +119,7 @@
   --shadow-card-hover: 0 1px 2px rgb(0 0 0 / 4%), 0 6px 16px -8px rgb(0 0 0 / 12%);
   --shadow-peek: 0 6px 18px rgb(0 0 0 / 6%);
   --shadow-composer-float: 0 12px 36px -24px rgb(0 0 0 / 80%);
+  --shadow-progress-glow: 0 0 6px 1px var(--color-ring);
   --shadow-composer-banner: 0 12px 28px -18px rgb(0 0 0/40%);
   --shadow-composer-banner-dark: 0 14px 32px -18px rgb(0 0 0/75%);
   --shadow-preview-frame: 0 24px 70px -36px rgba(0, 0, 0, 0.45);

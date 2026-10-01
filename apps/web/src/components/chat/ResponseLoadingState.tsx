@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef } from "react";
 
 import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
@@ -57,7 +57,7 @@ export function LoaderMeter({ className }: { readonly className?: string }) {
           key={`r${Math.floor(index / 3)}c${index % 3}`}
           className="response-loading-pixel size-1 rounded-1px bg-current"
           data-lit={LOADER_RESTING_CELLS[index] ? "" : undefined}
-          style={{ animationDelay: `${delay}ms` } as CSSProperties}
+          style={{ "--response-loading-pixel-delay": `${delay}ms` }}
         />
       ))}
     </span>
