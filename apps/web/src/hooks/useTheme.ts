@@ -1,17 +1,11 @@
-import type { DesktopBridge } from "@akeru/contracts";
 import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
-import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import {
   applyThemePalette,
   CUSTOM_THEMES_STORAGE_KEY,
   invalidateCustomThemes,
-  canonicalThemePreference,
-  isKnownThemePreference,
   getThemePreferenceMode,
-  parseThemeHalves,
   removeLegacyStorageKey,
-  resolveDesktopTheme,
   resolveThemeAppearance,
   resolveThemeHalf,
   LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY,
@@ -20,13 +14,26 @@ import {
   THEME_APPEARANCE_MODE_STORAGE_KEY,
   THEME_FOLLOW_SYSTEM_STORAGE_KEY,
   THEME_HALVES_STORAGE_KEY,
-  ThemePreference,
   type ThemeAppearance,
   type ThemeHalves,
   type ThemePreferenceMode,
 } from "../themePalette";
-
-type Theme = ThemePreference;
+import {
+  type Theme,
+  STORAGE_KEY,
+  LEGACY_STORAGE_KEY,
+  DEFAULT_THEME,
+  readStoredThemeHalves,
+  clearStoredThemeHalves,
+  ThemeStorageError,
+  isThemeStorageError,
+  readAppearanceModePreference,
+  writeAppearanceModePreference,
+  readThemePreference,
+  persistThemePreference,
+} from "../theme/preferenceStorage";
+import { syncBrowserChromeTheme } from "../theme/browserChrome";
+import { syncDesktopTheme } from "../theme/desktopSync";
 
 type ThemeSnapshot = {
   theme: Theme;
@@ -36,15 +43,7 @@ type ThemeSnapshot = {
   themeHalves: ThemeHalves | null;
 };
 
-type DesktopThemeBridge = Pick<DesktopBridge, "setTheme">;
-
-const STORAGE_KEY = "akeru:theme";
-
-const LEGACY_STORAGE_KEY = "t3code:theme";
-
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
-
-const DEFAULT_THEME = "akeru-paper";
 
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   theme: DEFAULT_THEME,
@@ -54,82 +53,15 @@ const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   themeHalves: null,
 };
 
-/** Live read of the stored appearance mix, for callers that must not rely on
- * a render-time snapshot (for example rollback after an async dialog). */
-export function readThemeHalves(): ThemeHalves | null {
-  return readStoredThemeHalves();
-}
-
-function readStoredThemeHalves(): ThemeHalves | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    return parseThemeHalves(
-      window.localStorage.getItem(THEME_HALVES_STORAGE_KEY) ??
-        window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY),
-    );
-  } catch {
-    return null;
-  }
-}
-
-/** Removes the stored mix. An empty mix under the current key shadows a legacy mix that
- * could not be removed, so the legacy fallback in readStoredThemeHalves cannot revive it. */
-function clearStoredThemeHalves(): void {
-  removeLegacyStorageKey(LEGACY_THEME_HALVES_STORAGE_KEY);
-
-  if (window.localStorage.getItem(LEGACY_THEME_HALVES_STORAGE_KEY) === null) {
-    window.localStorage.removeItem(THEME_HALVES_STORAGE_KEY);
-  } else {
-    window.localStorage.setItem(THEME_HALVES_STORAGE_KEY, "{}");
-  }
-}
-
 function themeHalvesSignature(halves: ThemeHalves | null): string {
   return `${halves?.light ?? ""}|${halves?.dark ?? ""}`;
 }
-
-const THEME_COLOR_META_NAME = "theme-color";
-
-const DYNAMIC_THEME_COLOR_SELECTOR = `meta[name="${THEME_COLOR_META_NAME}"][data-dynamic-theme-color="true"]`;
-
-export class ThemeStorageError extends Schema.TaggedErrorClass<ThemeStorageError>()(
-  "ThemeStorageError",
-  {
-    operation: Schema.Literals(["read", "write"]),
-    storageKey: Schema.String,
-    theme: Schema.optional(ThemePreference),
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Failed to ${this.operation} theme preference for ${this.storageKey}.`;
-  }
-}
-
-export const isThemeStorageError = Schema.is(ThemeStorageError);
-
-export class DesktopThemeSyncError extends Schema.TaggedErrorClass<DesktopThemeSyncError>()(
-  "DesktopThemeSyncError",
-  {
-    theme: ThemePreference,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Failed to sync the ${this.theme} theme to the desktop shell.`;
-  }
-}
-
-export const isDesktopThemeSyncError = Schema.is(DesktopThemeSyncError);
 
 let listeners: Array<() => void> = [];
 
 let lastSnapshot: ThemeSnapshot | null = null;
 
 let snapshotStale = true;
-
-let lastDesktopTheme: "light" | "dark" | "system" | null = null;
 
 let lastAppliedTheme: ThemeSnapshot | null = null;
 
@@ -149,102 +81,10 @@ function getSystemDark() {
   );
 }
 
-function readStoredFollowSystem(theme: Theme): boolean {
-  if (typeof window === "undefined") return theme === "system";
-
-  try {
-    const raw =
-      window.localStorage.getItem(THEME_FOLLOW_SYSTEM_STORAGE_KEY) ??
-      window.localStorage.getItem(LEGACY_THEME_FOLLOW_SYSTEM_STORAGE_KEY);
-
-    if (raw === "true") return true;
-
-    if (raw === "false") return false;
-  } catch {
-    // Fall back to the legacy theme value when the separate preference is unavailable.
-  }
-
-  return theme === "system" || theme === DEFAULT_THEME;
-}
-
-function isThemePreferenceMode(value: string | null): value is ThemePreferenceMode {
-  return value === "light" || value === "dark" || value === "system";
-}
-
-export function readAppearanceModePreference(theme: Theme): ThemePreferenceMode {
-  if (typeof window !== "undefined") {
-    try {
-      const raw =
-        window.localStorage.getItem(THEME_APPEARANCE_MODE_STORAGE_KEY) ??
-        window.localStorage.getItem(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
-
-      if (isThemePreferenceMode(raw)) return raw;
-    } catch {
-      // Fall back to the legacy preference below when storage is unavailable.
-    }
-  }
-
-  if (readStoredFollowSystem(theme)) return "system";
-
-  return getThemePreferenceMode(theme) ?? "light";
-}
-
-function writeAppearanceModePreference(appearanceMode: ThemePreferenceMode): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    // The legacy follow-system flag is read-only migration input now; the
-    // mode key is the single source of truth.
-    window.localStorage.setItem(THEME_APPEARANCE_MODE_STORAGE_KEY, appearanceMode);
-  } catch (cause) {
-    throw new ThemeStorageError({
-      operation: "write",
-      storageKey: THEME_APPEARANCE_MODE_STORAGE_KEY,
-      cause,
-    });
-  }
-
-  removeLegacyStorageKey(LEGACY_THEME_APPEARANCE_MODE_STORAGE_KEY);
-}
-
-export function readThemePreference(): Theme {
-  if (typeof window === "undefined") return DEFAULT_THEME_SNAPSHOT.theme;
-  let raw: string | null;
-
-  try {
-    raw =
-      window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
-  } catch (cause) {
-    throw new ThemeStorageError({
-      operation: "read",
-      storageKey: STORAGE_KEY,
-      cause,
-    });
-  }
-
-  if (raw !== null && isKnownThemePreference(raw)) {
-    return raw === "system" ? DEFAULT_THEME : canonicalThemePreference(raw);
-  }
-
-  return DEFAULT_THEME_SNAPSHOT.theme;
-}
-
 export function writeThemePreference(theme: Theme): void {
   if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY, theme);
-    themeStorageReadFailure = null;
-  } catch (cause) {
-    throw new ThemeStorageError({
-      operation: "write",
-      storageKey: STORAGE_KEY,
-      theme,
-      cause,
-    });
-  }
-
-  removeLegacyStorageKey(LEGACY_STORAGE_KEY);
+  persistThemePreference(theme);
+  themeStorageReadFailure = null;
 }
 
 function getStored(): Theme {
@@ -271,81 +111,6 @@ function getStored(): Theme {
     });
 
     return DEFAULT_THEME_SNAPSHOT.theme;
-  }
-}
-
-function ensureThemeColorMetaTag(): HTMLMetaElement {
-  let element = document.querySelector<HTMLMetaElement>(DYNAMIC_THEME_COLOR_SELECTOR);
-
-  if (element) {
-    return element;
-  }
-
-  element = document.createElement("meta");
-  element.name = THEME_COLOR_META_NAME;
-  element.setAttribute("data-dynamic-theme-color", "true");
-  document.head.append(element);
-
-  return element;
-}
-
-function normalizeThemeColor(value: string | null | undefined): string | null {
-  const normalizedValue = value?.trim().toLowerCase();
-
-  if (
-    !normalizedValue ||
-    normalizedValue === "transparent" ||
-    normalizedValue === "rgba(0, 0, 0, 0)" ||
-    normalizedValue === "rgba(0 0 0 / 0)"
-  ) {
-    return null;
-  }
-
-  return value?.trim() ?? null;
-}
-
-function resolveBrowserChromeSurface(): HTMLElement {
-  return (
-    document.querySelector<HTMLElement>("main[data-slot='sidebar-inset']") ??
-    document.querySelector<HTMLElement>("[data-slot='sidebar-inner']") ??
-    document.body
-  );
-}
-
-export function syncBrowserChromeTheme() {
-  if (typeof document === "undefined" || typeof getComputedStyle === "undefined") return;
-  const rootStyles = getComputedStyle(document.documentElement);
-
-  const themeChromeColor = document.documentElement.dataset.themeId
-    ? normalizeThemeColor(rootStyles.getPropertyValue("--app-chrome-background"))
-    : null;
-
-  const surfaceColor = normalizeThemeColor(
-    getComputedStyle(resolveBrowserChromeSurface()).backgroundColor,
-  );
-
-  const fallbackColor = normalizeThemeColor(getComputedStyle(document.body).backgroundColor);
-  const backgroundColor = themeChromeColor ?? surfaceColor ?? fallbackColor;
-
-  if (!backgroundColor) return;
-
-  document.documentElement.style.backgroundColor = backgroundColor;
-  document.body.style.backgroundColor = backgroundColor;
-
-  // Update every theme-color meta so any element another layer added (for
-  // example a media-scoped one) carries the resolved color too.
-  const themeColorMetas = document.querySelectorAll<HTMLMetaElement>(
-    `meta[name="${THEME_COLOR_META_NAME}"]`,
-  );
-
-  if (themeColorMetas.length === 0) {
-    ensureThemeColorMetaTag().setAttribute("content", backgroundColor);
-
-    return;
-  }
-
-  for (const element of themeColorMetas) {
-    element.setAttribute("content", backgroundColor);
   }
 }
 
@@ -395,53 +160,6 @@ function applyTheme(theme: Theme, suppressTransitions = false) {
       document.documentElement.classList.remove("no-transitions");
     });
   }
-}
-
-export async function syncDesktopThemePreference(
-  bridge: DesktopThemeBridge,
-  theme: Theme,
-  followSystem?: boolean,
-  appearanceMode?: ThemePreferenceMode,
-  halves: ThemeHalves | null = readStoredThemeHalves(),
-): Promise<void> {
-  try {
-    await bridge.setTheme(resolveDesktopTheme(theme, followSystem, appearanceMode, halves));
-  } catch (cause) {
-    throw new DesktopThemeSyncError({ theme, cause });
-  }
-}
-
-export function syncDesktopTheme(
-  theme: Theme,
-  followSystem?: boolean,
-  appearanceMode?: ThemePreferenceMode,
-) {
-  if (typeof window === "undefined") return;
-  const bridge = window.desktopBridge;
-  const halves = readStoredThemeHalves();
-  const desktopTheme = resolveDesktopTheme(theme, followSystem, appearanceMode, halves);
-
-  if (!bridge || typeof bridge.setTheme !== "function" || lastDesktopTheme === desktopTheme) {
-    return;
-  }
-
-  lastDesktopTheme = desktopTheme;
-  void syncDesktopThemePreference(bridge, theme, followSystem, appearanceMode, halves).catch(
-    (cause: unknown) => {
-      const error = isDesktopThemeSyncError(cause)
-        ? cause
-        : new DesktopThemeSyncError({ theme, cause });
-
-      console.error(error.message, {
-        theme: error.theme,
-        ...safeErrorLogAttributes(error),
-      });
-
-      if (lastDesktopTheme === desktopTheme) {
-        lastDesktopTheme = null;
-      }
-    },
-  );
 }
 
 // Apply immediately on module load to prevent flash
@@ -754,3 +472,19 @@ export function useTheme() {
     themeHalves: snapshot.themeHalves,
   } as const;
 }
+export {
+  readThemeHalves,
+  ThemeStorageError,
+  isThemeStorageError,
+  readAppearanceModePreference,
+  readThemePreference,
+} from "../theme/preferenceStorage";
+
+export { syncBrowserChromeTheme } from "../theme/browserChrome";
+
+export {
+  DesktopThemeSyncError,
+  isDesktopThemeSyncError,
+  syncDesktopThemePreference,
+  syncDesktopTheme,
+} from "../theme/desktopSync";
