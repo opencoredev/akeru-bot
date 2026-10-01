@@ -14,6 +14,7 @@ describe("AcpCoreRuntimeEvents", () => {
   it("maps ACP permission requests to canonical runtime events", () => {
     const stamp = { eventId: "event-1" as never, createdAt: "2026-03-27T00:00:00.000Z" };
     const turnId = TurnId.make("turn-1");
+
     const permissionRequest = {
       kind: "execute" as const,
       detail: "cat package.json",
@@ -72,6 +73,7 @@ describe("AcpCoreRuntimeEvents", () => {
 
     for (const kind of ["search", "fetch", "other", "unknown", "future-tool-kind"]) {
       const permissionRequest = { kind };
+
       const request = {
         stamp,
         provider: ProviderDriverKind.make("cursor"),

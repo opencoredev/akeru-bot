@@ -21,12 +21,14 @@ export const codexExecLaunchArgs = (launchArgs?: string) => {
 
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
+
     if (arg === undefined) continue;
 
     if (arg === "--strict-config" || arg.startsWith("--config=") || arg.startsWith("-c=")) {
       execArgs.push(arg);
     } else if (arg === "--config" || arg === "-c" || arg === "--enable" || arg === "--disable") {
       const value = args[index + 1];
+
       if (value !== undefined && !value.startsWith("-")) {
         execArgs.push(arg, value);
         index++;
@@ -44,5 +46,6 @@ export const codexSessionAppServerArgs = (
   launchArgs: string | undefined,
 ) => {
   const launchAppServerArgs = codexAppServerArgs(launchArgs);
+
   return appServerArgs ? [...launchAppServerArgs, ...appServerArgs] : launchAppServerArgs;
 };

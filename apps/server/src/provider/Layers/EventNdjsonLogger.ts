@@ -8,7 +8,6 @@
 import type * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-
 import type { ThreadId } from "@akeru/contracts";
 import { RotatingFileSink } from "@akeru/shared/logging";
 import { errorTag } from "@akeru/shared/observability";
@@ -16,260 +15,35 @@ import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import { toSafeThreadAttachmentSegment } from "../../attachmentStore.ts";
-import type { ResourceAttribution } from "../../resourceTelemetry/ResourceAttribution.ts";
-
-const MEBIBYTE = 1024 * 1024;
-const DAY_MS = 24 * 60 * 60 * 1_000;
-const DEFAULT_MAX_BYTES = 10 * MEBIBYTE;
-const DEFAULT_MAX_FILES = 10;
-const DEFAULT_BATCH_WINDOW_MS = 1_000;
-const DEFAULT_MAX_TOTAL_BYTES = 512 * MEBIBYTE;
-const DEFAULT_MAX_AGE_MS = 14 * DAY_MS;
-const DEFAULT_RETENTION_CHECK_INTERVAL_MS = 5 * 60 * 1_000;
-const DEFAULT_MAX_BUFFERED_BYTES = MEBIBYTE;
-const DEFAULT_MAX_BUFFERED_RECORDS = 512;
-const GLOBAL_THREAD_SEGMENT = "_global";
-const LOG_SCOPE = "provider-observability";
-const encodeUnknownJsonString = Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
-
-const transientCanonicalEventTypes = new Set([
-  "content.delta",
-  "hook.progress",
-  "item.updated",
-  "task.progress",
-  "thread.realtime.audio.delta",
-  "tool.progress",
-  "turn.proposed.delta",
-]);
-const transientNativeMethods = new Set([
-  "item/agentMessage/delta",
-  "item/commandExecution/outputDelta",
-  "item/fileChange/outputDelta",
-  "item/plan/delta",
-  "item/reasoning/summaryTextDelta",
-  "item/reasoning/textDelta",
-  "thread/realtime/outputAudio/delta",
-  "thread/realtime/transcript/delta",
-]);
-const transientAcpUpdates = new Set(["agent_message_chunk", "agent_thought_chunk"]);
-
-export type EventNdjsonStream = "native" | "canonical" | "orchestration";
-
-export interface EventNdjsonLogger {
-  readonly filePath: string;
-  readonly write: (event: unknown, threadId: ThreadId | null) => Effect.Effect<void>;
-  readonly close: () => Effect.Effect<void>;
-}
-
-export interface EventNdjsonLogStore {
-  readonly filePath: string;
-  readonly logger: (stream: EventNdjsonStream) => EventNdjsonLogger;
-  readonly flush: Effect.Effect<void>;
-  readonly close: () => Effect.Effect<void>;
-}
-
-export interface EventNdjsonLogStoreOptions {
-  readonly maxBytes?: number;
-  readonly maxFiles?: number;
-  readonly batchWindowMs?: number;
-  readonly maxTotalBytes?: number;
-  readonly maxAgeMs?: number;
-  readonly retentionCheckIntervalMs?: number;
-  readonly maxBufferedBytes?: number;
-  readonly maxBufferedRecords?: number;
-  readonly attribution?: ResourceAttribution["Service"];
-}
-
-export interface EventNdjsonLoggerOptions extends EventNdjsonLogStoreOptions {
-  readonly stream: EventNdjsonStream;
-}
-
-export class EventNdjsonLogConfigurationError extends Schema.TaggedErrorClass<EventNdjsonLogConfigurationError>()(
-  "EventNdjsonLogConfigurationError",
-  {
-    filePath: Schema.String,
-    option: Schema.String,
-    value: Schema.Number,
-    minimum: Schema.Number,
-  },
-) {
-  override get message(): string {
-    return `Provider event log option '${this.option}' must be an integer >= ${this.minimum}; received ${this.value} for '${this.filePath}'`;
-  }
-}
-
-export class EventNdjsonLogDirectoryError extends Schema.TaggedErrorClass<EventNdjsonLogDirectoryError>()(
-  "EventNdjsonLogDirectoryError",
-  {
-    directory: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Failed to create provider event log directory '${this.directory}'`;
-  }
-}
-
-export type EventNdjsonLogStoreError =
-  | EventNdjsonLogConfigurationError
-  | EventNdjsonLogDirectoryError;
-
-interface ResolvedOptions {
-  readonly maxBytes: number;
-  readonly maxFiles: number;
-  readonly batchWindowMs: number;
-  readonly maxTotalBytes: number;
-  readonly maxAgeMs: number;
-  readonly retentionCheckIntervalMs: number;
-  readonly maxBufferedBytes: number;
-  readonly maxBufferedRecords: number;
-  readonly attribution: ResourceAttribution["Service"] | undefined;
-}
-
-export interface PendingRecord {
-  readonly stream: EventNdjsonStream;
-  readonly threadSegment: string;
-  readonly line: string;
-  readonly bytes: number;
-}
-
-interface StoreState {
-  readonly pending: Array<PendingRecord>;
-  readonly pendingBytes: number;
-  readonly sinks: ReadonlyMap<string, RotatingFileSink>;
-  readonly flushScheduled: boolean;
-  readonly closed: boolean;
-  readonly lastRetentionAt: number;
-}
-
-interface AttributionSummary {
-  readonly stream: EventNdjsonStream;
-  readonly count: number;
-  readonly logicalWriteBytes: number;
-}
-
-interface FileOperationFailure {
-  readonly filePath: string;
-  readonly cause: unknown;
-}
-
-interface RetentionResult {
-  readonly failures: ReadonlyArray<FileOperationFailure>;
-}
-
-interface DrainResult {
-  readonly attributions: ReadonlyArray<AttributionSummary>;
-  readonly failures: ReadonlyArray<FileOperationFailure>;
-}
-
-function logWarning(message: string, context: Record<string, unknown>): Effect.Effect<void> {
-  return Effect.logWarning(message, context).pipe(Effect.annotateLogs({ scope: LOG_SCOPE }));
-}
-
-function resolveThreadSegment(raw: string | null | undefined): string {
-  const normalized = typeof raw === "string" ? toSafeThreadAttachmentSegment(raw) : null;
-  return normalized ?? GLOBAL_THREAD_SEGMENT;
-}
-
-function resolveStreamLabel(stream: EventNdjsonStream): string {
-  return stream === "native" ? "NTIVE" : stream === "orchestration" ? "ORCH" : "CANON";
-}
-
-function providerLogPrefix(filePath: string): string {
-  const basename = NodePath.basename(filePath);
-  const extension = NodePath.extname(basename);
-  return `${extension.length > 0 ? basename.slice(0, -extension.length) : basename}.`;
-}
-
-function providerLogPath(directory: string, prefix: string, threadSegment: string): string {
-  return NodePath.join(directory, `${prefix}${threadSegment}.log`);
-}
-
-function shouldPersist(stream: EventNdjsonStream, event: unknown): boolean {
-  if (stream === "orchestration" || typeof event !== "object" || event === null) {
-    return true;
-  }
-  try {
-    const type = Reflect.get(event, "type");
-    if (typeof type === "string" && transientCanonicalEventTypes.has(type)) {
-      return false;
-    }
-    if (stream !== "native") return true;
-
-    const nested = Reflect.get(event, "event");
-    const nativeEvent = typeof nested === "object" && nested !== null ? nested : event;
-    const method = Reflect.get(nativeEvent, "method");
-    if (
-      typeof method === "string" &&
-      (transientNativeMethods.has(method) ||
-        method.startsWith("claude/stream_event/content_block_delta/"))
-    ) {
-      return false;
-    }
-
-    const nativeType = Reflect.get(nativeEvent, "type");
-    if (nativeType === "message.part.delta") return false;
-
-    const payload = Reflect.get(nativeEvent, "payload");
-    if (typeof payload !== "object" || payload === null) return true;
-
-    if (method === "session/update") {
-      const update = Reflect.get(payload, "update");
-      if (typeof update !== "object" || update === null) return true;
-      const updateType = Reflect.get(update, "sessionUpdate");
-      return typeof updateType !== "string" || !transientAcpUpdates.has(updateType);
-    }
-
-    if (nativeType === "message.part.updated") {
-      const properties = Reflect.get(payload, "properties");
-      if (typeof properties !== "object" || properties === null) return true;
-      const part = Reflect.get(properties, "part");
-      if (typeof part !== "object" || part === null) return true;
-      const partType = Reflect.get(part, "type");
-      return partType !== "text" && partType !== "reasoning";
-    }
-
-    return true;
-  } catch {
-    return true;
-  }
-}
-
-export async function writeBatchedMessages(
-  sink: Pick<RotatingFileSink, "write">,
-  records: ReadonlyArray<PendingRecord>,
-  maxBytes: number,
-  onWritten: (records: ReadonlyArray<PendingRecord>) => void,
-): Promise<void> {
-  let pendingRecords: Array<PendingRecord> = [];
-  let pendingBytes = 0;
-
-  const flush = async () => {
-    if (pendingRecords.length === 0) return;
-    const writtenRecords = pendingRecords;
-    await sink.write(writtenRecords.map((record) => record.line).join(""));
-    onWritten(writtenRecords);
-    pendingRecords = [];
-    pendingBytes = 0;
-  };
-
-  for (const record of records) {
-    if (pendingBytes > 0 && pendingBytes + record.bytes > maxBytes) {
-      await flush();
-    }
-    pendingRecords.push(record);
-    pendingBytes += record.bytes;
-    if (pendingBytes >= maxBytes) {
-      await flush();
-    }
-  }
-  await flush();
-}
+import {
+  type EventNdjsonStream,
+  type EventNdjsonLogger,
+  type EventNdjsonLogStore,
+  type EventNdjsonLogStoreOptions,
+  type EventNdjsonLoggerOptions,
+  EventNdjsonLogDirectoryError,
+  type EventNdjsonLogStoreError,
+  type ResolvedOptions,
+  type PendingRecord,
+  type StoreState,
+  type FileOperationFailure,
+  type RetentionResult,
+  type DrainResult,
+} from "./logging/EventLogTypes.ts";
+import {
+  logWarning,
+  resolveThreadSegment,
+  resolveStreamLabel,
+  providerLogPrefix,
+  providerLogPath,
+  shouldPersist,
+  serializeEvent,
+} from "./logging/EventLogEncoding.ts";
+import { writeBatchedMessages } from "./logging/EventLogFiles.ts";
+import { resolveOptions } from "./logging/EventLogOptions.ts";
 
 async function isProviderLogFile(
   filePath: string,
@@ -277,12 +51,15 @@ async function isProviderLogFile(
   filePrefix: string,
 ): Promise<boolean> {
   if (!/\.log(?:\.\d+)?$/u.test(fileName)) return false;
+
   if (fileName.startsWith(filePrefix)) return true;
 
   const descriptor = await NodeFSP.open(filePath, "r");
+
   try {
     const header = Buffer.alloc(256);
     const { bytesRead } = await descriptor.read(header, 0, header.byteLength, 0);
+
     return /^\[[^\]\r\n]+\] (?:NTIVE|CANON|ORCH): /u.test(header.toString("utf8", 0, bytesRead));
   } finally {
     await descriptor.close();
@@ -301,6 +78,7 @@ async function enforceRetention(input: {
   const files: Array<{ filePath: string; mtimeMs: number; size: number }> = [];
 
   let entries: ReadonlyArray<NodeFS.Dirent>;
+
   try {
     entries = await NodeFSP.readdir(input.directory, { withFileTypes: true });
   } catch (cause) {
@@ -310,6 +88,7 @@ async function enforceRetention(input: {
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const filePath = NodePath.join(input.directory, entry.name);
+
     try {
       if (!(await isProviderLogFile(filePath, entry.name, input.filePrefix))) continue;
       const stat = await NodeFSP.stat(filePath);
@@ -320,19 +99,24 @@ async function enforceRetention(input: {
   }
 
   let totalBytes = files.reduce((total, file) => total + file.size, 0);
+
   const remove = async (file: (typeof files)[number]) => {
     if (input.activeFilePaths.has(file.filePath)) return false;
+
     try {
       await NodeFSP.rm(file.filePath, { force: true });
       totalBytes -= file.size;
+
       return true;
     } catch (cause) {
       failures.push({ filePath: file.filePath, cause });
+
       return false;
     }
   };
 
   const retained: typeof files = [];
+
   for (const file of files) {
     if (input.now - file.mtimeMs <= input.maxAgeMs || !(await remove(file))) retained.push(file);
   }
@@ -345,51 +129,6 @@ async function enforceRetention(input: {
   }
 
   return { failures };
-}
-
-function validateOption(input: {
-  readonly filePath: string;
-  readonly option: string;
-  readonly value: number;
-  readonly minimum: number;
-}): EventNdjsonLogConfigurationError | undefined {
-  if (Number.isInteger(input.value) && input.value >= input.minimum) return undefined;
-  return new EventNdjsonLogConfigurationError(input);
-}
-
-function resolveOptions(
-  filePath: string,
-  options: EventNdjsonLogStoreOptions,
-): Effect.Effect<ResolvedOptions, EventNdjsonLogConfigurationError> {
-  const resolved = {
-    maxBytes: options.maxBytes ?? DEFAULT_MAX_BYTES,
-    maxFiles: options.maxFiles ?? DEFAULT_MAX_FILES,
-    batchWindowMs: options.batchWindowMs ?? DEFAULT_BATCH_WINDOW_MS,
-    maxTotalBytes: options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES,
-    maxAgeMs: options.maxAgeMs ?? DEFAULT_MAX_AGE_MS,
-    retentionCheckIntervalMs:
-      options.retentionCheckIntervalMs ?? DEFAULT_RETENTION_CHECK_INTERVAL_MS,
-    maxBufferedBytes: options.maxBufferedBytes ?? DEFAULT_MAX_BUFFERED_BYTES,
-    maxBufferedRecords: options.maxBufferedRecords ?? DEFAULT_MAX_BUFFERED_RECORDS,
-    attribution: options.attribution,
-  } satisfies ResolvedOptions;
-
-  const validations = [
-    ["maxBytes", resolved.maxBytes, 1],
-    ["maxFiles", resolved.maxFiles, 1],
-    ["batchWindowMs", resolved.batchWindowMs, 0],
-    ["maxTotalBytes", resolved.maxTotalBytes, 1],
-    ["maxAgeMs", resolved.maxAgeMs, 1],
-    ["retentionCheckIntervalMs", resolved.retentionCheckIntervalMs, 1],
-    ["maxBufferedBytes", resolved.maxBufferedBytes, 1],
-    ["maxBufferedRecords", resolved.maxBufferedRecords, 1],
-  ] as const;
-
-  for (const [option, value, minimum] of validations) {
-    const error = validateOption({ filePath, option, value, minimum });
-    if (error) return Effect.fail(error);
-  }
-  return Effect.succeed(resolved);
 }
 
 async function drainPending(input: {
@@ -407,10 +146,12 @@ async function drainPending(input: {
 
   const sinks = new Map(input.state.sinks);
   const failures: Array<FileOperationFailure> = [];
+
   const attributionByStream = new Map<
     EventNdjsonStream,
     { count: number; logicalWriteBytes: number }
   >();
+
   const recordsBySegment = new Map<string, Array<PendingRecord>>();
 
   for (const record of input.state.pending) {
@@ -422,6 +163,7 @@ async function drainPending(input: {
   for (const [threadSegment, records] of recordsBySegment) {
     const filePath = providerLogPath(input.directory, input.filePrefix, threadSegment);
     let sink = sinks.get(threadSegment);
+
     if (!sink) {
       try {
         sink = new RotatingFileSink({
@@ -444,6 +186,7 @@ async function drainPending(input: {
             count: 0,
             logicalWriteBytes: 0,
           };
+
           attributionByStream.set(record.stream, {
             count: current.count + 1,
             logicalWriteBytes: current.logicalWriteBytes + record.bytes,
@@ -459,6 +202,7 @@ async function drainPending(input: {
 
   const retentionDue =
     input.now - input.state.lastRetentionAt >= input.options.retentionCheckIntervalMs;
+
   const retention = retentionDue
     ? await enforceRetention({
         directory: input.directory,
@@ -485,6 +229,7 @@ async function drainPending(input: {
         });
       }
     }
+
     sinks.clear();
   }
 
@@ -507,16 +252,6 @@ async function drainPending(input: {
   ];
 }
 
-const serializeEvent = Effect.fnUntraced(function* (event: unknown) {
-  return yield* encodeUnknownJsonString(event).pipe(
-    Effect.catch((error) =>
-      logWarning("failed to serialize provider event log record", {
-        errorTag: errorTag(error),
-      }).pipe(Effect.as(undefined)),
-    ),
-  );
-});
-
 export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
   filePath: string,
   options: EventNdjsonLogStoreOptions = {},
@@ -531,6 +266,7 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
   });
 
   const initializedAt = yield* Clock.currentTimeMillis;
+
   const initialRetention = yield* Effect.promise(() =>
     enforceRetention({
       directory,
@@ -541,6 +277,7 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
       now: initializedAt,
     }),
   );
+
   for (const failure of initialRetention.failures) {
     yield* logWarning("provider event log retention failed", {
       filePath: failure.filePath,
@@ -556,6 +293,7 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
     closed: false,
     lastRetentionAt: initializedAt,
   });
+
   const timerScope = yield* Scope.make();
 
   const drain = (state: StoreState, now: number, timerFired = false, close = false) =>
@@ -574,10 +312,12 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
     if (resolved.attribution && result.attributions.length > 0) {
       const completedAt = yield* Clock.currentTimeMillis;
       const durationMs = Math.max(0, completedAt - startedAt);
+
       const totalBytes = result.attributions.reduce(
         (total, entry) => total + entry.logicalWriteBytes,
         0,
       );
+
       yield* Effect.forEach(
         result.attributions,
         (entry) =>
@@ -598,9 +338,11 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
 
   const flush = Effect.fnUntraced(function* (timerFired: boolean, close: boolean) {
     const startedAt = yield* Clock.currentTimeMillis;
+
     const result = yield* SynchronizedRef.modifyEffect(stateRef, (state) =>
       drain(state, startedAt, timerFired, close),
     );
+
     yield* reportDrain(result, startedAt);
   }, Effect.uninterruptible);
 
@@ -618,43 +360,56 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
   }, Effect.uninterruptible);
 
   const loggerViews = new Map<EventNdjsonStream, EventNdjsonLogger>();
+
   const logger = (stream: EventNdjsonStream): EventNdjsonLogger => {
     const existing = loggerViews.get(stream);
+
     if (existing) return existing;
 
     const write = Effect.fnUntraced(function* (event: unknown, threadId: ThreadId | null) {
       if (!shouldPersist(stream, event)) return;
       const startedAt = yield* Clock.currentTimeMillis;
+
       const results = yield* SynchronizedRef.modifyEffect(stateRef, (state) =>
         Effect.gen(function* () {
           const results: DrainResult[] = [];
+
           if (state.closed) return [results, state] as const;
           const payload = yield* serializeEvent(event);
+
           if (payload === undefined) return [results, state] as const;
           const observedAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
           const line = `[${observedAt}] ${resolveStreamLabel(stream)}: ${payload}\n`;
           const bytes = Buffer.byteLength(line);
+
           if (bytes > resolved.maxBufferedBytes) {
             yield* logWarning("provider event log record exceeds buffer capacity", {
               filePath,
               bytes,
             });
+
             return [results, state] as const;
           }
+
           let current = state;
+
           if (current.pendingBytes + bytes > resolved.maxBufferedBytes) {
             const [result, drained] = yield* drain(current, startedAt);
             results.push(result);
             current = drained;
           }
+
           const pending = current.pending;
           pending.push({ stream, threadSegment: resolveThreadSegment(threadId), line, bytes });
           const pendingBytes = current.pendingBytes + bytes;
+
           const flushNow =
             resolved.batchWindowMs === 0 ||
             pending.length >= resolved.maxBufferedRecords ||
             pendingBytes >= resolved.maxBufferedBytes;
+
           current = { ...current, pending, pendingBytes };
+
           if (flushNow) {
             const [result, drained] = yield* drain(current, startedAt);
             results.push(result);
@@ -663,14 +418,17 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
             yield* scheduleFlush();
             current = { ...current, flushScheduled: true };
           }
+
           return [results, current] as const;
         }),
       ).pipe(Effect.uninterruptible);
+
       for (const result of results) yield* reportDrain(result, startedAt);
     });
 
     const view = { filePath, write, close: () => Effect.void } satisfies EventNdjsonLogger;
     loggerViews.set(stream, view);
+
     return view;
   };
 
@@ -688,6 +446,22 @@ export const makeEventNdjsonLogger = Effect.fnUntraced(function* (
       ),
     ),
   );
+
   if (!store) return undefined;
+
   return { ...store.logger(options.stream), close: store.close };
 });
+
+export {
+  type EventNdjsonStream,
+  type EventNdjsonLogger,
+  type EventNdjsonLogStore,
+  type EventNdjsonLogStoreOptions,
+  type EventNdjsonLoggerOptions,
+  EventNdjsonLogConfigurationError,
+  EventNdjsonLogDirectoryError,
+  type EventNdjsonLogStoreError,
+  type PendingRecord,
+} from "./logging/EventLogTypes.ts";
+
+export { writeBatchedMessages } from "./logging/EventLogFiles.ts";

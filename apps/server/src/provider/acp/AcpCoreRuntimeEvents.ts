@@ -12,7 +12,7 @@ import {
   type TurnId,
 } from "@akeru/contracts";
 
-import type { AcpPermissionRequest, AcpPlanUpdate, AcpToolCallState } from "./AcpRuntimeModel.ts";
+import type { AcpPermissionRequest, AcpPlanUpdate, AcpToolCallState } from "./AcpRuntimeTypes.ts";
 
 type AcpAdapterRawSource = Extract<
   RuntimeEventRawSource,
@@ -164,6 +164,7 @@ export function makeAcpToolCallEvent(input: {
   readonly rawPayload: unknown;
 }): ProviderRuntimeEvent {
   const runtimeStatus = runtimeItemStatusFromAcpToolStatus(input.toolCall.status);
+
   return {
     type:
       input.toolCall.status === "completed" || input.toolCall.status === "failed"

@@ -18,6 +18,7 @@ import {
 } from "../opencodeRuntime.ts";
 import { checkOpenCodeProviderStatus } from "./OpenCodeProvider.ts";
 import type { OpenCodeInventory } from "../opencodeRuntime.ts";
+
 const decodeOpenCodeSettings = Schema.decodeSync(OpenCodeSettings);
 
 const DEFAULT_VERSION_STDOUT = "opencode 1.14.19\n";
@@ -75,6 +76,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
           }),
         );
       }
+
       return {
         url: serverUrl ?? "http://127.0.0.1:4301",
         exitCode: null,
@@ -107,6 +109,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
       : Effect.succeed(runtimeMock.state.inventory as OpenCodeInventory),
   loadInventoryFromCli: ({ cwd }) => {
     runtimeMock.state.inventoryCwd = cwd;
+
     return runtimeMock.state.inventoryError
       ? Effect.fail(
           new OpenCodeRuntimeError({
@@ -167,6 +170,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
   it.effect("times out a hanging local CLI version probe", () =>
     Effect.gen(function* () {
       runtimeMock.state.runVersionPending = true;
+
       const probeFiber = yield* checkOpenCodeProviderStatus(
         makeOpenCodeSettings(),
         process.cwd(),
@@ -221,17 +225,21 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
       const model = snapshot.models.find((entry) => entry.slug === "openai/gpt-5.4");
 
       NodeAssert.ok(model);
+
       const variantDescriptor = model.capabilities?.optionDescriptors?.find(
         (descriptor) => descriptor.id === "variant" && descriptor.type === "select",
       );
+
       NodeAssert.ok(variantDescriptor && variantDescriptor.type === "select");
       NodeAssert.equal(
         variantDescriptor.options.find((option) => option.isDefault === true)?.id,
         "medium",
       );
+
       const agentDescriptor = model.capabilities?.optionDescriptors?.find(
         (descriptor) => descriptor.id === "agent" && descriptor.type === "select",
       );
+
       NodeAssert.ok(agentDescriptor && agentDescriptor.type === "select");
       NodeAssert.equal(
         agentDescriptor.options.find((option) => option.isDefault === true)?.id,
@@ -354,6 +362,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus with configured server URL", (i
   it.effect("surfaces a friendly auth error for configured servers", () =>
     Effect.gen(function* () {
       runtimeMock.state.inventoryError = new Error("401 Unauthorized");
+
       const snapshot = yield* checkOpenCodeProviderStatus(
         makeOpenCodeSettings({
           serverUrl: "http://127.0.0.1:9999",
@@ -376,6 +385,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus with configured server URL", (i
       runtimeMock.state.inventoryError = new Error(
         "fetch failed: connect ECONNREFUSED 127.0.0.1:9999",
       );
+
       const snapshot = yield* checkOpenCodeProviderStatus(
         makeOpenCodeSettings({
           serverUrl: "http://127.0.0.1:9999",

@@ -25,8 +25,11 @@ import wireFixture from "../testFixtures/codexMultiAgentWire.json" with { type: 
 import { makeCodexSessionRuntime } from "./CodexSessionRuntime.ts";
 
 const ROOT = wireFixture.rootThreadId;
+
 const [CHILD_A, CHILD_B] = wireFixture.childThreadIds as [string, string];
+
 const MEMORY = "memory-consolidation-thread";
+
 const decodeMcpElicitationResponse = Schema.decodeUnknownEffect(
   Schema.fromJsonString(
     Schema.Struct({
@@ -45,6 +48,7 @@ const decodeMcpElicitationResponse = Schema.decodeUnknownEffect(
  */
 function buildScript() {
   const captured = wireFixture.notifications;
+
   const extras = [
     {
       method: "item/completed",
@@ -75,6 +79,7 @@ function buildScript() {
     // parent path (approval correlation cleanup), not be swallowed.
     { method: "serverRequest/resolved", params: { threadId: CHILD_A, requestId: "req-1" } },
   ];
+
   return {
     rootThreadId: ROOT,
     notifications: [...captured.filter((entry) => entry.method !== "turn/completed"), ...extras],
@@ -82,6 +87,7 @@ function buildScript() {
 }
 
 const scriptPath = NodePath.join(import.meta.dirname, "../testFixtures/.collab-script.json");
+
 const peerPath = NodePath.join(import.meta.dirname, "../testFixtures/codexCollabMockPeer.sh");
 
 describe("CodexSessionRuntime collab integration", () => {
@@ -125,6 +131,7 @@ describe("CodexSessionRuntime collab integration", () => {
           event.method === "collabAgent/turnCompleted" &&
           (event.payload as { agentThreadId?: string }).agentThreadId === CHILD_A,
       );
+
       assert.isDefined(childTurnCompleted, "child A's turn completion becomes an agent event");
 
       const childClosed = events.find(
@@ -132,6 +139,7 @@ describe("CodexSessionRuntime collab integration", () => {
           event.method === "collabAgent/closed" &&
           (event.payload as { agentThreadId?: string }).agentThreadId === CHILD_B,
       );
+
       assert.isDefined(childClosed, "child B's close becomes an agent event");
 
       // Parent-owned resolution passes through — not swallowed, not
@@ -146,8 +154,10 @@ describe("CodexSessionRuntime collab integration", () => {
       const leaked = events.filter((event) => {
         const payload = event.payload as { threadId?: string } | undefined;
         const addressedToChild = payload?.threadId === CHILD_A || payload?.threadId === CHILD_B;
+
         return addressedToChild && (event.method?.startsWith("thread/") ?? false);
       });
+
       assert.deepEqual(
         leaked.map((event) => event.method),
         [],
@@ -174,13 +184,17 @@ describe("CodexSessionRuntime collab integration", () => {
       // turn/started precedes its registration, and drop terminal rows so
       // children stay live when Stop fires.
       const byIndex = wireFixture.notifications;
+
       const isTurnStarted = (entry: (typeof byIndex)[number], child: string) =>
         entry.method === "turn/started" &&
         (entry.params as { threadId?: string }).threadId === child;
+
       const isRegistration = (entry: (typeof byIndex)[number], child: string) => {
         const item = (entry.params as { item?: { type?: string; agentThreadId?: string } }).item;
+
         return item?.type === "subAgentActivity" && item.agentThreadId === child;
       };
+
       const turnStartedA = byIndex.find((entry) => isTurnStarted(entry, CHILD_A));
       const turnStartedB = byIndex.find((entry) => isTurnStarted(entry, CHILD_B));
       const registrationA = byIndex.find((entry) => isRegistration(entry, CHILD_A));
@@ -191,6 +205,7 @@ describe("CodexSessionRuntime collab integration", () => {
       assert.isDefined(registrationA);
       assert.isDefined(registrationB);
       assert.isDefined(rootThreadStarted);
+
       const memoryThreadStarted = {
         ...rootThreadStarted,
         params: {
@@ -203,6 +218,7 @@ describe("CodexSessionRuntime collab integration", () => {
           },
         },
       };
+
       const memoryTurnStarted = {
         ...turnStartedA,
         params: {
@@ -211,6 +227,7 @@ describe("CodexSessionRuntime collab integration", () => {
           turn: { ...turnStartedA.params.turn, id: "memory-consolidation-turn" },
         },
       };
+
       const script = {
         rootThreadId: ROOT,
         holdTurnOpen: true,
@@ -224,6 +241,7 @@ describe("CodexSessionRuntime collab integration", () => {
           turnStartedB,
         ],
       };
+
       // @effect-diagnostics-next-line preferSchemaOverJson:off
       NodeFS.writeFileSync(scriptPath, JSON.stringify(script), "utf8");
       const interruptsPath = `${scriptPath}.interrupts`;
@@ -259,9 +277,11 @@ describe("CodexSessionRuntime collab integration", () => {
 
       yield* runtime.start();
       yield* runtime.sendTurn({ input: "fan out and hang" });
+
       const childBStarted = yield* Fiber.join(childBStartedFiber).pipe(
         Effect.timeoutOption("15 seconds"),
       );
+
       assert.isTrue(childBStarted._tag === "Some", "child B turnStarted never arrived");
 
       // Stop everything. A's interrupt hangs forever — the bounded child
@@ -269,11 +289,13 @@ describe("CodexSessionRuntime collab integration", () => {
       yield* runtime.interruptTurn();
 
       const parseInterruptLine = (line: string) => JSON.parse(line) as { threadId?: string };
+
       const interrupted = NodeFS.readFileSync(interruptsPath, "utf8")
         .trim()
         .split("\n")
         .filter((line) => line.length > 0)
         .map(parseInterruptLine);
+
       const interruptedThreads = new Set(interrupted.map((entry) => entry.threadId));
       assert.isTrue(
         interruptedThreads.has(CHILD_A),
@@ -294,6 +316,7 @@ describe("CodexSessionRuntime collab integration", () => {
     Effect.gen(function* () {
       const activeTurnId = "019fe3e8-f908-7f31-8d51-283f4a47897a";
       const queuedTurnId = "019fe3eb-8faf-7de3-a85b-ac64c7f9c8c3";
+
       const script = {
         rootThreadId: ROOT,
         holdTurnOpen: true,
@@ -302,6 +325,7 @@ describe("CodexSessionRuntime collab integration", () => {
         expectedActiveTurnId: activeTurnId,
         notifications: [],
       };
+
       // @effect-diagnostics-next-line preferSchemaOverJson:off
       NodeFS.writeFileSync(scriptPath, JSON.stringify(script), "utf8");
       const interruptsPath = `${scriptPath}.interrupts`;
@@ -330,6 +354,7 @@ describe("CodexSessionRuntime collab integration", () => {
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line) as { threadId?: string; turnId?: string });
+
       assert.deepEqual(interrupts.at(-1), {
         threadId: ROOT,
         turnId: activeTurnId,
@@ -392,6 +417,7 @@ describe("CodexSessionRuntime collab integration", () => {
             },
           },
         };
+
         const script = {
           rootThreadId: ROOT,
           holdTurnOpen: true,
@@ -399,6 +425,7 @@ describe("CodexSessionRuntime collab integration", () => {
           notifications: [],
           serverRequests: [scriptedRequest],
         };
+
         const responsesPath = `${scriptPath}.responses`;
         // @effect-diagnostics-next-line preferSchemaOverJson:off
         NodeFS.writeFileSync(scriptPath, JSON.stringify(script), "utf8");
@@ -417,6 +444,7 @@ describe("CodexSessionRuntime collab integration", () => {
           runtimeMode: "auto",
           environment: { ...process.env, T3_CODEX_COLLAB_SCRIPT: scriptPath },
         });
+
         const approvalRequested = yield* Deferred.make<ProviderEvent>();
         const turnCompleted = yield* Deferred.make<void>();
         yield* runtime.events.pipe(
@@ -435,6 +463,7 @@ describe("CodexSessionRuntime collab integration", () => {
         const approval = yield* Deferred.await(approvalRequested);
         assert.equal(approval.requestKind, "mcp-elicitation");
         assert.isDefined(approval.requestId);
+
         if (approval.requestId === undefined) return;
 
         yield* runtime.respondToRequest(approval.requestId, decision);
@@ -443,6 +472,7 @@ describe("CodexSessionRuntime collab integration", () => {
         const recordedResponse = yield* decodeMcpElicitationResponse(
           NodeFS.readFileSync(responsesPath, "utf8"),
         );
+
         assert.equal(recordedResponse.id, scriptedRequest.id);
         assert.deepEqual(recordedResponse.result, response);
 

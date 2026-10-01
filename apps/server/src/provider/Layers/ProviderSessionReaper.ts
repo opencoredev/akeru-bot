@@ -15,6 +15,7 @@ import {
 import { forkParked } from "../../serverActivation.ts";
 
 const DEFAULT_INACTIVITY_THRESHOLD_MS = 30 * 60 * 1000;
+
 const DEFAULT_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 export interface ProviderSessionReaperLiveOptions {
@@ -32,6 +33,7 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
       1,
       options?.inactivityThresholdMs ?? DEFAULT_INACTIVITY_THRESHOLD_MS,
     );
+
     const sweepIntervalMs = Math.max(1, options?.sweepIntervalMs ?? DEFAULT_SWEEP_INTERVAL_MS);
 
     const sweep = Effect.gen(function* () {
@@ -45,6 +47,7 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
         }
 
         const lastSeenMs = Date.parse(binding.lastSeenAt);
+
         if (Number.isNaN(lastSeenMs)) {
           yield* Effect.logWarning("provider.session.reaper.invalid-last-seen", {
             threadId: binding.threadId,
@@ -61,6 +64,7 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
         const thread = yield* projectionSnapshotQuery
           .getThreadShellById(binding.threadId)
           .pipe(Effect.map(Option.getOrUndefined));
+
         // Ingestion updates this timestamp alongside activeTurnId when a turn
         // settles. Long turns must get a full idle window after that transition,
         // even though the binding was last touched when the turn was sent.
@@ -68,10 +72,13 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
           lastSeenMs,
           Date.parse(thread?.session?.updatedAt ?? binding.lastSeenAt),
         );
+
         const idleDurationMs = now - lastActivityMs;
+
         if (idleDurationMs < inactivityThresholdMs) {
           continue;
         }
+
         if (thread?.session?.activeTurnId != null) {
           yield* Effect.logDebug("provider.session.reaper.skipped-active-turn", {
             threadId: binding.threadId,

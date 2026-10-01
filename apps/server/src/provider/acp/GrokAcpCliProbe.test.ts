@@ -18,6 +18,7 @@ import { makeGrokAcpRuntime } from "./GrokAcpSupport.ts";
 
 const makeProbeRuntime = Effect.gen(function* () {
   const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
   return yield* makeGrokAcpRuntime({
     grokSettings: { binaryPath: "grok" },
     environment: process.env,
@@ -72,6 +73,7 @@ describe.runIf(process.env.T3_GROK_ACP_PROBE === "1")("Grok ACP CLI probe", () =
       const started = yield* runtime.start();
       const currentModelId = started.sessionSetupResult.models?.currentModelId?.trim();
       expect(currentModelId).toBeDefined();
+
       if (!currentModelId) return;
 
       // No-op switch — selecting the model the session already runs on must

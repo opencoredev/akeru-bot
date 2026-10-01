@@ -80,6 +80,7 @@ export const deriveProviderInstanceConfigMap = (
     // New environments use the separate OpenCode Go driver.
     if (driver.driverKind === "opencode") continue;
     const instanceId = defaultInstanceIdForDriver(driver.driverKind);
+
     if (instanceId in merged) {
       // Explicit `providerInstances` entry for this slot — user-authored
       // config always wins over the legacy mirror.
@@ -93,6 +94,7 @@ export const deriveProviderInstanceConfigMap = (
     // built-in driver kinds.
     const legacyKey = driver.driverKind as keyof ServerSettings["providers"];
     const legacyConfig = settings.providers[legacyKey];
+
     if (legacyConfig === undefined) {
       continue;
     }
@@ -159,9 +161,11 @@ export const ProviderInstanceRegistryHydrationLive: Layer.Layer<
 > = Layer.unwrap(
   Effect.gen(function* () {
     const serverSettings = yield* ServerSettingsService;
+
     const initialSettings: ServerSettings | undefined = yield* serverSettings.getSettings.pipe(
       Effect.orElseSucceed(() => undefined),
     );
+
     const initialConfigMap =
       initialSettings === undefined
         ? ({} as ProviderInstanceConfigMap)

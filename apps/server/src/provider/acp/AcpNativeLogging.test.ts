@@ -12,29 +12,35 @@ import type { EventNdjsonLogger } from "../Layers/EventNdjsonLogger.ts";
 import { makeAcpNativeLoggerFactory } from "./AcpNativeLogging.ts";
 
 const nodeServicesIt = it.layer(NodeServices.layer);
+
 const encodeUnknownJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 nodeServicesIt("ACP native logging", (it) => {
   it.effect("records bounded request and protocol diagnostics without raw payloads", () =>
     Effect.gen(function* () {
       const records: Array<unknown> = [];
+
       const nativeEventLogger: EventNdjsonLogger = {
         filePath: "/tmp/provider-native.ndjson",
         write: (event) => Effect.sync(() => void records.push(event)),
         close: () => Effect.void,
       };
+
       const makeLogger = yield* makeAcpNativeLoggerFactory();
+
       const logger = makeLogger({
         nativeEventLogger,
         provider: ProviderDriverKind.make("cursor"),
         threadId: ThreadId.make("thread-1"),
         verboseProtocolLogging: true,
       });
+
       const secret = "secret-token-value";
       const requestLogger = logger.requestLogger;
       const protocolLogger = logger.protocolLogging?.logger;
       assert.exists(requestLogger);
       assert.exists(protocolLogger);
+
       if (!requestLogger || !protocolLogger) return;
 
       yield* requestLogger({
@@ -72,6 +78,7 @@ nodeServicesIt("ACP native logging", (it) => {
     Effect.gen(function* () {
       const records: Array<unknown> = [];
       const makeLogger = yield* makeAcpNativeLoggerFactory();
+
       const logger = makeLogger({
         nativeEventLogger: {
           filePath: "/tmp/provider-native.ndjson",
@@ -85,6 +92,7 @@ nodeServicesIt("ACP native logging", (it) => {
       assert.isUndefined(logger.protocolLogging);
       const requestLogger = logger.requestLogger;
       assert.exists(requestLogger);
+
       if (!requestLogger) return;
       yield* requestLogger({
         method: "session/prompt",
@@ -99,6 +107,7 @@ nodeServicesIt("ACP native logging", (it) => {
     Effect.gen(function* () {
       const records: Array<unknown> = [];
       const makeLogger = yield* makeAcpNativeLoggerFactory();
+
       const logger = makeLogger({
         nativeEventLogger: {
           filePath: "/tmp/provider-native.ndjson",
@@ -109,8 +118,10 @@ nodeServicesIt("ACP native logging", (it) => {
         threadId: ThreadId.make("thread-1"),
         verboseProtocolLogging: true,
       });
+
       const protocolLogger = logger.protocolLogging?.logger;
       assert.exists(protocolLogger);
+
       if (!protocolLogger) return;
 
       for (const updateType of ["agent_message_chunk", "agent_thought_chunk"] as const) {
@@ -156,6 +167,7 @@ nodeServicesIt("ACP native logging", (it) => {
     Effect.gen(function* () {
       const records: Array<unknown> = [];
       const makeLogger = yield* makeAcpNativeLoggerFactory();
+
       const logger = makeLogger({
         nativeEventLogger: {
           filePath: "/tmp/provider-native.ndjson",
@@ -166,14 +178,17 @@ nodeServicesIt("ACP native logging", (it) => {
         threadId: ThreadId.make("thread-1"),
         verboseProtocolLogging: true,
       });
+
       const protocolLogger = logger.protocolLogging?.logger;
       assert.exists(protocolLogger);
+
       if (!protocolLogger) return;
 
       const transient = encodeUnknownJson({
         method: "session/update",
         params: { update: { sessionUpdate: "agent_message_chunk" } },
       });
+
       const lifecycle = encodeUnknownJson({ method: "session/new", params: {} });
 
       yield* protocolLogger({
@@ -200,6 +215,7 @@ nodeServicesIt("ACP native logging", (it) => {
     Effect.gen(function* () {
       const records: Array<unknown> = [];
       const makeLogger = yield* makeAcpNativeLoggerFactory();
+
       const logger = makeLogger({
         nativeEventLogger: {
           filePath: "/tmp/provider-native.ndjson",
@@ -210,8 +226,10 @@ nodeServicesIt("ACP native logging", (it) => {
         threadId: ThreadId.make("thread-1"),
         verboseProtocolLogging: true,
       });
+
       const protocolLogger = logger.protocolLogging?.logger;
       assert.exists(protocolLogger);
+
       if (!protocolLogger) return;
 
       yield* protocolLogger({
@@ -238,6 +256,7 @@ nodeServicesIt("ACP native logging", (it) => {
 
   it.effect("logs a structural tag when the native writer defects", () => {
     const messages: Array<unknown> = [];
+
     const logCapture = Logger.make<unknown, void>(({ message }) => {
       if (Array.isArray(message)) {
         messages.push(...message);
@@ -245,10 +264,12 @@ nodeServicesIt("ACP native logging", (it) => {
         messages.push(message);
       }
     });
+
     const secret = "secret-writer-failure";
 
     return Effect.gen(function* () {
       const makeLogger = yield* makeAcpNativeLoggerFactory();
+
       const logger = makeLogger({
         nativeEventLogger: {
           filePath: "/tmp/provider-native.ndjson",
@@ -258,8 +279,10 @@ nodeServicesIt("ACP native logging", (it) => {
         provider: ProviderDriverKind.make("cursor"),
         threadId: ThreadId.make("thread-1"),
       });
+
       const requestLogger = logger.requestLogger;
       assert.exists(requestLogger);
+
       if (!requestLogger) return;
 
       yield* requestLogger({
@@ -278,6 +301,7 @@ nodeServicesIt("ACP native logging", (it) => {
   it.effect("preserves native writer interruption", () =>
     Effect.gen(function* () {
       const makeLogger = yield* makeAcpNativeLoggerFactory();
+
       const logger = makeLogger({
         nativeEventLogger: {
           filePath: "/tmp/provider-native.ndjson",
@@ -287,8 +311,10 @@ nodeServicesIt("ACP native logging", (it) => {
         provider: ProviderDriverKind.make("cursor"),
         threadId: ThreadId.make("thread-1"),
       });
+
       const requestLogger = logger.requestLogger;
       assert.exists(requestLogger);
+
       if (!requestLogger) return;
 
       const exit = yield* requestLogger({
@@ -298,6 +324,7 @@ nodeServicesIt("ACP native logging", (it) => {
       }).pipe(Effect.exit);
 
       assert.isTrue(Exit.isFailure(exit));
+
       if (Exit.isFailure(exit)) {
         assert.isTrue(Cause.hasInterruptsOnly(exit.cause));
       }
