@@ -137,7 +137,8 @@ and `no-runtime-typeof`. They run without the Effect runtime or any application 
 there is no `HostProcessPlatform` to inject and no `Predicate` to import.
 
 There are no inline exceptions. `akeru/no-lint-suppressions` reports every `oxlint-disable`,
-`eslint-disable`, `@ts-ignore`, `@ts-expect-error`, and `@ts-nocheck` comment, and
+`eslint-disable`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`, and `@effect-diagnostics`
+comment, and
 `typescript/no-explicit-any` reports `any`. A file-wide `oxlint-disable` would also silence that
 rule, so `vp run lint` finishes with `scripts/check-lint-suppressions.ts`, which scans tracked
 sources directly. Vendored and generated code is excluded and fixed at its source.
@@ -145,6 +146,23 @@ sources directly. Vendored and generated code is excluded and fixed at its sourc
 When a rule is wrong for a whole category of code, change its configuration in `vite.config.ts`
 with the reason beside it, as the test-file override above does. To assert that a value fails to
 type-check, use `expectTypeOf` from Vitest rather than `@ts-expect-error`.
+
+## Effect diagnostics
+
+The Effect language service (`@effect/tsgo`) runs inside every `tsgo` typecheck. Its rules ban
+Node built-in imports, global `Date`, `fetch`, timers, `console`, and `JSON.parse` in favor of
+Effect services, and flag Effect anti-patterns. Severities live in `tsconfig.base.json` under
+`compilerOptions.plugins[0].diagnosticSeverity`, all at `error`.
+
+Exceptions apply to whole categories of code through `overrides` in the same file, each with
+its reason beside it. Today they cover tests and test harnesses, build and release scripts, and
+the feedback Worker. Two quirks of the override matcher: globs match absolute paths, so each
+needs a leading `**/`, and a glob must end in a file pattern such as `**/scripts/**/*.ts`
+because a bare directory glob matches nothing. Overrides are also ignored in a project with
+`composite: true`, which is why no app tsconfig sets it.
+
+To find diagnostics, run `tsgo --noEmit -p <package>` and look for lines ending in
+`effect(<rule>)`. Suggestion-level findings print without failing the exit code; fix them too.
 
 ## Updating the vendored anti-slop copy
 

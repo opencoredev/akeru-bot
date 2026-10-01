@@ -17,33 +17,15 @@ const runtimeEscape = /\bEffect\.run(?:Promise|Sync|Fork)\s*\(/g;
 
 const promiseBridge = /\bEffect\.(?:tryPromise|promise)\s*\(/g;
 
-const suppression = /@effect-diagnostics(?:-next-line)?\s+([^\n]+)/g;
-
 export type MigrationMetric = {
   readonly runtimeEscapes: number;
   readonly promiseBridges: number;
-  readonly suppressions: ReadonlyMap<string, number>;
 };
 
-export const countSource = (source: string): MigrationMetric => {
-  const suppressions = new Map<string, number>();
-
-  for (const [, directive] of source.matchAll(suppression)) {
-    if (directive === undefined) continue;
-
-    for (const rule of directive.matchAll(/([A-Za-z]+):off/g)) {
-      const name = rule[1];
-
-      if (name !== undefined) suppressions.set(name, (suppressions.get(name) ?? 0) + 1);
-    }
-  }
-
-  return {
-    runtimeEscapes: source.match(runtimeEscape)?.length ?? 0,
-    promiseBridges: source.match(promiseBridge)?.length ?? 0,
-    suppressions,
-  };
-};
+export const countSource = (source: string): MigrationMetric => ({
+  runtimeEscapes: source.match(runtimeEscape)?.length ?? 0,
+  promiseBridges: source.match(promiseBridge)?.length ?? 0,
+});
 
 const filesUnder = async (directory: string): Promise<string[]> => {
   const entries = await NodeFSP.readdir(directory, { withFileTypes: true });
@@ -68,26 +50,16 @@ const report = async () => {
   const files = await filesUnder(sourceRoot);
   let runtimeEscapes = 0;
   let promiseBridges = 0;
-  const suppressions = new Map<string, number>();
 
   for (const file of files) {
     const source = await NodeFSP.readFile(file, "utf8");
     const metric = countSource(source);
     runtimeEscapes += metric.runtimeEscapes;
     promiseBridges += metric.promiseBridges;
-
-    for (const [rule, count] of metric.suppressions) {
-      suppressions.set(rule, (suppressions.get(rule) ?? 0) + count);
-    }
   }
 
   console.log(`Effect runtime escapes: ${runtimeEscapes}`);
   console.log(`Promise bridges: ${promiseBridges}`);
-  console.log("Diagnostic suppressions:");
-
-  for (const [rule, count] of [...suppressions].sort(([a], [b]) => a.localeCompare(b))) {
-    console.log(`  ${rule}: ${count}`);
-  }
 
   console.error(
     `Scanned ${files.length} production files under ${NodePath.relative(process.cwd(), sourceRoot)}`,
