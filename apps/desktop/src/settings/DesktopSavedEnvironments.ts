@@ -302,24 +302,37 @@ const writeRegistryDocument = Effect.fn("desktop.savedEnvironments.writeRegistry
           }),
       ),
     );
-    yield* input.fileSystem.writeFileString(tempPath, `${encoded}\n`).pipe(
-      Effect.mapError(
-        (cause) =>
-          new DesktopSavedEnvironmentsWriteError({
-            operation: "write-temporary-file",
-            path: tempPath,
-            cause,
-          }),
-      ),
-    );
-    yield* input.fileSystem.rename(tempPath, input.registryPath).pipe(
-      Effect.mapError(
-        (cause) =>
-          new DesktopSavedEnvironmentsWriteError({
-            operation: "replace-registry-file",
-            path: input.registryPath,
-            cause,
-          }),
+    yield* Effect.gen(function* () {
+      yield* input.fileSystem.writeFileString(tempPath, `${encoded}\n`).pipe(
+        Effect.mapError(
+          (cause) =>
+            new DesktopSavedEnvironmentsWriteError({
+              operation: "write-temporary-file",
+              path: tempPath,
+              cause,
+            }),
+        ),
+      );
+      yield* input.fileSystem.rename(tempPath, input.registryPath).pipe(
+        Effect.mapError(
+          (cause) =>
+            new DesktopSavedEnvironmentsWriteError({
+              operation: "replace-registry-file",
+              path: input.registryPath,
+              cause,
+            }),
+        ),
+      );
+    }).pipe(
+      Effect.ensuring(
+        input.fileSystem.remove(tempPath, { force: true }).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Could not remove a temporary saved-environment registry file.", {
+              tempPath,
+              error,
+            }),
+          ),
+        ),
       ),
     );
   },
