@@ -93,6 +93,7 @@ function payloadString(raw: Record<string, unknown>, key: string): string | unde
 
 export function makeTestMastraHarness(): TestMastraHarness {
   const sessions = new Map<string, SessionState>();
+  const transcripts = new Map<string, ReadonlyArray<MastraDBMessage>>();
   // Outlives session restarts so a model change that restarts the session stays visible.
   const modelSwitchesByThread = new Map<string, Array<string>>();
   const queuedResponsesForNextSession: TestTurnResponse[] = [];
@@ -206,6 +207,14 @@ export function makeTestMastraHarness(): TestMastraHarness {
 
   const makeSession = (state: SessionState) =>
     ({
+      stream: {
+        isActive: () => state.activeTurnId !== undefined,
+        waitForTeardown: async () => undefined,
+      },
+      run: {
+        getRunId: () => state.activeTurnId ?? null,
+        waitForTeardown: async () => undefined,
+      },
       state: {
         get: () => state.stateSnapshot,
         set: async (next: Record<string, unknown>) => {
@@ -270,6 +279,14 @@ export function makeTestMastraHarness(): TestMastraHarness {
 
   const factory: TestMastraHarness["factory"] = () =>
     Effect.succeed({
+      rebuildConversation: async (threadId: string, messages: ReadonlyArray<MastraDBMessage>) => {
+        const previous = transcripts.get(threadId);
+        transcripts.set(threadId, messages);
+        return async () => {
+          if (previous === undefined) transcripts.delete(threadId);
+          else transcripts.set(threadId, previous);
+        };
+      },
       controller: {
         init: async () => undefined,
         createSession: async (input: {
