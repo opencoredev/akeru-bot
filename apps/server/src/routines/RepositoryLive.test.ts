@@ -18,6 +18,7 @@ it.layer(layer)("RoutineRepository.listThreadRuns", (it) => {
       const repository = yield* RoutineRepository;
       const threadId = ThreadId.make("paged-routine-thread");
       const otherThreadId = ThreadId.make("other-routine-thread");
+
       for (const [routineId, targetThreadId, lifecycle] of [
         ["paged-routine", threadId, "deleted"],
         ["other-routine", otherThreadId, "enabled"],
@@ -34,6 +35,7 @@ it.layer(layer)("RoutineRepository.listThreadRuns", (it) => {
           )
         `;
       }
+
       for (let index = 0; index < 151; index++) {
         const runId = `paged-run-${String(index).padStart(3, "0")}`;
         const createdAt = new Date(Date.UTC(2026, 8, 1, 0, index)).toISOString();
@@ -43,6 +45,7 @@ it.layer(layer)("RoutineRepository.listThreadRuns", (it) => {
           ) VALUES (${runId}, 'paged-routine', 1, 'manual', 'completed', ${createdAt}, ${createdAt})
         `;
       }
+
       yield* sql`
         INSERT INTO projection_routine_runs (
           run_id, routine_id, procedure_version, trigger, status, created_at, updated_at

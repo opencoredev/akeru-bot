@@ -69,8 +69,10 @@ export class BotInboxService {
   reload(): void {
     if (!NodeFS.existsSync(this.filePath)) {
       this.items = [];
+
       return;
     }
+
     try {
       const decoded = JSON.parse(NodeFS.readFileSync(this.filePath, "utf-8")) as BotInboxItem[];
       this.items = Array.isArray(decoded) ? decoded : [];
@@ -86,23 +88,29 @@ export class BotInboxService {
   upsert(incident: BotInboxIncident): BotInboxItem {
     this.reload();
     const seenAt = this.now();
+
     const existingIndex = this.items.findIndex(
       (item) => item.incidentKey === incident.incidentKey && item.status === "open",
     );
+
     if (existingIndex >= 0) {
       const existing = this.items[existingIndex]!;
+
       const updated: BotInboxItem = {
         ...existing,
         ...incident,
         lastSeenAt: seenAt,
         occurrenceCount: existing.occurrenceCount + 1,
       };
+
       this.items[existingIndex] = updated;
       this.save();
+
       return updated;
     }
 
     const previous = this.items.findLast((item) => item.incidentKey === incident.incidentKey);
+
     const created: BotInboxItem = {
       id: NodeCrypto.randomUUID(),
       ...incident,
@@ -111,16 +119,20 @@ export class BotInboxService {
       lastSeenAt: seenAt,
       occurrenceCount: (previous?.occurrenceCount ?? 0) + 1,
     };
+
     this.items.push(created);
     this.save();
+
     return created;
   }
 
   ensureOpen(incident: BotInboxIncident): BotInboxItem {
     this.reload();
+
     let existingIndex = this.items.findIndex(
       (item) => item.incidentKey === incident.incidentKey && item.status === "open",
     );
+
     if (existingIndex < 0) {
       // A silent turn keeps one item per chat and turn, so its later silent windows
       // reopen that item even when nobody acknowledged the earlier one.
@@ -131,9 +143,11 @@ export class BotInboxService {
           (reopensUnacknowledged || item.acknowledgedAt !== undefined),
       );
     }
+
     if (existingIndex < 0) return this.upsert(incident);
 
     const existing = this.items[existingIndex]!;
+
     if (existing.status === "resolved") {
       // Reopen in place only when the reported failure is genuinely newer than
       // the one the item was closed against. Comparisons use provider failure
@@ -143,8 +157,10 @@ export class BotInboxService {
       // (connector, approval, routine) must not resurrect on every sync.
       const failureAt = incident.lastFailedRequestAt;
       const storedFailureAt = existing.resolvedFailureAt ?? existing.lastFailedRequestAt ?? null;
+
       const timestampedReopenAllowed =
         incident.kind === "browser-dead" || incident.kind === "silence-watchdog-failure";
+
       if (failureAt === undefined) {
         if (!timestampedReopenAllowed) return existing;
       } else if (storedFailureAt !== null) {
@@ -157,16 +173,20 @@ export class BotInboxService {
           ...existing,
           resolvedFailureAt: failureAt,
         };
+
         this.items[existingIndex] = baselined;
         this.save();
+
         return baselined;
       }
+
       const {
         resolvedAt: _resolvedAt,
         acknowledgedAt: _acknowledgedAt,
         resolvedFailureAt: _resolvedFailureAt,
         ...active
       } = existing;
+
       const reopened: BotInboxItem = {
         ...active,
         ...incident,
@@ -174,10 +194,13 @@ export class BotInboxService {
         lastSeenAt: this.now(),
         occurrenceCount: existing.occurrenceCount + 1,
       };
+
       this.items[existingIndex] = reopened;
       this.save();
+
       return reopened;
     }
+
     if (
       existing.kind === incident.kind &&
       existing.botId === incident.botId &&
@@ -195,8 +218,10 @@ export class BotInboxService {
       ...incident,
       lastSeenAt: this.now(),
     };
+
     this.items[existingIndex] = updated;
     this.save();
+
     return updated;
   }
 
@@ -211,8 +236,10 @@ export class BotInboxService {
       ) {
         return item;
       }
+
       changed = true;
       const { acknowledgedAt: _acknowledgedAt, ...resolvedItem } = item;
+
       return {
         ...resolvedItem,
         status: "resolved",
@@ -223,7 +250,9 @@ export class BotInboxService {
           : {}),
       };
     });
+
     if (changed) this.save();
+
     return changed;
   }
 
@@ -237,7 +266,9 @@ export class BotInboxService {
       if (item.id !== id || item.status === "resolved" || item.memoryApproval !== undefined) {
         return item;
       }
+
       changed = true;
+
       return {
         ...item,
         status: "resolved",
@@ -249,7 +280,9 @@ export class BotInboxService {
           : {}),
       };
     });
+
     if (changed) this.save();
+
     return changed;
   }
 

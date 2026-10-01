@@ -8,15 +8,19 @@ import { listTranscriptFiles, readTranscriptRecords } from "./usageTranscriptRea
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const original = await importOriginal<typeof NodeFSP>();
+
   return { ...original, readdir: vi.fn(original.readdir) };
 });
 
 const directories: string[] = [];
+
 const tempDirectory = async () => {
   const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-usage-reader-"));
   directories.push(directory);
+
   return directory;
 };
+
 const line = JSON.stringify({
   type: "assistant",
   timestamp: "2026-09-07T04:05:13.944Z",
@@ -26,6 +30,7 @@ const line = JSON.stringify({
 
 afterEach(async () => {
   vi.restoreAllMocks();
+
   for (const directory of directories.splice(0))
     await NodeFSP.rm(directory, { recursive: true, force: true });
 });
@@ -37,10 +42,12 @@ describe("usage transcript single-flight", () => {
     await NodeFSP.writeFile(file, line);
     const readdir = vi.mocked(NodeFSP.readdir);
     readdir.mockClear();
+
     const [all, none] = await Promise.all([
       listTranscriptFiles(directory, 0),
       listTranscriptFiles(directory, Infinity),
     ]);
+
     expect(all.map((entry) => entry.path)).toEqual([file]);
     expect(none).toEqual([]);
     expect(readdir).toHaveBeenCalledTimes(1);

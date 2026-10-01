@@ -1,14 +1,5 @@
-/**
- * In-memory PreviewManager implementation.
- *
- * Sessions are keyed by `(threadId, tabId)`; a single thread can host
- * multiple tabs (browser-style). `open` always creates a new tab — tab
- * lifecycle is owned by the renderer.
- *
- * Events are published via Effect's `PubSub`, so subscriber failures are
- * isolated from the publishing call (a closed WS subscriber queue cannot
- * fail an in-progress `navigate()`).
- */
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import {
   type PreviewCloseInput,
   type PreviewEvent,
@@ -105,9 +96,11 @@ const sessionsForThread = (
   threadId: string,
 ): ReadonlyArray<PreviewSessionState> => {
   const out: PreviewSessionState[] = [];
+
   for (const session of state.sessions.values()) {
     if (session.threadId === threadId) out.push(session);
   }
+
   return out;
 };
 
@@ -174,6 +167,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
   // that stops pulling retains every event published in the meantime, and
   // its chat filter runs only as it pulls.
   const eventsPubSub = yield* PubSub.unbounded<PreviewEvent>();
+
   const streamEvents: PreviewManager["Service"]["streamEvents"] = (input) =>
     Stream.fromPubSub(eventsPubSub).pipe(Stream.filter(previewEventMatchesSubscription(input)));
 
@@ -200,16 +194,19 @@ export const make = Effect.gen(function* PreviewManagerMake() {
 
     return SynchronizedRef.modifyEffect(stateRef, (state) => {
       const session = state.sessions.get(compositeKey(threadId, tabId));
+
       if (!session) {
         return Effect.succeed([
           { kind: "fail", error: new PreviewSessionLookupError({ threadId, tabId }) },
           state,
         ] as readonly [ModifyResult, ManagerState]);
       }
+
       return mutator(session).pipe(
         Effect.flatMap(
           Effect.fn("PreviewManager.commitMutation")(function* ({ next, emit, result }) {
             const revision = emit ? state.revision + 1 : state.revision;
+
             if (emit) {
               yield* PubSub.publish(eventsPubSub, {
                 ...emit,
@@ -217,8 +214,10 @@ export const make = Effect.gen(function* PreviewManagerMake() {
                 serverEpoch,
               } as PreviewEvent);
             }
+
             const sessions = new Map(state.sessions);
             sessions.set(compositeKey(threadId, tabId), next);
+
             return [{ kind: "ok", result } as ModifyResult, { sessions, revision }] as readonly [
               ModifyResult,
               ManagerState,
@@ -241,6 +240,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
       // session is born at the right size; older clients omit it and keep the
       // historical fill-panel behaviour.
       const viewport = input.viewport ?? FILL_PREVIEW_VIEWPORT;
+
       const snapshot = input.url
         ? buildLoadingSnapshot({
             threadId: input.threadId,
@@ -251,6 +251,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
             updatedAt,
           })
         : buildIdleSnapshot({ threadId: input.threadId, tabId, viewport, updatedAt });
+
       yield* SynchronizedRef.modifyEffect(stateRef, (state) =>
         Effect.gen(function* () {
           const revision = state.revision + 1;
@@ -269,9 +270,11 @@ export const make = Effect.gen(function* PreviewManagerMake() {
             revision,
             snapshot,
           });
+
           return [snapshot, { sessions, revision }] as const;
         }),
       );
+
       return snapshot;
     },
   );
@@ -279,14 +282,20 @@ export const make = Effect.gen(function* PreviewManagerMake() {
   const navigate: PreviewManager["Service"]["navigate"] = Effect.fn("PreviewManager.navigate")(
     function* (input) {
       const url = yield* normalizeUrl(input.url);
+
       return yield* mutateExistingSession(
         input.threadId,
         input.tabId,
         Effect.fn("PreviewManager.navigateSession")(function* (session) {
           const updatedAt = yield* currentIsoTimestamp;
-          const previousTitle =
-            session.snapshot.navStatus._tag === "Idle" ? "" : session.snapshot.navStatus.title;
+
+          const previousTitle = Match.value(session.snapshot.navStatus).pipe(
+            Match.tag("Idle", () => ""),
+            Match.orElse((navigation) => navigation.title),
+          );
+
           const resolvedTitle = input.resolvedTitle ?? previousTitle;
+
           const snapshot: PreviewSessionSnapshot = {
             threadId: session.threadId,
             tabId: session.tabId,
@@ -296,6 +305,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
             viewport: session.snapshot.viewport ?? FILL_PREVIEW_VIEWPORT,
             updatedAt,
           };
+
           return {
             next: { ...session, snapshot },
             emit: {
@@ -320,6 +330,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
       input.tabId,
       Effect.fn("PreviewManager.reportSessionStatus")(function* (session) {
         const updatedAt = yield* currentIsoTimestamp;
+
         const snapshot: PreviewSessionSnapshot = {
           threadId: session.threadId,
           tabId: session.tabId,
@@ -329,25 +340,26 @@ export const make = Effect.gen(function* PreviewManagerMake() {
           viewport: session.snapshot.viewport ?? FILL_PREVIEW_VIEWPORT,
           updatedAt,
         };
-        const emit: PreviewEventDraft =
-          input.navStatus._tag === "LoadFailed"
-            ? {
-                type: "failed",
-                threadId: session.threadId,
-                tabId: session.tabId,
-                createdAt: snapshot.updatedAt,
-                url: input.navStatus.url,
-                title: input.navStatus.title,
-                code: input.navStatus.code,
-                description: input.navStatus.description,
-              }
-            : {
-                type: "navigated",
-                threadId: session.threadId,
-                tabId: session.tabId,
-                createdAt: snapshot.updatedAt,
-                snapshot,
-              };
+
+        const emit: PreviewEventDraft = Predicate.isTagged(input.navStatus, "LoadFailed")
+          ? {
+              type: "failed",
+              threadId: session.threadId,
+              tabId: session.tabId,
+              createdAt: snapshot.updatedAt,
+              url: input.navStatus.url,
+              title: input.navStatus.title,
+              code: input.navStatus.code,
+              description: input.navStatus.description,
+            }
+          : {
+              type: "navigated",
+              threadId: session.threadId,
+              tabId: session.tabId,
+              createdAt: snapshot.updatedAt,
+              snapshot,
+            };
+
         return {
           next: { ...session, snapshot },
           emit,
@@ -384,11 +396,13 @@ export const make = Effect.gen(function* PreviewManagerMake() {
         input.tabId,
         Effect.fn("PreviewManager.resizeSession")(function* (session) {
           const updatedAt = yield* currentIsoTimestamp;
+
           const snapshot: PreviewSessionSnapshot = {
             ...session.snapshot,
             viewport: input.viewport,
             updatedAt,
           };
+
           return {
             next: { ...session, snapshot },
             emit: {
@@ -421,12 +435,15 @@ export const make = Effect.gen(function* PreviewManagerMake() {
       yield* SynchronizedRef.modifyEffect(stateRef, (state) => {
         const eventsToEmit: PreviewEvent[] = [];
         const sessions = new Map(state.sessions);
+
         const targets = input.tabId
           ? [state.sessions.get(compositeKey(input.threadId, input.tabId))].filter(
               (entry): entry is PreviewSessionState => entry !== undefined,
             )
           : sessionsForThread(state, input.threadId);
+
         let revision = state.revision;
+
         for (const target of targets) {
           revision += 1;
           sessions.delete(compositeKey(target.threadId, target.tabId));
@@ -439,9 +456,11 @@ export const make = Effect.gen(function* PreviewManagerMake() {
             revision,
           });
         }
+
         if (eventsToEmit.length === 0) {
           return Effect.succeed([undefined, state] as const);
         }
+
         return Effect.as(
           Effect.forEach(eventsToEmit, (event) => PubSub.publish(eventsPubSub, event), {
             discard: true,

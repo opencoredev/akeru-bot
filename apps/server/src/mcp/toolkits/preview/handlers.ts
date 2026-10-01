@@ -25,6 +25,7 @@ export function normalizePreviewOpenInput(
   input: PreviewAutomationOpenInput,
 ): PreviewAutomationOpenInput {
   const open = input.open ?? input.show;
+
   return {
     ...input,
     ...(open === undefined ? {} : { open, show: open }),
@@ -44,6 +45,7 @@ const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
 > {
   const scope = yield* McpInvocationContext.requireMcpCapability("preview");
   const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+
   return yield* broker.invoke<A>({
     scope,
     operation,
@@ -62,6 +64,7 @@ const invokeTargeted = <A>(
   timeoutMs?: number,
 ) => {
   const { tabId, ...operationInput } = input;
+
   return invoke<A>(operation, operationInput, timeoutMs, tabId);
 };
 
@@ -78,6 +81,7 @@ const handlers = {
   preview_snapshot: (input) => {
     // Output selection is MCP-only; the browser still produces a complete snapshot.
     const { includeImage: _includeImage, ...operationInput } = input ?? {};
+
     return invokeTargeted<PreviewAutomationSnapshot>("snapshot", operationInput);
   },
   preview_click: (input) =>

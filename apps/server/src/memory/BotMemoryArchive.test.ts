@@ -16,12 +16,15 @@ import {
 const NodeFS = NodeFSP;
 
 const directories: string[] = [];
+
 const access = {
   botId: BotId.make("bot-1"),
   groupId: GroupId.make("group-1"),
   groupMemberBotIds: [BotId.make("bot-1")],
 };
+
 const emptyConversation: AkeruConversationMemorySnapshot = { current: null, history: [] };
+
 const conversation: AkeruConversationMemorySnapshot = {
   current: {
     id: "observation-1",
@@ -41,6 +44,7 @@ const conversation: AkeruConversationMemorySnapshot = {
 async function fixture() {
   const directory = await NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-archive-"));
   directories.push(directory);
+
   return new BotMemoryStore(NodePath.join(directory, "userdata"));
 }
 
@@ -80,6 +84,7 @@ describe("Markdown memory archive", () => {
     const source = await fixture();
     await source.replaceDocument(access, "user", "Imported user context.");
     await source.replaceDocument(access, "group", "Imported group context.");
+
     const archive = await exportBotMemoryArchive({
       store: source,
       access,
@@ -87,7 +92,9 @@ describe("Markdown memory archive", () => {
       conversation,
       createdAt: "2026-09-13T12:02:00.000Z",
     });
+
     const destination = await fixture();
+
     const preview = await previewBotMemoryImport({
       store: destination,
       access,
@@ -95,6 +102,7 @@ describe("Markdown memory archive", () => {
       archive,
       currentConversation: emptyConversation,
     });
+
     const restoreConversation = vi.fn(async () => undefined);
 
     const result = await applyBotMemoryImport({
@@ -124,6 +132,7 @@ describe("Markdown memory archive", () => {
     const store = await fixture();
     await store.replaceDocument(access, "user", "Archived user notes.");
     await store.replaceDocument(access, "memory", "Archived work notes.");
+
     const archive = await exportBotMemoryArchive({
       store,
       access,
@@ -131,8 +140,10 @@ describe("Markdown memory archive", () => {
       conversation,
       createdAt: "2026-09-13T12:02:00.000Z",
     });
+
     await store.replaceDocument(access, "user", "Original user notes.");
     await store.replaceDocument(access, "memory", "Original work notes.");
+
     const input = {
       store,
       access,
@@ -140,10 +151,13 @@ describe("Markdown memory archive", () => {
       archive,
       currentConversation: emptyConversation,
     };
+
     const preview = await previewBotMemoryImport(input);
+
     const restoreConversation = vi
       .fn(async (_snapshot: AkeruConversationMemorySnapshot) => undefined)
       .mockRejectedValueOnce(new Error("Transient observation write failure"));
+
     await expect(
       applyBotMemoryImport({ ...input, previewHash: preview.previewHash, restoreConversation }),
     ).rejects.toThrow("Transient observation write failure");
@@ -156,6 +170,7 @@ describe("Markdown memory archive", () => {
     const store = await fixture();
     await store.replaceDocument(access, "user", "Archived user notes.");
     await store.replaceDocument(access, "memory", "Private work notes.");
+
     const archive = await exportBotMemoryArchive({
       store,
       access,
@@ -163,7 +178,9 @@ describe("Markdown memory archive", () => {
       conversation: emptyConversation,
       createdAt: "2026-09-13T12:02:00.000Z",
     });
+
     await store.replaceDocument(access, "user", "Newer user notes.");
+
     const input = {
       store,
       access,
@@ -172,12 +189,15 @@ describe("Markdown memory archive", () => {
       currentConversation: emptyConversation,
       privateBotMemory: false,
     };
+
     const preview = await previewBotMemoryImport(input);
+
     const result = await applyBotMemoryImport({
       ...input,
       previewHash: preview.previewHash,
       restoreConversation: async () => undefined,
     });
+
     assert.equal(result.changedDocuments, 1);
     assert.equal((await store.readDocument(access, "user")).content, "Archived user notes.");
 
@@ -190,6 +210,7 @@ describe("Markdown memory archive", () => {
 
   it("rejects cross-chat imports before changing notes or clearing observations", async () => {
     const store = await fixture();
+
     const archive = await exportBotMemoryArchive({
       store,
       access,
@@ -197,8 +218,10 @@ describe("Markdown memory archive", () => {
       conversation,
       createdAt: "2026-09-13T12:02:00.000Z",
     });
+
     await store.replaceDocument(access, "memory", "Keep these destination notes.");
     const restoreConversation = vi.fn(async () => undefined);
+
     const input = {
       store,
       access,
@@ -206,6 +229,7 @@ describe("Markdown memory archive", () => {
       archive,
       currentConversation: conversation,
     };
+
     await expect(previewBotMemoryImport(input)).rejects.toMatchObject({ code: "access-denied" });
     await expect(
       applyBotMemoryImport({ ...input, previewHash: "unused", restoreConversation }),
@@ -219,6 +243,7 @@ describe("Markdown memory archive", () => {
 
   it("rejects tampering and stale previews", async () => {
     const store = await fixture();
+
     const archive = await exportBotMemoryArchive({
       store,
       access,
@@ -226,12 +251,14 @@ describe("Markdown memory archive", () => {
       conversation,
       createdAt: "2026-09-13T12:02:00.000Z",
     });
+
     const tampered = {
       ...archive,
       documents: archive.documents.map((document, index) =>
         index === 0 ? { ...document, content: "tampered" } : document,
       ),
     };
+
     await expect(
       previewBotMemoryImport({
         store,
@@ -249,6 +276,7 @@ describe("Markdown memory archive", () => {
       archive,
       currentConversation: emptyConversation,
     });
+
     await store.replaceDocument(access, "memory", "Changed after preview.");
     await expect(
       applyBotMemoryImport({

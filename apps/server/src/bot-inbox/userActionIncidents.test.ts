@@ -21,6 +21,7 @@ function makeService() {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-user-action-inbox-"));
   directories.push(directory);
   const filePath = NodePath.join(directory, "bot-inbox.json");
+
   return { filePath, service: new BotInboxService(filePath) };
 }
 
@@ -49,6 +50,7 @@ describe("user-action inbox incidents", () => {
   it("deduplicates the same help request and keeps a later occurrence", () => {
     const { service } = makeService();
     const first = recordUserActionIncident(service, input);
+
     const second = recordUserActionIncident(service, {
       ...input,
       summary: "The login form is asking for a one-time code.",

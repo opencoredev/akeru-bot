@@ -1,61 +1,35 @@
+import {
+  environmentId,
+  tabId,
+  alternateTabId,
+  screenshot,
+  invocation,
+  client,
+  TestLayer,
+} from "./testUtils/mcpHttpServer.ts";
 import { expect, it } from "@effect/vitest";
 import { NodeHttpServer } from "@effect/platform-node";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EnvironmentId, PreviewTabId, ProviderInstanceId, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import { McpProtocol, McpSchema, McpServer } from "effect/unstable/ai";
 import { HttpBody, HttpClient, HttpRouter, HttpServerResponse } from "effect/unstable/http";
 import { PNG } from "pngjs";
-
-import * as ImageGenerationRuntime from "../image-generation/ImageGenerationRuntime.ts";
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
-import * as McpMemoryToolSession from "./McpMemoryToolSession.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
-
-const environmentId = EnvironmentId.make("environment-mcp-test");
-const threadId = ThreadId.make("thread-mcp-test");
-const tabId = PreviewTabId.make("tab-mcp-test");
-const alternateTabId = PreviewTabId.make("tab-mcp-alternate");
-const screenshot = (() => {
-  const png = new PNG({ width: 10, height: 5 });
-  png.data.fill(255);
-  return PNG.sync.write(png).toString("base64");
-})();
-const invocation = {
-  environmentId,
-  threadId,
-  providerSessionId: "provider-session-mcp-test",
-  providerInstanceId: ProviderInstanceId.make("codex"),
-  capabilities: new Set(["preview"] as const),
-  issuedAt: 1,
-};
-const client = McpSchema.McpServerClient.of({
-  clientId: 1,
-  protocolVersion: "2025-06-18",
-  initializePayload: {
-    protocolVersion: "2025-06-18",
-    capabilities: {},
-    clientInfo: { name: "mcp-test", version: "1.0.0" },
-  },
-  getClient: Effect.die("unused"),
-});
-const TestLayer = McpHttpServer.PreviewToolkitRegistrationLive.pipe(
-  Layer.provideMerge(McpServer.McpServer.layer),
-  Layer.provideMerge(PreviewAutomationBroker.layer.pipe(Layer.provide(NodeServices.layer))),
-);
 
 it("normalizes empty successful notification responses to accepted", () => {
   const notificationResponse = McpHttpServer.normalizeMcpHttpResponse(
     HttpServerResponse.text("", { status: 200, contentType: "application/json" }),
   );
+
   expect(notificationResponse.status).toBe(202);
 
   const resultResponse = McpHttpServer.normalizeMcpHttpResponse(
     HttpServerResponse.jsonUnsafe({ jsonrpc: "2.0", id: 1, result: {} }),
   );
+
   expect(resultResponse.status).toBe(200);
 });
 
@@ -106,190 +80,6 @@ it("normalizes only conflict-free scalar allOf constraints", () => {
   }
 });
 
-it.effect("requires both memory capability and a thread-scoped handler", () =>
-  Effect.gen(function* () {
-    const server = yield* McpServer.McpServer;
-    let calls = 0;
-    McpMemoryToolSession.setMcpMemoryToolSession(threadId, async ({ input }) => {
-      calls += 1;
-      return { success: true, message: "Memory updated.", input };
-    });
-    const memoryInvocation = { ...invocation, capabilities: new Set(["memory"] as const) };
-    const previewOnly = yield* server
-      .callTool({
-        name: "memory",
-        arguments: {
-          target: "memory",
-          operations: [{ action: "add", content: "Unauthorized note." }],
-        },
-      })
-      .pipe(
-        Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-        Effect.provideService(McpSchema.McpServerClient, client),
-      );
-    expect(previewOnly.isError).toBe(true);
-    expect(calls).toBe(0);
-
-    const result = yield* server
-      .callTool({
-        name: "memory",
-        arguments: {
-          target: "memory",
-          operations: [{ action: "add", content: "Keep answers concise." }],
-        },
-      })
-      .pipe(
-        Effect.provideService(McpInvocationContext.McpInvocationContext, memoryInvocation),
-        Effect.provideService(McpSchema.McpServerClient, client),
-      );
-
-    expect(result.isError).toBe(false);
-    expect(calls).toBe(1);
-    expect(result.structuredContent).toMatchObject({
-      success: true,
-      message: "Memory updated.",
-    });
-
-    McpMemoryToolSession.clearMcpMemoryToolSession(threadId);
-    const denied = yield* server
-      .callTool({
-        name: "memory",
-        arguments: { target: "user", operations: [] },
-      })
-      .pipe(
-        Effect.provideService(McpInvocationContext.McpInvocationContext, memoryInvocation),
-        Effect.provideService(McpSchema.McpServerClient, client),
-      );
-    expect(denied.isError).toBe(true);
-  }).pipe(
-    Effect.ensuring(Effect.sync(() => McpMemoryToolSession.clearMcpMemoryToolSession(threadId))),
-    Effect.provide(TestLayer),
-  ),
-);
-
-it.effect("gates generate_image on the image capability and returns metadata only", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const server = yield* McpServer.McpServer;
-      const received: Array<unknown> = [];
-      yield* ImageGenerationRuntime.activateImageGenerationRuntime({
-        generate: (_threadId, input) =>
-          Effect.sync(() => {
-            received.push(input);
-            return {
-              status: "completed" as const,
-              provider: "grok" as const,
-              artifacts: [
-                {
-                  attachmentId: "thread-mcp-test-image",
-                  mimeType: "image/png" as const,
-                  width: 16,
-                  height: 16,
-                  sizeBytes: 33,
-                  provider: "grok" as const,
-                },
-              ],
-              attempts: [{ provider: "grok" as const, outcome: "completed" as const }],
-            };
-          }),
-        cancelThread: () => Effect.void,
-      });
-      const call = (capabilities: ReadonlySet<McpInvocationContext.McpCapability>) =>
-        server
-          .callTool({
-            name: "generate_image",
-            arguments: { operation: "generate", prompt: "A kite", quality: "ultra" },
-          })
-          .pipe(
-            Effect.provideService(McpInvocationContext.McpInvocationContext, {
-              ...invocation,
-              capabilities,
-            }),
-            Effect.provideService(McpSchema.McpServerClient, client),
-          );
-
-      const denied = yield* call(new Set(["preview", "memory"]));
-      expect(denied.isError).toBe(true);
-      expect(received).toEqual([]);
-
-      const result = yield* call(new Set(["image"]));
-      expect(result.isError).toBe(false);
-      // The runtime decodes strictly, so unknown options must reach it unchanged.
-      expect(received).toEqual([{ operation: "generate", prompt: "A kite", quality: "ultra" }]);
-      expect(result.structuredContent).toMatchObject({
-        status: "completed",
-        artifacts: [{ attachmentId: "thread-mcp-test-image", mimeType: "image/png" }],
-      });
-      expect(result.content).toEqual([
-        { type: "text", text: "Created 1 image. It is shown in the chat." },
-      ]);
-    }),
-  ).pipe(Effect.provide(TestLayer)),
-);
-
-it.effect("reports generate_image as unavailable when no runtime is running", () =>
-  Effect.gen(function* () {
-    const server = yield* McpServer.McpServer;
-    const result = yield* server
-      .callTool({ name: "generate_image", arguments: { operation: "generate", prompt: "A kite" } })
-      .pipe(
-        Effect.provideService(McpInvocationContext.McpInvocationContext, {
-          ...invocation,
-          capabilities: new Set(["image"] as const),
-        }),
-        Effect.provideService(McpSchema.McpServerClient, client),
-      );
-    expect(result.isError).toBe(true);
-    expect(result.structuredContent).toMatchObject({ status: "failed", kind: "unavailable" });
-  }).pipe(Effect.provide(TestLayer)),
-);
-
-it.effect("returns bounded structural preview snapshot failures", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const server = yield* McpServer.McpServer;
-      const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
-      const events = yield* broker.connect({
-        clientId: "mcp-failure-client",
-        environmentId,
-      });
-      yield* Stream.runForEach(events, (event) =>
-        event.type === "connected"
-          ? Effect.void
-          : broker.respond({
-              clientId: "mcp-failure-client",
-              connectionId: event.connectionId,
-              requestId: event.request.requestId,
-              ok: false,
-              error: {
-                _tag: "PreviewAutomationExecutionError",
-                message: "sensitive renderer failure",
-                detail: { consoleOutput: "sensitive browser output" },
-              },
-            }),
-      ).pipe(Effect.forkScoped);
-      yield* Effect.yieldNow;
-
-      const snapshot = yield* server
-        .callTool({ name: "preview_snapshot", arguments: {} })
-        .pipe(
-          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-          Effect.provideService(McpSchema.McpServerClient, client),
-        );
-
-      expect(snapshot.isError).toBe(true);
-      expect(snapshot.content).toEqual([{ type: "text", text: "Preview snapshot failed." }]);
-      expect(snapshot.structuredContent).toEqual({
-        error: {
-          _tag: "PreviewAutomationExecutionError",
-          operation: "snapshot",
-          failureCount: 1,
-        },
-      });
-    }),
-  ).pipe(Effect.provide(TestLayer)),
-);
-
 it.effect("terminates HTTP MCP sessions with DELETE", () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -299,6 +89,7 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
         path: "/mcp",
         protocols: [McpProtocol.v2025_06_18],
       });
+
       yield* HttpRouter.serve(serverLayer, {
         disableListenLog: true,
         disableLogger: true,
@@ -312,6 +103,7 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
           "application/json",
         ),
       });
+
       const sessionId = initializeResponse.headers["mcp-session-id"];
       expect(initializeResponse.status).toBe(200);
       expect(sessionId).not.toBeNull();
@@ -322,11 +114,13 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
       const unknownSessionResponse = yield* httpClient.del("/mcp", {
         headers: { "mcp-session-id": "unknown-session" },
       });
+
       expect(unknownSessionResponse.status).toBe(404);
 
       const terminateResponse = yield* httpClient.del("/mcp", {
         headers: { "mcp-session-id": sessionId! },
       });
+
       expect(terminateResponse.status).toBe(204);
 
       const reusedSessionResponse = yield* httpClient.post("/mcp", {
@@ -339,6 +133,7 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
           "application/json",
         ),
       });
+
       expect(reusedSessionResponse.status).toBe(404);
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
@@ -349,17 +144,21 @@ it.effect("registers annotated tools and preserves authenticated request context
     Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+
       const routedRequests: Array<{
         readonly operation: string;
         readonly tabId?: string | undefined;
       }> = [];
+
       const events = yield* broker.connect({
         clientId: "mcp-test-client",
         environmentId,
       });
+
       yield* Stream.runForEach(events, (event) => {
         if (event.type === "connected") return Effect.void;
         routedRequests.push(event.request);
+
         if (event.request.operation === "navigate") {
           return broker.respond({
             clientId: "mcp-test-client",
@@ -373,6 +172,7 @@ it.effect("registers annotated tools and preserves authenticated request context
             },
           });
         }
+
         return broker.respond({
           clientId: "mcp-test-client",
           connectionId: event.connectionId,
@@ -453,15 +253,20 @@ it.effect("registers annotated tools and preserves authenticated request context
       const advertisedString = (toolName: string, field: string) => {
         const registered = server.tools.find(({ tool }) => tool.name === toolName)?.tool;
         expect(registered, `${toolName} must be advertised`).toBeDefined();
+
         const inputSchema = registered?.inputSchema as {
           readonly properties?: Readonly<Record<string, unknown>>;
         };
+
         const fieldSchema = inputSchema.properties?.[field] as Record<string, unknown>;
+
         const variants = Array.isArray(fieldSchema.anyOf)
           ? (fieldSchema.anyOf as Array<Record<string, unknown>>)
           : [fieldSchema];
+
         return variants.find((variant) => variant.type === "string");
       };
+
       for (const [toolName, field] of [
         ["preview_navigate", "url"],
         ["preview_press", "key"],
@@ -478,6 +283,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(status.isError).toBe(false);
       expect(status.structuredContent).toMatchObject({
         available: true,
@@ -491,6 +297,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpSchema.McpServerClient, client),
           Effect.flip,
         );
+
       expect(malformed._tag).toBe("InvalidParams");
 
       for (const request of [
@@ -504,6 +311,7 @@ it.effect("registers annotated tools and preserves authenticated request context
             Effect.provideService(McpSchema.McpServerClient, client),
             Effect.flip,
           );
+
         expect(invalid._tag).toBe("InvalidParams");
       }
 
@@ -513,6 +321,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(snapshot.isError).toBe(false);
       expect(snapshot.content.some((content) => content.type === "image")).toBe(true);
       expect(snapshot.structuredContent).toMatchObject({
@@ -520,6 +329,7 @@ it.effect("registers annotated tools and preserves authenticated request context
         screenshot: { mimeType: "image/png", width: 10, height: 5, redacted: true },
       });
       const image = snapshot.content.find((content) => content.type === "image");
+
       if (!image || image.type !== "image") throw new Error("Expected a redacted snapshot image.");
       const png = PNG.sync.read(Buffer.from(image.data));
       expect([...png.data.subarray(0, 4)]).toEqual([0, 0, 0, 255]);
@@ -536,6 +346,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(textOnly.isError).toBe(false);
       expect(textOnly.content.some((content) => content.type === "image")).toBe(false);
       expect(textOnly.structuredContent).toMatchObject({
@@ -548,6 +359,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(evaluation.structuredContent).toEqual({
         redactionStatus: "omitted-unverified-preview-evaluation",
       });
@@ -564,6 +376,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(recording.structuredContent).toMatchObject({ path: "[REDACTED]" });
       expect(recording.content).toEqual([
         {
@@ -578,6 +391,7 @@ it.effect("registers annotated tools and preserves authenticated request context
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.provideService(McpSchema.McpServerClient, client),
         );
+
       expect(navigation.isError).toBe(true);
       expect(navigation.content).toEqual([
         {
@@ -593,6 +407,7 @@ it.effect("registers annotated tools and preserves authenticated request context
         { name: "preview_scroll", arguments: { deltaY: 100 } },
         { name: "preview_wait_for", arguments: { text: "Example" } },
       ];
+
       for (const request of actionRequests) {
         const result = yield* server
           .callTool(request)
@@ -600,6 +415,7 @@ it.effect("registers annotated tools and preserves authenticated request context
             Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
             Effect.provideService(McpSchema.McpServerClient, client),
           );
+
         expect(result.isError).toBe(false);
         expect(result.structuredContent).toEqual({});
         expect(result.content).toEqual([{ type: "text", text: "{}" }]);

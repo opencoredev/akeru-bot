@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type {
   ServerTraceDiagnosticsErrorKind,
   ServerTraceDiagnosticsFailureSummary,
@@ -79,14 +80,19 @@ interface TraceDiagnosticsErrorSummary {
 }
 
 const DEFAULT_SLOW_SPAN_THRESHOLD_MS = 1_000;
+
 const TOP_LIMIT = 10;
+
 const RECENT_LIMIT = 20;
+
 function toRotatedTracePaths(traceFilePath: string, maxFiles: number): ReadonlyArray<string> {
   const backupCount = Math.max(0, Math.floor(maxFiles));
+
   const backups = Array.from(
     { length: backupCount },
     (_, index) => `${traceFilePath}.${backupCount - index}`,
   );
+
   return [...backups, traceFilePath];
 }
 
@@ -104,9 +110,12 @@ function toNumberValue(value: unknown): number | null {
 
 function unixNanoToDateTime(value: unknown): DateTime.Utc | null {
   const text = toStringValue(value);
+
   if (!text) return null;
+
   try {
     const millis = Number(BigInt(text) / 1_000_000n);
+
     return Option.getOrNull(DateTime.make(millis));
   } catch {
     return null;
@@ -115,11 +124,13 @@ function unixNanoToDateTime(value: unknown): DateTime.Utc | null {
 
 function readExitTag(exit: unknown): string | null {
   if (!isRecordObject(exit) || !("_tag" in exit)) return null;
+
   return toStringValue(exit._tag);
 }
 
 function readExitCause(exit: unknown): string {
   if (!isRecordObject(exit) || !("cause" in exit)) return "Failure";
+
   return toStringValue(exit.cause)?.trim() ?? "Failure";
 }
 
@@ -165,7 +176,7 @@ function makeEmptyDiagnostics(input: {
 }
 
 function isNotFoundError(error: PlatformError.PlatformError): boolean {
-  return error.reason._tag === "NotFound";
+  return Predicate.isTagged(error.reason, "NotFound");
 }
 
 function insertBoundedSlowestSpan(
@@ -181,6 +192,7 @@ function insertBoundedSlowestSpan(
 
   slowestSpans.push(span);
   slowestSpans.sort((left, right) => right.durationMs - left.durationMs);
+
   if (slowestSpans.length > TOP_LIMIT) {
     slowestSpans.length = TOP_LIMIT;
   }
@@ -192,6 +204,7 @@ export function aggregateTraceDiagnostics(
   const readAt = input.readAt;
   const slowSpanThresholdMs = input.slowSpanThresholdMs ?? DEFAULT_SLOW_SPAN_THRESHOLD_MS;
   const scannedFilePaths = input.scannedFilePaths ?? input.files.map((file) => file.path);
+
   if (input.files.length === 0) {
     return makeEmptyDiagnostics({
       traceFilePath: input.traceFilePath,
@@ -218,6 +231,7 @@ export function aggregateTraceDiagnostics(
     string,
     { count: number; failureCount: number; totalDurationMs: number; maxDurationMs: number }
   >();
+
   const failuresByKey = new Map<string, ServerTraceDiagnosticsFailureSummary>();
   const latestFailures: ServerTraceDiagnosticsRecentFailure[] = [];
   const slowestSpans: ServerTraceDiagnosticsSpanOccurrence[] = [];
@@ -226,10 +240,12 @@ export function aggregateTraceDiagnostics(
 
   for (const file of input.files) {
     const lines = file.text.split(/\r?\n/);
+
     for (const line of lines) {
       if (line.trim().length === 0) continue;
 
       let parsed: unknown;
+
       try {
         parsed = JSON.parse(line);
       } catch {
@@ -265,7 +281,9 @@ export function aggregateTraceDiagnostics(
       const exitTag = readExitTag(parsed.exit);
       const isFailure = exitTag === "Failure";
       const isInterrupted = exitTag === "Interrupted";
+
       if (isFailure) failureCount += 1;
+
       if (isInterrupted) interruptionCount += 1;
 
       const spanSummary = spansByName.get(name) ?? {
@@ -274,16 +292,20 @@ export function aggregateTraceDiagnostics(
         totalDurationMs: 0,
         maxDurationMs: 0,
       };
+
       spanSummary.count += 1;
       spanSummary.totalDurationMs += durationMs;
       spanSummary.maxDurationMs = Math.max(spanSummary.maxDurationMs, durationMs);
+
       if (isFailure) spanSummary.failureCount += 1;
       spansByName.set(name, spanSummary);
 
       const spanItem = { name, durationMs, endedAt, traceId, spanId };
+
       if (durationMs >= slowSpanThresholdMs) {
         slowSpanCount += 1;
       }
+
       insertBoundedSlowestSpan(slowestSpans, spanItem);
 
       if (isFailure) {
@@ -308,10 +330,12 @@ export function aggregateTraceDiagnostics(
           if (!isTraceEvent(rawEvent)) continue;
           const attributes = readEventAttributes(rawEvent);
           const level = toStringValue(attributes["effect.logLevel"]);
+
           if (!level) continue;
 
           logLevelCounts[level] = (logLevelCounts[level] ?? 0) + 1;
           const normalizedLevel = level.toLowerCase();
+
           if (
             normalizedLevel !== "warning" &&
             normalizedLevel !== "warn" &&
@@ -419,6 +443,7 @@ export const make = Effect.gen(function* () {
       const readAt = options.readAt ?? (yield* DateTime.now);
       const slowSpanThresholdMs = options.slowSpanThresholdMs ?? DEFAULT_SLOW_SPAN_THRESHOLD_MS;
       const paths = toRotatedTracePaths(options.traceFilePath, options.maxFiles);
+
       const results = yield* Effect.all(
         paths.map((path) =>
           readTraceFile(fileSystem, path).pipe(
@@ -438,12 +463,15 @@ export const make = Effect.gen(function* () {
           concurrency: 1,
         },
       );
+
       const files = results.flatMap((result) =>
-        Result.isSuccess(result) && result.success._tag === "Loaded"
+        Result.isSuccess(result) && Predicate.isTagged(result.success, "Loaded")
           ? [{ path: result.success.path, text: result.success.text }]
           : [],
       );
+
       const readFailure = results.find(Result.isFailure);
+
       const readFailureError = readFailure
         ? ({
             kind: "trace-file-read-failed",
@@ -487,6 +515,7 @@ export function readTraceDiagnostics(
 ): Effect.Effect<ServerTraceDiagnosticsResult, never, TraceDiagnostics> {
   return Effect.gen(function* () {
     const diagnostics = yield* TraceDiagnostics;
+
     return yield* diagnostics.read(options);
   });
 }

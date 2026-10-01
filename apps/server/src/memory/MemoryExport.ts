@@ -15,6 +15,7 @@ import { resolveMemoryArchivePartitions } from "./EntityMemoryAccess.ts";
 import { encodeMemoryArchiveJson } from "./MemoryArchiveJson.ts";
 
 const checksum = (content: string) => NodeCrypto.createHash("sha256").update(content).digest("hex");
+
 const safeName = (value: string) => value.replaceAll(/[^a-zA-Z0-9._-]/g, "_");
 
 const frontmatter = (revision: AkeruMemoryRevision) => ({
@@ -59,13 +60,16 @@ export function exportAkeruMemory(input: {
 }) {
   return Effect.gen(function* () {
     const partitions = yield* resolveMemoryArchivePartitions(input.access, input.target);
+
     const revisions = yield* input.repository.listByPartitions({
       access: input.access,
       partitions,
       complete: input.complete,
     });
+
     const files = revisions.map((revision) => {
       const content = renderMemoryRevision(revision);
+
       return {
         path: memoryRevisionArchivePath(revision),
         mediaType: "text/markdown" as const,
@@ -73,15 +77,18 @@ export function exportAkeruMemory(input: {
         content,
       };
     });
+
     const revisionRecords = revisions.map((revision) => ({
       revision,
       sha256: checksum(encodeMemoryArchiveJson(revision)),
     }));
+
     const conversations = input.conversations.map(({ threadId, snapshot }) => ({
       threadId,
       snapshot,
       sha256: checksum(encodeMemoryArchiveJson({ threadId, snapshot })),
     }));
+
     const manifest = encodeMemoryArchiveJson({
       schemaVersion: 2,
       anchorThreadId: input.access.threadId,
@@ -97,6 +104,7 @@ export function exportAkeruMemory(input: {
       })),
       conversations: conversations.map(({ threadId, sha256 }) => ({ threadId, sha256 })),
     });
+
     return yield* Schema.decodeUnknownEffect(AkeruMemoryArchiveV2)({
       schemaVersion: 2,
       anchorThreadId: input.access.threadId,

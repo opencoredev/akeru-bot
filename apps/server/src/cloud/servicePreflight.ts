@@ -20,6 +20,7 @@ export function runServicePreflight(input: {
   readonly version?: string;
 }): ServicePreflightResult {
   const version = input.version ?? packageJson.version;
+
   if (input.launcherProtocol !== SERVICE_LAUNCHER_PROTOCOL) {
     return {
       status: "blocked",
@@ -36,7 +37,9 @@ export function decodeServicePreflightResult(value: unknown): ServicePreflightRe
   if (typeof value !== "object" || value === null) {
     return undefined;
   }
+
   const record = value as Record<string, unknown>;
+
   if (
     record.status === "ready" &&
     record.launcherProtocol === SERVICE_LAUNCHER_PROTOCOL &&
@@ -48,6 +51,7 @@ export function decodeServicePreflightResult(value: unknown): ServicePreflightRe
       launcherProtocol: SERVICE_LAUNCHER_PROTOCOL,
     };
   }
+
   if (
     record.status === "blocked" &&
     typeof record.version === "string" &&
@@ -55,5 +59,6 @@ export function decodeServicePreflightResult(value: unknown): ServicePreflightRe
   ) {
     return { status: "blocked", version: record.version, reason: record.reason };
   }
+
   return undefined;
 }

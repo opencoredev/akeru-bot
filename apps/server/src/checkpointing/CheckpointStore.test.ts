@@ -22,12 +22,16 @@ import * as ServerConfig from "../config.ts";
 const ServerConfigLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
   prefix: "t3-checkpoint-store-test-",
 });
+
 const VcsProcessTestLayer = VcsProcess.layer.pipe(Layer.provide(NodeServices.layer));
+
 const VcsDriverTestLayer = VcsDriverRegistry.layer.pipe(Layer.provide(VcsProcessTestLayer));
+
 const CheckpointStoreTestLayer = CheckpointStore.layer.pipe(
   Layer.provideMerge(VcsDriverTestLayer),
   Layer.provideMerge(NodeServices.layer),
 );
+
 const TestLayer = CheckpointStoreTestLayer.pipe(
   Layer.provideMerge(VcsProcessTestLayer),
   Layer.provideMerge(VcsDriverTestLayer),
@@ -40,6 +44,7 @@ function makeTmpDir(
 ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem | Scope.Scope> {
   return Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     return yield* fileSystem.makeTempDirectoryScoped({ prefix });
   });
 }
@@ -60,6 +65,7 @@ function git(
 ): Effect.Effect<string, VcsError, VcsProcess.VcsProcess> {
   return Effect.gen(function* () {
     const process = yield* VcsProcess.VcsProcess;
+
     const result = yield* process.run({
       operation: "CheckpointStore.test.git",
       command: "git",
@@ -67,6 +73,7 @@ function git(
       args,
       timeoutMs: 10_000,
     });
+
     return result.stdout.trim();
   });
 }
@@ -206,6 +213,7 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
           toCheckpointRef,
           ignoreWhitespace: false,
         });
+
         const whitespaceIgnoredDiff = yield* checkpointStore.diffCheckpoints({
           cwd: tmp,
           fromCheckpointRef,
@@ -230,6 +238,7 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
             ignoreWhitespace,
             format: "numstat",
           });
+
           expect(parseTurnDiffFilesFromNumstat(numstat)).toEqual([
             {
               path: "Component.tsx",
@@ -312,6 +321,7 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
           ignoreWhitespace: false,
           format: "numstat",
         });
+
         expect(parseTurnDiffFilesFromNumstat(numstat)).toEqual([
           { path: "apps/server/index.ts", additions: 1, deletions: 1 },
         ]);
@@ -329,12 +339,15 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
         const baseline = checkpointRefForThreadTurn(threadId, 0);
         const firstTurn = checkpointRefForThreadTurn(threadId, 1);
         const secondTurn = checkpointRefForThreadTurn(threadId, 2);
+
         const copiedText = Array.from({ length: 20 }, (_, index) => `copy line ${index}\n`).join(
           "",
         );
+
         const platform = yield* HostProcessPlatform;
         const renamedPath = platform === "win32" ? "renamed café.txt" : "renamed\tcafé\nname.txt";
         const addedPath = platform === "win32" ? "new café.txt" : "new\tfile\n名.txt";
+
         for (const [path, contents] of Object.entries({
           "copy-source.txt": copiedText,
           "deleted.txt": "delete me\n",
@@ -343,6 +356,7 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
         })) {
           yield* writeTextFile(NodePath.join(tmp, path), contents);
         }
+
         yield* checkpointStore.captureCheckpoint({ cwd: tmp, checkpointRef: baseline });
 
         yield* fileSystem.rename(
@@ -350,6 +364,7 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
           NodePath.join(tmp, renamedPath),
         );
         yield* fileSystem.remove(NodePath.join(tmp, "deleted.txt"));
+
         for (const [path, contents] of Object.entries({
           "copy-source.txt": `${copiedText}one more\n`,
           "copied.txt": copiedText,
@@ -360,8 +375,10 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
         })) {
           yield* writeTextFile(NodePath.join(tmp, path), contents);
         }
+
         yield* checkpointStore.captureCheckpoint({ cwd: tmp, checkpointRef: firstTurn });
         const userIndex = yield* fileSystem.readFile(NodePath.join(tmp, ".git/index"));
+
         const input = {
           cwd: tmp,
           fromCheckpointRef: baseline,
@@ -369,9 +386,11 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
           ignoreWhitespace: false,
           format: "numstat" as const,
         };
+
         const firstSummary = parseTurnDiffFilesFromNumstat(
           yield* checkpointStore.diffCheckpoints(input),
         );
+
         const expectedFiles = [
           { path: "binary.bin", additions: 0, deletions: 0 },
           { path: "copied.txt", additions: 0, deletions: 0 },
@@ -381,11 +400,13 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
           { path: addedPath, additions: 2, deletions: 0 },
           { path: renamedPath, additions: 1, deletions: 1 },
         ].toSorted((left, right) => left.path.localeCompare(right.path));
+
         expect(firstSummary).toEqual(expectedFiles);
 
         yield* fileSystem.remove(NodePath.join(tmp, "empty.txt"));
         yield* writeTextFile(NodePath.join(tmp, "copy-source.txt"), "replacement\n");
         yield* checkpointStore.captureCheckpoint({ cwd: tmp, checkpointRef: secondTurn });
+
         const secondSummary = parseTurnDiffFilesFromNumstat(
           yield* checkpointStore.diffCheckpoints({
             ...input,
@@ -393,6 +414,7 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
             toCheckpointRef: secondTurn,
           }),
         );
+
         expect(secondSummary).toEqual([
           { path: "copy-source.txt", additions: 1, deletions: 21 },
           { path: "empty.txt", additions: 0, deletions: 0 },
@@ -401,6 +423,7 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
         const inclusiveSummary = parseTurnDiffFilesFromNumstat(
           yield* checkpointStore.diffCheckpoints({ ...input, toCheckpointRef: secondTurn }),
         );
+
         expect(inclusiveSummary).toEqual(
           expectedFiles
             .filter((file) => file.path !== "empty.txt")
@@ -425,6 +448,7 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
         const toCheckpointRef = checkpointRefForThreadTurn(threadId, 1);
         yield* writeTextFile(NodePath.join(tmp, "README.md"), "changed\n");
         yield* checkpointStore.captureCheckpoint({ cwd: tmp, checkpointRef: toCheckpointRef });
+
         const input = {
           cwd: tmp,
           fromCheckpointRef,
@@ -435,10 +459,12 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
 
         const error = yield* Effect.flip(checkpointStore.diffCheckpoints(input));
         expect(error._tag).toBe("VcsProcessExitError");
+
         const numstat = yield* checkpointStore.diffCheckpoints({
           ...input,
           fallbackFromToHead: true,
         });
+
         expect(parseTurnDiffFilesFromNumstat(numstat)).toEqual([
           { path: "README.md", additions: 1, deletions: 1 },
         ]);

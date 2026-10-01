@@ -1,7 +1,6 @@
 import {
   AuthSessionId,
   AuthStandardClientScopes,
-  AuthEnvironmentScopes,
   type AuthClientMetadata,
   type AuthClientSession,
   type AuthEnvironmentScope,
@@ -19,7 +18,6 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
-
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as AuthSessions from "../persistence/AuthSessions.ts";
@@ -32,192 +30,10 @@ import {
   signPayload,
   timingSafeEqualBase64Url,
 } from "./utils.ts";
-
-export interface IssuedSession {
-  readonly sessionId: AuthSessionId;
-  readonly token: string;
-  readonly method: ServerAuthSessionMethod;
-  readonly client: AuthClientMetadata;
-  readonly expiresAt: DateTime.DateTime;
-  readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
-}
-
-export interface VerifiedSession {
-  readonly sessionId: AuthSessionId;
-  readonly token: string;
-  readonly method: ServerAuthSessionMethod;
-  readonly client: AuthClientMetadata;
-  readonly expiresAt?: DateTime.DateTime;
-  readonly subject: string;
-  readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
-}
-
-export type SessionCredentialChange =
-  | {
-      readonly type: "clientUpserted";
-      readonly clientSession: AuthClientSession;
-    }
-  | {
-      readonly type: "clientRemoved";
-      readonly sessionId: AuthSessionId;
-    };
-
-export class MalformedSessionTokenError extends Schema.TaggedErrorClass<MalformedSessionTokenError>()(
-  "MalformedSessionTokenError",
-  {},
-) {
-  override get message(): string {
-    return "Malformed session token.";
-  }
-}
-
-export class InvalidSessionTokenSignatureError extends Schema.TaggedErrorClass<InvalidSessionTokenSignatureError>()(
-  "InvalidSessionTokenSignatureError",
-  {},
-) {
-  override get message(): string {
-    return "Invalid session token signature.";
-  }
-}
-
-export class InvalidSessionTokenPayloadError extends Schema.TaggedErrorClass<InvalidSessionTokenPayloadError>()(
-  "InvalidSessionTokenPayloadError",
-  {
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return "Invalid session token payload.";
-  }
-}
-
-export class SessionTokenExpiredError extends Schema.TaggedErrorClass<SessionTokenExpiredError>()(
-  "SessionTokenExpiredError",
-  {
-    sessionId: AuthSessionId,
-    expiresAt: Schema.DateTimeUtc,
-    observedAt: Schema.DateTimeUtc,
-  },
-) {
-  override get message(): string {
-    return "Session token expired.";
-  }
-}
-
-export class UnknownSessionTokenError extends Schema.TaggedErrorClass<UnknownSessionTokenError>()(
-  "UnknownSessionTokenError",
-  {
-    sessionId: AuthSessionId,
-  },
-) {
-  override get message(): string {
-    return "Unknown session token.";
-  }
-}
-
-export class SessionTokenRevokedError extends Schema.TaggedErrorClass<SessionTokenRevokedError>()(
-  "SessionTokenRevokedError",
-  {
-    sessionId: AuthSessionId,
-    revokedAt: Schema.DateTimeUtc,
-  },
-) {
-  override get message(): string {
-    return "Session token revoked.";
-  }
-}
-
-export class InvalidSessionExpirationClaimError extends Schema.TaggedErrorClass<InvalidSessionExpirationClaimError>()(
-  "InvalidSessionExpirationClaimError",
-  {
-    sessionId: AuthSessionId,
-    expirationClaim: Schema.Number,
-  },
-) {
-  override get message(): string {
-    return "Invalid `exp` claim";
-  }
-}
-
-export class MalformedWebSocketTokenError extends Schema.TaggedErrorClass<MalformedWebSocketTokenError>()(
-  "MalformedWebSocketTokenError",
-  {},
-) {
-  override get message(): string {
-    return "Malformed websocket token.";
-  }
-}
-
-export class InvalidWebSocketTokenSignatureError extends Schema.TaggedErrorClass<InvalidWebSocketTokenSignatureError>()(
-  "InvalidWebSocketTokenSignatureError",
-  {},
-) {
-  override get message(): string {
-    return "Invalid websocket token signature.";
-  }
-}
-
-export class InvalidWebSocketTokenPayloadError extends Schema.TaggedErrorClass<InvalidWebSocketTokenPayloadError>()(
-  "InvalidWebSocketTokenPayloadError",
-  {
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return "Invalid websocket token payload.";
-  }
-}
-
-export class WebSocketTokenExpiredError extends Schema.TaggedErrorClass<WebSocketTokenExpiredError>()(
-  "WebSocketTokenExpiredError",
-  {
-    sessionId: AuthSessionId,
-    expiresAt: Schema.DateTimeUtc,
-    observedAt: Schema.DateTimeUtc,
-  },
-) {
-  override get message(): string {
-    return "Websocket token expired.";
-  }
-}
-
-export class UnknownWebSocketSessionError extends Schema.TaggedErrorClass<UnknownWebSocketSessionError>()(
-  "UnknownWebSocketSessionError",
-  {
-    sessionId: AuthSessionId,
-  },
-) {
-  override get message(): string {
-    return "Unknown websocket session.";
-  }
-}
-
-export class WebSocketSessionExpiredError extends Schema.TaggedErrorClass<WebSocketSessionExpiredError>()(
-  "WebSocketSessionExpiredError",
-  {
-    sessionId: AuthSessionId,
-    expiresAt: Schema.DateTimeUtc,
-    observedAt: Schema.DateTimeUtc,
-  },
-) {
-  override get message(): string {
-    return "Websocket session expired.";
-  }
-}
-
-export class WebSocketSessionRevokedError extends Schema.TaggedErrorClass<WebSocketSessionRevokedError>()(
-  "WebSocketSessionRevokedError",
-  {
-    sessionId: AuthSessionId,
-    revokedAt: Schema.DateTimeUtc,
-  },
-) {
-  override get message(): string {
-    return "Websocket session revoked.";
-  }
-}
-
-export const SessionCredentialInvalidError = Schema.Union([
+import {
+  type IssuedSession,
+  type VerifiedSession,
+  type SessionCredentialChange,
   MalformedSessionTokenError,
   InvalidSessionTokenSignatureError,
   InvalidSessionTokenPayloadError,
@@ -232,111 +48,6 @@ export const SessionCredentialInvalidError = Schema.Union([
   UnknownWebSocketSessionError,
   WebSocketSessionExpiredError,
   WebSocketSessionRevokedError,
-]);
-export type SessionCredentialInvalidError = typeof SessionCredentialInvalidError.Type;
-export const isSessionCredentialInvalidError = Schema.is(SessionCredentialInvalidError);
-
-const sessionCredentialInternalErrorContext = {
-  cause: Schema.Defect(),
-};
-
-export class SessionClaimsEncodingError extends Schema.TaggedErrorClass<SessionClaimsEncodingError>()(
-  "SessionClaimsEncodingError",
-  {
-    sessionId: AuthSessionId,
-    operation: Schema.Literals(["encode_session_claims", "encode_websocket_claims"]),
-    ...sessionCredentialInternalErrorContext,
-  },
-) {
-  override get message(): string {
-    return "Failed to encode claims";
-  }
-}
-
-export class SessionCredentialIssueError extends Schema.TaggedErrorClass<SessionCredentialIssueError>()(
-  "SessionCredentialIssueError",
-  {
-    sessionId: Schema.optional(AuthSessionId),
-    ...sessionCredentialInternalErrorContext,
-  },
-) {
-  override get message(): string {
-    return "Failed to issue session credential.";
-  }
-}
-
-export class SessionCredentialVerificationError extends Schema.TaggedErrorClass<SessionCredentialVerificationError>()(
-  "SessionCredentialVerificationError",
-  {
-    sessionId: AuthSessionId,
-    ...sessionCredentialInternalErrorContext,
-  },
-) {
-  override get message(): string {
-    return "Failed to verify session credential.";
-  }
-}
-
-export class WebSocketTokenIssueError extends Schema.TaggedErrorClass<WebSocketTokenIssueError>()(
-  "WebSocketTokenIssueError",
-  {
-    sessionId: AuthSessionId,
-    ...sessionCredentialInternalErrorContext,
-  },
-) {
-  override get message(): string {
-    return "Failed to issue websocket token.";
-  }
-}
-
-export class WebSocketTokenVerificationError extends Schema.TaggedErrorClass<WebSocketTokenVerificationError>()(
-  "WebSocketTokenVerificationError",
-  {
-    sessionId: AuthSessionId,
-    ...sessionCredentialInternalErrorContext,
-  },
-) {
-  override get message(): string {
-    return "Failed to verify websocket token.";
-  }
-}
-
-export class ActiveSessionsListError extends Schema.TaggedErrorClass<ActiveSessionsListError>()(
-  "ActiveSessionsListError",
-  {
-    ...sessionCredentialInternalErrorContext,
-  },
-) {
-  override get message(): string {
-    return "Failed to list active sessions.";
-  }
-}
-
-export class SessionRevocationError extends Schema.TaggedErrorClass<SessionRevocationError>()(
-  "SessionRevocationError",
-  {
-    sessionId: AuthSessionId,
-    ...sessionCredentialInternalErrorContext,
-  },
-) {
-  override get message(): string {
-    return "Failed to revoke session.";
-  }
-}
-
-export class OtherSessionsRevocationError extends Schema.TaggedErrorClass<OtherSessionsRevocationError>()(
-  "OtherSessionsRevocationError",
-  {
-    currentSessionId: AuthSessionId,
-    ...sessionCredentialInternalErrorContext,
-  },
-) {
-  override get message(): string {
-    return "Failed to revoke other sessions.";
-  }
-}
-
-export const SessionCredentialInternalError = Schema.Union([
   SessionClaimsEncodingError,
   SessionCredentialIssueError,
   SessionCredentialVerificationError,
@@ -345,16 +56,21 @@ export const SessionCredentialInternalError = Schema.Union([
   ActiveSessionsListError,
   SessionRevocationError,
   OtherSessionsRevocationError,
-]);
-export type SessionCredentialInternalError = typeof SessionCredentialInternalError.Type;
-export const isSessionCredentialInternalError = Schema.is(SessionCredentialInternalError);
-
-export const SessionCredentialError = Schema.Union([
-  SessionCredentialInvalidError,
   SessionCredentialInternalError,
-]);
-export type SessionCredentialError = typeof SessionCredentialError.Type;
-export const isSessionCredentialError = Schema.is(SessionCredentialError);
+  SessionCredentialError,
+} from "./SessionStoreTypes.ts";
+import {
+  SIGNING_SECRET_NAME,
+  DEFAULT_SESSION_TTL,
+  DEFAULT_WEBSOCKET_TOKEN_TTL,
+  SessionClaims,
+  WebSocketClaims,
+  decodeSessionClaims,
+  decodeWebSocketClaims,
+  createDefaultClientMetadata,
+  toClientMetadata,
+  toAuthClientSession,
+} from "./SessionTokenClaims.ts";
 
 export class SessionStore extends Context.Service<
   SessionStore,
@@ -407,65 +123,6 @@ export class SessionStore extends Context.Service<
   }
 >()("akeru-bot/auth/SessionStore") {}
 
-const SIGNING_SECRET_NAME = "server-signing-key";
-const DEFAULT_SESSION_TTL = Duration.days(30);
-const DEFAULT_WEBSOCKET_TOKEN_TTL = Duration.minutes(5);
-
-const SessionClaims = Schema.Struct({
-  v: Schema.Literal(1),
-  kind: Schema.Literal("session"),
-  sid: AuthSessionId,
-  sub: Schema.String,
-  scopes: AuthEnvironmentScopes,
-  method: Schema.Literals(["browser-session-cookie", "bearer-access-token"]),
-  iat: Schema.Number,
-  exp: Schema.Number,
-});
-type SessionClaims = typeof SessionClaims.Type;
-
-const WebSocketClaims = Schema.Struct({
-  v: Schema.Literal(1),
-  kind: Schema.Literal("websocket"),
-  sid: AuthSessionId,
-  iat: Schema.Number,
-  exp: Schema.Number,
-});
-type WebSocketClaims = typeof WebSocketClaims.Type;
-
-const decodeSessionClaims = Schema.decodeUnknownEffect(Schema.fromJsonString(SessionClaims));
-const decodeWebSocketClaims = Schema.decodeUnknownEffect(Schema.fromJsonString(WebSocketClaims));
-
-function createDefaultClientMetadata(): AuthClientMetadata {
-  return {
-    deviceType: "unknown",
-  };
-}
-
-function toClientMetadata(record: {
-  readonly label: string | null;
-  readonly ipAddress: string | null;
-  readonly userAgent: string | null;
-  readonly deviceType: AuthClientMetadata["deviceType"];
-  readonly os: string | null;
-  readonly browser: string | null;
-}): AuthClientMetadata {
-  return {
-    ...(record.label ? { label: record.label } : {}),
-    ...(record.ipAddress ? { ipAddress: record.ipAddress } : {}),
-    ...(record.userAgent ? { userAgent: record.userAgent } : {}),
-    deviceType: record.deviceType,
-    ...(record.os ? { os: record.os } : {}),
-    ...(record.browser ? { browser: record.browser } : {}),
-  };
-}
-
-function toAuthClientSession(input: Omit<AuthClientSession, "current">): AuthClientSession {
-  return {
-    ...input,
-    current: false,
-  };
-}
-
 export const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const serverConfig = yield* ServerConfig.ServerConfig;
@@ -475,6 +132,7 @@ export const make = Effect.gen(function* () {
   const signingSecret = yield* secretStore.getOrCreateRandom(SIGNING_SECRET_NAME, 32);
   const connectedSessionsRef = yield* Ref.make(new Map<string, number>());
   const changesPubSub = yield* PubSub.unbounded<SessionCredentialChange>();
+
   const cookieInput = {
     mode: serverConfig.mode,
     port: serverConfig.port,
@@ -483,6 +141,7 @@ export const make = Effect.gen(function* () {
     environmentId: yield* serverEnvironment.getEnvironmentId,
     development: serverConfig.devUrl !== undefined,
   } as const;
+
   const cookieName = resolveSessionCookieName(cookieInput);
   const legacyCookieName = resolveLegacySessionCookieName(cookieInput);
 
@@ -501,11 +160,13 @@ export const make = Effect.gen(function* () {
   const loadActiveSession = (sessionId: AuthSessionId) =>
     Effect.gen(function* () {
       const row = yield* authSessions.getById({ sessionId });
+
       if (Option.isNone(row) || row.value.revokedAt !== null) {
         return Option.none<AuthClientSession>();
       }
 
       const connectedSessions = yield* Ref.get(connectedSessionsRef);
+
       return Option.some(
         toAuthClientSession({
           sessionId: row.value.sessionId,
@@ -526,6 +187,7 @@ export const make = Effect.gen(function* () {
       const next = new Map(current);
       const wasDisconnected = !next.has(sessionId);
       next.set(sessionId, (next.get(sessionId) ?? 0) + 1);
+
       return [wasDisconnected, next] as const;
     }).pipe(
       Effect.flatMap((wasDisconnected) =>
@@ -581,11 +243,13 @@ export const make = Effect.gen(function* () {
     Ref.update(connectedSessionsRef, (current) => {
       const next = new Map(current);
       const remaining = (next.get(sessionId) ?? 0) - 1;
+
       if (remaining > 0) {
         next.set(sessionId, remaining);
       } else {
         next.delete(sessionId);
       }
+
       return next;
     }).pipe(
       Effect.flatMap(() => loadActiveSession(sessionId)),
@@ -604,6 +268,7 @@ export const make = Effect.gen(function* () {
     );
 
   const encodeClaims = Schema.encodeEffect(Schema.fromJsonString(SessionClaims));
+
   const issue: SessionStore["Service"]["issue"] = Effect.fn("SessionStore.issue")(
     function* (input) {
       const sessionId = AuthSessionId.make(
@@ -611,10 +276,13 @@ export const make = Effect.gen(function* () {
           Effect.mapError((cause) => new SessionCredentialIssueError({ cause })),
         ),
       );
+
       const issuedAt = yield* DateTime.now;
+
       const expiresAt = DateTime.add(issuedAt, {
         milliseconds: Duration.toMillis(input?.ttl ?? DEFAULT_SESSION_TTL),
       });
+
       const claims: SessionClaims = {
         v: 1,
         kind: "session",
@@ -640,6 +308,7 @@ export const make = Effect.gen(function* () {
             }),
         ),
       );
+
       const signature = signPayload(encodedPayload, signingSecret);
       const client = input?.client ?? createDefaultClientMetadata();
       yield* authSessions
@@ -688,11 +357,13 @@ export const make = Effect.gen(function* () {
   const verify: SessionStore["Service"]["verify"] = Effect.fn("SessionStore.verify")(
     function* (token) {
       const [encodedPayload, signature] = token.split(".");
+
       if (!encodedPayload || !signature) {
         return yield* new MalformedSessionTokenError({});
       }
 
       const expectedSignature = signPayload(encodedPayload, signingSecret);
+
       if (!timingSafeEqualBase64Url(signature, expectedSignature)) {
         return yield* new InvalidSessionTokenSignatureError({});
       }
@@ -703,12 +374,14 @@ export const make = Effect.gen(function* () {
 
       const observedAt = yield* DateTime.now;
       const expiresAt = DateTime.make(claims.exp);
+
       if (Option.isNone(expiresAt)) {
         return yield* new InvalidSessionExpirationClaimError({
           sessionId: claims.sid,
           expirationClaim: claims.exp,
         });
       }
+
       if (claims.exp <= observedAt.epochMilliseconds) {
         return yield* new SessionTokenExpiredError({
           sessionId: claims.sid,
@@ -724,9 +397,11 @@ export const make = Effect.gen(function* () {
             (cause) => new SessionCredentialVerificationError({ sessionId: claims.sid, cause }),
           ),
         );
+
       if (Option.isNone(row)) {
         return yield* new UnknownSessionTokenError({ sessionId: claims.sid });
       }
+
       if (row.value.revokedAt !== null) {
         return yield* new SessionTokenRevokedError({
           sessionId: claims.sid,
@@ -747,13 +422,16 @@ export const make = Effect.gen(function* () {
   );
 
   const encodeWsClaims = Schema.encodeEffect(Schema.fromJsonString(WebSocketClaims));
+
   const issueWebSocketToken: SessionStore["Service"]["issueWebSocketToken"] = Effect.fn(
     "SessionStore.issueWebSocketToken",
   )(function* (sessionId, input) {
     const issuedAt = yield* DateTime.now;
+
     const expiresAt = DateTime.add(issuedAt, {
       milliseconds: Duration.toMillis(input?.ttl ?? DEFAULT_WEBSOCKET_TOKEN_TTL),
     });
+
     const claims: WebSocketClaims = {
       v: 1,
       kind: "websocket",
@@ -761,6 +439,7 @@ export const make = Effect.gen(function* () {
       iat: issuedAt.epochMilliseconds,
       exp: expiresAt.epochMilliseconds,
     };
+
     const encodedPayload = yield* encodeWsClaims(claims).pipe(
       Effect.map(base64UrlEncode),
       Effect.mapError(
@@ -775,7 +454,9 @@ export const make = Effect.gen(function* () {
           }),
       ),
     );
+
     const signature = signPayload(encodedPayload, signingSecret);
+
     return {
       token: `${encodedPayload}.${signature}`,
       expiresAt,
@@ -786,11 +467,13 @@ export const make = Effect.gen(function* () {
     "SessionStore.verifyWebSocketToken",
   )(function* (token) {
     const [encodedPayload, signature] = token.split(".");
+
     if (!encodedPayload || !signature) {
       return yield* new MalformedWebSocketTokenError({});
     }
 
     const expectedSignature = signPayload(encodedPayload, signingSecret);
+
     if (!timingSafeEqualBase64Url(signature, expectedSignature)) {
       return yield* new InvalidWebSocketTokenSignatureError({});
     }
@@ -801,12 +484,14 @@ export const make = Effect.gen(function* () {
 
     const observedAt = yield* DateTime.now;
     const expiresAt = DateTime.make(claims.exp);
+
     if (Option.isNone(expiresAt)) {
       return yield* new InvalidSessionExpirationClaimError({
         sessionId: claims.sid,
         expirationClaim: claims.exp,
       });
     }
+
     if (claims.exp <= observedAt.epochMilliseconds) {
       return yield* new WebSocketTokenExpiredError({
         sessionId: claims.sid,
@@ -822,9 +507,11 @@ export const make = Effect.gen(function* () {
           (cause) => new WebSocketTokenVerificationError({ sessionId: claims.sid, cause }),
         ),
       );
+
     if (Option.isNone(row)) {
       return yield* new UnknownWebSocketSessionError({ sessionId: claims.sid });
     }
+
     if (row.value.expiresAt.epochMilliseconds <= observedAt.epochMilliseconds) {
       return yield* new WebSocketSessionExpiredError({
         sessionId: claims.sid,
@@ -832,6 +519,7 @@ export const make = Effect.gen(function* () {
         observedAt,
       });
     }
+
     if (row.value.revokedAt !== null) {
       return yield* new WebSocketSessionRevokedError({
         sessionId: claims.sid,
@@ -876,20 +564,24 @@ export const make = Effect.gen(function* () {
   const revoke: SessionStore["Service"]["revoke"] = Effect.fn("SessionStore.revoke")(
     function* (sessionId) {
       const revokedAt = yield* DateTime.now;
+
       const revoked = yield* authSessions
         .revoke({
           sessionId,
           revokedAt,
         })
         .pipe(Effect.mapError((cause) => new SessionRevocationError({ sessionId, cause })));
+
       if (revoked) {
         yield* Ref.update(connectedSessionsRef, (current) => {
           const next = new Map(current);
           next.delete(sessionId);
+
           return next;
         });
         yield* emitRemoved(sessionId);
       }
+
       return revoked;
     },
   );
@@ -898,6 +590,7 @@ export const make = Effect.gen(function* () {
     "SessionStore.revokeAllExcept",
   )(function* (sessionId) {
     const revokedAt = yield* DateTime.now;
+
     const revokedSessionIds = yield* authSessions
       .revokeAllExcept({
         currentSessionId: sessionId,
@@ -908,12 +601,15 @@ export const make = Effect.gen(function* () {
           (cause) => new OtherSessionsRevocationError({ currentSessionId: sessionId, cause }),
         ),
       );
+
     if (revokedSessionIds.length > 0) {
       yield* Ref.update(connectedSessionsRef, (current) => {
         const next = new Map(current);
+
         for (const revokedSessionId of revokedSessionIds) {
           next.delete(revokedSessionId);
         }
+
         return next;
       });
       yield* Effect.forEach(
@@ -925,6 +621,7 @@ export const make = Effect.gen(function* () {
         },
       );
     }
+
     return revokedSessionIds.length;
   });
 
@@ -948,3 +645,65 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(SessionStore, make).pipe(Layer.provideMerge(AuthSessions.layer));
+
+export type { IssuedSession } from "./SessionStoreTypes.ts";
+
+export type { VerifiedSession } from "./SessionStoreTypes.ts";
+
+export type { SessionCredentialChange } from "./SessionStoreTypes.ts";
+
+export { MalformedSessionTokenError } from "./SessionStoreTypes.ts";
+
+export { InvalidSessionTokenSignatureError } from "./SessionStoreTypes.ts";
+
+export { InvalidSessionTokenPayloadError } from "./SessionStoreTypes.ts";
+
+export { SessionTokenExpiredError } from "./SessionStoreTypes.ts";
+
+export { UnknownSessionTokenError } from "./SessionStoreTypes.ts";
+
+export { SessionTokenRevokedError } from "./SessionStoreTypes.ts";
+
+export { InvalidSessionExpirationClaimError } from "./SessionStoreTypes.ts";
+
+export { MalformedWebSocketTokenError } from "./SessionStoreTypes.ts";
+
+export { InvalidWebSocketTokenSignatureError } from "./SessionStoreTypes.ts";
+
+export { InvalidWebSocketTokenPayloadError } from "./SessionStoreTypes.ts";
+
+export { WebSocketTokenExpiredError } from "./SessionStoreTypes.ts";
+
+export { UnknownWebSocketSessionError } from "./SessionStoreTypes.ts";
+
+export { WebSocketSessionExpiredError } from "./SessionStoreTypes.ts";
+
+export { WebSocketSessionRevokedError } from "./SessionStoreTypes.ts";
+
+export { SessionCredentialInvalidError } from "./SessionStoreTypes.ts";
+
+export { isSessionCredentialInvalidError } from "./SessionStoreTypes.ts";
+
+export { SessionClaimsEncodingError } from "./SessionStoreTypes.ts";
+
+export { SessionCredentialIssueError } from "./SessionStoreTypes.ts";
+
+export { SessionCredentialVerificationError } from "./SessionStoreTypes.ts";
+
+export { WebSocketTokenIssueError } from "./SessionStoreTypes.ts";
+
+export { WebSocketTokenVerificationError } from "./SessionStoreTypes.ts";
+
+export { ActiveSessionsListError } from "./SessionStoreTypes.ts";
+
+export { SessionRevocationError } from "./SessionStoreTypes.ts";
+
+export { OtherSessionsRevocationError } from "./SessionStoreTypes.ts";
+
+export { SessionCredentialInternalError } from "./SessionStoreTypes.ts";
+
+export { isSessionCredentialInternalError } from "./SessionStoreTypes.ts";
+
+export { SessionCredentialError } from "./SessionStoreTypes.ts";
+
+export { isSessionCredentialError } from "./SessionStoreTypes.ts";

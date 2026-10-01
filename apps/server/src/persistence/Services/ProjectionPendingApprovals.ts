@@ -30,21 +30,25 @@ export const ProjectionPendingApproval = Schema.Struct({
   createdAt: IsoDateTime,
   resolvedAt: Schema.NullOr(IsoDateTime),
 });
+
 export type ProjectionPendingApproval = typeof ProjectionPendingApproval.Type;
 
 export const ListProjectionPendingApprovalsInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type ListProjectionPendingApprovalsInput = typeof ListProjectionPendingApprovalsInput.Type;
 
 export const GetProjectionPendingApprovalInput = Schema.Struct({
   requestId: ApprovalRequestId,
 });
+
 export type GetProjectionPendingApprovalInput = typeof GetProjectionPendingApprovalInput.Type;
 
 export const DeleteProjectionPendingApprovalInput = Schema.Struct({
   requestId: ApprovalRequestId,
 });
+
 export type DeleteProjectionPendingApprovalInput = typeof DeleteProjectionPendingApprovalInput.Type;
 
 /**

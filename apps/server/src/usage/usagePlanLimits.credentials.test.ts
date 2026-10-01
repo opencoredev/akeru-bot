@@ -4,7 +4,6 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as TestClock from "effect/testing/TestClock";
-
 import { makePlanLimitsReader } from "./usagePlanLimits.ts";
 
 const fetchMock = vi.fn<(input: unknown, init?: RequestInit) => Promise<Response>>();
@@ -15,6 +14,7 @@ it.effect("drops the previous account's windows when credentials change", () =>
     const usedByToken: Record<string, number> = { "token-a": 95, "token-b": 10 };
     fetchMock.mockReset().mockImplementation(async (_input: unknown, init?: RequestInit) => {
       const token = new Headers(init?.headers).get("authorization")?.replace("Bearer ", "") ?? "";
+
       return new Response(
         JSON.stringify({
           five_hour: { utilization: usedByToken[token], resets_at: "2026-08-27T12:00:00.000Z" },
@@ -25,9 +25,11 @@ it.effect("drops the previous account's windows when credentials change", () =>
     vi.stubGlobal("fetch", fetchMock);
     let token = "token-a";
     let accountId = "account-a";
+
     const read = yield* makePlanLimitsReader(async (provider) =>
       provider === "anthropic" ? { accessToken: token, accountId } : undefined,
     );
+
     const usedPercent = Effect.map(read("anthropic"), ([limits]) =>
       limits?.windows.map((window) => window.usedPercent),
     );
@@ -68,10 +70,13 @@ it.effect("keeps meters across token rotation, usage failures and unavailable to
     let lookupFails = false;
     let connected = true;
     let accountId = "same-account";
+
     const read = yield* makePlanLimitsReader(async (provider) => {
       if (provider !== "anthropic" || !connected) return undefined;
+
       return { accessToken: lookupFails ? null : accessToken, accountId };
     });
+
     try {
       const first = yield* read("anthropic");
       expect(first[0]?.windows[0]?.usedPercent).toBe(70);

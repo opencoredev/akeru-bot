@@ -12,6 +12,7 @@ import * as VcsProjectConfig from "./VcsProjectConfig.ts";
 import * as VcsDriver from "./VcsDriver.ts";
 
 const DETECTION_CACHE_CAPACITY = 2_048;
+
 const DETECTION_CACHE_TTL = Duration.seconds(2);
 
 export interface VcsDriverResolveInput {
@@ -48,12 +49,14 @@ function parseDetectionCacheKey(key: string): {
   readonly requestedKind: VcsDriverKind | "auto";
 } {
   const separatorIndex = key.indexOf("\0");
+
   if (separatorIndex === -1) {
     return {
       cwd: key,
       requestedKind: "auto",
     };
   }
+
   return {
     requestedKind: key.slice(0, separatorIndex) as VcsDriverKind | "auto",
     cwd: key.slice(separatorIndex + 1),
@@ -63,12 +66,14 @@ function parseDetectionCacheKey(key: string): {
 export const make = Effect.gen(function* () {
   const projectConfig = yield* VcsProjectConfig.VcsProjectConfig;
   const git = yield* GitVcsDriver.makeVcsDriver;
+
   const drivers: Partial<Record<VcsDriverKind, VcsDriver.VcsDriver["Service"]>> = {
     git,
   };
 
   const get: VcsDriverRegistry["Service"]["get"] = (kind) => {
     const driver = drivers[kind];
+
     if (!driver) {
       return Effect.fail(
         new VcsUnsupportedOperationError({
@@ -78,6 +83,7 @@ export const make = Effect.gen(function* () {
         }),
       );
     }
+
     return Effect.succeed(driver);
   };
 
@@ -87,9 +93,11 @@ export const make = Effect.gen(function* () {
     cwd: string,
   ) {
     const repository = yield* driver.detectRepository(cwd);
+
     if (!repository) {
       return null;
     }
+
     return {
       kind,
       repository,
@@ -105,6 +113,7 @@ export const make = Effect.gen(function* () {
 
     if (requestedKind !== "auto" && requestedKind !== "unknown") {
       const driver = yield* get(requestedKind);
+
       return yield* detectWithDriver(requestedKind, driver, input.cwd);
     }
 
@@ -125,6 +134,7 @@ export const make = Effect.gen(function* () {
   const detect: VcsDriverRegistry["Service"]["detect"] = Effect.fn("VcsDriverRegistry.detect")(
     function* (input) {
       const requestedKind = yield* projectConfig.resolveKind(input);
+
       return yield* Cache.get(detectionCache, detectionCacheKey({ cwd: input.cwd, requestedKind }));
     },
   );
@@ -132,11 +142,13 @@ export const make = Effect.gen(function* () {
   const resolve: VcsDriverRegistry["Service"]["resolve"] = Effect.fn("VcsDriverRegistry.resolve")(
     function* (input) {
       const detected = yield* detect(input);
+
       if (detected) {
         return detected;
       }
 
       const requestedKind = input.requestedKind ?? "auto";
+
       return yield* new VcsUnsupportedOperationError({
         operation: "VcsDriverRegistry.resolve",
         kind: requestedKind === "auto" ? "unknown" : requestedKind,

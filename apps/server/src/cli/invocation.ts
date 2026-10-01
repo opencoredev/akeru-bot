@@ -20,9 +20,11 @@ export type CliRunner = "npx" | "pnpm dlx" | "bunx";
  */
 export function detectCliRunner(entryPath: string): CliRunner | null {
   const path = entryPath.replaceAll("\\", "/");
+
   if (path.includes("/_npx/")) {
     return "npx";
   }
+
   if (
     path.includes("/pnpm/dlx/") ||
     path.includes("/.pnpm/dlx/") ||
@@ -30,9 +32,11 @@ export function detectCliRunner(entryPath: string): CliRunner | null {
   ) {
     return "pnpm dlx";
   }
+
   if (path.includes("/.bun/install/cache/") || path.includes("/bunx-")) {
     return "bunx";
   }
+
   return null;
 }
 
@@ -41,7 +45,7 @@ export function detectCliRunner(entryPath: string): CliRunner | null {
  * is resolved away before our process starts, so re-derive it from the
  * running version.
  */
-export function suggestedPackageSpec(version: string): string {
+export function suggestedPackageSpec(_version: string): string {
   return "akeru-bot";
 }
 
@@ -56,9 +60,11 @@ export function formatCliCommand(input: {
   readonly version: string;
 }): string {
   const runner = detectCliRunner(input.entryPath);
+
   if (runner === null) {
     return `akeru ${input.subcommand}`;
   }
+
   return `${runner} ${suggestedPackageSpec(input.version)} ${input.subcommand}`;
 }
 

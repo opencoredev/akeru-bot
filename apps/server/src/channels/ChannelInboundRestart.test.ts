@@ -36,9 +36,13 @@ import { makeMemoryChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
 import { ChannelRuntime, type ChannelRuntimeDependencies } from "./ChannelRuntime.ts";
 
 const NOW = "2026-09-04T12:00:00.000Z";
+
 const LATER = "2026-09-04T13:00:00.000Z";
+
 const BOT_ID = BotId.make("inbound-restart-bot");
+
 const FIRST_PROJECT_ID = ProjectId.make("first-project");
+
 const TARGET_PROJECT_ID = ProjectId.make("selected-project");
 
 function makeLayer(dbPath: string) {
@@ -59,6 +63,7 @@ function makeLayer(dbPath: string) {
 const makeDependencies = Effect.fn("makeDependencies")(function* (now: string) {
   const engine = yield* OrchestrationEngineService;
   const snapshots = yield* ProjectionSnapshotQuery;
+
   return {
     engine,
     readModel: snapshots.getCommandReadModel(),
@@ -84,6 +89,7 @@ const makeDependencies = Effect.fn("makeDependencies")(function* (now: string) {
 const seedProjectsAndBot = Effect.fn("seedProjectsAndBot")(function* (root: string) {
   const engine = yield* OrchestrationEngineService;
   const path = yield* Path.Path;
+
   for (const projectId of [FIRST_PROJECT_ID, TARGET_PROJECT_ID]) {
     yield* engine.dispatch({
       type: "project.create",
@@ -98,6 +104,7 @@ const seedProjectsAndBot = Effect.fn("seedProjectsAndBot")(function* (root: stri
       createdAt: NOW,
     });
   }
+
   yield* engine.dispatch({
     type: "bot.create",
     commandId: CommandId.make("create-inbound-bot"),
@@ -117,11 +124,13 @@ const seedProjectsAndBot = Effect.fn("seedProjectsAndBot")(function* (root: stri
 /** Builds a runtime in the current scope, as the server layer does. */
 const makeRuntime = Effect.fn("makeRuntime")(function* (deps: ChannelRuntimeDependencies) {
   const context = yield* Layer.build(ChannelRuntime.layerWith(deps));
+
   return Context.get(context, ChannelRuntime);
 });
 
 const readReceipt = Effect.fn("readReceipt")(function* (commandId: CommandId) {
   const receipts = yield* OrchestrationCommandReceiptRepository;
+
   return Option.getOrThrow(yield* receipts.getByCommandId({ commandId }));
 });
 
@@ -135,6 +144,7 @@ describe("channel inbound persistence across restart", () => {
           const path = yield* Path.Path;
           const root = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-channel-inbound-" });
           const dbPath = path.join(root, "state.sqlite");
+
           const input = {
             botId: BOT_ID,
             projectId: TARGET_PROJECT_ID,
@@ -153,9 +163,11 @@ describe("channel inbound persistence across restart", () => {
             yield* runtime.dispatchInbound(input);
 
             const originalEvents = yield* Stream.runCollect(before.engine.readEvents(0));
+
             const originalTurns = originalEvents.filter(
               (event) => event.type === "thread.turn-start-requested",
             );
+
             expect(originalTurns).toHaveLength(1);
             const originalTurn = originalTurns[0]!;
             const commandId = originalTurn.commandId!;
@@ -171,12 +183,14 @@ describe("channel inbound persistence across restart", () => {
             expect(
               originalThread?.messages.filter((message) => message.role === "user"),
             ).toHaveLength(1);
+
             const expectedOrigin = {
               provider,
               externalThreadId: input.externalThreadId,
               externalMessageId: input.externalMessageId,
               externalSenderId: input.externalSenderId,
             };
+
             expect(originalThread?.messages[0]).toMatchObject({
               channelOrigin: expectedOrigin,
               authorDisplayName: input.externalSenderName,
@@ -189,14 +203,17 @@ describe("channel inbound persistence across restart", () => {
               channelOrigin: expectedOrigin,
               authorDisplayName: input.externalSenderName,
             });
+
             const windowed = Option.getOrThrow(
               yield* snapshots.getThreadDetailSnapshot(threadId, { turnLimit: 1 }),
             );
+
             expect(windowed.thread.messages[0]).toMatchObject({
               channelOrigin: expectedOrigin,
               authorDisplayName: input.externalSenderName,
             });
             const originalSequence = yield* before.engine.latestSequence;
+
             return {
               before,
               commandId,
@@ -219,6 +236,7 @@ describe("channel inbound persistence across restart", () => {
               originalEvents,
               originalSequence,
             } = original;
+
             const after = yield* makeDependencies(LATER);
             expect(after.engine).not.toBe(before.engine);
             expect(after.deliveryStore).not.toBe(before.deliveryStore);
@@ -240,9 +258,11 @@ describe("channel inbound persistence across restart", () => {
             expect(turns).toHaveLength(2);
             expect(new Set(turns.map((event) => event.commandId)).size).toBe(2);
             expect(turns.map((event) => event.payload.threadId)).toEqual([threadId, threadId]);
+
             const messageEvents = events
               .filter((event) => event.type === "thread.message-sent")
               .filter((event) => event.payload.role === "user");
+
             expect(messageEvents).toHaveLength(2);
             expect(
               messageEvents.map((event) => event.payload.channelOrigin?.externalMessageId),

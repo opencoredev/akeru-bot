@@ -5,13 +5,7 @@ import type {
 } from "@akeru/contracts";
 
 import * as Effect from "effect/Effect";
-
-import {
-  toBotMemoryError,
-  makeBotMemoryError,
-  type BotMemoryAccess,
-  type BotMemoryStore,
-} from "./BotMemory.ts";
+import { toBotMemoryError, type BotMemoryAccess, type BotMemoryStore } from "./BotMemory.ts";
 
 export interface LegacyMemoryMigrationReport {
   readonly migrated: number;
@@ -23,7 +17,9 @@ export function legacyMemoryMigrationAccesses(
   access: AkeruMemoryThreadAccess,
 ): ReadonlyArray<AkeruMemoryThreadAccess> {
   const botId = access.respondingBotId ?? access.botId;
+
   if (!botId || access.groupId === null) return [access];
+
   return [
     { ...access, botId, respondingBotId: botId, groupId: null, groupMemberBotIds: [] },
     access,
@@ -32,7 +28,9 @@ export function legacyMemoryMigrationAccesses(
 
 export function legacyMemoryMigrationKeys(access: AkeruMemoryThreadAccess): ReadonlyArray<string> {
   const botId = access.respondingBotId ?? access.botId;
+
   if (!botId) return [];
+
   return [
     "legacy-approved-private-v1",
     ...(access.groupId !== null && access.groupMemberBotIds.includes(botId)
@@ -63,19 +61,23 @@ async function migrateSet(input: {
 }): Promise<LegacyMemoryMigrationReport> {
   let migrated = 0;
   const archived: string[] = [];
+
   const ran = await input.store.runMigrationOnce(
     input.access.botId,
     input.migrationKey,
     async () => {
       for (const revision of input.revisions) {
         const target = input.classify(revision);
+
         if (target === "skip") continue;
+
         if (target === "archive") {
           archived.push(
             archiveEntry(revision, "This legacy scope has no injected Markdown target."),
           );
           continue;
         }
+
         const result = await Effect.runPromise(
           Effect.tryPromise({
             try: () =>
@@ -90,18 +92,22 @@ async function migrateSet(input: {
               "limit-exceeded": (_reason, error) =>
                 Effect.sync(() => {
                   archived.push(archiveEntry(revision, error.message));
+
                   return null;
                 }),
               "unsafe-content": (_reason, error) =>
                 Effect.sync(() => {
                   archived.push(archiveEntry(revision, error.message));
+
                   return null;
                 }),
             }),
           ),
         );
+
         if (result?.changed) migrated += 1;
       }
+
       if (archived.length > 0) {
         await input.store.writeMigrationArchive(
           input.access.botId,
@@ -117,6 +123,7 @@ async function migrateSet(input: {
       }
     },
   );
+
   return {
     migrated: ran ? migrated : 0,
     archived: ran ? archived.length : 0,
@@ -130,16 +137,21 @@ export async function migrateLegacyBotMemory(input: {
   readonly revisions: ReadonlyArray<AkeruMemoryRevision>;
 }): Promise<ReadonlyArray<LegacyMemoryMigrationReport>> {
   const botId = input.access.respondingBotId ?? input.access.botId;
+
   if (!botId) return [];
+
   const access: BotMemoryAccess = {
     botId,
     groupId: input.access.groupId,
     groupMemberBotIds: input.access.groupMemberBotIds,
   };
+
   const [privateMigrationKey, groupMigrationKey] = legacyMemoryMigrationKeys(input.access);
+
   const current = input.revisions.filter(
     (revision) => revision.approvalState === "approved" && revision.deletionState === "active",
   );
+
   const reports = [
     await migrateSet({
       store: input.store,
@@ -150,14 +162,18 @@ export async function migrateLegacyBotMemory(input: {
         if (revision.partition.scope === "user" || revision.partition.scope === "bot-user") {
           return "user";
         }
+
         if (revision.partition.scope === "bot") {
           return String(revision.entityId) === String(botId) ? "memory" : "archive";
         }
+
         if (revision.partition.scope === "group") return "skip";
+
         return "archive";
       },
     }),
   ];
+
   if (groupMigrationKey) {
     reports.push(
       await migrateSet({
@@ -174,5 +190,6 @@ export async function migrateLegacyBotMemory(input: {
       }),
     );
   }
+
   return reports;
 }

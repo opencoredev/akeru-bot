@@ -115,6 +115,7 @@ describe("buildThreadTitlePrompt", () => {
 
   it("does not truncate an already-marked regeneration context twice", () => {
     const retainedContext = "x".repeat(7_998);
+
     const result = buildThreadTitlePrompt({
       message: `[Earlier content truncated]\n\n${retainedContext}`,
       previousTitle: "Old title",

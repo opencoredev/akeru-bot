@@ -4,6 +4,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const botColumns = yield* sql<{ readonly name: string }>`PRAGMA table_info(projection_bots)`;
+
   if (!botColumns.some((column) => column.name === "channel_bindings_json")) {
     yield* sql`
       ALTER TABLE projection_bots
@@ -14,12 +15,15 @@ export default Effect.gen(function* () {
   const messageColumns = yield* sql<{ readonly name: string }>`
     PRAGMA table_info(projection_thread_messages)
   `;
+
   if (!messageColumns.some((column) => column.name === "author_person_id")) {
     yield* sql`ALTER TABLE projection_thread_messages ADD COLUMN author_person_id TEXT`;
   }
+
   if (!messageColumns.some((column) => column.name === "author_display_name")) {
     yield* sql`ALTER TABLE projection_thread_messages ADD COLUMN author_display_name TEXT`;
   }
+
   if (!messageColumns.some((column) => column.name === "channel_origin_json")) {
     yield* sql`ALTER TABLE projection_thread_messages ADD COLUMN channel_origin_json TEXT`;
   }

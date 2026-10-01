@@ -1,23 +1,10 @@
 // @effect-diagnostics nodeBuiltinImport:off
-/**
- * Runs one image tool call for a chat.
- *
- * Every provider reaches this through the same entry: MCP-driven providers
- * (Claude, Grok, OpenCode) through the `generate_image` MCP tool, and the
- * Mastra controller (Codex, Kimi) through `runImageGenerationTool`, which
- * backs the `GenerateImage` catalog tool. The runtime resolves the calling
- * bot, routes the
- * request with `routeImageRequest`, saves each image as a local chat
- * attachment, posts the attachments into the chat as an assistant message,
- * and records usage against the calling bot.
- *
- * Prompts and image bytes stay inside this module and the provider request.
- * The tool result, events, logs, and usage rows only carry metadata.
- */
+import * as Predicate from "effect/Predicate";
+
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
-
+import { readImageFile } from "./ImageFile.ts";
 import {
   AkeruUsageReservationId,
   type BotId,
@@ -40,7 +27,6 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-
 import { createAttachmentId, resolveAttachmentPath } from "../attachmentStore.ts";
 import { ServerConfig } from "../config.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
@@ -114,18 +100,22 @@ function persistImage(input: {
   readonly index: number;
 }): ChatImageAttachment | null {
   const attachmentId = createAttachmentId(input.threadId);
+
   if (!attachmentId) return null;
   const extension = EXTENSION_BY_MIME[input.mimeType];
   const finalPath = NodePath.join(input.attachmentsDir, `${attachmentId}${extension}`);
   const temporaryPath = `${finalPath}.part`;
+
   try {
     NodeFS.mkdirSync(input.attachmentsDir, { recursive: true });
     NodeFS.writeFileSync(temporaryPath, input.bytes, { flag: "wx" });
     NodeFS.renameSync(temporaryPath, finalPath);
   } catch {
     NodeFS.rmSync(temporaryPath, { force: true });
+
     return null;
   }
+
   return {
     type: "image",
     id: attachmentId,
@@ -145,14 +135,18 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
   const bots = yield* ProjectionBotRepository;
   const serverSettings = yield* ServerSettingsService;
   const usageLedger = yield* BotUsageLedger;
+
   const sharedStore = yield* Effect.cached(
     SubscriptionAuthService.forSecretsDir(config.secretsDir),
   );
+
   const subscriptionAuth = options.subscriptionAuth ?? (yield* sharedStore);
+
   const adapters = options.adapters ?? {
     chatgpt: makeChatGptImageAdapter({ subscriptionAuth: yield* sharedStore }),
     grok: makeGrokImageAdapter({ subscriptionAuth: yield* sharedStore }),
   };
+
   const inFlight = new Map<string, Set<Fiber.Fiber<ImageGenerationResult>>>();
   // Requests run detached from their caller, so shutdown interrupts them explicitly
   // before anything else can write an attachment into a closing server.
@@ -168,9 +162,11 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
 
   const availability = (provider: ImageProviderId): ImageProviderAvailability => {
     const label = provider === "chatgpt" ? "ChatGPT" : "Grok";
+
     const subscription = subscriptionAuth
       .statuses()
       .find((status) => status.provider === SUBSCRIPTION_BY_IMAGE_PROVIDER[provider]);
+
     if (!subscription?.connected) {
       return {
         state: "unavailable",
@@ -178,6 +174,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
         message: `${label} is not connected. Connect it in Settings.`,
       };
     }
+
     if (subscription.health === "revoked") {
       return {
         state: "unavailable",
@@ -185,6 +182,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
         message: `${label} access was revoked. Reconnect it in Settings.`,
       };
     }
+
     return { state: "available" };
   };
 
@@ -195,10 +193,13 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
     Effect.sync(() => {
       if (outcome.ok) {
         subscriptionAuth.recordImageGenerationSuccess(provider);
+
         return;
       }
+
       // Cancellation and bad requests say nothing about the provider's health.
       const kind = outcome.failure.kind;
+
       if (kind === "cancelled" || kind === "invalid-request" || kind === "unsupported") return;
       subscriptionAuth.recordImageRequestFailure(
         provider,
@@ -212,18 +213,23 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
   const resolveInputImages = (threadId: ThreadId, requested: ReadonlyArray<string> | undefined) =>
     Effect.gen(function* () {
       const threadMessages = yield* messages.listByThreadId({ threadId });
+
       const images = threadMessages.flatMap((message) =>
         (message.attachments ?? []).flatMap((attachment) =>
           attachment.type === "image" ? [{ attachment, role: message.role }] : [],
         ),
       );
+
       let selected: ReadonlyArray<ChatImageAttachment>;
+
       if (requested) {
         const byId = new Map(images.map(({ attachment }) => [attachment.id, attachment]));
         const missing = requested.filter((id) => !byId.has(id));
+
         if (missing.length > 0) {
           return { ok: false as const, message: "Input images must be images from this chat." };
         }
+
         selected = requested.map((id) => byId.get(id)!);
       } else {
         // Only the latest user message counts, so a text-only follow-up never edits an older image.
@@ -231,6 +237,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
         selected = (latestUser?.attachments ?? []).filter(
           (attachment): attachment is ChatImageAttachment => attachment.type === "image",
         );
+
         if (selected.length === 0) {
           return {
             ok: false as const,
@@ -238,15 +245,20 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
           };
         }
       }
+
       const loaded: ImageAdapterInputImage[] = [];
+
       for (const attachment of selected) {
         const path = resolveAttachmentPath({ attachmentsDir: config.attachmentsDir, attachment });
-        const bytes = path ? yield* Effect.sync(() => readImageFile(path)) : null;
+        const bytes = path ? yield* Effect.tryPromise(() => readImageFile(path)) : null;
+
         if (!bytes) {
           return { ok: false as const, message: "An input image is no longer available." };
         }
+
         loaded.push({ mimeType: attachment.mimeType, bytes });
       }
+
       return { ok: true as const, images: loaded };
     });
 
@@ -279,6 +291,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
                   attachmentsDir: config.attachmentsDir,
                   attachment,
                 });
+
                 if (path) NodeFS.rmSync(path, { force: true });
               }
             }),
@@ -324,14 +337,18 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
   const run = (threadId: ThreadId, rawInput: unknown) =>
     Effect.gen(function* () {
       const decoded = decodeImageGenerationRequest(rawInput);
+
       if (!decoded.ok) return failed("invalid-request", decoded.message);
       const request = decoded.request;
 
       const shell = yield* snapshots.getThreadShellById(threadId);
+
       if (Option.isNone(shell)) return failed("invalid-request", "This chat no longer exists.");
       const thread = shell.value;
+
       const botId =
         thread.latestTurn?.respondingBotId ?? thread.respondingBotId ?? thread.botId ?? null;
+
       const bot = botId ? yield* bots.getById({ botId }) : Option.none();
       const turnId = thread.latestTurn?.state === "running" ? thread.latestTurn.turnId : null;
       const settings = (yield* serverSettings.getSettings).imageGeneration;
@@ -340,9 +357,11 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
         request.operation === "edit" || request.inputImages
           ? yield* resolveInputImages(threadId, request.inputImages)
           : { ok: true as const, images: [] };
+
       if (!inputImages.ok) return failed("invalid-request", inputImages.message);
 
       const generationId = NodeCrypto.randomUUID();
+
       const routed = yield* routeImageRequest({
         request,
         inputImages: inputImages.images,
@@ -376,10 +395,13 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
 
       const artifacts: ImageArtifact[] = [];
       const attachments: ChatImageAttachment[] = [];
+
       for (const part of routed.parts) {
         for (const bytes of part.output.images) {
           const sniffed = sniffImage(bytes);
+
           if (!sniffed || bytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) continue;
+
           const attachment = persistImage({
             attachmentsDir: config.attachmentsDir,
             threadId,
@@ -387,6 +409,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
             mimeType: sniffed.mimeType,
             index: attachments.length,
           });
+
           if (!attachment) continue;
           attachments.push(attachment);
           artifacts.push({
@@ -400,14 +423,19 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
           });
         }
       }
+
       if (attachments.length > 0) {
         yield* postAttachments({ threadId, turnId, generationId, attachments });
       }
+
       if (routed.status !== "completed") {
         const { parts: _parts, ...result } = routed;
+
         return result;
       }
+
       const requested = request.count ?? 1;
+
       if (attachments.length < requested) {
         return {
           status: "failed",
@@ -443,16 +471,19 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
       const fibers = inFlight.get(key) ?? new Set();
       fibers.add(fiber);
       inFlight.set(key, fibers);
+
       const exit = yield* Fiber.await(fiber).pipe(
         Effect.onInterrupt(() => Fiber.interrupt(fiber)),
         Effect.ensuring(
           Effect.sync(() => {
             fibers.delete(fiber);
+
             if (fibers.size === 0) inFlight.delete(key);
           }),
         ),
       );
-      return exit._tag === "Success"
+
+      return Predicate.isTagged(exit, "Success")
         ? exit.value
         : failed("cancelled", "Image generation was cancelled.");
     });
@@ -460,22 +491,12 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
   const cancelThread: ImageGenerationRuntimeShape["cancelThread"] = (threadId) =>
     Effect.suspend(() => {
       const fibers = [...(inFlight.get(String(threadId)) ?? [])];
+
       return Effect.forEach(fibers, (fiber) => Fiber.interrupt(fiber), { discard: true });
     });
 
   return ImageGenerationRuntime.of({ generate, cancelThread });
 });
-
-function readImageFile(path: string): Uint8Array | null {
-  try {
-    const bytes = NodeFS.readFileSync(path);
-    return bytes.byteLength > 0 && bytes.byteLength <= PROVIDER_SEND_TURN_MAX_IMAGE_BYTES
-      ? new Uint8Array(bytes)
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 let activeImageGenerationRuntime: ImageGenerationRuntimeShape | undefined;
 

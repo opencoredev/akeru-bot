@@ -18,6 +18,7 @@ export const reportExpectedCliError =
   <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.tapError(effect, (error) => {
       const tagged = error as { readonly _tag?: unknown; readonly cause?: unknown };
+
       if (
         !(error instanceof Error) ||
         typeof tagged._tag !== "string" ||
@@ -25,10 +26,12 @@ export const reportExpectedCliError =
       ) {
         return Effect.void;
       }
+
       const lines =
         tagged.cause === undefined
           ? [error.message]
           : [error.message, `Caused by: ${String(tagged.cause)}`];
+
       return Console.error(lines.join("\n")).pipe(
         Effect.andThen(
           Effect.sync(() => {

@@ -126,14 +126,18 @@ export const SecretStoreError = Schema.Union([
   SecretStoreDecodeError,
   SecretStoreEncodeError,
 ]);
+
 export type SecretStoreError = typeof SecretStoreError.Type;
+
 export const isSecretStoreError = Schema.is(SecretStoreError);
 
 const isPlatformError = (value: unknown): value is PlatformError.PlatformError =>
   Predicate.isTagged(value, "PlatformError");
 
 export const isSecretAlreadyExistsError = (error: SecretStoreError): boolean =>
-  "cause" in error && isPlatformError(error.cause) && error.cause.reason._tag === "AlreadyExists";
+  "cause" in error &&
+  isPlatformError(error.cause) &&
+  Predicate.isTagged(error.cause.reason, "AlreadyExists");
 
 export class ServerSecretStore extends Context.Service<
   ServerSecretStore,
@@ -172,7 +176,7 @@ export const make = Effect.gen(function* () {
     fileSystem.readFile(resolveSecretPath(name)).pipe(
       Effect.map((bytes) => Option.some(Uint8Array.from(bytes))),
       Effect.catch((cause) =>
-        cause.reason._tag === "NotFound"
+        Predicate.isTagged(cause.reason, "NotFound")
           ? Effect.succeed(Option.none())
           : Effect.fail(
               new SecretStoreReadError({
@@ -186,6 +190,7 @@ export const make = Effect.gen(function* () {
 
   const set: ServerSecretStore["Service"]["set"] = (name, value) => {
     const secretPath = resolveSecretPath(name);
+
     return crypto.randomUUIDv4.pipe(
       Effect.mapError(
         (cause) =>
@@ -196,6 +201,7 @@ export const make = Effect.gen(function* () {
       ),
       Effect.flatMap((uuid) => {
         const tempPath = `${secretPath}.${uuid}.tmp`;
+
         return Effect.gen(function* () {
           yield* fileSystem.writeFile(tempPath, value);
           yield* fileSystem.chmod(tempPath, 0o600);
@@ -223,12 +229,14 @@ export const make = Effect.gen(function* () {
 
   const create: ServerSecretStore["Service"]["create"] = (name, value) => {
     const secretPath = resolveSecretPath(name);
+
     return Effect.scoped(
       Effect.gen(function* () {
         const file = yield* fileSystem.open(secretPath, {
           flag: "wx",
           mode: 0o600,
         });
+
         yield* file.writeAll(value);
         yield* file.sync;
         yield* fileSystem.chmod(secretPath, 0o600);
@@ -289,7 +297,7 @@ export const make = Effect.gen(function* () {
   const remove: ServerSecretStore["Service"]["remove"] = (name) =>
     fileSystem.remove(resolveSecretPath(name)).pipe(
       Effect.catch((cause) =>
-        cause.reason._tag === "NotFound"
+        Predicate.isTagged(cause.reason, "NotFound")
           ? Effect.void
           : Effect.fail(
               new SecretStoreRemoveError({

@@ -1,12 +1,14 @@
 type ClearObservationalMemory = (threadId: string, resourceId?: string) => Promise<void>;
 
 const owners = new Map<string, Set<ClearObservationalMemory>>();
+
 const stores = new Set<ClearObservationalMemory>();
 
 // Registers an observational-memory store that can clear any thread, so a
 // durable invalidation still reaches threads no live harness has touched yet.
 export function registerEntityMemoryStore(clear: ClearObservationalMemory): () => void {
   stores.add(clear);
+
   return () => {
     stores.delete(clear);
   };
@@ -21,8 +23,10 @@ export function registerEntityMemoryResource(
   const callbacks = owners.get(key) ?? new Set<ClearObservationalMemory>();
   callbacks.add(clear);
   owners.set(key, callbacks);
+
   return () => {
     callbacks.delete(clear);
+
     if (callbacks.size === 0) owners.delete(key);
   };
 }

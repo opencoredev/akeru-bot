@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   BotId,
   CommandId,
@@ -40,6 +41,7 @@ it("creates a current realtime session through the ChatGPT subscription endpoint
   const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     assert.equal(String(url), "https://chatgpt.com/backend-api/codex/realtime/calls");
     assert.isNull(new Headers(init?.headers).get("OpenAI-Alpha"));
+
     const body = JSON.parse(String(init?.body)) as {
       readonly session: {
         readonly type: string;
@@ -59,6 +61,7 @@ it("creates a current realtime session through the ChatGPT subscription endpoint
         readonly tools: ReadonlyArray<{ readonly name: string }>;
       };
     };
+
     assert.equal(body.session.type, "realtime");
     assert.equal(body.session.model, "gpt-realtime-2.1");
     assert.equal(body.session.audio.output.voice, "marin");
@@ -70,9 +73,12 @@ it("creates a current realtime session through the ChatGPT subscription endpoint
       ["send_to_chat"],
     );
     assert.equal(body.session.instructions, "Be concise.");
+
     return new Response("answer-sdp");
   });
+
   vi.stubGlobal("fetch", fetchMock);
+
   try {
     const answer = await defaultSession().negotiate({
       offerSdp: "offer-sdp",
@@ -82,6 +88,7 @@ it("creates a current realtime session through the ChatGPT subscription endpoint
       voice: "marin",
       signal: new AbortController().signal,
     });
+
     assert.equal(answer, "answer-sdp");
   } finally {
     vi.unstubAllGlobals();
@@ -89,7 +96,9 @@ it("creates a current realtime session through the ChatGPT subscription endpoint
 });
 
 const botId = BotId.make("bot-voice");
+
 const now = "2026-08-27T00:00:00.000Z";
+
 const bot = {
   botId,
   name: "Akeru",
@@ -147,11 +156,13 @@ const VoiceDisabledTestLayer = layer({
 );
 
 let negotiatedVoice: string | undefined;
+
 const SelectedVoiceTestLayer = layer({
   getCredential: async () => ({ accessToken: "access", accountId: "account" }),
   makeSession: () => ({
     negotiate: async ({ voice }) => {
       negotiatedVoice = voice;
+
       return "answer-sdp";
     },
   }),
@@ -184,7 +195,8 @@ it.layer(VoiceDisabledTestLayer)("VoiceCallManager global settings", (it) => {
       const manager = yield* VoiceCallManager;
       const result = yield* Effect.result(manager.start({ botId, sdp: "offer-sdp" }, "client-1"));
       assert.equal(result._tag, "Failure");
-      if (result._tag === "Failure") {
+
+      if (Predicate.isTagged(result, "Failure")) {
         assert.equal(result.failure.reason, "voice-disabled");
         assert.equal(result.failure.message, "Voice calls are disabled in Settings.");
       }
@@ -196,11 +208,14 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
   it.effect("releases the one-call lock when session construction fails", () =>
     Effect.gen(function* () {
       let constructionAttempts = 0;
+
       const failingLayer = layer({
         getCredential: async () => ({ accessToken: "access", accountId: "account" }),
         makeSession: () => {
           constructionAttempts += 1;
+
           if (constructionAttempts === 1) throw new Error("session constructor failed");
+
           return { negotiate: async () => "answer-sdp" };
         },
       }).pipe(
@@ -213,12 +228,15 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
           }).pipe(Layer.provide(NodeServices.layer)),
         ),
       );
+
       const result = yield* Effect.provide(
         Effect.gen(function* () {
           const manager = yield* VoiceCallManager;
+
           const failed = yield* Effect.result(
             manager.start({ botId, sdp: "offer-sdp" }, "client-1"),
           );
+
           assert.equal(failed._tag, "Failure");
           assert.deepEqual(yield* manager.get, { status: "idle" });
           const retry = yield* manager.start({ botId, sdp: "offer-sdp" }, "client-1");
@@ -227,6 +245,7 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
         }),
         failingLayer,
       );
+
       return result;
     }),
   );
@@ -235,6 +254,7 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
     Effect.gen(function* () {
       const manager = yield* VoiceCallManager;
       const call = yield* manager.start({ botId, sdp: "offer-sdp" }, "client-1");
+
       const botDeleted = (deletedBotId: BotId, sequence: number): OrchestrationEvent => ({
         sequence,
         eventId: EventId.make(`evt-bot-deleted-${sequence}`),
@@ -269,9 +289,11 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
 
       const stolen = yield* Effect.result(manager.hangup(first.call.callId, "client-2"));
       assert.equal(stolen._tag, "Failure");
-      if (stolen._tag === "Failure") {
+
+      if (Predicate.isTagged(stolen, "Failure")) {
         assert.equal(stolen.failure.reason, "call-not-active");
       }
+
       assert.equal((yield* manager.get).status, "live");
 
       yield* manager.hangupOwner("client-2");
@@ -285,6 +307,7 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
   it.effect("allows only one concurrent start to claim the call lock", () =>
     Effect.gen(function* () {
       const manager = yield* VoiceCallManager;
+
       const results = yield* Effect.all(
         [
           manager.start({ botId, sdp: "first-offer" }, "client-1").pipe(Effect.result),
@@ -292,13 +315,15 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
         ],
         { concurrency: "unbounded" },
       );
-      const successes = results.filter((result) => result._tag === "Success");
-      const failures = results.filter((result) => result._tag === "Failure");
+
+      const successes = results.filter((result) => Predicate.isTagged(result, "Success"));
+      const failures = results.filter((result) => Predicate.isTagged(result, "Failure"));
       assert.lengthOf(successes, 1);
       assert.lengthOf(failures, 1);
       assert.equal(failures[0]?.failure.reason, "already-active");
       const active = yield* manager.get;
       assert.notEqual(active.status, "idle");
+
       if (active.status !== "idle") {
         const ownerId = results[0]?._tag === "Success" ? "client-1" : "client-2";
         yield* manager.hangup(active.callId, ownerId);
@@ -316,8 +341,10 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
       const second = yield* Effect.result(
         manager.start({ botId, sdp: "second-offer" }, "client-2"),
       );
+
       assert.equal(second._tag, "Failure");
-      if (second._tag === "Failure") {
+
+      if (Predicate.isTagged(second, "Failure")) {
         const failure = second.failure;
         assert.instanceOf(failure, VoiceCallError);
         assert.equal(failure.reason, "already-active");
@@ -337,9 +364,11 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
 });
 
 let codexCliCredentialRequested = false;
+
 const CodexCliCredentialTestLayer = layer({
   getCodexCliCredential: async () => {
     codexCliCredentialRequested = true;
+
     return { accessToken: "codex-access", accountId: "codex-account" };
   },
   makeSession: () => ({
@@ -372,6 +401,7 @@ it.layer(CodexCliCredentialTestLayer)("VoiceCallManager Codex CLI auth", (it) =>
 });
 
 let negotiationStarted: (() => void) | undefined;
+
 const PendingTestLayer = layer({
   getCredential: async () => ({ accessToken: "access", accountId: "account" }),
   makeSession: () => ({
@@ -396,21 +426,27 @@ it.layer(PendingTestLayer)("VoiceCallManager pending start", (it) => {
   it.effect("cancels an in-flight negotiation when the call hangs up", () =>
     Effect.gen(function* () {
       const manager = yield* VoiceCallManager;
+
       const started = new Promise<void>((resolve) => {
         negotiationStarted = resolve;
       });
+
       const startFiber = yield* manager
         .start({ botId, sdp: "offer-sdp" }, "client-1")
         .pipe(Effect.result, Effect.forkChild);
+
       yield* Effect.promise(() => started);
       const pending = yield* manager.get;
       assert.notEqual(pending.status, "idle");
+
       if (pending.status === "idle") return;
 
       yield* manager.hangup(pending.callId, "client-1");
       const result = yield* Fiber.join(startFiber);
       assert.equal(result._tag, "Failure");
-      if (result._tag === "Failure") assert.equal(result.failure.reason, "call-not-active");
+
+      if (Predicate.isTagged(result, "Failure"))
+        assert.equal(result.failure.reason, "call-not-active");
       assert.deepEqual(yield* manager.get, { status: "idle" });
     }),
   );

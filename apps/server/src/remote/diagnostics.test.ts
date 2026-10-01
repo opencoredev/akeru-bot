@@ -15,6 +15,7 @@ describe("Akeru Remote diagnostics", () => {
     NodeFS.mkdirSync(NodePath.join(baseDir, "userdata"), { recursive: true });
     const prior = process.env.AKERU_REMOTE_CONTAINER;
     process.env.AKERU_REMOTE_CONTAINER = "1";
+
     try {
       await expect(
         runRemoteDoctor({ baseDir, repair: true, platform: "linux" }),
@@ -36,6 +37,7 @@ describe("Akeru Remote diagnostics", () => {
     const priorPath = process.env.PATH;
     process.env.AKERU_REMOTE_CONTAINER = "1";
     process.env.PATH = `${binDir}:${priorPath ?? ""}`;
+
     try {
       const report = await runRemoteDoctor({ baseDir, repair: false, platform: "linux" });
       expect(report.checks.find((check) => check.id === "service")?.status).toBe("pass");
@@ -74,6 +76,7 @@ describe("Akeru Remote diagnostics", () => {
     delete process.env.AKERU_REMOTE_CONTAINER;
     delete process.env.T3CODE_PORT;
     process.env.PATH = `${binDir}:${priorPath ?? ""}`;
+
     try {
       const report = await runRemoteDoctor({ baseDir, repair: false, platform: "win32" });
       expect(report.checks.find((check) => check.id === "service")).toMatchObject({
@@ -85,6 +88,7 @@ describe("Akeru Remote diagnostics", () => {
       );
     } finally {
       if (priorContainer !== undefined) process.env.AKERU_REMOTE_CONTAINER = priorContainer;
+
       if (priorPort !== undefined) process.env.T3CODE_PORT = priorPort;
       process.env.PATH = priorPath;
       NodeFS.rmSync(baseDir, { recursive: true, force: true });
@@ -121,6 +125,7 @@ describe("Akeru Remote diagnostics", () => {
       platform: "linux",
       now: new Date("2026-09-13T12:00:00.000Z"),
     });
+
     expect(report.checks.find((check) => check.id === "database")?.status).toBe("pass");
     expect(report.checks.find((check) => check.id === "binding-permissions")?.status).toBe("pass");
     expect(report.repairsApplied).toContain("binding-permissions");
@@ -161,6 +166,7 @@ describe("Akeru Remote diagnostics", () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-fresh-home-"));
     const prior = process.env.AKERU_REMOTE_CONTAINER;
     delete process.env.AKERU_REMOTE_CONTAINER;
+
     try {
       const report = await runRemoteDoctor({ baseDir, repair: false });
       const disk = report.checks.find((check) => check.id === "disk");
@@ -189,6 +195,7 @@ describe("Akeru Remote diagnostics", () => {
     });
     const prior = process.env.AKERU_REMOTE_CONTAINER;
     process.env.AKERU_REMOTE_CONTAINER = "1";
+
     try {
       const untouched = await runRemoteDoctor({ baseDir, repair: new Set(["logs"]) });
       expect(untouched.repairsApplied).not.toContain("binding-permissions");
@@ -198,6 +205,7 @@ describe("Akeru Remote diagnostics", () => {
         baseDir,
         repair: new Set(["binding-permissions"]),
       });
+
       expect(repaired.repairsApplied).toEqual(["binding-permissions"]);
       expect(NodeFS.statSync(bindingPath).mode & 0o077).toBe(0);
     } finally {
@@ -213,6 +221,7 @@ describe("Akeru Remote diagnostics", () => {
     const scripts = ["install-remote.sh", "akeru-remote-admin.sh"].map((name) =>
       NodeFS.readFileSync(new URL(`../../../../scripts/${name}`, import.meta.url), "utf8"),
     );
+
     for (const script of scripts) {
       expect(script).toContain(BOOT_SERVICE_UNIT_FILE);
       expect(script).not.toContain("akeru.service");

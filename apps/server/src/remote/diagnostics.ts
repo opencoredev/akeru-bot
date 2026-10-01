@@ -28,6 +28,7 @@ const commandOutput = (command: string, args: ReadonlyArray<string>) =>
       { encoding: "utf8", timeout: COMMAND_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
       (error, stdout) => resume(Effect.succeed({ ok: error === null, stdout })),
     );
+
     // An interrupted doctor request stops its probe instead of waiting out the timeout.
     return Effect.sync(() => {
       child.kill();
@@ -57,6 +58,7 @@ const check = (
 function httpsOrigin(endpoint: string): string | undefined {
   try {
     const url = new URL(endpoint);
+
     return url.protocol === "https:" ? url.origin : undefined;
   } catch {
     return undefined;
@@ -68,10 +70,12 @@ export function formatBytes(value: number): string {
   const units = ["KB", "MB", "GB", "TB"] as const;
   let next = value;
   let unitIndex = -1;
+
   do {
     next /= 1_024;
     unitIndex += 1;
   } while (next >= 1_024 && unitIndex < units.length - 1);
+
   return `${next.toFixed(next >= 100 ? 0 : next >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
@@ -94,6 +98,7 @@ export async function runRemoteDoctor(input: {
 }): Promise<RemoteDoctorReportValue> {
   const shouldRepair = (checkId: string) =>
     input.repair === true || (input.repair !== false && input.repair.has(checkId));
+
   const stateDir = NodePath.join(input.baseDir, "userdata");
   const bindingPath = NodePath.join(stateDir, "remote-directory.json");
   const dbPath = NodePath.join(stateDir, "state.sqlite");
@@ -104,15 +109,18 @@ export async function runRemoteDoctor(input: {
   const checks: Array<RemoteDiagnosticCheck> = [];
   const repairsApplied: Array<string> = [];
   const container = process.env.AKERU_REMOTE_CONTAINER === "1";
+
   // Background setup only installs systemd and launchd services. Other hosts, such as Windows,
   // run the server directly, so the doctor asks that server over HTTP instead.
   const serviceManaged =
     !container && (input.platform === undefined || ["linux", "darwin"].includes(input.platform));
+
   const readRuntimePort = () => {
     try {
       const { port } = JSON.parse(
         NodeFS.readFileSync(NodePath.join(stateDir, "server-runtime.json"), "utf8"),
       ) as { port?: unknown };
+
       return typeof port === "number" ? String(port) : undefined;
     } catch {
       return undefined;
@@ -132,6 +140,7 @@ export async function runRemoteDoctor(input: {
           `gui/${process.getuid?.() ?? 0}/${BOOT_SERVICE_LAUNCHD_LABEL}`,
         ])
       : await commandOk("systemctl", ["--user", "is-active", BOOT_SERVICE_UNIT_FILE]);
+
   checks.push(
     check(
       "service",
@@ -149,10 +158,12 @@ export async function runRemoteDoctor(input: {
             : "Background service is not active.",
     ),
   );
+
   if (!container && (await commandOk("sh", ["-c", "command -v loginctl"]))) {
     const linger = await Effect.runPromise(
       commandOutput("loginctl", ["show-user", process.env.USER ?? "", "-p", "Linger", "--value"]),
     );
+
     const persistent = linger.ok && linger.stdout.trim() === "yes";
     checks.push(
       check(
@@ -211,6 +222,7 @@ export async function runRemoteDoctor(input: {
   }
 
   let binding: Record<string, unknown> | undefined;
+
   if (NodeFS.existsSync(bindingPath)) {
     try {
       if (
@@ -220,6 +232,7 @@ export async function runRemoteDoctor(input: {
         NodeFS.chmodSync(bindingPath, 0o600);
         repairsApplied.push("binding-permissions");
       }
+
       binding = JSON.parse(NodeFS.readFileSync(bindingPath, "utf8")) as Record<string, unknown>;
       const secure = (NodeFS.statSync(bindingPath).mode & 0o077) === 0;
       checks.push(
@@ -271,9 +284,11 @@ export async function runRemoteDoctor(input: {
     NodeFS.chmodSync(controlTokenPath, 0o600);
     repairsApplied.push("update-credential-permissions");
   }
+
   if (!container) {
     const updateCredentialSecure =
       NodeFS.existsSync(controlTokenPath) && (NodeFS.statSync(controlTokenPath).mode & 0o077) === 0;
+
     checks.push(
       check(
         "update-credential",
@@ -289,9 +304,11 @@ export async function runRemoteDoctor(input: {
   const environmentId = NodeFS.existsSync(NodePath.join(stateDir, "environment-id"))
     ? NodeFS.readFileSync(NodePath.join(stateDir, "environment-id"), "utf8").trim()
     : "";
+
   // The binding is local state, so only probe an HTTPS origin and never follow redirects.
   const endpointOrigin =
     typeof binding?.endpoint === "string" ? httpsOrigin(binding.endpoint) : undefined;
+
   if (typeof binding?.endpoint === "string") {
     const response = endpointOrigin
       ? await Effect.runPromise(
@@ -305,7 +322,9 @@ export async function runRemoteDoctor(input: {
           ]),
         )
       : { ok: false, stdout: "" };
+
     let servedId = "";
+
     try {
       servedId = String(
         (JSON.parse(response.stdout || "{}") as { environmentId?: unknown }).environmentId ?? "",
@@ -313,6 +332,7 @@ export async function runRemoteDoctor(input: {
     } catch {
       servedId = "";
     }
+
     checks.push(
       check(
         "endpoint-reachability",
@@ -323,6 +343,7 @@ export async function runRemoteDoctor(input: {
       ),
     );
   }
+
   if (binding?.endpointKind === "tailscale" && typeof binding.endpoint === "string") {
     const tailscaleHealthy = await commandOk("tailscale", ["status"]);
     checks.push(
@@ -332,9 +353,11 @@ export async function runRemoteDoctor(input: {
         tailscaleHealthy ? "Tailscale is connected." : "Tailscale is unavailable.",
       ),
     );
+
     const mapping = binding.tailscaleServe as
       | { httpsPort?: unknown; endpoint?: unknown }
       | undefined;
+
     const owned = mapping?.httpsPort === 443 && mapping.endpoint === binding.endpoint;
     checks.push(
       check(
@@ -362,6 +385,7 @@ export async function runRemoteDoctor(input: {
         activeVersion?: string;
         update?: { status?: string };
       };
+
       const pending = state.update?.status === "pending";
       checks.push(
         check(
@@ -388,6 +412,7 @@ export async function runRemoteDoctor(input: {
           : check("update-state", "fail", `Service runtime state is unreadable: ${String(cause)}`),
       );
     }
+
   if (!container && NodeFS.existsSync(updateDeferredPath)) {
     const deferredAt = Date.parse(NodeFS.readFileSync(updateDeferredPath, "utf8").trim());
     const ageMs = (input.now ?? new Date()).getTime() - deferredAt;
@@ -405,7 +430,9 @@ export async function runRemoteDoctor(input: {
   } else {
     checks.push(check("update-deferral", "pass", "No update is deferred by active work."));
   }
+
   const releaseRoot = process.env.AKERU_REMOTE_RELEASE_ROOT;
+
   if (releaseRoot) {
     const previous = NodePath.join(releaseRoot, "previous");
     checks.push(
@@ -422,6 +449,7 @@ export async function runRemoteDoctor(input: {
   const found = await Promise.all(
     PROVIDER_COMMANDS.map((name) => commandOk("sh", ["-c", `command -v ${name}`])),
   );
+
   const providers = PROVIDER_COMMANDS.filter((_, index) => found[index]);
   const inServer = "Kimi For Coding and OpenCode Go need no command; connect them in Settings.";
   checks.push(
@@ -440,13 +468,16 @@ export async function runRemoteDoctor(input: {
     NodeFS.mkdirSync(NodePath.dirname(logPath), { recursive: true, mode: 0o700 });
     repairsApplied.push("log-directory");
   }
+
   let logBytes = NodeFS.existsSync(logPath) ? NodeFS.statSync(logPath).size : 0;
+
   if (shouldRepair("logs") && logBytes >= 100 * 1024 * 1024) {
     NodeFS.renameSync(logPath, `${logPath}.previous`);
     NodeFS.writeFileSync(logPath, "", { mode: 0o600 });
     logBytes = 0;
     repairsApplied.push("log-rotation");
   }
+
   checks.push(
     check(
       "logs",
@@ -462,6 +493,7 @@ export async function runRemoteDoctor(input: {
     : checks.some((entry) => entry.status === "warning")
       ? "warning"
       : "pass";
+
   return decodeReport({
     version: 1,
     generatedAt: (input.now ?? new Date()).toISOString(),

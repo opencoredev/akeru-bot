@@ -35,19 +35,23 @@ export const remoteDoctorCommand = Command.make(
     Effect.gen(function* () {
       const baseDir = yield* resolveBaseDir(remoteDoctorHome(flags.baseDir, process.env));
       const platform = yield* HostProcessPlatform;
+
       const report = yield* Effect.promise(() =>
         runRemoteDoctor({ baseDir, repair: flags.repair, platform }),
       );
+
       if (Option.isSome(flags.supportBundle)) {
         const bundlePath = Option.getOrThrow(flags.supportBundle);
         const arch = yield* HostProcessArchitecture;
         yield* Effect.sync(() => writeRemoteSupportBundle(bundlePath, report, { platform, arch }));
       }
+
       const output = flags.json
         ? yield* Schema.encodeEffect(Schema.fromJsonString(RemoteDoctorReport))(report).pipe(
             Effect.orDie,
           )
         : renderRemoteDoctor(report);
+
       yield* Console.log(output);
     }),
 ).pipe(Command.withDescription("Run typed Akeru Remote diagnostics."));

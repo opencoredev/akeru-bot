@@ -20,6 +20,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))(
           VALUES (${threadId}, 'project-1', ${threadId}, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
         `;
         }
+
         yield* sql`
         INSERT INTO projection_delegations (delegation_id, record_json)
         VALUES (
@@ -42,6 +43,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))(
         FROM projection_threads
         ORDER BY thread_id
       `;
+
         assert.deepStrictEqual(rows, [
           {
             threadId: "thread-child",

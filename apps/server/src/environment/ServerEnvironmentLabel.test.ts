@@ -16,6 +16,7 @@ import * as ServerEnvironmentLabel from "./ServerEnvironmentLabel.ts";
 const isServerEnvironmentLabelFileError = Schema.is(
   ServerEnvironmentLabel.ServerEnvironmentLabelFileError,
 );
+
 const isServerEnvironmentLabelCommandError = Schema.is(
   ServerEnvironmentLabel.ServerEnvironmentLabelCommandError,
 );
@@ -33,8 +34,11 @@ const ProcessRunnerTest = Layer.succeed(
     run: (input) => runMock(input),
   }),
 );
+
 const NoopFileSystemLayer = FileSystem.layerNoop({});
+
 const TestLayer = Layer.merge(NoopFileSystemLayer, ProcessRunnerTest);
+
 const LinuxMachineInfoLayer = Layer.merge(
   ProcessRunnerTest,
   FileSystem.layerNoop({
@@ -45,6 +49,7 @@ const LinuxMachineInfoLayer = Layer.merge(
         : Effect.succeed(""),
   }),
 );
+
 const withHostPlatform = <ROut, E, RIn>(
   layer: Layer.Layer<ROut, E, RIn>,
   platform: NodeJS.Platform,
@@ -154,18 +159,22 @@ describe("resolveServerEnvironmentLabel", () => {
 
   it.effect("falls back to the hostname when the friendly-label command is missing", () => {
     const logs: CapturedLog[] = [];
+
     const logger = Logger.make(({ fiber, message }) => {
       logs.push({
         message,
         annotations: fiber.getRef(References.CurrentLogAnnotations),
       });
     });
+
     const spawnCause = new Error("spawn scutil ENOENT");
+
     const processError = new ProcessRunner.ProcessSpawnError({
       command: "scutil",
       argumentCount: 2,
       cause: spawnCause,
     });
+
     runMock.mockReturnValueOnce(Effect.fail(processError));
 
     return Effect.gen(function* () {
@@ -179,6 +188,7 @@ describe("resolveServerEnvironmentLabel", () => {
       ]);
       const error = logs[0]?.annotations.cause;
       expect(isServerEnvironmentLabelCommandError(error)).toBe(true);
+
       if (isServerEnvironmentLabelCommandError(error)) {
         expect(error.probe).toBe("macos-computer-name");
         expect(error.executable).toBe("scutil");
@@ -202,13 +212,16 @@ describe("resolveServerEnvironmentLabel", () => {
 
   it.effect("continues to hostnamectl after a machine-info inspect failure", () => {
     const logs: CapturedLog[] = [];
+
     const logger = Logger.make(({ fiber, message }) => {
       logs.push({
         message,
         annotations: fiber.getRef(References.CurrentLogAnnotations),
       });
     });
+
     const fileCause = new Error("permission denied");
+
     const platformError = PlatformError.systemError({
       _tag: "PermissionDenied",
       module: "FileSystem",
@@ -216,9 +229,11 @@ describe("resolveServerEnvironmentLabel", () => {
       pathOrDescriptor: "/etc/machine-info",
       cause: fileCause,
     });
+
     const fileSystemLayer = FileSystem.layerNoop({
       exists: () => Effect.fail(platformError),
     });
+
     runMock.mockReturnValueOnce(
       Effect.succeed({
         stdout: "CI Runner\n",
@@ -243,6 +258,7 @@ describe("resolveServerEnvironmentLabel", () => {
       ]);
       const error = logs[0]?.annotations.cause;
       expect(isServerEnvironmentLabelFileError(error)).toBe(true);
+
       if (isServerEnvironmentLabelFileError(error)) {
         expect(error.operation).toBe("inspect");
         expect(error.path).toBe("/etc/machine-info");

@@ -6,6 +6,7 @@ export const TextGenerationPolicyKind = Schema.Literals([
   "repo_conventions",
   "custom",
 ]);
+
 export type TextGenerationPolicyKind = typeof TextGenerationPolicyKind.Type;
 
 export const TextGenerationPolicy = Schema.Struct({
@@ -16,4 +17,5 @@ export const TextGenerationPolicy = Schema.Struct({
   threadTitleInstructions: Schema.optional(Schema.String),
   inferRepositoryConventions: Schema.Boolean,
 });
+
 export type TextGenerationPolicy = typeof TextGenerationPolicy.Type;

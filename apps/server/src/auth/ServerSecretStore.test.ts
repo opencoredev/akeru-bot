@@ -115,11 +115,14 @@ const ConcurrentReadMissFileSystemLayer = Layer.effect(
                 if (count > 2) {
                   return fileSystem.readFile(path);
                 }
+
                 return Effect.gen(function* () {
                   if (count === 2) {
                     yield* Deferred.succeed(readBarrier, void 0);
                   }
+
                   yield* Deferred.await(readBarrier);
+
                   return yield* Effect.failCause(
                     Cause.fail(
                       PlatformError.systemError({
@@ -178,6 +181,7 @@ it.layer(NodeServices.layer)("ServerSecretStore.layer", (it) => {
         ],
         { concurrency: "unbounded" },
       );
+
       const persisted = yield* secretStore.get("session-signing-key");
       const persistedBytes = Option.getOrThrow(persisted);
 
@@ -189,6 +193,7 @@ it.layer(NodeServices.layer)("ServerSecretStore.layer", (it) => {
   it.effect("uses restrictive permissions for the secret directory and files", () =>
     Effect.gen(function* () {
       const chmodCalls: Array<{ readonly path: string; readonly mode: number }> = [];
+
       const recordingFileSystemLayer = Layer.effect(
         FileSystem.FileSystem,
         Effect.gen(function* () {

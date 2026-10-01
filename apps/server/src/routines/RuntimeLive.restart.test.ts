@@ -16,7 +16,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-
 import { ServerConfig } from "../config.ts";
 import { OrchestrationEngineLive } from "../orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "../orchestration/Layers/ProjectionPipeline.ts";
@@ -42,13 +41,21 @@ import { RoutineRuntimeAdapterLive } from "./RuntimeAdapterLive.ts";
 import { RoutineRuntimeLive } from "./RuntimeLive.ts";
 
 const CREATED_AT = "2026-09-26T09:00:00.000Z";
+
 const STARTED_AT = "2026-09-26T13:00:05.000Z";
+
 const RESTARTED_AT = "2026-09-28T09:00:00.000Z";
+
 const OWNER_BOT_ID = BotId.make("bot-mira");
+
 const HELPER_BOT_ID = BotId.make("bot-ren");
+
 const PROJECT_ID = ProjectId.make("project-1");
+
 const TARGET_THREAD_ID = ThreadId.make("thread-routine");
+
 const ROUTINE_ID = RoutineId.make("routine-digest");
+
 const MODEL_SELECTION = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6" };
 
 const engineLayer = (dbPath: string) =>
@@ -84,6 +91,7 @@ const serverLayer = (dbPath: string) =>
 /** A scheduled run whose bot work was one of the given child chats when the server stopped. */
 const scheduledRun = (key: string, childThreadId: ThreadId, scheduledFor: string) => {
   const runId = RoutineRunId.make(`routine:${ROUTINE_ID}:${scheduledFor}`);
+
   const delegation: AkeruDelegationRecord = {
     delegationId: DelegationId.make(`delegation-${key}`),
     parentDelegationId: null,
@@ -115,6 +123,7 @@ const scheduledRun = (key: string, childThreadId: ThreadId, scheduledFor: string
     createdAt: STARTED_AT,
     updatedAt: STARTED_AT,
   };
+
   return { runId, childThreadId, scheduledFor, delegation };
 };
 
@@ -124,6 +133,7 @@ const ABSENT = scheduledRun(
   ThreadId.make("delegation-thread-absent"),
   "2026-09-25T13:00:00.000Z",
 );
+
 const READY = scheduledRun(
   "ready",
   ThreadId.make("delegation-thread-ready"),
@@ -155,6 +165,7 @@ const seed = Effect.gen(function* () {
       createdAt: CREATED_AT,
     });
   }
+
   yield* engine.dispatch({
     type: "project.create",
     commandId: commandId(),
@@ -164,6 +175,7 @@ const seed = Effect.gen(function* () {
     defaultModelSelection: null,
     createdAt: CREATED_AT,
   });
+
   const createThread = (
     threadId: ThreadId,
     botId: BotId,
@@ -185,6 +197,7 @@ const seed = Effect.gen(function* () {
       worktreePath: null,
       createdAt: CREATED_AT,
     });
+
   yield* createThread(TARGET_THREAD_ID, OWNER_BOT_ID, null);
 
   yield* engine.dispatch({
@@ -285,6 +298,7 @@ const seed = Effect.gen(function* () {
 const routineEventCount = Effect.gen(function* () {
   const engine = yield* OrchestrationEngineService;
   const events = yield* Stream.runCollect(engine.readEvents(0, 10_000));
+
   return Array.from(events).filter((event) => event.type.startsWith("routine.")).length;
 });
 
@@ -301,6 +315,7 @@ it.effect("settles scheduled runs whose bot work a restart failed, once", () =>
       yield* (yield* RoutineRuntime).recover;
       const readModel = yield* (yield* ProjectionSnapshotQuery).getCommandReadModel();
       const recoverable = yield* (yield* RoutineRepository).listRecoverable;
+
       return { readModel, recoverable };
     }).pipe(Effect.provide(serverLayer(dbPath)));
 
@@ -312,10 +327,13 @@ it.effect("settles scheduled runs whose bot work a restart failed, once", () =>
         message: ServerRuntimeStartup.DELEGATION_RESTART_FAILURE_MESSAGE,
       });
     }
+
     assert.deepStrictEqual(first.recoverable, []);
+
     const routine = (first.readModel.routines ?? []).find(
       (candidate) => candidate.id === ROUTINE_ID,
     );
+
     assert.notEqual(routine?.lifecycle, "running");
 
     // A second startup finds nothing left to settle.

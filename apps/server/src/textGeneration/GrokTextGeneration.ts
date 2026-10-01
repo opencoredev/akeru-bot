@@ -51,6 +51,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
     Effect.gen(function* () {
       const resolvedModel = resolveGrokAcpBaseModelId(modelSelection.model);
       const outputRef = yield* Ref.make("");
+
       const runtime = yield* makeGrokAcpRuntime({
         grokSettings,
         environment: secretsDir
@@ -63,13 +64,17 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
 
       yield* runtime.handleSessionUpdate((notification) => {
         const update = notification.update;
+
         if (update.sessionUpdate !== "agent_message_chunk") {
           return Effect.void;
         }
+
         const content = update.content;
+
         if (content.type !== "text") {
           return Effect.void;
         }
+
         return Ref.update(outputRef, (current) => current + content.text);
       });
 
@@ -113,6 +118,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       );
 
       const trimmed = (yield* Ref.get(outputRef)).trim();
+
       if (!trimmed) {
         return yield* new TextGenerationError({
           operation,
@@ -124,6 +130,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       }
 
       const decodeOutput = Schema.decodeEffect(Schema.fromJsonString(outputSchemaJson));
+
       return yield* decodeOutput(extractJsonObject(trimmed)).pipe(
         Effect.catchTags({
           SchemaError: (cause) =>

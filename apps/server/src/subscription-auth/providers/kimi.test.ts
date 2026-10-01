@@ -22,6 +22,7 @@ const pending: KimiDeviceLoginPending = {
 
 const pollWith = (response: Response) => {
   const { client } = scriptedHttpClient(() => response);
+
   return KimiOAuth.pollDeviceLogin(pending).pipe(
     Effect.provideService(HttpClient.HttpClient, client),
   );
@@ -55,9 +56,11 @@ describe("Kimi For Coding OAuth", () => {
           verification_uri_complete: "https://www.kimi.com/device?code=ABCD-EFGH",
         }),
       );
+
       const result = yield* KimiOAuth.startDeviceLogin().pipe(
         Effect.provideService(HttpClient.HttpClient, client),
       );
+
       expect(result).toMatchObject({
         deviceCode: "device-code",
         url: "https://www.kimi.com/device?code=ABCD-EFGH",
@@ -78,10 +81,12 @@ describe("Kimi For Coding OAuth", () => {
           verification_uri_complete: "http://www.kimi.com/device?code=ABCD-EFGH",
         }),
       );
+
       const error = yield* KimiOAuth.startDeviceLogin().pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.flip,
       );
+
       expect(error).toMatchObject({
         _tag: "SubscriptionAuthResponseError",
         message: "Invalid Kimi For Coding device authorization response",
@@ -135,10 +140,12 @@ describe("Kimi For Coding OAuth", () => {
       const { client, requests } = scriptedHttpClient((_, index) =>
         index < 2 ? new Response("busy", { status: 503 }) : Response.json(tokens),
       );
+
       const fiber = yield* KimiOAuth.refreshToken("refresh", DEVICE_ID).pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.forkChild,
       );
+
       yield* TestClock.adjust(0);
       expect(requests).toHaveLength(1);
       yield* TestClock.adjust("1 second");
@@ -156,11 +163,13 @@ describe("Kimi For Coding OAuth", () => {
   it.effect("gives up after three refresh retries", () =>
     Effect.gen(function* () {
       const { client, requests } = scriptedHttpClient(() => new Response("busy", { status: 503 }));
+
       const fiber = yield* KimiOAuth.refreshToken("refresh", DEVICE_ID).pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.flip,
         Effect.forkChild,
       );
+
       yield* TestClock.adjust("7 seconds");
       const error = yield* Fiber.join(fiber);
       expect(requests).toHaveLength(4);
@@ -176,10 +185,12 @@ describe("Kimi For Coding OAuth", () => {
       const { client, requests } = scriptedHttpClient(() =>
         Response.json({ error: "invalid_grant" }, { status: 400 }),
       );
+
       const error = yield* KimiOAuth.refreshToken("refresh", DEVICE_ID).pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.flip,
       );
+
       expect(requests).toHaveLength(1);
       expect(error.message).toBe("Kimi For Coding token refresh failed: 400 invalid_grant");
     }),
@@ -188,10 +199,12 @@ describe("Kimi For Coding OAuth", () => {
   it.effect("refuses to refresh without a device id", () =>
     Effect.gen(function* () {
       const { client, requests } = scriptedHttpClient(() => Response.json(tokens));
+
       const error = yield* KimiOAuth.refreshToken("refresh", undefined).pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.flip,
       );
+
       expect(requests).toHaveLength(0);
       expect(error._tag).toBe("SubscriptionAuthInputError");
     }),

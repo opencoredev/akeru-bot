@@ -55,18 +55,22 @@ export const channelCommandFailure = (
   cause: Cause.Cause<unknown>,
 ): Effect.Effect<ChannelFailurePresentation> => {
   const error = Cause.hasInterruptsOnly(cause) ? undefined : Cause.squash(cause);
+
   const presented =
     error === undefined
       ? { message: "Channel command was interrupted. Try again." }
       : channelFailurePresentation(error);
+
   // A provider error after a reply post began is ambiguous: the message may have been delivered.
   // A definite rejection, or a check that failed before posting, keeps its own category.
   const deliveryUnknown = channelFailureMessage("delivery-unknown");
+
   const failure: ChannelFailurePresentation =
     command.type === "channel.send" &&
     (isChannelTransportError(error) || presented.message === deliveryUnknown)
       ? { message: deliveryUnknown, category: "delivery-unknown" }
       : presented;
+
   return Effect.logWarning("channel command failed", {
     commandType: command.type,
     category: failure.category ?? "internal",

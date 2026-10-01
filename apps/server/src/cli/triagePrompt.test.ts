@@ -27,14 +27,17 @@ it("keeps the GitHub triage flow Akeru-only and labeled via-triage", () => {
     NodePath.join(repoRoot, ".github/ISSUE_TEMPLATE/via-triage.yml"),
     "utf8",
   );
+
   const bugTemplate = NodeFS.readFileSync(
     NodePath.join(repoRoot, ".github/ISSUE_TEMPLATE/bug_report.yml"),
     "utf8",
   );
+
   const issueLabelWorkflow = NodeFS.readFileSync(
     NodePath.join(repoRoot, ".github/workflows/issue-labels.yml"),
     "utf8",
   );
+
   const githubTriage = `${issueTemplate}\n${bugTemplate}`;
 
   assert.include(issueTemplate, "`npx akeru-bot triage`");
@@ -48,6 +51,7 @@ it("keeps the package identity and explicit approval gate", () => {
     NodePath.join(repoRoot, "apps/server/package.json"),
     "utf8",
   );
+
   const triageSource = NodeFS.readFileSync(
     NodePath.join(repoRoot, "apps/server/src/cli/triage.ts"),
     "utf8",
@@ -76,6 +80,7 @@ it("launch prompt stays a single argv-safe line naming the prompt file", () => {
   const launch = buildTriageLaunchPrompt(
     String.raw`C:\Users\a b\.akeru\userdata\triage\x\prompt.md`,
   );
+
   assert.notInclude(launch, "\n");
   assert.include(launch, String.raw`C:\Users\a b\.akeru\userdata\triage\x\prompt.md`);
   assert.isBelow(launch.length, 1_000);
@@ -104,6 +109,7 @@ it("context file carries every path the playbook depends on", () => {
       sourceCacheDir: "/home/u/.akeru/source",
     },
   });
+
   assert.include(context, "/home/u/.akeru/userdata/state.sqlite");
   assert.include(context, "/home/u/.akeru/userdata/logs/server.trace.ndjson");
   assert.include(context, "/home/u/.akeru/userdata/logs/provider/events.log");

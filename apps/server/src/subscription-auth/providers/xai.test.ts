@@ -19,6 +19,7 @@ const pending: XAIDeviceLoginPending = {
 
 const pollWith = (response: Response) => {
   const { client } = scriptedHttpClient(() => response);
+
   return XAIOAuth.pollDeviceLogin(pending).pipe(
     Effect.provideService(HttpClient.HttpClient, client),
   );
@@ -37,10 +38,13 @@ describe("xAI device login", () => {
           expires_in: 300,
         }),
       );
+
       yield* TestClock.adjust(1_000);
+
       const result = yield* XAIOAuth.startDeviceLogin().pipe(
         Effect.provideService(HttpClient.HttpClient, client),
       );
+
       expect(result).toEqual({
         deviceCode: "device-code",
         userCode: "ABCD-EFGH",
@@ -62,10 +66,12 @@ describe("xAI device login", () => {
           verification_uri: "http://accounts.x.ai/device",
         }),
       );
+
       const error = yield* XAIOAuth.startDeviceLogin().pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.flip,
       );
+
       expect(error._tag).toBe("SubscriptionAuthResponseError");
       expect(error.message).toContain("non-https verification_uri");
     }),
@@ -74,10 +80,12 @@ describe("xAI device login", () => {
   it.effect("reports the status when starting fails", () =>
     Effect.gen(function* () {
       const { client } = scriptedHttpClient(() => new Response("nope", { status: 401 }));
+
       const error = yield* XAIOAuth.startDeviceLogin().pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.flip,
       );
+
       expect(error).toMatchObject({
         _tag: "SubscriptionAuthRequestError",
         status: 401,
@@ -91,6 +99,7 @@ describe("xAI device login", () => {
       const result = yield* pollWith(
         Response.json({ error: "authorization_pending" }, { status: 400 }),
       );
+
       expect(result).toMatchObject({ status: "pending", nextPollMs: 6_000 });
     }),
   );
@@ -100,6 +109,7 @@ describe("xAI device login", () => {
       const result = yield* pollWith(
         Response.json({ error: "slow_down", interval: 15 }, { status: 400 }),
       );
+
       expect(result).toMatchObject({
         status: "pending",
         nextPollMs: 21_000,
@@ -130,6 +140,7 @@ describe("xAI device login", () => {
       const result = yield* pollWith(
         Response.json({ access_token: "access", refresh_token: "refresh", expires_in: 3600 }),
       );
+
       expect(result).toEqual({
         status: "complete",
         credentials: { access: "access", refresh: "refresh", expires: 3_300_000 },
@@ -140,11 +151,13 @@ describe("xAI device login", () => {
   it.effect("times out a stalled poll", () =>
     Effect.gen(function* () {
       const { client } = scriptedHttpClient(() => Effect.never);
+
       const fiber = yield* XAIOAuth.pollDeviceLogin(pending).pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.flip,
         Effect.forkChild,
       );
+
       yield* TestClock.adjust("30 seconds");
       const error = yield* Fiber.join(fiber);
       expect(error.message).toBe("xAI device token poll timed out after 30s");
@@ -154,9 +167,11 @@ describe("xAI device login", () => {
   it.effect("keeps the previous refresh token when refresh omits one", () =>
     Effect.gen(function* () {
       const { client } = scriptedHttpClient(() => Response.json({ access_token: "next" }));
+
       const result = yield* XAIOAuth.refreshToken("previous").pipe(
         Effect.provideService(HttpClient.HttpClient, client),
       );
+
       expect(result).toEqual({ access: "next", refresh: "previous", expires: 3_300_000 });
     }),
   );

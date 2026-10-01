@@ -21,6 +21,7 @@ describe("device code polling", () => {
       expiresInSeconds: 600,
       now: NOW,
     });
+
     expect(state).toEqual({
       deadlineAt: NOW + 600_000,
       intervalMs: 5_000,
@@ -32,13 +33,16 @@ describe("device code polling", () => {
   it.effect("grows the interval after slow_down", () =>
     Effect.gen(function* () {
       const state = createDeviceCodePollState({ expiresInSeconds: 600, now: 0 });
+
       const result = yield* stepDeviceCodePoll(
         state,
         Effect.succeed<DeviceCodePollOutcome<string>>({ status: "slow_down" }),
       );
+
       expect(result.status).toBe("slow_down");
       expect(result.state.slowDownResponses).toBe(1);
       expect(result.state.intervalMs).toBe(10_000);
+
       if (result.status === "slow_down") expect(result.nextPollMs).toBe(14_000);
     }),
   );
@@ -46,6 +50,7 @@ describe("device code polling", () => {
   it.effect("uses the interval a slow_down response sends", () =>
     Effect.gen(function* () {
       const state = createDeviceCodePollState({ expiresInSeconds: 600, now: 0 });
+
       const result = yield* stepDeviceCodePoll(
         state,
         Effect.succeed<DeviceCodePollOutcome<string>>({
@@ -53,6 +58,7 @@ describe("device code polling", () => {
           intervalSeconds: 20,
         }),
       );
+
       expect(result.state.intervalMs).toBe(20_000);
     }),
   );
@@ -60,10 +66,12 @@ describe("device code polling", () => {
   it.effect("returns completion without changing the state", () =>
     Effect.gen(function* () {
       const state = createDeviceCodePollState({ expiresInSeconds: 600, now: 0 });
+
       const result = yield* stepDeviceCodePoll(
         state,
         Effect.succeed<DeviceCodePollOutcome<string>>({ status: "complete", result: "token" }),
       );
+
       expect(result).toEqual({ status: "complete", result: "token", state });
     }),
   );
@@ -73,13 +81,16 @@ describe("device code polling", () => {
       const state = createDeviceCodePollState({ expiresInSeconds: 1, now: 0 });
       yield* TestClock.adjust(1_001);
       let polled = false;
+
       const result = yield* stepDeviceCodePoll(
         state,
         Effect.sync((): DeviceCodePollOutcome<string> => {
           polled = true;
+
           return { status: "pending" };
         }),
       );
+
       expect(polled).toBe(false);
       expect(result).toMatchObject({ status: "failed", error: "Device flow timed out" });
     }),
@@ -92,15 +103,19 @@ describe("device code polling", () => {
         { status: "slow_down" },
         { status: "complete", result: "token" },
       ];
+
       const polledAt: Array<number> = [];
+
       const state = createDeviceCodePollState({
         intervalSeconds: 5,
         expiresInSeconds: 600,
         now: 0,
       });
+
       const fiber = yield* pollDeviceCodeUntilSettled(state, () =>
         Effect.sync(() => {
           polledAt.push(polledAt.length);
+
           return outcomes.shift()!;
         }),
       ).pipe(Effect.forkChild);
@@ -134,13 +149,17 @@ describe("device code polling", () => {
         expiresInSeconds: 10,
         now: 0,
       });
+
       let polls = 0;
+
       const fiber = yield* pollDeviceCodeUntilSettled(state, () =>
         Effect.sync((): DeviceCodePollOutcome<string> => {
           polls += 1;
+
           return { status: "pending" };
         }),
       ).pipe(Effect.forkChild);
+
       yield* TestClock.adjust(10_000);
       const result = yield* Fiber.join(fiber);
       expect(result).toMatchObject({ status: "failed", error: "Device flow timed out" });

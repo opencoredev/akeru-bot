@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { EnvironmentId, type ExecutionEnvironmentDescriptor } from "@akeru/contracts";
 import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Context from "effect/Context";
@@ -27,6 +28,7 @@ export class ServerEnvironmentIdPersistenceError extends Schema.TaggedErrorClass
     if (this.operation === "initialize") {
       return `Server environment ID file is missing or empty after initialization at '${this.environmentIdPath}'.`;
     }
+
     return `Server environment ID ${this.operation} failed at '${this.environmentIdPath}'.`;
   }
 }
@@ -88,6 +90,7 @@ const makeIdentity = Effect.gen(function* () {
           }),
       ),
     );
+
     if (!exists) {
       return null;
     }
@@ -113,19 +116,22 @@ const makeIdentity = Effect.gen(function* () {
         mode === "recover"
           ? `${serverConfig.environmentIdPath}.recovery`
           : serverConfig.environmentIdPath;
+
       const tempPath = yield* fileSystem.makeTempFileScoped({
         directory: serverConfig.stateDir,
         prefix: ".environment-id-",
       });
+
       yield* fileSystem.writeFileString(tempPath, `${value}\n`);
       // Publish the completed file without replacing an ID created by another process.
       yield* fileSystem
         .link(tempPath, destinationPath)
         .pipe(
           Effect.catch((cause) =>
-            cause.reason._tag === "AlreadyExists" ? Effect.void : Effect.fail(cause),
+            Predicate.isTagged(cause.reason, "AlreadyExists") ? Effect.void : Effect.fail(cause),
           ),
         );
+
       if (mode === "recover") {
         // Keep the recovery ID so delayed initializers also publish the same winner.
         yield* fileSystem.remove(tempPath);
@@ -146,6 +152,7 @@ const makeIdentity = Effect.gen(function* () {
 
   const environmentIdRaw = yield* Effect.gen(function* () {
     const persisted = yield* readPersistedEnvironmentId;
+
     if (persisted) {
       return persisted;
     }
@@ -153,20 +160,24 @@ const makeIdentity = Effect.gen(function* () {
     const generated = yield* crypto.randomUUIDv4;
     yield* persistEnvironmentId(generated, "create");
     let winner = yield* readPersistedEnvironmentId;
+
     if (winner === null) {
       yield* persistEnvironmentId(generated, "recover");
       winner = yield* readPersistedEnvironmentId;
     }
+
     if (winner === null) {
       return yield* new ServerEnvironmentIdPersistenceError({
         operation: "initialize",
         environmentIdPath: serverConfig.environmentIdPath,
       });
     }
+
     return winner;
   });
 
   const environmentId = EnvironmentId.make(environmentIdRaw);
+
   return ServerEnvironmentIdentity.of({
     getEnvironmentId: Effect.succeed(environmentId),
   });
@@ -182,6 +193,7 @@ export const make = Effect.gen(function* () {
   const cwdBaseName = path.basename(serverConfig.cwd).trim();
   const label = yield* resolveServerEnvironmentLabel({ cwdBaseName });
   const launcher = yield* resolveServiceLauncherMode();
+
   const serverSelfUpdate = resolveServerSelfUpdateCapability({
     desktopManaged: serverConfig.mode === "desktop",
     launcherManaged: launcher.managed,

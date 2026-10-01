@@ -18,6 +18,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("053_BotVoiceEnabled", 
         readonly notnull: number;
         readonly dflt_value: string | null;
       }>`PRAGMA table_info(projection_bots)`;
+
       const voice = columns.find((column) => column.name === "voice_enabled");
       assert.equal(voice?.notnull, 1);
       assert.equal(voice?.dflt_value, "0");

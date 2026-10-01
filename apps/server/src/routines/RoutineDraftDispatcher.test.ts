@@ -33,7 +33,9 @@ import {
 } from "./RoutineDraftDispatcher.ts";
 
 const botId = BotId.make("bot-1");
+
 const otherBotId = BotId.make("bot-2");
+
 const now = IsoDateTime.make("2026-09-01T09:00:00.000Z");
 
 function bot(id: BotId): OrchestrationBot {
@@ -118,6 +120,7 @@ function deleteHarness(input: {
   readonly respondingBotId?: BotId | null;
 }) {
   const commands: Array<OrchestrationCommand> = [];
+
   const thread: OrchestrationThread = {
     id: ThreadId.make("thread-1"),
     projectId: ProjectId.make("project-1"),
@@ -146,6 +149,7 @@ function deleteHarness(input: {
     checkpoints: [],
     session: null,
   };
+
   const snapshot: OrchestrationShellSnapshot = {
     snapshotSequence: 1,
     projects: [],
@@ -156,6 +160,7 @@ function deleteHarness(input: {
     threads: [],
     updatedAt: now,
   };
+
   const query: ProjectionSnapshotQueryShape = {
     getCommandReadModel: () => Effect.die("unused"),
     getSnapshot: () => Effect.die("unused"),
@@ -177,6 +182,7 @@ function deleteHarness(input: {
     getTurnStartMessage: () => Effect.die("unused"),
     getThreadDetailSnapshot: () => Effect.die("unused"),
   };
+
   const layer = RoutineDraftDispatcherLive.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -185,6 +191,7 @@ function deleteHarness(input: {
           dispatch: (command) =>
             Effect.sync(() => {
               commands.push(command);
+
               return { sequence: commands.length };
             }),
           readEvents: () => Stream.empty,
@@ -198,6 +205,7 @@ function deleteHarness(input: {
     ),
     Layer.provideMerge(NodeServices.layer),
   );
+
   return { commands, layer };
 }
 
@@ -209,6 +217,7 @@ describe("RoutineDraftDispatcher.deleteForThread", () => {
 
     return Effect.gen(function* () {
       const dispatcher = yield* RoutineDraftDispatcher;
+
       const error = yield* dispatcher
         .deleteForThread(ThreadId.make("thread-1"), [
           RoutineId.make("owned"),
@@ -233,6 +242,7 @@ describe("RoutineDraftDispatcher.deleteForThread", () => {
 
     return Effect.gen(function* () {
       const dispatcher = yield* RoutineDraftDispatcher;
+
       const result = yield* dispatcher.deleteForThread(ThreadId.make("thread-1"), [
         RoutineId.make("first"),
         RoutineId.make("second"),

@@ -11,6 +11,7 @@ import * as ServerPreviewBrowser from "./ServerPreviewBrowser.ts";
 
 const playwright = vi.hoisted(() => {
   const browsers: Array<{ readonly close: ReturnType<typeof vi.fn> }> = [];
+
   const fakePage = () => ({
     url: () => "about:blank",
     title: async () => "",
@@ -18,23 +19,29 @@ const playwright = vi.hoisted(() => {
     screenshot: async () => Buffer.from("png"),
     close: vi.fn(async () => undefined),
   });
+
   const connectOverCDP = vi.fn(async () => {
     const browser = {
       contexts: () => [{ newPage: async () => fakePage() }],
       close: vi.fn(async () => undefined),
     };
+
     browsers.push(browser);
+
     return browser;
   });
+
   return { browsers, connectOverCDP };
 });
 
 vi.mock("playwright-core", () => ({ chromium: { connectOverCDP: playwright.connectOverCDP } }));
 
 let sessions = 0;
+
 const browserbase = HttpClient.make((request) =>
   Effect.sync(() => {
     sessions += 1;
+
     return HttpClientResponse.fromWeb(
       request,
       Response.json({ id: `session-${sessions}`, connectUrl: `wss://browserbase/${sessions}` }),
@@ -89,6 +96,7 @@ it.layer(testLayer)("ServerPreviewBrowser", (it) => {
       const opening = browser.handle(openRequest("thread-race", "open-race"));
       yield* Effect.promise(() => browser.close());
       yield* Effect.promise(() => expect(opening).rejects.toThrow("browser was closed"));
+
       // No Browserbase session outlives the close.
       for (const opened of playwright.browsers) expect(opened.close).toHaveBeenCalledOnce();
     }),

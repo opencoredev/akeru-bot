@@ -44,22 +44,26 @@ export const ProjectionThreadMessage = Schema.Struct({
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
+
 export type ProjectionThreadMessage = typeof ProjectionThreadMessage.Type;
 
 export const AppendStreamingProjectionThreadMessage = Schema.Struct(
   Struct.omit(ProjectionThreadMessage.fields, ["isStreaming", "reactions"]),
 );
+
 export type AppendStreamingProjectionThreadMessage =
   typeof AppendStreamingProjectionThreadMessage.Type;
 
 export const ListProjectionThreadMessagesInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type ListProjectionThreadMessagesInput = typeof ListProjectionThreadMessagesInput.Type;
 
 export const GetProjectionThreadMessageInput = Schema.Struct({
   messageId: MessageId,
 });
+
 export type GetProjectionThreadMessageInput = typeof GetProjectionThreadMessageInput.Type;
 
 export const HasProjectionThreadAssistantMessageInput = Schema.Struct({
@@ -67,12 +71,14 @@ export const HasProjectionThreadAssistantMessageInput = Schema.Struct({
   turnId: TurnId,
   streamingOnly: Schema.Boolean,
 });
+
 export type HasProjectionThreadAssistantMessageInput =
   typeof HasProjectionThreadAssistantMessageInput.Type;
 
 export const DeleteProjectionThreadMessagesInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type DeleteProjectionThreadMessagesInput = typeof DeleteProjectionThreadMessagesInput.Type;
 
 /**

@@ -13,7 +13,6 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
-
 import * as ProcessRunner from "../processRunner.ts";
 import * as BootService from "./bootService.ts";
 import { pinnedRuntimePaths } from "./pinnedRuntime.ts";
@@ -56,8 +55,10 @@ const macPlan = {
   logPath: "/Users/theo/.t3/userdata/logs/boot-service.log",
   unitPath: "/Users/theo/Library/LaunchAgents/dev.leodoes.akeru.service.plist",
 };
+
 const macInstallerPath =
   "/opt/homebrew/bin:/Users/theo/.npm-global/bin:/Users/theo/.nvm/versions/node/v22.16.0/bin:/usr/bin:/bin";
+
 const macRenderOptions = { homeDir: "/Users/theo", environmentPath: macInstallerPath };
 
 it("keeps launchd pinned to the stable launcher rather than a versioned server", () => {
@@ -128,12 +129,14 @@ const makeHarness = Effect.fn("test.make_boot_service_harness")(function* (
   const commands: string[] = [];
   const timeouts = new Map<string, unknown>();
   const control: { failCommand: string | undefined } = { failCommand: undefined };
+
   const runner = ProcessRunner.ProcessRunner.of({
     run: (input) =>
       Effect.sync(() => {
         const command = `${input.command} ${input.args.join(" ")}`;
         commands.push(command);
         timeouts.set(command, input.timeout);
+
         return {
           stdout: input.args[1] === "--version" ? "t3 v1.2.3\n" : "",
           stderr: "",
@@ -146,6 +149,7 @@ const makeHarness = Effect.fn("test.make_boot_service_harness")(function* (
         };
       }),
   });
+
   const makeService = (environmentPath = installerPath) =>
     BootService.make({
       baseDir,
@@ -171,7 +175,9 @@ const makeHarness = Effect.fn("test.make_boot_service_harness")(function* (
         ),
       ),
     );
+
   const service = yield* makeService();
+
   return { service, makeService, fs, statePath, commands, timeouts, control, home, baseDir };
 });
 
@@ -187,6 +193,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       });
       expect(yield* fs.readFileString(plan.launcherPath)).toBe("export {};\n");
       expect((yield* service.status).current).toBe(true);
+
       // @effect-diagnostics-next-line preferSchemaOverJson:off - fixed launcher-owned test document.
       const pendingState = JSON.stringify({
         protocol: SERVICE_LAUNCHER_PROTOCOL,
@@ -199,6 +206,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
           status: "pending",
         },
       });
+
       yield* fs.writeFileString(statePath, pendingState);
       expect((yield* service.status).current).toBe(false);
       expect(yield* service.uninstall).toBe(true);
@@ -244,6 +252,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
     Effect.gen(function* () {
       const { service, fs, statePath, commands } = yield* makeHarness();
       yield* service.install;
+
       // @effect-diagnostics-next-line preferSchemaOverJson:off - fixed launcher-owned test document.
       const pendingState = JSON.stringify({
         protocol: SERVICE_LAUNCHER_PROTOCOL - 1,
@@ -255,6 +264,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
           status: "pending",
         },
       });
+
       yield* fs.writeFileString(statePath, pendingState);
       commands.length = 0;
 
@@ -364,6 +374,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
         false,
         "/opt/homebrew/bin:/Users/theo/\u0001invalid:/usr/bin",
       );
+
       const plan = yield* service.install;
       const plist = yield* fs.readFileString(plan.unitPath);
 
@@ -391,6 +402,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       const { service, fs, statePath, commands } = yield* makeHarness("darwin");
       yield* service.install;
       const plistPath = (yield* service.status).unitPath;
+
       // @effect-diagnostics-next-line preferSchemaOverJson:off - fixed launcher-owned test document.
       const pendingState = JSON.stringify({
         protocol: SERVICE_LAUNCHER_PROTOCOL - 1,
@@ -402,6 +414,7 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
           status: "pending",
         },
       });
+
       yield* fs.writeFileString(statePath, pendingState);
       commands.length = 0;
 

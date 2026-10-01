@@ -4,7 +4,6 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Metric from "effect/Metric";
 import { dual } from "effect/Function";
-
 import {
   compactMetricAttributes,
   normalizeModelMetricLabel,
@@ -66,14 +65,6 @@ export const gitCommandDuration = Metric.timer("t3_git_command_duration", {
   description: "Git command execution duration.",
 });
 
-export const terminalSessionsTotal = Metric.counter("t3_terminal_sessions_total", {
-  description: "Total terminal sessions started.",
-});
-
-export const terminalRestartsTotal = Metric.counter("t3_terminal_restarts_total", {
-  description: "Total terminal restart requests handled.",
-});
-
 export const metricAttributes = (
   attributes: Readonly<Record<string, unknown>>,
 ): ReadonlyArray<[string, string]> => Object.entries(compactMetricAttributes(attributes));
@@ -105,6 +96,7 @@ const withMetricsImpl = <A, E, R>(
     const endedAt = yield* Clock.currentTimeNanos;
     const elapsedNanos = endedAt > startedAt ? endedAt - startedAt : 0n;
     const duration = Duration.nanos(elapsedNanos);
+
     const baseAttributes =
       typeof options.attributes === "function" ? options.attributes() : (options.attributes ?? {});
 
@@ -133,6 +125,7 @@ const withMetricsImpl = <A, E, R>(
     if (Exit.isSuccess(exit)) {
       return exit.value;
     }
+
     return yield* Effect.failCause(exit.cause);
   });
 
@@ -158,6 +151,7 @@ export const providerTurnMetricAttributes = (input: {
   readonly extra?: Readonly<Record<string, unknown>>;
 }) => {
   const modelFamily = normalizeModelMetricLabel(input.model);
+
   return compactMetricAttributes({
     provider: input.provider,
     ...(modelFamily ? { modelFamily } : {}),

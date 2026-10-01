@@ -104,7 +104,9 @@ const SkillAssignmentRow = Schema.Struct({
 });
 
 const decodeRoutine = Schema.decodeUnknownSync(RoutineRow);
+
 const decodeRun = Schema.decodeUnknownSync(RoutineRunRow);
+
 const decodeSkillAssignment = Schema.decodeUnknownSync(SkillAssignmentRow);
 
 const make = Effect.gen(function* () {
@@ -145,6 +147,7 @@ const make = Effect.gen(function* () {
     Effect.map((rows) =>
       rows.map((row) => {
         const decoded = decodeRoutine(row);
+
         return { ...decoded, enabled: decoded.enabled === 1 } as Routine;
       }),
     ),
@@ -160,6 +163,7 @@ const make = Effect.gen(function* () {
       Effect.map((rows) => {
         if (rows[0] === undefined) return null;
         const decoded = decodeRoutine(rows[0]);
+
         return { ...decoded, enabled: decoded.enabled === 1 } as Routine;
       }),
       Effect.mapError(toPersistenceSqlError("RoutineRepository.getById")),
@@ -202,6 +206,7 @@ const make = Effect.gen(function* () {
     `.pipe(
       Effect.map((rows) => {
         const runs = rows.slice(0, 100).map((row) => decodeRun(row) as RoutineRun);
+
         return { runs, nextCursor: rows.length > 100 ? (runs[99]?.id ?? null) : null };
       }),
       Effect.mapError(toPersistenceSqlError("RoutineRepository.listThreadRuns")),

@@ -13,6 +13,7 @@ function makeSecretStore(initial: Readonly<Record<string, string>> = {}) {
   const values = new Map(
     Object.entries(initial).map(([name, value]) => [name, new TextEncoder().encode(value)]),
   );
+
   const store = {
     get: (name: string) => Effect.sync(() => Option.fromNullishOr(values.get(name))),
     set: (name: string, value: Uint8Array) =>
@@ -22,13 +23,16 @@ function makeSecretStore(initial: Readonly<Record<string, string>> = {}) {
     getOrCreateRandom: (name: string, bytes: number) =>
       Effect.sync(() => {
         const existing = values.get(name);
+
         if (existing) return existing;
         const value = new Uint8Array(bytes).fill(7);
         values.set(name, value);
+
         return value;
       }),
     remove: (name: string) => Effect.sync(() => void values.delete(name)),
   } satisfies ServerSecretStore["Service"];
+
   return { store, values };
 }
 
@@ -48,11 +52,13 @@ function fakeClient(input?: {
   readonly sessionCreationGates?: readonly Promise<void>[];
 }) {
   const sessionDeletes: Array<ReturnType<typeof vi.fn<() => Promise<void>>>> = [];
+
   const createSession = vi.fn(async () => {
     await (input?.sessionCreationGates?.[createSession.mock.calls.length - 1] ??
       input?.sessionCreationGate);
     const deleteSession = vi.fn(input?.deleteSession ?? (async () => undefined));
     sessionDeletes.push(deleteSession);
+
     return {
       mcp: {
         url: "https://app.composio.dev/tool_router/v3/session/mcp",
@@ -68,6 +74,7 @@ function fakeClient(input?: {
       delete: deleteSession,
     };
   });
+
   const client = {
     toolkits: { get: vi.fn(async () => []) },
     connectedAccounts: {
@@ -76,6 +83,7 @@ function fakeClient(input?: {
     },
     sessions: { create: createSession },
   } as unknown as InstanceType<typeof Composio>;
+
   return { client, createSession, sessionDeletes };
 }
 
@@ -126,9 +134,11 @@ describe("ComposioService", () => {
   it.effect("deletes its hosted session when authorization fails", () =>
     Effect.gen(function* () {
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, sessionDeletes } = fakeClient({
         authorize: () => Promise.reject(new Error("authorization failed")),
       });
+
       const service = make(store, () => client);
 
       expect(yield* Effect.flip(service.authorize({ toolkitSlug: "gmail" }))).toMatchObject({
@@ -142,9 +152,11 @@ describe("ComposioService", () => {
   it.effect("deletes its hosted session when the authorization URL is missing", () =>
     Effect.gen(function* () {
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, sessionDeletes } = fakeClient({
         authorize: async () => ({ id: "connection-new" }),
       });
+
       const service = make(store, () => client);
 
       expect(yield* Effect.flip(service.authorize({ toolkitSlug: "gmail" }))).toMatchObject({
@@ -159,15 +171,19 @@ describe("ComposioService", () => {
     Effect.gen(function* () {
       let cleanupAttempt = 0;
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, createSession, sessionDeletes } = fakeClient({
         deleteSession: async () => {
           cleanupAttempt += 1;
+
           if (cleanupAttempt === 1) throw new Error("cleanup response was lost");
+
           if (cleanupAttempt === 2) {
             throw Object.assign(new Error("session not found"), { status: 404 });
           }
         },
       });
+
       const service = make(store, () => client);
 
       expect(yield* Effect.flip(service.authorize({ toolkitSlug: "gmail" }))).toMatchObject({
@@ -189,6 +205,7 @@ describe("ComposioService", () => {
   it.effect("keeps multiple accounts and MCP headers in transient runtime state", () =>
     Effect.gen(function* () {
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, createSession } = fakeClient({
         accounts: [
           { id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE", alias: "Work" },
@@ -196,6 +213,7 @@ describe("ComposioService", () => {
           { id: "slack-failed", toolkit: { slug: "slack" }, status: "FAILED" },
         ],
       });
+
       const service = make(store, () => client);
 
       const status = yield* service.getStatus;
@@ -237,6 +255,7 @@ describe("ComposioService", () => {
   it.effect("reuses a hosted runtime when account and toolkit order changes", () =>
     Effect.gen(function* () {
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, createSession, sessionDeletes } = fakeClient({
         accounts: [
           { id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" },
@@ -244,6 +263,7 @@ describe("ComposioService", () => {
           { id: "gmail-home", toolkit: { slug: "gmail" }, status: "ACTIVE" },
         ],
       });
+
       const service = make(store, () => client);
 
       const first = yield* service.resolveRuntimeMcpServer("thread-1");
@@ -266,12 +286,14 @@ describe("ComposioService", () => {
   it.effect("replaces a hosted runtime when active account status changes", () =>
     Effect.gen(function* () {
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, createSession, sessionDeletes } = fakeClient({
         accounts: [
           { id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" },
           { id: "gmail-home", toolkit: { slug: "gmail" }, status: "ACTIVE" },
         ],
       });
+
       const service = make(store, () => client);
 
       yield* service.resolveRuntimeMcpServer("thread-1");
@@ -293,9 +315,11 @@ describe("ComposioService", () => {
   it.effect("deletes a hosted session before replacing its cached runtime", () =>
     Effect.gen(function* () {
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, createSession, sessionDeletes } = fakeClient({
         accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
       });
+
       const service = make(store, () => client);
 
       yield* service.resolveRuntimeMcpServer("thread-1");
@@ -314,9 +338,11 @@ describe("ComposioService", () => {
   it.effect("keeps failed hosted-session cleanup retryable", () =>
     Effect.gen(function* () {
       const { store, values } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, sessionDeletes } = fakeClient({
         accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
       });
+
       const service = make(store, () => client);
 
       yield* service.resolveRuntimeMcpServer("thread-1");
@@ -338,9 +364,11 @@ describe("ComposioService", () => {
   it.effect("deletes the oldest hosted session before LRU eviction", () =>
     Effect.gen(function* () {
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, createSession, sessionDeletes } = fakeClient({
         accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
       });
+
       const service = make(store, () => client);
 
       for (let index = 0; index <= 100; index += 1) {
@@ -356,14 +384,18 @@ describe("ComposioService", () => {
   it.effect("deletes a runtime session created while an account is disconnected", () =>
     Effect.gen(function* () {
       let releaseSessionCreation!: () => void;
+
       const sessionCreationGate = new Promise<void>((resolve) => {
         releaseSessionCreation = resolve;
       });
+
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, createSession, sessionDeletes } = fakeClient({
         accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
         sessionCreationGate,
       });
+
       const service = make(store, () => client);
 
       const resolving = yield* Effect.forkChild(service.resolveRuntimeMcpServer("thread-1"));
@@ -379,14 +411,18 @@ describe("ComposioService", () => {
   it.effect("shares concurrent runtime resolution for the same resource", () =>
     Effect.gen(function* () {
       let releaseSessionCreation!: () => void;
+
       const sessionCreationGate = new Promise<void>((resolve) => {
         releaseSessionCreation = resolve;
       });
+
       const { store } = makeSecretStore({ "composio-api-key": "project-key" });
+
       const { client, createSession, sessionDeletes } = fakeClient({
         accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
         sessionCreationGate,
       });
+
       const createClient = vi.fn(() => client);
       const service = make(store, createClient);
 
@@ -406,14 +442,18 @@ describe("ComposioService", () => {
   it.effect("starts a new runtime resolution after configuration changes", () =>
     Effect.gen(function* () {
       let releaseOldSessionCreation!: () => void;
+
       const oldSessionCreationGate = new Promise<void>((resolve) => {
         releaseOldSessionCreation = resolve;
       });
+
       const { store } = makeSecretStore({ "composio-api-key": "old-key" });
+
       const { client, createSession, sessionDeletes } = fakeClient({
         accounts: [{ id: "gmail-work", toolkit: { slug: "gmail" }, status: "ACTIVE" }],
         sessionCreationGates: [oldSessionCreationGate, Promise.resolve()],
       });
+
       const service = make(store, () => client);
 
       const oldResolution = yield* Effect.forkChild(service.resolveRuntimeMcpServer("thread-1"));

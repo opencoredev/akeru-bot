@@ -141,6 +141,7 @@ const makeProjectionThreadProposedPlanRepository = Effect.gen(function* () {
     function* (input: HasActionableProjectionThreadProposedPlanInput) {
       const candidates = yield* listPlanStatusCandidates(input);
       let selected: (typeof candidates)[number] | undefined;
+
       // Timestamps and IDs use localeCompare, not SQLite byte order. Replace
       // equal candidates to preserve the stable order of listByThreadId.
       for (const candidate of candidates) {
@@ -152,6 +153,7 @@ const makeProjectionThreadProposedPlanRepository = Effect.gen(function* () {
           selected = candidate;
         }
       }
+
       return selected?.implementedAt === null;
     },
     Effect.mapError(

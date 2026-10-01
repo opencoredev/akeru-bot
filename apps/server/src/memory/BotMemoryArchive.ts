@@ -15,6 +15,7 @@ import { makeBotMemoryError, type BotMemoryAccess, type BotMemoryStore } from ".
 import { encodeMemoryArchiveJson } from "./MemoryArchiveJson.ts";
 
 const checksum = (value: string) => NodeCrypto.createHash("sha256").update(value).digest("hex");
+
 const decodeArchive = Schema.decodeUnknownSync(AkeruMarkdownMemoryArchiveV3);
 
 const documentPath = (access: BotMemoryAccess, target: AkeruMemoryDocumentTarget): string =>
@@ -49,6 +50,7 @@ export async function exportBotMemoryArchive(input: {
   readonly createdAt: string;
 }): Promise<AkeruMarkdownMemoryArchiveV3Value> {
   const snapshot = await input.store.readSnapshot(input.access);
+
   const documents = [
     snapshot.user,
     snapshot.memory,
@@ -61,10 +63,12 @@ export async function exportBotMemoryArchive(input: {
     content: document.content,
     sha256: checksum(document.content),
   }));
+
   const conversation = {
     snapshot: input.conversation,
     sha256: checksum(encodeMemoryArchiveJson(input.conversation)),
   };
+
   const withoutManifest = {
     schemaVersion: 3 as const,
     anchorThreadId: input.threadId,
@@ -74,6 +78,7 @@ export async function exportBotMemoryArchive(input: {
     documents,
     conversation,
   };
+
   return decodeArchive({
     ...withoutManifest,
     manifestSha256: checksum(manifestValue(withoutManifest)),
@@ -90,23 +95,28 @@ async function prepareImport(input: {
   readonly privateBotMemory?: boolean;
 }) {
   const { archive, access } = input;
+
   if (archive.anchorThreadId !== input.threadId) {
     throw makeBotMemoryError("access-denied", "Restore this memory archive in its original chat.");
   }
+
   if (String(archive.botId) !== String(access.botId)) {
     throw makeBotMemoryError("access-denied", "The archive belongs to a different bot.");
   }
+
   if (String(archive.groupId) !== String(access.groupId)) {
     throw makeBotMemoryError(
       "access-denied",
       "The archive group does not match the active conversation group.",
     );
   }
+
   if (
     checksum(encodeMemoryArchiveJson(archive.conversation.snapshot)) !== archive.conversation.sha256
   ) {
     throw makeBotMemoryError("io-error", "The observational-memory checksum is invalid.");
   }
+
   if (checksum(manifestValue(archive)) !== archive.manifestSha256) {
     throw makeBotMemoryError("io-error", "The memory archive manifest checksum is invalid.");
   }
@@ -116,17 +126,21 @@ async function prepareImport(input: {
     "memory",
     ...(access.groupId === null ? [] : (["group"] as const)),
   ]);
+
   if (archive.documents.length !== expectedTargets.size) {
     throw makeBotMemoryError("invalid-operation", "The memory archive has missing or extra files.");
   }
+
   const seen = new Set<AkeruMemoryDocumentTarget>();
   const current = await input.store.readSnapshot(access);
+
   const currentByTarget = new Map(
     [current.user, current.memory, ...(current.group ? [current.group] : [])].map((document) => [
       document.target,
       document,
     ]),
   );
+
   const prepared = archive.documents.map((document) => {
     if (!expectedTargets.has(document.target) || seen.has(document.target)) {
       throw makeBotMemoryError(
@@ -134,8 +148,10 @@ async function prepareImport(input: {
         "The memory archive contains an invalid file set.",
       );
     }
+
     seen.add(document.target);
     const expectedGroupId = document.target === "group" ? access.groupId : null;
+
     if (
       String(document.botId) !== String(access.botId) ||
       String(document.groupId) !== String(expectedGroupId) ||
@@ -144,12 +160,15 @@ async function prepareImport(input: {
     ) {
       throw makeBotMemoryError("io-error", `The ${document.target} memory file failed validation.`);
     }
+
     const validated = input.store.validateDocumentReplacement(
       access,
       document.target,
       document.content,
     );
+
     const existing = currentByTarget.get(document.target)!;
+
     return {
       target: document.target,
       content: validated.normalized,
@@ -163,6 +182,7 @@ async function prepareImport(input: {
             : ("changed" as const),
     };
   });
+
   if (
     input.privateBotMemory === false &&
     prepared.some(
@@ -174,15 +194,18 @@ async function prepareImport(input: {
       "Private bot memory is turned off. Turn it on to restore MEMORY.md from this archive.",
     );
   }
+
   const currentStateChecksum = checksum(
     encodeMemoryArchiveJson({
       documents: [...currentByTarget.values()].map(({ target, content }) => ({ target, content })),
       conversation: input.currentConversation,
     }),
   );
+
   const observationsChanged =
     encodeMemoryArchiveJson(input.currentConversation) !==
     encodeMemoryArchiveJson(archive.conversation.snapshot);
+
   return {
     prepared,
     observationsChanged,
@@ -199,6 +222,7 @@ export async function previewBotMemoryImport(input: {
   readonly privateBotMemory?: boolean;
 }): Promise<AkeruMarkdownMemoryImportPreview> {
   const prepared = await prepareImport(input);
+
   return {
     previewHash: prepared.previewHash,
     documents: prepared.prepared.map(({ content: _content, ...document }) => document),
@@ -222,24 +246,29 @@ export async function applyBotMemoryImport(input: {
 }): Promise<AkeruMarkdownMemoryImportApplyResult> {
   return input.store.withDocumentTransaction(input.access, async (replace) => {
     const prepared = await prepareImport(input);
+
     if (prepared.previewHash !== input.previewHash) {
       throw makeBotMemoryError(
         "invalid-operation",
         "Memory changed after the import preview. Preview the archive again.",
       );
     }
+
     let changedDocuments = 0;
+
     for (const document of prepared.prepared) {
       if (document.classification === "unchanged") continue;
       await replace(document.target, document.content);
       changedDocuments += 1;
     }
+
     if (prepared.observationsChanged) {
       await input.restoreConversation(
         input.archive.conversation.snapshot,
         input.currentConversation,
       );
     }
+
     return { changedDocuments, restoredObservations: prepared.observationsChanged };
   });
 }

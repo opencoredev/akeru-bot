@@ -22,6 +22,7 @@ import * as UsageService from "./UsageService.ts";
 
 vi.mock("../subscription-auth/service.ts", async () => {
   const Effect = await import("effect/Effect");
+
   return {
     SubscriptionAuthService: {
       forSecretsDir: () =>
@@ -33,16 +34,21 @@ vi.mock("../subscription-auth/service.ts", async () => {
     },
   };
 });
+
 const planLimits = vi.hoisted(() => ({ readerCreations: 0, reads: 0 }));
+
 vi.mock("./usagePlanLimits.ts", async () => {
   const Effect = await import("effect/Effect");
+
   return {
     makePlanLimitsReader: () =>
       Effect.sync(() => {
         planLimits.readerCreations += 1;
+
         return () =>
           Effect.sync(() => {
             planLimits.reads += 1;
+
             return [];
           });
       }),
@@ -54,6 +60,7 @@ afterEach(() => vi.restoreAllMocks());
 const rateDocument = {
   "test-model": { input_cost_per_token: 0.001, output_cost_per_token: 0.002 },
 };
+
 const pricedStep = {
   model: "test-model",
   totals: {
@@ -69,16 +76,21 @@ const pricedStep = {
 const makeFixture = Effect.fnUntraced(function* (response: Effect.Effect<Response>) {
   const fs = yield* FileSystem.FileSystem;
   const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-usage-test-" });
+
   const config = yield* ServerConfig.ServerConfig.pipe(
     Effect.provide(ServerConfig.layerTest("/tmp", baseDir)),
   );
+
   let fetches = 0;
+
   const client = HttpClient.make((request) =>
     Effect.gen(function* () {
       fetches += 1;
+
       return HttpClientResponse.fromWeb(request, yield* response);
     }),
   );
+
   const service = yield* UsageService.make.pipe(
     Effect.provideService(ServerConfig.ServerConfig, config),
     Effect.provideService(HttpClient.HttpClient, client),
@@ -87,6 +99,7 @@ const makeFixture = Effect.fnUntraced(function* (response: Effect.Effect<Respons
       ProviderUsageHistory.of({ readReported: () => Effect.succeed([]) }),
     ),
   );
+
   return { service, fetches: () => fetches };
 });
 
@@ -165,13 +178,16 @@ it.layer(NodeServices.layer)("UsageService pricing", (it) => {
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>();
       const reply = yield* Deferred.make<Response>();
+
       const { service, fetches } = yield* makeFixture(
         Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(reply))),
       );
+
       const prices = yield* Effect.all(
         Array.from({ length: 8 }, () => service.priceStepUsage(pricedStep)),
         { concurrency: "unbounded" },
       ).pipe(Effect.forkChild);
+
       yield* Deferred.await(started);
       expect(fetches()).toBe(1);
       yield* Deferred.succeed(reply, Response.json(rateDocument));

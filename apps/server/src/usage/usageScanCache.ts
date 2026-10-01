@@ -72,14 +72,17 @@ export function encodeScanCache(cache: ScanCache): SerializedCache {
 
   const intern = (table: string[], index: Map<string, number>, value: string): number => {
     const existing = index.get(value);
+
     if (existing !== undefined) return existing;
     const next = table.length;
     table.push(value);
     index.set(value, next);
+
     return next;
   };
 
   const files: Record<string, SerializedFile> = {};
+
   for (const [path, entry] of cache) {
     files[path] = {
       s: entry.size,
@@ -115,17 +118,22 @@ function isRecordArray(value: unknown): value is readonly unknown[] {
  */
 export function decodeScanCache(document: unknown): ScanCache {
   const cache: ScanCache = new Map();
+
   if (typeof document !== "object" || document === null) return cache;
 
   const root = document as Partial<SerializedCache>;
+
   if (root.version !== USAGE_SCAN_CACHE_VERSION) return cache;
+
   if (!isRecordArray(root.models) || !isRecordArray(root.sessions)) return cache;
+
   if (typeof root.files !== "object" || root.files === null) return cache;
 
   // The intern tables must be all strings: a numeric entry would pass the
   // undefined guard below, land in a record's model, and crash the aggregate
   // at lookupRate. A corrupt table rejects the whole cache.
   if (!root.models.every((value) => typeof value === "string")) return cache;
+
   if (!root.sessions.every((value) => typeof value === "string")) return cache;
   const models = root.models as readonly string[];
   const sessions = root.sessions as readonly string[];
@@ -133,8 +141,11 @@ export function decodeScanCache(document: unknown): ScanCache {
   for (const [path, raw] of Object.entries(root.files)) {
     if (typeof raw !== "object" || raw === null) continue;
     const entry = raw as Partial<SerializedFile>;
+
     if (typeof entry.s !== "number" || typeof entry.m !== "number") continue;
+
     if (entry.p !== "claude" && entry.p !== "codex") continue;
+
     if (!isRecordArray(entry.r)) continue;
 
     const provider: UsageProviderKind = entry.p;
@@ -143,11 +154,13 @@ export function decodeScanCache(document: unknown): ScanCache {
     // under the original (size, mtime) would read as a valid warm hit and the
     // file would never be re-parsed, silently losing the dropped rows' usage.
     let corrupt = false;
+
     for (const row of entry.r) {
       if (!isRecordArray(row) || row.length < 10) {
         corrupt = true;
         break;
       }
+
       const [
         timestampMs,
         modelIndex,
@@ -162,6 +175,7 @@ export function decodeScanCache(document: unknown): ScanCache {
       ] = row as SerializedRecord;
 
       const model = typeof modelIndex === "number" ? models[modelIndex] : undefined;
+
       if (
         typeof timestampMs !== "number" ||
         !Number.isFinite(timestampMs) ||
@@ -227,16 +241,20 @@ export interface PruneOptions {
  */
 export function pruneScanCache(cache: ScanCache, options: PruneOptions): number {
   let removed = 0;
+
   for (const [path, entry] of cache) {
     const agedOut = entry.mtimeMs < options.retentionCutoffMs;
     const underWalkedRoot = options.walkedRoots.some((root) => path.startsWith(root));
+
     const deleted =
       underWalkedRoot && entry.mtimeMs >= options.windowStartMs && !options.livePaths.has(path);
+
     if (agedOut || deleted) {
       cache.delete(path);
       removed += 1;
     }
   }
+
   return removed;
 }
 
@@ -244,12 +262,15 @@ export function pruneScanCache(cache: ScanCache, options: PruneOptions): number 
 export function dedupeWithinFile(records: readonly UsageRecord[]): readonly UsageRecord[] {
   const seen = new Set<string>();
   const kept: UsageRecord[] = [];
+
   for (const record of records) {
     if (record.dedupeKey !== null) {
       if (seen.has(record.dedupeKey)) continue;
       seen.add(record.dedupeKey);
     }
+
     kept.push(record);
   }
+
   return kept;
 }

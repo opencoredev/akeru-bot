@@ -60,6 +60,7 @@ describe("provider access capabilities", () => {
       ],
       [],
     );
+
     expect(capabilities.find((entry) => entry.id === "claude-max")).toMatchObject({
       accessMethod: "api-key",
       nextAction: "Check the API key, then send a provider request to verify access.",
@@ -160,6 +161,7 @@ describe("provider access capabilities", () => {
     const requested = buildProviderAccessCapabilities([], providers, (instanceId) =>
       instanceId === "custom-openai" ? "failed-first-request" : "recovered",
     );
+
     expect(requested.find((item) => item.id === "api-key-custom-openai")?.health).toBe(
       "failed-first-request",
     );
@@ -196,6 +198,7 @@ describe("provider access capabilities", () => {
 
   it("reports exact MCP health, built-in identity, and dependent bots", () => {
     const serverId = McpServerId.make("builtin-executor");
+
     const rows = buildProviderAccessCapabilities(
       [],
       [],

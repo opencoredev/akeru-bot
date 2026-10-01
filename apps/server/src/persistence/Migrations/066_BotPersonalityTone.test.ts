@@ -18,6 +18,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("066_BotPersonalityTone
         readonly notnull: number;
         readonly dflt_value: string | null;
       }>`PRAGMA table_info(projection_bots)`;
+
       const personality = columns.find((column) => column.name === "personality_tone");
       assert.equal(personality?.notnull, 1);
       assert.equal(personality?.dflt_value, "50");

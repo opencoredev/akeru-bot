@@ -15,7 +15,9 @@ export const ChannelDeliveryClaim = Schema.Struct({
   externalThreadId: Schema.String,
   requestedAt: IsoDateTime,
 });
+
 export type ChannelDeliveryClaim = typeof ChannelDeliveryClaim.Type;
+
 export type ChannelDeliveryClaimResult = "claimed" | "requested" | "sent";
 
 export interface ChannelDeliveryStoreShape {
@@ -56,10 +58,13 @@ export const makeChannelDeliveryStore = Effect.gen(function* () {
         )
         RETURNING message_id AS "messageId"
       `;
+
       if (inserted.length === 1) return "claimed" as const;
+
       const rows = yield* sql<{ readonly status: "requested" | "sent" }>`
         SELECT status FROM channel_deliveries WHERE message_id = ${input.messageId}
       `;
+
       return rows[0]?.status ?? "requested";
     }).pipe(Effect.mapError(toPersistenceSqlError("ChannelDeliveryStore.claim")));
 
@@ -129,13 +134,16 @@ export const ChannelDeliveryStoreLive = Layer.effect(
 export function makeMemoryChannelDeliveryStore(): ChannelDeliveryStoreShape {
   const status = new Map<MessageId, "requested" | "sent">();
   const claims = new Map<MessageId, ChannelDeliveryClaim>();
+
   return {
     claim: (input) =>
       Effect.sync(() => {
         const existing = status.get(input.messageId);
+
         if (existing) return existing;
         status.set(input.messageId, "requested");
         claims.set(input.messageId, input);
+
         return "claimed";
       }),
     listRequestedClaims: () =>

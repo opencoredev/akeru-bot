@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
-import * as NodeCrypto from "node:crypto";
+import * as Predicate from "effect/Predicate";
 
+import * as NodeCrypto from "node:crypto";
 import {
   AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
   AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY,
@@ -13,10 +14,8 @@ import {
   EventId,
   ThreadId,
   type AkeruMemoryApprovalRequest,
-  type AkeruMemoryCandidateDecision,
   type AkeruMemoryDecisionReceipt,
   type AkeruMemoryRevision,
-  type AkeruMemoryShareScope,
   type AkeruMemoryTargetScope,
   type AkeruMemoryThreadAccess,
 } from "@akeru/contracts";
@@ -25,10 +24,8 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-
 import { BotInboxService } from "../bot-inbox/service.ts";
 import { ServerConfig } from "../config.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
@@ -36,93 +33,24 @@ import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSna
 import { assertSafeContent } from "./BotMemory.ts";
 import { resolveAuthorizedMemoryPartitions } from "./EntityMemoryAccess.ts";
 import { EntityMemoryRepository } from "./Services/EntityMemoryRepository.ts";
-
-export class MemoryApprovalError extends Schema.TaggedErrorClass<MemoryApprovalError>()(
-  "MemoryApprovalError",
-  { message: Schema.String },
-) {}
-
-export interface MemoryShareProposal {
-  readonly access: AkeruMemoryThreadAccess;
-  readonly fact: string;
-  readonly scope: AkeruMemoryShareScope;
-  readonly sensitive: boolean;
-  // "auto" saves non-sensitive shared facts without asking.
-  readonly mode: "ask" | "auto";
-}
-
-export type MemoryShareResult =
-  | { readonly status: "saved"; readonly memoryId: AkeruMemoryRootId }
-  | { readonly status: "pending"; readonly candidateId: AkeruMemoryCandidateId };
-
-export interface MemoryApprovalsShape {
-  // Called by the memory tool when a bot wants to save a shared fact.
-  readonly propose: (
-    input: MemoryShareProposal,
-  ) => Effect.Effect<MemoryShareResult, MemoryApprovalError>;
-  // Called when a person approves or rejects a pending candidate from the
-  // chat card or the bot inbox. Deciding twice returns the first receipt.
-  readonly decide: (input: {
-    readonly access: AkeruMemoryThreadAccess;
-    readonly decision: AkeruMemoryCandidateDecision;
-  }) => Effect.Effect<AkeruMemoryDecisionReceipt, MemoryApprovalError>;
-}
+import {
+  MemoryApprovalError,
+  type MemoryApprovalsShape,
+  memoryApprovalIncidentKey,
+  SCOPE_LABELS,
+  boundedSummary,
+} from "./MemoryShareProposal.ts";
+import {
+  encodeAffectedBotIds,
+  CandidateRow,
+  decodeCandidateRow,
+  decodeReceiptRow,
+  failWith,
+} from "./MemoryApprovalRows.ts";
 
 export class MemoryApprovals extends Context.Service<MemoryApprovals, MemoryApprovalsShape>()(
   "akeru-bot/memory/MemoryApprovals",
 ) {}
-
-export const memoryApprovalIncidentKey = (candidateId: string) => `memory-approval:${candidateId}`;
-
-const SCOPE_LABELS: Record<AkeruMemoryTargetScope, string> = {
-  private: "private",
-  bot: "this bot's",
-  project: "project",
-  group: "group",
-  workspace: "workspace",
-};
-const INBOX_SUMMARY_MAX_CHARS = 240;
-const boundedSummary = (value: string) =>
-  value.length <= INBOX_SUMMARY_MAX_CHARS
-    ? value
-    : `${value.slice(0, INBOX_SUMMARY_MAX_CHARS - 1)}…`;
-
-const AffectedBotIdsJson = Schema.fromJsonString(Schema.Array(BotId));
-const encodeAffectedBotIds = Schema.encodeEffect(AffectedBotIdsJson);
-
-const CandidateRow = Schema.Struct({
-  candidateId: Schema.String,
-  tenantId: Schema.String,
-  sourceThreadId: Schema.String,
-  sourceMessageId: Schema.NullOr(Schema.String),
-  authorBotId: Schema.NullOr(Schema.String),
-  fact: Schema.String,
-  scope: Schema.String,
-  sensitive: Schema.Number,
-  confidence: Schema.Number,
-  affectedBotIds: AffectedBotIdsJson,
-  status: Schema.String,
-});
-
-const ReceiptRow = Schema.Struct({
-  status: Schema.String,
-  fact: Schema.String,
-  scope: Schema.String,
-  affectedBotIds: AffectedBotIdsJson,
-  memoryRootId: Schema.NullOr(Schema.String),
-  createdAt: Schema.String,
-});
-
-const decodeCandidateRow = Schema.decodeUnknownEffect(CandidateRow);
-const decodeReceiptRow = Schema.decodeUnknownEffect(ReceiptRow);
-
-const failWith = (message: string) => (cause: unknown) =>
-  new MemoryApprovalError({
-    message:
-      typeof cause === "object" && cause !== null && "message" in cause
-        ? `${message}: ${String(cause.message)}`
-        : message,
-  });
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -136,6 +64,7 @@ const make = Effect.gen(function* () {
 
   const affectedBotsFor = (access: AkeruMemoryThreadAccess) => {
     const authorBotId = access.respondingBotId ?? access.botId;
+
     return access.groupId === null
       ? authorBotId === null
         ? []
@@ -179,17 +108,22 @@ const make = Effect.gen(function* () {
     const thread = yield* projectionSnapshotQuery
       .getThreadShellById(request.sourceThreadId)
       .pipe(Effect.orElseSucceed(() => Option.none()));
+
     const botId =
       request.authorBotId ??
       Option.match(thread, {
         onNone: () => null,
         onSome: (value) => value.respondingBotId ?? value.botId ?? null,
       });
+
     if (botId === null) return;
+
     const snapshot = yield* projectionSnapshotQuery
       .getShellSnapshot()
       .pipe(Effect.orElseSucceed(() => null));
+
     const bot = snapshot?.bots.find((candidate) => candidate.id === botId);
+
     if (!bot) return;
     yield* Effect.sync(() =>
       botInbox.ensureOpen({
@@ -215,9 +149,12 @@ const make = Effect.gen(function* () {
       if (input.fact.length > AKERU_MEMORY_FACT_MAX_CHARS) {
         return yield* new MemoryApprovalError({ message: "Memory text is too long." });
       }
+
       const createdAt = yield* nowIso;
+
       if (input.mode === "auto" && !input.sensitive) {
         const memoryId = AkeruMemoryId.make(NodeCrypto.randomUUID());
+
         const revision = yield* repository
           .insertScopedFact({
             access: input.access,
@@ -230,6 +167,7 @@ const make = Effect.gen(function* () {
             createdAt,
           })
           .pipe(Effect.mapError(failWith("Could not save the memory")));
+
         return { status: "saved", memoryId: revision.rootId } as const;
       }
 
@@ -237,13 +175,16 @@ const make = Effect.gen(function* () {
       const partitions = yield* resolveAuthorizedMemoryPartitions(input.access).pipe(
         Effect.mapError(failWith("Could not store the memory candidate")),
       );
+
       if (!partitions.some((partition) => partition.scope === input.scope)) {
         return yield* new MemoryApprovalError({
           message: `The ${input.scope} memory scope is not available to this chat.`,
         });
       }
+
       const candidateId = AkeruMemoryCandidateId.make(NodeCrypto.randomUUID());
       const authorBotId = input.access.respondingBotId ?? input.access.botId;
+
       const request: AkeruMemoryApprovalRequest = {
         candidateId,
         fact: input.fact,
@@ -253,9 +194,11 @@ const make = Effect.gen(function* () {
         authorBotId,
         affectedBotIds: affectedBotsFor(input.access),
       };
+
       const affectedBotIdsJson = yield* encodeAffectedBotIds(request.affectedBotIds).pipe(
         Effect.mapError(failWith("Could not store the memory candidate")),
       );
+
       yield* sql`
         INSERT INTO akeru_memory_candidates (
           candidate_id, tenant_id, initiating_user_id, source_thread_id,
@@ -286,6 +229,7 @@ const make = Effect.gen(function* () {
         ),
       );
       yield* openInboxItem(request);
+
       return { status: "pending", candidateId } as const;
     },
   );
@@ -343,6 +287,7 @@ const make = Effect.gen(function* () {
         Effect.gen(function* () {
           const { decision } = input;
           let access = input.access;
+
           const rows = yield* sql`
           SELECT candidate_id AS candidateId, tenant_id AS tenantId,
             source_thread_id AS sourceThreadId, source_message_id AS sourceMessageId,
@@ -354,18 +299,24 @@ const make = Effect.gen(function* () {
             Effect.flatMap(Effect.forEach((row) => decodeCandidateRow(row))),
             Effect.mapError(failWith("Could not read the memory candidate")),
           );
+
           const candidate = rows[0];
+
           if (candidate === undefined || candidate.sourceThreadId !== access.threadId) {
             return yield* new MemoryApprovalError({
               message: "This memory approval does not belong to this chat.",
             });
           }
+
           if (candidate.status !== "pending") {
             const existing = yield* readReceipt(access.tenantId, candidate.candidateId);
+
             if (existing !== null) {
               yield* reconcileResolved(candidate, existing);
+
               return existing;
             }
+
             return yield* new MemoryApprovalError({
               message: "This memory approval was already decided.",
             });
@@ -375,6 +326,7 @@ const make = Effect.gen(function* () {
           // responding by the time the user decides. A bot that has since left
           // the group falls back to the current responder so the decision lands.
           const authorBotId = candidate.authorBotId;
+
           if (
             authorBotId !== null &&
             (access.groupId === null ||
@@ -382,12 +334,16 @@ const make = Effect.gen(function* () {
           ) {
             access = { ...access, respondingBotId: BotId.make(authorBotId) };
           }
+
           const createdAt = yield* nowIso;
+
           let fact =
             decision.decision === "approve" ? (decision.fact ?? candidate.fact) : candidate.fact;
+
           if (fact.length > AKERU_MEMORY_FACT_MAX_CHARS) {
             return yield* new MemoryApprovalError({ message: "Memory text is too long." });
           }
+
           if (decision.decision === "approve" && decision.fact !== undefined) {
             // An edited fact goes through the same guard as a tool-proposed one.
             yield* Effect.try({
@@ -398,6 +354,7 @@ const make = Effect.gen(function* () {
                 }),
             });
           }
+
           if (
             decision.decision === "approve" &&
             decision.scope !== undefined &&
@@ -407,11 +364,14 @@ const make = Effect.gen(function* () {
               message: "The approval scope must match the candidate scope.",
             });
           }
+
           let scope =
             decision.decision === "approve"
               ? (decision.scope ?? (candidate.scope as AkeruMemoryTargetScope))
               : (candidate.scope as AkeruMemoryTargetScope);
+
           let approvedRevision: AkeruMemoryRevision | null = null;
+
           if (decision.decision === "approve") {
             approvedRevision = yield* repository
               .insertScopedFact({
@@ -448,7 +408,7 @@ const make = Effect.gen(function* () {
                     ),
                 ),
                 Effect.mapError((cause) =>
-                  cause._tag === "MemoryApprovalError"
+                  Predicate.isTagged(cause, "MemoryApprovalError")
                     ? cause
                     : failWith("Could not save the memory")(cause),
                 ),
@@ -464,6 +424,7 @@ const make = Effect.gen(function* () {
                 rootId: AkeruMemoryRootId.make(`approval:${candidate.candidateId}`),
               })
               .pipe(Effect.catchTag("EntityMemoryNotFoundError", () => Effect.succeed(null)));
+
             // A retry after a crash may find the orphan already retracted.
             if (orphan !== null && orphan.deletionState === "active") {
               yield* repository
@@ -481,7 +442,9 @@ const make = Effect.gen(function* () {
                 .pipe(Effect.mapError(failWith("Could not retract the rejected memory")));
             }
           }
+
           const memoryRootId = approvedRevision?.rootId ?? null;
+
           const receipt: AkeruMemoryDecisionReceipt = {
             candidateId: AkeruMemoryCandidateId.make(candidate.candidateId),
             status: decision.decision === "approve" ? "approved" : "rejected",
@@ -491,9 +454,11 @@ const make = Effect.gen(function* () {
             memoryRootId,
             createdAt,
           };
+
           const affectedBotIdsJson = yield* encodeAffectedBotIds(receipt.affectedBotIds).pipe(
             Effect.mapError(failWith("Could not record the memory decision")),
           );
+
           yield* sql
             .withTransaction(
               Effect.gen(function* () {
@@ -517,12 +482,13 @@ const make = Effect.gen(function* () {
             )
             .pipe(Effect.mapError(failWith("Could not record the memory decision")));
           yield* reconcileResolved(candidate, receipt);
+
           return receipt;
         }),
       )
       .pipe(
         Effect.mapError((cause) =>
-          cause._tag === "MemoryApprovalError"
+          Predicate.isTagged(cause, "MemoryApprovalError")
             ? cause
             : failWith("Could not record the memory decision")(cause),
         ),
@@ -532,3 +498,13 @@ const make = Effect.gen(function* () {
 });
 
 export const MemoryApprovalsLive = Layer.effect(MemoryApprovals, make);
+
+export { MemoryApprovalError } from "./MemoryShareProposal.ts";
+
+export type { MemoryShareProposal } from "./MemoryShareProposal.ts";
+
+export type { MemoryShareResult } from "./MemoryShareProposal.ts";
+
+export type { MemoryApprovalsShape } from "./MemoryShareProposal.ts";
+
+export { memoryApprovalIncidentKey } from "./MemoryShareProposal.ts";

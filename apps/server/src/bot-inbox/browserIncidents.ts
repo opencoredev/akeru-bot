@@ -14,6 +14,7 @@ export interface BrowserIncidentInput {
 
 export function browserIncidentKey(botId: BotId, resourceKey: string): string {
   const resourceId = NodeCrypto.createHash("sha256").update(resourceKey).digest("hex").slice(0, 16);
+
   return `browser:${botId}:${resourceId}`;
 }
 

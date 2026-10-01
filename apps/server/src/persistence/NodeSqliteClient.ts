@@ -1,11 +1,4 @@
-/**
- * Port of `@effect/sql-sqlite-node` that uses the native `node:sqlite`
- * bindings instead of `better-sqlite3`.
- *
- * @module SqliteClient
- */
 import * as NodeSqlite from "node:sqlite";
-
 import * as Cache from "effect/Cache";
 import * as Config from "effect/Config";
 import * as Duration from "effect/Duration";
@@ -25,6 +18,35 @@ import { SqlError, classifySqliteError } from "effect/unstable/sql/SqlError";
 import * as Statement from "effect/unstable/sql/Statement";
 
 const ATTR_DB_SYSTEM_NAME = "db.system.name";
+
+const sqliteInput = (value: unknown): NodeSqlite.SQLInputValue => {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "bigint"
+  )
+    return value;
+
+  if (ArrayBuffer.isView(value))
+    return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  throw new TypeError("Unsupported SQLite parameter.");
+};
+
+const sqliteInputs = (
+  params: ReadonlyArray<unknown>,
+): [Record<string, NodeSqlite.SQLInputValue>, ...NodeSqlite.SQLInputValue[]] => {
+  const first = params[0];
+
+  if (first !== null && typeof first === "object" && !ArrayBuffer.isView(first)) {
+    return [
+      Object.fromEntries(Object.entries(first).map(([key, value]) => [key, sqliteInput(value)])),
+      ...params.slice(1).map(sqliteInput),
+    ];
+  }
+
+  return [{}, ...params.map(sqliteInput)];
+};
 
 export const TypeId: TypeId = "~local/sqlite-node/SqliteClient";
 
@@ -88,6 +110,7 @@ const checkNodeSqliteCompat = () => {
       }),
     );
   }
+
   return Effect.void;
 };
 
@@ -98,12 +121,14 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
   yield* checkNodeSqliteCompat();
 
   const compiler = Statement.makeCompilerSqlite(options.transformQueryNames);
+
   const transformRows = options.transformResultNames
     ? Statement.defaultTransforms(options.transformResultNames).array
     : undefined;
 
   const makeConnection = Effect.gen(function* () {
     const scope = yield* Effect.scope;
+
     const db = yield* Effect.try({
       try: openDatabase,
       catch: (cause) =>
@@ -114,6 +139,7 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
           }),
         }),
     });
+
     yield* Scope.addFinalizer(
       scope,
       Effect.try({
@@ -129,13 +155,17 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
     );
 
     const statementReaderCache = new WeakMap<NodeSqlite.StatementSync, boolean>();
+
     const hasRows = (statement: NodeSqlite.StatementSync): boolean => {
       const cached = statementReaderCache.get(statement);
+
       if (cached !== undefined) {
         return cached;
       }
+
       const value = statement.columns().length > 0;
       statementReaderCache.set(statement, value);
+
       return value;
     };
 
@@ -162,14 +192,22 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
       params: ReadonlyArray<unknown>,
       raw: boolean,
     ) =>
-      Effect.withFiber<ReadonlyArray<any>, SqlError>((fiber) => {
+      Effect.withFiber<
+        | ReadonlyArray<Record<string, NodeSqlite.SQLOutputValue>>
+        | NodeSqlite.StatementResultingChanges,
+        SqlError
+      >((fiber) => {
         try {
+          const inputs = sqliteInputs(params);
           statement.setReadBigInts(Boolean(Context.get(fiber.context, Client.SafeIntegers)));
+
           if (hasRows(statement)) {
-            return Effect.succeed(statement.all(...(params as any)));
+            return Effect.succeed(statement.all(...inputs));
           }
-          const result = statement.run(...(params as any));
-          return Effect.succeed(raw ? (result as unknown as ReadonlyArray<any>) : []);
+
+          const result = statement.run(...inputs);
+
+          return Effect.succeed(raw ? result : []);
         } catch (cause) {
           return Effect.fail(
             new SqlError({
@@ -182,8 +220,10 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
         }
       });
 
-    const run = (sql: string, params: ReadonlyArray<unknown>, raw = false) =>
-      Effect.flatMap(Cache.get(prepareCache, sql), (s) => runStatement(s, params, raw));
+    const run = (sql: string, params: ReadonlyArray<unknown>) =>
+      Effect.flatMap(Cache.get(prepareCache, sql), (statement) =>
+        runStatement(statement, params, false),
+      ).pipe(Effect.map((result) => (Array.isArray(result) ? result : [])));
 
     const runStatementValues = (
       statement: NodeSqlite.StatementSync,
@@ -192,26 +232,33 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
       Effect.acquireUseRelease(
         Effect.succeed(statement),
         (statement) =>
-          Effect.try({
-            try: () => {
-              if (hasRows(statement)) {
-                statement.setReturnArrays(true);
-                // Safe to cast to array after we've setReturnArrays(true)
-                return statement.all(...(params as any)) as unknown as ReadonlyArray<
-                  ReadonlyArray<unknown>
-                >;
-              }
-              statement.run(...(params as any));
-              return [];
-            },
-            catch: (cause) =>
-              new SqlError({
-                reason: classifySqliteError(cause, {
-                  message: "Failed to execute statement",
-                  operation: "execute",
+          Effect.withFiber((fiber) =>
+            Effect.try({
+              try: () => {
+                statement.setReadBigInts(Boolean(Context.get(fiber.context, Client.SafeIntegers)));
+                const inputs = sqliteInputs(params);
+
+                if (hasRows(statement)) {
+                  statement.setReturnArrays(true);
+                  const rows: unknown = statement.all(...inputs);
+
+                  // SAFETY: setReturnArrays(true) makes Node SQLite return positional arrays.
+                  return rows as ReadonlyArray<ReadonlyArray<unknown>>;
+                }
+
+                statement.run(...inputs);
+
+                return [];
+              },
+              catch: (cause) =>
+                new SqlError({
+                  reason: classifySqliteError(cause, {
+                    message: "Failed to execute statement",
+                    operation: "execute",
+                  }),
                 }),
-              }),
-          }),
+            }),
+          ),
         (statement) =>
           Effect.try({
             try: () => {
@@ -239,7 +286,9 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
         return rowTransform ? Effect.map(run(sql, params), rowTransform) : run(sql, params);
       },
       executeRaw(sql, params) {
-        return run(sql, params, true);
+        return Effect.flatMap(Cache.get(prepareCache, sql), (statement) =>
+          runStatement(statement, params, true),
+        );
       },
       executeValues(sql, params) {
         return runValues(sql, params);
@@ -252,7 +301,9 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
       executeUnprepared(sql, params, rowTransform) {
         const effect = prepare(sql).pipe(
           Effect.flatMap((statement) => runStatement(statement, params ?? [], false)),
+          Effect.map((result) => (Array.isArray(result) ? result : [])),
         );
+
         return rowTransform ? Effect.map(effect, rowTransform) : effect;
       },
       executeStream(_sql, _params) {
@@ -265,9 +316,11 @@ const makeWithDatabase = Effect.fn("makeWithDatabase")(function* (
   const connection = yield* makeConnection;
 
   const acquirer = semaphore.withPermits(1)(Effect.succeed(connection));
+
   const transactionAcquirer = Effect.uninterruptibleMask((restore) => {
     const fiber = Fiber.getCurrent()!;
     const scope = Context.getUnsafe(fiber.context, Scope.Scope);
+
     return Effect.as(
       Effect.tap(restore(semaphore.take(1)), () => Scope.addFinalizer(scope, semaphore.release(1))),
       connection,
@@ -311,6 +364,7 @@ const makeMemory = (
       const database = new NodeSqlite.DatabaseSync(":memory:", {
         allowExtension: config.allowExtension ?? false,
       });
+
       return database;
     },
   );

@@ -25,6 +25,7 @@ export const PersistenceErrorCorrelation = Schema.Union([
   Schema.Struct({ pairingLinkId: Schema.String }),
   Schema.Struct({ threadId: Schema.String }),
 ]);
+
 export type PersistenceErrorCorrelation = typeof PersistenceErrorCorrelation.Type;
 
 export class PersistenceSqlError extends Schema.TaggedErrorClass<PersistenceSqlError>()(
@@ -69,7 +70,9 @@ export class PersistenceDecodeError extends Schema.TaggedErrorClass<PersistenceD
     return `Decode error in ${this.operation}: ${this.issue}`;
   }
 }
+
 const isPersistenceSqlError = Schema.is(PersistenceSqlError);
+
 const isPersistenceDecodeError = Schema.is(PersistenceDecodeError);
 
 // Kept for orchestration/projection call sites, which are being revamped separately.
@@ -132,7 +135,9 @@ export type OrchestrationCommandReceiptRepositoryError =
   | PersistenceDecodeError;
 
 export type ProviderSessionRuntimeRepositoryError = PersistenceSqlError | PersistenceDecodeError;
+
 export type AuthPairingLinkRepositoryError = PersistenceSqlError | PersistenceDecodeError;
+
 export type AuthSessionRepositoryError = PersistenceSqlError | PersistenceDecodeError;
 
 export type ProjectionRepositoryError = PersistenceSqlError | PersistenceDecodeError;

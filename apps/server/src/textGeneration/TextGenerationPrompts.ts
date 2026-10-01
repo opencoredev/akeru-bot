@@ -16,6 +16,7 @@ const EARLIER_CONTENT_TRUNCATION_MARKER = "[Earlier content truncated]\n\n";
 
 function policyInstruction(instruction: string | undefined): ReadonlyArray<string> {
   const trimmed = instruction?.trim();
+
   return trimmed ? ["", "Additional instructions:", limitSection(trimmed, 4_000)] : [];
 }
 
@@ -53,6 +54,7 @@ function buildPromptFromMessage(input: PromptFromMessageInput): string {
     limitSection(input.message, 8_000),
     ...policyInstruction(input.additionalInstructions),
   ];
+
   if (attachmentLines.length > 0) {
     promptSections.push(
       "",
@@ -78,6 +80,7 @@ export function buildBranchNamePrompt(input: BranchNamePromptInput) {
     attachments: input.attachments,
     additionalInstructions: input.policy?.branchInstructions,
   });
+
   const outputSchema = Schema.Struct({
     branch: Schema.String,
   });
@@ -158,33 +161,41 @@ Examples of the distinction:
 
 function preserveMessageEnd(message: string): string {
   const alreadyTruncated = message.startsWith(EARLIER_CONTENT_TRUNCATION_MARKER);
+
   const contents = alreadyTruncated
     ? message.slice(EARLIER_CONTENT_TRUNCATION_MARKER.length)
     : message;
+
   if (!alreadyTruncated && contents.length <= 8_000) {
     return contents;
   }
+
   return `${EARLIER_CONTENT_TRUNCATION_MARKER}${contents.slice(-8_000)}`;
 }
 
 function threadTitlePromptSuffix(input: ThreadTitlePromptInput): string {
   const additionalInstructions = policyInstruction(input.policy?.threadTitleInstructions);
+
   const attachmentLines = (input.attachments ?? []).map(
     (attachment) => `- ${attachment.name} (${attachment.mimeType}, ${attachment.sizeBytes} bytes)`,
   );
 
   let suffix = "";
+
   if (additionalInstructions.length > 0) {
     suffix = `\n${additionalInstructions.join("\n")}`;
   }
+
   if (attachmentLines.length > 0) {
     suffix += `\n\nAttachment metadata:\n${limitSection(attachmentLines.join("\n"), 4_000)}`;
   }
+
   return suffix;
 }
 
 export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
   let prompt: string;
+
   if (input.previousTitle === undefined) {
     const message = limitSection(input.message, 8_000);
     prompt = `${INITIAL_THREAD_TITLE_PROMPT}\n\nUser message:\n${message}${threadTitlePromptSuffix(input)}`;
@@ -192,6 +203,7 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
     const message = preserveMessageEnd(input.message);
     prompt = `${regenerateThreadTitlePrompt(input.previousTitle)}\n\nThread contents:\n${message}${threadTitlePromptSuffix(input)}`;
   }
+
   const outputSchema = Schema.Struct({
     title: Schema.String,
   });

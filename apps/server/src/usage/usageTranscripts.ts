@@ -37,6 +37,7 @@ function int(value: unknown): number {
 function parseTimestampMs(value: unknown): number | null {
   if (typeof value !== "string") return null;
   const parsed = Date.parse(value);
+
   return Number.isNaN(parsed) ? null : parsed;
 }
 
@@ -85,32 +86,40 @@ export function mightCarryUsage(line: string, provider: UsageProviderKind): bool
  */
 export function parseClaudeLine(line: string): UsageRecord | null {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(line);
   } catch {
     return null;
   }
+
   if (typeof parsed !== "object" || parsed === null) return null;
 
   const record = parsed as Record<string, unknown>;
+
   if (record["type"] !== "assistant") return null;
 
   const message = record["message"];
+
   if (typeof message !== "object" || message === null) return null;
   const messageRecord = message as Record<string, unknown>;
 
   const usage = messageRecord["usage"];
+
   if (typeof usage !== "object" || usage === null) return null;
   const usageRecord = usage as Record<string, unknown>;
 
   const timestampMs = parseTimestampMs(record["timestamp"]);
+
   if (timestampMs === null) return null;
 
   const model = typeof messageRecord["model"] === "string" ? messageRecord["model"] : "";
+
   if (model.length === 0) return null;
 
   const messageId = typeof messageRecord["id"] === "string" ? messageRecord["id"] : null;
   const requestId = typeof record["requestId"] === "string" ? record["requestId"] : null;
+
   // Matches ccusage: prefer the message/request pair, fall back to whichever
   // half exists. Records with neither cannot be de-duplicated.
   const dedupeKey =
@@ -181,11 +190,15 @@ const FORK_COPY_MAX_GAP_MS = 1000;
 function isForkedSessionMeta(payload: Record<string, unknown>): boolean {
   if (typeof payload["forked_from_id"] === "string") return true;
   const source = payload["source"];
+
   if (typeof source !== "object" || source === null) return false;
   const subagent = (source as Record<string, unknown>)["subagent"];
+
   if (typeof subagent !== "object" || subagent === null) return false;
   const spawn = (subagent as Record<string, unknown>)["thread_spawn"];
+
   if (typeof spawn !== "object" || spawn === null) return false;
+
   return typeof (spawn as Record<string, unknown>)["parent_thread_id"] === "string";
 }
 
@@ -199,15 +212,18 @@ function isForkedSessionMeta(payload: Record<string, unknown>): boolean {
  */
 export function parseCodexLine(line: string, state: CodexScanState): UsageRecord | null {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(line);
   } catch {
     return null;
   }
+
   if (typeof parsed !== "object" || parsed === null) return null;
 
   const record = parsed as Record<string, unknown>;
   const payload = record["payload"];
+
   if (typeof payload !== "object" || payload === null) return null;
   const payloadRecord = payload as Record<string, unknown>;
   const payloadType = payloadRecord["type"];
@@ -219,25 +235,31 @@ export function parseCodexLine(line: string, state: CodexScanState): UsageRecord
     if (state.sawSessionMeta) return null;
     state.sawSessionMeta = true;
     const id = payloadRecord["id"] ?? payloadRecord["session_id"];
+
     if (typeof id === "string") state.sessionId = id;
     const metaTimestampMs = parseTimestampMs(record["timestamp"]);
+
     if (metaTimestampMs !== null && isForkedSessionMeta(payloadRecord)) {
       state.suppressingForkCopies = true;
       state.forkCopyAnchorMs = metaTimestampMs;
     }
+
     return null;
   }
 
   if (record["type"] === "turn_context") {
     if (typeof payloadRecord["model"] === "string") state.model = payloadRecord["model"];
+
     return null;
   }
 
   if (payloadType !== "token_count") return null;
 
   const info = payloadRecord["info"];
+
   if (typeof info !== "object" || info === null) return null;
   const last = (info as Record<string, unknown>)["last_token_usage"];
+
   if (typeof last !== "object" || last === null) return null;
   const lastRecord = last as Record<string, unknown>;
 
@@ -246,12 +268,15 @@ export function parseCodexLine(line: string, state: CodexScanState): UsageRecord
   // must not poison it, or the re-emitted copy after the model is known would
   // be skipped as a duplicate and those tokens never counted.
   const timestampMs = parseTimestampMs(record["timestamp"]);
+
   if (timestampMs === null) return null;
+
   if (state.model.length === 0) return null;
 
   // Codex re-emits an unchanged token_count on some stream boundaries. Summing
   // those would double count, so identical consecutive payloads are skipped.
   const signature = JSON.stringify(lastRecord);
+
   if (signature === state.lastUsageSignature) return null;
   state.lastUsageSignature = signature;
 
@@ -261,8 +286,10 @@ export function parseCodexLine(line: string, state: CodexScanState): UsageRecord
   if (state.suppressingForkCopies) {
     if (timestampMs - state.forkCopyAnchorMs < FORK_COPY_MAX_GAP_MS) {
       state.forkCopyAnchorMs = timestampMs;
+
       return null;
     }
+
     state.suppressingForkCopies = false;
   }
 
