@@ -2,6 +2,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, describe, expect } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Cause from "effect/Cause";
+import * as Exit from "effect/Exit";
+import * as PlatformError from "effect/PlatformError";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 
@@ -70,6 +73,72 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
           contents: "export const answer = 42;\n",
           byteLength: 26,
           truncated: false,
+        });
+      }),
+    );
+
+    it.effect("preserves the close operation and original cause when closing fails", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "read.txt", "content");
+        const cause = new Error("close failed");
+
+        const closeError = PlatformError.systemError({
+          _tag: "Unknown",
+          module: "FileSystem",
+          method: "open",
+          cause,
+        });
+
+        const workspaceFileSystem = yield* WorkspaceFileSystem.make.pipe(
+          Effect.provideService(FileSystem.FileSystem, {
+            ...fs,
+            open: (filePath, options) =>
+              Effect.gen(function* () {
+                const handle = yield* fs.open(filePath, options);
+                yield* Effect.addFinalizer(() => Effect.die(closeError));
+
+                return handle;
+              }),
+          }),
+        );
+
+        const exit = yield* Effect.exit(
+          workspaceFileSystem.readFile({ cwd, relativePath: "read.txt" }),
+        );
+
+        expect(Exit.isFailure(exit)).toBe(true);
+
+        if (Exit.isFailure(exit)) {
+          expect(Cause.squash(exit.cause)).toMatchObject({
+            _tag: "WorkspaceFileSystemOperationError",
+            operation: "close",
+            cause,
+          });
+        }
+      }),
+    );
+
+    it.effect("reads empty files and truncates oversized UTF-8 previews", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "empty.txt", "");
+        const contents = "a".repeat(1024 * 1024 + 3);
+        yield* writeTextFile(cwd, "large.txt", contents);
+
+        expect(yield* workspaceFileSystem.readFile({ cwd, relativePath: "empty.txt" })).toEqual({
+          relativePath: "empty.txt",
+          contents: "",
+          byteLength: 0,
+          truncated: false,
+        });
+        expect(yield* workspaceFileSystem.readFile({ cwd, relativePath: "large.txt" })).toEqual({
+          relativePath: "large.txt",
+          contents: contents.slice(0, 1024 * 1024),
+          byteLength: contents.length,
+          truncated: true,
         });
       }),
     );

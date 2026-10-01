@@ -2,8 +2,8 @@ import type { AkeruToolExecution } from "../provider/AkeruToolRuntime.ts";
 import * as Predicate from "effect/Predicate";
 
 import * as NodeCrypto from "node:crypto";
-import * as NodeFS from "node:fs";
-import * as NodePath from "node:path";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import { readImageFile } from "./ImageFile.ts";
 import {
   AkeruUsageReservationId,
@@ -95,29 +95,37 @@ function failed(
   return { status: "failed", kind, message, attempts: [] };
 }
 
-function persistImage(input: {
-  readonly attachmentsDir: string;
-  readonly threadId: ThreadId;
-  readonly bytes: Uint8Array;
-  readonly mimeType: keyof typeof EXTENSION_BY_MIME;
-  readonly index: number;
-}): ChatImageAttachment | null {
+const persistImage = Effect.fn("persistImage")(function* (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  input: {
+    readonly attachmentsDir: string;
+    readonly threadId: ThreadId;
+    readonly bytes: Uint8Array;
+    readonly mimeType: keyof typeof EXTENSION_BY_MIME;
+    readonly index: number;
+  },
+): Effect.fn.Return<ChatImageAttachment | null> {
   const attachmentId = createAttachmentId(input.threadId);
 
   if (!attachmentId) return null;
   const extension = EXTENSION_BY_MIME[input.mimeType];
-  const finalPath = NodePath.join(input.attachmentsDir, `${attachmentId}${extension}`);
+  const finalPath = path.join(input.attachmentsDir, `${attachmentId}${extension}`);
   const temporaryPath = `${finalPath}.part`;
 
-  try {
-    NodeFS.mkdirSync(input.attachmentsDir, { recursive: true });
-    NodeFS.writeFileSync(temporaryPath, input.bytes, { flag: "wx" });
-    NodeFS.renameSync(temporaryPath, finalPath);
-  } catch {
-    NodeFS.rmSync(temporaryPath, { force: true });
+  const saved = yield* Effect.gen(function* () {
+    yield* fs.makeDirectory(input.attachmentsDir, { recursive: true });
+    yield* fs.writeFile(temporaryPath, input.bytes, { flag: "wx" });
+    yield* fs.rename(temporaryPath, finalPath);
 
-    return null;
-  }
+    return true;
+  }).pipe(
+    Effect.catch(() =>
+      fs.remove(temporaryPath, { force: true }).pipe(Effect.orDie, Effect.as(false)),
+    ),
+  );
+
+  if (!saved) return null;
 
   return {
     type: "image",
@@ -126,12 +134,14 @@ function persistImage(input: {
     mimeType: input.mimeType,
     sizeBytes: input.bytes.byteLength,
   };
-}
+}, Effect.uninterruptible);
 
 export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime")(function* (
   options: ImageGenerationRuntimeOptions = {},
 ) {
   const config = yield* ServerConfig;
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const engine = yield* OrchestrationEngineService;
   const snapshots = yield* ProjectionSnapshotQuery;
   const messages = yield* ProjectionThreadMessageRepository;
@@ -253,7 +263,10 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
 
       for (const attachment of selected) {
         const path = resolveAttachmentPath({ attachmentsDir: config.attachmentsDir, attachment });
-        const bytes = path ? yield* Effect.tryPromise(() => readImageFile(path)) : null;
+
+        const bytes = path
+          ? yield* readImageFile(path).pipe(Effect.provideService(FileSystem.FileSystem, fs))
+          : null;
 
         if (!bytes) {
           return { ok: false as const, message: "An input image is no longer available." };
@@ -288,14 +301,14 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
         .pipe(
           // No message references the files when this post fails, so nothing else would remove them.
           Effect.onError(() =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
               for (const attachment of input.attachments) {
                 const path = resolveAttachmentPath({
                   attachmentsDir: config.attachmentsDir,
                   attachment,
                 });
 
-                if (path) NodeFS.rmSync(path, { force: true });
+                if (path) yield* fs.remove(path, { force: true }).pipe(Effect.orDie);
               }
             }),
           ),
@@ -405,7 +418,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
 
           if (!sniffed || bytes.byteLength > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) continue;
 
-          const attachment = persistImage({
+          const attachment = yield* persistImage(fs, path, {
             attachmentsDir: config.attachmentsDir,
             threadId,
             bytes,
@@ -459,9 +472,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
         attempts: routed.attempts,
       } satisfies ImageGenerationResult;
     }).pipe(
-      Effect.catch(() =>
-        Effect.succeed(failed("provider-failed", "Image generation could not finish.")),
-      ),
+      Effect.orElseSucceed(() => failed("provider-failed", "Image generation could not finish.")),
       Effect.onInterrupt(() =>
         Effect.logInfo("Image generation cancelled.", { threadId: String(threadId) }),
       ),
