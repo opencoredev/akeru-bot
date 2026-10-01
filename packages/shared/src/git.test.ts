@@ -6,7 +6,6 @@ import {
   buildTemporaryWorktreeBranchName,
   isTemporaryWorktreeBranch,
   normalizeGitRemoteUrl,
-  stripWorktreeBranchPrefix,
   parseGitHubRepositoryNameWithOwnerFromRemoteUrl,
   WORKTREE_BRANCH_PREFIX,
 } from "./git.ts";
