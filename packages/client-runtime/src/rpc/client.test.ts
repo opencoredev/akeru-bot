@@ -34,6 +34,7 @@ import {
   runStream,
   subscribe,
   type EnvironmentStreamRpcTag,
+  type EnvironmentRpcStreamValue,
   type EnvironmentSubscriptionRpcTag,
   type EnvironmentUnaryRpcTag,
 } from "./client.ts";
@@ -105,6 +106,9 @@ describe("environment RPC", () => {
     expectTypeOf<
       Extract<EnvironmentUnaryRpcTag, typeof WS_METHODS.subscribeBackgroundPolicy>
     >().toEqualTypeOf<never>();
+    expectTypeOf<
+      EnvironmentRpcStreamValue<typeof WS_METHODS.subscribeBackgroundPolicy>
+    >().toEqualTypeOf<BackgroundPolicySnapshot>();
   });
 
   it.effect(

@@ -20,6 +20,20 @@ const { readFileSync, readdirSync } = (
 const root = new URL("../../../../", import.meta.url);
 const read = (file: string) => readFileSync(new URL(file, root), "utf8");
 
+function readSurface(file: string): string {
+  const modules =
+    file === "packages/client-runtime/src/durableMemory.ts"
+      ? [
+          file,
+          "packages/client-runtime/src/durableMemory/types.ts",
+          "packages/client-runtime/src/durableMemory/facts.ts",
+          "packages/client-runtime/src/durableMemory/import.ts",
+          "packages/client-runtime/src/durableMemory/approvals.ts",
+        ]
+      : [file];
+  return modules.map(read).join("\n");
+}
+
 function discover(directory: string): string[] {
   return readdirSync(new URL(directory, root), { withFileTypes: true }).flatMap((entry) => {
     const file = `${directory}/${entry.name}`;
@@ -150,7 +164,7 @@ describe("discovered interface message coverage", () => {
     const expressions: Record<string, string[]> = {};
     const directMessages = new Set<string>();
     for (const file of surfaces) {
-      const result = extract(read(file));
+      const result = extract(readSurface(file));
       expect(result.parameterIssues, `${file}: named parameter coverage`).toEqual([]);
       for (const message of result.messages) {
         directMessages.add(message);

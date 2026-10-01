@@ -82,25 +82,26 @@ export const isRpcClientError = Schema.is(RpcClientError.RpcClientError);
 
 export type EnvironmentRpcInput<TTag extends EnvironmentRpcTag> = Parameters<RpcMethod<TTag>>[0];
 
-export type EnvironmentRpcSuccess<TTag extends EnvironmentUnaryRpcTag> =
-  RpcMethod<TTag> extends (input: any, options?: any) => Effect.Effect<infer A, any, any>
-    ? A
-    : never;
+export type EnvironmentRpcSuccess<TTag extends EnvironmentUnaryRpcTag> = Effect.Success<
+  ReturnType<RpcMethod<TTag>>
+>;
 
-export type EnvironmentRpcFailure<TTag extends EnvironmentUnaryRpcTag> =
-  RpcMethod<TTag> extends (input: any, options?: any) => Effect.Effect<any, infer E, any>
-    ? E
-    : never;
+export type EnvironmentRpcFailure<TTag extends EnvironmentUnaryRpcTag> = Effect.Error<
+  ReturnType<RpcMethod<TTag>>
+>;
 
-export type EnvironmentRpcStreamValue<TTag extends EnvironmentStreamRpcTag> =
-  RpcMethod<TTag> extends (input: any, options?: any) => Stream.Stream<infer A, any, any>
-    ? A
-    : never;
+type RpcStreamResult<TTag extends EnvironmentStreamRpcTag> = Extract<
+  ReturnType<RpcMethod<TTag>>,
+  Stream.Stream<unknown, unknown, unknown>
+>;
 
-export type EnvironmentRpcStreamFailure<TTag extends EnvironmentStreamRpcTag> =
-  RpcMethod<TTag> extends (input: any, options?: any) => Stream.Stream<any, infer E, any>
-    ? E
-    : never;
+export type EnvironmentRpcStreamValue<TTag extends EnvironmentStreamRpcTag> = Stream.Success<
+  RpcStreamResult<TTag>
+>;
+
+export type EnvironmentRpcStreamFailure<TTag extends EnvironmentStreamRpcTag> = Stream.Error<
+  RpcStreamResult<TTag>
+>;
 
 const currentSession = Effect.fn("EnvironmentRpc.currentSession")(function* () {
   const supervisor = yield* EnvironmentSupervisor;
@@ -130,6 +131,7 @@ export const request = Effect.fn("EnvironmentRpc.request")(function* <
   });
   const session = yield* currentSession();
   const observer = yield* EnvironmentRpcRequestObserver;
+  // SAFETY: Unary tags select schema-generated Effect methods; only the generic input/result correlation is erased by indexing.
   const method = session.client[tag] as (
     input: EnvironmentRpcInput<TTag>,
   ) => Effect.Effect<EnvironmentRpcSuccess<TTag>, EnvironmentRpcFailure<TTag>>;
@@ -151,6 +153,7 @@ export function runStream<TTag extends EnvironmentStreamCommandRpcTag>(
   return Stream.unwrap(
     currentSession().pipe(
       Effect.map((session) => {
+        // SAFETY: Stream command tags select schema-generated streams when called without queue options.
         const method = session.client[tag] as (
           input: EnvironmentRpcInput<TTag>,
         ) => Stream.Stream<EnvironmentRpcStreamValue<TTag>, EnvironmentRpcStreamFailure<TTag>>;
@@ -200,6 +203,7 @@ export function subscribeDynamic<TTag extends EnvironmentSubscriptionRpcTag>(
           Option.match({
             onNone: () => Stream.empty,
             onSome: (session) => {
+              // SAFETY: Subscription tags select schema-generated streams with matching input and output schemas.
               const method = session.client[tag] as (
                 input: EnvironmentRpcInput<TTag>,
               ) => Stream.Stream<

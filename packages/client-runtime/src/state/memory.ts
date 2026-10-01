@@ -89,12 +89,13 @@ export function createMemoryEnvironmentAtoms<R, E>(
       }
       for (const threadId of threadIds ?? []) {
         if (threadId === target.input.threadId) continue;
-        const mounted = LISTED_FACT_TARGETS.map((listTarget) =>
-          listFactsFamily({
+        const mounted = LISTED_FACT_TARGETS.flatMap((listTarget) => {
+          const atom = listFactsFamily({
             environmentId: target.environmentId,
             input: { threadId, target: listTarget },
-          }),
-        ).filter((atom) => nodes.has(atom));
+          });
+          return nodes.has(atom) ? [atom] : [];
+        });
         // Chats whose lists are gone no longer need refreshes, so forget them.
         if (mounted.length === 0) threadIds?.delete(threadId);
         for (const atom of mounted) registry.refresh(atom);
