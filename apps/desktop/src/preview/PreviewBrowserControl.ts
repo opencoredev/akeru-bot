@@ -1,3 +1,4 @@
+import { decodeEvaluationValue } from "./PreviewEvaluation.ts";
 import { evaluateWithDebugger } from "./PreviewEvaluation.ts";
 import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
@@ -55,6 +56,8 @@ import {
 const decodeDebuggerParams = Schema.decodeUnknownOption(
   Schema.Record(Schema.String, Schema.Union([Schema.Json, Schema.Undefined])),
 );
+
+const decodeInjected = Schema.decodeUnknownEffect(Schema.Boolean);
 
 export const createPreviewBrowserControl = ({
   currentIso,
@@ -596,12 +599,12 @@ export const createPreviewBrowserControl = ({
     tabId: string,
     send: SendCommand,
   ) {
-    const installed = yield* evaluateWithDebugger<boolean>(
+    const installed = yield* evaluateWithDebugger(
       tabId,
       send,
       "Boolean(globalThis.__t3PlaywrightInjected)",
       true,
-    );
+    ).pipe(Effect.flatMap(decodeEvaluationValue(tabId, decodeInjected)));
 
     if (installed) return;
 

@@ -60,7 +60,8 @@ export const isDesktopIpcError = Schema.is(DesktopIpcError);
 export interface DesktopIpcMethod<E, R> {
   readonly channel: string;
   readonly handler: (
-    raw: Parameters<ReturnType<typeof Schema.decodeUnknownEffect<typeof Schema.Unknown>>>[0],
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Electron IPC delivers arbitrary renderer payloads; each registered handler decodes its request.
+    raw: unknown,
   ) => Effect.Effect<unknown, E, R>;
 }
 

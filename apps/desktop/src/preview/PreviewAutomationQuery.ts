@@ -1,3 +1,5 @@
+import { decodeEvaluationValue } from "./PreviewEvaluation.ts";
+import * as Schema from "effect/Schema";
 import type {
   PreviewAutomationEvaluateInput,
   PreviewAutomationScrollInput,
@@ -16,6 +18,21 @@ import type { createPreviewAutomationSnapshot } from "./PreviewAutomationSnapsho
 import type { createPreviewBrowserControl } from "./PreviewBrowserControl.ts";
 import type { createPreviewState } from "./PreviewState.ts";
 import { MAX_EVALUATION_BYTES, type SendCommand } from "./PreviewModel.ts";
+
+const decodeScrollResult = Schema.decodeUnknownEffect(
+  Schema.Union([
+    Schema.Struct({ ok: Schema.Literal(true) }),
+    Schema.Struct({ invalidSelector: Schema.Literal(true), message: Schema.String }),
+    Schema.Struct({ notFound: Schema.Literal(true) }),
+  ]),
+);
+
+const decodeWaitResult = Schema.decodeUnknownEffect(
+  Schema.Union([
+    Schema.Struct({ matched: Schema.Boolean }),
+    Schema.Struct({ invalidSelector: Schema.Literal(true), message: Schema.String }),
+  ]),
+);
 
 export const createPreviewAutomationQuery = ({
   automationLocator,
@@ -58,9 +75,7 @@ export const createPreviewAutomationQuery = ({
       ? yield* encodeJson({ operation: "automationScroll.encodeLocator", tabId }, locator)
       : null;
 
-    const result = yield* evaluateWithDebugger<
-      { ok: true } | { invalidSelector: true; message: string } | { notFound: true }
-    >(
+    const result = yield* evaluateWithDebugger(
       tabId,
       send,
       `(() => {
@@ -74,7 +89,7 @@ export const createPreviewAutomationQuery = ({
         }
       })()`,
       true,
-    );
+    ).pipe(Effect.flatMap(decodeEvaluationValue(tabId, decodeScrollResult)));
 
     if ("invalidSelector" in result) {
       return yield* new PreviewAutomationInvalidSelectorError({
@@ -173,9 +188,7 @@ export const createPreviewAutomationQuery = ({
     const deadline = (yield* currentMillis) + timeoutMs;
 
     while ((yield* currentMillis) <= deadline) {
-      const result = yield* evaluateWithDebugger<
-        { matched: boolean } | { invalidSelector: true; message: string }
-      >(
+      const result = yield* evaluateWithDebugger(
         tabId,
         send,
         `(() => {
@@ -193,7 +206,7 @@ export const createPreviewAutomationQuery = ({
               }
             })()`,
         true,
-      );
+      ).pipe(Effect.flatMap(decodeEvaluationValue(tabId, decodeWaitResult)));
 
       if ("invalidSelector" in result) {
         return yield* new PreviewAutomationInvalidSelectorError({

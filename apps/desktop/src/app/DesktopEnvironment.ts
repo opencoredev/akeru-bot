@@ -86,7 +86,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
     readonly runtimeInfo: DesktopRuntimeInfo;
     readonly resolvePickFolderDefaultPath: (
-      rawOptions: Parameters<typeof decodeFolderOptions>[0],
+      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Folder picker options arrive from Electron IPC and are decoded before resolving a path.
+      rawOptions: unknown,
     ) => Option.Option<string>;
     readonly resolveResourcePathCandidates: (fileName: string) => readonly string[];
   }

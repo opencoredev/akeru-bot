@@ -1,3 +1,5 @@
+import { decodeEvaluationValue } from "./PreviewEvaluation.ts";
+import * as Schema from "effect/Schema";
 import type {
   DesktopPreviewPointerEvent,
   PreviewAutomationClickInput,
@@ -28,6 +30,27 @@ import {
   type PointerEventListener,
   type SendCommand,
 } from "./PreviewModel.ts";
+
+const decodeClickPoint = Schema.decodeUnknownEffect(
+  Schema.Union([
+    Schema.Struct({ x: Schema.Number, y: Schema.Number }),
+    Schema.Struct({ invalidSelector: Schema.Literal(true), message: Schema.String }),
+    Schema.Struct({ notFound: Schema.Literal(true) }),
+  ]),
+);
+
+const decodeViewport = Schema.decodeUnknownEffect(
+  Schema.Struct({ width: Schema.Number, height: Schema.Number }),
+);
+
+const decodeTypeResult = Schema.decodeUnknownEffect(
+  Schema.Union([
+    Schema.Struct({ ok: Schema.Literal(true) }),
+    Schema.Struct({ invalidSelector: Schema.Literal(true), message: Schema.String }),
+    Schema.Struct({ notEditable: Schema.Literal(true) }),
+    Schema.Struct({ notFound: Schema.Literal(true) }),
+  ]),
+);
 
 export const createPreviewAutomationInput = ({
   automationLocator,
@@ -91,9 +114,7 @@ export const createPreviewAutomationInput = ({
       locator,
     );
 
-    const point = yield* evaluateWithDebugger<
-      { x: number; y: number } | { invalidSelector: true; message: string } | { notFound: true }
-    >(
+    const point = yield* evaluateWithDebugger(
       tabId,
       send,
       `(() => {
@@ -113,7 +134,7 @@ export const createPreviewAutomationInput = ({
           }
         })()`,
       true,
-    );
+    ).pipe(Effect.flatMap(decodeEvaluationValue(tabId, decodeClickPoint)));
 
     if ("invalidSelector" in point) {
       return yield* new PreviewAutomationInvalidSelectorError({
@@ -155,12 +176,12 @@ export const createPreviewAutomationInput = ({
     yield* prepareAutomationInput(send, true);
     const point = yield* resolveClickPoint(tabId, send, input);
 
-    const viewport = yield* evaluateWithDebugger<{ width: number; height: number }>(
+    const viewport = yield* evaluateWithDebugger(
       tabId,
       send,
       "({ width: window.innerWidth, height: window.innerHeight })",
       true,
-    );
+    ).pipe(Effect.flatMap(decodeEvaluationValue(tabId, decodeViewport)));
 
     if (point.x < 0 || point.y < 0 || point.x > viewport.width || point.y > viewport.height) {
       return yield* new PreviewAutomationCoordinatesOutsideViewportError({
@@ -235,12 +256,7 @@ export const createPreviewAutomationInput = ({
       input.text,
     );
 
-    const result = yield* evaluateWithDebugger<
-      | { ok: true }
-      | { invalidSelector: true; message: string }
-      | { notEditable: true }
-      | { notFound: true }
-    >(
+    const result = yield* evaluateWithDebugger(
       tabId,
       send,
       `(() => {
@@ -301,7 +317,7 @@ export const createPreviewAutomationInput = ({
           }
         })()`,
       true,
-    );
+    ).pipe(Effect.flatMap(decodeEvaluationValue(tabId, decodeTypeResult)));
 
     if ("invalidSelector" in result) {
       return yield* new PreviewAutomationInvalidSelectorError({

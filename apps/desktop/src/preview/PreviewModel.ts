@@ -224,17 +224,6 @@ export const artifactSiteSlug = (rawUrl: string): string => {
   }
 };
 
-export interface CdpEvaluationResult {
-  readonly result?: {
-    readonly value?: unknown;
-    readonly description?: string;
-  };
-  readonly exceptionDetails?: {
-    readonly text?: string;
-    readonly exception?: { readonly description?: string };
-  };
-}
-
 const decodeCaptureRect = Schema.decodeUnknownOption(
   Schema.Struct({
     x: Schema.Number,

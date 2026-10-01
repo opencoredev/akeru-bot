@@ -90,7 +90,8 @@ const decodeFolderOptions = Schema.decodeUnknownOption(
 );
 
 export function resolveWslPickFolderDefaultPath(
-  rawOptions: Parameters<typeof decodeFolderOptions>[0],
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Folder picker options arrive from Electron IPC and are decoded before resolving a WSL path.
+  rawOptions: unknown,
   config: WslConfig,
   distros: readonly WslDistro[],
   // Absolute Linux path of the user's home dir inside the chosen distro

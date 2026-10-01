@@ -132,7 +132,8 @@ const decodeReleaseNotes = Schema.decodeUnknownOption(
 );
 
 export function normalizeDesktopUpdateReleaseNotes(
-  releaseNotes: Parameters<typeof decodeReleaseNotes>[0],
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Release notes come from external updater metadata and are decoded before normalization.
+  releaseNotes: unknown,
   fallbackVersion: string,
 ): ReadonlyArray<DesktopUpdateReleaseNote> {
   const parsed = decodeReleaseNotes(releaseNotes);

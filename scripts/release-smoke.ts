@@ -36,6 +36,8 @@ const ciWorkflow = read(".github/workflows/ci.yml");
 
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
 
+const desktopArtifactConfig = read("scripts/lib/desktop-build/config.ts");
+
 const serverCli = read("apps/server/scripts/cli.ts");
 
 const depotWorkflowDirectory = NodePath.join(repoRoot, ".depot/workflows");
@@ -51,13 +53,13 @@ if (NodeFS.existsSync(depotWorkflowDirectory)) {
 }
 
 assertContains(
-  desktopArtifactBuilder,
+  desktopArtifactConfig,
   '"Akeru-Bot-${version}-${arch}.${ext}"',
   "Desktop artifacts do not use the Akeru Bot release name.",
 );
 
 assertContains(
-  desktopArtifactBuilder,
+  desktopArtifactConfig,
   '"Akeru-Bot-${version}-x64.${ext}"',
   "Linux desktop artifacts do not use the advertised x64 release name.",
 );
@@ -269,19 +271,19 @@ assertOmits(releaseSmokeWorkflow, "depot-", "Depot runners");
 assertOmits(releaseWorkflow, "depot-", "Depot runners");
 
 assertOmits(
-  desktopArtifactBuilder,
+  desktopArtifactConfig,
   'const DESKTOP_APP_ID = "com.t3tools.t3code"',
   "legacy T3 desktop bundle identifier",
 );
 
 assertContains(
-  desktopArtifactBuilder,
+  desktopArtifactConfig,
   'const DESKTOP_APP_ID = "dev.leodoes.akeru"',
   "Akeru desktop bundle identifier is missing.",
 );
 
 assertContains(
-  desktopArtifactBuilder,
+  desktopArtifactConfig,
   'identity: "-"',
   "Unsigned macOS builds do not opt into a sealed ad-hoc signature.",
 );

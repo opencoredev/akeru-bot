@@ -1,4 +1,6 @@
-import type * as Schema from "effect/Schema";
+import { PreviewAutomationElement } from "@akeru/contracts";
+import { decodeEvaluationValue } from "./PreviewEvaluation.ts";
+import * as Schema from "effect/Schema";
 
 interface PreviewSelectorDiagnostics {
   readonly selectorKind: PreviewAutomationSelectorKind;
@@ -6,7 +8,6 @@ interface PreviewSelectorDiagnostics {
 }
 
 import * as Predicate from "effect/Predicate";
-import type { PreviewAutomationSnapshot } from "@akeru/contracts";
 
 import { type BrowserWindow, desktopCapturer, nativeImage } from "electron";
 
@@ -32,6 +33,16 @@ import {
   type BrowserDiagnostics,
   type SendCommand,
 } from "./PreviewModel.ts";
+
+const decodePage = Schema.decodeUnknownEffect(
+  Schema.Struct({
+    url: Schema.String,
+    title: Schema.String,
+    loading: Schema.Boolean,
+    visibleText: Schema.String,
+    interactiveElements: Schema.Array(PreviewAutomationElement),
+  }),
+);
 
 export const createPreviewAutomationSnapshot = ({
   evaluateWithDebugger,
@@ -105,13 +116,7 @@ export const createPreviewAutomationSnapshot = ({
         discard: true,
       });
 
-      const page = yield* evaluateWithDebugger<{
-        url: string;
-        title: string;
-        loading: boolean;
-        visibleText: string;
-        interactiveElements: PreviewAutomationSnapshot["interactiveElements"];
-      }>(
+      const page = yield* evaluateWithDebugger(
         tabId,
         send,
         `(() => {
@@ -166,7 +171,7 @@ export const createPreviewAutomationSnapshot = ({
           };
         })()`,
         true,
-      );
+      ).pipe(Effect.flatMap(decodeEvaluationValue(tabId, decodePage)));
 
       const [accessibility, initialScreenshotResult, diagnostics, timelines] = yield* Effect.all([
         send("Accessibility.getFullAXTree"),
