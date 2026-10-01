@@ -49,16 +49,18 @@ function Input({
 
   if (nativeInput) {
     const { style, onValueChange: _onValueChange, ...nativeInputProps } = props;
-    // oxlint-disable-next-line shadcn/no-inline-styles -- primitive forwards the caller's style prop to the native input
-    const nativeStyle = Predicate.isFunction(style) ? undefined : style;
+
+    // Base UI accepts a state callback for style; a native input forwards only a plain object.
+    const forwardedProps = Predicate.isFunction(style)
+      ? nativeInputProps
+      : { ...nativeInputProps, style };
 
     inputElement = (
       <input
         className={inputClassName}
         data-slot="input"
         size={Predicate.isNumber(size) ? size : undefined}
-        style={nativeStyle}
-        {...nativeInputProps}
+        {...forwardedProps}
       />
     );
   } else {
