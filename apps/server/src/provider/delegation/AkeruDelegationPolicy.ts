@@ -69,7 +69,9 @@ export interface AkeruDelegationChildOutcome {
 
 export interface AkeruDelegationRuntimeOptions {
   readonly readSnapshot: () => Promise<OrchestrationReadModel>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+  readonly dispatch: (
+    command: OrchestrationCommand,
+  ) => Promise<{ readonly sequence: number } | void>;
   /**
    * Resolves with the child's turn outcome. Rejects with
    * `PendingWaiterTimeoutError` at the deadline, or after a bounded default

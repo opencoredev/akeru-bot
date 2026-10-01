@@ -164,6 +164,7 @@ async function resolvePinnedAddress(
 }
 
 function pinnedLookup(pinned: PinnedAddress): NodeHttp.RequestOptions["lookup"] {
+  // SAFETY: This lookup implements both Node DNS overloads, returning a list only when all is requested.
   return ((
     _hostname: string,
     options: { readonly all?: boolean },

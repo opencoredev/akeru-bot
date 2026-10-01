@@ -1,3 +1,7 @@
+import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
+import type { ToolsInput } from "@mastra/core/agent";
+import type { BrowserRpcParams } from "./browser/BotBrowserTypes.ts";
+import { probeTool } from "./test-support/toolProbe.ts";
 import {
   LocalFilesystem,
   LocalSandbox,
@@ -34,16 +38,8 @@ function rpc() {
   return { call, attachment, reconnect, close } satisfies BotBrowserRpc;
 }
 
-async function executeTool(
-  tool: unknown,
-  input: Readonly<Record<string, unknown>>,
-): Promise<unknown> {
-  const execute = (tool as { execute?: (input: Readonly<Record<string, unknown>>) => unknown })
-    .execute;
-
-  if (!execute) throw new Error("expected executable tool");
-
-  return execute(input);
+async function executeTool(tool: ToolsInput[string] | undefined, input: BrowserRpcParams) {
+  return probeTool(tool).execute(input);
 }
 
 describe("sandbox bot browser", () => {
@@ -162,6 +158,8 @@ describe("sandbox bot browser", () => {
   });
 
   it("creates and reconnects one remote browser while preserving its current URL", async () => {
+    const outputForCommand = (command: string) => (command === "sh" ? "4242\n" : "");
+
     const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
       if (command === "sh" && args[1]?.includes("while kill"))
         return await new Promise<never>(() => {});
@@ -173,9 +171,7 @@ describe("sandbox bot browser", () => {
             ? args[0] === "-s"
               ? "Linux\n"
               : "x86_64\n"
-            : command === "sh"
-              ? "4242\n"
-              : "",
+            : outputForCommand(command),
         stderr: "",
         success: true,
         executionTimeMs: 1,
@@ -184,11 +180,11 @@ describe("sandbox bot browser", () => {
 
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
-      sandbox: {
+      sandbox: partialSdkFixture<WorkspaceSandbox>({
         id: "remote-workspace",
         provider: "e2b",
         executeCommand,
-      } as unknown as WorkspaceSandbox,
+      }),
     });
 
     const browserEndpoint = vi.fn(async () => ({
@@ -276,11 +272,11 @@ describe("sandbox bot browser", () => {
       threadId: "unsupported-remote-browser",
       workspace: new Workspace({
         filesystem: new LocalFilesystem({ basePath: process.cwd() }),
-        sandbox: {
+        sandbox: partialSdkFixture<WorkspaceSandbox>({
           id: "unsupported-remote-workspace",
           provider: "remote",
           executeCommand: vi.fn(),
-        } as unknown as WorkspaceSandbox,
+        }),
       }),
       cacheDir: "/tmp/unused-remote-browser-cache",
     });
@@ -296,11 +292,14 @@ describe("sandbox bot browser", () => {
       threadId: "startup-failure",
       workspace: new Workspace({
         filesystem: new LocalFilesystem({ basePath: process.cwd() }),
-        sandbox: {
-          id: "local",
-          provider: "local",
-          executeCommand: vi.fn(),
-        } as unknown as WorkspaceSandbox,
+        sandbox: partialSdkFixture<WorkspaceSandbox>(
+          {
+            id: "local",
+            provider: "local",
+            executeCommand: vi.fn(),
+          },
+          ["processes"],
+        ),
       }),
       cacheDir: "/tmp/unused-remote-browser-cache",
       onFailure,
@@ -340,7 +339,11 @@ describe("sandbox bot browser", () => {
 
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
-      sandbox: { id: "remote", provider: "e2b", executeCommand } as unknown as WorkspaceSandbox,
+      sandbox: partialSdkFixture<WorkspaceSandbox>({
+        id: "remote",
+        provider: "e2b",
+        executeCommand,
+      }),
     });
 
     vi.stubGlobal(
@@ -382,7 +385,7 @@ describe("sandbox bot browser", () => {
       const secondMonitorStarted = new Promise<void>((resolve) => (secondMonitorReceipt = resolve));
       let failureReceipt!: () => void;
       const failureObserved = new Promise<void>((resolve) => (failureReceipt = resolve));
-      const onFailure = vi.fn((_error: unknown) => failureReceipt());
+      const onFailure = vi.fn((_error) => failureReceipt());
       const onReady = vi.fn();
       let monitorCalls = 0;
 
@@ -425,7 +428,11 @@ describe("sandbox bot browser", () => {
 
       const workspace = new Workspace({
         filesystem: new LocalFilesystem({ basePath: process.cwd() }),
-        sandbox: { id: "remote", provider: "e2b", executeCommand } as unknown as WorkspaceSandbox,
+        sandbox: partialSdkFixture<WorkspaceSandbox>({
+          id: "remote",
+          provider: "e2b",
+          executeCommand,
+        }),
       });
 
       vi.stubGlobal(

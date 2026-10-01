@@ -16,7 +16,7 @@ function structuralMethod(value: string): string {
   return value.length <= 128 && /^[A-Za-z][A-Za-z0-9._:/-]*$/.test(value) ? value : "unknown";
 }
 
-function summarizePayload(payload: unknown): Readonly<Record<string, unknown>> {
+function summarizePayload<Payload>(payload: Payload) {
   if (payload === null) return { valueType: "null" };
 
   if (Predicate.isString(payload)) {
@@ -31,13 +31,13 @@ function summarizePayload(payload: unknown): Readonly<Record<string, unknown>> {
     return { valueType: "array", itemCount: payload.length };
   }
 
-  if (!Predicate.isObjectOrArray(payload)) {
+  if (!Predicate.isObject(payload)) {
     // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Native logs record the JavaScript primitive category without reading the payload.
     return { valueType: typeof payload };
   }
 
   try {
-    const record = payload as Record<string, unknown>;
+    const record = payload;
 
     return {
       valueType: "object",
@@ -73,19 +73,24 @@ function formatProtocolLogPayload(event: EffectAcpProtocol.AcpProtocolLogEvent) 
   };
 }
 
-function isTransientProtocolMessage(message: unknown): boolean {
+function isTransientProtocolMessage<Message>(message: Message): boolean {
   if (!Predicate.isObjectOrArray(message) || message === null) return false;
-  const method = Reflect.get(message, "tag") ?? Reflect.get(message, "method");
+
+  const method =
+    ("tag" in message ? message.tag : undefined) ??
+    ("method" in message ? message.method : undefined);
 
   if (method !== "session/update") return false;
 
-  const payload = Reflect.get(message, "payload") ?? Reflect.get(message, "params");
+  const payload =
+    ("payload" in message ? message.payload : undefined) ??
+    ("params" in message ? message.params : undefined);
 
   if (!Predicate.isObjectOrArray(payload) || payload === null) return false;
-  const update = Reflect.get(payload, "update");
+  const update = "update" in payload ? payload.update : undefined;
 
   if (!Predicate.isObjectOrArray(update) || update === null) return false;
-  const updateType = Reflect.get(update, "sessionUpdate");
+  const updateType = "sessionUpdate" in update ? update.sessionUpdate : undefined;
 
   return Predicate.isString(updateType) && transientProtocolUpdates.has(updateType);
 }
@@ -140,9 +145,9 @@ export const makeAcpNativeLoggerFactory = Effect.fn("makeAcpNativeLoggerFactory"
     readonly threadId: ThreadId;
     readonly verboseProtocolLogging?: boolean;
   }): Pick<AcpSessionRuntime.AcpSessionRuntimeOptions, "requestLogger" | "protocolLogging"> => {
-    const writeNativeAcpLog = (logInput: {
+    const writeNativeAcpLog = <Payload>(logInput: {
       readonly kind: "request" | "protocol";
-      readonly payload: unknown;
+      readonly payload: Payload;
     }) =>
       Effect.gen(function* () {
         if (!input.nativeEventLogger) return;

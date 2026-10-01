@@ -21,7 +21,7 @@ import {
 import type { ProviderDriver } from "../ProviderDriver.ts";
 import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { defaultProviderContinuationIdentity } from "../ProviderDriver.ts";
-import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import { manualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("opencodeGo");
 
@@ -152,7 +152,7 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
         adapter: undefined,
         textGeneration: undefined,
         snapshot: {
-          maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+          maintenanceCapabilities: manualOnlyProviderMaintenanceCapabilities({
             provider: DRIVER_KIND,
             packageName: null,
           }),

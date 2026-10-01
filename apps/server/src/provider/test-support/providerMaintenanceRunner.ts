@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import {
   ProviderDriverKind,
@@ -18,7 +19,7 @@ import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import { ProviderRegistry, type ProviderRegistryShape } from "../Services/ProviderRegistry.ts";
 import * as ProviderMaintenanceRunner from "../providerMaintenanceRunner.ts";
 import {
-  makeProviderMaintenanceCapabilities,
+  providerMaintenanceCapabilities,
   ProviderVersionCache,
   type ProviderMaintenanceCapabilities,
 } from "../providerMaintenance.ts";
@@ -48,7 +49,7 @@ export function makeproviderMaintenanceRunnerTestSupport() {
 
   function lifecycleFor(provider: ProviderDriverKind): ProviderMaintenanceCapabilities {
     if (provider === CURSOR_DRIVER) {
-      return makeProviderMaintenanceCapabilities({
+      return providerMaintenanceCapabilities({
         provider,
         packageName: null,
         updateExecutable: "cursor-agent",
@@ -57,7 +58,7 @@ export function makeproviderMaintenanceRunnerTestSupport() {
       });
     }
 
-    return makeProviderMaintenanceCapabilities({
+    return providerMaintenanceCapabilities({
       provider,
       packageName: provider === OPENCODE_DRIVER ? "opencode-ai" : "@openai/codex",
       updateExecutable: "npm",
@@ -143,10 +144,9 @@ export function makeproviderMaintenanceRunnerTestSupport() {
     return Layer.succeed(
       ChildProcessSpawner.ChildProcessSpawner,
       ChildProcessSpawner.make((command) => {
-        const childProcess = command as unknown as {
-          readonly command: string;
-          readonly args: ReadonlyArray<string>;
-        };
+        if (!Predicate.isTagged(command, "StandardCommand"))
+          return Effect.die(new Error("Expected a standard command."));
+        const childProcess = command;
 
         return Effect.succeed(mockHandle(handler(childProcess.command, childProcess.args)));
       }),

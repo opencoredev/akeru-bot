@@ -1,6 +1,6 @@
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
-import { type Agent, type Model } from "@opencode-ai/sdk/v2";
+import { type Agent } from "@opencode-ai/sdk/v2";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 
@@ -34,17 +34,39 @@ export const AGENT_HEADER_RE = /^(.+)\s+\((\S+)\)\s*$/;
 // definitions (in the OpenCode repo: packages/opencode/src/agent/agent.ts).
 export const KNOWN_HIDDEN_AGENTS = new Set(["compaction", "summary", "title"]);
 
+export const OpenCodeCliModelSchema = Schema.Struct({
+  id: Schema.String,
+  providerID: Schema.String,
+  name: Schema.String,
+  capabilities: Schema.optionalKey(
+    Schema.Struct({ reasoning: Schema.optionalKey(Schema.Boolean) }),
+  ),
+  variants: Schema.optionalKey(
+    Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Json)),
+  ),
+});
+
+export type OpenCodeCliModel = typeof OpenCodeCliModelSchema.Type;
+
+const decodeCliModel = Schema.decodeUnknownSync(OpenCodeCliModelSchema);
+
+const decodeAgentMode = Schema.decodeUnknownSync(Schema.Literals(["primary", "subagent", "all"]));
+
+const decodePermissions = Schema.decodeUnknownSync(
+  Schema.Array(
+    Schema.Struct({
+      permission: Schema.String,
+      pattern: Schema.String,
+      action: Schema.Literals(["allow", "deny", "ask"]),
+    }),
+  ),
+);
+
 /** @internal */
-export function parseModelsCliOutput(stdout: string): {
-  readonly providers: ReadonlyMap<
-    string,
-    { readonly id: string; readonly name: string; readonly models: { [key: string]: Model } }
-  >;
-  readonly connected: ReadonlyArray<string>;
-} {
+export function parseModelsCliOutput(stdout: string) {
   const providers = new Map<
     string,
-    { id: string; name: string; models: { [key: string]: Model } }
+    { id: string; name: string; models: { [key: string]: OpenCodeCliModel } }
   >();
 
   const lines = stdout.split("\n");
@@ -57,7 +79,7 @@ export function parseModelsCliOutput(stdout: string): {
 
       if (jsonStr.length > 0) {
         try {
-          const model = JSON.parse(jsonStr) as Model;
+          const model = decodeCliModel(JSON.parse(jsonStr), { onExcessProperty: "preserve" });
           const separator = currentSlug.indexOf("/");
 
           if (separator > 0) {
@@ -117,10 +139,10 @@ export function parseAgentListCliOutput(stdout: string): ReadonlyArray<Agent> {
 
       if (jsonStr.length > 0) {
         try {
-          const permission = JSON.parse(jsonStr);
+          const permission = Array.from(decodePermissions(JSON.parse(jsonStr)));
           agents.push({
             name: currentHeader.name,
-            mode: currentHeader.mode as Agent["mode"],
+            mode: decodeAgentMode(currentHeader.mode),
             hidden: KNOWN_HIDDEN_AGENTS.has(currentHeader.name),
             permission,
             options: {},

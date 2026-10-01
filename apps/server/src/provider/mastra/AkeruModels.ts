@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
@@ -7,24 +8,30 @@ import { xaiProvider } from "@mastra/code-sdk/providers/xai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { isThinkingLevelSetting } from "@mastra/code-sdk/thinking";
-import { type ProviderDriverKind } from "@akeru/contracts";
+import { SubscriptionProviderId, type ProviderDriverKind } from "@akeru/contracts";
 import type { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import { akeruOpenAIProvider } from "../AkeruOpenAIProvider.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "../AkeruKimiProvider.ts";
 import { akeruOpenCodeGoProvider } from "../AkeruOpenCodeGoProvider.ts";
 import { type AkeruMastraState } from "./AkeruHarnessTypes.ts";
 
+const decodeInlineConfig = Schema.decodeUnknownSync(
+  Schema.Struct({ provider: Schema.optionalKey(Schema.Unknown) }),
+);
+
+const isSubscriptionProviderId = Schema.is(SubscriptionProviderId);
+
 export const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
 
 export type AkeruRunOptions = {
   readonly providerOptions?: unknown;
-  readonly [key: string]: unknown;
+  readonly requireToolApproval?: boolean | ((input: { readonly toolName: string }) => boolean);
 };
 
-export function withAkeruModelRunOptions(
-  runOptions: AkeruRunOptions,
+export function withAkeruModelRunOptions<Options extends AkeruRunOptions>(
+  runOptions: Options,
   state: AkeruMastraState,
-): AkeruRunOptions {
+) {
   const serviceTier = state.modelOptions?.serviceTier;
 
   if (!serviceTier) return runOptions;
@@ -60,7 +67,7 @@ export const MASTRA_MODEL_PREFIX = {
 
 export function mastraModelId(provider: ProviderDriverKind, model: string): string {
   const trimmed = model.trim();
-  const prefix = MASTRA_MODEL_PREFIX[provider as keyof typeof MASTRA_MODEL_PREFIX];
+  const prefix = Object.entries(MASTRA_MODEL_PREFIX).find(([driver]) => driver === provider)?.[1];
 
   if (!prefix) return trimmed.includes("/") ? trimmed : `${provider}/${trimmed}`;
   const token = `${prefix}/`;
@@ -68,26 +75,28 @@ export function mastraModelId(provider: ProviderDriverKind, model: string): stri
   return trimmed.startsWith(token) ? trimmed : `${token}${trimmed}`;
 }
 
-export function openCodeGoInlineConnection(environment: NodeJS.ProcessEnv | undefined): {
-  readonly apiKey?: string;
-  readonly baseUrl?: string;
-} {
+export function openCodeGoInlineConnection(environment: NodeJS.ProcessEnv | undefined) {
   const content = environment?.OPENCODE_CONFIG_CONTENT?.trim();
 
   if (!content) return {};
 
   try {
-    const parsed = JSON.parse(content) as {
-      readonly provider?: {
-        readonly "opencode-go"?: {
-          readonly options?: { readonly apiKey?: unknown; readonly baseURL?: unknown };
-        };
-      };
-    };
+    const parsed = decodeInlineConfig(JSON.parse(content));
+    const provider = parsed.provider;
 
-    const options = parsed.provider?.["opencode-go"]?.options;
-    const apiKey = Predicate.isString(options?.apiKey) ? options.apiKey.trim() : "";
-    const baseUrl = Predicate.isString(options?.baseURL) ? options.baseURL.trim() : "";
+    const go =
+      Predicate.isObject(provider) && "opencode-go" in provider
+        ? provider["opencode-go"]
+        : undefined;
+
+    const options =
+      Predicate.isObject(go) && "options" in go && Predicate.isObject(go.options) ? go.options : {};
+
+    const apiKey =
+      "apiKey" in options && Predicate.isString(options.apiKey) ? options.apiKey.trim() : "";
+
+    const baseUrl =
+      "baseURL" in options && Predicate.isString(options.baseURL) ? options.baseURL.trim() : "";
 
     return {
       ...(apiKey ? { apiKey } : {}),
@@ -126,20 +135,19 @@ export function resolveAkeruMastraModel(
   const savedApiKey = (provider: Parameters<NonNullable<typeof getSubscriptionApiKey>>[0]) =>
     instanceId ? getSubscriptionApiKey?.(provider, instanceId) : getSubscriptionApiKey?.(provider);
 
+  // SAFETY: The scoped view inherits AuthStorage methods and state, and overrides only credential lookup.
   const scopedAuthStorage =
     instanceId && getSubscriptionOAuth && getSubscriptionAccessToken
       ? Object.assign(Object.create(authStorage) as AuthStorage, {
           reload: () => {},
           get: (provider: string) =>
-            getSubscriptionOAuth(
-              provider as Parameters<typeof getSubscriptionOAuth>[0],
-              instanceId,
-            ),
+            isSubscriptionProviderId(provider)
+              ? getSubscriptionOAuth(provider, instanceId)
+              : undefined,
           getApiKey: (provider: string) =>
-            getSubscriptionAccessToken(
-              provider as Parameters<typeof getSubscriptionAccessToken>[0],
-              instanceId,
-            ),
+            isSubscriptionProviderId(provider)
+              ? getSubscriptionAccessToken(provider, instanceId)
+              : undefined,
         })
       : authStorage;
 

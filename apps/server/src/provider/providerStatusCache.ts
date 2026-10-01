@@ -34,15 +34,18 @@ export const orderProviderSnapshots = (
       left.instanceId.localeCompare(right.instanceId),
   );
 
+type CachedProviderSnapshot = Omit<ServerProvider, "instanceId" | "driver"> &
+  Partial<Pick<ServerProvider, "instanceId" | "driver">>;
+
 export const isCachedProviderCorrelated = (input: {
-  readonly cachedProvider: ServerProvider;
+  readonly cachedProvider: CachedProviderSnapshot;
   readonly fallbackProvider: ServerProvider;
 }): boolean =>
   input.cachedProvider.instanceId === input.fallbackProvider.instanceId &&
   input.cachedProvider.driver === input.fallbackProvider.driver;
 
 export const hydrateCachedProvider = (input: {
-  readonly cachedProvider: ServerProvider;
+  readonly cachedProvider: CachedProviderSnapshot;
   readonly fallbackProvider: ServerProvider;
 }): ServerProvider => {
   if (!isCachedProviderCorrelated(input)) {

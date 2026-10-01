@@ -1,3 +1,5 @@
+import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
+import { SandboxState } from "@daytona/sdk";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -23,12 +25,12 @@ describe("createBotWorkspace", () => {
     const identityFile = NodePath.join(baseDir, "identity.json");
     const destroy = vi.fn(async () => undefined);
 
-    const sandbox = {
+    const sandbox = partialSdkFixture<import("railway").Sandbox>({
       id: "railway-id",
       status: "RUNNING",
-      refresh: vi.fn(async () => undefined),
+      refresh: vi.fn(async () => ({ id: "railway-id" })),
       destroy,
-    } as unknown as import("railway").Sandbox;
+    });
 
     const create = vi.spyOn(Sandbox, "create").mockResolvedValue(sandbox);
     const connect = vi.spyOn(Sandbox, "connect").mockResolvedValue(sandbox);
@@ -81,9 +83,17 @@ describe("createBotWorkspace", () => {
       }),
     );
 
-    const refresh = vi.fn(async () => undefined);
-    const sandbox = { id: "railway-id", status: "RUNNING", exec, refresh };
-    const session = railway(sandbox as unknown as import("railway").Sandbox);
+    const refresh = vi.fn(async () => ({ id: "railway-id" }));
+
+    type RailwayFixture = {
+      id: string;
+      status: import("railway").SandboxStatus;
+      exec: typeof exec;
+      refresh: typeof refresh;
+    };
+
+    const sandbox: RailwayFixture = { id: "railway-id", status: "RUNNING", exec, refresh };
+    const session = railway(partialSdkFixture<import("railway").Sandbox>(sandbox));
     expect(
       await session.run("echo", ["it's private"], {
         cwd: "/tmp",
@@ -121,17 +131,17 @@ describe("createBotWorkspace", () => {
   });
 
   it("pauses and restarts Daytona workspaces", async () => {
-    let state = "started";
+    let state: NonNullable<import("@daytona/sdk").Sandbox["state"]> = SandboxState.STARTED;
 
     const pause = vi.fn(async () => {
-      state = "paused";
+      state = SandboxState.PAUSED;
     });
 
     const start = vi.fn(async () => {
-      state = "started";
+      state = SandboxState.STARTED;
     });
 
-    const sandbox = {
+    const sandbox = partialSdkFixture<import("@daytona/sdk").Sandbox>({
       id: "daytona-id",
       get state() {
         return state;
@@ -145,11 +155,11 @@ describe("createBotWorkspace", () => {
         token: "daytona-token",
       })),
       process: { executeCommand: vi.fn() },
-    } as unknown as import("@daytona/sdk").Sandbox;
+    });
 
-    const client = {
+    const client = partialSdkFixture<import("@daytona/sdk").Daytona>({
       [Symbol.asyncDispose]: vi.fn(async () => undefined),
-    } as unknown as import("@daytona/sdk").Daytona;
+    });
 
     const session = daytona(client, sandbox);
 
@@ -167,14 +177,16 @@ describe("createBotWorkspace", () => {
   });
 
   it("keeps E2B browser ingress private", async () => {
-    const session = e2b({
-      sandboxId: "e2b-id",
-      trafficAccessToken: "e2b-token",
-      getHost: (port: number) => `${port}-e2b.example`,
-      commands: { run: vi.fn() },
-      pause: vi.fn(),
-      kill: vi.fn(),
-    } as unknown as import("e2b").Sandbox);
+    const session = e2b(
+      partialSdkFixture<import("e2b").Sandbox>({
+        sandboxId: "e2b-id",
+        trafficAccessToken: "e2b-token",
+        getHost: (port: number) => `${port}-e2b.example`,
+        commands: { run: vi.fn() },
+        pause: vi.fn(),
+        kill: vi.fn(),
+      }),
+    );
 
     await expect(session.browserEndpoint(9223)).resolves.toEqual({
       url: "https://9223-e2b.example",
@@ -185,16 +197,18 @@ describe("createBotWorkspace", () => {
   it("adds the Vercel browser port without removing existing routes", async () => {
     const update = vi.fn(async () => undefined);
 
-    const session = vercel({
-      name: "vercel-id",
-      status: "running",
-      routes: [{ port: 3000 }],
-      update,
-      domain: (port: number) => `https://${port}-vercel.example`,
-      runCommand: vi.fn(),
-      stop: vi.fn(),
-      delete: vi.fn(),
-    } as unknown as import("@vercel/sandbox").Sandbox);
+    const session = vercel(
+      partialSdkFixture<import("@vercel/sandbox").Sandbox>({
+        name: "vercel-id",
+        status: "running",
+        routes: [{ port: 3000 }],
+        update,
+        domain: (port: number) => `https://${port}-vercel.example`,
+        runCommand: vi.fn(),
+        stop: vi.fn(),
+        delete: vi.fn(),
+      }),
+    );
 
     await expect(session.browserEndpoint(9223)).resolves.toEqual({
       url: "https://9223-vercel.example",
@@ -210,7 +224,7 @@ describe("createBotWorkspace", () => {
       status = "running";
     });
 
-    const box = {
+    const box = partialSdkFixture<import("@upstash/box").Box>({
       id: "upstash-id",
       getStatus: vi.fn(async () => ({ status })),
       resume,
@@ -222,7 +236,7 @@ describe("createBotWorkspace", () => {
         token: "upstash-token",
       })),
       exec: { command: vi.fn() },
-    } as unknown as import("@upstash/box").Box;
+    });
 
     const session = upstash(box);
 
@@ -237,28 +251,33 @@ describe("createBotWorkspace", () => {
   });
 
   it("fails closed when a remote provider omits browser credentials", async () => {
-    const e2bSession = e2b({
-      sandboxId: "e2b-id",
-      getHost: vi.fn(),
-      commands: { run: vi.fn() },
-      pause: vi.fn(),
-      kill: vi.fn(),
-    } as unknown as import("e2b").Sandbox);
+    const e2bSession = e2b(
+      partialSdkFixture<import("e2b").Sandbox>({
+        sandboxId: "e2b-id",
+        trafficAccessToken: "",
+        getHost: vi.fn(),
+        commands: { run: vi.fn() },
+        pause: vi.fn(),
+        kill: vi.fn(),
+      }),
+    );
 
-    const upstashSession = upstash({
-      id: "upstash-id",
-      getPublicURL: vi.fn(async () => ({ url: "https://upstash.example", port: 9223 })),
-    } as unknown as import("@upstash/box").Box);
+    const upstashSession = upstash(
+      partialSdkFixture<import("@upstash/box").Box>({
+        id: "upstash-id",
+        getPublicURL: vi.fn(async () => ({ url: "https://upstash.example", port: 9223 })),
+      }),
+    );
 
     const daytonaSession = daytona(
       {} as import("@daytona/sdk").Daytona,
-      {
+      partialSdkFixture<import("@daytona/sdk").Sandbox>({
         id: "daytona-id",
         getPreviewLink: vi.fn(async () => ({
           url: "https://daytona.example",
           token: "",
         })),
-      } as unknown as import("@daytona/sdk").Sandbox,
+      }),
     );
 
     await expect(e2bSession.browserEndpoint(9223)).rejects.toThrow("no traffic access token");

@@ -4,7 +4,7 @@ import { it, assert } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
-import { makeProviderMaintenanceCapabilities } from "./providerMaintenance.ts";
+import { providerMaintenanceCapabilities } from "./providerMaintenance.ts";
 import { makeproviderMaintenanceRunnerTestSupport } from "./test-support/providerMaintenanceRunner.ts";
 
 const {
@@ -75,7 +75,7 @@ describe("providerMaintenanceRunner", () => {
         ...registry,
         getProviderMaintenanceCapabilitiesForInstance: () =>
           Effect.succeed(
-            makeProviderMaintenanceCapabilities({
+            providerMaintenanceCapabilities({
               provider: CODEX_DRIVER,
               packageName: "@openai/codex",
               updateExecutable: "bun",

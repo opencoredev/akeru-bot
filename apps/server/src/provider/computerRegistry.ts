@@ -9,7 +9,7 @@ import {
   type ComputerInput,
   type ComputerSessionInput,
   type ComputerState,
-  type ThreadId,
+  ThreadId,
 } from "@akeru/contracts";
 import type { WorkspaceComputer } from "./workspaceComputer.ts";
 import { Effect, Queue, Schedule, Schema, Stream } from "effect";
@@ -90,7 +90,7 @@ export class ComputerRegistry {
 
   private publish(threadId: string) {
     for (const listener of this.listeners.get(threadId) ?? [])
-      listener(computerEvents.state({ state: this.state(threadId as ThreadId) }));
+      listener(computerEvents.state({ state: this.state(ThreadId.make(threadId)) }));
   }
 
   private publishWorkspace(computer: WorkspaceComputer) {

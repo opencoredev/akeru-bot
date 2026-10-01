@@ -221,7 +221,7 @@ export class AkeruSessionResources {
             : {}),
           ...(this.options.onBrowserFailure
             ? {
-                onFailure: (error: unknown) => {
+                onFailure: (error) => {
                   if (this.browsers.resourceBrowsers.get(input.workspaceResourceKey) === browser) {
                     this.browsers.reportBrowserFailure(input.workspaceResourceKey, error);
                   }
@@ -384,7 +384,7 @@ export class AkeruSessionResources {
             ? name.slice(AKERU_PREVIEW_TOOL_PREFIX.length)
             : name;
 
-          const execute = Reflect.get(tool, "execute") as unknown;
+          const execute = "execute" in tool ? tool.execute : undefined;
 
           if (!isCodexComputerUseTool(name) || !Predicate.isFunction(execute)) {
             return [exposedName, tool];
@@ -398,7 +398,7 @@ export class AkeruSessionResources {
                 const temporaryDirectory = this.computerUseTemporaryDirectories.get(threadId);
 
                 return sanitizeCodexComputerUseResult(
-                  await Reflect.apply(execute, tool, args),
+                  await execute.call(tool, ...args),
                   temporaryDirectory ? { temporaryDirectory } : undefined,
                 );
               },

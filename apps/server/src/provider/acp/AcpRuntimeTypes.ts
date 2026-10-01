@@ -12,6 +12,16 @@ export interface AcpSessionModeState {
   readonly availableModes: ReadonlyArray<AcpSessionMode>;
 }
 
+export interface AcpToolCallData {
+  toolCallId?: string;
+  kind?: string;
+  command?: string;
+  rawInput?: EffectAcpSchema.ToolCall["rawInput"];
+  rawOutput?: EffectAcpSchema.ToolCall["rawOutput"];
+  content?: AcpToolCallUpdate["content"];
+  locations?: AcpToolCallUpdate["locations"];
+}
+
 export interface AcpToolCallState {
   readonly toolCallId: string;
   readonly kind?: string;
@@ -19,7 +29,7 @@ export interface AcpToolCallState {
   readonly status?: "pending" | "inProgress" | "completed" | "failed";
   readonly command?: string;
   readonly detail?: string;
-  readonly data: Record<string, unknown>;
+  readonly data: AcpToolCallData;
 }
 
 export interface AcpPlanUpdate {

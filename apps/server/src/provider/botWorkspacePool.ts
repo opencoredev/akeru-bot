@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 
@@ -157,13 +158,17 @@ export class BotWorkspacePool {
       Effect.tap((workspace) =>
         Effect.tryPromise({ try: () => workspace.wake(), catch: toPoolError }).pipe(
           Effect.tapCause(() =>
-            workspace.provider === "local"
-              ? Effect.promise(() => workspace.destroy().catch(() => undefined))
-              : workspace.provider === "ascii"
-                ? Effect.void
-                : Effect.sync(() => {
-                    this.sleepers.set(key, workspace);
-                  }),
+            Match.value(workspace.provider).pipe(
+              Match.when("local", () =>
+                Effect.promise(() => workspace.destroy().catch(() => undefined)),
+              ),
+              Match.when("ascii", () => Effect.void),
+              Match.orElse(() =>
+                Effect.sync(() => {
+                  this.sleepers.set(key, workspace);
+                }),
+              ),
+            ),
           ),
         ),
       ),
@@ -217,14 +222,18 @@ export class BotWorkspacePool {
       Effect.tap(() => Effect.sync(() => this.sleepers.set(key, workspace))),
       // Remote workspaces can remain usable after a pause failure; retain them for retry.
       Effect.tapError(() =>
-        workspace.provider === "local"
-          ? Effect.promise(() => workspace.destroy().catch(() => undefined))
-          : workspace.provider === "ascii"
-            ? Effect.void
-            : Effect.sync(() => {
-                this.sleepers.set(key, workspace);
-                this.failed.add(key);
-              }),
+        Match.value(workspace.provider).pipe(
+          Match.when("local", () =>
+            Effect.promise(() => workspace.destroy().catch(() => undefined)),
+          ),
+          Match.when("ascii", () => Effect.void),
+          Match.orElse(() =>
+            Effect.sync(() => {
+              this.sleepers.set(key, workspace);
+              this.failed.add(key);
+            }),
+          ),
+        ),
       ),
       Effect.catch((error) => Effect.die(error.cause)),
     );
@@ -401,7 +410,7 @@ export class BotWorkspacePool {
 
         if (existing) return existing;
 
-        const destruction = workspace.destroy().catch((error: unknown) => {
+        const destruction = workspace.destroy().catch((error) => {
           if (state.destruction === destruction) delete state.destruction;
           throw error;
         });

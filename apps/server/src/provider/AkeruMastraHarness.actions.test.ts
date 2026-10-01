@@ -1,3 +1,5 @@
+type NestedAction = { action: string } | { nested: NestedAction };
+
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import { it } from "@effect/vitest";
@@ -56,7 +58,7 @@ describe("Akeru action classifier", () => {
   });
 
   it("requires approval when nested input exceeds the inspection limit", () => {
-    let args: unknown = { action: "send" };
+    let args: NestedAction = { action: "send" };
 
     for (let depth = 0; depth < 101; depth += 1) args = { nested: args };
 

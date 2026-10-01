@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import type { AkeruToolResult } from "./tools/AkeruToolTypes.ts";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
@@ -27,21 +29,23 @@ export interface CodexComputerUseServerConfig {
   readonly env: Record<string, string>;
 }
 
-function object(value: unknown, label: string): Record<string, unknown> {
+const decodeObject = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Json));
+
+function object(value: typeof Schema.Json.Type | undefined, label: string) {
   if (!Predicate.isObjectOrArray(value) || value === null || Array.isArray(value)) {
     throw new Error(`${label} is invalid.`);
   }
 
-  return value as Record<string, unknown>;
+  return decodeObject(value);
 }
 
-function entries(value: unknown): readonly Record<string, unknown>[] {
+function entries(value: typeof Schema.Json.Type | undefined) {
   if (!Array.isArray(value)) throw new Error("Codex returned an invalid plugin list.");
 
   return value.map((entry) => object(entry, "Codex plugin entry"));
 }
 
-function string(value: unknown, label: string): string {
+function string(value: typeof Schema.Json.Type | undefined, label: string): string {
   if (!Predicate.isString(value) || value.length === 0) throw new Error(`${label} is invalid.`);
 
   return value;
@@ -130,19 +134,19 @@ function screenshotDataUrl(url: string, temporaryDirectory?: string): string {
 }
 
 export function sanitizeCodexComputerUseResult(
-  value: unknown,
+  value: AkeruToolResult,
   options?: { readonly temporaryDirectory?: string },
-): unknown {
+): AkeruToolResult {
   let remaining = 10_000;
 
-  const visit = (entry: unknown, field?: string): unknown => {
+  const visit = (entry: AkeruToolResult, field?: string): AkeruToolResult => {
     remaining -= 1;
 
     if (remaining < 0) throw new Error("Computer Use returned too much data.");
 
     if (Array.isArray(entry)) return entry.map((item) => visit(item));
 
-    if (!Predicate.isObjectOrArray(entry) || entry === null) {
+    if (!Predicate.isObject(entry)) {
       if (field === "screenshot" && entry !== null) {
         throw new Error("Computer Use returned an invalid screenshot.");
       }
@@ -150,7 +154,7 @@ export function sanitizeCodexComputerUseResult(
       return entry;
     }
 
-    const object = entry as Record<string, unknown>;
+    const object = entry;
 
     if (object.type === "image") {
       const mediaType = object.mimeType ?? object.mediaType;
@@ -208,7 +212,7 @@ export async function resolveCodexComputerUseServer(options: {
     throw new Error("Could not inspect the Codex Computer Use plugin.");
   }
 
-  let document: Record<string, unknown>;
+  let document: ReturnType<typeof object>;
 
   try {
     document = object(JSON.parse(output), "Codex plugin list");
@@ -233,7 +237,7 @@ export async function resolveCodexComputerUseServer(options: {
   if (source.source !== "local") throw new Error("Codex Computer Use must use a local plugin.");
   let root: string;
   let manifestPath: string;
-  let manifest: Record<string, unknown>;
+  let manifest: ReturnType<typeof object>;
 
   try {
     root = NodeFS.realpathSync(string(source.path, "Codex Computer Use plugin path"));

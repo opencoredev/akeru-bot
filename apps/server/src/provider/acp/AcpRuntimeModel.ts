@@ -5,12 +5,14 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { type AcpPermissionRequest, type AcpParsedSessionEvent } from "./AcpRuntimeTypes.ts";
 import {
   normalizeToolKind,
-  makeToolCallState,
+  toolCallState,
   parseTypedToolCallState,
   boundToolCallRawPayload,
 } from "./AcpToolCalls.ts";
 
-function normalizePlanStepStatus(raw: unknown): "pending" | "inProgress" | "completed" {
+function normalizePlanStepStatus(
+  raw: EffectAcpSchema.PlanEntry["status"] | "inProgress",
+): "pending" | "inProgress" | "completed" {
   switch (raw) {
     case "completed":
       return "completed";
@@ -25,7 +27,7 @@ function normalizePlanStepStatus(raw: unknown): "pending" | "inProgress" | "comp
 export function parsePermissionRequest(
   params: EffectAcpSchema.RequestPermissionRequest,
 ): AcpPermissionRequest {
-  const toolCall = makeToolCallState(
+  const toolCall = toolCallState(
     {
       toolCallId: params.toolCall.toolCallId,
       title: params.toolCall.title,
@@ -54,10 +56,7 @@ export function parsePermissionRequest(
   };
 }
 
-export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotification): {
-  readonly modeId?: string;
-  readonly events: ReadonlyArray<AcpParsedSessionEvent>;
-} {
+export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotification) {
   const upd = params.update;
   const events: Array<AcpParsedSessionEvent> = [];
   let modeId: string | undefined;

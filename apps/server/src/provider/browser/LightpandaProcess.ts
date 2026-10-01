@@ -61,7 +61,7 @@ export function browserRequestTransport(
 }
 
 export type BrowserProcess = Pick<ProcessHandle, "kill"> & {
-  readonly wait?: () => Promise<unknown>;
+  readonly wait?: () => Promise<{ exitCode: number } | void>;
 };
 
 export function browserMonitorRetryDelayMs(failures: number): number {

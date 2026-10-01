@@ -1,3 +1,6 @@
+import type { ToolsInput } from "@mastra/core/agent";
+import type { BrowserRpcParams } from "./browser/BotBrowserTypes.ts";
+import { probeTool } from "./test-support/toolProbe.ts";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
@@ -9,16 +12,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { createBotBrowser } from "./botBrowser.ts";
 
-async function executeTool(
-  tool: unknown,
-  input: Readonly<Record<string, unknown>>,
-): Promise<unknown> {
-  const execute = (tool as { execute?: (input: Readonly<Record<string, unknown>>) => unknown })
-    .execute;
-
-  if (!execute) throw new Error("expected executable tool");
-
-  return execute(input);
+async function executeTool(tool: ToolsInput[string] | undefined, input: BrowserRpcParams) {
+  return probeTool(tool).execute(input);
 }
 
 describe.runIf(process.env.T3_BOT_BROWSER_INTEGRATION === "1")(

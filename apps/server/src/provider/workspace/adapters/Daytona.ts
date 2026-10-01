@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { DaytonaComputer } from "../../daytonaComputer.ts";
 import { WorkspaceComputer } from "../../workspaceComputer.ts";
@@ -12,7 +13,11 @@ export function daytona(
     await sandbox.refreshData();
     const current = String(sandbox.state);
 
-    return current === "destroyed" ? "missing" : current === "started" ? "running" : "sleeping";
+    return Match.value(current).pipe(
+      Match.when("destroyed", () => "missing" as const),
+      Match.when("started", () => "running" as const),
+      Match.orElse(() => "sleeping" as const),
+    );
   };
 
   const computer = new WorkspaceComputer(

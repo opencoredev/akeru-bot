@@ -1,6 +1,6 @@
 import * as Predicate from "effect/Predicate";
 import type { ToolsInput } from "@mastra/core/agent";
-import { createTool } from "@mastra/core/tools";
+import { type Tool, createTool } from "@mastra/core/tools";
 import { AkeruToolInputSchemas } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { z } from "zod";
@@ -16,7 +16,7 @@ function inputSchema(toolId: AkeruRuntimeToolId) {
   return isMemoryToolId(toolId) ? AkeruMemoryToolInputSchema : AkeruToolInputSchemas[toolId];
 }
 
-function omitNullValues(input: unknown): unknown {
+function omitNullValues<Input>(input: Input) {
   if (!input || !Predicate.isObjectOrArray(input) || Array.isArray(input)) return input;
 
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null));
@@ -28,7 +28,7 @@ export function createAkeruMastraTools(threadId: string, runtime: AkeruToolRunti
       const schema = inputSchema(definition.id);
       const standardSchema = Schema.toStandardJSONSchemaV1(schema);
 
-      const approval = (input: unknown) =>
+      const approval: NonNullable<Tool["needsApprovalFn"]> = (input) =>
         runtime.requiresApproval(threadId, definition.id, omitNullValues(input));
 
       const tool = createTool({

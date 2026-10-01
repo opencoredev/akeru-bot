@@ -161,8 +161,8 @@ export function createAkeruConversation(
       // The original failure stays the error's cause whether or not the
       // rollback lands; a rollback failure is carried beside it.
       let rollbackFailure: { readonly cause: unknown } | undefined;
-      await rollback().catch((rollbackCause: unknown) => {
-        rollbackFailure = { cause: rollbackCause };
+      await rollback().catch((cause: unknown) => {
+        rollbackFailure = { cause };
       });
       throw new AkeruObservationRestoreError({
         threadId,

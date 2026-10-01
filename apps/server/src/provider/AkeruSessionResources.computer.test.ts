@@ -1,3 +1,4 @@
+import { probeTool } from "./test-support/toolProbe.ts";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -121,11 +122,9 @@ describe("AkeruSessionResources", () => {
       mcpServers: [computerServer()],
     });
 
-    const tool = Reflect.get(resources.getConnectorTools("controller"), toolName) as {
-      execute: () => Promise<unknown>;
-    };
+    const tool = probeTool(resources.getConnectorTools("controller")[toolName]);
 
-    await expect(tool.execute()).rejects.toThrow("unknown screenshot");
+    await expect(tool.execute({})).rejects.toThrow("unknown screenshot");
     expect(execute).toHaveBeenCalledOnce();
     await resources.shutdown();
   });

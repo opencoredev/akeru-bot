@@ -16,7 +16,7 @@ import type * as OpenCodeAdapter from "../Services/OpenCodeAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderInstanceRegistry from "../Services/ProviderInstanceRegistry.ts";
 import type { ProviderInstance } from "../ProviderDriver.ts";
-import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import { manualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 import type * as TextGeneration from "../../textGeneration/TextGeneration.ts";
 import * as ProviderAdapterRegistryLayer from "./ProviderAdapterRegistry.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -100,7 +100,7 @@ const makeFakeInstance = (
     displayName: undefined,
     enabled: true,
     snapshot: {
-      maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+      maintenanceCapabilities: manualOnlyProviderMaintenanceCapabilities({
         provider: driverKind,
         packageName: null,
       }),

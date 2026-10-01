@@ -7,13 +7,13 @@ import {
   StreamErrorRetryProcessor,
 } from "@mastra/core/processors";
 
-export function isConnectionReset(error: unknown): boolean {
-  if (!error) return false;
-  const code = Predicate.isObjectOrArray(error) && "code" in error ? error.code : undefined;
+export function isConnectionReset(cause: unknown): boolean {
+  if (!cause) return false;
+  const code = Predicate.isObjectOrArray(cause) && "code" in cause ? cause.code : undefined;
 
   if (Predicate.isString(code) && code.toUpperCase() === "ECONNRESET") return true;
 
-  return error instanceof Error && /econnreset|socket hang up/i.test(error.message);
+  return cause instanceof Error && /econnreset|socket hang up/i.test(cause.message);
 }
 
 /**

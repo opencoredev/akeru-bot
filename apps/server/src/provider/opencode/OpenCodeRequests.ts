@@ -1,7 +1,12 @@
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeURL from "node:url";
-import type { ChatAttachment, ProviderApprovalDecision, RuntimeMode } from "@akeru/contracts";
+import type {
+  ProviderUserInputAnswers,
+  ChatAttachment,
+  ProviderApprovalDecision,
+  RuntimeMode,
+} from "@akeru/contracts";
 import {
   type FilePartInput,
   type PermissionRuleset,
@@ -86,7 +91,7 @@ export function toOpenCodePermissionReply(
 
 export function toOpenCodeQuestionAnswers(
   request: QuestionRequest,
-  answers: Record<string, unknown>,
+  answers: ProviderUserInputAnswers,
 ): Array<QuestionAnswer> {
   return request.questions.map((question, index) => {
     const raw =

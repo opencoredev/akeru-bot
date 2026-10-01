@@ -31,6 +31,7 @@ import { resolveSpawnCommand } from "@akeru/shared/shell";
 import {
   type OpenCodeSkill,
   parseModelsCliOutput,
+  type OpenCodeCliModel,
   parseAgentListCliOutput,
   parseSkillsCliOutput,
 } from "./opencode/OpenCodeCliParsers.ts";
@@ -80,7 +81,7 @@ export class OpenCodeRuntimeError extends Data.TaggedError(OPENCODE_RUNTIME_ERRO
     P.isTagged(u, OPENCODE_RUNTIME_ERROR_TAG);
 }
 
-function encodeJsonStringForDiagnostics(input: unknown): string | undefined {
+function encodeJsonStringForDiagnostics<Input>(input: Input): string | undefined {
   const result = encodeUnknownJsonStringExit(input);
 
   return Exit.isSuccess(result) ? result.value : undefined;
@@ -91,11 +92,11 @@ export function openCodeRuntimeErrorDetail(cause: unknown): string {
 
   if (cause instanceof Error && cause.message.trim().length > 0) return cause.message.trim();
 
-  if (cause && Predicate.isObjectOrArray(cause)) {
+  if (Predicate.isObject(cause)) {
     // SDK v2 throws { response, request, error? } shapes — extract what's useful
-    const anyCause = cause as Record<string, unknown>;
-    const status = (anyCause.response as { status?: number } | undefined)?.status;
-    const body = anyCause.error ?? anyCause.data ?? anyCause.body;
+    const response = Predicate.isObject(cause.response) ? cause.response : undefined;
+    const status = response?.status;
+    const body = cause.error ?? cause.data ?? cause.body;
     const encodedBody = encodeJsonStringForDiagnostics(body ?? cause);
 
     if (encodedBody) {
@@ -123,7 +124,15 @@ export interface OpenCodeCommandResult {
 }
 
 export interface OpenCodeInventory {
-  readonly providerList: ProviderListResponse;
+  readonly providerList: Omit<ProviderListResponse, "all"> & {
+    readonly all: ReadonlyArray<
+      Omit<ProviderListResponse["all"][number], "models"> & {
+        readonly models: Readonly<
+          Record<string, ProviderListResponse["all"][number]["models"][string] | OpenCodeCliModel>
+        >;
+      }
+    >;
+  };
   readonly agents: ReadonlyArray<Agent>;
   readonly skills: ReadonlyArray<OpenCodeSkill>;
 }
@@ -532,7 +541,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
 
   const loadInventoryFromCli: OpenCodeRuntimeShape["loadInventoryFromCli"] = (input) =>
     Effect.gen(function* () {
-      const env = input.environment !== undefined ? { environment: input.environment } : ({} as {});
+      const env = input.environment !== undefined ? { environment: input.environment } : {};
       const commandContext = { cwd: input.cwd, ...env };
 
       const runModelsCli = () =>
@@ -615,16 +624,16 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       const parsed = parseModelsCliOutput(modelsResult.value.stdout);
       const connected = [...parsed.connected];
 
-      const allProviders: ProviderListResponse["all"] = [...parsed.providers.values()].map(
-        (provider) => ({
-          id: provider.id,
-          name: provider.name,
-          source: "config" as const,
-          env: [],
-          options: {},
-          models: provider.models,
-        }),
-      );
+      const allProviders: OpenCodeInventory["providerList"]["all"] = [
+        ...parsed.providers.values(),
+      ].map((provider) => ({
+        id: provider.id,
+        name: provider.name,
+        source: "config" as const,
+        env: [],
+        options: {},
+        models: provider.models,
+      }));
 
       // Agent and skill metadata enrich the provider snapshot but are not required
       // for an authoritative model inventory, so either may degrade to an empty list.

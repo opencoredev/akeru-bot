@@ -1,3 +1,4 @@
+import { probeTool } from "./test-support/toolProbe.ts";
 import { toolRuntimeFixture } from "./test-support/toolRuntimeFixture.ts";
 import { AKERU_TOOL_CATALOG } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -27,9 +28,7 @@ describe("createAkeruMastraTools", () => {
       execute,
     });
 
-    const shell = createAkeruMastraTools("thread-1", runtime).Shell as {
-      readonly execute?: (input: unknown, context: unknown) => Promise<unknown>;
-    };
+    const shell = probeTool(createAkeruMastraTools("thread-1", runtime).Shell);
 
     if (!shell?.execute) throw new Error("Shell tool is unavailable.");
 
@@ -59,9 +58,7 @@ describe("createAkeruMastraTools", () => {
       },
     });
 
-    const memory = createAkeruMastraTools("thread-memory", runtime).memory as {
-      readonly execute?: (input: unknown, context: unknown) => Promise<unknown>;
-    };
+    const memory = probeTool(createAkeruMastraTools("thread-memory", runtime).memory);
 
     if (!memory?.execute) throw new Error("Memory tool is unavailable.");
 

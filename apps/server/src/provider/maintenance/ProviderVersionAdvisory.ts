@@ -13,7 +13,7 @@ import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import {
   type ProviderMaintenanceCapabilities,
-  makeManualProviderMaintenanceCapabilities,
+  manualProviderMaintenanceCapabilities,
   nonEmptyString,
 } from "./ProviderMaintenanceCapabilities.ts";
 
@@ -70,7 +70,7 @@ export function createProviderVersionAdvisory(input: {
   readonly maintenanceCapabilities?: ProviderMaintenanceCapabilities;
 }): ServerProviderVersionAdvisory {
   const capabilities =
-    input.maintenanceCapabilities ?? makeManualProviderMaintenanceCapabilities(input.driver);
+    input.maintenanceCapabilities ?? manualProviderMaintenanceCapabilities(input.driver);
 
   const latestVersion = input.latestVersion ?? null;
 
@@ -158,7 +158,7 @@ export const enrichProviderSnapshotWithVersionAdvisory = Effect.fn(
   },
 ) {
   const capabilities =
-    maintenanceCapabilities ?? makeManualProviderMaintenanceCapabilities(snapshot.driver);
+    maintenanceCapabilities ?? manualProviderMaintenanceCapabilities(snapshot.driver);
 
   const shouldResolveLatestVersion =
     options?.enableProviderUpdateChecks !== false &&

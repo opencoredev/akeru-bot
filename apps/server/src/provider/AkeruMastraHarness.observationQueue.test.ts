@@ -285,19 +285,14 @@ describe("AkeruMastraHarness", () => {
 
         const observe = vi
           .spyOn(ObservationalMemory.prototype, "observe")
-          .mockImplementation(
-            async (input: {
-              threadId: string;
-              requestContext?: { getRaw: (key: string) => unknown };
-            }) => {
-              controllers.push({
-                threadId: input.threadId,
-                controller: input.requestContext?.getRaw("controller"),
-              });
+          .mockImplementation(async (input) => {
+            controllers.push({
+              threadId: input.threadId,
+              controller: input.requestContext?.getRaw("controller"),
+            });
 
-              return { observed: false, reflected: false, record: {} } as never;
-            },
-          );
+            return { observed: false, reflected: false, record: {} } as never;
+          });
 
         const harness = await makeObservationHarness(open, directory);
 

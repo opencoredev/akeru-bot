@@ -1,3 +1,4 @@
+import type { BrowserRpcParams } from "./browser/BotBrowserTypes.ts";
 import * as Predicate from "effect/Predicate";
 import { Schema } from "effect";
 import type { AkeruBrowserEndpoint } from "./botWorkspace.ts";
@@ -8,8 +9,8 @@ const Targets = Schema.Array(
 
 const Message = Schema.Struct({
   id: Schema.optional(Schema.Number),
-  result: Schema.optional(Schema.Unknown),
-  error: Schema.optional(Schema.Unknown),
+  result: Schema.optional(Schema.Json),
+  error: Schema.optional(Schema.Json),
 });
 
 const Document = Schema.Struct({ root: Schema.Struct({ nodeId: Schema.Number }) });
@@ -47,7 +48,7 @@ export class ComputerCdp {
   private nextId = 1;
   private readonly pending = new Map<
     number,
-    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+    { resolve: (value: typeof Message.Type.result) => void; reject: (error: Error) => void }
   >();
   private constructor(socket: WebSocket) {
     this.socket = socket;
@@ -140,8 +141,8 @@ export class ComputerCdp {
 
   private request(
     method: string,
-    params: Readonly<Record<string, unknown>> = {},
-  ): Promise<unknown> {
+    params: BrowserRpcParams = {},
+  ): Promise<typeof Message.Type.result> {
     if (this.socket.readyState !== WebSocket.OPEN)
       return Promise.reject(new Error("Graphical browser disconnected."));
     const id = this.nextId++;
@@ -169,7 +170,7 @@ export class ComputerCdp {
     });
   }
 
-  async call(name: string, input: Readonly<Record<string, unknown>>) {
+  async call(name: string, input: BrowserRpcParams) {
     if (name === "goto") {
       await this.request("Page.navigate", { url: input.url });
 

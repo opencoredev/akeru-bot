@@ -182,7 +182,7 @@ const DEFAULT_OPENCODE_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabi
 
 function openCodeCapabilitiesForModel(input: {
   readonly providerID: string;
-  readonly model: ProviderListResponse["all"][number]["models"][string];
+  readonly model: OpenCodeInventory["providerList"]["all"][number]["models"][string];
   readonly agents: ReadonlyArray<Agent>;
 }): ModelCapabilities {
   const variantValues = Object.keys(input.model.variants ?? {});

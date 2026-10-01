@@ -168,7 +168,7 @@ export type AkeruActionInspection = {
   readonly hasUnclassifiedIntent: boolean;
 };
 
-export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActionInspection {
+export function inspectAkeruAction<Input>(toolName: string, args?: Input): AkeruActionInspection {
   const namedAction = criticalActionFromText(toolName);
 
   if (namedAction) return { action: namedAction, hasUnclassifiedIntent: false };
@@ -245,11 +245,14 @@ export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActio
   return { action: null, hasUnclassifiedIntent: hasUnclassifiedIntent || pending.length > 0 };
 }
 
-export function criticalAkeruAction(toolName: string, args?: unknown): AkeruCriticalAction | null {
+export function criticalAkeruAction<Input>(
+  toolName: string,
+  args?: Input,
+): AkeruCriticalAction | null {
   return inspectAkeruAction(toolName, args).action;
 }
 
-export function akeruActionNeedsApproval(toolName: string, args?: unknown): boolean {
+export function akeruActionNeedsApproval<Input>(toolName: string, args?: Input): boolean {
   const inspection = inspectAkeruAction(toolName, args);
 
   return inspection.action !== null || inspection.hasUnclassifiedIntent;

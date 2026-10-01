@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeURL from "node:url";
@@ -56,14 +58,23 @@ export function createAkeruObserveHooks(
   };
 }
 
-export function controllerContext(
-  requestContext: RequestContext,
-): Record<string, unknown> | undefined {
-  const value = requestContext.getRaw("controller");
+const decodeControllerContext = Schema.decodeUnknownOption(
+  Schema.Struct({
+    session: Schema.optionalKey(Schema.Unknown),
+    state: Schema.optionalKey(Schema.Unknown),
+    resourceId: Schema.optionalKey(Schema.Unknown),
+  }),
+);
 
-  return Predicate.isObjectOrArray(value) && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
+const decodeModelOptions = Schema.decodeUnknownOption(
+  Schema.Struct({
+    reasoningEffort: Schema.optionalKey(Schema.String),
+    serviceTier: Schema.optionalKey(Schema.String),
+  }),
+);
+
+export function controllerContext(requestContext: RequestContext) {
+  return Option.getOrUndefined(decodeControllerContext(requestContext.getRaw("controller")));
 }
 
 export function controllerModelId(requestContext: RequestContext): string {
@@ -90,9 +101,7 @@ export function controllerModelOptions(
 
   const modelOptions = state.modelOptions;
 
-  return Predicate.isObjectOrArray(modelOptions) && modelOptions !== null
-    ? (modelOptions as AkeruMastraState["modelOptions"])
-    : undefined;
+  return Option.getOrUndefined(decodeModelOptions(modelOptions));
 }
 
 export function controllerModelConnection(

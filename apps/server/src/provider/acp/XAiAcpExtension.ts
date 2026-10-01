@@ -117,7 +117,7 @@ interface NormalizedXAiAnswer {
   readonly annotation?: XAiAskUserQuestionAnnotation;
 }
 
-function answerValues(answer: unknown): ReadonlyArray<string> {
+function answerValues(answer: ProviderUserInputAnswers[string]): ReadonlyArray<string> {
   if (Array.isArray(answer)) {
     return answer.flatMap((entry) => {
       const text = Predicate.isString(entry) ? trimmed(entry) : undefined;
@@ -133,7 +133,7 @@ function answerValues(answer: unknown): ReadonlyArray<string> {
 
 function normalizeAnswerForXAi(
   question: XAiAskUserQuestionRequestParams["questions"][number],
-  answer: unknown,
+  answer: ProviderUserInputAnswers[string],
 ): NormalizedXAiAnswer | undefined {
   const values = answerValues(answer);
 
@@ -174,7 +174,7 @@ function normalizeAnswerForXAi(
 function findQuestionAnswer(
   answers: ProviderUserInputAnswers,
   question: XAiAskUserQuestionRequestParams["questions"][number],
-): unknown {
+) {
   const key = question.id ?? question.question;
 
   return answers[key] ?? answers[question.question];
@@ -435,22 +435,14 @@ function promptResponseFromXAi(
 ): EffectAcpSchema.PromptResponse {
   const stopReason = normalizeXAiStopReason(notification.stopReason);
 
-  const meta: Record<string, unknown> = {
+  const meta = {
+    ...(notification.stopReason === undefined ? { [xAiStopReasonMissingMetaKey]: true } : {}),
+    ...(notification.promptId !== undefined
+      ? { promptId: notification.promptId, requestId: notification.promptId }
+      : {}),
+    ...(notification.agentResult !== undefined ? { agentResult: notification.agentResult } : {}),
     sessionId: notification.sessionId,
   };
-
-  if (notification.stopReason === undefined) {
-    meta[xAiStopReasonMissingMetaKey] = true;
-  }
-
-  if (notification.promptId !== undefined) {
-    meta.promptId = notification.promptId;
-    meta.requestId = notification.promptId;
-  }
-
-  if (notification.agentResult !== undefined) {
-    meta.agentResult = notification.agentResult;
-  }
 
   return {
     stopReason,

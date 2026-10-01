@@ -28,9 +28,9 @@ export function makeAkeruCatalogToolHandlersTestSupport() {
 
   const now = "2026-01-01T00:00:00.000Z";
 
-  function snapshot(
-    mcpServers: readonly Record<string, unknown>[] = [],
-    bots: readonly Record<string, unknown>[] = [],
+  function snapshot<Server extends object, Bot extends object>(
+    mcpServers: readonly Server[] = [],
+    bots: readonly Bot[] = [],
   ) {
     return {
       snapshotSequence: 0,

@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import type { ToolsInput } from "@mastra/core/agent";
 import type { Workspace } from "@mastra/core/workspace";
@@ -19,7 +20,7 @@ export interface BotBrowser {
 }
 
 export interface BotBrowserRpc {
-  readonly call: (name: string, arguments_: Readonly<Record<string, unknown>>) => Promise<string>;
+  readonly call: (name: string, arguments_: BrowserRpcParams) => Promise<string>;
   readonly attachment: () => Promise<BotBrowserAttachment | undefined>;
   readonly reconnect: () => Promise<void>;
   readonly close: () => Promise<void>;
@@ -30,7 +31,7 @@ export interface BotBrowserProcessInput {
   readonly workspace: Workspace;
   readonly cacheDir: string;
   readonly browserEndpoint?: (port: number) => Promise<AkeruBrowserEndpoint>;
-  readonly onFailure?: (error: unknown) => void;
+  readonly onFailure?: (cause: unknown) => void;
   readonly onReady?: () => void;
 }
 
@@ -38,11 +39,26 @@ export interface CreateBotBrowserInput extends BotBrowserProcessInput {
   readonly makeRpc?: (input: BotBrowserProcessInput) => BotBrowserRpc;
 }
 
-export interface JsonRpcResponse {
-  readonly id?: number;
-  readonly result?: unknown;
-  readonly error?: { readonly code?: number; readonly message?: string };
-}
+export const JsonRpcResponseSchema = Schema.Struct({
+  id: Schema.optional(Schema.Number),
+  result: Schema.optional(Schema.Json),
+  error: Schema.optional(
+    Schema.Struct({
+      code: Schema.optional(Schema.Number),
+      message: Schema.optional(Schema.String),
+    }),
+  ),
+});
+
+export type JsonRpcResponse = typeof JsonRpcResponseSchema.Type;
+
+export type BrowserRpcValue =
+  | typeof Schema.Json.Type
+  | undefined
+  | readonly BrowserRpcValue[]
+  | { readonly [key: string]: BrowserRpcValue };
+
+export type BrowserRpcParams = Readonly<Record<string, BrowserRpcValue>>;
 
 export interface BrowserHttpResponse {
   readonly status: number;

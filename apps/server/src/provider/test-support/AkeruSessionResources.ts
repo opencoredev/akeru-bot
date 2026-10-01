@@ -60,7 +60,7 @@ export function makeAkeruSessionResourcesTestSupport() {
 
   function mcpManager(
     status: { connected: boolean; toolCount: number; error?: string },
-    tools: Record<string, unknown> = {},
+    tools: Record<string, Pick<import("@mastra/core/tools").Tool, "execute">> = {},
   ) {
     return {
       init: vi.fn(async () => undefined),

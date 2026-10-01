@@ -1,3 +1,4 @@
+import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
 import * as NodeAssert from "node:assert/strict";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -29,7 +30,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
     Effect.gen(function* () {
       const runtime = yield* OpenCodeRuntime;
 
-      const client = {
+      const client = partialSdkFixture<OpencodeClient>({
         provider: {
           list: () =>
             Promise.resolve({
@@ -44,7 +45,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
           agents: () => Promise.resolve({ data: [] }),
           skills: () => Promise.reject(new Error("skills endpoint unavailable")),
         },
-      } as unknown as OpencodeClient;
+      });
 
       const inventory = yield* runtime.loadOpenCodeInventory(client);
 
@@ -58,7 +59,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
     Effect.gen(function* () {
       const runtime = yield* OpenCodeRuntime;
 
-      const client = {
+      const client = partialSdkFixture<OpencodeClient>({
         provider: {
           list: () =>
             Promise.resolve({
@@ -83,7 +84,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
               ],
             }),
         },
-      } as unknown as OpencodeClient;
+      });
 
       const inventory = yield* runtime.loadOpenCodeInventory(client);
 

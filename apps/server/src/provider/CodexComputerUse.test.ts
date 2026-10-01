@@ -37,7 +37,7 @@ function plugin(command = "./bin/launcher") {
   return root;
 }
 
-function listing(root: string, overrides?: Record<string, unknown>) {
+function listing(root: string, overrides?: { enabled?: boolean }) {
   return JSON.stringify({
     installed: [
       {

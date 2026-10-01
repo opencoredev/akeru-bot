@@ -47,8 +47,8 @@ export class SharedBotBrowsers {
     await browser.close().catch(() => undefined);
   }
 
-  reportBrowserFailure(resourceKey: string, error: unknown): void {
-    const detail = error instanceof Error ? error.message : String(error);
+  reportBrowserFailure(resourceKey: string, cause: unknown): void {
+    const detail = cause instanceof Error ? cause.message : String(cause);
     this.browserFailures.set(resourceKey, detail);
 
     for (const attribution of this.browserAttributions.get(resourceKey)?.values() ?? []) {

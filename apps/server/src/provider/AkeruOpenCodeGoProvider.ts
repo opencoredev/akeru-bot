@@ -74,6 +74,7 @@ export function akeruOpenCodeGoProvider(
 ): MastraModelConfig {
   const protocol = openCodeGoProtocol(modelId);
 
+  // SAFETY: The request adapter implements Fetch; this SDK declaration also includes an unused Bun preconnect method.
   const fetch = buildAkeruOpenCodeGoFetch(
     protocol,
     getApiKey,
@@ -86,6 +87,7 @@ export function akeruOpenCodeGoProvider(
       name: "opencode-go",
       apiKey: "api-key-placeholder",
       baseURL: OPEN_CODE_GO_BASE_URL,
+      // SAFETY: The SDK accepts this Fetch API implementation; Bun ambient types add preconnect, which the SDK never calls.
       fetch: fetch as NonNullable<NonNullable<Parameters<typeof createOpenAI>[0]>["fetch"]>,
     }).responses(modelId);
   }
@@ -94,6 +96,7 @@ export function akeruOpenCodeGoProvider(
     return createAnthropic({
       apiKey: "api-key-placeholder",
       baseURL: OPEN_CODE_GO_BASE_URL,
+      // SAFETY: The SDK accepts this Fetch API implementation; Bun ambient types add preconnect, which the SDK never calls.
       fetch: fetch as NonNullable<NonNullable<Parameters<typeof createAnthropic>[0]>["fetch"]>,
     })(modelId);
   }
@@ -102,6 +105,7 @@ export function akeruOpenCodeGoProvider(
     name: "opencode-go",
     apiKey: "api-key-placeholder",
     baseURL: OPEN_CODE_GO_BASE_URL,
+    // SAFETY: The SDK accepts this Fetch API implementation; Bun ambient types add preconnect, which the SDK never calls.
     fetch: fetch as NonNullable<NonNullable<Parameters<typeof createOpenAICompatible>[0]>["fetch"]>,
   })(modelId);
 }

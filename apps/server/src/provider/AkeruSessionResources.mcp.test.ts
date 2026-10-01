@@ -1,3 +1,4 @@
+import { probeTool } from "./test-support/toolProbe.ts";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -137,9 +138,7 @@ describe("AkeruSessionResources", () => {
       expect(attachment).not.toHaveBeenCalled();
       expect(call).not.toHaveBeenCalled();
 
-      const tool = resources.getConnectorTools("lazy").browser_snapshot as {
-        execute: (input: Record<string, unknown>) => Promise<unknown>;
-      };
+      const tool = probeTool(resources.getConnectorTools("lazy").browser_snapshot);
 
       await tool.execute({});
       expect(call).toHaveBeenCalledExactlyOnceWith("tree", {});

@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import type { Sandbox } from "@daytona/sdk";
 import { Schema } from "effect";
@@ -20,30 +21,24 @@ export class DaytonaComputer {
   async input(action: ComputerAction) {
     const computer = this.sandbox.computerUse;
 
-    switch (action._tag) {
-      case "click":
-        await computer.mouse.click(action.x, action.y, action.button);
-        break;
-      case "move":
-        await computer.mouse.move(action.x, action.y);
-        break;
-      case "key":
-        await computer.keyboard.hotkey(action.key);
-        break;
-      case "type":
-        await computer.keyboard.type(action.text);
-        break;
-      case "scroll": {
-        const position = await computer.mouse.getPosition();
-        await computer.mouse.scroll(
-          position.x ?? 0,
-          position.y ?? 0,
-          action.direction,
-          action.amount,
-        );
-        break;
-      }
-    }
+    await Match.value(action).pipe(
+      Match.tags({
+        click: (action) => computer.mouse.click(action.x, action.y, action.button),
+        move: (action) => computer.mouse.move(action.x, action.y),
+        key: (action) => computer.keyboard.hotkey(action.key),
+        type: (action) => computer.keyboard.type(action.text),
+        scroll: async (action) => {
+          const position = await computer.mouse.getPosition();
+          await computer.mouse.scroll(
+            position.x ?? 0,
+            position.y ?? 0,
+            action.direction,
+            action.amount,
+          );
+        },
+      }),
+      Match.exhaustive,
+    );
   }
 
   async capture(): Promise<ComputerFrame> {

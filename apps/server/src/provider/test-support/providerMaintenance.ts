@@ -5,9 +5,9 @@ import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@ak
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import {
-  makePackageManagedProviderMaintenanceResolver,
-  makeProviderMaintenanceCapabilities,
-  makeStaticProviderMaintenanceResolver,
+  packageManagedProviderMaintenanceResolver,
+  providerMaintenanceCapabilities,
+  staticProviderMaintenanceResolver,
   normalizeCommandPath,
 } from "../providerMaintenance.ts";
 
@@ -25,14 +25,14 @@ export function makeproviderMaintenanceTestSupport() {
     (commandPath: string): boolean =>
       normalizeCommandPath(commandPath).includes(expectedPathSegment);
 
-  const packageToolUpdate = makePackageManagedProviderMaintenanceResolver({
+  const packageToolUpdate = packageManagedProviderMaintenanceResolver({
     provider: driver("packageTool"),
     npmPackageName: "@example/package-tool",
     homebrewFormula: "package-tool",
     nativeUpdate: null,
   });
 
-  const nativePackageToolUpdate = makePackageManagedProviderMaintenanceResolver({
+  const nativePackageToolUpdate = packageManagedProviderMaintenanceResolver({
     provider: driver("nativePackageTool"),
     npmPackageName: "@example/native-package-tool",
     homebrewFormula: "native-package-tool",
@@ -44,7 +44,7 @@ export function makeproviderMaintenanceTestSupport() {
     },
   });
 
-  const scopedPackageToolUpdate = makePackageManagedProviderMaintenanceResolver({
+  const scopedPackageToolUpdate = packageManagedProviderMaintenanceResolver({
     provider: driver("scopedPackageTool"),
     npmPackageName: "@example/scoped-package-tool",
     homebrewFormula: "example/tap/scoped-package-tool",
@@ -56,8 +56,8 @@ export function makeproviderMaintenanceTestSupport() {
     },
   });
 
-  const staticToolUpdate = makeStaticProviderMaintenanceResolver(
-    makeProviderMaintenanceCapabilities({
+  const staticToolUpdate = staticProviderMaintenanceResolver(
+    providerMaintenanceCapabilities({
       provider: driver("staticTool"),
       packageName: null,
       updateExecutable: "static-tool",

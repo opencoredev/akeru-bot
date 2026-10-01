@@ -1,3 +1,4 @@
+import type { Tool } from "@mastra/core/tools";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { type Workspace } from "@mastra/core/workspace";
 import {
@@ -17,6 +18,9 @@ import {
 } from "../../memory/BotMemoryToolHandlers.ts";
 import type { AkeruCatalogToolHandler } from "./AkeruCatalogTypes.ts";
 import type { AkeruBotStateRuntime } from "../AkeruBotStateRuntime.ts";
+
+/** Native and plugin tools use the SDK result contract until tool-specific processing. */
+export type AkeruToolResult = Awaited<ReturnType<NonNullable<Tool["execute"]>>>;
 
 export type AkeruRuntimeToolId = AkeruToolId | AkeruMemoryToolId;
 
@@ -41,10 +45,16 @@ export interface AkeruToolSession {
     readonly access: AkeruDelegationAccessGrant;
     readonly create?: (
       input: (typeof AkeruToolInputSchemas.CreateAgent)["Type"],
-    ) => Promise<unknown>;
-    readonly check?: (input: (typeof AkeruToolInputSchemas.CheckAgent)["Type"]) => Promise<unknown>;
-    readonly send: (input: (typeof AkeruToolInputSchemas.SendToAgent)["Type"]) => Promise<unknown>;
-    readonly stop?: (input: (typeof AkeruToolInputSchemas.StopAgent)["Type"]) => Promise<unknown>;
+    ) => Promise<AkeruToolResult>;
+    readonly check?: (
+      input: (typeof AkeruToolInputSchemas.CheckAgent)["Type"],
+    ) => Promise<AkeruToolResult>;
+    readonly send: (
+      input: (typeof AkeruToolInputSchemas.SendToAgent)["Type"],
+    ) => Promise<AkeruToolResult>;
+    readonly stop?: (
+      input: (typeof AkeruToolInputSchemas.StopAgent)["Type"],
+    ) => Promise<AkeruToolResult>;
   };
   /** Temporary workers owned by this bot turn. Worker threads never get this. */
   readonly workers?: {
@@ -77,7 +87,7 @@ export interface AkeruToolSession {
   readonly reactToMessage?: (
     input: (typeof AkeruToolInputSchemas.ReactToMessage)["Type"],
     toolCallId: string,
-  ) => Promise<unknown>;
+  ) => Promise<AkeruToolResult>;
   readonly catalogHandlers?: Partial<Record<AkeruToolId, AkeruCatalogToolHandler>>;
   /** Image providers enabled in Settings; gates the GenerateImage tool. */
   readonly imageGeneration?: { readonly chatgptEnabled: boolean; readonly grokEnabled: boolean };
@@ -114,8 +124,8 @@ export interface AkeruToolRuntime {
   readonly requiresApproval: (
     threadId: string,
     toolId: AkeruRuntimeToolId,
-    input: unknown,
+    input: AkeruToolExecution["input"],
   ) => Promise<boolean>;
   readonly grantApproval: (input: Omit<AkeruToolExecution, "approvalMode">) => void;
-  readonly execute: (input: AkeruToolExecution) => Promise<unknown>;
+  readonly execute: (input: AkeruToolExecution) => Promise<AkeruToolResult>;
 }

@@ -1,3 +1,4 @@
+import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -48,7 +49,7 @@ describe("AkeruMastraHarness", () => {
 
       const reopened = await createAkeruMastraMemory(options);
 
-      const engine = {
+      const engine = partialSdkFixture<ObservationalMemory>({
         getThreadContext: vi.fn(() => ({
           threadId: "thread-history",
           resourceId: "thread-history",
@@ -56,7 +57,7 @@ describe("AkeruMastraHarness", () => {
         loadUnobservedMessages: vi.fn(async () => []),
         getOrCreateRecord: vi.fn(async () => ({ activeObservations: "Older observations." })),
         buildContextSystemMessages: vi.fn(async () => ["Older context from observations."]),
-      } as unknown as ObservationalMemory;
+      });
 
       const processor = new AkeruPassiveObservationalMemoryProcessor(engine, reopened.memory);
 
@@ -97,19 +98,22 @@ describe("AkeruMastraHarness", () => {
   });
 
   it("adds older observational context beside the recent message window", async () => {
-    const engine = {
+    const engine = partialSdkFixture<ObservationalMemory>({
       getThreadContext: vi.fn(() => ({ threadId: "thread-context", resourceId: "thread-context" })),
       loadUnobservedMessages: vi.fn(async () => []),
       getOrCreateRecord: vi.fn(async () => ({
         activeObservations: "The user prefers short replies.",
       })),
       buildContextSystemMessages: vi.fn(async () => ["Older context: short replies."]),
-    } as unknown as ObservationalMemory;
+    });
 
-    const processor = new AkeruPassiveObservationalMemoryProcessor(engine, {
-      recall: vi.fn(async () => ({ messages: [] })),
-      persistMessages: vi.fn(async () => undefined),
-    } as unknown as Memory);
+    const processor = new AkeruPassiveObservationalMemoryProcessor(
+      engine,
+      partialSdkFixture<Memory>({
+        recall: vi.fn(async () => ({ messages: [] })),
+        persistMessages: vi.fn(async () => undefined),
+      }),
+    );
 
     const messageList = new MessageList({
       threadId: "thread-context",
@@ -141,16 +145,19 @@ describe("AkeruMastraHarness", () => {
   it("persists only messages created by the current turn", async () => {
     const persistMessages = vi.fn(async () => undefined);
 
-    const engine = {
+    const engine = partialSdkFixture<ObservationalMemory>({
       getThreadContext: vi.fn(() => ({ threadId: "thread-passive", resourceId: "thread-passive" })),
       loadUnobservedMessages: vi.fn(async () => []),
       getOrCreateRecord: vi.fn(async () => ({ activeObservations: "" })),
       buildContextSystemMessages: vi.fn(async () => []),
-    } as unknown as ObservationalMemory;
+    });
 
-    const processor = new AkeruPassiveObservationalMemoryProcessor(engine, {
-      persistMessages,
-    } as unknown as Memory);
+    const processor = new AkeruPassiveObservationalMemoryProcessor(
+      engine,
+      partialSdkFixture<Memory>({
+        persistMessages,
+      }),
+    );
 
     const messageList = new MessageList({
       threadId: "thread-passive",

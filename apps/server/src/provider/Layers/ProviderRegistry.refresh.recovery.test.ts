@@ -24,7 +24,7 @@ import * as ServerSettingsModule from "../../serverSettings.ts";
 import type { ProviderInstance } from "../ProviderDriver.ts";
 import * as ProviderInstanceRegistry from "../Services/ProviderInstanceRegistry.ts";
 import * as ProviderRegistry from "../Services/ProviderRegistry.ts";
-import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import { manualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 import {
   decodeServerSettings,
   encodedDefaultServerSettings,
@@ -85,7 +85,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             displayName: undefined,
             enabled: true,
             snapshot: {
-              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+              maintenanceCapabilities: manualOnlyProviderMaintenanceCapabilities({
                 provider: provider.driver,
                 packageName: null,
               }),

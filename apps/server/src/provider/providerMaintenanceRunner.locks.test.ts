@@ -8,7 +8,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import { ChildProcessSpawner } from "effect/unstable/process";
-import { makeProviderMaintenanceCapabilities } from "./providerMaintenance.ts";
+import { providerMaintenanceCapabilities } from "./providerMaintenance.ts";
 import { makeproviderMaintenanceRunnerTestSupport } from "./test-support/providerMaintenanceRunner.ts";
 
 const {
@@ -27,8 +27,8 @@ const {
 
 describe("providerMaintenanceRunner", () => {
   it.effect("prevents concurrent updates for the same provider", () => {
-    const startedLatch: { resolve: () => void } = { resolve: () => {} };
-    const releaseLatch: { resolve: () => void } = { resolve: () => {} };
+    const startedLatch = { resolve: () => {} };
+    const releaseLatch = { resolve: () => {} };
 
     const started = new Promise<void>((resolve) => {
       startedLatch.resolve = resolve;
@@ -80,8 +80,8 @@ describe("providerMaintenanceRunner", () => {
   });
 
   it.effect("serializes different providers that share the same update lock key", () => {
-    const firstStartedLatch: { resolve: () => void } = { resolve: () => {} };
-    const releaseFirstLatch: { resolve: () => void } = { resolve: () => {} };
+    const firstStartedLatch = { resolve: () => {} };
+    const releaseFirstLatch = { resolve: () => {} };
 
     const firstStarted = new Promise<void>((resolve) => {
       firstStartedLatch.resolve = resolve;
@@ -100,7 +100,7 @@ describe("providerMaintenanceRunner", () => {
         ...registry,
         getProviderMaintenanceCapabilitiesForInstance: (_instanceId, provider) =>
           Effect.succeed(
-            makeProviderMaintenanceCapabilities({
+            providerMaintenanceCapabilities({
               provider,
               packageName: provider === OPENCODE_DRIVER ? "opencode-ai" : "@openai/codex",
               updateExecutable: "npm",
@@ -183,7 +183,7 @@ describe("providerMaintenanceRunner", () => {
         ...registry,
         getProviderMaintenanceCapabilitiesForInstance: (_instanceId, provider) =>
           Effect.succeed(
-            makeProviderMaintenanceCapabilities({
+            providerMaintenanceCapabilities({
               provider,
               packageName: "@openai/codex",
               updateExecutable: "npm",
@@ -217,8 +217,8 @@ describe("providerMaintenanceRunner", () => {
       Effect.gen(function* () {
         const { registry } = yield* makeRegistry(baseProvider);
         let blockQueuedState = true;
-        const queuedStateWrittenLatch: { resolve: () => void } = { resolve: () => {} };
-        const releaseQueuedStateLatch: { resolve: () => void } = { resolve: () => {} };
+        const queuedStateWrittenLatch = { resolve: () => {} };
+        const releaseQueuedStateLatch = { resolve: () => {} };
 
         const queuedStateWritten = new Promise<void>((resolve) => {
           queuedStateWrittenLatch.resolve = resolve;

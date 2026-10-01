@@ -1,3 +1,4 @@
+import { decodeAkeruToolInput } from "@akeru/contracts";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -79,12 +80,14 @@ describe("AkeruToolRuntime", () => {
   });
 
   it("advertises and executes a wired Mastra catalog backend", async () => {
-    const fetch = vi.fn(async (_input: unknown) => ({ text: "ok" }));
+    const fetch = vi.fn(async (_input: { readonly url: string }) => ({ text: "ok" }));
     const runtime = createAkeruToolRuntime();
     runtime.registerSession("thread-webfetch", {
       runtimeMode: "full-access",
       workspaceType: "none",
-      catalogHandlers: { WebFetch: async ({ input }) => fetch(input) },
+      catalogHandlers: {
+        WebFetch: async ({ input }) => fetch(decodeAkeruToolInput("WebFetch", input)),
+      },
     });
     expect(runtime.toolsForThread("thread-webfetch").map((tool) => tool.id)).toContain("WebFetch");
     await expect(

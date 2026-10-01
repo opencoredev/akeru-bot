@@ -216,7 +216,7 @@ describe("AkeruToolRuntime", () => {
       },
     });
 
-    const execute = (toolId: "CreateAgent" | "CheckAgent", input: unknown) =>
+    const execute = <Input>(toolId: "CreateAgent" | "CheckAgent", input: Input) =>
       runtime.execute({
         threadId: "thread-controls",
         toolId,

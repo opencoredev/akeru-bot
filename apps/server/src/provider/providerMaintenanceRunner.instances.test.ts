@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import { it, assert } from "@effect/vitest";
@@ -7,7 +8,7 @@ import * as Layer from "effect/Layer";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import { HostProcessEnvironment, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import { SpawnExecutableResolution } from "@akeru/shared/shell";
-import { makeProviderMaintenanceCapabilities } from "./providerMaintenance.ts";
+import { providerMaintenanceCapabilities } from "./providerMaintenance.ts";
 import { makeproviderMaintenanceRunnerTestSupport } from "./test-support/providerMaintenanceRunner.ts";
 
 const {
@@ -47,7 +48,7 @@ describe("providerMaintenanceRunner", () => {
         ...registry,
         getProviderMaintenanceCapabilitiesForInstance: (instanceId, provider) =>
           Effect.succeed(
-            makeProviderMaintenanceCapabilities({
+            providerMaintenanceCapabilities({
               provider,
               packageName: "@openai/codex-instance-test",
               updateExecutable: "vp",
@@ -143,11 +144,9 @@ describe("providerMaintenanceRunner", () => {
           Layer.succeed(
             ChildProcessSpawner.ChildProcessSpawner,
             ChildProcessSpawner.make((command) => {
-              const childProcess = command as unknown as {
-                readonly command: string;
-                readonly args: ReadonlyArray<string>;
-                readonly options: { readonly shell?: boolean | string | undefined };
-              };
+              if (!Predicate.isTagged(command, "StandardCommand"))
+                return Effect.die(new Error("Expected a standard command."));
+              const childProcess = command;
 
               captured.push({
                 command: childProcess.command,
