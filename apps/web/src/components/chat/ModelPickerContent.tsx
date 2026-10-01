@@ -30,6 +30,7 @@ import { TooltipProvider } from "../ui/tooltip";
 import { ModelListRow } from "./ModelListRow";
 import { ModelPickerSidebar } from "./ModelPickerSidebar";
 import { modelPickerEmptyMessage } from "./modelPickerEmptyState";
+import { flattenModelPickerItems, type ModelPickerItem } from "./modelPickerItems";
 import {
   modelPickerLegacySectionKey,
   modelPickerModelKey,
@@ -40,19 +41,6 @@ import { isModelPickerNewModel } from "./modelPickerModelHighlights";
 import { buildModelPickerSearchText, scoreModelPickerSearch } from "./modelPickerSearch";
 import { ModelEsque } from "./providerIconUtils";
 import { useModelPickerViewport } from "./useModelPickerViewport";
-
-type ModelPickerItem = {
-  slug: string;
-  name: string;
-  shortName?: string;
-  subProvider?: string;
-  instanceId: ProviderInstanceId;
-  driverKind: ProviderDriverKind;
-  instanceDisplayName: string;
-  instanceAccentColor?: string | undefined;
-  continuationGroupKey?: string | undefined;
-  isLegacy?: boolean | undefined;
-};
 
 const EMPTY_MODEL_JUMP_LABELS = new Map<string, string>();
 
@@ -214,37 +202,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   // instance-keyed map; each model carries its instance id + driver kind
   // so the list row can render the right icon and display name without
   // another lookup.
-  const flatModels = useMemo(() => {
-    const out: ModelPickerItem[] = [];
-    for (const [instanceId, models] of modelOptionsByInstance) {
-      const entry = entryByInstanceId.get(instanceId);
-      if (!entry) {
-        // Instance disappeared between renders (configuration change). Skip
-        // its models — stale options shouldn't appear in the picker.
-        continue;
-      }
-      if (!blockReasonByInstance.has(instanceId)) {
-        continue;
-      }
-      for (const model of models) {
-        out.push({
-          slug: model.slug,
-          name: model.name,
-          ...(model.shortName ? { shortName: model.shortName } : {}),
-          ...(model.subProvider ? { subProvider: model.subProvider } : {}),
-          ...(model.isLegacy ? { isLegacy: true } : {}),
-          instanceId,
-          driverKind: entry.driverKind,
-          instanceDisplayName: entry.displayName,
-          ...(entry.accentColor ? { instanceAccentColor: entry.accentColor } : {}),
-          ...(entry.continuationGroupKey
-            ? { continuationGroupKey: entry.continuationGroupKey }
-            : {}),
-        });
-      }
-    }
-    return out;
-  }, [modelOptionsByInstance, entryByInstanceId, blockReasonByInstance]);
+  const flatModels = useMemo(
+    () => flattenModelPickerItems(modelOptionsByInstance, entryByInstanceId, blockReasonByInstance),
+    [modelOptionsByInstance, entryByInstanceId, blockReasonByInstance],
+  );
 
   const isLocked = props.lockedProvider !== null;
   const isSearching = searchQuery.trim().length > 0;
