@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   BotId,
   CommandId,
@@ -184,7 +185,7 @@ it.layer(VoiceDisabledTestLayer)("VoiceCallManager global settings", (it) => {
       const manager = yield* VoiceCallManager;
       const result = yield* Effect.result(manager.start({ botId, sdp: "offer-sdp" }, "client-1"));
       assert.equal(result._tag, "Failure");
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         assert.equal(result.failure.reason, "voice-disabled");
         assert.equal(result.failure.message, "Voice calls are disabled in Settings.");
       }
@@ -269,7 +270,7 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
 
       const stolen = yield* Effect.result(manager.hangup(first.call.callId, "client-2"));
       assert.equal(stolen._tag, "Failure");
-      if (stolen._tag === "Failure") {
+      if (Predicate.isTagged(stolen, "Failure")) {
         assert.equal(stolen.failure.reason, "call-not-active");
       }
       assert.equal((yield* manager.get).status, "live");
@@ -292,8 +293,8 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
         ],
         { concurrency: "unbounded" },
       );
-      const successes = results.filter((result) => result._tag === "Success");
-      const failures = results.filter((result) => result._tag === "Failure");
+      const successes = results.filter((result) => Predicate.isTagged(result, "Success"));
+      const failures = results.filter((result) => Predicate.isTagged(result, "Failure"));
       assert.lengthOf(successes, 1);
       assert.lengthOf(failures, 1);
       assert.equal(failures[0]?.failure.reason, "already-active");
@@ -317,7 +318,7 @@ it.layer(TestLayer)("VoiceCallManager", (it) => {
         manager.start({ botId, sdp: "second-offer" }, "client-2"),
       );
       assert.equal(second._tag, "Failure");
-      if (second._tag === "Failure") {
+      if (Predicate.isTagged(second, "Failure")) {
         const failure = second.failure;
         assert.instanceOf(failure, VoiceCallError);
         assert.equal(failure.reason, "already-active");
@@ -410,7 +411,8 @@ it.layer(PendingTestLayer)("VoiceCallManager pending start", (it) => {
       yield* manager.hangup(pending.callId, "client-1");
       const result = yield* Fiber.join(startFiber);
       assert.equal(result._tag, "Failure");
-      if (result._tag === "Failure") assert.equal(result.failure.reason, "call-not-active");
+      if (Predicate.isTagged(result, "Failure"))
+        assert.equal(result.failure.reason, "call-not-active");
       assert.deepEqual(yield* manager.get, { status: "idle" });
     }),
   );

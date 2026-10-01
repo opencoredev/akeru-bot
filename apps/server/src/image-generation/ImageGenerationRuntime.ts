@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
@@ -437,7 +438,7 @@ export const makeImageGenerationRuntime = Effect.fn("makeImageGenerationRuntime"
           }),
         ),
       );
-      return exit._tag === "Success"
+      return Predicate.isTagged(exit, "Success")
         ? exit.value
         : failed("cancelled", "Image generation was cancelled.");
     });

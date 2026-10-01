@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -6,9 +7,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
-
 import {
-  NonNegativeInt,
   TextGenerationError,
   type ChatAttachment,
   type ModelSelection,
@@ -17,7 +16,6 @@ import {
 import { sanitizeBranchFragment } from "@akeru/shared/git";
 import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
 import { extractJsonObject } from "@akeru/shared/schemaJson";
-
 import * as ServerConfig from "../config.ts";
 import { subscriptionRuntimeEnvironment } from "../subscription-auth/runtime.ts";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
@@ -25,147 +23,18 @@ import { buildBranchNamePrompt, buildThreadTitlePrompt } from "./TextGenerationP
 import * as TextGeneration from "./TextGeneration.ts";
 import { sanitizeThreadTitle } from "./TextGenerationUtils.ts";
 import * as OpenCodeRuntime from "../provider/opencodeRuntime.ts";
-
+import {
+  OpenCodeTextGenerationOperation,
+  OpenCodeTextGenerationSessionRequestError,
+  OpenCodeTextGenerationSessionPayloadError,
+  OpenCodeTextGenerationPromptRequestError,
+  OpenCodeTextGenerationPromptResponseError,
+  OpenCodeTextGenerationEmptyOutputError,
+  getOpenCodePromptFailure,
+  isOpenCodeTextPart,
+  getOpenCodeTextResponse,
+} from "./OpenCodeTextGenerationProtocol.ts";
 const OPENCODE_TEXT_GENERATION_IDLE_TTL = "30 seconds";
-
-const OpenCodeTextGenerationOperation = Schema.Literals([
-  "generateBranchName",
-  "generateThreadTitle",
-]);
-
-type OpenCodeTextGenerationOperation = typeof OpenCodeTextGenerationOperation.Type;
-
-const openCodeTextGenerationErrorContext = {
-  operation: OpenCodeTextGenerationOperation,
-  cwd: Schema.String,
-};
-
-export class OpenCodeTextGenerationSessionRequestError extends Schema.TaggedErrorClass<OpenCodeTextGenerationSessionRequestError>()(
-  "OpenCodeTextGenerationSessionRequestError",
-  {
-    ...openCodeTextGenerationErrorContext,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `OpenCode session creation request failed for ${this.operation} in ${this.cwd}.`;
-  }
-}
-
-export class OpenCodeTextGenerationSessionPayloadError extends Schema.TaggedErrorClass<OpenCodeTextGenerationSessionPayloadError>()(
-  "OpenCodeTextGenerationSessionPayloadError",
-  openCodeTextGenerationErrorContext,
-) {
-  override get message(): string {
-    return `OpenCode session.create returned no session payload for ${this.operation} in ${this.cwd}.`;
-  }
-}
-
-const openCodePromptErrorContext = {
-  ...openCodeTextGenerationErrorContext,
-  sessionId: Schema.String,
-  providerId: Schema.String,
-  modelId: Schema.String,
-};
-
-export class OpenCodeTextGenerationPromptRequestError extends Schema.TaggedErrorClass<OpenCodeTextGenerationPromptRequestError>()(
-  "OpenCodeTextGenerationPromptRequestError",
-  {
-    ...openCodePromptErrorContext,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `OpenCode prompt request failed for ${this.operation} in ${this.cwd} using ${this.providerId}/${this.modelId} (session ${this.sessionId}).`;
-  }
-}
-
-export class OpenCodeTextGenerationPromptResponseError extends Schema.TaggedErrorClass<OpenCodeTextGenerationPromptResponseError>()(
-  "OpenCodeTextGenerationPromptResponseError",
-  {
-    ...openCodePromptErrorContext,
-    providerErrorName: Schema.optional(Schema.String),
-    providerMessage: Schema.String,
-  },
-) {
-  override get message(): string {
-    const providerError = this.providerErrorName ? ` ${this.providerErrorName}` : "";
-    return `OpenCode prompt${providerError} failed for ${this.operation} in ${this.cwd} using ${this.providerId}/${this.modelId} (session ${this.sessionId}): ${this.providerMessage}`;
-  }
-}
-
-export class OpenCodeTextGenerationEmptyOutputError extends Schema.TaggedErrorClass<OpenCodeTextGenerationEmptyOutputError>()(
-  "OpenCodeTextGenerationEmptyOutputError",
-  {
-    ...openCodePromptErrorContext,
-    responsePartCount: NonNegativeInt,
-    textPartCount: NonNegativeInt,
-  },
-) {
-  override get message(): string {
-    return `OpenCode returned empty output for ${this.operation} in ${this.cwd} using ${this.providerId}/${this.modelId} (session ${this.sessionId}, ${this.responsePartCount} response parts, ${this.textPartCount} text parts).`;
-  }
-}
-
-interface OpenCodePromptFailure {
-  readonly name?: string;
-  readonly message: string;
-}
-
-interface OpenCodeTextPart {
-  readonly type: "text";
-  readonly text: string;
-}
-
-function getOpenCodePromptFailure(error: unknown): OpenCodePromptFailure | null {
-  if (!error || typeof error !== "object") {
-    return null;
-  }
-
-  const name =
-    "name" in error && typeof error.name === "string" && error.name.trim().length > 0
-      ? error.name.trim()
-      : undefined;
-  const message =
-    "data" in error &&
-    error.data &&
-    typeof error.data === "object" &&
-    "message" in error.data &&
-    typeof error.data.message === "string"
-      ? error.data.message.trim()
-      : "";
-  if (message.length > 0) {
-    return {
-      ...(name ? { name } : {}),
-      message,
-    };
-  }
-
-  if (name) {
-    return { name, message: name };
-  }
-
-  return null;
-}
-
-function isOpenCodeTextPart(part: unknown): part is OpenCodeTextPart {
-  return (
-    part !== null &&
-    typeof part === "object" &&
-    "type" in part &&
-    part.type === "text" &&
-    "text" in part &&
-    typeof part.text === "string"
-  );
-}
-
-function getOpenCodeTextResponse(parts: ReadonlyArray<unknown> | undefined): string {
-  return (parts ?? [])
-    .filter(isOpenCodeTextPart)
-    .map((part) => part.text)
-    .join("")
-    .trim();
-}
 
 interface SharedOpenCodeTextGenerationServerState {
   server: OpenCodeRuntime.OpenCodeServerProcess | null;
@@ -315,7 +184,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
                   ),
               ),
             );
-            if (startedExit._tag === "Failure") {
+            if (Predicate.isTagged(startedExit, "Failure")) {
               yield* Scope.close(serverScope, Exit.void).pipe(Effect.ignore);
               return yield* Effect.failCause(startedExit.cause);
             }
@@ -568,3 +437,8 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     generateThreadTitle,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
+export { OpenCodeTextGenerationSessionRequestError } from "./OpenCodeTextGenerationProtocol.ts";
+export { OpenCodeTextGenerationSessionPayloadError } from "./OpenCodeTextGenerationProtocol.ts";
+export { OpenCodeTextGenerationPromptRequestError } from "./OpenCodeTextGenerationProtocol.ts";
+export { OpenCodeTextGenerationPromptResponseError } from "./OpenCodeTextGenerationProtocol.ts";
+export { OpenCodeTextGenerationEmptyOutputError } from "./OpenCodeTextGenerationProtocol.ts";
