@@ -6,6 +6,7 @@ import * as Scope from "effect/Scope";
 import * as Electron from "electron";
 
 export type ElectronThermalState = ReturnType<Electron.PowerMonitor["getCurrentThermalState"]>;
+
 export type ElectronIdleState = ReturnType<Electron.PowerMonitor["getSystemIdleState"]>;
 
 export class ElectronPowerMonitor extends Context.Service<
@@ -47,6 +48,7 @@ const onThermalStateChange: ElectronPowerMonitor["Service"]["onThermalStateChang
   ): void => {
     listener(event.state);
   };
+
   return Effect.acquireRelease(
     Effect.sync(() => {
       Electron.powerMonitor.on("thermal-state-change", wrapped);
@@ -64,6 +66,7 @@ const onSpeedLimitChange: ElectronPowerMonitor["Service"]["onSpeedLimitChange"] 
   ): void => {
     listener(event.limit);
   };
+
   return Effect.acquireRelease(
     Effect.sync(() => {
       Electron.powerMonitor.on("speed-limit-change", wrapped);

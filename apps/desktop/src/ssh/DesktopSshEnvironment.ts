@@ -90,6 +90,7 @@ export function toSshPasswordPromptError(
   cause: DesktopSshPasswordPrompts.DesktopSshPasswordPromptRequestError,
 ): SshPasswordPromptError {
   let message: string;
+
   switch (cause._tag) {
     case "DesktopSshPromptRequestIdGenerationError":
       message = "Secure randomness is unavailable.";
@@ -113,6 +114,7 @@ export function toSshPasswordPromptError(
     default:
       return unexpectedPasswordPromptError(cause);
   }
+
   return new SshPasswordPromptError({ message, cause });
 }
 

@@ -41,6 +41,7 @@ export class DesktopNetworkInterfaces extends Context.Service<
 
 export const make = Effect.gen(function* () {
   const platform = yield* HostProcessPlatform;
+
   return DesktopNetworkInterfaces.of({
     read: Effect.try({
       try: () => NodeOS.networkInterfaces(),

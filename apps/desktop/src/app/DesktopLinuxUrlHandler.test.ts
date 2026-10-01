@@ -90,10 +90,12 @@ const makeHandlerLayer = (
               readonly command: string;
               readonly args: ReadonlyArray<string>;
             };
+
             recorded.commands.push({
               command: childProcess.command,
               args: childProcess.args,
             });
+
             return Effect.succeed(mockProcess(input.xdgMimeExitCode ?? 0));
           }),
         ),
@@ -145,6 +147,7 @@ describe("DesktopLinuxUrlHandler", () => {
       desktopEntryPath: "/home/alice/.local/share/applications/akeru-url-handler.desktop",
       cause: new Error("boom"),
     });
+
     assert.equal(
       writeError.message,
       "Failed to register the akeru:// URL handler (step: write-desktop-entry).",
@@ -159,6 +162,7 @@ describe("DesktopLinuxUrlHandler", () => {
       scheme: "akeru",
       exitCode: 4,
     });
+
     assert.equal(
       exitError.message,
       "Failed to register the akeru:// URL handler (step: set-default-handler, xdg-mime exit code 4).",
@@ -235,6 +239,7 @@ describe("DesktopLinuxUrlHandler", () => {
       const mimeappsWrite = recorded.files.find(
         (file) => file.path === "/home/alice/.config/mimeapps.list",
       );
+
       assert.equal(
         mimeappsWrite?.content,
         ["[Default Applications]", "x-scheme-handler/akeru=akeru-url-handler.desktop"].join("\n"),

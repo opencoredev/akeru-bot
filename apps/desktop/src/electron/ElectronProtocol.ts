@@ -9,7 +9,9 @@ import * as Scope from "effect/Scope";
 import * as Electron from "electron";
 
 export const DESKTOP_HOST = "app";
+
 export const DESKTOP_PRODUCTION_SCHEME = "akeru";
+
 export const DESKTOP_DEVELOPMENT_SCHEME = "akeru-dev";
 
 export function getDesktopScheme(isDevelopment: boolean): string {
@@ -87,6 +89,7 @@ export function makeDesktopContentSecurityPolicy(input: DesktopProtocolRegistrat
 function withContentSecurityPolicy(response: Response, policy: string): Response {
   const headers = new Headers(response.headers);
   headers.set("Content-Security-Policy", policy);
+
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -132,6 +135,7 @@ async function proxyRequest(
   contentSecurityPolicy: string,
 ): Promise<Response> {
   const requestUrl = new URL(request.url);
+
   if (requestUrl.host !== DESKTOP_HOST) {
     return new Response(null, { status: 404 });
   }
@@ -139,6 +143,7 @@ async function proxyRequest(
   const targetUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, targetOrigin);
   const headers = new Headers(request.headers);
   const headersToRemove: string[] = [];
+
   for (const name of headers.keys()) {
     if (
       name === "host" ||
@@ -153,21 +158,26 @@ async function proxyRequest(
       headersToRemove.push(name);
     }
   }
+
   for (const name of headersToRemove) {
     headers.delete(name);
   }
+
   const init: RequestInit = {
     method: request.method,
     headers,
   };
+
   if (request.method !== "GET" && request.method !== "HEAD") {
     init.body = request.body;
     (init as RequestInit & { duplex: "half" }).duplex = "half";
   }
+
   const response =
     request.method === "GET" || request.method === "HEAD"
       ? await fetchWithTransientRetry(targetUrl.toString(), init)
       : await Electron.net.fetch(targetUrl.toString(), init);
+
   return withContentSecurityPolicy(response, contentSecurityPolicy);
 }
 
@@ -198,8 +208,10 @@ export const make = Effect.gen(function* () {
     function* (input: DesktopProtocolRegistrationInput) {
       const shouldRegister = yield* Ref.modify(registered, (schemes) => {
         if (schemes.has(input.scheme)) return [false, schemes] as const;
+
         return [true, new Set([...schemes, input.scheme])] as const;
       });
+
       if (!shouldRegister) return;
 
       const contentSecurityPolicy = makeDesktopContentSecurityPolicy(input);
@@ -217,6 +229,7 @@ export const make = Effect.gen(function* () {
             Ref.update(registered, (schemes) => {
               const next = new Set(schemes);
               next.delete(input.scheme);
+
               return next;
             }),
           ),
@@ -234,6 +247,7 @@ export const make = Effect.gen(function* () {
               Ref.update(registered, (schemes) => {
                 const next = new Set(schemes);
                 next.delete(input.scheme);
+
                 return next;
               }),
             ),

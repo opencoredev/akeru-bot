@@ -52,6 +52,7 @@ describe("ElectronWindow", () => {
       browserWindowMock.mockImplementationOnce(function BrowserWindowFailure() {
         throw cause;
       });
+
       const options = {
         title: "T3 Code",
         width: 1100,
@@ -74,6 +75,7 @@ describe("ElectronWindow", () => {
           spellcheck: true,
         },
       } satisfies Electron.BrowserWindowConstructorOptions;
+
       const electronWindow = yield* ElectronWindow.ElectronWindow;
 
       const error = yield* electronWindow.create(options).pipe(Effect.flip);
@@ -139,6 +141,7 @@ describe("ElectronWindow", () => {
       const exit = yield* Effect.exit(electronWindow.currentMainOrFirst);
 
       assert.equal(exit._tag, "Failure");
+
       if (exit._tag === "Failure") {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronWindow.ElectronWindowOperationError);
@@ -155,6 +158,7 @@ describe("ElectronWindow", () => {
   it.effect("preserves reveal failures with the target window", () =>
     Effect.gen(function* () {
       const cause = new Error("window restore failed");
+
       const window = {
         id: 41,
         isDestroyed: vi.fn(() => false),
@@ -168,6 +172,7 @@ describe("ElectronWindow", () => {
       const exit = yield* Effect.exit(electronWindow.reveal(window));
 
       assert.equal(exit._tag, "Failure");
+
       if (exit._tag === "Failure") {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronWindow.ElectronWindowOperationError);
@@ -182,6 +187,7 @@ describe("ElectronWindow", () => {
   it.effect("preserves message delivery failures with window and channel context", () =>
     Effect.gen(function* () {
       const cause = new Error("renderer send failed");
+
       const window = {
         id: 42,
         isDestroyed: vi.fn(() => false),
@@ -191,12 +197,14 @@ describe("ElectronWindow", () => {
           }),
         },
       } as unknown as Electron.BrowserWindow;
+
       getAllWindowsMock.mockReturnValueOnce([window]);
 
       const electronWindow = yield* ElectronWindow.ElectronWindow;
       const exit = yield* Effect.exit(electronWindow.sendAll("desktop:update", { ready: true }));
 
       assert.equal(exit._tag, "Failure");
+
       if (exit._tag === "Failure") {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronWindow.ElectronWindowOperationError);
@@ -211,22 +219,26 @@ describe("ElectronWindow", () => {
   it.effect("preserves destroy failures and continues with later windows", () =>
     Effect.gen(function* () {
       const cause = new Error("window destroy failed");
+
       const window = {
         id: 43,
         destroy: vi.fn(() => {
           throw cause;
         }),
       } as unknown as Electron.BrowserWindow;
+
       const laterWindow = {
         id: 44,
         destroy: vi.fn(),
       } as unknown as Electron.BrowserWindow;
+
       getAllWindowsMock.mockReturnValueOnce([window, laterWindow]);
 
       const electronWindow = yield* ElectronWindow.ElectronWindow;
       const exit = yield* Effect.exit(electronWindow.destroyAll);
 
       assert.equal(exit._tag, "Failure");
+
       if (exit._tag === "Failure") {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronWindow.ElectronWindowOperationError);
@@ -235,6 +247,7 @@ describe("ElectronWindow", () => {
         assert.isNull(error.channel);
         assert.strictEqual(error.cause, cause);
       }
+
       assert.equal(vi.mocked(laterWindow.destroy).mock.calls.length, 1);
     }).pipe(Effect.provide(TestLayer)),
   );

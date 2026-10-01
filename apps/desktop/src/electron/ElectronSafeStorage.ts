@@ -49,7 +49,9 @@ export const ElectronSafeStorageError = Schema.Union([
   ElectronSafeStorageEncryptError,
   ElectronSafeStorageDecryptError,
 ]);
+
 export type ElectronSafeStorageError = typeof ElectronSafeStorageError.Type;
+
 export const isElectronSafeStorageError = Schema.is(ElectronSafeStorageError);
 
 export class ElectronSafeStorage extends Context.Service<
@@ -88,6 +90,7 @@ export const make = Effect.gen(function* () {
       if (platform !== "linux") {
         return Option.none();
       }
+
       try {
         return Option.fromNullishOr(Electron.safeStorage.getSelectedStorageBackend());
       } catch {

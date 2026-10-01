@@ -26,6 +26,7 @@ export function readCommandLineSwitchValue(
   }
 
   const value = commandLine.getSwitchValue(switchName).trim();
+
   return value.length > 0 ? value : null;
 }
 
@@ -48,15 +49,18 @@ export class DesktopPreReadyElectronOptions extends Context.Service<
 
 export const make = Effect.gen(function* () {
   const platform = yield* HostProcessPlatform;
+
   return yield* Effect.sync((): DesktopPreReadyElectronOptions["Service"] => {
     const linuxPasswordStoreCommandLine =
       platform === "linux"
         ? readCommandLineSwitchValue(Electron.app.commandLine, "password-store")
         : null;
+
     const linux = platform === "linux" ? resolveEarlyLinuxElectronOptionsFromProcess() : null;
 
     if (linux !== null) {
       Electron.app.commandLine.appendSwitch("class", linux.linuxWmClass);
+
       if (linux.passwordStore !== null && linuxPasswordStoreCommandLine === null) {
         Electron.app.commandLine.appendSwitch("password-store", linux.passwordStore);
       }

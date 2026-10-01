@@ -49,6 +49,7 @@ const ContextMenuInput = Schema.Struct({
 function toWebSocketBaseUrl(httpBaseUrl: URL): string {
   const url = new URL(httpBaseUrl.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+
   return url.href;
 }
 
@@ -57,6 +58,7 @@ export const getAppBranding = DesktopIpc.makeSyncIpcMethod({
   result: Schema.NullOr(DesktopAppBrandingSchema),
   handler: Effect.fn("desktop.ipc.window.getAppBranding")(function* () {
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
     return environment.branding;
   }),
 });
@@ -66,6 +68,7 @@ export const getSystemLocale = DesktopIpc.makeSyncIpcMethod({
   result: Schema.String,
   handler: Effect.fn("desktop.ipc.window.getSystemLocale")(function* () {
     const electronApp = yield* ElectronApp.ElectronApp;
+
     return yield* electronApp.systemLocale;
   }),
 });
@@ -76,6 +79,7 @@ export const getWindowFullscreenState = DesktopIpc.makeSyncIpcMethod({
   handler: Effect.fn("desktop.ipc.window.getWindowFullscreenState")(function* () {
     const electronWindow = yield* ElectronWindow.ElectronWindow;
     const window = yield* electronWindow.currentMainOrFirst;
+
     return Option.isSome(window) && window.value.isFullScreen();
   }),
 });
@@ -87,10 +91,12 @@ export const getLocalEnvironmentBootstraps = DesktopIpc.makeSyncIpcMethod({
     const pool = yield* DesktopBackendPool.DesktopBackendPool;
     const instances = yield* pool.list;
     const bootstraps: DesktopEnvironmentBootstrap[] = [];
+
     for (const instance of instances) {
       const isPrimary = instance.id === PRIMARY_LOCAL_ENVIRONMENT_ID;
       const config = yield* instance.currentConfig;
       const snapshot = yield* instance.snapshot;
+
       // A secondary backend (e.g. a parallel WSL backend) that hasn't produced
       // a config yet (mid-registration, before its first start cycle) or that
       // is retrying a *transient* preflight failure (WSL VM still booting, a
@@ -110,10 +116,12 @@ export const getLocalEnvironmentBootstraps = DesktopIpc.makeSyncIpcMethod({
           Option.isSome(config) &&
           Option.isSome(config.value.preflightFailure) &&
           config.value.preflightFailure.value.fatal;
+
         const stoppedPreflight =
           Option.isSome(config) &&
           Option.isSome(config.value.preflightFailure) &&
           (!snapshot.desiredRunning || !snapshot.restartScheduled);
+
         if (isPrimary || fatalPreflight || stoppedPreflight) continue;
         bootstraps.push({
           id: instance.id,
@@ -124,6 +132,7 @@ export const getLocalEnvironmentBootstraps = DesktopIpc.makeSyncIpcMethod({
         });
         continue;
       }
+
       const { bootstrap, httpBaseUrl } = config.value;
       const runningDistro = config.value.runningDistro ?? null;
       bootstraps.push({
@@ -137,6 +146,7 @@ export const getLocalEnvironmentBootstraps = DesktopIpc.makeSyncIpcMethod({
           : {}),
       });
     }
+
     return bootstraps;
   }),
 });
@@ -149,7 +159,9 @@ function extractWslDistroFromEnvironmentId(envId: string): string | null {
   if (!envId.startsWith(DesktopWslBackend.WSL_INSTANCE_ID_PREFIX)) {
     return null;
   }
+
   const suffix = envId.slice(DesktopWslBackend.WSL_INSTANCE_ID_PREFIX.length);
+
   return suffix === "default" || suffix.length === 0 ? null : suffix;
 }
 
@@ -159,6 +171,7 @@ export const getLocalEnvironmentBearerToken = DesktopIpc.makeIpcMethod({
   result: Schema.String,
   handler: Effect.fn("desktop.ipc.window.getLocalEnvironmentBearerToken")(function* () {
     const localAuth = yield* DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth;
+
     return yield* localAuth.getBearerToken;
   }),
 });
@@ -183,19 +196,23 @@ export const pickFolder = DesktopIpc.makeIpcMethod({
     //     wslDistro when the id is the "wsl:default" sentinel).
     //   - anything else (incl. PRIMARY_LOCAL_ENVIRONMENT_ID): primary picker.
     const targetId = options?.targetEnvironmentId;
+
     const wslDistroFromTarget =
       targetId !== undefined && targetId.startsWith(DesktopWslBackend.WSL_INSTANCE_ID_PREFIX)
         ? extractWslDistroFromEnvironmentId(targetId)
         : null;
+
     const useWsl =
       targetId !== undefined &&
       targetId !== PRIMARY_LOCAL_ENVIRONMENT_ID &&
       targetId.startsWith(DesktopWslBackend.WSL_INSTANCE_ID_PREFIX);
+
     const settings = yield* appSettings.get;
     // Fall back to the persisted wslDistro when the id is the
     // "wsl:default" sentinel; the orchestrator uses the same fallback
     // for the actual backend.
     const wslDistro = useWsl ? (wslDistroFromTarget ?? settings.wslDistro) : null;
+
     const defaultPath = useWsl
       ? Option.fromNullishOr(
           resolveWslPickFolderDefaultPath(
@@ -206,18 +223,22 @@ export const pickFolder = DesktopIpc.makeIpcMethod({
           ),
         )
       : environment.resolvePickFolderDefaultPath(options);
+
     const selectedPath = yield* dialog.pickFolder({
       owner: yield* electronWindow.focusedMainOrFirst,
       defaultPath,
     });
+
     if (Option.isNone(selectedPath)) {
       return null;
     }
+
     if (!useWsl) {
       return selectedPath.value;
     }
 
     const linuxUncPath = wslUncPathToLinuxPath(selectedPath.value);
+
     if (linuxUncPath !== null) {
       return linuxUncPath;
     }
@@ -226,6 +247,7 @@ export const pickFolder = DesktopIpc.makeIpcMethod({
       extractDistroFromUncPath(selectedPath.value) ?? wslDistro,
       selectedPath.value,
     );
+
     return Option.getOrElse(converted, () => selectedPath.value);
   }),
 });
@@ -248,6 +270,7 @@ export const showContextMenu = DesktopIpc.makeIpcMethod({
     const electronMenu = yield* ElectronMenu.ElectronMenu;
     const electronWindow = yield* ElectronWindow.ElectronWindow;
     const window = yield* electronWindow.focusedMainOrFirst;
+
     if (Option.isNone(window)) {
       return null;
     }
@@ -257,6 +280,7 @@ export const showContextMenu = DesktopIpc.makeIpcMethod({
       items: input.items,
       position: Option.fromNullishOr(input.position),
     });
+
     return Option.getOrNull(selectedItemId);
   }),
 });
@@ -267,6 +291,7 @@ export const openExternal = DesktopIpc.makeIpcMethod({
   result: Schema.Boolean,
   handler: Effect.fn("desktop.ipc.window.openExternal")(function* (url) {
     const shell = yield* ElectronShell.ElectronShell;
+
     return yield* shell.openExternal(url);
   }),
 });
@@ -288,27 +313,35 @@ export const pickThemeFiles = DesktopIpc.makeIpcMethod({
     // macOS, and Linux; when it is missing the picker opens wherever the
     // platform would by default.
     const extensionsDir = path.join(NodeOS.homedir(), ".vscode", "extensions");
+
     const defaultPath = yield* fileSystem
       .exists(extensionsDir)
       .pipe(Effect.orElseSucceed(() => false));
+
     const paths = yield* dialog.pickFiles({
       owner: yield* electronWindow.focusedMainOrFirst,
       defaultPath: defaultPath ? Option.some(extensionsDir) : Option.none(),
       filters: [{ name: "JSON", extensions: ["json"] }],
       multiple: true,
     });
+
     if (paths.length === 0) {
       return null;
     }
+
     return yield* Effect.forEach(paths, (filePath) => {
       const name = path.basename(filePath);
+
       return Effect.gen(function* () {
         const info = yield* fileSystem.stat(filePath);
         const size = Number(info.size);
+
         if (size > PICKED_THEME_FILE_MAX_BYTES) {
           return { name, size, text: "" } satisfies PickedThemeFile;
         }
+
         const text = yield* fileSystem.readFileString(filePath);
+
         return { name, size, text } satisfies PickedThemeFile;
       }).pipe(
         // An unreadable file degrades to an entry the renderer reports.

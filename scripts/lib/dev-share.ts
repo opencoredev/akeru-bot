@@ -98,10 +98,12 @@ export class DevServeFailedError extends Schema.TaggedErrorClass<DevServeFailedE
 ) {
   override get message(): string {
     const port = String(this.webPort);
+
     const base =
       this.stage === "clear-existing"
         ? `could not clear the existing mapping for port ${port}. Run \`tailscale serve --https=${port} off\` and retry`
         : `could not serve port ${port} on the tailnet (it is no longer served; any previous mapping for it was cleared before this attempt)`;
+
     return this.explanation ? `${base}: ${this.explanation}` : base;
   }
 
@@ -115,7 +117,9 @@ export const DevShareError = Schema.Union([
   TailnetNameMissingError,
   DevServeFailedError,
 ]);
+
 export type DevShareError = typeof DevShareError.Type;
+
 export const isDevShareError = Schema.is(DevShareError);
 
 /**
@@ -173,6 +177,7 @@ export const shareDevServer = Effect.fn("devShare.shareDevServer")(function* (in
   const status = yield* readTailscaleStatus.pipe(
     Effect.mapError((error) => new TailscaleUnavailableError({ cause: error })),
   );
+
   if (status.magicDnsName === null) {
     return yield* new TailnetNameMissingError();
   }
@@ -183,6 +188,7 @@ export const shareDevServer = Effect.fn("devShare.shareDevServer")(function* (in
   // /ws, /api and friends to a separate backend port, and serving "/" alone
   // would leave those pointing at a port nothing is listening on.
   const cleared = yield* unshareDevServer(input.webPort);
+
   if (!cleared.cleared) {
     // Serving over routes we failed to remove would hand out a URL that is
     // broken in a way the user cannot see: the page loads while /ws and /api
@@ -198,6 +204,7 @@ export const shareDevServer = Effect.fn("devShare.shareDevServer")(function* (in
   yield* ensureTailscaleServe({ localPort: input.webPort, servePort: input.webPort }).pipe(
     Effect.mapError((error) => {
       const explanation = explainCommandFailure(error);
+
       return new DevServeFailedError({
         stage: "serve",
         webPort: input.webPort,

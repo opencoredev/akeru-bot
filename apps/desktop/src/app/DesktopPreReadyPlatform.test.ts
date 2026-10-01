@@ -43,6 +43,7 @@ describe("DesktopPreReadyPlatform", () => {
         hasSwitch: (switchName) => switchName === "password-store",
         getSwitchValue: (switchName) => {
           assert.equal(switchName, "password-store");
+
           return "basic";
         },
       },
@@ -100,6 +101,7 @@ describe("DesktopPreReadyPlatform", () => {
           Effect.promise(() => Promise.resolve()).pipe(
             Effect.map(() => {
               events.push("clerk");
+
               return { ready: true as const };
             }),
           ),

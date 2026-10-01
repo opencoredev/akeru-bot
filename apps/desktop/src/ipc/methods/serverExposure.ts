@@ -22,6 +22,7 @@ export const getServerExposureState = DesktopIpc.makeIpcMethod({
   result: DesktopServerExposureStateSchema,
   handler: Effect.fn("desktop.ipc.serverExposure.getState")(function* () {
     const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
+
     return yield* serverExposure.getState;
   }),
 });
@@ -34,9 +35,11 @@ export const setServerExposureMode = DesktopIpc.makeIpcMethod({
     const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
     const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
     const change = yield* serverExposure.setMode(mode);
+
     if (change.requiresRelaunch) {
       yield* lifecycle.relaunch(`serverExposureMode=${mode}`);
     }
+
     return change.state;
   }),
 });
@@ -49,11 +52,13 @@ export const setTailscaleServeEnabled = DesktopIpc.makeIpcMethod({
     const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
     const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
     const change = yield* serverExposure.setTailscaleServeEnabled(input);
+
     if (change.requiresRelaunch) {
       yield* lifecycle.relaunch(
         change.state.tailscaleServeEnabled ? "tailscale-serve-enabled" : "tailscale-serve-disabled",
       );
     }
+
     return change.state;
   }),
 });
@@ -64,6 +69,7 @@ export const getAdvertisedEndpoints = DesktopIpc.makeIpcMethod({
   result: Schema.Array(AdvertisedEndpoint),
   handler: Effect.fn("desktop.ipc.serverExposure.getAdvertisedEndpoints")(function* () {
     const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
+
     return yield* serverExposure.getAdvertisedEndpoints;
   }),
 });

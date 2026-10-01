@@ -11,11 +11,13 @@ import * as DesktopAssets from "./DesktopAssets.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
+
 const COMMIT_HASH_DISPLAY_LENGTH = 12;
 
 const AppPackageMetadata = Schema.Struct({
   t3codeCommitHash: Schema.optional(Schema.String),
 });
+
 const decodeAppPackageMetadata = Schema.decodeEffect(Schema.fromJsonString(AppPackageMetadata));
 
 export class DesktopUserDataPathResolutionError extends Schema.TaggedErrorClass<DesktopUserDataPathResolutionError>()(
@@ -40,6 +42,7 @@ export class DesktopAppIdentity extends Context.Service<
 
 const normalizeCommitHash = (value: string): Option.Option<string> => {
   const trimmed = value.trim();
+
   return COMMIT_HASH_PATTERN.test(trimmed)
     ? Option.some(trimmed.slice(0, COMMIT_HASH_DISPLAY_LENGTH).toLowerCase())
     : Option.none();
@@ -48,10 +51,12 @@ const normalizeCommitHash = (value: string): Option.Option<string> => {
 export const resolveUserDataPath = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
+
   const legacyPath = environment.path.join(
     environment.appDataDirectory,
     environment.legacyUserDataDirName,
   );
+
   const legacyPathExists = yield* fileSystem.exists(legacyPath).pipe(
     Effect.mapError(
       (cause) =>
@@ -61,6 +66,7 @@ export const resolveUserDataPath = Effect.gen(function* () {
         }),
     ),
   );
+
   return legacyPathExists
     ? legacyPath
     : environment.path.join(environment.appDataDirectory, environment.userDataDirName);
@@ -76,6 +82,7 @@ export const make = Effect.gen(function* () {
   const resolveEmbeddedCommitHash = Effect.gen(function* () {
     const packageJsonPath = environment.path.join(environment.appRoot, "package.json");
     const raw = yield* fileSystem.readFileString(packageJsonPath).pipe(Effect.option);
+
     return yield* Option.match(raw, {
       onNone: () => Effect.succeed(Option.none<string>()),
       onSome: (value) =>
@@ -90,24 +97,29 @@ export const make = Effect.gen(function* () {
 
   const resolveAboutCommitHash = Effect.gen(function* () {
     const cached = yield* Ref.get(commitHashCache);
+
     if (Option.isSome(cached)) {
       return cached.value;
     }
 
     const override = Option.flatMap(environment.commitHashOverride, normalizeCommitHash);
+
     if (Option.isSome(override)) {
       yield* Ref.set(commitHashCache, Option.some(override));
+
       return override;
     }
 
     if (!environment.isPackaged) {
       const empty = Option.none<string>();
       yield* Ref.set(commitHashCache, Option.some(empty));
+
       return empty;
     }
 
     const commitHash = yield* resolveEmbeddedCommitHash;
     yield* Ref.set(commitHashCache, Option.some(commitHash));
+
     return commitHash;
   });
 

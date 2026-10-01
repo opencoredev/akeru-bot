@@ -26,16 +26,24 @@ function assertOmits(haystack: string, needle: string, message: string): void {
 }
 
 const releaseWorkflow = read(".github/workflows/release.yml");
+
 const versionPackagesWorkflow = read(".github/workflows/version-packages.yml");
+
 const releaseSmokeWorkflow = read(".github/workflows/release-smoke.yml");
+
 const ciWorkflow = read(".github/workflows/ci.yml");
+
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
+
 const serverCli = read("apps/server/scripts/cli.ts");
+
 const depotWorkflowDirectory = NodePath.join(repoRoot, ".depot/workflows");
+
 if (NodeFS.existsSync(depotWorkflowDirectory)) {
   const depotWorkflows = NodeFS.readdirSync(depotWorkflowDirectory).filter(
     (workflowFile) => workflowFile.endsWith(".yml") || workflowFile.endsWith(".yaml"),
   );
+
   if (depotWorkflows.length > 0) {
     throw new Error(`Retired Depot workflows still exist: ${depotWorkflows.join(", ")}.`);
   }
@@ -46,17 +54,21 @@ assertContains(
   '"Akeru-Bot-${version}-${arch}.${ext}"',
   "Desktop artifacts do not use the Akeru Bot release name.",
 );
+
 assertContains(
   desktopArtifactBuilder,
   '"Akeru-Bot-${version}-x64.${ext}"',
   "Linux desktop artifacts do not use the advertised x64 release name.",
 );
+
 assertContains(serverCli, '"akeru-bot",', "CLI publishing does not select the Akeru package.");
+
 assertContains(
   serverCli,
   "license: serverPackageJson.license",
   "CLI publishing drops MIT metadata.",
 );
+
 assertContains(
   desktopArtifactBuilder,
   "stageReleaseLegalFiles",
@@ -130,6 +142,7 @@ for (const [needle, label] of [
 }
 
 assertContains(releaseWorkflow, "tag=v%s\\n", "Stable release workflow does not use a vX.Y.Z tag.");
+
 for (const [needle, label] of [
   ["branches: [main]", "main branch trigger"],
   ["pnpm release:version", "Changesets version command"],
@@ -143,11 +156,13 @@ for (const [needle, label] of [
 ] as const) {
   assertContains(versionPackagesWorkflow, needle, `Version packages workflow is missing ${label}.`);
 }
+
 assertOmits(
   versionPackagesWorkflow,
   "gh release create",
   "Version packages workflow publishes before its pull request merges",
 );
+
 for (const [needle, label] of [
   ['cron: "17 */3 * * *"', "three-hour nightly schedule"],
   ["scripts/nightly-release.ts", "nightly release selection"],
@@ -156,19 +171,25 @@ for (const [needle, label] of [
 ] as const) {
   assertContains(releaseWorkflow, needle, `Release workflow is missing ${label}.`);
 }
+
 assertContains(
   releaseWorkflow,
   "APPLE_API_KEY: ${{ runner.temp }}/notarytool-api-key.p8",
   "Signed macOS verification cannot access the App Store Connect key.",
 );
+
 assertContains(
   releaseWorkflow,
   "!release/builder-debug.yml",
   "Stable release uploads electron-builder debug metadata.",
 );
+
 const desktopJobHeader = /\n  desktop:\n([\s\S]*?)\n    strategy:/u.exec(releaseWorkflow)?.[1];
+
 if (!desktopJobHeader) throw new Error("Stable release workflow is missing the desktop job.");
+
 assertOmits(desktopJobHeader, "secrets.", "Desktop signing secrets are scoped at the job level");
+
 assertOmits(releaseWorkflow, "macOS x64", "unadvertised macOS x64 build");
 
 const parsedReleaseWorkflow = parse(releaseWorkflow) as {
@@ -183,15 +204,19 @@ const parsedReleaseWorkflow = parse(releaseWorkflow) as {
     };
   };
 };
+
 const macOSConditions = new Set([
   "matrix.platform == 'mac'",
   "matrix.platform == 'mac' && env.MACOS_SIGNED == 'true'",
 ]);
+
 for (const step of parsedReleaseWorkflow.jobs?.desktop?.steps ?? []) {
   const secretInputs = JSON.stringify({ env: step.env, with: step.with });
+
   if (/MACOS_|APPSTORE_|APPLE_API_/u.test(secretInputs) && !macOSConditions.has(step.if ?? "")) {
     throw new Error(`${step.name ?? "Unnamed step"} exposes macOS secrets outside the macOS job.`);
   }
+
   if (/AZURE_/u.test(secretInputs) && step.if !== "matrix.platform == 'win'") {
     throw new Error(
       `${step.name ?? "Unnamed step"} exposes Windows secrets outside the Windows job.`,
@@ -212,20 +237,27 @@ assertContains(
   "runs-on: tenki-standard-medium-4c-8g",
   "CI does not use 4-vCPU Tenki runners.",
 );
+
 assertOmits(ciWorkflow, "runs-on: ubuntu-24.04", "GitHub-hosted Linux runners");
+
 assertOmits(ciWorkflow, "depot-", "Depot runners");
+
 assertOmits(releaseSmokeWorkflow, "depot-", "Depot runners");
+
 assertOmits(releaseWorkflow, "depot-", "Depot runners");
+
 assertOmits(
   desktopArtifactBuilder,
   'const DESKTOP_APP_ID = "com.t3tools.t3code"',
   "legacy T3 desktop bundle identifier",
 );
+
 assertContains(
   desktopArtifactBuilder,
   'const DESKTOP_APP_ID = "dev.leodoes.akeru"',
   "Akeru desktop bundle identifier is missing.",
 );
+
 assertContains(
   desktopArtifactBuilder,
   'identity: "-"',
@@ -252,6 +284,7 @@ for (const relativePath of [
 }
 
 const dependencyProblems = checkPublicDependencies(repoRoot);
+
 if (dependencyProblems.length > 0) {
   throw new Error(
     `Release inputs contain ${dependencyProblems.length} external local dependency path(s).`,
@@ -259,6 +292,7 @@ if (dependencyProblems.length > 0) {
 }
 
 const tempRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-release-smoke-"));
+
 try {
   for (const relativePath of [
     "apps/server/package.json",
@@ -289,6 +323,7 @@ try {
     "packages/contracts/package.json",
   ] as const) {
     const manifest = JSON.parse(readFromTemp(relativePath)) as { readonly version?: unknown };
+
     if (manifest.version !== "9.9.9-smoke.0") {
       throw new Error(`Release version did not update ${relativePath}.`);
     }

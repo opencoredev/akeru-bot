@@ -18,16 +18,21 @@ export const REMOTE_TARGETS = [
 export type RemoteTarget = (typeof REMOTE_TARGETS)[number];
 
 export const REMOTE_MANIFEST = "AKERU-REMOTE-MANIFEST.txt";
+
 export const REMOTE_MANIFEST_SIGNATURE = "AKERU-REMOTE-MANIFEST.sig";
+
 export const REMOTE_INSTALLERS = ["install-remote.sh", "install-remote.ps1"] as const;
+
 // The Linux installer only fetches Tailscale packages the signed manifest authorizes.
 export const TAILSCALE_VERSION = "1.88.4";
+
 export const TAILSCALE_ARCHIVES = [`tailscale_${TAILSCALE_VERSION}_amd64.tgz`] as const;
 
 const scriptsDirectory = import.meta.dirname;
 
 export function remoteArchiveName(version: string, target: RemoteTarget): string {
   const extension = target.platform === "win32" ? "zip" : "tar.gz";
+
   return `Akeru-Remote-${version}-${target.platform}-${target.arch}.${extension}`;
 }
 
@@ -44,7 +49,9 @@ export function remoteTargetFor(platform: string, arch: string): RemoteTarget {
   const target = REMOTE_TARGETS.find(
     (candidate) => candidate.platform === platform && candidate.arch === arch,
   );
+
   if (!target) throw new Error(`Akeru Remote is not published for ${platform} ${arch}.`);
+
   return target;
 }
 
@@ -86,6 +93,7 @@ const WINDOWS_LAUNCHER = [
 
 const run = (command: string, args: readonly string[]) => {
   const result = NodeChildProcess.spawnSync(command, args, { stdio: "inherit" });
+
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed.`);
 };
 
@@ -107,22 +115,28 @@ export function packageRemoteArchive(input: {
   const { target, version } = input;
   const windows = target.platform === "win32";
   const staging = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-remote-package-"));
+
   try {
     const rootName = windows
       ? "akeru"
       : `Akeru-Remote-${version}-${target.platform}-${target.arch}`;
+
     const root = NodePath.join(staging, rootName);
     NodeFS.cpSync(input.runtimeDirectory, root, { recursive: true, verbatimSymlinks: true });
+
     if (!NodeFS.existsSync(NodePath.join(root, "node_modules", "akeru-bot", "dist", "bin.mjs"))) {
       throw new Error("The runtime tree is missing node_modules/akeru-bot/dist/bin.mjs.");
     }
+
     const copy = (source: string, destination: string, mode = 0o644) => {
       NodeFS.mkdirSync(NodePath.dirname(NodePath.join(root, destination)), { recursive: true });
       NodeFS.copyFileSync(source, NodePath.join(root, destination));
       NodeFS.chmodSync(NodePath.join(root, destination), mode);
     };
+
     NodeFS.writeFileSync(NodePath.join(root, "VERSION"), `${version}\n`);
     copy(input.license, "LICENSE");
+
     if (windows) {
       copy(input.nodeBinary, NodePath.join("node", "node.exe"), 0o755);
       NodeFS.writeFileSync(NodePath.join(root, "akeru.cmd"), WINDOWS_LAUNCHER);
@@ -146,6 +160,7 @@ export function packageRemoteArchive(input: {
 
     NodeFS.mkdirSync(input.outputDirectory, { recursive: true });
     const archive = NodePath.join(input.outputDirectory, remoteArchiveName(version, target));
+
     if (windows) {
       // Windows' bundled bsdtar writes zip archives that Expand-Archive reads.
       const tar = NodePath.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
@@ -153,6 +168,7 @@ export function packageRemoteArchive(input: {
     } else {
       run("tar", ["-czf", archive, "-C", staging, rootName]);
     }
+
     return archive;
   } finally {
     NodeFS.rmSync(staging, { recursive: true, force: true });
@@ -178,45 +194,59 @@ export function writeRemoteManifest(input: {
     ...REMOTE_TARGETS.map((target) => remoteArchiveName(input.version, target)),
     ...REMOTE_INSTALLERS,
   ].map((name) => `${sha256(NodePath.join(input.directory, name))}  ${name}`);
+
   for (const name of TAILSCALE_ARCHIVES) {
     const checksum = input.externalChecksums[name];
+
     if (!checksum || !/^[a-f0-9]{64}$/.test(checksum)) {
       throw new Error(`A SHA-256 checksum is required for ${name}.`);
     }
+
     lines.push(`${checksum}  ${name}`);
   }
+
   const manifest = Buffer.from(`${lines.join("\n")}\n`);
   const signature = NodeCrypto.sign(null, manifest, input.privateKeyPem);
+
   const publicKey =
     input.publicKeyPem ??
     NodeFS.readFileSync(NodePath.join(scriptsDirectory, "akeru-release-manifest.pub"), "utf8");
+
   if (!NodeCrypto.verify(null, manifest, publicKey, signature)) {
     throw new Error("The manifest signing key does not match scripts/akeru-release-manifest.pub.");
   }
+
   NodeFS.writeFileSync(NodePath.join(input.directory, REMOTE_MANIFEST), manifest);
   NodeFS.writeFileSync(NodePath.join(input.directory, REMOTE_MANIFEST_SIGNATURE), signature);
+
   return manifest.toString("utf8");
 }
 
 async function fetchTailscaleChecksums(): Promise<Record<string, string>> {
   const checksums: Record<string, string> = {};
+
   for (const name of TAILSCALE_ARCHIVES) {
     const response = await fetch(`https://pkgs.tailscale.com/stable/${name}.sha256`);
+
     if (!response.ok) throw new Error(`Could not fetch the published checksum for ${name}.`);
     checksums[name] = (await response.text()).trim().split(/\s+/u)[0]?.toLowerCase() ?? "";
   }
+
   return checksums;
 }
 
 if (import.meta.main) {
   const [command, ...args] = process.argv.slice(2);
+
   if (command === "archive") {
     const [runtimeDirectory, outputDirectory, version, platform, arch] = args;
+
     if (!runtimeDirectory || !outputDirectory || !version || !platform || !arch) {
       throw new Error(
         "Usage: package-remote archive <runtime-dir> <output-dir> <version> <platform> <arch>",
       );
     }
+
     const archive = packageRemoteArchive({
       runtimeDirectory: NodePath.resolve(runtimeDirectory),
       outputDirectory: NodePath.resolve(outputDirectory),
@@ -225,18 +255,23 @@ if (import.meta.main) {
       nodeBinary: process.execPath,
       license: NodePath.join(scriptsDirectory, "..", "LICENSE"),
     });
+
     console.log(`Packaged ${NodePath.basename(archive)}.`);
   } else if (command === "manifest") {
     const [directory, version] = args;
     const privateKeyPem = process.env.AKERU_REMOTE_MANIFEST_SIGNING_KEY?.trim();
+
     if (!directory || !version) throw new Error("Usage: package-remote manifest <dir> <version>");
+
     if (!privateKeyPem) throw new Error("AKERU_REMOTE_MANIFEST_SIGNING_KEY is required.");
+
     for (const installer of REMOTE_INSTALLERS) {
       NodeFS.copyFileSync(
         NodePath.join(scriptsDirectory, installer),
         NodePath.join(directory, installer),
       );
     }
+
     writeRemoteManifest({
       directory: NodePath.resolve(directory),
       version,

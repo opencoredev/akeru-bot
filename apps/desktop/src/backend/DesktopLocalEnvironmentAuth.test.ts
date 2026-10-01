@@ -33,6 +33,7 @@ describe("DesktopLocalEnvironmentAuth", () => {
   it.effect("exchanges the desktop bootstrap credential only once", () =>
     Effect.gen(function* () {
       const requestCount = yield* Ref.make(0);
+
       const httpClientLayer = Layer.succeed(
         HttpClient.HttpClient,
         HttpClient.make((request) =>
@@ -55,6 +56,7 @@ describe("DesktopLocalEnvironmentAuth", () => {
           ),
         ),
       );
+
       const poolLayer = Layer.succeed(DesktopBackendPool.DesktopBackendPool, {
         list: Effect.succeed([
           {
@@ -64,12 +66,14 @@ describe("DesktopLocalEnvironmentAuth", () => {
           },
         ]),
       } as unknown as DesktopBackendPool.DesktopBackendPool["Service"]);
+
       const testLayer = DesktopLocalEnvironmentAuth.layer.pipe(
         Layer.provide(Layer.mergeAll(poolLayer, httpClientLayer)),
       );
 
       const [first, second] = yield* Effect.gen(function* () {
         const auth = yield* DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth;
+
         return yield* Effect.all([auth.getBearerToken, auth.getBearerToken]);
       }).pipe(Effect.provide(testLayer));
 

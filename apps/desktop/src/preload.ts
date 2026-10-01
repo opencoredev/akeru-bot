@@ -19,28 +19,35 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
       "message" in result && typeof result.message === "string"
         ? result.message
         : "SSH authentication cancelled.";
+
     throw new Error(message);
   }
+
   return result as Awaited<ReturnType<DesktopBridge["ensureSshEnvironment"]>>;
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
+
     if (typeof result !== "object" || result === null) {
       return null;
     }
+
     return result as ReturnType<DesktopBridge["getAppBranding"]>;
   },
   getSystemLocale: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_SYSTEM_LOCALE_CHANNEL);
+
     return typeof result === "string" ? result : null;
   },
   getLocalEnvironmentBootstraps: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL);
+
     if (!Array.isArray(result)) {
       return [];
     }
+
     return result as ReturnType<DesktopBridge["getLocalEnvironmentBootstraps"]>;
   },
   getLocalEnvironmentBearerToken: () =>
@@ -80,6 +87,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     };
 
     ipcRenderer.on(IpcChannels.SSH_PASSWORD_PROMPT_CHANNEL, wrappedListener);
+
     return () => {
       ipcRenderer.removeListener(IpcChannels.SSH_PASSWORD_PROMPT_CHANNEL, wrappedListener);
     };
@@ -113,6 +121,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     };
 
     ipcRenderer.on(IpcChannels.MENU_ACTION_CHANNEL, wrappedListener);
+
     return () => {
       ipcRenderer.removeListener(IpcChannels.MENU_ACTION_CHANNEL, wrappedListener);
     };
@@ -120,10 +129,13 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   onQuitShortcut: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, hint: unknown) => {
       if (typeof hint !== "object" || hint === null || !("state" in hint)) return;
+
       if (hint.state === "up") {
         listener({ state: "up" });
+
         return;
       }
+
       if (
         hint.state === "down" &&
         "mode" in hint &&
@@ -134,6 +146,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     };
 
     ipcRenderer.on(IpcChannels.QUIT_SHORTCUT_CHANNEL, wrappedListener);
+
     return () => {
       ipcRenderer.removeListener(IpcChannels.QUIT_SHORTCUT_CHANNEL, wrappedListener);
     };
@@ -147,6 +160,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     };
 
     ipcRenderer.on(IpcChannels.WINDOW_FULLSCREEN_STATE_CHANNEL, wrappedListener);
+
     return () => {
       ipcRenderer.removeListener(IpcChannels.WINDOW_FULLSCREEN_STATE_CHANNEL, wrappedListener);
     };
@@ -164,6 +178,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     };
 
     ipcRenderer.on(IpcChannels.UPDATE_STATE_CHANNEL, wrappedListener);
+
     return () => {
       ipcRenderer.removeListener(IpcChannels.UPDATE_STATE_CHANNEL, wrappedListener);
     };
@@ -230,7 +245,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
           if (typeof frame !== "object" || frame === null) return;
           listener(frame as DesktopPreviewRecordingFrame);
         };
+
         ipcRenderer.on(IpcChannels.PREVIEW_RECORDING_FRAME_CHANNEL, wrappedListener);
+
         return () =>
           ipcRenderer.removeListener(IpcChannels.PREVIEW_RECORDING_FRAME_CHANNEL, wrappedListener);
       },
@@ -262,7 +279,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         if (typeof tabId !== "string" || typeof state !== "object" || state === null) return;
         listener(tabId, state as DesktopPreviewTabState);
       };
+
       ipcRenderer.on(IpcChannels.PREVIEW_STATE_CHANGE_CHANNEL, wrappedListener);
+
       return () =>
         ipcRenderer.removeListener(IpcChannels.PREVIEW_STATE_CHANGE_CHANNEL, wrappedListener);
     },
@@ -271,7 +290,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         if (typeof pointerEvent !== "object" || pointerEvent === null) return;
         listener(pointerEvent as DesktopPreviewPointerEvent);
       };
+
       ipcRenderer.on(IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, wrappedListener);
+
       return () =>
         ipcRenderer.removeListener(IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, wrappedListener);
     },

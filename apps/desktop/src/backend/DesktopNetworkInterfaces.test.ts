@@ -34,6 +34,7 @@ describe("DesktopNetworkInterfaces", () => {
         },
       ],
     };
+
     networkInterfacesMock.mockReturnValueOnce(interfaces);
 
     return Effect.gen(function* () {
@@ -53,6 +54,7 @@ describe("DesktopNetworkInterfaces", () => {
       const exit = yield* Effect.exit(service.read);
 
       assert.equal(exit._tag, "Failure");
+
       if (exit._tag === "Failure") {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, DesktopNetworkInterfaces.DesktopNetworkInterfacesReadError);

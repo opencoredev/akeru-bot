@@ -37,12 +37,15 @@ export function getPropertyName(node: unknown): Option.Option<string> {
     if (expression.type === "Identifier" && typeof expression.name === "string") {
       return Option.some(expression.name);
     }
+
     if (expression.type === "PrivateIdentifier" && typeof expression.name === "string") {
       return Option.some(expression.name);
     }
+
     if (expression.type === "Literal" && typeof expression.value === "string") {
       return Option.some(expression.value);
     }
+
     return Option.none();
   });
 }
@@ -50,6 +53,7 @@ export function getPropertyName(node: unknown): Option.Option<string> {
 export function isIdentifier(node: Option.Option<AstNode>, name?: string): boolean {
   if (Option.isNone(node)) return false;
   const expression = node.value;
+
   return (
     expression.type === "Identifier" &&
     typeof expression.name === "string" &&

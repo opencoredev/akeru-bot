@@ -82,7 +82,9 @@ export const BrowserSessionGetSessionError = Schema.Union([
   BrowserSessionPartitionDerivationError,
   BrowserSessionCreationError,
 ]);
+
 export type BrowserSessionGetSessionError = typeof BrowserSessionGetSessionError.Type;
+
 export const isBrowserSessionGetSessionError = Schema.is(BrowserSessionGetSessionError);
 
 export const BrowserSessionError = Schema.Union([
@@ -91,7 +93,9 @@ export const BrowserSessionError = Schema.Union([
   BrowserSessionStorageClearError,
   BrowserSessionCacheClearError,
 ]);
+
 export type BrowserSessionError = typeof BrowserSessionError.Type;
+
 export const isBrowserSessionError = Schema.is(BrowserSessionError);
 
 export class BrowserSession extends Context.Service<
@@ -121,23 +125,29 @@ export const make = Effect.gen(function* BrowserSessionMake() {
           }),
       ),
     );
+
     return `${PREVIEW_PARTITION_PREFIX}${Encoding.encodeHex(digest).slice(0, 20)}`;
   });
 
   const getSession = Effect.fn("BrowserSession.getSession")(function* (scope = "shared") {
     const partition = yield* getPartition(scope);
+
     return yield* SynchronizedRef.modifyEffect(sessionsRef, (sessions) => {
       const existing = sessions.get(partition);
+
       if (existing) return Effect.succeed([existing, sessions] as const);
+
       return Effect.try({
         try: () => {
           const browserSession = session.fromPartition(partition);
+
           const userAgent = browserSession
             .getUserAgent()
             .replace(/Electron\/[\d.]+ /, "")
             .replace(/\s*akeru\/[\d.]+/, "")
             // Pre-rebrand builds shipped a `t3code/` UA token.
             .replace(/\s*t3code\/[\d.]+/, "");
+
           browserSession.setUserAgent(userAgent);
           browserSession.setPermissionRequestHandler((_webContents, permission, callback) => {
             callback(ALLOWED_PREVIEW_PERMISSIONS.has(permission));
@@ -147,6 +157,7 @@ export const make = Effect.gen(function* BrowserSessionMake() {
           );
           const next = new Map(sessions);
           next.set(partition, browserSession);
+
           return [browserSession, next] as const;
         },
         catch: (cause) =>

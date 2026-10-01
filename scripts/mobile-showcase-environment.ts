@@ -2,205 +2,33 @@
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-import * as NodeSqlite from "node:sqlite";
+
 import * as NodeUtil from "node:util";
+import {
+  BASE_ENVIRONMENT_PRESENCE,
+  UPDATED_ENVIRONMENT_PRESENCE,
+  REMOTE_HANDOFF_CARD,
+  SHOWCASE_PROJECTS,
+  SHOWCASE_THREADS,
+  SHOWCASE_PROJECT_ID,
+} from "./mobile-showcase-fixtures.ts";
+import { waitForSeedableSchema, seedDatabase } from "./mobile-showcase-seed-database.ts";
+
+export { SHOWCASE_PROJECT_ID } from "./mobile-showcase-fixtures.ts";
+
+export { SHOWCASE_THREAD_ID } from "./mobile-showcase-fixtures.ts";
+
+export { SHOWCASE_SCENES } from "./mobile-showcase-fixtures.ts";
+
+export type { ShowcaseScene } from "./mobile-showcase-fixtures.ts";
+
+export { SHOWCASE_PROJECTS } from "./mobile-showcase-fixtures.ts";
+
+export { SHOWCASE_ENVIRONMENTS } from "./mobile-showcase-fixtures.ts";
+
+export { SHOWCASE_THREADS } from "./mobile-showcase-fixtures.ts";
 
 const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
-
-export const SHOWCASE_PROJECT_ID = "t3code";
-export const SHOWCASE_THREAD_ID = "remote-command-center";
-
-export const SHOWCASE_SCENES = ["threads", "thread", "environments"] as const;
-export type ShowcaseScene = (typeof SHOWCASE_SCENES)[number];
-
-const PROJECTOR_NAMES = [
-  "projection.projects",
-  "projection.threads",
-  "projection.thread-messages",
-  "projection.thread-proposed-plans",
-  "projection.thread-activities",
-  "projection.thread-sessions",
-  "projection.thread-turns",
-  "projection.checkpoints",
-  "projection.pending-approvals",
-] as const;
-
-const MODEL_SELECTION = JSON.stringify({ instanceId: "codex", model: "gpt-5.4" });
-const BASE_ENVIRONMENT_PRESENCE = `export function environmentLabel(count: number): string {
-  return \`${"${count}"} environments\`;
-}
-`;
-
-const UPDATED_ENVIRONMENT_PRESENCE = `const PULSE = ["✦", "✧", "·", "✧"] as const;
-
-export function environmentLabel(connected: number, total: number, frame: number): string {
-  const pulse = PULSE[frame % PULSE.length];
-  return \`${"${pulse} ${connected}/${total}"} ready\`;
-}
-`;
-
-const REMOTE_HANDOFF_CARD = `import { View, Text } from "react-native";
-
-export function RemoteHandoffCard(props: { machine: string; latencyMs: number }) {
-  return (
-    <View className="rounded-2xl bg-surface-2 p-4">
-      <Text className="font-semibold">Ready on {props.machine}</Text>
-      <Text className="text-success">Handoff in {props.latencyMs}ms</Text>
-    </View>
-  );
-}
-`;
-
-export const SHOWCASE_PROJECTS = [
-  {
-    id: "t3code",
-    title: "Akeru Bot",
-    directory: "akeru-bot",
-    repositoryUrl: "https://github.com/opencoredev/akeru-bot.git",
-  },
-  {
-    id: "react",
-    title: "React",
-    directory: "react",
-    repositoryUrl: "https://github.com/facebook/react.git",
-  },
-  {
-    id: "linux",
-    title: "Linux",
-    directory: "linux",
-    repositoryUrl: "https://github.com/torvalds/linux.git",
-  },
-] as const;
-
-export const SHOWCASE_ENVIRONMENTS = [
-  {
-    id: "moonbase-terminal",
-    label: "Moonbase Terminal",
-    projectIds: ["t3code"],
-  },
-  {
-    id: "suspense-station",
-    label: "Suspense Station",
-    projectIds: ["react"],
-  },
-  {
-    id: "kernel-cabin",
-    label: "Kernel Cabin",
-    projectIds: ["linux"],
-  },
-] as const;
-
-export const SHOWCASE_THREADS = [
-  {
-    id: SHOWCASE_THREAD_ID,
-    projectId: "t3code",
-    title: "Make remote coding feel local ✦",
-    branch: "feat/remote-command-center",
-    minutesAgo: 3,
-    request:
-      "Give Akeru Bot a remote-first command center. Make three machines feel one tap away, keep agent work in sync, and make every handoff feel instant.",
-    response:
-      "Akeru Bot now treats every machine like it is right here in the room. ✦\n\n- Moonbase, Suspense Station, and Kernel Cabin stay live together\n- Every chat follows you without losing a single line\n- Agent work remains perfectly in sync across devices\n- Handoffs land before your train of thought can wander\n\nI also ran the changed workspace: **612 tests passed**.",
-  },
-  {
-    id: "pocket-command-center",
-    projectId: "t3code",
-    title: "Put the command center in your pocket",
-    branch: "feat/pocket-command-center",
-    minutesAgo: 21,
-    state: "approval" as const,
-    request: "Make switching between desktop, phone, and tablet feel like one continuous session.",
-    response:
-      "The handoff flow preserves the selected chat, bot context, and working diff. The final motion treatment is ready for approval.",
-  },
-  {
-    id: "buttery-suspense",
-    projectId: "react",
-    title: "Make Suspense transitions buttery",
-    branch: "perf/buttery-suspense",
-    minutesAgo: 12,
-    state: "working" as const,
-    request:
-      "Trace the last few dropped frames in nested Suspense transitions and make them disappear.",
-    response: null,
-  },
-  {
-    id: "hydration-haikus",
-    projectId: "react",
-    title: "Turn hydration warnings into haikus",
-    branch: "dev/hydration-haikus",
-    minutesAgo: 44,
-    request:
-      "Keep hydration errors precise, but make the development copy unexpectedly delightful.",
-    response:
-      "The diagnostics still lead with the exact mismatch and component stack. A tiny optional haiku now closes the expanded explanation.",
-    snoozeMinutes: 90,
-  },
-  {
-    id: "beautiful-boot",
-    projectId: "linux",
-    title: "Make boot logs oddly beautiful",
-    branch: "feat/beautiful-boot",
-    minutesAgo: 34,
-    state: "plan" as const,
-    request:
-      "Design a clearer boot timeline that remains useful over serial and never hides kernel detail.",
-    response:
-      "The plan groups milestones without changing the underlying log stream, preserves plain-text output, and adds zero work to the hot path.",
-  },
-  {
-    id: "patient-penguins",
-    projectId: "linux",
-    title: "Teach penguins to wait patiently",
-    branch: "feat/patient-penguins",
-    minutesAgo: 52,
-    request: "Make delayed work easier to follow without adding noise to the scheduler trace.",
-    response:
-      "Delayed work now carries a concise reason through the trace, so the wait is legible without changing scheduling behavior.",
-    snoozeMinutes: 8 * 60,
-  },
-  // Finished work, settled by hand: the list keeps it as a receded tail so
-  // the active block above reads as everything still in flight. The active
-  // block stays small enough that the settled tail begins above the fold —
-  // a store screenshot has to show that history exists, not just imply it.
-  {
-    id: "handoff-haptics",
-    projectId: "t3code",
-    title: "Tune the handoff haptics",
-    branch: "feat/handoff-haptics",
-    minutesAgo: 5 * 60,
-    settled: true,
-    request: "Give the desktop-to-phone handoff a haptic that lands with the animation.",
-    response:
-      "The handoff now taps once as the thread lands and stays silent on failure, so the phone never celebrates a handoff that did not happen.",
-  },
-  {
-    id: "streaming-shell",
-    projectId: "react",
-    title: "Stream the shell before the data",
-    branch: "feat/streaming-shell",
-    minutesAgo: 28 * 60,
-    settled: true,
-    request: "Get the app shell painted before any data request resolves.",
-    response:
-      "The shell now flushes on first byte and the data boundaries hydrate underneath it, so the first paint no longer waits on the slowest query.",
-  },
-  {
-    id: "quieter-oom",
-    projectId: "linux",
-    title: "Make the OOM killer explain itself",
-    branch: "feat/quieter-oom",
-    minutesAgo: 2 * 24 * 60,
-    settled: true,
-    request: "Make out-of-memory kills legible without adding a single allocation to the hot path.",
-    response:
-      "Kills now report the winning heuristic and the runner-up alongside the usual dump, assembled entirely from data the path already had.",
-  },
-] as const;
-
-function minutesBefore(now: number, minutes: number): string {
-  return new Date(now - minutes * 60_000).toISOString();
-}
 
 async function runGit(workspaceRoot: string, args: ReadonlyArray<string>): Promise<void> {
   await execFile("git", [...args], {
@@ -271,326 +99,48 @@ async function seedCompanionWorkspace(input: {
   });
 }
 
-function insertThread(
-  database: NodeSqlite.DatabaseSync,
-  now: number,
-  input: {
-    readonly id: string;
-    readonly projectId: string;
-    readonly title: string;
-    readonly branch: string;
-    readonly minutesAgo: number;
-    readonly state?: "working" | "approval" | "plan";
-    readonly settled?: boolean;
-    readonly snoozeMinutes?: number;
-    readonly workspaceRoot: string;
-  },
-): void {
-  const turnId = `${input.id}-turn`;
-  const updatedAt = minutesBefore(now, input.minutesAgo);
-  const isWorking = input.state === "working";
-  const snoozedUntil =
-    input.snoozeMinutes === undefined
-      ? null
-      : new Date(now + input.snoozeMinutes * 60_000).toISOString();
-  const snoozedAt =
-    input.snoozeMinutes === undefined
-      ? null
-      : minutesBefore(now, Math.max(1, Math.floor(input.minutesAgo / 2)));
-  database
-    .prepare(
-      `INSERT INTO projection_threads (
-        thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
-        branch, worktree_path, latest_turn_id, latest_user_message_at, pending_approval_count,
-        pending_user_input_count, has_actionable_proposed_plan, created_at, updated_at,
-        archived_at, deleted_at, settled_override, settled_at, snoozed_until, snoozed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
-    )
-    .run(
-      input.id,
-      input.projectId,
-      input.title,
-      MODEL_SELECTION,
-      "full-access",
-      input.state === "plan" ? "plan" : "default",
-      input.branch,
-      input.workspaceRoot,
-      turnId,
-      minutesBefore(now, input.minutesAgo + 1),
-      input.state === "approval" ? 1 : 0,
-      input.state === "plan" ? 1 : 0,
-      minutesBefore(now, input.minutesAgo + 120),
-      updatedAt,
-      input.settled ? "settled" : null,
-      input.settled ? updatedAt : null,
-      snoozedUntil,
-      snoozedAt,
-    );
-  database
-    .prepare(
-      `INSERT INTO projection_turns (
-        thread_id, turn_id, pending_message_id, assistant_message_id, state, requested_at,
-        started_at, completed_at, checkpoint_turn_count, checkpoint_ref, checkpoint_status,
-        checkpoint_files_json, source_proposed_plan_thread_id, source_proposed_plan_id
-      ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, NULL, NULL, NULL, '[]', NULL, NULL)`,
-    )
-    .run(
-      input.id,
-      turnId,
-      isWorking ? null : `${input.id}-answer`,
-      isWorking ? "running" : "completed",
-      minutesBefore(now, input.minutesAgo + 2),
-      minutesBefore(now, input.minutesAgo + 2),
-      isWorking ? null : updatedAt,
-    );
-  database
-    .prepare(
-      `INSERT INTO projection_thread_sessions (
-        thread_id, status, provider_name, provider_instance_id, provider_session_id,
-        provider_thread_id, runtime_mode, active_turn_id, last_error, updated_at
-      ) VALUES (?, ?, 'Codex', 'codex', NULL, NULL, 'full-access', ?, NULL, ?)`,
-    )
-    .run(input.id, isWorking ? "running" : "ready", isWorking ? turnId : null, updatedAt);
-}
-
-const SEEDED_PROJECTION_TABLES = [
-  "projection_pending_approvals",
-  "projection_thread_proposed_plans",
-  "projection_thread_activities",
-  "projection_thread_messages",
-  "projection_thread_sessions",
-  "projection_turns",
-  "projection_threads",
-  "projection_projects",
-  "projection_state",
-] as const;
-
-const SEEDED_THREAD_COLUMNS = ["snoozed_until", "snoozed_at"] as const;
-
-function hasSeedableSchema(dbPath: string): boolean {
-  let database: NodeSqlite.DatabaseSync;
-  try {
-    database = new NodeSqlite.DatabaseSync(dbPath, { readOnly: true });
-  } catch {
-    return false;
-  }
-  try {
-    const tableCount = database
-      .prepare(
-        `SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name IN (${SEEDED_PROJECTION_TABLES.map(() => "?").join(", ")})`,
-      )
-      .get(...SEEDED_PROJECTION_TABLES) as { count: number };
-    if (tableCount.count !== SEEDED_PROJECTION_TABLES.length) return false;
-
-    const threadColumns = database.prepare("PRAGMA table_info(projection_threads)").all() as Array<{
-      name: string;
-    }>;
-    const threadColumnNames = new Set(threadColumns.map((column) => column.name));
-    return SEEDED_THREAD_COLUMNS.every((column) => threadColumnNames.has(column));
-  } catch {
-    return false;
-  } finally {
-    database.close();
-  }
-}
-
-async function waitForSeedableSchema(dbPath: string, timeoutMs = 60_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (hasSeedableSchema(dbPath)) return;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error(`The environment server did not migrate ${dbPath} within ${timeoutMs}ms.`);
-}
-
-function seedDatabase(
-  dbPath: string,
-  workspaceRoots: ReadonlyMap<string, string>,
-  projects: ReadonlyArray<(typeof SHOWCASE_PROJECTS)[number]>,
-  threads: ReadonlyArray<(typeof SHOWCASE_THREADS)[number]>,
-  now: number,
-): void {
-  // The environment server is already running against this file and keeps
-  // writing (migrations, projections) while we seed, so the write lock is
-  // genuinely contended — without a busy timeout `BEGIN IMMEDIATE` fails
-  // instantly with SQLITE_BUSY on a loaded machine.
-  const database = new NodeSqlite.DatabaseSync(dbPath, { timeout: 30_000 });
-  try {
-    database.exec("BEGIN IMMEDIATE");
-    for (const table of SEEDED_PROJECTION_TABLES) {
-      database.exec(`DELETE FROM ${table}`);
-    }
-    const insertProject = database.prepare(
-      `INSERT INTO projection_projects (
-          project_id, title, workspace_root, default_model_selection_json, scripts_json,
-          created_at, updated_at, deleted_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
-    );
-    for (const [index, project] of projects.entries()) {
-      const workspaceRoot = workspaceRoots.get(project.id);
-      if (!workspaceRoot) throw new Error(`Missing workspace root for ${project.id}.`);
-      const latestThreadMinutes = Math.min(
-        ...threads
-          .filter((thread) => thread.projectId === project.id)
-          .map((thread) => thread.minutesAgo),
-      );
-      insertProject.run(
-        project.id,
-        project.title,
-        workspaceRoot,
-        MODEL_SELECTION,
-        "[]",
-        minutesBefore(now, 60 * 24 * (90 - index * 12)),
-        minutesBefore(now, latestThreadMinutes),
-      );
-    }
-
-    for (const thread of threads) {
-      const workspaceRoot = workspaceRoots.get(thread.projectId);
-      if (!workspaceRoot) throw new Error(`Missing workspace root for ${thread.projectId}.`);
-      insertThread(database, now, {
-        ...thread,
-        ...("state" in thread ? { state: thread.state } : {}),
-        workspaceRoot,
-      });
-    }
-
-    const insertMessage = database.prepare(
-      `INSERT INTO projection_thread_messages (
-        message_id, thread_id, turn_id, role, text, is_streaming, attachments_json,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?)`,
-    );
-    for (const thread of threads) {
-      const turnId = `${thread.id}-turn`;
-      const requestTime = minutesBefore(now, thread.minutesAgo + 5);
-      insertMessage.run(
-        `${thread.id}-request`,
-        thread.id,
-        turnId,
-        "user",
-        thread.request,
-        requestTime,
-        requestTime,
-      );
-      if (thread.response !== null) {
-        const responseTime = minutesBefore(now, thread.minutesAgo);
-        insertMessage.run(
-          `${thread.id}-answer`,
-          thread.id,
-          turnId,
-          "assistant",
-          thread.response,
-          responseTime,
-          responseTime,
-        );
-      }
-    }
-
-    const turnId = `${SHOWCASE_THREAD_ID}-turn`;
-    const insertActivity = database.prepare(
-      `INSERT INTO projection_thread_activities (
-        activity_id, thread_id, turn_id, tone, kind, summary, payload_json, sequence, created_at
-      ) VALUES (?, ?, ?, 'tool', 'tool.completed', ?, ?, ?, ?)`,
-    );
-    insertActivity.run(
-      "trace-remote-handoff",
-      SHOWCASE_THREAD_ID,
-      turnId,
-      "Traced the remote handoff path",
-      JSON.stringify({
-        itemType: "command_execution",
-        title: "Traced the remote handoff path",
-        detail: "Three environments, one continuous workspace",
-        status: "completed",
-      }),
-      1,
-      minutesBefore(now, 8),
-    );
-    insertActivity.run(
-      "sync-command-center",
-      SHOWCASE_THREAD_ID,
-      turnId,
-      "Synced the command center",
-      JSON.stringify({
-        itemType: "file_change",
-        title: "Synced the command center",
-        detail: "2 files changed · instant handoffs · calm reconnects",
-        status: "completed",
-      }),
-      2,
-      minutesBefore(now, 6),
-    );
-    insertActivity.run(
-      "run-changed-suite",
-      SHOWCASE_THREAD_ID,
-      turnId,
-      "Ran the changed workspace",
-      JSON.stringify({
-        itemType: "command_execution",
-        title: "Ran the changed workspace",
-        detail: "612 tests passed · 3 environments online",
-        status: "completed",
-      }),
-      3,
-      minutesBefore(now, 4),
-    );
-
-    for (const [index, projector] of PROJECTOR_NAMES.entries()) {
-      database
-        .prepare(
-          "INSERT INTO projection_state (projector, last_applied_sequence, updated_at) VALUES (?, ?, ?)",
-        )
-        .run(projector, index + 1, minutesBefore(now, 1));
-    }
-    database.exec("COMMIT");
-  } catch (error) {
-    // A failed BEGIN (or an error SQLite already auto-rolled back) leaves no
-    // transaction, and the rollback's own "cannot rollback" error would then
-    // replace the one that actually explains the failure.
-    try {
-      database.exec("ROLLBACK");
-    } catch {
-      // Nothing to roll back.
-    }
-    throw error;
-  } finally {
-    database.close();
-  }
-}
-
 export async function seedShowcaseEnvironment(input: {
   readonly baseDir: string;
   readonly projectIds?: ReadonlyArray<string>;
   readonly now?: number;
 }): Promise<{ readonly dbPath: string; readonly workspaceRoot: string }> {
   const now = input.now ?? Date.now();
+
   const selectedProjectIds = new Set(
     input.projectIds ?? SHOWCASE_PROJECTS.map((project) => project.id),
   );
+
   const projects = SHOWCASE_PROJECTS.filter((project) => selectedProjectIds.has(project.id));
+
   if (projects.length === 0) throw new Error("At least one showcase project must be selected.");
   const threads = SHOWCASE_THREADS.filter((thread) => selectedProjectIds.has(thread.projectId));
   const workspaceBase = NodePath.join(input.baseDir, "workspace");
+
   const workspaceRoots = new Map(
     projects.map(
       (project) => [project.id, NodePath.join(workspaceBase, project.directory)] as const,
     ),
   );
+
   const primaryProject =
     projects.find((project) => project.id === SHOWCASE_PROJECT_ID) ?? projects[0];
+
   if (!primaryProject) throw new Error("The primary showcase workspace is not configured.");
   const workspaceRoot = workspaceRoots.get(primaryProject.id);
+
   if (!workspaceRoot) throw new Error("The primary showcase workspace is not configured.");
   const dbPath = NodePath.join(input.baseDir, "userdata", "state.sqlite");
+
   if (primaryProject.id === SHOWCASE_PROJECT_ID) {
     await seedT3CodeWorkspace(workspaceRoot);
   }
+
   await Promise.all(
     projects
       .filter((project) => project.id !== SHOWCASE_PROJECT_ID)
       .map(async (project) => {
         const projectWorkspaceRoot = workspaceRoots.get(project.id);
+
         if (!projectWorkspaceRoot) throw new Error(`Missing workspace root for ${project.id}.`);
         await seedCompanionWorkspace({
           workspaceRoot: projectWorkspaceRoot,

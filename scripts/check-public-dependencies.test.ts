@@ -17,11 +17,13 @@ function writeManifest(root: string, relativePath: string, dependency: string): 
     manifestPath,
     `${JSON.stringify({ dependencies: { example: dependency } }, null, 2)}\n`,
   );
+
   return manifestPath;
 }
 
 it("accepts registry, workspace, and repository-owned file dependencies", () => {
   const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-public-deps-"));
+
   const manifests = [
     writeManifest(root, "apps/server/package.json", "0.2.0"),
     writeManifest(root, "packages/example/package.json", "workspace:*"),
@@ -33,6 +35,7 @@ it("accepts registry, workspace, and repository-owned file dependencies", () => 
 
 it("rejects file dependencies that escape the repository", () => {
   const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-public-deps-"));
+
   const manifestPath = writeManifest(
     root,
     "apps/server/package.json",

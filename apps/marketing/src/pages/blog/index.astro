@@ -21,7 +21,9 @@ const articles = [
     title: "Run a Grok bot on an environment you control",
   },
 ] as const;
+
 const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
+
 const structuredData = [
   {
     "@context": "https://schema.org",

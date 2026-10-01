@@ -228,9 +228,11 @@ releaseDate: '2026-03-07T10:36:07.540Z'
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "merge-update-manifests-cli-",
       });
+
       const primaryPath = path.join(baseDir, "latest-mac.yml");
       const secondaryPath = path.join(baseDir, "latest-mac-x64.yml");
 
@@ -250,9 +252,11 @@ releaseDate: '2026-03-07T10:36:07.540Z'
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "merge-update-manifests-cli-output-",
       });
+
       const primaryPath = path.join(baseDir, "latest-win-arm64.yml");
       const secondaryPath = path.join(baseDir, "latest-win-x64.yml");
       const outputPath = path.join(baseDir, "latest-win.yml");

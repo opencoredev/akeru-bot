@@ -29,6 +29,7 @@ function makeStubInstance(
     restartAttempt: 0,
     restartScheduled: false,
   };
+
   return {
     id,
     label: Effect.succeed(label),
@@ -138,9 +139,11 @@ describe("DesktopBackendPool", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const labelRef = yield* Ref.make("Windows");
+
         const pool = yield* DesktopBackendPool.DesktopBackendPool.pipe(
           Effect.provide(makePoolLayer(labelRef)),
         );
+
         const primary = yield* pool.primary;
 
         yield* Ref.set(labelRef, "WSL (Ubuntu)");

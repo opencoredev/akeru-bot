@@ -6,7 +6,9 @@ import type { QuitConfirmationMode, QuitShortcutHintEvent } from "@akeru/contrac
 // before the native menu accelerator. Quitting from the application menu is
 // untouched and always quits immediately.
 export const QUIT_HOLD_DURATION_MS = 1200;
+
 export const QUIT_DOUBLE_PRESS_MS = 500;
+
 // "Still held" is proven by auto-repeat keydowns, not by the absence of a
 // release: macOS suppresses a letter keyUp while the command key is down, so a
 // tap release can go completely unseen and a release-based timer would quit
@@ -15,6 +17,7 @@ export const QUIT_DOUBLE_PRESS_MS = 500;
 // auto-repeat disabled must use a double press or the application menu Quit action.
 // Supporting holds without repeats requires a native physical key-state check.
 export const QUIT_HOLD_RELEASE_GRACE_MS = 600;
+
 // A slow repeat rate can exceed the fixed grace. Waiting for two observed
 // cadences keeps the timer behind the next repeat without slowing normal rates.
 const QUIT_HOLD_REPEAT_CADENCE_MULTIPLIER = 2;
@@ -66,6 +69,7 @@ export function makeQuitShortcutHandler(
 
   const release = (cancelPendingMode = true, keepDoublePressHint = false) => {
     if (cancelPendingMode) generation += 1;
+
     if (!holding && !notified) return;
     const keepHint = keepDoublePressHint && mode === "double-click" && notified;
     holding = false;
@@ -73,10 +77,12 @@ export function makeQuitShortcutHandler(
     quitOnRelease = false;
     lastRepeatAt = 0;
     repeatCadenceMs = 0;
+
     if (keepHint) return;
 
     mode = undefined;
     clearWatchdog();
+
     if (notified) {
       notified = false;
       options.notify({ state: "up" });
@@ -92,19 +98,23 @@ export function makeQuitShortcutHandler(
 
   const quitAfterQuietPeriod = () => {
     clearWatchdog();
+
     const quietPeriodMs = Math.max(
       QUIT_HOLD_RELEASE_GRACE_MS,
       repeatCadenceMs * QUIT_HOLD_REPEAT_CADENCE_MULTIPLIER,
     );
+
     watchdog = setTimeout(quitNow, quietPeriodMs);
   };
 
   return (event, input) => {
     const key = input.key.toLowerCase();
+
     if (input.type === "keyUp") {
       if (key === "q") {
         const shouldQuit = quitOnRelease;
         release(false, true);
+
         if (shouldQuit) options.quit();
       } else if (key === modifierKey) {
         if (!quitOnRelease) {
@@ -113,24 +123,30 @@ export function makeQuitShortcutHandler(
           quitAfterQuietPeriod();
         }
       }
+
       return;
     }
+
     if (input.type !== "keyDown") return;
 
     const modifierDown = options.platform === "darwin" ? input.meta : input.control;
+
     if (input.isAutoRepeat && modifierDown && key === "q") {
       const now = Date.now();
       repeatCadenceMs = now - (lastRepeatAt === 0 ? heldSince : lastRepeatAt);
       lastRepeatAt = now;
     }
+
     if (quitOnRelease) {
       event.preventDefault();
+
       if (key === "q") {
         // Keep the quiet-period fallback even after the modifier is released.
         // A later Q auto-repeat must not cancel it: macOS can omit the final
         // Q key-up, and the concealed window would otherwise stay running.
         quitAfterQuietPeriod();
       }
+
       return;
     }
 
@@ -146,6 +162,7 @@ export function makeQuitShortcutHandler(
         lastPressAt = 0;
         release();
       }
+
       return;
     }
 
@@ -158,21 +175,25 @@ export function makeQuitShortcutHandler(
         options.concealWindow();
         quitAfterQuietPeriod();
       }
+
       return;
     }
 
     const now = Date.now();
     const previousPressAt = lastPressAt;
     lastPressAt = now;
+
     // A fresh keydown supersedes the current physical hold or the hint kept
     // alive after a detected release.
     if (holding || notified) release();
 
     generation += 1;
+
     // Every mode accepts two presses. Quit before reading settings so a slow
     // read cannot delay the second press. Repeats never reach this branch.
     if (previousPressAt !== 0 && now - previousPressAt <= QUIT_DOUBLE_PRESS_MS) {
       quitNow();
+
       return;
     }
 
@@ -182,20 +203,27 @@ export function makeQuitShortcutHandler(
     void options.getMode().then(
       (resolvedMode) => {
         if (generation !== pressGeneration) return;
+
         if (resolvedMode === "direct") {
           quitNow();
+
           return;
         }
+
         if (resolvedMode === "double-click") {
           const remainingMs = QUIT_DOUBLE_PRESS_MS - (Date.now() - now);
+
           if (remainingMs <= 0) {
             release();
+
             return;
           }
+
           mode = resolvedMode;
           notified = true;
           options.notify({ state: "down", mode: resolvedMode });
           watchdog = setTimeout(release, remainingMs);
+
           return;
         }
 

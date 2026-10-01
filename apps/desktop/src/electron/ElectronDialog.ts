@@ -17,6 +17,7 @@ export class ElectronDialogPickFolderError extends Schema.TaggedErrorClass<Elect
   override get message(): string {
     const owner = this.ownerWindowId === null ? "the application" : `window ${this.ownerWindowId}`;
     const defaultPath = this.defaultPath === null ? "no default path" : this.defaultPath;
+
     return `Failed to open the Electron folder picker for ${owner} with ${defaultPath}.`;
   }
 }
@@ -32,6 +33,7 @@ export class ElectronDialogPickFilesError extends Schema.TaggedErrorClass<Electr
   override get message(): string {
     const owner = this.ownerWindowId === null ? "the application" : `window ${this.ownerWindowId}`;
     const defaultPath = this.defaultPath === null ? "no default path" : this.defaultPath;
+
     return `Failed to open the Electron file picker for ${owner} with ${defaultPath}.`;
   }
 }
@@ -49,6 +51,7 @@ export class ElectronDialogShowMessageBoxError extends Schema.TaggedErrorClass<E
 ) {
   override get message(): string {
     const type = this.type === null ? "untyped" : this.type;
+
     return `Failed to show the Electron ${type} message box with ${this.buttonCount} buttons.`;
   }
 }
@@ -72,7 +75,9 @@ export const ElectronDialogError = Schema.Union([
   ElectronDialogShowMessageBoxError,
   ElectronDialogShowErrorBoxError,
 ]);
+
 export type ElectronDialogError = typeof ElectronDialogError.Type;
+
 export const isElectronDialogError = Schema.is(ElectronDialogError);
 
 export interface ElectronDialogPickFolderInput {
@@ -109,7 +114,9 @@ export const make = ElectronDialog.of({
       onNone: () => null,
       onSome: (owner) => owner.id,
     });
+
     const defaultPath = Option.getOrNull(input.defaultPath);
+
     const openDialogOptions: Electron.OpenDialogOptions = Option.match(input.defaultPath, {
       onNone: () => ({
         properties: ["openDirectory", "createDirectory"],
@@ -119,6 +126,7 @@ export const make = ElectronDialog.of({
         defaultPath,
       }),
     });
+
     const result = yield* Effect.tryPromise({
       try: () =>
         Option.match(input.owner, {
@@ -136,6 +144,7 @@ export const make = ElectronDialog.of({
     if (result.canceled) {
       return Option.none();
     }
+
     return Option.fromNullishOr(result.filePaths[0]);
   }),
   pickFiles: Effect.fn("desktop.electron.dialog.pickFiles")(function* (input) {
@@ -143,12 +152,15 @@ export const make = ElectronDialog.of({
       onNone: () => null,
       onSome: (owner) => owner.id,
     });
+
     const defaultPath = Option.getOrNull(input.defaultPath);
+
     const openDialogOptions: Electron.OpenDialogOptions = {
       properties: input.multiple ? ["openFile", "multiSelections"] : ["openFile"],
       filters: [...input.filters],
       ...(defaultPath === null ? {} : { defaultPath }),
     };
+
     const result = yield* Effect.tryPromise({
       try: () =>
         Option.match(input.owner, {
@@ -162,6 +174,7 @@ export const make = ElectronDialog.of({
           cause,
         }),
     });
+
     return result.canceled ? [] : result.filePaths;
   }),
   showMessageBox: (options) =>

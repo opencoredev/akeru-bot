@@ -55,6 +55,7 @@ it.effect("preserves webhook request context and the full client cause chain", (
   const payload = buildDiscordReleaseAnnouncement(latestAnnouncement);
   const requestCause = new Error("request encoder unavailable");
   let clientError: HttpClientError.HttpClientError | undefined;
+
   const httpClientLayer = Layer.succeed(
     HttpClient.HttpClient,
     HttpClient.make((request) => {
@@ -64,6 +65,7 @@ it.effect("preserves webhook request context and the full client cause chain", (
           cause: requestCause,
         }),
       });
+
       return Effect.fail(clientError);
     }),
   );
@@ -77,6 +79,7 @@ it.effect("preserves webhook request context and the full client cause chain", (
     if (error._tag !== "DiscordReleaseWebhookRequestError") {
       assert.fail(`Unexpected error: ${error._tag}`);
     }
+
     assert.equal(error.target, "latest");
     assert.equal(error.releaseName, latestAnnouncement.releaseName);
     assert.equal(error.version, latestAnnouncement.version);
@@ -97,6 +100,7 @@ it.effect("preserves webhook request context and the full client cause chain", (
 
 it.effect("preserves a non-success response error with structured status context", () => {
   const payload = buildDiscordReleaseAnnouncement(latestAnnouncement);
+
   const httpClientLayer = Layer.succeed(
     HttpClient.HttpClient,
     HttpClient.make((request) =>
@@ -115,14 +119,17 @@ it.effect("preserves a non-success response error with structured status context
     if (error._tag !== "DiscordReleaseWebhookResponseError") {
       assert.fail(`Unexpected error: ${error._tag}`);
     }
+
     assert.equal(error.target, "latest");
     assert.equal(error.tag, latestAnnouncement.tag);
     assert.equal(error.webhookOrigin, webhookUrl.origin);
     assert.equal(error.webhookPathnameSegmentCount, 4);
     assert.equal(error.status, 400);
+
     if (!HttpClientError.isHttpClientError(error.cause)) {
       assert.fail("Expected HttpClientError cause");
     }
+
     assert.equal(error.cause.reason._tag, "StatusCodeError");
     assert.ok(!error.message.includes(error.cause.message));
     assert.equal(isDiscordReleaseAnnouncementError(error), true);

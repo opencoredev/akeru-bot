@@ -9,19 +9,29 @@ import * as NodeURL from "node:url";
 import { ensureElectronRuntime } from "./ensure-electron-runtime.mjs";
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
+
 const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
+
 export const desktopDir = NodePath.resolve(__dirname, "..");
+
 const repoRoot = NodePath.resolve(desktopDir, "..", "..");
+
 const devBundleIdSuffix = NodePath.basename(repoRoot)
   .toLowerCase()
   .replaceAll(/[^a-z0-9]+/g, "");
+
 export const APP_DISPLAY_NAME = isDevelopment ? "Akeru Bot (Dev)" : "Akeru Bot (Alpha)";
+
 export const APP_BUNDLE_ID = isDevelopment
   ? `dev.leodoes.akeru.dev.${devBundleIdSuffix || "local"}`
   : "dev.leodoes.akeru";
+
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["akeru-dev"] : ["akeru"];
+
 const LAUNCHER_VERSION = 16;
+
 const productionMacIconPngPath = NodePath.join(repoRoot, "assets", "prod", "akeru-macos-1024.png");
+
 // oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone launcher script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
 
@@ -33,6 +43,7 @@ function setPlistString(plistPath, key, value) {
       encoding: "utf8",
     },
   );
+
   if (replaceResult.status === 0) {
     return;
   }
@@ -44,6 +55,7 @@ function setPlistString(plistPath, key, value) {
       encoding: "utf8",
     },
   );
+
   if (insertResult.status === 0) {
     return;
   }
@@ -54,6 +66,7 @@ function setPlistString(plistPath, key, value) {
 
 function setPlistJson(plistPath, key, value) {
   const serialized = JSON.stringify(value);
+
   const replaceResult = NodeChildProcess.spawnSync(
     "plutil",
     ["-replace", key, "-json", serialized, plistPath],
@@ -61,6 +74,7 @@ function setPlistJson(plistPath, key, value) {
       encoding: "utf8",
     },
   );
+
   if (replaceResult.status === 0) {
     return;
   }
@@ -72,6 +86,7 @@ function setPlistJson(plistPath, key, value) {
       encoding: "utf8",
     },
   );
+
   if (insertResult.status === 0) {
     return;
   }
@@ -82,6 +97,7 @@ function setPlistJson(plistPath, key, value) {
 
 function runChecked(command, args) {
   const result = NodeChildProcess.spawnSync(command, args, { encoding: "utf8" });
+
   if (result.status === 0) {
     return;
   }
@@ -109,6 +125,7 @@ export function makeDevelopmentLauncherScript({
     ["T3CODE_OTLP_EXPORT_INTERVAL_MS", environment.T3CODE_OTLP_EXPORT_INTERVAL_MS],
     ["T3CODE_DESKTOP_APP_USER_MODEL_ID", APP_BUNDLE_ID],
   ].filter((entry) => typeof entry[1] === "string" && entry[1].trim().length > 0);
+
   return [
     "#!/bin/sh",
     ...envEntries.map(
@@ -178,6 +195,7 @@ function ensureMacIconIcns(runtimeDir) {
   }
 
   const sourceMtimeMs = NodeFS.statSync(sourceIconPath).mtimeMs;
+
   if (
     NodeFS.existsSync(generatedIconPath) &&
     NodeFS.statSync(generatedIconPath).mtimeMs >= sourceMtimeMs
@@ -212,6 +230,7 @@ function ensureMacIconIcns(runtimeDir) {
     }
 
     runChecked("iconutil", ["-c", "icns", iconsetDir, "-o", generatedIconPath]);
+
     return generatedIconPath;
   } finally {
     NodeFS.rmSync(iconsetRoot, { recursive: true, force: true });
@@ -259,6 +278,7 @@ function patchHelperBundleInfoPlists(appBundlePath) {
       "Contents",
       "Info.plist",
     );
+
     if (!NodeFS.existsSync(infoPlistPath)) {
       continue;
     }
@@ -284,6 +304,7 @@ function readJson(path) {
 export function resolveMacLauncherPaths(appBundlePath, displayName = APP_DISPLAY_NAME) {
   const executableDir = NodePath.join(appBundlePath, "Contents", "MacOS");
   const launcherExecutableName = `${displayName} Launcher`;
+
   return {
     launcherExecutableName,
     launcherBinaryPath: NodePath.join(executableDir, launcherExecutableName),
@@ -297,9 +318,11 @@ function buildMacLauncher(electronBinaryPath) {
   const targetAppBundlePath = NodePath.join(runtimeDir, `${APP_DISPLAY_NAME}.app`);
   const developmentPaths = resolveMacLauncherPaths(targetAppBundlePath);
   const runtimeElectronBinaryPath = developmentPaths.runtimeElectronBinaryPath;
+
   const launcherBinaryPath = isDevelopment
     ? developmentPaths.launcherBinaryPath
     : runtimeElectronBinaryPath;
+
   const iconPath = ensureMacIconIcns(runtimeDir);
   const metadataPath = NodePath.join(runtimeDir, "metadata.json");
 
@@ -315,6 +338,7 @@ function buildMacLauncher(electronBinaryPath) {
   };
 
   const currentMetadata = readJson(metadataPath);
+
   if (
     NodeFS.existsSync(launcherBinaryPath) &&
     (!isDevelopment || NodeFS.existsSync(runtimeElectronBinaryPath)) &&
@@ -327,7 +351,9 @@ function buildMacLauncher(electronBinaryPath) {
       // captured by an older parent app override the live dev-runner environment.
       writeDevelopmentLauncherScript(launcherBinaryPath, runtimeElectronBinaryPath);
     }
+
     registerMacLauncherBundle(targetAppBundlePath);
+
     return launcherBinaryPath;
   }
 
@@ -346,6 +372,7 @@ function buildMacLauncher(electronBinaryPath) {
     isDevelopment ? developmentPaths.launcherExecutableName : "Electron",
   );
   patchHelperBundleInfoPlists(targetAppBundlePath);
+
   if (isDevelopment) {
     // Keep Electron's native executable inside the branded bundle. Launching the
     // node_modules copy makes macOS associate the process (and Dock label) with
@@ -354,6 +381,7 @@ function buildMacLauncher(electronBinaryPath) {
     // in development mode instead of making app.isPackaged report true.
     writeDevelopmentLauncherScript(launcherBinaryPath, runtimeElectronBinaryPath);
   }
+
   NodeFS.writeFileSync(metadataPath, `${JSON.stringify(expectedMetadata, null, 2)}\n`);
   registerMacLauncherBundle(targetAppBundlePath);
 
@@ -366,8 +394,10 @@ function isLinuxSetuidSandboxConfigured(electronBinaryPath) {
   }
 
   const sandboxPath = NodePath.join(NodePath.dirname(electronBinaryPath), "chrome-sandbox");
+
   try {
     const sandboxStat = NodeFS.statSync(sandboxPath);
+
     return sandboxStat.uid === 0 && (sandboxStat.mode & 0o4777) === 0o4755;
   } catch {
     return false;
@@ -382,6 +412,7 @@ function resolveLinuxSandboxArgs(electronBinaryPath) {
   console.warn(
     "[desktop-launcher] Electron chrome-sandbox is not root-owned with mode 4755; launching local Electron with --no-sandbox.",
   );
+
   return ["--no-sandbox"];
 }
 
@@ -397,6 +428,7 @@ export function resolveElectronPath() {
 
 export function resolveElectronLaunchCommand(args = []) {
   const electronPath = resolveElectronPath();
+
   return {
     electronPath,
     args: [...resolveLinuxSandboxArgs(electronPath), ...args],
@@ -411,6 +443,7 @@ export function resolveElectronBinaryPath({
   ensureRuntime();
 
   const require = createRequire(moduleUrl);
+
   return require("electron");
 }
 
@@ -421,6 +454,7 @@ export function resolveDevProtocolClient() {
 
   const electronBinaryPath = resolveElectronBinaryPath();
   const launcherBinaryPath = buildMacLauncher(electronBinaryPath);
+
   return {
     appBundlePath: NodePath.resolve(launcherBinaryPath, "..", "..", ".."),
     appBundleId: APP_BUNDLE_ID,

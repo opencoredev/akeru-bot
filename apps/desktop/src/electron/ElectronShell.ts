@@ -10,9 +10,11 @@ import * as Electron from "electron";
 // `zed://ssh/<host>/<path>`) must reach the OS handler; every other non-web
 // scheme stays blocked.
 const SAFE_WEB_PROTOCOLS = new Set(["http:", "https:"]);
+
 const REMOTE_EDITOR_PROTOCOLS = new Set(
   REMOTE_CAPABLE_EDITOR_IDS.flatMap((id) => {
     const scheme = remoteSchemeForEditor(id);
+
     return scheme === undefined ? [] : [`${scheme}:`];
   }),
 );
@@ -26,16 +28,21 @@ function isZedSshUrl(url: URL): boolean {
   if (url.host !== "ssh") {
     return false;
   }
+
   const encodedHost = url.pathname.split("/")[1];
+
   if (!encodedHost) {
     return false;
   }
+
   let host: string;
+
   try {
     host = decodeURIComponent(encodedHost);
   } catch {
     return false;
   }
+
   return ZED_SSH_HOST.test(host) && url.pathname.length > encodedHost.length + 1;
 }
 
@@ -56,6 +63,7 @@ export function parseSafeExternalUrl(rawUrl: unknown): Option.Option<string> {
 
   try {
     const url = new URL(rawUrl);
+
     return SAFE_WEB_PROTOCOLS.has(url.protocol) || isRemoteEditorUrl(url)
       ? Option.some(url.href)
       : Option.none();

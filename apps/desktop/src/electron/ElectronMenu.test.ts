@@ -47,6 +47,7 @@ describe("ElectronMenu", () => {
   it.effect("returns none without building a menu when there are no valid items", () =>
     Effect.gen(function* () {
       const electronMenu = yield* ElectronMenu.ElectronMenu;
+
       const selectedItemId = yield* electronMenu.showContextMenu({
         window: {} as Electron.BrowserWindow,
         items: [],
@@ -66,15 +67,18 @@ describe("ElectronMenu", () => {
             const firstItem = template[0];
             assert.isDefined(firstItem);
             const click = firstItem.click;
+
             if (!click) {
               throw new Error("Expected menu item to have a click handler.");
             }
+
             click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
           },
         }),
       );
 
       const electronMenu = yield* ElectronMenu.ElectronMenu;
+
       const selectedItemId = yield* electronMenu.showContextMenu({
         window: makeWindow(),
         items: [{ id: "copy", label: "Copy" }],
@@ -96,6 +100,7 @@ describe("ElectronMenu", () => {
       }));
 
       const electronMenu = yield* ElectronMenu.ElectronMenu;
+
       const selectedItemId = yield* electronMenu.showContextMenu({
         window: makeWindow(2),
         items: [
@@ -155,6 +160,7 @@ describe("ElectronMenu", () => {
 
       const electronMenu = yield* ElectronMenu.ElectronMenu;
       const frame = { routingId: 7 } as Electron.WebFrameMain;
+
       const popup = electronMenu.popupTemplate({
         window: {} as Electron.BrowserWindow,
         template: [{ label: "Copy" }],
@@ -180,11 +186,13 @@ describe("ElectronMenu", () => {
       });
 
       const electronMenu = yield* ElectronMenu.ElectronMenu;
+
       const exit = yield* Effect.exit(
         electronMenu.setApplicationMenu([{ label: "File" }, { label: "Edit" }]),
       );
 
       assert.equal(exit._tag, "Failure");
+
       if (exit._tag === "Failure") {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronMenu.ElectronMenuOperationError);
@@ -208,6 +216,7 @@ describe("ElectronMenu", () => {
       });
 
       const electronMenu = yield* ElectronMenu.ElectronMenu;
+
       const exit = yield* Effect.exit(
         electronMenu.popupTemplate({
           window: { id: 41 } as Electron.BrowserWindow,
@@ -216,6 +225,7 @@ describe("ElectronMenu", () => {
       );
 
       assert.equal(exit._tag, "Failure");
+
       if (exit._tag === "Failure") {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronMenu.ElectronMenuOperationError);
@@ -235,6 +245,7 @@ describe("ElectronMenu", () => {
       });
 
       const electronMenu = yield* ElectronMenu.ElectronMenu;
+
       const exit = yield* Effect.exit(
         electronMenu.showContextMenu({
           window: { id: 42 } as Electron.BrowserWindow,
@@ -244,6 +255,7 @@ describe("ElectronMenu", () => {
       );
 
       assert.equal(exit._tag, "Failure");
+
       if (exit._tag === "Failure") {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronMenu.ElectronMenuOperationError);

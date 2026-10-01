@@ -1,6 +1,4 @@
 import {
-  DesktopUpdateChannelSchema,
-  type DesktopRuntimeInfo,
   type DesktopUpdateActionResult,
   type DesktopUpdateChannel,
   type DesktopUpdateCheckResult,
@@ -15,9 +13,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
-import * as Scope from "effect/Scope";
 
+import * as Scope from "effect/Scope";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
@@ -41,112 +38,53 @@ import {
   reduceDesktopUpdateStateOnNoUpdate,
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine.ts";
+import {
+  type AppUpdateYmlConfig,
+  decodeAppUpdateYmlConfig,
+  getAutoUpdateDisabledReason,
+  isArm64HostRunningIntelBuild,
+  decodeUpdateInfo,
+  getCanRetryFromState,
+  decodeDownloadProgressInfo,
+  shouldBroadcastDownloadProgress,
+  createBaseUpdateState,
+} from "./UpdatePolicy.ts";
+import {
+  type DesktopUpdateConfigureError,
+  type DesktopUpdateSetChannelError,
+  DesktopUpdateUnexpectedActionError,
+  DesktopUpdatePollerError,
+  DesktopUpdateEventHandlingError,
+  DesktopUpdaterReportedError,
+  DesktopUpdateActionInProgressError,
+  DesktopUpdateChannelPersistenceError,
+} from "./UpdateErrors.ts";
+
+export { DesktopUpdateActionInProgressError } from "./UpdateErrors.ts";
+
+export { DesktopUpdateChannelPersistenceError } from "./UpdateErrors.ts";
+
+export { DesktopUpdatePollerError } from "./UpdateErrors.ts";
+
+export { DesktopUpdateEventHandlingError } from "./UpdateErrors.ts";
+
+export { DesktopUpdaterReportedError } from "./UpdateErrors.ts";
+
+export { DesktopUpdateUnexpectedActionError } from "./UpdateErrors.ts";
+
+export type { DesktopUpdateConfigureError } from "./UpdateErrors.ts";
+
+export { DesktopUpdateSetChannelError } from "./UpdateErrors.ts";
+
+export { isDesktopUpdateSetChannelError } from "./UpdateErrors.ts";
 
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
+
 const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
 
 type UpdateAction = "check" | "download" | "install" | "channel";
 
-const AppUpdateYmlConfig = Schema.Record(Schema.String, Schema.String);
-type AppUpdateYmlConfig = typeof AppUpdateYmlConfig.Type;
-
-const UpdateInfo = Schema.Struct({
-  version: Schema.String,
-  // Left unvalidated on purpose: a malformed release-notes payload must never
-  // fail the decode and block the update state transition. The shape is
-  // validated defensively in normalizeDesktopUpdateReleaseNotes.
-  releaseNotes: Schema.optional(Schema.Unknown),
-});
-
-const DownloadProgressInfo = Schema.Struct({
-  percent: Schema.Number,
-});
-const decodeAppUpdateYmlConfig = Schema.decodeUnknownEffect(AppUpdateYmlConfig);
-const decodeUpdateInfo = Schema.decodeUnknownEffect(UpdateInfo);
-const decodeDownloadProgressInfo = Schema.decodeUnknownEffect(DownloadProgressInfo);
-
 const currentIsoTimestamp = DateTime.now.pipe(Effect.map(DateTime.formatIso));
-
-export class DesktopUpdateActionInProgressError extends Schema.TaggedErrorClass<DesktopUpdateActionInProgressError>()(
-  "DesktopUpdateActionInProgressError",
-  {
-    action: Schema.Literals(["check", "download", "install", "channel"]),
-    requestedChannel: DesktopUpdateChannelSchema,
-  },
-) {
-  override get message(): string {
-    return `Cannot change the desktop update channel to ${this.requestedChannel} while an update ${this.action} action is in progress.`;
-  }
-}
-
-export class DesktopUpdateChannelPersistenceError extends Schema.TaggedErrorClass<DesktopUpdateChannelPersistenceError>()(
-  "DesktopUpdateChannelPersistenceError",
-  {
-    channel: DesktopUpdateChannelSchema,
-    cause: Schema.instanceOf(DesktopAppSettings.DesktopSettingsWriteError),
-  },
-) {
-  override get message(): string {
-    return `Failed to persist the ${this.channel} desktop update channel.`;
-  }
-}
-
-export class DesktopUpdatePollerError extends Schema.TaggedErrorClass<DesktopUpdatePollerError>()(
-  "DesktopUpdatePollerError",
-  {
-    poller: Schema.Literals(["startup", "poll"]),
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Desktop update ${this.poller} poller failed.`;
-  }
-}
-
-export class DesktopUpdateEventHandlingError extends Schema.TaggedErrorClass<DesktopUpdateEventHandlingError>()(
-  "DesktopUpdateEventHandlingError",
-  {
-    event: Schema.Literals(["update-available", "download-progress", "update-downloaded"]),
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Failed to handle desktop update ${this.event} event.`;
-  }
-}
-
-export class DesktopUpdaterReportedError extends Schema.TaggedErrorClass<DesktopUpdaterReportedError>()(
-  "DesktopUpdaterReportedError",
-  {
-    operation: Schema.Literals(["check", "download", "install", "channel", "background"]),
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Desktop updater ${this.operation} operation reported an error.`;
-  }
-}
-
-export class DesktopUpdateUnexpectedActionError extends Schema.TaggedErrorClass<DesktopUpdateUnexpectedActionError>()(
-  "DesktopUpdateUnexpectedActionError",
-  {
-    action: Schema.Literals(["download", "install"]),
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Desktop update ${this.action} action failed unexpectedly.`;
-  }
-}
-
-export type DesktopUpdateConfigureError = never;
-
-export const DesktopUpdateSetChannelError = Schema.Union([
-  DesktopUpdateActionInProgressError,
-  DesktopUpdateChannelPersistenceError,
-]);
-export type DesktopUpdateSetChannelError = typeof DesktopUpdateSetChannelError.Type;
-export const isDesktopUpdateSetChannelError = Schema.is(DesktopUpdateSetChannelError);
 
 export class DesktopUpdates extends Context.Service<
   DesktopUpdates,
@@ -172,8 +110,10 @@ const {
 
 function parseAppUpdateYml(raw: string): Effect.Effect<Option.Option<AppUpdateYmlConfig>> {
   const entries: Record<string, string> = {};
+
   for (const line of raw.split("\n")) {
     const match = line.match(/^(\w+):\s*(.+)$/);
+
     if (match?.[1] && match[2]) {
       entries[match[1]] = match[2].trim();
     }
@@ -183,67 +123,6 @@ function parseAppUpdateYml(raw: string): Effect.Effect<Option.Option<AppUpdateYm
     Effect.map((config) => (config.provider ? Option.some(config) : Option.none())),
     Effect.orElseSucceed(() => Option.none<AppUpdateYmlConfig>()),
   );
-}
-
-function createBaseUpdateState(
-  channel: DesktopUpdateChannel,
-  enabled: boolean,
-  environment: DesktopEnvironment.DesktopEnvironment["Service"],
-): DesktopUpdateState {
-  return {
-    ...createInitialDesktopUpdateState(environment.appVersion, environment.runtimeInfo, channel),
-    enabled,
-    status: enabled ? "idle" : "disabled",
-  };
-}
-
-function getCanRetryFromState(state: DesktopUpdateState): boolean {
-  return state.availableVersion !== null || state.downloadedVersion !== null;
-}
-
-function shouldBroadcastDownloadProgress(
-  currentState: DesktopUpdateState,
-  nextPercent: number,
-): boolean {
-  if (currentState.status !== "downloading") {
-    return true;
-  }
-
-  const currentPercent = currentState.downloadPercent;
-  if (currentPercent === null) {
-    return true;
-  }
-
-  const previousStep = Math.floor(currentPercent / 10);
-  const nextStep = Math.floor(nextPercent / 10);
-  return nextStep !== previousStep || nextPercent === 100;
-}
-
-function getAutoUpdateDisabledReason(args: {
-  isDevelopment: boolean;
-  isPackaged: boolean;
-  platform: NodeJS.Platform;
-  appImage?: string | undefined;
-  disabledByEnv: boolean;
-  hasUpdateFeedConfig: boolean;
-}): string | null {
-  if (!args.hasUpdateFeedConfig) {
-    return "Automatic updates are not available because no update feed is configured.";
-  }
-  if (args.isDevelopment || !args.isPackaged) {
-    return "Automatic updates are only available in packaged production builds.";
-  }
-  if (args.disabledByEnv) {
-    return "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.";
-  }
-  if (args.platform === "linux" && !args.appImage) {
-    return "Automatic updates on Linux require running the AppImage build.";
-  }
-  return null;
-}
-
-function isArm64HostRunningIntelBuild(runtimeInfo: DesktopRuntimeInfo): boolean {
-  return runtimeInfo.hostArch === "arm64" && runtimeInfo.appArch === "x64";
 }
 
 export const make = Effect.gen(function* () {
@@ -260,6 +139,7 @@ export const make = Effect.gen(function* () {
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
   const updaterConfiguredRef = yield* Ref.make(false);
   const lastLoggedDownloadMilestoneRef = yield* Ref.make(-1);
+
   const updateStateRef = yield* Ref.make<DesktopUpdateState>(
     createInitialDesktopUpdateState(
       environment.appVersion,
@@ -281,6 +161,7 @@ export const make = Effect.gen(function* () {
     Ref.get(updateStateRef).pipe(
       Effect.flatMap((state) => {
         const nextState = f(state);
+
         return setState(nextState).pipe(Effect.as(nextState));
       }),
     );
@@ -301,6 +182,7 @@ export const make = Effect.gen(function* () {
 
   const resolveDisabledReason = Effect.gen(function* () {
     const hasFeedConfig = yield* hasUpdateFeedConfig;
+
     return Option.fromNullishOr(
       getAutoUpdateDisabledReason({
         isDevelopment: environment.isDevelopment,
@@ -354,15 +236,19 @@ export const make = Effect.gen(function* () {
     actionReservation: "acquire" | "held" = "acquire",
   ) {
     yield* Effect.annotateCurrentSpan({ reason });
+
     if (yield* Ref.get(desktopState.quitting)) return false;
+
     if (!(yield* Ref.get(updaterConfiguredRef))) return false;
 
     const state = yield* Ref.get(updateStateRef);
+
     if (state.status === "downloading") {
       yield* logUpdaterInfo("skipping update check while update is active", {
         reason,
         status: state.status,
       });
+
       return false;
     }
 
@@ -387,6 +273,7 @@ export const make = Effect.gen(function* () {
               errorTag: error._tag,
               channel: error.channel,
             });
+
             return true;
           }),
         }),
@@ -400,6 +287,7 @@ export const make = Effect.gen(function* () {
 
   const downloadAvailableUpdate = Effect.gen(function* () {
     const state = yield* Ref.get(updateStateRef);
+
     if (!(yield* Ref.get(updaterConfiguredRef)) || state.status !== "available") {
       return { accepted: false, completed: false };
     }
@@ -415,6 +303,7 @@ export const make = Effect.gen(function* () {
       );
       yield* logUpdaterInfo("downloading update");
       yield* electronUpdater.downloadUpdate;
+
       return { accepted: true, completed: true };
     }).pipe(
       Effect.catchTags({
@@ -427,6 +316,7 @@ export const make = Effect.gen(function* () {
               errorTag: error._tag,
               channel: error.channel,
             });
+
             return { accepted: true, completed: false };
           },
         ),
@@ -440,7 +330,9 @@ export const make = Effect.gen(function* () {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.failCause(cause);
         }
+
         const error = new DesktopUpdateUnexpectedActionError({ action: "download", cause });
+
         return Effect.gen(function* () {
           yield* updateState((current) =>
             reduceDesktopUpdateStateOnDownloadFailure(current, error.message),
@@ -449,6 +341,7 @@ export const make = Effect.gen(function* () {
             errorTag: error._tag,
             action: error.action,
           });
+
           return { accepted: true, completed: false };
         });
       }),
@@ -463,11 +356,13 @@ export const make = Effect.gen(function* () {
 
   const installDownloadedUpdate = Effect.gen(function* () {
     const state = yield* Ref.get(updateStateRef);
+
     const hasInstallableDownload =
       state.downloadedVersion !== null &&
       (state.status === "downloaded" ||
         (state.status === "error" &&
           (state.errorContext === null || state.errorContext === "install")));
+
     if (
       (yield* Ref.get(desktopState.quitting)) ||
       !(yield* Ref.get(updaterConfiguredRef)) ||
@@ -501,6 +396,7 @@ export const make = Effect.gen(function* () {
         isSilent: true,
         isForceRunAfter: true,
       });
+
       return { accepted: true, completed: false };
     }).pipe(
       Effect.catchTags({
@@ -516,6 +412,7 @@ export const make = Effect.gen(function* () {
               isSilent: error.isSilent,
               isForceRunAfter: error.isForceRunAfter,
             });
+
             return { accepted: true, completed: false };
           },
         ),
@@ -526,6 +423,7 @@ export const make = Effect.gen(function* () {
           if (Cause.hasInterruptsOnly(cause)) {
             return yield* Effect.failCause(cause);
           }
+
           yield* resetInstallAction;
           const error = new DesktopUpdateUnexpectedActionError({ action: "install", cause });
           yield* updateState((current) =>
@@ -535,6 +433,7 @@ export const make = Effect.gen(function* () {
             errorTag: error._tag,
             action: error.action,
           });
+
           return { accepted: true, completed: false };
         }),
       ),
@@ -548,7 +447,9 @@ export const make = Effect.gen(function* () {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.void;
         }
+
         const error = new DesktopUpdatePollerError({ poller: "startup", cause });
+
         return logUpdaterError(error.message, {
           errorTag: error._tag,
           poller: error.poller,
@@ -563,7 +464,9 @@ export const make = Effect.gen(function* () {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.void;
         }
+
         const error = new DesktopUpdatePollerError({ poller: "poll", cause });
+
         return logUpdaterError(error.message, {
           errorTag: error._tag,
           poller: error.poller,
@@ -580,6 +483,7 @@ export const make = Effect.gen(function* () {
       Effect.flatMap(
         Effect.fn("desktop.updates.applyUpdateAvailable")(function* (info) {
           const state = yield* Ref.get(updateStateRef);
+
           if (resolveDefaultDesktopUpdateChannel(info.version) !== state.channel) {
             yield* logUpdaterInfo("ignoring update that does not match selected channel", {
               version: info.version,
@@ -588,6 +492,7 @@ export const make = Effect.gen(function* () {
             const checkedAt = yield* currentIsoTimestamp;
             yield* setState(reduceDesktopUpdateStateOnNoUpdate(state, checkedAt));
             yield* Ref.set(lastLoggedDownloadMilestoneRef, -1);
+
             return;
           }
 
@@ -607,7 +512,9 @@ export const make = Effect.gen(function* () {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.void;
         }
+
         const error = new DesktopUpdateEventHandlingError({ event: "update-available", cause });
+
         return logUpdaterWarning(error.message, {
           errorTag: error._tag,
           event: error.event,
@@ -628,10 +535,12 @@ export const make = Effect.gen(function* () {
     cause: unknown,
   ) {
     const activeAction = yield* activeUpdateAction;
+
     const error = new DesktopUpdaterReportedError({
       operation: Option.getOrElse(activeAction, () => "background" as const),
       cause,
     });
+
     if (Option.isSome(activeAction) && activeAction.value === "install") {
       yield* finishUpdateAction("install");
       yield* Ref.set(desktopState.quitting, false);
@@ -647,6 +556,7 @@ export const make = Effect.gen(function* () {
         errorTag: error._tag,
         operation: error.operation,
       });
+
       return;
     }
 
@@ -677,11 +587,14 @@ export const make = Effect.gen(function* () {
         Effect.fn("desktop.updates.applyDownloadProgress")(function* (progress) {
           const state = yield* Ref.get(updateStateRef);
           const percent = Math.floor(progress.percent);
+
           if (shouldBroadcastDownloadProgress(state, progress.percent) || state.message !== null) {
             yield* setState(reduceDesktopUpdateStateOnDownloadProgress(state, progress.percent));
           }
+
           const milestone = percent - (percent % 10);
           const lastLoggedMilestone = yield* Ref.get(lastLoggedDownloadMilestoneRef);
+
           if (milestone > lastLoggedMilestone) {
             yield* Ref.set(lastLoggedDownloadMilestoneRef, milestone);
             yield* logUpdaterInfo("download progress", { percent });
@@ -692,7 +605,9 @@ export const make = Effect.gen(function* () {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.void;
         }
+
         const error = new DesktopUpdateEventHandlingError({ event: "download-progress", cause });
+
         return logUpdaterWarning(error.message, {
           errorTag: error._tag,
           event: error.event,
@@ -716,7 +631,9 @@ export const make = Effect.gen(function* () {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.void;
         }
+
         const error = new DesktopUpdateEventHandlingError({ event: "update-downloaded", cause });
+
         return logUpdaterWarning(error.message, {
           errorTag: error._tag,
           event: error.event,
@@ -731,6 +648,7 @@ export const make = Effect.gen(function* () {
     disabledReason: resolveDisabledReason,
     configure: Effect.gen(function* () {
       const context = yield* Effect.context<never>();
+
       const runEffect = (effect: Effect.Effect<void>) => {
         void Effect.runPromiseWith(context)(effect);
       };
@@ -748,9 +666,11 @@ export const make = Effect.gen(function* () {
       const settings = yield* desktopSettings.get;
       const enabled = yield* shouldEnableAutoUpdates;
       yield* setState(createBaseUpdateState(settings.updateChannel, enabled, environment));
+
       if (!enabled) {
         return;
       }
+
       yield* Ref.set(updaterConfiguredRef, true);
 
       yield* electronUpdater.setAutoDownload(false);
@@ -796,6 +716,7 @@ export const make = Effect.gen(function* () {
     ) {
       yield* Effect.annotateCurrentSpan({ channel: nextChannel });
       const activeAction = yield* tryStartChannelChange;
+
       if (Option.isSome(activeAction)) {
         return yield* new DesktopUpdateActionInProgressError({
           action: activeAction.value,
@@ -805,6 +726,7 @@ export const make = Effect.gen(function* () {
 
       return yield* Effect.gen(function* () {
         const state = yield* Ref.get(updateStateRef);
+
         if (nextChannel === state.channel) {
           return state;
         }
@@ -830,18 +752,22 @@ export const make = Effect.gen(function* () {
         yield* checkForUpdates("channel-change", "held").pipe(
           Effect.ensuring(electronUpdater.setAllowDowngrade(allowDowngrade).pipe(Effect.ignore)),
         );
+
         return yield* Ref.get(updateStateRef);
       }).pipe(Effect.ensuring(finishUpdateAction("channel")));
     }),
     check: Effect.fn("desktop.updates.check")(function* (reason: string) {
       yield* Effect.annotateCurrentSpan({ reason });
+
       if (!(yield* Ref.get(updaterConfiguredRef))) {
         return {
           checked: false,
           state: yield* Ref.get(updateStateRef),
         };
       }
+
       const checked = yield* checkForUpdates(reason);
+
       return {
         checked,
         state: yield* Ref.get(updateStateRef),
@@ -849,6 +775,7 @@ export const make = Effect.gen(function* () {
     }),
     download: Effect.gen(function* () {
       const result = yield* downloadAvailableUpdate;
+
       return {
         accepted: result.accepted,
         completed: result.completed,
@@ -863,7 +790,9 @@ export const make = Effect.gen(function* () {
           state: yield* Ref.get(updateStateRef),
         };
       }
+
       const result = yield* installDownloadedUpdate;
+
       return {
         accepted: result.accepted,
         completed: result.completed,

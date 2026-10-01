@@ -42,7 +42,9 @@ import * as DesktopWslEnvironment from "./DesktopWslEnvironment.ts";
 // module produces. Keeping it inline in two places risks silent
 // divergence if one ever gets renamed.
 export const WSL_INSTANCE_ID_PREFIX = "wsl:";
+
 const WSL_DEFAULT_DISTRO_ID = `${WSL_INSTANCE_ID_PREFIX}default`;
+
 const MAX_TCP_PORT = 65_535;
 
 export class DesktopWslBackend extends Context.Service<
@@ -81,11 +83,13 @@ const scanForWslPort = Effect.fn("desktop.wslBackend.scanForWslPort")(function* 
   startPort: number,
 ): Effect.fn.Return<number, NetService.NetError, NetService.NetService> {
   const net = yield* NetService.NetService;
+
   for (let port = startPort; port <= MAX_TCP_PORT; port += 1) {
     if (yield* net.canListenOnHost(port, "127.0.0.1")) {
       return port;
     }
   }
+
   return yield* new NetService.NetError({
     message: `No loopback port available for WSL backend between ${startPort} and ${MAX_TCP_PORT}.`,
   });
@@ -136,6 +140,7 @@ export const layer = Layer.effect(
       readonly distro: string | null;
     }) {
       const primaryConfig = yield* serverExposure.backendConfig;
+
       const port = yield* scanForWslPort(primaryConfig.port + 1).pipe(
         Effect.provideService(NetService.NetService, net),
         Effect.map((value) => Option.some(value)),
@@ -149,6 +154,7 @@ export const layer = Layer.effect(
       if (Option.isNone(port)) {
         return;
       }
+
       const allocatedPort = port.value;
 
       const targetId = resolveTargetInstanceId(input.distro);
@@ -198,6 +204,7 @@ export const layer = Layer.effect(
       // secondary. Without this skip we'd spin up two WSL processes
       // on the same distro for users who explicitly asked for one.
       const shouldRun = settings.wslBackendEnabled && available && !settings.wslOnly;
+
       const targetId = shouldRun
         ? Option.some(resolveTargetInstanceId(settings.wslDistro))
         : Option.none<DesktopBackendPool.BackendInstanceId>();
@@ -206,6 +213,7 @@ export const layer = Layer.effect(
       if (Option.isNone(targetId) && Option.isNone(existingId)) {
         return;
       }
+
       if (
         Option.isSome(targetId) &&
         Option.isSome(existing) &&
@@ -213,13 +221,16 @@ export const layer = Layer.effect(
       ) {
         const existingInstance = existing.value;
         const snapshot = yield* existingInstance.snapshot;
+
         const isIdle =
           !snapshot.ready && Option.isNone(snapshot.activePid) && !snapshot.restartScheduled;
+
         if (isIdle) {
           yield* logWslBackendInfo("retrying idle WSL backend", { id: existingInstance.id });
           yield* Ref.set(preflightErrorRef, Option.none());
           yield* existingInstance.start;
         }
+
         return;
       }
 

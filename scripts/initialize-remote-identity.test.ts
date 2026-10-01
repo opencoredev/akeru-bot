@@ -14,6 +14,7 @@ for (const [label, runner, file] of cases) {
   it(`${label} ignores ambient T3CODE_HOME and writes only to Akeru home`, () => {
     const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-identity-"));
     const legacy = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-legacy-"));
+
     try {
       const result = NodeChildProcess.spawnSync(
         runner,
@@ -27,6 +28,7 @@ for (const [label, runner, file] of cases) {
           },
         },
       );
+
       expect(result.status).toBe(0);
       expect(
         NodeFS.existsSync(NodePath.join(root, ".akeru", "userdata", "remote-link-identity.json")),

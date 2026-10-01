@@ -13,6 +13,7 @@ export const getClientSettings = DesktopIpc.makeIpcMethod({
   result: Schema.NullOr(ClientSettingsSchema),
   handler: Effect.fn("desktop.ipc.clientSettings.get")(function* () {
     const clientSettings = yield* DesktopClientSettings.DesktopClientSettings;
+
     return Option.getOrNull(yield* clientSettings.get);
   }),
 });

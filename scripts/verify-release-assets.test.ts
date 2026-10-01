@@ -35,7 +35,9 @@ describe("verify-release-assets", () => {
     const directory = await NodeFSP.mkdtemp(
       NodePath.join(NodeOS.tmpdir(), "akeru-release-assets-"),
     );
+
     const names = expectedReleaseAssetNames("1.2.3");
+
     for (const name of names) await NodeFSP.writeFile(NodePath.join(directory, name), name);
 
     const sums = await verifyReleaseAssets(directory, "1.2.3");

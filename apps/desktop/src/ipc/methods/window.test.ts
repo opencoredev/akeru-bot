@@ -76,6 +76,7 @@ describe("getLocalEnvironmentBootstraps", () => {
         retryLimit: 12,
       }),
     };
+
     const retryingInstance: DesktopBackendManager.DesktopBackendInstance = {
       ...defaultWslInstance,
       currentConfig: Effect.succeed(Option.some(retryingConfig)),

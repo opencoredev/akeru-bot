@@ -24,14 +24,18 @@ const {
   datePublished,
   dateModified = datePublished,
 } = Astro.props;
+
 const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
+
 const canonicalUrl = new URL(path, siteOrigin).href;
+
 const displayDate = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   year: "numeric",
   timeZone: "UTC",
 }).format(new Date(`${datePublished}T00:00:00Z`));
+
 const related = [
   {
     href: "/open-source-grok-bot",
@@ -49,6 +53,7 @@ const related = [
     category: "Guide",
   },
 ].filter((article) => article.href !== path);
+
 const structuredData = [
   {
     "@context": "https://schema.org",

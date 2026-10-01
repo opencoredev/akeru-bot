@@ -43,6 +43,7 @@ function makeLayer(fileSystemLayer: Layer.Layer<FileSystem.FileSystem>) {
 
 const readWithLogs = (fileSystemLayer: Layer.Layer<FileSystem.FileSystem>) => {
   const records: Array<LogRecord> = [];
+
   const logger = Logger.make(({ fiber, message }) => {
     records.push({
       message,
@@ -53,6 +54,7 @@ const readWithLogs = (fileSystemLayer: Layer.Layer<FileSystem.FileSystem>) => {
   return Effect.gen(function* () {
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     const settings = yield* DesktopClientSettings.DesktopClientSettings;
+
     return {
       result: yield* settings.get,
       settingsPath: environment.clientSettingsPath,
@@ -114,14 +116,18 @@ describe("DesktopClientSettings diagnostics", () => {
       assert.isTrue(Option.isNone(result.result));
       assert.equal(result.records.length, 1);
       const message = result.records[0]?.message;
+
       if (!Array.isArray(message)) {
         return assert.fail("expected structured warning arguments");
       }
+
       assert.equal(message[0], "Could not decode desktop client settings.");
       const schemaError = message[1];
+
       if (schemaError === null || typeof schemaError !== "object") {
         return assert.fail("expected the schema error in the warning");
       }
+
       assert.equal("_tag" in schemaError ? schemaError._tag : undefined, "SchemaError");
       assert.equal(result.records[0]?.annotations.settingsPath, result.settingsPath);
     }),

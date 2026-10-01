@@ -138,6 +138,7 @@ describe("DesktopEnvironment", () => {
         {},
         { VITE_DEV_SERVER_URL: "http://localhost:5173" },
       );
+
       const production = yield* makeEnvironment();
 
       assert.equal(development.stateDir, "/Users/alice/.akeru/dev");
@@ -151,6 +152,7 @@ describe("DesktopEnvironment", () => {
         {},
         { VITE_DEV_SERVER_URL: "http://localhost:5173" },
       );
+
       const alpha = yield* makeEnvironment();
 
       assert.equal(development.displayName, "Akeru Bot (Dev)");

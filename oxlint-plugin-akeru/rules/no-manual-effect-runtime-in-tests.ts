@@ -4,6 +4,7 @@ import * as Option from "effect/Option";
 import { getPropertyName, isIdentifier, unwrapExpression } from "../utils.ts";
 
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
+
 const EFFECT_RUNTIME_METHODS = new Set([
   "runCallback",
   "runCallbackWith",
@@ -44,20 +45,24 @@ const LEGACY_BASELINE = new Map<string, number>([
 
 const baselineFor = (filename: string): number => {
   const normalized = filename.replaceAll("\\", "/");
+
   for (const [suffix, count] of LEGACY_BASELINE) {
     if (normalized.endsWith(suffix)) return count;
   }
+
   return 0;
 };
 
 const manualRunnerName = (callee: unknown): Option.Option<string> => {
   const expression = unwrapExpression(callee);
+
   if (Option.isNone(expression) || expression.value.type !== "MemberExpression") {
     return Option.none();
   }
 
   const object = unwrapExpression(expression.value.object);
   const property = getPropertyName(expression.value.property);
+
   if (Option.isNone(property)) return Option.none();
 
   if (isIdentifier(object, "Effect") && EFFECT_RUNTIME_METHODS.has(property.value)) {
@@ -88,9 +93,11 @@ export default defineRule({
     return {
       CallExpression(node) {
         const runner = manualRunnerName(node.callee);
+
         if (Option.isNone(runner)) return;
 
         occurrenceCount++;
+
         if (occurrenceCount <= allowedCount) return;
 
         context.report({

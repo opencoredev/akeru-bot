@@ -10,6 +10,7 @@ describe("Akeru public identity", () => {
   it("credits T3 Code without claiming T3 ownership", () => {
     const publicIdentity = [
       sourceFile("layouts/Layout.astro"),
+      sourceFile("components/SiteFooter.astro"),
       sourceFile("pages/about.astro"),
       sourceFile("pages/contact.astro"),
     ].join("\n");

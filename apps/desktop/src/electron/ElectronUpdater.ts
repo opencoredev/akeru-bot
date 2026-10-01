@@ -53,7 +53,9 @@ export const ElectronUpdaterError = Schema.Union([
   ElectronUpdaterDownloadUpdateError,
   ElectronUpdaterQuitAndInstallError,
 ]);
+
 export type ElectronUpdaterError = typeof ElectronUpdaterError.Type;
+
 export const isElectronUpdaterError = Schema.is(ElectronUpdaterError);
 
 export class ElectronUpdater extends Context.Service<
@@ -85,46 +87,55 @@ export const make = ElectronUpdater.of({
   setFeedURL: (options) =>
     Effect.suspend(() => {
       autoUpdater.setFeedURL(options);
+
       return Effect.void;
     }),
   setAutoDownload: (value) =>
     Effect.suspend(() => {
       autoUpdater.autoDownload = value;
+
       return Effect.void;
     }),
   setAutoInstallOnAppQuit: (value) =>
     Effect.suspend(() => {
       autoUpdater.autoInstallOnAppQuit = value;
+
       return Effect.void;
     }),
   setChannel: (channel) =>
     Effect.suspend(() => {
       autoUpdater.channel = channel;
+
       return Effect.void;
     }),
   setAllowPrerelease: (value) =>
     Effect.suspend(() => {
       autoUpdater.allowPrerelease = value;
+
       return Effect.void;
     }),
   allowDowngrade: Effect.sync(() => autoUpdater.allowDowngrade),
   setAllowDowngrade: (value) =>
     Effect.suspend(() => {
       autoUpdater.allowDowngrade = value;
+
       return Effect.void;
     }),
   setFullChangelog: (value) =>
     Effect.suspend(() => {
       autoUpdater.fullChangelog = value;
+
       return Effect.void;
     }),
   setDisableDifferentialDownload: (value) =>
     Effect.suspend(() => {
       autoUpdater.disableDifferentialDownload = value;
+
       return Effect.void;
     }),
   checkForUpdates: Effect.suspend(() => {
     const channel = autoUpdater.channel;
+
     return Effect.tryPromise({
       try: () => autoUpdater.checkForUpdates(),
       catch: (cause) => new ElectronUpdaterCheckForUpdatesError({ channel, cause }),
@@ -132,6 +143,7 @@ export const make = ElectronUpdater.of({
   }),
   downloadUpdate: Effect.suspend(() => {
     const channel = autoUpdater.channel;
+
     return Effect.tryPromise({
       try: () => autoUpdater.downloadUpdate(),
       catch: (cause) => new ElectronUpdaterDownloadUpdateError({ channel, cause }),
@@ -140,6 +152,7 @@ export const make = ElectronUpdater.of({
   quitAndInstall: ({ isSilent, isForceRunAfter }) =>
     Effect.suspend(() => {
       const channel = autoUpdater.channel;
+
       return Effect.try({
         try: () => autoUpdater.quitAndInstall(isSilent, isForceRunAfter),
         catch: (cause) =>
@@ -156,7 +169,9 @@ export const make = ElectronUpdater.of({
       on: (eventName: string, listener: (...args: Array<unknown>) => void) => void;
       removeListener: (eventName: string, listener: (...args: Array<unknown>) => void) => void;
     };
+
     const untypedListener = listener as unknown as (...args: Array<unknown>) => void;
+
     return Effect.acquireRelease(
       Effect.sync(() => {
         eventTarget.on(eventName, untypedListener);

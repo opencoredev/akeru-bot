@@ -36,12 +36,14 @@ function makeTestWindow(
       if (options.isDestroyedError !== undefined) {
         throw options.isDestroyedError;
       }
+
       return destroyed;
     },
     isMinimized: () => {
       if (options.isMinimizedError !== undefined) {
         throw options.isMinimizedError;
       }
+
       return minimized;
     },
     restore: () => {
@@ -63,6 +65,7 @@ function makeTestWindow(
       send: (channel: string, ...args: readonly unknown[]) => {
         const message = { channel, args };
         sentMessages.push(message);
+
         if (options.sendError !== undefined) {
           throw options.sendError;
         }
@@ -80,6 +83,7 @@ function makeTestWindow(
       destroyed = true;
       const closedListeners = [...(listeners.get("closed") ?? [])];
       listeners.delete("closed");
+
       for (const listener of closedListeners) {
         listener();
       }
@@ -119,6 +123,7 @@ describe("DesktopSshPasswordPrompts", () => {
 
     return Effect.gen(function* () {
       const prompts = yield* DesktopSshPasswordPrompts.DesktopSshPasswordPrompts;
+
       const fiber = yield* prompts
         .request({
           destination: "devbox",
@@ -149,6 +154,7 @@ describe("DesktopSshPasswordPrompts", () => {
 
     return Effect.gen(function* () {
       const prompts = yield* DesktopSshPasswordPrompts.DesktopSshPasswordPrompts;
+
       const fiber = yield* prompts
         .request({
           destination: "devbox",
@@ -172,6 +178,7 @@ describe("DesktopSshPasswordPrompts", () => {
 
     return Effect.gen(function* () {
       const prompts = yield* DesktopSshPasswordPrompts.DesktopSshPasswordPrompts;
+
       const error = yield* prompts
         .request({
           destination: "devbox",
@@ -185,14 +192,17 @@ describe("DesktopSshPasswordPrompts", () => {
       assert.equal(error.operation, "send-prompt-request");
       assert.equal(error.destination, "devbox");
       const requestId = error.requestId;
+
       if (requestId === null) {
         assert.fail("renderer delivery failures must retain their request id");
       }
+
       assert.equal(testWindow.closedListenerCount(), 0);
 
       const resolveError = yield* prompts
         .resolve({ requestId, password: "secret" })
         .pipe(Effect.flip);
+
       assert.instanceOf(resolveError, DesktopSshPasswordPrompts.DesktopSshPromptExpiredError);
     }).pipe(Effect.provide(makeLayer(testWindow.window)), Effect.scoped);
   });
@@ -204,6 +214,7 @@ describe("DesktopSshPasswordPrompts", () => {
 
     return Effect.gen(function* () {
       const prompts = yield* DesktopSshPasswordPrompts.DesktopSshPasswordPrompts;
+
       const requestFiber = yield* prompts
         .request({
           destination: "devbox",
@@ -231,6 +242,7 @@ describe("DesktopSshPasswordPrompts", () => {
 
     return Effect.gen(function* () {
       const prompts = yield* DesktopSshPasswordPrompts.DesktopSshPasswordPrompts;
+
       const error = yield* prompts
         .request({
           destination: "devbox",

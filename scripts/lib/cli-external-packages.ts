@@ -112,6 +112,7 @@ export function isExternalCliDependency(id: string): boolean {
 /** True when the CLI bundle should inline `id` rather than leave it external. */
 export function shouldBundleCliDependency(id: string): boolean {
   if (id.startsWith("node:")) return false;
+
   return !isExternalCliDependency(id);
 }
 
@@ -169,13 +170,17 @@ export function findInlinedExternalPackages(source: string): {
   let regionCount = 0;
   const inlined = new Set<string>();
   const inlinedPackages = new Set<string>();
+
   for (const region of source.matchAll(regionPattern)) {
     regionCount += 1;
     const regionPath = region[1] ?? "";
+
     for (const candidate of regionPath.matchAll(packagePattern)) {
       const name = candidate[1];
+
       if (name === undefined || name === ".pnpm") continue;
       inlinedPackages.add(name);
+
       if (isExternalCliDependency(name)) inlined.add(name);
     }
   }

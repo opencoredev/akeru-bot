@@ -76,11 +76,13 @@ function firstNonEmpty(sources: readonly Environment[], ...names: readonly strin
   for (const source of sources) {
     for (const name of names) {
       const value = source[name]?.trim();
+
       if (value) {
         return value;
       }
     }
   }
+
   return undefined;
 }
 

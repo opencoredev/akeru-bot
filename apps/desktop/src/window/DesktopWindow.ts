@@ -1,9 +1,15 @@
 import * as Clock from "effect/Clock";
+
 import * as Context from "effect/Context";
+
 import * as Effect from "effect/Effect";
+
 import * as Fiber from "effect/Fiber";
+
 import * as Layer from "effect/Layer";
+
 import * as Option from "effect/Option";
+
 import * as Ref from "effect/Ref";
 
 import * as Electron from "electron";
@@ -11,50 +17,71 @@ import * as Electron from "electron";
 import { DEFAULT_CLIENT_SETTINGS } from "@akeru/contracts";
 
 import * as DesktopAssets from "../app/DesktopAssets.ts";
+
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+
 import { makeComponentLogger } from "../app/DesktopObservability.ts";
+
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
+
 import { getDesktopUrl } from "../electron/ElectronProtocol.ts";
+
 import * as ElectronShell from "../electron/ElectronShell.ts";
+
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
+
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
+
 import {
   MENU_ACTION_CHANNEL,
   QUIT_SHORTCUT_CHANNEL,
   WINDOW_FULLSCREEN_STATE_CHANNEL,
 } from "../ipc/channels.ts";
+
 import * as PreviewManager from "../preview/Manager.ts";
+
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
+
 import * as ElectronApp from "../electron/ElectronApp.ts";
+
 import { makeQuitShortcutHandler } from "./QuitHold.ts";
 
-const TITLEBAR_HEIGHT = 40;
-const TITLEBAR_COLOR = "#01000000"; // #00000000 does not work correctly on Linux
-const TITLEBAR_LIGHT_SYMBOL_COLOR = "#1f2937";
-const TITLEBAR_DARK_SYMBOL_COLOR = "#f8fafc";
+import {
+  getIconOption,
+  getInitialWindowBackgroundColor,
+  windowBoundsEqual,
+  resolveInitialMainWindowBounds,
+  buildConnectingSplashDataUrl,
+  isSameOriginRendererNavigation,
+  isRetryableDevelopmentRendererLoadFailure,
+  concealPendingQuitWindow,
+  getWindowTitleBarOptions,
+  syncWindowAppearance,
+  type RevealSubscription,
+  bindFirstRevealTrigger,
+} from "./WindowPresentation.ts";
+
+export {
+  resolveInitialMainWindowBounds,
+  isSameOriginRendererNavigation,
+  isRetryableDevelopmentRendererLoadFailure,
+  concealPendingQuitWindow,
+} from "./WindowPresentation.ts";
+
 const MAIN_WINDOW_BOUNDS_PERSIST_DEBOUNCE_MS = 500;
+
 const DEVELOPMENT_LOAD_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000] as const;
+
 // Renderer crash (usually V8 OOM on long sessions) recovery: reload after a
 // short delay, at most MAX_ATTEMPTS times per rolling WINDOW so a renderer
 // that dies on boot cannot reload-loop forever.
 const RENDERER_RECOVERY_RELOAD_DELAY_MS = 500;
-const RENDERER_RECOVERY_MAX_ATTEMPTS = 3;
-const RENDERER_RECOVERY_WINDOW_MS = 60_000;
-const DEVELOPMENT_RETRYABLE_LOAD_ERROR_CODES = new Set([
-  -2, // ERR_FAILED
-  -7, // ERR_TIMED_OUT
-  -9, // ERR_UNEXPECTED (custom protocol handler rejected)
-  -102, // ERR_CONNECTION_REFUSED
-  -105, // ERR_NAME_NOT_RESOLVED
-  -106, // ERR_INTERNET_DISCONNECTED
-  -118, // ERR_CONNECTION_TIMED_OUT
-]);
 
-type WindowTitleBarOptions = Pick<
-  Electron.BrowserWindowConstructorOptions,
-  "titleBarOverlay" | "titleBarStyle" | "trafficLightPosition"
->;
+const RENDERER_RECOVERY_MAX_ATTEMPTS = 3;
+
+const RENDERER_RECOVERY_WINDOW_MS = 60_000;
 
 type DesktopWindowRuntimeServices =
   | DesktopEnvironment.DesktopEnvironment
@@ -113,171 +140,6 @@ export class DesktopWindow extends Context.Service<
 const { logInfo: logWindowInfo, logWarning: logWindowWarning } =
   makeComponentLogger("desktop-window");
 
-function getIconOption(
-  iconPaths: DesktopAssets.DesktopIconPaths,
-  platform: NodeJS.Platform,
-): { icon: string } | Record<string, never> {
-  if (platform === "darwin") return {}; // macOS uses .icns from app bundle
-  const ext = platform === "win32" ? "ico" : "png";
-  return Option.match(iconPaths[ext], {
-    onNone: () => ({}),
-    onSome: (icon) => ({ icon }),
-  });
-}
-
-function getInitialWindowBackgroundColor(shouldUseDarkColors: boolean): string {
-  return shouldUseDarkColors ? "#0a0a0a" : "#ffffff";
-}
-
-type DisplayBounds = Pick<Electron.Rectangle, "x" | "y" | "width" | "height">;
-
-function windowFitsWithinDisplay(
-  windowBounds: DesktopAppSettings.DesktopWindowBounds,
-  displayBounds: DisplayBounds,
-): boolean {
-  return (
-    windowBounds.x >= displayBounds.x &&
-    windowBounds.y >= displayBounds.y &&
-    windowBounds.x + windowBounds.width <= displayBounds.x + displayBounds.width &&
-    windowBounds.y + windowBounds.height <= displayBounds.y + displayBounds.height
-  );
-}
-
-function windowBoundsEqual(
-  left: DesktopAppSettings.DesktopWindowBounds,
-  right: DesktopAppSettings.DesktopWindowBounds,
-): boolean {
-  return (
-    left.x === right.x &&
-    left.y === right.y &&
-    left.width === right.width &&
-    left.height === right.height
-  );
-}
-
-export function resolveInitialMainWindowBounds(
-  persistedBounds: DesktopAppSettings.DesktopWindowBounds | null,
-  displays: readonly DisplayBounds[],
-): DesktopAppSettings.DesktopWindowBounds | typeof DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE {
-  if (
-    persistedBounds !== null &&
-    displays.some((display) => windowFitsWithinDisplay(persistedBounds, display))
-  ) {
-    return persistedBounds;
-  }
-  return DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE;
-}
-
-// A self-contained "Connecting to WSL" splash, shown immediately in wsl-only
-// mode while the WSL backend (which serves the renderer) cold-boots. Inlined as
-// a data URL so it needs no bundled asset and no backend — pure CSS, no JS.
-function buildConnectingSplashDataUrl(shouldUseDarkColors: boolean): string {
-  const background = getInitialWindowBackgroundColor(shouldUseDarkColors);
-  const label = shouldUseDarkColors ? "#9ca3af" : "#6b7280";
-  const accent = shouldUseDarkColors ? "#f8fafc" : "#1f2937";
-  const track = shouldUseDarkColors ? "rgba(248,250,252,0.18)" : "rgba(31,41,55,0.18)";
-  const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>html,body{margin:0;height:100%}body{background:${background};color:${label};font-family:system-ui,-apple-system,'Segoe UI',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;-webkit-user-select:none;user-select:none;-webkit-app-region:drag}.spinner{width:26px;height:26px;border:3px solid ${track};border-top-color:${accent};border-radius:50%;animation:spin .8s linear infinite}.label{font-size:13px}@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class="spinner"></div><div class="label">Connecting to WSL…</div></body></html>`;
-  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
-}
-
-export function isSameOriginRendererNavigation(input: {
-  readonly applicationUrl: string;
-  readonly navigationUrl: string;
-}): boolean {
-  try {
-    return new URL(input.applicationUrl).origin === new URL(input.navigationUrl).origin;
-  } catch {
-    return false;
-  }
-}
-
-export function isRetryableDevelopmentRendererLoadFailure(input: {
-  readonly applicationUrl: string;
-  readonly errorCode: number;
-  readonly isMainFrame: boolean;
-  readonly validatedUrl: string;
-}): boolean {
-  return (
-    input.isMainFrame &&
-    DEVELOPMENT_RETRYABLE_LOAD_ERROR_CODES.has(input.errorCode) &&
-    isSameOriginRendererNavigation({
-      applicationUrl: input.applicationUrl,
-      navigationUrl: input.validatedUrl,
-    })
-  );
-}
-
-export function concealPendingQuitWindow(
-  window: Pick<
-    Electron.BrowserWindow,
-    "isDestroyed" | "isFullScreen" | "setFullScreen" | "setOpacity"
-  >,
-): void {
-  if (window.isDestroyed()) return;
-  if (window.isFullScreen()) {
-    window.setFullScreen(false);
-  }
-  // Electron implements window opacity on macOS and Windows. Linux keeps the
-  // release-gated quit behavior but cannot make the pending window disappear.
-  window.setOpacity(0);
-}
-
-function getWindowTitleBarOptions(
-  shouldUseDarkColors: boolean,
-  platform: NodeJS.Platform,
-): WindowTitleBarOptions {
-  if (platform === "darwin") {
-    return {
-      titleBarStyle: "hiddenInset",
-      trafficLightPosition: { x: 16, y: 18 },
-    };
-  }
-
-  return {
-    titleBarStyle: "hidden",
-    titleBarOverlay: {
-      color: TITLEBAR_COLOR,
-      height: TITLEBAR_HEIGHT,
-      symbolColor: shouldUseDarkColors ? TITLEBAR_DARK_SYMBOL_COLOR : TITLEBAR_LIGHT_SYMBOL_COLOR,
-    },
-  };
-}
-
-function syncWindowAppearance(
-  window: Electron.BrowserWindow,
-  shouldUseDarkColors: boolean,
-  platform: NodeJS.Platform,
-): Effect.Effect<void> {
-  return Effect.sync(() => {
-    if (window.isDestroyed()) {
-      return;
-    }
-
-    window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors));
-    const { titleBarOverlay } = getWindowTitleBarOptions(shouldUseDarkColors, platform);
-    if (typeof titleBarOverlay === "object") {
-      window.setTitleBarOverlay(titleBarOverlay);
-    }
-  });
-}
-
-type RevealSubscription = (listener: () => void) => void;
-
-function bindFirstRevealTrigger(
-  subscribers: readonly RevealSubscription[],
-  reveal: () => void,
-): void {
-  let revealed = false;
-  const fire = () => {
-    if (revealed) return;
-    revealed = true;
-    reveal();
-  };
-  for (const subscribe of subscribers) {
-    subscribe(fire);
-  }
-}
-
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const assets = yield* DesktopAssets.DesktopAssets;
@@ -305,6 +167,7 @@ export const make = Effect.gen(function* () {
 
   const dismissConnectingSplash = Effect.gen(function* () {
     const splash = yield* Ref.getAndSet(splashWindowRef, Option.none());
+
     if (Option.isSome(splash) && !splash.value.isDestroyed()) {
       splash.value.close();
     }
@@ -340,6 +203,7 @@ export const make = Effect.gen(function* () {
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
     const persistedSettings = yield* desktopSettings.get;
     const persistedBounds = persistedSettings.mainWindowBounds;
+
     const displayBoundsResult = yield* Effect.sync(() => {
       try {
         return {
@@ -350,17 +214,21 @@ export const make = Effect.gen(function* () {
         return { _tag: "Failure" as const, cause };
       }
     });
+
     const displayBounds =
       displayBoundsResult._tag === "Success"
         ? displayBoundsResult.bounds
         : yield* logWindowWarning("failed to read connected displays; using defaults", {
             cause: displayBoundsResult.cause,
           }).pipe(Effect.as<readonly Electron.Rectangle[]>([]));
+
     const initialBounds = resolveInitialMainWindowBounds(persistedBounds, displayBounds);
     const restoredPersistedBounds = persistedBounds !== null && initialBounds === persistedBounds;
+
     if (persistedBounds !== null && initialBounds === DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE) {
       yield* logWindowWarning("saved main window bounds could not be restored; using defaults");
     }
+
     const window = yield* electronWindow.create({
       ...initialBounds,
       minWidth: 840,
@@ -390,17 +258,21 @@ export const make = Effect.gen(function* () {
     if (environment.platform === "darwin") {
       window.setAutoHideCursor(false);
     }
+
     let boundsPersistFiber: Fiber.Fiber<void, never> | undefined;
     let pendingBoundsPersistFiber: Fiber.Fiber<void, never> | undefined;
     let boundsPersistenceEnabled = persistedBounds === null || restoredPersistedBounds;
+
     const readPersistableBounds = (): DesktopAppSettings.DesktopWindowBounds | null => {
       if (window.isDestroyed()) {
         return null;
       }
+
       const bounds =
         window.isFullScreen() || window.isMaximized() || window.isMinimized()
           ? window.getNormalBounds()
           : window.getBounds();
+
       return DesktopAppSettings.normalizeMainWindowBounds({
         x: Math.round(bounds.x),
         y: Math.round(bounds.y),
@@ -408,16 +280,21 @@ export const make = Effect.gen(function* () {
         height: Math.round(bounds.height),
       });
     };
+
     const fallbackWindowBounds = boundsPersistenceEnabled ? null : readPersistableBounds();
     const fallbackWindowMaximized = persistedSettings.mainWindowMaximized;
+
     const persistCurrentBounds = (): Fiber.Fiber<void, never> | undefined => {
       if (!boundsPersistenceEnabled) {
         return pendingBoundsPersistFiber;
       }
+
       const bounds = readPersistableBounds();
+
       if (bounds === null) {
         return pendingBoundsPersistFiber;
       }
+
       pendingBoundsPersistFiber = runFork(
         desktopSettings.setMainWindowBounds(bounds, window.isMaximized()).pipe(
           Effect.asVoid,
@@ -428,11 +305,14 @@ export const make = Effect.gen(function* () {
           ),
         ),
       );
+
       return pendingBoundsPersistFiber;
     };
+
     const scheduleBoundsPersist = () => {
       if (!boundsPersistenceEnabled) {
         const currentBounds = readPersistableBounds();
+
         if (
           currentBounds === null ||
           (fallbackWindowBounds !== null &&
@@ -442,12 +322,15 @@ export const make = Effect.gen(function* () {
           return;
         }
       }
+
       boundsPersistenceEnabled = true;
+
       if (boundsPersistFiber !== undefined) {
         const fiber = boundsPersistFiber;
         boundsPersistFiber = undefined;
         runFork(Fiber.interrupt(fiber));
       }
+
       boundsPersistFiber = runFork(
         Effect.sleep(MAIN_WINDOW_BOUNDS_PERSIST_DEBOUNCE_MS).pipe(
           Effect.andThen(
@@ -459,22 +342,27 @@ export const make = Effect.gen(function* () {
         ),
       );
     };
+
     const clearBoundsPersist = () => {
       if (boundsPersistFiber === undefined) {
         return;
       }
+
       const fiber = boundsPersistFiber;
       boundsPersistFiber = undefined;
       runFork(Fiber.interrupt(fiber));
     };
+
     const flushBoundsPersist = Effect.sync(() => {
       clearBoundsPersist();
+
       return persistCurrentBounds();
     }).pipe(
       Effect.flatMap((fiber) =>
         fiber === undefined ? Effect.void : Fiber.join(fiber).pipe(Effect.asVoid),
       ),
     );
+
     flushMainWindowBounds = flushBoundsPersist;
 
     yield* previewManager.setMainWindow(window);
@@ -484,8 +372,10 @@ export const make = Effect.gen(function* () {
         !previewManager.isBrowserPartition(params.partition)
       ) {
         event.preventDefault();
+
         return;
       }
+
       webPreferences.sandbox = true;
       webPreferences.nodeIntegration = false;
       webPreferences.nodeIntegrationInSubFrames = false;
@@ -493,6 +383,7 @@ export const make = Effect.gen(function* () {
     });
 
     const contextMenuContents = new WeakSet<Electron.WebContents>();
+
     const installContextMenu = (
       ownerWindow: Electron.BrowserWindow,
       contents: Electron.WebContents,
@@ -501,6 +392,7 @@ export const make = Effect.gen(function* () {
       contextMenuContents.add(contents);
       contents.on("context-menu", (event, params) => {
         event.preventDefault();
+
         if (contents.isDestroyed() || ownerWindow.isDestroyed()) return;
         // Native editing roles act on the focused contents, which may still be
         // the host renderer when the user right-clicks inside a browser guest.
@@ -517,9 +409,11 @@ export const make = Effect.gen(function* () {
               },
             });
           }
+
           if (params.dictionarySuggestions.length === 0) {
             menuTemplate.push({ label: "No suggestions", enabled: false });
           }
+
           menuTemplate.push({ type: "separator" });
         }
 
@@ -564,6 +458,7 @@ export const make = Effect.gen(function* () {
         installContextMenu(popup, popup.webContents);
       });
     };
+
     installContextMenu(window, window.webContents);
     window.webContents.on("did-attach-webview", (_event, contents) => {
       installContextMenu(window, contents);
@@ -573,6 +468,7 @@ export const make = Effect.gen(function* () {
       if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
         void runPromise(electronShell.openExternal(url));
       }
+
       return { action: "deny" };
     });
     window.webContents.on("will-navigate", (event, url) => {
@@ -586,6 +482,7 @@ export const make = Effect.gen(function* () {
       }
 
       event.preventDefault();
+
       if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
         void runPromise(electronShell.openExternal(url));
       }
@@ -621,10 +518,13 @@ export const make = Effect.gen(function* () {
         void runPromise(electronApp.quit);
       },
     });
+
     window.webContents.on("before-input-event", (event, input) => {
       quitShortcutHandler(event, input);
+
       if (input.type !== "keyDown" || !input.isAutoRepeat) return;
       const modifier = environment.platform === "darwin" ? input.meta : input.control;
+
       if (modifier && !input.alt && !input.shift && input.key.toLowerCase() === "w") {
         event.preventDefault();
       }
@@ -654,20 +554,25 @@ export const make = Effect.gen(function* () {
     let developmentLoadRetryIndex = 0;
     let developmentLoadRetryFiber: Fiber.Fiber<void, never> | undefined;
     let rendererRecoveryTimestamps: number[] = [];
+
     const clearDevelopmentLoadRetry = () => {
       if (developmentLoadRetryFiber === undefined) {
         return;
       }
+
       const retryFiber = developmentLoadRetryFiber;
       developmentLoadRetryFiber = undefined;
       runFork(Fiber.interrupt(retryFiber));
     };
+
     const loadApplication = () => {
       if (window.isDestroyed()) {
         return;
       }
+
       void window.loadURL(applicationUrl).catch(() => undefined);
     };
+
     const scheduleDevelopmentLoadRetry = () => {
       if (developmentLoadRetryFiber !== undefined || window.isDestroyed()) {
         return undefined;
@@ -677,6 +582,7 @@ export const make = Effect.gen(function* () {
         developmentLoadRetryIndex,
         DEVELOPMENT_LOAD_RETRY_DELAYS_MS.length - 1,
       );
+
       const retryInMs = DEVELOPMENT_LOAD_RETRY_DELAYS_MS[retryIndex] ?? 2_000;
       developmentLoadRetryIndex += 1;
       developmentLoadRetryFiber = runFork(
@@ -684,6 +590,7 @@ export const make = Effect.gen(function* () {
           Effect.andThen(
             Effect.sync(() => {
               developmentLoadRetryFiber = undefined;
+
               if (!window.isDestroyed()) {
                 loadApplication();
               }
@@ -691,6 +598,7 @@ export const make = Effect.gen(function* () {
           ),
         ),
       );
+
       return retryInMs;
     };
 
@@ -704,6 +612,7 @@ export const make = Effect.gen(function* () {
       ) {
         return;
       }
+
       clearDevelopmentLoadRetry();
       developmentLoadRetryIndex = 0;
       window.setTitle(environment.displayName);
@@ -714,6 +623,7 @@ export const make = Effect.gen(function* () {
         if (!isMainFrame) {
           return;
         }
+
         const retryInMs =
           environment.isDevelopment &&
           isRetryableDevelopmentRendererLoadFailure({
@@ -724,6 +634,7 @@ export const make = Effect.gen(function* () {
           })
             ? scheduleDevelopmentLoadRetry()
             : undefined;
+
         void runPromise(
           logWindowWarning("main window failed to load", {
             errorCode,
@@ -739,6 +650,7 @@ export const make = Effect.gen(function* () {
         details.reason === "crashed" ||
         details.reason === "oom" ||
         details.reason === "abnormal-exit";
+
       // Long sessions can OOM the renderer (V8 heap exhaustion from
       // accumulated thread state). Without a reload the user is left staring
       // at a dead white window while agents keep running invisibly, so
@@ -751,20 +663,25 @@ export const make = Effect.gen(function* () {
           rendererRecoveryTimestamps = rendererRecoveryTimestamps.filter(
             (timestamp) => now - timestamp < RENDERER_RECOVERY_WINDOW_MS,
           );
+
           const shouldRecover =
             recoverable &&
             !window.isDestroyed() &&
             rendererRecoveryTimestamps.length < RENDERER_RECOVERY_MAX_ATTEMPTS;
+
           yield* logWindowWarning("main window render process gone", {
             reason: details.reason,
             exitCode: details.exitCode,
             recovering: shouldRecover,
           });
+
           if (!shouldRecover) {
             return;
           }
+
           rendererRecoveryTimestamps.push(now);
           yield* Effect.sleep(RENDERER_RECOVERY_RELOAD_DELAY_MS);
+
           if (!window.isDestroyed()) {
             loadApplication();
           }
@@ -773,20 +690,24 @@ export const make = Effect.gen(function* () {
     });
 
     const revealSubscribers: RevealSubscription[] = [(fire) => window.once("ready-to-show", fire)];
+
     if (environment.platform === "linux") {
       revealSubscribers.push((fire) => window.webContents.once("did-finish-load", fire));
     }
+
     bindFirstRevealTrigger(revealSubscribers, () => {
       // Boot is done; hand the window back to normal hidden-window throttling
       // (see the backgroundThrottling comment on the create options above).
       if (!window.isDestroyed()) {
         window.webContents.setBackgroundThrottling(true);
       }
+
       // Reveal the real window, then close the connecting splash (if any) so the
       // two don't overlap and there's no blank gap between them.
       if (persistedSettings.mainWindowMaximized) {
         window.maximize();
       }
+
       void runPromise(Effect.andThen(electronWindow.reveal(window), dismissConnectingSplash));
     });
 
@@ -804,27 +725,33 @@ export const make = Effect.gen(function* () {
     const window = yield* createWindow();
     yield* electronWindow.setMain(window);
     yield* logWindowInfo("main window created");
+
     return window;
   }).pipe(Effect.withSpan("desktop.window.createMain"));
 
   const ensureMain = Effect.gen(function* () {
     const existingWindow = yield* currentMainWindow;
+
     if (Option.isSome(existingWindow)) {
       return existingWindow.value;
     }
+
     return yield* createMain;
   }).pipe(Effect.withSpan("desktop.window.ensureMain"));
 
   const revealOrCreateMain = Effect.gen(function* () {
     const window = yield* ensureMain;
     yield* electronWindow.reveal(window);
+
     return window;
   }).pipe(Effect.withSpan("desktop.window.revealOrCreateMain"));
 
   const createMainIfBackendReady = Effect.gen(function* () {
     const backendReady = yield* Ref.get(backendReadyRef);
+
     if (!backendReady) return;
     const existingWindow = yield* currentMainWindow;
+
     if (Option.isSome(existingWindow)) return;
     yield* createMain;
   }).pipe(Effect.withSpan("desktop.window.createMainIfBackendReady"));
@@ -832,11 +759,14 @@ export const make = Effect.gen(function* () {
   const showConnectingSplash = Effect.gen(function* () {
     // Only when nothing is shown yet: no real window, no existing splash.
     const existingSplash = yield* Ref.get(splashWindowRef);
+
     if (Option.isSome(existingSplash)) return;
     const existingWindow = yield* electronWindow.currentMainOrFirst;
+
     if (Option.isSome(existingWindow)) return;
 
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+
     const splash = yield* electronWindow.create({
       width: 360,
       height: 220,
@@ -856,6 +786,7 @@ export const make = Effect.gen(function* () {
         sandbox: true,
       },
     });
+
     yield* Ref.set(splashWindowRef, Option.some(splash));
     splash.once("closed", () => {
       void runPromise(Ref.set(splashWindowRef, Option.none()));
@@ -881,23 +812,30 @@ export const make = Effect.gen(function* () {
     revealOrCreateMain,
     activate: Effect.gen(function* () {
       const existingWindow = yield* currentMainWindow;
+
       if (Option.isSome(existingWindow)) {
         yield* electronWindow.reveal(existingWindow.value);
+
         return;
       }
+
       // No real main window yet. While the backend is still cold-booting,
       // re-reveal the connecting splash so taskbar/dock activation brings it
       // back instead of doing nothing. Once the backend is ready we fall
       // through to (re)create the real main -- including retrying a previously
       // failed open the pool swallowed -- rather than latching onto the splash.
       const backendReady = yield* Ref.get(backendReadyRef);
+
       if (!backendReady) {
         const splash = yield* Ref.get(splashWindowRef);
+
         if (Option.isSome(splash)) {
           yield* electronWindow.reveal(splash.value);
+
           return;
         }
       }
+
       yield* createMainIfBackendReady;
     }).pipe(Effect.withSpan("desktop.window.activate")),
     createMainIfBackendReady,
@@ -916,9 +854,11 @@ export const make = Effect.gen(function* () {
     dispatchMenuAction: Effect.fn("desktop.window.dispatchMenuAction")(function* (action) {
       yield* Effect.annotateCurrentSpan({ action });
       const existingWindow = yield* focusedMainWindow;
+
       if (Option.isNone(existingWindow) && !(yield* Ref.get(backendReadyRef))) {
         return;
       }
+
       const targetWindow = Option.isSome(existingWindow) ? existingWindow.value : yield* ensureMain;
 
       const send = () => {
@@ -929,6 +869,7 @@ export const make = Effect.gen(function* () {
 
       if (targetWindow.webContents.isLoadingMainFrame()) {
         targetWindow.webContents.once("did-finish-load", send);
+
         return;
       }
 
@@ -937,9 +878,11 @@ export const make = Effect.gen(function* () {
     zoomMain: Effect.fn("desktop.window.zoomMain")(function* (direction) {
       yield* Effect.annotateCurrentSpan({ direction });
       const window = yield* focusedMainWindow;
+
       if (Option.isNone(window) || window.value.isDestroyed()) {
         return;
       }
+
       const webContents = window.value.webContents;
       // Same step size as the Electron zoomIn/zoomOut menu roles.
       webContents.setZoomLevel(

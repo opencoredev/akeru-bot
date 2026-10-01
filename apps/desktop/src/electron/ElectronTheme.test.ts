@@ -21,6 +21,7 @@ vi.mock("electron", () => ({
       if (themeState.setSourceError !== null) {
         throw themeState.setSourceError;
       }
+
       themeState.themeSource = value;
     },
     on: onMock,

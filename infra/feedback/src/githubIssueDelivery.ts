@@ -59,9 +59,13 @@ interface GitHubIssueUnknown {
 }
 
 const DELIVERY_LEASE_MILLISECONDS = 60_000;
+
 const GITHUB_REQUEST_TIMEOUT_MILLISECONDS = 20_000;
+
 const MAX_DELIVERY_BATCH = 10;
+
 const MAX_RETRY_DELAY_MILLISECONDS = 86_400_000;
+
 const GITHUB_API_VERSION = "2026-03-10";
 
 function indentedCode(value: string): string {
@@ -77,6 +81,7 @@ export function formatGitHubIssue(record: FeedbackDeliveryRecord): {
 } {
   const summary = record.submission.feedback.replace(/\s+/g, " ").trim().slice(0, 96);
   const element = record.submission.element;
+
   const body = [
     "## Feedback",
     "",
@@ -103,6 +108,7 @@ export function formatGitHubIssue(record: FeedbackDeliveryRecord): {
     `- Feedback ID: \`${record.feedbackId}\``,
     `- Received: \`${record.receivedAt}\``,
   ].join("\n");
+
   return {
     title: `[Akeru feedback] ${summary || record.feedbackId}`,
     body,
@@ -132,11 +138,13 @@ export function createGitHubAppJwt(
   const header = base64UrlJson({ alg: "RS256", typ: "JWT" });
   const payload = base64UrlJson({ iat: issuedAt, exp: issuedAt + 600, iss: appId });
   const unsigned = `${header}.${payload}`;
+
   const signature = NodeCrypto.sign(
     "RSA-SHA256",
     NodeBuffer.Buffer.from(unsigned),
     privateKey,
   ).toString("base64url");
+
   return `${unsigned}.${signature}`;
 }
 
@@ -149,15 +157,20 @@ async function createInstallationToken(
   if (!validRepository(destination.repository)) {
     return { kind: "failed", errorCode: "invalid_repository" };
   }
+
   const repositoryName = destination.repository.split("/")[1];
+
   if (!repositoryName) return { kind: "failed", errorCode: "invalid_repository" };
   let jwt: string;
+
   try {
     jwt = signJwt(destination.appId, destination.privateKey, now);
   } catch {
     return { kind: "failed", errorCode: "app_jwt_signing_error" };
   }
+
   let response: Response;
+
   try {
     response = await request(
       `https://api.github.com/app/installations/${destination.installationId}/access_tokens`,
@@ -174,15 +187,19 @@ async function createInstallationToken(
   } catch {
     return { kind: "failed", errorCode: "installation_token_network_error" };
   }
+
   if (!response.ok) {
     return { kind: "failed", errorCode: `installation_token_http_${response.status}` };
   }
+
   let body: unknown;
+
   try {
     body = await response.json();
   } catch {
     return { kind: "failed", errorCode: "invalid_installation_token_receipt" };
   }
+
   if (
     typeof body !== "object" ||
     body === null ||
@@ -192,6 +209,7 @@ async function createInstallationToken(
   ) {
     return { kind: "failed", errorCode: "invalid_installation_token_receipt" };
   }
+
   return { kind: "authenticated", token: body.token };
 }
 
@@ -208,8 +226,10 @@ async function createGitHubIssue(
   if (!validRepository(destination.repository)) {
     return { kind: "failed", errorCode: "invalid_repository" };
   }
+
   const repositoryUrl = `https://api.github.com/repos/${destination.repository}`;
   let issueResponse: Response;
+
   try {
     issueResponse = await request(`${repositoryUrl}/issues`, {
       method: "POST",
@@ -220,15 +240,19 @@ async function createGitHubIssue(
   } catch {
     return { kind: "unknown", errorCode: "issue_network_error" };
   }
+
   if (!issueResponse.ok) {
     return { kind: "failed", errorCode: `issue_http_${issueResponse.status}` };
   }
+
   let issueBody: unknown;
+
   try {
     issueBody = await issueResponse.json();
   } catch {
     return { kind: "unknown", errorCode: "invalid_issue_receipt" };
   }
+
   if (
     typeof issueBody !== "object" ||
     issueBody === null ||
@@ -239,11 +263,13 @@ async function createGitHubIssue(
   ) {
     return { kind: "unknown", errorCode: "invalid_issue_receipt" };
   }
+
   return { kind: "delivered", number: issueBody.number, htmlUrl: issueBody.html_url };
 }
 
 function retryAt(now: Date, attempts: number): string {
   const delay = Math.min(300_000 * 2 ** Math.max(0, attempts - 1), MAX_RETRY_DELAY_MILLISECONDS);
+
   return new Date(now.getTime() + delay).toISOString();
 }
 
@@ -258,19 +284,23 @@ export async function deliverFeedbackToGitHub(options: {
 }): Promise<void> {
   const current = (options.now ?? (() => new Date()))();
   const claimId = (options.claimId ?? (() => crypto.randomUUID()))();
+
   const record = await options.outbox.claim(
     options.feedbackId,
     claimId,
     current.toISOString(),
     new Date(current.getTime() + DELIVERY_LEASE_MILLISECONDS).toISOString(),
   );
+
   if (!record) return;
+
   const authenticated = await createInstallationToken(
     options.destination,
     options.request ?? fetch,
     current,
     options.signJwt ?? createGitHubAppJwt,
   );
+
   if (authenticated.kind === "failed") {
     await options.outbox.markFailed(
       record.feedbackId,
@@ -278,14 +308,17 @@ export async function deliverFeedbackToGitHub(options: {
       retryAt(current, record.deliveryAttempts),
       authenticated.errorCode,
     );
+
     return;
   }
+
   const result = await createGitHubIssue(
     options.destination,
     authenticated.token,
     record,
     options.request ?? fetch,
   );
+
   if (result.kind === "failed") {
     await options.outbox.markFailed(
       record.feedbackId,
@@ -293,8 +326,10 @@ export async function deliverFeedbackToGitHub(options: {
       retryAt(current, record.deliveryAttempts),
       result.errorCode,
     );
+
     return;
   }
+
   if (result.kind === "unknown") {
     await options.outbox.markUnknown(record.feedbackId, record.claimId, result.errorCode);
     console.error(
@@ -304,8 +339,10 @@ export async function deliverFeedbackToGitHub(options: {
         errorCode: result.errorCode,
       }),
     );
+
     return;
   }
+
   await options.outbox.markDelivered(
     record.feedbackId,
     record.claimId,
@@ -322,6 +359,7 @@ export async function drainFeedbackToGitHub(options: {
 }): Promise<void> {
   const now = options.now ?? (() => new Date());
   const ids = await options.outbox.listEligible(now().toISOString(), MAX_DELIVERY_BATCH);
+
   for (const feedbackId of ids) {
     await deliverFeedbackToGitHub({ ...options, feedbackId, now });
   }

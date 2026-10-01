@@ -26,6 +26,7 @@ describe("tailscale endpoint provider", () => {
       const dnsName = yield* parseTailscaleMagicDnsName(
         `{"Self":{"DNSName":"desktop.tail.ts.net."}}`,
       );
+
       assert.equal(dnsName, "desktop.tail.ts.net");
       assert.equal(yield* parseTailscaleMagicDnsName("{}"), null);
       const malformed = yield* Effect.result(parseTailscaleMagicDnsName("not-json"));
@@ -51,6 +52,7 @@ describe("tailscale endpoint provider", () => {
         },
         statusJson: `{"Self":{"DNSName":"desktop.tail.ts.net."}}`,
       });
+
       assert.deepEqual(endpoints, [
         {
           id: "tailscale-ip:http://100.100.100.100:3773",
@@ -99,14 +101,17 @@ describe("tailscale endpoint provider", () => {
   it.effect("uses an injected magic DNS name reader instead of spawning tailscale", () =>
     Effect.gen(function* () {
       let readerCalls = 0;
+
       const endpoints = yield* resolveTailscaleAdvertisedEndpoints({
         port: 3773,
         networkInterfaces: {},
         readMagicDnsName: Effect.sync(() => {
           readerCalls += 1;
+
           return "desktop.tail.ts.net";
         }),
       });
+
       assert.equal(readerCalls, 1);
       assert.deepEqual(
         endpoints.map((endpoint) => endpoint.httpBaseUrl),
@@ -126,6 +131,7 @@ describe("tailscale endpoint provider", () => {
           serveEnabled: true,
           probe: () => Effect.succeed(true),
         });
+
         assert.deepEqual(endpoints, [
           {
             id: "tailscale-magicdns:https://desktop.tail.ts.net/",

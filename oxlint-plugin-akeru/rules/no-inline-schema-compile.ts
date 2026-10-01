@@ -38,11 +38,13 @@ const COMPILER_METHODS = new Set<keyof typeof Schema>([
 
 const getSchemaCompilerMethod = (callee: unknown): Option.Option<string> => {
   const expression = unwrapExpression(callee);
+
   if (Option.isNone(expression) || expression.value.type !== "MemberExpression") {
     return Option.none();
   }
 
   const object = unwrapExpression(expression.value.object);
+
   if (!isIdentifier(object, "Schema")) return Option.none();
 
   return Option.filter(getPropertyName(expression.value.property), (method) =>
@@ -52,10 +54,12 @@ const getSchemaCompilerMethod = (callee: unknown): Option.Option<string> => {
 
 const isStaticSchemaReference = (node: unknown): boolean => {
   const expression = unwrapExpression(node);
+
   if (Option.isNone(expression)) return false;
 
   if (expression.value.type === "Identifier") {
     const [firstChar] = expression.value.name;
+
     return firstChar !== undefined && firstChar.toUpperCase() === firstChar;
   }
 
@@ -64,17 +68,22 @@ const isStaticSchemaReference = (node: unknown): boolean => {
 
 const isNestedStaticSchemaCall = (node: unknown): boolean => {
   const expression = unwrapExpression(node);
+
   if (Option.isNone(expression) || expression.value.type !== "CallExpression") return false;
 
   const callee = unwrapExpression(expression.value.callee);
+
   if (Option.isNone(callee) || callee.value.type !== "MemberExpression") return false;
 
   const object = unwrapExpression(callee.value.object);
+
   if (!isIdentifier(object, "Schema")) return false;
 
   const method = getPropertyName(callee.value.property);
+
   if (Option.isSome(method) && method.value === "fromJsonString") {
     const firstArg = expression.value.arguments[0];
+
     return isStaticSchemaReference(firstArg) || isNestedStaticSchemaCall(firstArg);
   }
 
@@ -83,10 +92,12 @@ const isNestedStaticSchemaCall = (node: unknown): boolean => {
 
 const isImmediatelyInvoked = (node: unknown): boolean => {
   const expression = unwrapExpression(node);
+
   if (Option.isNone(expression)) return false;
 
   const parent =
     "parent" in expression.value ? unwrapExpression(expression.value.parent) : Option.none();
+
   return (
     Option.isSome(parent) &&
     parent.value.type === "CallExpression" &&
@@ -137,11 +148,14 @@ export default defineRule({
         if (functionDepth === 0) return;
 
         const method = getSchemaCompilerMethod(node.callee);
+
         if (Option.isNone(method)) return;
+
         if (!isImmediatelyInvoked(node)) return;
 
         const firstArg = node.arguments[0];
         const high = firstArg && isNestedStaticSchemaCall(firstArg);
+
         if (!high && !isStaticSchemaReference(firstArg)) return;
 
         context.report({

@@ -24,6 +24,7 @@ function labelsForPath(config: PathLabelConfig, path: string): string[] {
     rules.some((rule) =>
       rule["changed-files"].some((condition) => {
         const patterns = condition["any-glob-to-any-file"];
+
         return (typeof patterns === "string" ? [patterns] : patterns).some((pattern) =>
           NodePath.matchesGlob(path, pattern),
         );
@@ -51,6 +52,7 @@ describe("plugin contribution policy", () => {
         validations?: { required?: boolean };
       }>;
     };
+
     const required = form.body
       .filter((field) => field.validations?.required)
       .map((field) => field.id);
@@ -107,9 +109,11 @@ describe("plugin contribution policy", () => {
 
   it("uses one path-label job and mints no auth or category labels", () => {
     const pathLabels = yaml(".github/path-labels.yml") as PathLabelConfig;
+
     const issueLabelWorkflow = yaml(".github/workflows/issue-labels.yml") as {
       jobs: Record<string, unknown>;
     };
+
     const issueLabels = text(".github/workflows/issue-labels.yml");
     const mintedLabels = [...issueLabels.matchAll(/name: "([^"]+)"/g)].map((match) => match[1]);
 
@@ -138,6 +142,7 @@ describe("plugin contribution policy", () => {
     const ci = yaml(".github/workflows/ci.yml") as {
       jobs: Record<string, { steps?: Array<{ run?: string }> }>;
     };
+
     const commands = Object.values(ci.jobs).flatMap(
       (job) => job.steps?.map((step) => step.run) ?? [],
     );
@@ -152,6 +157,7 @@ describe("plugin contribution policy", () => {
     const issueConfig = yaml(".github/ISSUE_TEMPLATE/config.yml") as {
       contact_links: Array<{ name: string; url: string }>;
     };
+
     const contributionGuide = text("CONTRIBUTING.md");
     const pullRequestTemplate = text(".github/pull_request_template.md");
 

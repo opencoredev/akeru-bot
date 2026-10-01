@@ -46,9 +46,13 @@ type DesktopSshEnvironmentRequestOperation =
 type DesktopSshEnvironmentRequestCause = RemoteEnvironmentAuthError | SshHttpBridgeError;
 
 const isEnvironmentAuthInvalidError = Schema.is(EnvironmentAuthInvalidError);
+
 const isEnvironmentInternalError = Schema.is(EnvironmentInternalError);
+
 const isEnvironmentOperationForbiddenError = Schema.is(EnvironmentOperationForbiddenError);
+
 const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
+
 const isEnvironmentScopeRequiredError = Schema.is(EnvironmentScopeRequiredError);
 
 function readSshHttpStatus(cause: DesktopSshEnvironmentRequestCause): number | null {
@@ -58,21 +62,27 @@ function readSshHttpStatus(cause: DesktopSshEnvironmentRequestCause): number | n
   ) {
     return cause.status ?? null;
   }
+
   if (isEnvironmentRequestInvalidError(cause)) {
     return 400;
   }
+
   if (isEnvironmentAuthInvalidError(cause)) {
     return 401;
   }
+
   if (isEnvironmentScopeRequiredError(cause)) {
     return 403;
   }
+
   if (isEnvironmentOperationForbiddenError(cause)) {
     return 403;
   }
+
   if (isEnvironmentInternalError(cause)) {
     return 500;
   }
+
   return null;
 }
 
@@ -85,6 +95,7 @@ export class DesktopSshEnvironmentRequestError extends Data.TaggedError(
 }> {
   override get message() {
     const prefix = this.sshHttpStatus === null ? "" : `[ssh_http:${this.sshHttpStatus}] `;
+
     return `${prefix}SSH remote API request failed during ${this.operation}.`;
   }
 }
@@ -113,6 +124,7 @@ export const discoverSshHosts = DesktopIpc.makeIpcMethod({
   result: Schema.Array(DesktopDiscoveredSshHostSchema),
   handler: Effect.fn("desktop.ipc.sshEnvironment.discoverHosts")(function* () {
     const sshEnvironment = yield* DesktopSshEnvironment.DesktopSshEnvironment;
+
     return yield* sshEnvironment.discoverHosts();
   }),
 });
@@ -126,6 +138,7 @@ export const ensureSshEnvironment = DesktopIpc.makeIpcMethod({
     options,
   }) {
     const sshEnvironment = yield* DesktopSshEnvironment.DesktopSshEnvironment;
+
     return yield* sshEnvironment.ensureEnvironment(target, options).pipe(
       Effect.catch((error) =>
         DesktopSshEnvironment.isDesktopSshPasswordPromptCancellation(error)
