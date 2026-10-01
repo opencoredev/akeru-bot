@@ -32,10 +32,10 @@ import {
   resolveMacStageDependencies,
   resolveFffNativeDependencies,
   resolveBuildOptions,
-  resolveDesktopBuildIconAssets,
+  DESKTOP_BUILD_ICON_ASSETS,
   resolveDesktopProductName,
-  resolveDesktopUpdateChannel,
-  resolveDesktopWebAssetBrand,
+  DESKTOP_UPDATE_CHANNEL,
+  DESKTOP_WEB_ASSET_BRAND,
   resolveResourceMonitorRustTargets,
   resolveResourceMonitorCargoBuildArgs,
   resolveWindowsServerAsarIgnoreGlobs,
@@ -171,11 +171,11 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
 
 it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it("uses the latest updater channel", () => {
-    assert.equal(resolveDesktopUpdateChannel("0.0.17"), "latest");
+    assert.equal(DESKTOP_UPDATE_CHANNEL, "latest");
   });
 
   it("uses the Akeru Bot product name", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "Akeru Bot (Alpha)");
+    assert.equal(resolveDesktopProductName(), "Akeru Bot (Alpha)");
   });
 
   it("uses the Akeru package identity for Electron safe storage", () => {
@@ -183,7 +183,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("uses production desktop artwork", () => {
-    assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17"), {
+    assert.deepStrictEqual(DESKTOP_BUILD_ICON_ASSETS, {
       macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
       macIconComposer: BRAND_ASSET_PATHS.productionMacIconComposer,
       linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
@@ -192,12 +192,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("uses production web artwork", () => {
-    assert.equal(resolveDesktopWebAssetBrand("0.0.17"), "production");
+    assert.equal(DESKTOP_WEB_ASSET_BRAND, "production");
   });
 
   it.effect("resolves GitHub desktop publish config from Effect config", () =>
     Effect.gen(function* () {
-      const latestConfig = yield* resolveGitHubPublishConfig("latest").pipe(
+      const latestConfig = yield* resolveGitHubPublishConfig().pipe(
         Effect.provide(
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
