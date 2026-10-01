@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import type { ServerSelfUpdateOutcome } from "@akeru/contracts";
 import { HostProcessEnvironment } from "@akeru/shared/hostProcess";
 import * as Context from "effect/Context";
@@ -216,16 +217,20 @@ export const make = Effect.fn("cloud.service_launcher_client.make")(function* (o
       (reply) => reply.type === "update-accepted" || reply.type === "update-rejected",
     ).pipe(
       Effect.flatMap((reply) =>
-        reply.type === "update-accepted"
-          ? Effect.succeed(reply.updateId)
-          : reply.type === "update-rejected"
-            ? Effect.fail(
-                new ServiceLauncherRejectedError({
-                  targetVersion: input.targetVersion,
-                  reason: reply.reason,
-                }),
-              )
-            : Effect.die("service launcher returned an impossible update response"),
+        Match.value(reply).pipe(
+          Match.when({ type: "update-accepted" }, (reply) => Effect.succeed(reply.updateId)),
+          Match.when({ type: "update-rejected" }, (reply) =>
+            Effect.fail(
+              new ServiceLauncherRejectedError({
+                targetVersion: input.targetVersion,
+                reason: reply.reason,
+              }),
+            ),
+          ),
+          Match.orElse((_reply) =>
+            Effect.die("service launcher returned an impossible update response"),
+          ),
+        ),
       ),
     );
 

@@ -32,24 +32,23 @@ export class BotMemoryError extends Schema.TaggedErrorClass<BotMemoryError>()("B
   message: Schema.String,
   details: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
 }) {
+  static fromCode(code: BotMemoryErrorCode, message: string, details?: BotMemoryError["details"]) {
+    return new BotMemoryError({
+      reason: { _tag: code },
+      message,
+      ...(details === undefined ? {} : { details }),
+    });
+  }
+
   get code(): BotMemoryErrorCode {
     return this.reason._tag;
   }
 }
 
-export const makeBotMemoryError = (
-  code: BotMemoryErrorCode,
-  message: string,
-  details?: Readonly<Record<string, unknown>>,
-) =>
-  new BotMemoryError({
-    reason: { _tag: code },
-    message,
-    ...(details === undefined ? {} : { details }),
-  });
+export const makeBotMemoryError = BotMemoryError.fromCode;
 
 export const toBotMemoryError = (cause: unknown): BotMemoryError =>
-  Schema.is(BotMemoryError)(cause)
+  isBotMemoryError(cause)
     ? cause
     : makeBotMemoryError("io-error", cause instanceof Error ? cause.message : String(cause), {
         cause,
@@ -78,3 +77,5 @@ export function assertSafeId(label: string, value: string): void {
     throw makeBotMemoryError("invalid-id", `${label} is not a valid memory path identifier.`);
   }
 }
+
+const isBotMemoryError = Schema.is(BotMemoryError);

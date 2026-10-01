@@ -1,3 +1,4 @@
+import { flow } from "effect/Function";
 /**
  * Shared HTTP plumbing for subscription OAuth flows.
  *
@@ -97,15 +98,22 @@ export const ensureOk =
 
 /** Read a JSON body, or `undefined` when the body is not JSON. */
 export const responseJson = (response: HttpClientResponse.HttpClientResponse) =>
-  response.json.pipe(Effect.orElseSucceed((): unknown => undefined));
+  response.json.pipe(
+    Effect.flatMap(decodeResponseJson),
+    Effect.orElseSucceed(() => undefined),
+  );
 
 /** Decode an already-read body, failing with `message` when the shape is wrong. */
-export const decodeOAuthBody =
-  <S extends Schema.ConstraintDecoder<unknown>>(schema: S, message: string) =>
-  (body: unknown): Effect.Effect<S["Type"], SubscriptionAuthResponseError> =>
-    Schema.decodeUnknownEffect(schema)(body).pipe(
-      Effect.mapError((cause) => new SubscriptionAuthResponseError({ message, cause })),
-    );
+const decodeResponseJson = Schema.decodeUnknownEffect(Schema.Json);
+
+export const decodeOAuthBody = <S extends Schema.ConstraintDecoder<unknown>>(
+  schema: S,
+  message: string,
+) =>
+  flow(
+    Schema.decodeUnknownEffect(schema),
+    Effect.mapError((cause) => new SubscriptionAuthResponseError({ message, cause })),
+  );
 
 /** Bound a whole upstream operation, reporting a timeout as a request error. */
 export const withOAuthTimeout =

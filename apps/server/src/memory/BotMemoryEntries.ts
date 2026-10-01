@@ -4,7 +4,7 @@ import {
   type AkeruMemoryFileOperation,
 } from "@akeru/contracts";
 import { scanMemoryContent } from "./memoryContentSafety.ts";
-import { makeBotMemoryError } from "./BotMemoryTypes.ts";
+import { BotMemoryError } from "./BotMemoryTypes.ts";
 
 export const BOT_MEMORY_ENTRY_DELIMITER = "\n\n§\n\n";
 
@@ -44,7 +44,7 @@ export function assertSafeContent(content: string): void {
   const findings = scanMemoryContent(content);
 
   if (findings.length > 0) {
-    throw makeBotMemoryError(
+    throw BotMemoryError.fromCode(
       "unsafe-content",
       `Memory content was rejected: ${findings.join(", ")}.`,
       { findings },
@@ -56,11 +56,13 @@ export function findUniqueEntry(entries: ReadonlyArray<string>, oldText: string)
   const matches = entries.flatMap((entry, index) => (entry.includes(oldText) ? [index] : []));
 
   if (matches.length === 0) {
-    throw makeBotMemoryError("not-found", `No memory entry matched '${oldText}'.`, { entries });
+    throw BotMemoryError.fromCode("not-found", `No memory entry matched '${oldText}'.`, {
+      entries,
+    });
   }
 
   if (matches.length > 1) {
-    throw makeBotMemoryError(
+    throw BotMemoryError.fromCode(
       "ambiguous-match",
       `More than one memory entry matched '${oldText}'.`,
       {
@@ -81,7 +83,8 @@ export function applyOperation(
   if (operation.action === "add") {
     const content = normalizeEntry(operation.content);
 
-    if (!content) throw makeBotMemoryError("invalid-operation", "Add content cannot be empty.");
+    if (!content)
+      throw BotMemoryError.fromCode("invalid-operation", "Add content cannot be empty.");
     assertSafeContent(content);
 
     if (!working.includes(content)) working.push(content);
@@ -92,7 +95,10 @@ export function applyOperation(
   const oldText = normalizeEntry(operation.oldText);
 
   if (!oldText) {
-    throw makeBotMemoryError("invalid-operation", `${operation.action} oldText cannot be empty.`);
+    throw BotMemoryError.fromCode(
+      "invalid-operation",
+      `${operation.action} oldText cannot be empty.`,
+    );
   }
 
   const index = findUniqueEntry(working, oldText);
@@ -106,7 +112,7 @@ export function applyOperation(
   const content = normalizeEntry(operation.content);
 
   if (!content) {
-    throw makeBotMemoryError("invalid-operation", "Replace content cannot be empty.");
+    throw BotMemoryError.fromCode("invalid-operation", "Replace content cannot be empty.");
   }
 
   assertSafeContent(content);

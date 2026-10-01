@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -45,7 +46,11 @@ const revision = (
   id: string,
   scope: AkeruMemoryScope,
   fact: string,
-  entityId = scope === "group" ? "group-1" : scope === "bot" ? "bot-1" : "owner",
+  entityId = Match.value(scope).pipe(
+    Match.when("group", () => "group-1"),
+    Match.when("bot", () => "bot-1"),
+    Match.orElse(() => "owner"),
+  ),
   overrides: Partial<AkeruMemoryRevision> = {},
 ): AkeruMemoryRevision => ({
   id: AkeruMemoryId.make(id),
@@ -56,7 +61,11 @@ const revision = (
     scope,
     partitionId: AkeruMemoryPartitionId.make(`${scope}:${entityId}`),
   },
-  entityKind: scope === "bot" ? "bot" : scope === "group" ? "group" : "user",
+  entityKind: Match.value(scope).pipe(
+    Match.when("bot", (): "bot" => "bot"),
+    Match.when("group", (): "group" => "group"),
+    Match.orElse((): "user" => "user"),
+  ),
   entityId: AkeruMemoryEntityId.make(entityId),
   kind: "fact",
   value: {},

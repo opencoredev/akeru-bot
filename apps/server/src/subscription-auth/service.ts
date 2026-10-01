@@ -1,3 +1,5 @@
+import { decodePendingLogins } from "./persistedSchemas.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 import * as NodeFS from "node:fs";
 import * as NodeCrypto from "node:crypto";
@@ -24,7 +26,6 @@ import {
   OPENCODE_GO_AUTH_URL,
   SUBSCRIPTION_PROVIDER_IDS,
   type SubscriptionProviderId,
-  isSubscriptionProviderId,
   type StartedLogin,
   type LoginPollStatus,
   type ProviderStatus,
@@ -133,13 +134,11 @@ export class SubscriptionAuthService {
     if (!NodeFS.existsSync(this.pendingPath)) return;
 
     try {
-      const entries = JSON.parse(NodeFS.readFileSync(this.pendingPath, "utf-8")) as Array<
-        readonly [string, BoundLogin]
-      >;
+      const entries = decodePendingLogins(NodeFS.readFileSync(this.pendingPath, "utf-8"));
 
       for (const [loginId, pending] of entries.slice(-PENDING_LOGIN_CAP)) {
         // Logins for a retired provider (Cursor) can linger in the file.
-        if (!isSubscriptionProviderId(pending.provider)) continue;
+        if (pending.provider === "cursor") continue;
         this.pendingLogins.set(loginId, pending);
       }
     } catch {
@@ -223,7 +222,7 @@ export class SubscriptionAuthService {
       const accountLabel =
         credential?.type === "oauth"
           ? [credential.email, credential.accountId].find(
-              (value): value is string => typeof value === "string" && value.trim().length > 0,
+              (value): value is string => Predicate.isString(value) && value.trim().length > 0,
             )
           : undefined;
 
@@ -255,9 +254,9 @@ export class SubscriptionAuthService {
               : "Connect account",
         healthTest: health?.healthTest ?? { status: "not-run" },
         ...(health?.oauthCheck ? { oauthCheck: health.oauthCheck } : {}),
-        dependentBots: dependentBots
-          .filter((bot) => bot.provider === provider)
-          .map(({ id, name }) => ({ id, name })),
+        dependentBots: dependentBots.flatMap((bot) =>
+          bot.provider === provider ? [{ id: bot.id, name: bot.name }] : [],
+        ),
         dependentRoutines: [],
       };
     });
@@ -438,7 +437,7 @@ export class SubscriptionAuthService {
 
     return (
       credential?.type === "oauth" &&
-      typeof credential.accountId === "string" &&
+      Predicate.isString(credential.accountId) &&
       credential.accountId.length > 0
     );
   }
@@ -763,7 +762,7 @@ export class SubscriptionAuthService {
   /** Sign out accounts that belonged to provider instances removed from settings. */
   async pruneDeletedInstanceCredentials(
     previous: Readonly<Record<string, { readonly driver: string }>>,
-    current: Readonly<Record<string, unknown>>,
+    current: Readonly<Record<string, { readonly driver: string }>>,
   ): Promise<void> {
     for (const [instanceId, instance] of Object.entries(previous)) {
       if (Object.hasOwn(current, instanceId)) continue;
@@ -896,8 +895,8 @@ export class SubscriptionAuthService {
 export {
   anthropicApiBaseUrl,
   SUBSCRIPTION_PROVIDER_IDS,
-  type SubscriptionProviderId,
   isSubscriptionProviderId,
+  type SubscriptionProviderId,
   type LoginCompletion,
   type StartedLogin,
   type LoginPollStatus,

@@ -18,6 +18,8 @@ import * as Schema from "effect/Schema";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 
+const decodeRoutineTimeZone = Schema.decodeUnknownEffect(RoutineTimeZone);
+
 export interface RoutineApprovedResult {
   readonly routineId: RoutineId;
   readonly sequence: number;
@@ -82,7 +84,7 @@ const make = Effect.gen(function* () {
   const engine = yield* OrchestrationEngineService;
   const snapshots = yield* ProjectionSnapshotQuery;
   const crypto = yield* Crypto.Crypto;
-  const decodeTimezone = Schema.decodeUnknownEffect(RoutineTimeZone);
+  const decodeTimezone = decodeRoutineTimeZone;
   const fail = (message: string) => new RoutineDraftError({ message });
 
   const createApprovedForThread: RoutineDraftDispatcherShape["createApprovedForThread"] = (
@@ -166,7 +168,7 @@ const make = Effect.gen(function* () {
       return { routineId, sequence: result.sequence, status: "approved" as const };
     }).pipe(
       Effect.mapError((cause) =>
-        Schema.is(RoutineDraftError)(cause)
+        isRoutineDraftError(cause)
           ? cause
           : fail(cause instanceof Error ? cause.message : String(cause)),
       ),
@@ -197,7 +199,7 @@ const make = Effect.gen(function* () {
       return routineStatusesForBot(snapshot.routines ?? [], botId);
     }).pipe(
       Effect.mapError((cause) =>
-        Schema.is(RoutineDraftError)(cause)
+        isRoutineDraftError(cause)
           ? cause
           : fail(cause instanceof Error ? cause.message : String(cause)),
       ),
@@ -261,7 +263,7 @@ const make = Effect.gen(function* () {
       };
     }).pipe(
       Effect.mapError((cause) =>
-        Schema.is(RoutineDraftError)(cause)
+        isRoutineDraftError(cause)
           ? cause
           : fail(cause instanceof Error ? cause.message : String(cause)),
       ),
@@ -275,3 +277,5 @@ const make = Effect.gen(function* () {
 });
 
 export const RoutineDraftDispatcherLive = Layer.effect(RoutineDraftDispatcher, make);
+
+const isRoutineDraftError = Schema.is(RoutineDraftError);

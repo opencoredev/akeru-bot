@@ -1,8 +1,9 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
-import type { AkeruMemoryApprovalRequest, BotId } from "@akeru/contracts";
+import { AkeruMemoryApprovalRequest, BotId } from "@akeru/contracts";
 
 export const BOT_INBOX_KINDS = [
   "oauth-expired",
@@ -37,6 +38,30 @@ export interface BotInboxItem {
   // Set on approval requests that ask to save shared memory.
   readonly memoryApproval?: AkeruMemoryApprovalRequest;
 }
+
+const InboxItem = Schema.Struct({
+  id: Schema.String,
+  incidentKey: Schema.String,
+  kind: Schema.Literals(BOT_INBOX_KINDS),
+  status: Schema.Literals(["open", "resolved"]),
+  botId: BotId,
+  botName: Schema.String,
+  taskOrRoutine: Schema.String,
+  lastFailure: Schema.String,
+  nextAction: Schema.String,
+  firstSeenAt: Schema.String,
+  lastSeenAt: Schema.String,
+  resolvedAt: Schema.optionalKey(Schema.String),
+  acknowledgedAt: Schema.optionalKey(Schema.String),
+  lastFailedRequestAt: Schema.optionalKey(Schema.String),
+  resolvedFailureAt: Schema.optionalKey(Schema.String),
+  occurrenceCount: Schema.Number,
+  memoryApproval: Schema.optionalKey(AkeruMemoryApprovalRequest),
+});
+
+const decodeInbox = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(InboxItem)), {
+  onExcessProperty: "preserve",
+});
 
 export type BotInboxIncident = Pick<
   BotInboxItem,
@@ -74,7 +99,7 @@ export class BotInboxService {
     }
 
     try {
-      const decoded = JSON.parse(NodeFS.readFileSync(this.filePath, "utf-8")) as BotInboxItem[];
+      const decoded = decodeInbox(NodeFS.readFileSync(this.filePath, "utf-8"));
       this.items = Array.isArray(decoded) ? decoded : [];
     } catch {
       this.items = [];

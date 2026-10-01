@@ -72,10 +72,10 @@ export function mergeSubscriptionInstanceEnvironment(
 
 /** Drivers call this after they add their own isolation variables to a merged environment. */
 export function withExplicitEnvironmentKeys(
-  environment: NodeJS.ProcessEnv,
+  environment: SubscriptionEnvironment,
   keys: Iterable<string>,
 ): SubscriptionEnvironment {
-  const existing = (environment as SubscriptionEnvironment)[explicitEnvironmentKeys];
+  const existing = environment[explicitEnvironmentKeys];
 
   return {
     ...environment,

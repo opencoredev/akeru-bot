@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 
@@ -16,7 +17,7 @@ import {
   type AkeruMemoryApprovalRequest,
   type AkeruMemoryDecisionReceipt,
   type AkeruMemoryRevision,
-  type AkeruMemoryTargetScope,
+  AkeruMemoryTargetScope,
   type AkeruMemoryThreadAccess,
 } from "@akeru/contracts";
 import * as Context from "effect/Context";
@@ -51,6 +52,8 @@ import {
 export class MemoryApprovals extends Context.Service<MemoryApprovals, MemoryApprovalsShape>()(
   "akeru-bot/memory/MemoryApprovals",
 ) {}
+
+const decodeTargetScope = Schema.decodeUnknownSync(AkeruMemoryTargetScope);
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -251,7 +254,7 @@ const make = Effect.gen(function* () {
                   candidateId: AkeruMemoryCandidateId.make(candidateId),
                   status: row.status === "approved" ? "approved" : "rejected",
                   fact: row.fact,
-                  scope: row.scope as AkeruMemoryTargetScope,
+                  scope: decodeTargetScope(row.scope),
                   affectedBotIds: row.affectedBotIds,
                   memoryRootId:
                     row.memoryRootId === null ? null : AkeruMemoryRootId.make(row.memoryRootId),
@@ -367,8 +370,8 @@ const make = Effect.gen(function* () {
 
           let scope =
             decision.decision === "approve"
-              ? (decision.scope ?? (candidate.scope as AkeruMemoryTargetScope))
-              : (candidate.scope as AkeruMemoryTargetScope);
+              ? (decision.scope ?? decodeTargetScope(candidate.scope))
+              : decodeTargetScope(candidate.scope);
 
           let approvedRevision: AkeruMemoryRevision | null = null;
 
@@ -416,7 +419,7 @@ const make = Effect.gen(function* () {
             // A conflict may mean the insert committed before the receipt write.
             // Use the durable revision as the source of truth for the receipt.
             fact = approvedRevision.fact;
-            scope = approvedRevision.partition.scope as AkeruMemoryTargetScope;
+            scope = decodeTargetScope(approvedRevision.partition.scope);
           } else {
             const orphan = yield* repository
               .getCurrent({

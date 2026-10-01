@@ -39,7 +39,7 @@ describe("OAuth completion ownership", () => {
       vi.stubGlobal("fetch", request);
       const login = await service.startLogin("anthropic");
       const state = new URL(login.url!).searchParams.get("state");
-      const store: SubscriptionCredentialStore = Reflect.get(service, "store");
+      const store: SubscriptionCredentialStore = service["store"];
       const originalUpdate = store.update;
 
       const updateSpy = vi.spyOn(store, "update").mockImplementationOnce((update) =>
@@ -104,7 +104,7 @@ describe("OAuth completion ownership", () => {
           }),
         );
         const login = await service.startLogin(provider);
-        const store: SubscriptionCredentialStore = Reflect.get(service, "store");
+        const store: SubscriptionCredentialStore = service["store"];
         const originalUpdate = store.update;
         let releaseUpdate = () => {};
 

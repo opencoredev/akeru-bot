@@ -42,7 +42,7 @@ export type AkeruMemoryShareFact = (
 
 export type AkeruMemoryToolHandler = (
   input: Omit<AkeruToolExecution, "toolId"> & { readonly toolId: AkeruMemoryToolId },
-) => Promise<unknown>;
+) => Promise<Schema.JsonObject>;
 
 export const AKERU_MEMORY_TOOL_DESCRIPTION = `Read or save durable context in this bot's Markdown memory. Call with an empty operations array to read a target when its contents were not supplied in your session context.
 
@@ -57,14 +57,14 @@ Save only stable, high-signal facts useful in future chats. Skip one-off request
 Shared memory: to save a fact that other bots or future chats in this project, group, or workspace should know, pass share with the exact fact text and a scope of project, group, or workspace. Set sensitive to true for personal, health, financial, or otherwise private details. Use share only when the user asks you to remember something for the project, group, or workspace, not for ordinary preferences. The user is usually asked to approve shared facts in the chat before they are saved. When the result says the fact is pending approval, tell the user briefly and do not call share again for the same fact.`;
 
 export function createBotMemoryToolHandler(
-  store: BotMemoryStore,
+  store: Pick<BotMemoryStore, "mutate" | "readDocument">,
   access: BotMemoryAccess,
   allowedTargets: ReadonlySet<AkeruMemoryDocumentTargetValue>,
   shareFact?: AkeruMemoryShareFact,
 ): Record<AkeruMemoryToolId, AkeruMemoryToolHandler> {
   return {
     memory: async ({ input }) => {
-      const decoded = input as AkeruMemoryToolInput;
+      const decoded = decodeMemoryToolInput(input);
       // A share with no document edits never touches the target document, so an agent
       // granted only shared scopes can still share.
       const shareOnly = decoded.share !== undefined && decoded.operations.length === 0;
@@ -163,3 +163,5 @@ export function createBotMemoryToolHandler(
     },
   };
 }
+
+const decodeMemoryToolInput = Schema.decodeUnknownSync(AkeruMemoryToolInputSchema);

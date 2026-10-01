@@ -16,7 +16,6 @@ import * as Effect from "effect/Effect";
 
 import { exportAkeruMemory } from "./MemoryExport.ts";
 import { previewAkeruMemoryImport } from "./MemoryImport.ts";
-import type { EntityMemoryRepositoryShape } from "./Services/EntityMemoryRepository.ts";
 
 const access = {
   tenantId: AkeruMemoryTenantId.make("local"),
@@ -69,7 +68,7 @@ const archiveWithRevisions = (
 ) => {
   const repository = {
     listByPartitions: () => Effect.succeed(revisions),
-  } as unknown as EntityMemoryRepositoryShape;
+  };
 
   return exportAkeruMemory({
     repository,
@@ -90,7 +89,7 @@ const previewRepository = {
       previewHash: "a".repeat(64),
       items: [],
     }),
-} as unknown as EntityMemoryRepositoryShape;
+};
 
 it.effect("rejects readable V1 archives for import", () =>
   Effect.gen(function* () {

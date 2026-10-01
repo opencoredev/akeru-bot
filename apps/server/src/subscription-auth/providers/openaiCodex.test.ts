@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -34,7 +35,7 @@ const refreshBody = new URLSearchParams({
   client_id: CLIENT_ID,
 }).toString();
 
-const tokens = (claims: Record<string, unknown>) => ({
+const tokens = (claims: Schema.JsonObject) => ({
   id_token: fakeJwt(claims),
   access_token: fakeJwt({}),
   refresh_token: "refresh",

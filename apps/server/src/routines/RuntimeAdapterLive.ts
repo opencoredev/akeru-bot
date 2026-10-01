@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import type { AkeruDelegationDispatch } from "../provider/AkeruDelegationRuntime.ts";
 import * as Predicate from "effect/Predicate";
 import {
   AkeruUsageReservationId,
@@ -443,15 +445,16 @@ const make = Effect.gen(function* () {
       }
 
       const handle = yield* agentController
-        .dispatchDelegation({
-          _tag: "Scheduled",
-          parentThreadId: routine.targetThreadId,
-          parentBotId: routine.botId,
-          childBotId,
-          task: routineTask(routine.procedure),
-          expectedResult: "A short summary of what you did and anything the owner should know.",
-          runtimeMode: routine.approvalPolicy,
-        })
+        .dispatchDelegation(
+          DelegationDispatch["Scheduled"]({
+            parentThreadId: routine.targetThreadId,
+            parentBotId: routine.botId,
+            childBotId,
+            task: routineTask(routine.procedure),
+            expectedResult: "A short summary of what you did and anything the owner should know.",
+            runtimeMode: routine.approvalPolicy,
+          }),
+        )
         .pipe(Effect.result);
 
       if (Predicate.isTagged(handle, "Failure")) {
@@ -555,3 +558,5 @@ const make = Effect.gen(function* () {
 });
 
 export const RoutineRuntimeAdapterLive = Layer.effect(RoutineRuntimeAdapter, make);
+
+const DelegationDispatch = Data.taggedEnum<AkeruDelegationDispatch>();

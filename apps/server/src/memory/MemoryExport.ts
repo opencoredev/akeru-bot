@@ -14,6 +14,8 @@ import type { EntityMemoryRepositoryShape } from "./Services/EntityMemoryReposit
 import { resolveMemoryArchivePartitions } from "./EntityMemoryAccess.ts";
 import { encodeMemoryArchiveJson } from "./MemoryArchiveJson.ts";
 
+const decodeMemoryArchive = Schema.decodeUnknownEffect(AkeruMemoryArchiveV2);
+
 const checksum = (content: string) => NodeCrypto.createHash("sha256").update(content).digest("hex");
 
 const safeName = (value: string) => value.replaceAll(/[^a-zA-Z0-9._-]/g, "_");
@@ -48,7 +50,7 @@ export const renderMemoryRevision = (revision: AkeruMemoryRevision) =>
   `---\nakeru-memory: ${encodeMemoryArchiveJson(frontmatter(revision))}\n---\n\n${revision.fact}\n`;
 
 export function exportAkeruMemory(input: {
-  readonly repository: EntityMemoryRepositoryShape;
+  readonly repository: Pick<EntityMemoryRepositoryShape, "listByPartitions">;
   readonly access: AkeruMemoryThreadAccess;
   readonly target: AkeruMemoryArchiveTarget;
   readonly complete: boolean;
@@ -105,7 +107,7 @@ export function exportAkeruMemory(input: {
       conversations: conversations.map(({ threadId, sha256 }) => ({ threadId, sha256 })),
     });
 
-    return yield* Schema.decodeUnknownEffect(AkeruMemoryArchiveV2)({
+    return yield* decodeMemoryArchive({
       schemaVersion: 2,
       anchorThreadId: input.access.threadId,
       target: input.target,

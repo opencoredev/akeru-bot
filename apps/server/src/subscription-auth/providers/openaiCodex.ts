@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * OpenAI Codex OAuth (ChatGPT Plus/Pro subscriptions).
  *
@@ -108,7 +109,7 @@ const DeviceTokenResponse = Schema.Struct({
 
 /** Decode a token response into credentials, resolving the ChatGPT account id. */
 const credentialsFromTokenResponse = Effect.fn("codex.credentialsFromTokenResponse")(function* (
-  body: unknown,
+  body: Schema.Json | undefined,
   missingFieldsMessage: string,
   previousAccountId?: string,
 ) {
@@ -197,10 +198,9 @@ const startDeviceLogin = Effect.fn("codex.startDeviceLogin")(function* () {
     });
   }
 
-  const intervalSeconds =
-    typeof data.interval === "number"
-      ? data.interval
-      : Number.parseInt(data.interval ?? "", 10) || 5;
+  const intervalSeconds = Predicate.isNumber(data.interval)
+    ? data.interval
+    : Number.parseInt(data.interval ?? "", 10) || 5;
 
   return {
     deviceAuthId: data.device_auth_id,
@@ -302,7 +302,7 @@ const refreshToken = Effect.fn("codex.refreshToken")(
     return yield* credentialsFromTokenResponse(
       body,
       "OpenAI Codex token refresh response missing fields",
-      typeof credentials.accountId === "string" ? credentials.accountId : undefined,
+      Predicate.isString(credentials.accountId) ? credentials.accountId : undefined,
     );
   },
   withOAuthTimeout("OpenAI Codex token refresh", REQUEST_TIMEOUT),

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { BotId } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { MemoryApprovalError } from "./MemoryShareProposal.ts";
@@ -36,7 +37,7 @@ export const decodeReceiptRow = Schema.decodeUnknownEffect(ReceiptRow);
 export const failWith = (message: string) => (cause: unknown) =>
   new MemoryApprovalError({
     message:
-      typeof cause === "object" && cause !== null && "message" in cause
+      Predicate.isObjectOrArray(cause) && "message" in cause
         ? `${message}: ${String(cause.message)}`
         : message,
   });

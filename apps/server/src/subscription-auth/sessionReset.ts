@@ -47,13 +47,11 @@ export function makeApiKeySessionReset(
 
     // Default instances run even when settings do not list them.
     const bindings = [
-      ...BRIDGE_PROVIDERS.filter(
-        ({ driver }) =>
-          !Object.hasOwn(instances, defaultInstanceIdForDriver(ProviderDriverKind.make(driver))),
-      ).map(({ provider, driver }) => ({
-        provider,
-        instanceId: defaultInstanceIdForDriver(ProviderDriverKind.make(driver)) as string,
-      })),
+      ...BRIDGE_PROVIDERS.flatMap(({ provider, driver }) => {
+        const instanceId = defaultInstanceIdForDriver(ProviderDriverKind.make(driver));
+
+        return Object.hasOwn(instances, instanceId) ? [] : [{ provider, instanceId }];
+      }),
       ...Object.entries(instances).flatMap(([instanceId, instance]) => {
         const match = BRIDGE_PROVIDERS.find(({ driver }) => driver === instance.driver);
 

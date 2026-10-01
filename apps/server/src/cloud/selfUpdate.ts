@@ -33,6 +33,8 @@ import { decodeServicePreflightResult } from "./servicePreflight.ts";
 import * as ServiceLauncherClient from "./serviceLauncherClient.ts";
 import { isExactServiceVersion, SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 
+const isPinnedRuntimeInstallError = Schema.is(PinnedRuntimeInstallError);
+
 const PREFLIGHT_TIMEOUT = Duration.seconds(30);
 
 export function resolveServerSelfUpdateCapability(input: {
@@ -212,7 +214,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
                   }),
                 ).pipe(
                   Effect.mapError((cause) =>
-                    Schema.is(PinnedRuntimeInstallError)(cause)
+                    isPinnedRuntimeInstallError(cause)
                       ? cause
                       : new PinnedRuntimeInstallError({
                           step: "preparing the verified remote archive",

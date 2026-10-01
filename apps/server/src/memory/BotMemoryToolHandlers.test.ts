@@ -1,7 +1,7 @@
+import * as Schema from "effect/Schema";
 import { BotId } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { BotMemoryStore } from "./BotMemory.ts";
 import {
   AKERU_MEMORY_TOOL_DESCRIPTION,
   createBotMemoryToolHandler,
@@ -13,13 +13,13 @@ const access = { botId: BotId.make("bot-ada"), groupId: null, groupMemberBotIds:
 // Share-only calls never touch the Markdown documents.
 const untouchedStore = {
   readDocument: vi.fn(() => Promise.reject(new Error("unexpected read"))),
-  applyOperations: vi.fn(() => Promise.reject(new Error("unexpected write"))),
-} as unknown as BotMemoryStore;
+  mutate: vi.fn(() => Promise.reject(new Error("unexpected write"))),
+};
 
 const call = (
   shareFact: AkeruMemoryShareFact | undefined,
-  input: Record<string, unknown>,
-  store: BotMemoryStore = untouchedStore,
+  input: Schema.JsonObject,
+  store: Parameters<typeof createBotMemoryToolHandler>[0] = untouchedStore,
 ) =>
   createBotMemoryToolHandler(store, access, new Set(["user", "memory"]), shareFact).memory({
     toolId: "memory",
@@ -59,7 +59,7 @@ describe("memory tool shared facts", () => {
     const shareFact = vi.fn<AkeruMemoryShareFact>(async () => ({ status: "pending" }));
     const sharedOnly = createBotMemoryToolHandler(untouchedStore, access, new Set(), shareFact);
 
-    const invoke = (input: Record<string, unknown>) =>
+    const invoke = (input: Schema.JsonObject) =>
       sharedOnly.memory({ toolId: "memory", toolCallId: "call-1", input } as Parameters<
         typeof sharedOnly.memory
       >[0]);
@@ -119,7 +119,7 @@ describe("memory tool shared facts", () => {
     const failingStore = {
       readDocument: vi.fn(() => Promise.reject(new Error("unexpected read"))),
       mutate: vi.fn(() => Promise.reject(new Error("write failed"))),
-    } as unknown as BotMemoryStore;
+    };
 
     await expect(
       call(
@@ -140,12 +140,18 @@ describe("memory tool shared facts", () => {
       throw new Error("This bot cannot share to the project.");
     });
 
-    const document = { charCount: 10, charLimit: 2_000 };
+    const document = {
+      target: "memory" as const,
+      content: "saved note",
+      charCount: 10,
+      charLimit: 2_000,
+      updatedAt: null,
+    };
 
     const committedStore = {
       readDocument: vi.fn(() => Promise.reject(new Error("unexpected read"))),
       mutate: vi.fn(async () => ({ changed: true, applied: 1, document })),
-    } as unknown as BotMemoryStore;
+    };
 
     const result = await call(
       shareFact,

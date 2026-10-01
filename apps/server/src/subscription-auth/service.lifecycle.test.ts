@@ -291,7 +291,7 @@ describe("subscription auth storage", () => {
     );
     const service = await makeTestSubscriptionAuthService(authPath);
     const other = await makeTestSubscriptionAuthService(authPath);
-    const store = Reflect.get(service, "store") as SubscriptionCredentialStore;
+    const store = service["store"];
     const originalUpdate = store.update;
     let releaseUpdate!: () => void;
     const held = new Promise<void>((resolve) => (releaseUpdate = resolve));
@@ -339,7 +339,7 @@ describe("subscription auth storage", () => {
     const { authPath } = fixture();
     const service = await makeTestSubscriptionAuthService(authPath);
     const login = await service.startLogin("xai", { authMode: "api-key" });
-    const store = Reflect.get(service, "store") as SubscriptionCredentialStore;
+    const store = service["store"];
     const originalUpdate = store.update;
     let releaseUpdate!: () => void;
     const held = new Promise<void>((resolve) => (releaseUpdate = resolve));
@@ -421,7 +421,7 @@ describe("subscription auth storage", () => {
     );
     const checking = await makeTestSubscriptionAuthService(authPath);
     const other = await makeTestSubscriptionAuthService(authPath);
-    const store: SubscriptionCredentialStore = Reflect.get(checking, "store");
+    const store: SubscriptionCredentialStore = checking["store"];
     const write = store.update;
     let calls = 0;
     // Another client logs out after the ownership check passes, before the write lands.
@@ -459,7 +459,7 @@ describe("subscription auth storage", () => {
       }),
     );
     const service = await makeTestSubscriptionAuthService(authPath);
-    const store: SubscriptionCredentialStore = Reflect.get(service, "store");
+    const store: SubscriptionCredentialStore = service["store"];
     const update = vi.spyOn(store, "update");
     vi.stubGlobal(
       "fetch",

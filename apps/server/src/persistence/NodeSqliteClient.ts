@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeSqlite from "node:sqlite";
 import * as Cache from "effect/Cache";
 import * as Config from "effect/Config";
@@ -19,12 +20,13 @@ import * as Statement from "effect/unstable/sql/Statement";
 
 const ATTR_DB_SYSTEM_NAME = "db.system.name";
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- The SQL driver probes raw Effect SQL parameters before adapting them to node:sqlite values.
 const sqliteInput = (value: unknown): NodeSqlite.SQLInputValue => {
   if (
     value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "bigint"
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBigInt(value)
   )
     return value;
 
@@ -38,7 +40,7 @@ const sqliteInputs = (
 ): [Record<string, NodeSqlite.SQLInputValue>, ...NodeSqlite.SQLInputValue[]] => {
   const first = params[0];
 
-  if (first !== null && typeof first === "object" && !ArrayBuffer.isView(first)) {
+  if (Predicate.isObjectOrArray(first) && !ArrayBuffer.isView(first)) {
     return [
       Object.fromEntries(Object.entries(first).map(([key, value]) => [key, sqliteInput(value)])),
       ...params.slice(1).map(sqliteInput),
@@ -58,7 +60,9 @@ export interface SqliteClientConfig {
   readonly allowExtension?: boolean | undefined;
   readonly prepareCacheSize?: number | undefined;
   readonly prepareCacheTTL?: Duration.Input | undefined;
-  readonly spanAttributes?: Record<string, unknown> | undefined;
+  readonly spanAttributes?:
+    | import("@effect/sql-sqlite-bun/SqliteClient").SqliteClientConfig["spanAttributes"]
+    | undefined;
   readonly transformResultNames?: ((str: string) => string) | undefined;
   readonly transformQueryNames?: ((str: string) => string) | undefined;
 }

@@ -53,8 +53,8 @@ export function scriptedHttpClient(
 }
 
 /** Build an unsigned JWT whose payload is `claims`. */
-export function fakeJwt(claims: Record<string, unknown>): string {
-  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+export function fakeJwt(claims: Schema.JsonObject): string {
+  const encode = <Value>(value: Value) => Buffer.from(JSON.stringify(value)).toString("base64url");
 
   return `${encode({ alg: "none" })}.${encode(claims)}.signature`;
 }

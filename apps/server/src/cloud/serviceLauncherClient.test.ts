@@ -7,6 +7,7 @@ import {
   SERVICE_LAUNCHER_CONTEXT_ENV,
   SERVICE_LAUNCHER_PROTOCOL,
   type ServiceLauncherChildMessage,
+  type ServiceLauncherContext,
   type ServiceLauncherParentMessage,
 } from "./serviceProtocol.ts";
 import * as ServiceLauncherClient from "./serviceLauncherClient.ts";
@@ -17,7 +18,7 @@ class FakeLauncherProcess {
   readonly sent: ServiceLauncherChildMessage[] = [];
   readonly #listeners = new Map<string, Set<(...args: ReadonlyArray<unknown>) => void>>();
 
-  constructor(context: unknown) {
+  constructor(context: ServiceLauncherContext) {
     this.env = { [SERVICE_LAUNCHER_CONTEXT_ENV]: JSON.stringify(context) };
   }
 

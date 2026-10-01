@@ -82,13 +82,25 @@ const run: RoutineRun = {
   updatedAt: NOW,
 };
 
-const bot = (botId: string, name: string, provider: string): ProjectionBot =>
-  ({
-    botId: BotId.make(botId),
-    name,
-    engine: { provider, model: "model-1" },
-    archivedAt: null,
-  }) as unknown as ProjectionBot;
+const bot = (botId: string, name: string, provider: string): ProjectionBot => ({
+  title: name,
+  label: null,
+  description: null,
+  disabledMcpServerIds: [],
+  avatar: { kind: "blob", shape: "circle", color: "blue" },
+  sandbox: "local",
+  runtimeMode: "approval-required",
+  usageCap: null,
+  imageProvider: null,
+  voiceEnabled: false,
+  groupId: null,
+  createdAt: NOW,
+  updatedAt: NOW,
+  botId: BotId.make(botId),
+  name,
+  engine: { provider, model: "model-1" },
+  archivedAt: null,
+});
 
 /**
  * Runs the live adapter against fakes. `runEnded` makes the decider refuse

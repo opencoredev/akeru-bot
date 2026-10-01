@@ -128,7 +128,10 @@ const makeHarness = Effect.fn("test.make_boot_service_harness")(function* (
 
   const commands: string[] = [];
   const timeouts = new Map<string, unknown>();
-  const control: { failCommand: string | undefined } = { failCommand: undefined };
+
+  type CommandFailureControl = { failCommand: string | undefined };
+
+  const control: CommandFailureControl = { failCommand: undefined };
 
   const runner = ProcessRunner.ProcessRunner.of({
     run: (input) =>
