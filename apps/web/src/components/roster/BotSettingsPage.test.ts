@@ -120,7 +120,7 @@ describe("bot settings entry points", () => {
   });
 
   it("opens from the roster row overflow menu", () => {
-    const source = read("./BotRosterSidebar.tsx");
+    const source = ["./BotRosterSidebar.tsx", "./RosterRows.tsx"].map(read).join("\n");
 
     expect(source).toContain("Bot settings");
     expect(source).toContain("onOpenSettings(bot)");
