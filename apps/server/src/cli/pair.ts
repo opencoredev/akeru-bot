@@ -16,8 +16,7 @@ import {
   resolveTailscalePairingBase,
 } from "./pairTarget.ts";
 import { PairStdoutIsTerminal, formatPairOutput } from "./pairOutput.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The pairing CLI composition root builds configuration for the selected environment.
-import { makePairServerConfig, mintPairingLink } from "./pairIssuer.ts";
+import { pairServerConfig, mintPairingLink } from "./pairIssuer.ts";
 
 const ttlFlag = Flag.string("ttl").pipe(
   Flag.withSchema(DurationFromString),
@@ -124,7 +123,7 @@ export const pairCommand = Command.make("pair", {
         }
       }
 
-      const config = yield* makePairServerConfig({ target, logLevel });
+      const config = yield* pairServerConfig({ target, logLevel });
 
       const issued = yield* mintPairingLink({
         config,

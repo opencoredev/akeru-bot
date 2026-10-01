@@ -20,7 +20,7 @@ import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationE
 import { OrchestrationEventStore } from "./persistence/Services/OrchestrationEventStore.ts";
 
 import {
-  makeDefaultOrchestrationReadModel,
+  defaultOrchestrationReadModel,
   defaultThreadId,
   makeLiveToolActivityEvent,
 } from "./serverTestFixtures.ts";
@@ -33,7 +33,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     () =>
       Effect.gen(function* () {
         let readEventsCalls = 0;
-        const thread = makeDefaultOrchestrationReadModel().threads[0]!;
+        const thread = defaultOrchestrationReadModel().threads[0]!;
 
         yield* buildAppUnderTest({
           layers: {
@@ -88,7 +88,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
   it.effect("subscribeThread replaces a cursor ahead of the authoritative head", () =>
     Effect.gen(function* () {
       let readEventsCalls = 0;
-      const thread = makeDefaultOrchestrationReadModel().threads[0]!;
+      const thread = defaultOrchestrationReadModel().threads[0]!;
 
       yield* buildAppUnderTest({
         layers: {
@@ -260,7 +260,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
   it.effect("subscribeThread resets cached history when its ID is created again", () =>
     Effect.gen(function* () {
       const thread = {
-        ...makeDefaultOrchestrationReadModel().threads[0]!,
+        ...defaultOrchestrationReadModel().threads[0]!,
         title: "Recreated thread",
       };
 
@@ -326,7 +326,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           const base = makeLiveToolActivityEvent(0, "tool.completed");
 
           if (createBeforeDelete) {
-            const thread = makeDefaultOrchestrationReadModel().threads[0]!;
+            const thread = defaultOrchestrationReadModel().threads[0]!;
             yield* store.append({
               ...base,
               eventId: EventId.make(`create-before-final-delete-${oversized}`),

@@ -28,7 +28,7 @@ import { SqlitePersistenceMemory } from "../src/persistence/Layers/Sqlite.ts";
 import * as ProviderSessionRuntime from "../src/persistence/ProviderSessionRuntime.ts";
 
 import {
-  makeTestProviderAdapterHarness,
+  testProviderAdapterHarness,
   type TestProviderAdapterHarness,
   type TestTurnResponse,
 } from "./TestProviderAdapter.integration.ts";
@@ -58,7 +58,7 @@ interface IntegrationFixture {
 const makeIntegrationFixture = () =>
   Effect.gen(function* () {
     const cwd = yield* makeWorkspaceDirectory;
-    const harness = yield* makeTestProviderAdapterHarness();
+    const harness = yield* testProviderAdapterHarness();
 
     const registry = makeAdapterRegistryMock({
       [ProviderDriverKind.make("codex")]: harness.adapter,

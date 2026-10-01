@@ -74,7 +74,7 @@ export const collectQueueUntil = Effect.fn("TransferBudget.collectQueueUntil")(f
   );
 });
 
-export const makeAuthTestLayer = () =>
+export const authTestLayer = () =>
   EnvironmentAuth.layer.pipe(
     Layer.provide(SqlitePersistenceMemory),
     Layer.provide(ServerSecretStore.layer),

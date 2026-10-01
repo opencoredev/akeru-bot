@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -354,3 +355,6 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     generateThreadTitle,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
+
+export const layerWithSettings = (settings: CodexSettings, environment?: NodeJS.ProcessEnv) =>
+  Layer.effect(TextGeneration.TextGeneration, makeCodexTextGeneration(settings, environment));

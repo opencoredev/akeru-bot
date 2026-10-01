@@ -9,6 +9,7 @@ import * as Predicate from "effect/Predicate";
  * @module ClaudeTextGeneration
  */
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -359,3 +360,6 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     generateThreadTitle,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
+
+export const layerWithSettings = (settings: ClaudeSettings, environment?: NodeJS.ProcessEnv) =>
+  Layer.effect(TextGeneration.TextGeneration, makeClaudeTextGeneration(settings, environment));

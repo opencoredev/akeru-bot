@@ -13,8 +13,7 @@ import { ProjectionTurnRepositoryLive } from "../../src/persistence/Layers/Proje
 import { ProjectionCheckpointRepositoryLive } from "../../src/persistence/Layers/ProjectionCheckpoints.ts";
 import { ProjectionPendingApprovalRepositoryLive } from "../../src/persistence/Layers/ProjectionPendingApprovals.ts";
 import { ProviderSessionRuntimeRepositoryLive } from "../../src/persistence/Layers/ProviderSessionRuntime.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root owns the sandbox SQLite database.
-import { makeSqlitePersistenceLive } from "../../src/persistence/Layers/Sqlite.ts";
+import { sqlitePersistenceLayer } from "../../src/persistence/Layers/Sqlite.ts";
 // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root supplies its isolated adapter registry.
 import { makeAdapterRegistryMock } from "../../src/provider/testUtils/providerAdapterRegistryMock.ts";
 import { ProviderAdapterRegistry } from "../../src/provider/Services/ProviderAdapterRegistry.ts";
@@ -29,8 +28,7 @@ import { type TestMastraHarness } from "../TestMastraHarness.integration.ts";
 import { EntityMemoryRepositoryLive } from "../../src/memory/Layers/EntityMemoryRepository.ts";
 import { MemoryRevisionWriteLockLive } from "../../src/memory/Services/MemoryRevisionWriteLock.ts";
 import { LegacyProviderBridgeLive } from "../../src/provider/Layers/LegacyProviderBridge.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root assembles the provider service and its reactors.
-import { makeProviderServiceLive } from "../../src/provider/Layers/ProviderService.ts";
+import { ProviderServiceLive } from "../../src/provider/Layers/ProviderService.ts";
 // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root supplies a test-configured Codex adapter.
 import { makeCodexAdapter } from "../../src/provider/Layers/CodexAdapter.ts";
 import {
@@ -84,7 +82,7 @@ export function createIntegrationLayers({
       )
     : null;
 
-  const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+  const persistenceLayer = sqlitePersistenceLayer(dbPath);
 
   const memoryRepositoriesLayer = EntityMemoryRepositoryLive.pipe(
     Layer.provide(MemoryRevisionWriteLockLive),
@@ -120,13 +118,13 @@ export function createIntegrationLayers({
   const providerEventLoggersLayer = Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers);
 
   const providerLayer = useRealCodex
-    ? makeProviderServiceLive().pipe(
+    ? ProviderServiceLive.pipe(
         Layer.provide(providerSessionDirectoryLayer),
         Layer.provide(realCodexRegistry),
         Layer.provide(AnalyticsService.layerTest),
         Layer.provide(providerEventLoggersLayer),
       )
-    : makeProviderServiceLive().pipe(
+    : ProviderServiceLive.pipe(
         Layer.provide(providerSessionDirectoryLayer),
         Layer.provide(fakeRegistry!),
         Layer.provide(AnalyticsService.layerTest),

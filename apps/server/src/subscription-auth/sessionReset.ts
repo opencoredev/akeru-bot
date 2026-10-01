@@ -23,7 +23,7 @@ function sessionInstanceId(session: ProviderSession): ProviderInstanceId {
 }
 
 /** Restart bridge processes after their saved API credentials change. */
-export function makeApiKeySessionReset(
+export function apiKeySessionReset(
   auth: Pick<SubscriptionAuthService, "getApiKeyCredential">,
   controller: Pick<AgentControllerShape, "listSessions" | "stopSession">,
   loadInstances: Effect.Effect<Readonly<Record<string, ProviderInstanceConfig>>>,

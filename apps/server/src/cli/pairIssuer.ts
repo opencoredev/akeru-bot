@@ -18,7 +18,7 @@ import { type DiscoveredPairTarget } from "./pairTarget.ts";
  * choice pinned to where the runtime state was actually found, independent of
  * ambient environment variables.
  */
-export const makePairServerConfig = Effect.fn(function* (input: {
+export const pairServerConfig = Effect.fn(function* (input: {
   readonly target: DiscoveredPairTarget;
   readonly logLevel: ServerConfig.ServerConfig["Service"]["logLevel"];
 }) {

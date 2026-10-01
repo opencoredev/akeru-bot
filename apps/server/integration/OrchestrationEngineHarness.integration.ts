@@ -27,8 +27,7 @@ import { ProjectionCheckpointRepository } from "../src/persistence/Services/Proj
 import { ProjectionPendingApprovalRepository } from "../src/persistence/Services/ProjectionPendingApprovals.ts";
 import { usesMastraCode } from "../src/provider/Layers/AgentController.ts";
 import { AgentController } from "../src/provider/Services/AgentController.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root injects a deterministic Mastra harness.
-import { makeTestMastraHarness, type TestMastraHarness } from "./TestMastraHarness.integration.ts";
+import { testMastraHarness, type TestMastraHarness } from "./TestMastraHarness.integration.ts";
 import { ProviderCommandReactor } from "../src/orchestration/Services/ProviderCommandReactor.ts";
 import { CheckpointReactor } from "../src/orchestration/Services/CheckpointReactor.ts";
 import { ProviderRuntimeIngestionService } from "../src/orchestration/Services/ProviderRuntimeIngestion.ts";
@@ -43,8 +42,7 @@ import {
   type OrchestrationRuntimeReceipt,
 } from "../src/orchestration/Services/RuntimeReceiptBus.ts";
 import {
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root injects deterministic provider adapters.
-  makeTestProviderAdapterHarness,
+  testProviderAdapterHarness,
   type TestProviderAdapterHarness,
 } from "./TestProviderAdapter.integration.ts";
 import { ProviderAdapterSessionNotFoundError } from "../src/provider/Errors.ts";
@@ -123,7 +121,7 @@ interface MakeOrchestrationIntegrationHarnessOptions {
   readonly realCodex?: boolean;
 }
 
-export const makeOrchestrationIntegrationHarness = (
+export const orchestrationIntegrationHarness = (
   options?: MakeOrchestrationIntegrationHarnessOptions,
 ) =>
   Effect.gen(function* () {
@@ -135,15 +133,14 @@ export const makeOrchestrationIntegrationHarness = (
 
     const adapterHarness = useRealCodex
       ? null
-      : yield* makeTestProviderAdapterHarness({
+      : yield* testProviderAdapterHarness({
           provider,
         });
 
     // Mastra-backed drivers run through AgentController's session seam rather
     // than the adapter's `sendTurn`, so fake the Mastra harness too; otherwise
     // the controller boots the real Mastra stack and makes live model calls.
-    const mastraHarness =
-      useRealCodex || !usesMastraCode(provider) ? null : makeTestMastraHarness();
+    const mastraHarness = useRealCodex || !usesMastraCode(provider) ? null : testMastraHarness();
 
     const rootDir = yield* fileSystem.makeTempDirectoryScoped({
       prefix: "t3-orchestration-integration-",

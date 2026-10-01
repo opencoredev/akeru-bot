@@ -59,7 +59,7 @@ export const requireBrowserbaseApiKey = (settingsService: ServerSettingsService[
     return apiKey;
   });
 
-export const makeBrowserbaseContexts = (
+export const browserbaseContexts = (
   httpClient: HttpClient.HttpClient,
   settingsService: ServerSettingsService["Service"],
 ) =>

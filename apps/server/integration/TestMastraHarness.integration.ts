@@ -98,7 +98,7 @@ function payloadString(
   return Predicate.isString(nested) ? nested : undefined;
 }
 
-export function makeTestMastraHarness(): TestMastraHarness {
+export function testMastraHarness(): TestMastraHarness {
   const sessions = new Map<string, SessionState>();
   const transcripts = new Map<string, ReadonlyArray<MastraDBMessage>>();
   // Outlives session restarts so a model change that restarts the session stays visible.

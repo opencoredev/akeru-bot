@@ -97,7 +97,7 @@ function missingSessionEffect(
   return Effect.fail(sessionNotFound(provider, threadId));
 }
 
-export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapterHarnessOptions) =>
+export const testProviderAdapterHarness = (options?: MakeTestProviderAdapterHarnessOptions) =>
   Effect.gen(function* () {
     const provider = options?.provider ?? ProviderDriverKind.make("codex");
     const runtimeEvents = yield* Queue.unbounded<ProviderRuntimeEvent>();

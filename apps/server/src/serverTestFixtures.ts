@@ -99,7 +99,7 @@ export const testEnvironmentDescriptor = {
   },
 };
 
-export const makeDefaultOrchestrationReadModel = () => {
+export const defaultOrchestrationReadModel = () => {
   const now = "2026-01-01T00:00:00.000Z";
 
   return {

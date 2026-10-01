@@ -25,8 +25,7 @@ import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 
 import * as ServerConfig from "./config.ts";
 
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test composition root builds routes with the requested fake dependencies.
-import { makeRoutesLayer } from "./server.ts";
+import { routesLayer } from "./server.ts";
 
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 
@@ -131,14 +130,12 @@ import { RoutineRuntime, type RoutineRuntimeShape } from "./routines/Runtime.ts"
 import {
   defaultDesktopBootstrapToken,
   TEST_EPOCH,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This pure fixture creates the initial read model for an isolated test server.
-  makeDefaultOrchestrationReadModel,
+  defaultOrchestrationReadModel,
   defaultThreadId,
   testEnvironmentDescriptor,
 } from "./serverTestFixtures.ts";
 
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This test composition root assembles authentication for its sandbox environment.
-import { makeAuthTestLayer } from "./serverTestClients.ts";
+import { authTestLayer } from "./serverTestClients.ts";
 
 export const buildAppUnderTest = (options?: {
   durableMemory?: {
@@ -358,7 +355,7 @@ export const buildAppUnderTest = (options?: {
     );
 
     const servedRoutesLayer = HttpRouter.serve(
-      makeRoutesLayer.pipe(Layer.provide(serviceLauncherClientLayer)),
+      routesLayer.pipe(Layer.provide(serviceLauncherClientLayer)),
       {
         disableListenLog: true,
         disableLogger: true,
@@ -600,8 +597,8 @@ export const buildAppUnderTest = (options?: {
             ...options?.layers?.projectionGroups,
           } satisfies ProjectionGroups.ProjectionGroupRepositoryShape),
           Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
-            getCommandReadModel: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
-            getSnapshot: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
+            getCommandReadModel: () => Effect.succeed(defaultOrchestrationReadModel()),
+            getSnapshot: () => Effect.succeed(defaultOrchestrationReadModel()),
             getShellSnapshot: () =>
               Effect.succeed({
                 snapshotSequence: 0,
@@ -759,7 +756,7 @@ export const buildAppUnderTest = (options?: {
           ...options?.layers?.repositoryIdentityResolver,
         }),
       ),
-      Layer.provideMerge(makeAuthTestLayer()),
+      Layer.provideMerge(authTestLayer()),
       Layer.provideMerge(
         options?.durableMemory
           ? EntityMemoryRepositoryLive.pipe(
@@ -785,7 +782,7 @@ export const buildAppUnderTest = (options?: {
           : Layer.succeed(
               ChannelDeliveryStore.ChannelDeliveryStore,
               options?.layers?.channelDeliveryStore ??
-                ChannelDeliveryStore.makeMemoryChannelDeliveryStore(),
+                ChannelDeliveryStore.memoryChannelDeliveryStore(),
             ),
       ),
       Layer.provide(workspaceAndProjectServicesLayer),

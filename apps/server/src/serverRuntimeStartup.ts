@@ -29,8 +29,7 @@ import { RoutineRuntime } from "./routines/Runtime.ts";
 
 import { type StartupOptions, restoreExternalChannels } from "./startupChannels.ts";
 import {
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Server startup owns the command gate used by the routes and shutdown path.
-  makeCommandGate,
+  scopedCommandGate,
   ServerRuntimeStartupError,
   ServerRuntimeStartup,
 } from "./startupCommandGate.ts";
@@ -62,7 +61,7 @@ export const make = (options?: StartupOptions) =>
     const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
     const channelRuntime = yield* Effect.serviceOption(ChannelRuntime.ChannelRuntime);
 
-    const commandGate = yield* makeCommandGate;
+    const commandGate = yield* scopedCommandGate;
     const httpListening = yield* Deferred.make<void>();
     const reactorScope = yield* Scope.make("sequential");
 
@@ -295,7 +294,7 @@ export const layer = layerWithOptions();
 export {
   ServerRuntimeStartupError,
   ServerRuntimeStartup,
-  makeCommandGate,
+  scopedCommandGate,
 } from "./startupCommandGate.ts";
 
 export {
