@@ -11,11 +11,11 @@ import {
   type ShowcaseDevice,
   type ShowcaseScene,
   type ShowcaseTheme,
-} from "../../mobile-showcase.config.ts";
+} from "../mobile-showcase.config.ts";
 
 export const REPO_ROOT = NodePath.resolve(
   NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
-  "../../..",
+  "../..",
 );
 
 export const MOBILE_ROOT = NodePath.join(REPO_ROOT, "apps/mobile");

@@ -1,7 +1,3 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-
-import { assert, it } from "@effect/vitest";
-
 import * as FileSystem from "effect/FileSystem";
 
 import * as Effect from "effect/Effect";
@@ -16,12 +12,7 @@ import * as Stream from "effect/Stream";
 
 import { ChildProcessSpawner } from "effect/unstable/process";
 
-import {
-  packWindowsServerAsar,
-  ancestorNodeModulesPaths,
-  copyDirectoryPreservingSymlinks,
-  WINDOWS_SERVER_ASAR_RESOURCE,
-} from "../build-desktop-artifact.ts";
+import { packWindowsServerAsar, WINDOWS_SERVER_ASAR_RESOURCE } from "../build-desktop-artifact.ts";
 
 export function mockProcess(exitCode: number) {
   return ChildProcessSpawner.makeHandle({

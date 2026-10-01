@@ -28,7 +28,6 @@ import {
   buildDistroArgs,
   concatChunks,
   decodeUtf8,
-  formatWslShellTransportFailureReason,
 } from "./WslShell.ts";
 
 import { type EnsureWslNodePtyResult, ensureNodePtyImpl } from "./WslNodePty.ts";

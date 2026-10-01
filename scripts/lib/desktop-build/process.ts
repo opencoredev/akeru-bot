@@ -12,8 +12,6 @@ import * as Path from "effect/Path";
 
 import * as Stream from "effect/Stream";
 
-import { Command } from "effect/unstable/cli";
-
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import { BuildCommandFailedError } from "./errors.ts";

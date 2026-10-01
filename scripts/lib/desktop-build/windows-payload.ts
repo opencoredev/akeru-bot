@@ -30,7 +30,6 @@ import {
   WslNodePtyManifestReadError,
   WindowsServerSidecarPackError,
   WindowsPrimaryNativeProbeError,
-  BuildCommandFailedError,
   WindowsPackagedPayloadValidationError,
 } from "./errors.ts";
 

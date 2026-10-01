@@ -9,7 +9,7 @@ import {
   type ShowcaseScene,
   SHOWCASE_THEMES,
   type ShowcaseTheme,
-} from "../../mobile-showcase.config.ts";
+} from "../mobile-showcase.config.ts";
 
 import { type CliOptions, type ShowcaseCapture } from "./paths.ts";
 

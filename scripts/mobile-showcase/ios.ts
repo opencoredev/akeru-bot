@@ -8,7 +8,7 @@ import {
   type ShowcaseConfig,
   type ShowcaseIosDevice,
   type ShowcaseScene,
-} from "../../mobile-showcase.config.ts";
+} from "../mobile-showcase.config.ts";
 
 import {
   MOBILE_ROOT,

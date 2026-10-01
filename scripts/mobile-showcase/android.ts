@@ -10,7 +10,7 @@ import {
   type ShowcaseAndroidDevice,
   type ShowcaseConfig,
   type ShowcaseScene,
-} from "../../mobile-showcase.config.ts";
+} from "../mobile-showcase.config.ts";
 
 import {
   REPO_ROOT,

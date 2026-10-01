@@ -1,10 +1,10 @@
+import { createAnnotationStyleControls } from "./AnnotationStyleControls.ts";
+
 // @effect-diagnostics globalDate:off - This isolated Electron preload does not run inside an Effect runtime.
 import { ipcRenderer } from "electron";
-import { getElementContext } from "react-grab/primitives";
+
 import type {
   DesktopPreviewAnnotationTheme,
-  PickedElementPayload,
-  PickedElementStackFrame,
   PreviewAnnotationPayload,
   PreviewAnnotationPoint,
   PreviewAnnotationRect,
@@ -15,8 +15,11 @@ import type {
 } from "@akeru/contracts";
 
 import { resolveAnnotationSubmission } from "./AnnotationKeyboard.ts";
+
 import { previewAnnotationStyles } from "./AnnotationStyles.generated.ts";
+
 import { selectMarqueeElements } from "./MarqueeSelection.ts";
+
 import {
   ANNOTATION_CAPTURED_CHANNEL,
   ANNOTATION_THEME_CHANNEL,
@@ -26,23 +29,38 @@ import {
   MOUSE_NAVIGATE_CHANNEL,
   START_PICK_CHANNEL,
 } from "./GuestProtocol.ts";
-const OVERLAY_ATTRIBUTE = "data-t3code-annotation-ui";
+
+import { PRIMARY, createButton } from "./AnnotationStyleControls.ts";
+
+import {
+  OVERLAY_ATTRIBUTE,
+  CONTENT_LAYER_Z_INDEX,
+  type SelectedElement,
+  rectFromDomRect,
+  normalizeRect,
+  isUsableRect,
+  unionRects,
+  isAnnotationNode,
+  pickFromPoint,
+  createBox,
+  positionBox,
+  createLabel,
+  updateSelectedVisual,
+  pathFromPoints,
+  strokeBounds,
+} from "./AnnotationGeometry.ts";
+
+import { captureElement } from "./AnnotationElementCapture.ts";
+
 const Z_INDEX_OVERLAY = 2147483646;
-const PRIMARY = "var(--t3-primary)";
+
 const PRIMARY_FILL = "color-mix(in srgb, var(--t3-primary) 10%, transparent)";
+
 const MAX_MARQUEE_ELEMENTS = 20;
-const CONTENT_LAYER_Z_INDEX = 1;
+
 const CHROME_LAYER_Z_INDEX = 10;
 
 type AnnotationTool = "select" | "marquee" | "draw" | "erase";
-
-interface SelectedElement {
-  id: string;
-  element: Element;
-  outline: HTMLDivElement;
-  label: HTMLDivElement;
-  baselineStyles: Map<string, string>;
-}
 
 interface AnnotationSession {
   teardown: (notifyMain: boolean) => void;
@@ -50,7 +68,9 @@ interface AnnotationSession {
 }
 
 let activeSession: AnnotationSession | null = null;
+
 let idSequence = 0;
+
 let annotationTheme: DesktopPreviewAnnotationTheme | null = null;
 
 const applyAnnotationTheme = (
@@ -102,10 +122,12 @@ const reportHumanKeyInput = (event: KeyboardEvent): void => {
 };
 
 window.addEventListener("pointerdown", reportHumanPointerInput, true);
+
 window.addEventListener("keydown", reportHumanKeyInput, true);
 
 // Mouse thumb buttons: `button === 3` is Back, `button === 4` is Forward.
 const MOUSE_BUTTON_BACK = 3;
+
 const MOUSE_BUTTON_FORWARD = 4;
 
 const navigationDirectionForButton = (button: number): "back" | "forward" | null => {
@@ -135,258 +157,15 @@ const requestNavigationForButton = (event: MouseEvent): void => {
 };
 
 window.addEventListener("mousedown", suppressNavigationButton, true);
+
 window.addEventListener("mouseup", requestNavigationForButton, true);
+
 window.addEventListener("auxclick", suppressNavigationButton, true);
 
 const nextId = (prefix: string): string => {
   idSequence += 1;
   return `${prefix}_${idSequence.toString(36)}`;
 };
-
-const rectFromDomRect = (rect: DOMRect): PreviewAnnotationRect => ({
-  x: rect.left,
-  y: rect.top,
-  width: rect.width,
-  height: rect.height,
-});
-
-const normalizeRect = (
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
-): PreviewAnnotationRect => ({
-  x: Math.min(startX, endX),
-  y: Math.min(startY, endY),
-  width: Math.abs(endX - startX),
-  height: Math.abs(endY - startY),
-});
-
-const isUsableRect = (rect: PreviewAnnotationRect): boolean => rect.width >= 3 && rect.height >= 3;
-
-function unionRects(
-  rects: ReadonlyArray<PreviewAnnotationRect>,
-  padding = 20,
-): PreviewAnnotationRect | null {
-  if (rects.length === 0) return null;
-  const left = Math.min(...rects.map((rect) => rect.x));
-  const top = Math.min(...rects.map((rect) => rect.y));
-  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
-  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
-  const x = Math.max(0, left - padding);
-  const y = Math.max(0, top - padding);
-  const maxWidth = Math.max(1, window.innerWidth - x);
-  const maxHeight = Math.max(1, window.innerHeight - y);
-  return {
-    x,
-    y,
-    width: Math.min(maxWidth, right - left + padding * 2),
-    height: Math.min(maxHeight, bottom - top + padding * 2),
-  };
-}
-
-function isAnnotationNode(element: Element): boolean {
-  return element instanceof Element && element.closest(`[${OVERLAY_ATTRIBUTE}]`) !== null;
-}
-
-function pickFromPoint(clientX: number, clientY: number): Element | null {
-  for (const candidate of document.elementsFromPoint(clientX, clientY)) {
-    if (!(candidate instanceof Element)) continue;
-    if (isAnnotationNode(candidate)) continue;
-    if (candidate === document.documentElement || candidate === document.body) continue;
-    return candidate;
-  }
-  return null;
-}
-
-function describeRawElement(element: Element): string {
-  const tag = element.tagName.toLowerCase();
-  const id = element.id ? `#${element.id}` : "";
-  const classes =
-    element instanceof HTMLElement && typeof element.className === "string"
-      ? element.className
-          .trim()
-          .split(/\s+/)
-          .filter(Boolean)
-          .slice(0, 2)
-          .map((name) => `.${name}`)
-          .join("")
-      : "";
-  return `${tag}${id}${classes}`;
-}
-
-function createBox(color: string, fill: string): HTMLDivElement {
-  const node = document.createElement("div");
-  node.setAttribute(OVERLAY_ATTRIBUTE, "");
-  node.style.cssText = [
-    "position:fixed",
-    "pointer-events:none",
-    `border:2px solid ${color}`,
-    `background:${fill}`,
-    "border-radius:3px",
-    "box-sizing:border-box",
-    "display:none",
-    `z-index:${CONTENT_LAYER_Z_INDEX}`,
-  ].join(";");
-  return node;
-}
-
-function positionBox(node: HTMLElement, rect: PreviewAnnotationRect): void {
-  node.style.display = "block";
-  node.style.transform = `translate(${rect.x}px, ${rect.y}px)`;
-  node.style.width = `${rect.width}px`;
-  node.style.height = `${rect.height}px`;
-}
-
-function createLabel(): HTMLDivElement {
-  const label = document.createElement("div");
-  label.setAttribute(OVERLAY_ATTRIBUTE, "");
-  label.className =
-    "fixed z-1 max-w-70 overflow-hidden rounded-md bg-primary px-2 py-1 font-sans text-xs font-semibold text-primary-foreground shadow-md";
-  label.style.cssText = [
-    "position:fixed",
-    "pointer-events:none",
-    "white-space:nowrap",
-    "text-overflow:ellipsis",
-    `z-index:${CONTENT_LAYER_Z_INDEX}`,
-  ].join(";");
-  return label;
-}
-
-function updateSelectedVisual(target: SelectedElement): void {
-  if (!target.element.isConnected) {
-    target.outline.style.display = "none";
-    target.label.style.display = "none";
-    return;
-  }
-  const rect = target.element.getBoundingClientRect();
-  positionBox(target.outline, rectFromDomRect(rect));
-  target.label.textContent = describeRawElement(target.element);
-  target.label.style.display = "block";
-  target.label.style.transform = `translate(${Math.max(4, rect.left)}px, ${Math.max(4, rect.top - 22)}px)`;
-}
-
-function toStackFrame(frame: {
-  functionName?: string;
-  fileName?: string;
-  lineNumber?: number;
-  columnNumber?: number;
-}): PickedElementStackFrame {
-  return {
-    functionName: frame.functionName ?? null,
-    fileName: frame.fileName ?? null,
-    lineNumber: frame.lineNumber ?? null,
-    columnNumber: frame.columnNumber ?? null,
-  };
-}
-
-async function captureElement(element: Element): Promise<PickedElementPayload | null> {
-  try {
-    const context = await getElementContext(element);
-    const stack = (context.stack ?? []).map(toStackFrame);
-    return {
-      pageUrl: location.href,
-      pageTitle: document.title?.trim() || null,
-      tagName: element.tagName.toLowerCase(),
-      selector: context.selector,
-      htmlPreview: context.htmlPreview ?? "",
-      componentName: context.componentName,
-      source: stack[0] ?? null,
-      stack,
-      styles: context.styles ?? "",
-      pickedAt: new Date().toISOString(),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function createButton(label: string, title: string): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = label;
-  button.title = title;
-  button.className =
-    "inline-flex h-7 cursor-pointer items-center justify-center rounded-md border border-transparent px-2 font-sans text-xs font-medium text-foreground outline-none hover:bg-accent disabled:pointer-events-none disabled:opacity-60";
-  return button;
-}
-
-function styleControl(input: HTMLInputElement | HTMLSelectElement): void {
-  input.setAttribute("aria-label", input.getAttribute("aria-label") ?? "Style value");
-  input.className =
-    "h-7 min-w-0 w-full appearance-none rounded-md border border-input bg-background px-2 font-mono text-xs text-foreground shadow-xs outline-none";
-}
-
-function createUnitControl(input: HTMLInputElement): HTMLElement {
-  const wrapper = document.createElement("div");
-  wrapper.style.cssText = "position:relative;min-width:0";
-  const unit = document.createElement("span");
-  unit.textContent = input.dataset.unit ?? "";
-  unit.className =
-    "pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 font-mono text-xs text-muted-foreground";
-  wrapper.append(input, unit);
-  return wrapper;
-}
-
-function createField(
-  labelText: string,
-  input: HTMLInputElement | HTMLSelectElement,
-): HTMLLabelElement {
-  const label = document.createElement("label");
-  label.className =
-    "grid min-h-7 grid-cols-[82px_minmax(0,1fr)] items-center gap-2 font-sans text-xs font-medium text-muted-foreground";
-  const text = document.createElement("span");
-  text.textContent = labelText;
-  styleControl(input);
-  label.append(
-    text,
-    input instanceof HTMLInputElement && input.dataset.unit ? createUnitControl(input) : input,
-  );
-  return label;
-}
-
-function createStyleSection(): HTMLElement {
-  const section = document.createElement("section");
-  section.className = "grid gap-1 border-t border-border py-2";
-  return section;
-}
-
-function createUnitInput(unit: string, placeholder = "0"): HTMLInputElement {
-  const input = document.createElement("input");
-  input.type = "number";
-  input.placeholder = placeholder;
-  input.style.paddingRight = "30px";
-  input.dataset.unit = unit;
-  return input;
-}
-
-function pathFromPoints(points: ReadonlyArray<PreviewAnnotationPoint>): string {
-  if (points.length === 0) return "";
-  if (points.length === 1) return `M ${points[0]!.x} ${points[0]!.y} l 0.01 0.01`;
-  let path = `M ${points[0]!.x} ${points[0]!.y}`;
-  for (let index = 1; index < points.length - 1; index += 1) {
-    const current = points[index]!;
-    const next = points[index + 1]!;
-    path += ` Q ${current.x} ${current.y} ${(current.x + next.x) / 2} ${(current.y + next.y) / 2}`;
-  }
-  const last = points[points.length - 1]!;
-  path += ` L ${last.x} ${last.y}`;
-  return path;
-}
-
-function strokeBounds(
-  points: ReadonlyArray<PreviewAnnotationPoint>,
-  width: number,
-): PreviewAnnotationRect {
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  const padding = width + 3;
-  const left = Math.min(...xs) - padding;
-  const top = Math.min(...ys) - padding;
-  const right = Math.max(...xs) + padding;
-  const bottom = Math.max(...ys) + padding;
-  return { x: left, y: top, width: right - left, height: bottom - top };
-}
 
 function startAnnotation(): void {
   activeSession?.teardown(false);
@@ -596,228 +375,11 @@ function startAnnotation(): void {
     }
   };
 
-  const textSection = createStyleSection();
-  const colorsSection = createStyleSection();
-  const bordersSection = createStyleSection();
-  const sizingSection = createStyleSection();
-  stylePanel.append(textSection, colorsSection, bordersSection, sizingSection);
-
-  const fontFamily = document.createElement("select");
-  for (const value of ["inherit", "system-ui", "sans-serif", "serif", "monospace"]) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
-    fontFamily.appendChild(option);
-  }
-  fontFamily.addEventListener("change", () => setStyleForSelected("font-family", fontFamily.value));
-  textSection.appendChild(createField("Font", fontFamily));
-
-  const fontSize = createUnitInput("px", "16");
-  fontSize.min = "1";
-  fontSize.max = "300";
-  fontSize.addEventListener("input", () => {
-    if (fontSize.value) setStyleForSelected("font-size", `${fontSize.value}px`);
+  const syncStyleControls = createAnnotationStyleControls({
+    panel: stylePanel,
+    selected,
+    setStyleForSelected,
   });
-  textSection.appendChild(createField("Font size", fontSize));
-
-  const fontWeight = document.createElement("select");
-  for (const value of ["300", "400", "500", "600", "700", "800", "900"]) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
-    fontWeight.appendChild(option);
-  }
-  fontWeight.addEventListener("change", () => setStyleForSelected("font-weight", fontWeight.value));
-  textSection.appendChild(createField("Font weight", fontWeight));
-
-  const lineHeight = document.createElement("input");
-  lineHeight.type = "text";
-  lineHeight.placeholder = "normal / 1.4";
-  lineHeight.addEventListener("change", () => {
-    if (lineHeight.value.trim()) setStyleForSelected("line-height", lineHeight.value.trim());
-  });
-  textSection.appendChild(createField("Line height", lineHeight));
-
-  const createColorRow = (
-    labelText: string,
-    property: string,
-    section: HTMLElement,
-  ): { row: HTMLLabelElement; color: HTMLInputElement; text: HTMLInputElement } => {
-    const row = document.createElement("label");
-    row.className =
-      "grid min-h-7 grid-cols-[82px_minmax(0,1fr)] items-center gap-2 font-sans text-xs font-medium text-muted-foreground";
-    const label = document.createElement("span");
-    label.textContent = labelText;
-    const control = document.createElement("div");
-    control.className =
-      "grid h-7 grid-cols-[22px_minmax(0,1fr)] items-center gap-1 rounded-md border border-input bg-background px-1 shadow-xs";
-    const color = document.createElement("input");
-    color.type = "color";
-    color.setAttribute("aria-label", labelText);
-    color.style.cssText =
-      "width:20px;height:20px;padding:0;border:0;border-radius:5px;overflow:hidden;background:transparent;cursor:pointer";
-    const text = document.createElement("input");
-    text.type = "text";
-    text.setAttribute("aria-label", `${labelText} value`);
-    text.className =
-      "min-w-0 w-full border-0 bg-transparent font-mono text-xs text-foreground outline-none";
-    color.addEventListener("input", () => {
-      text.value = color.value;
-      setStyleForSelected(property, color.value);
-    });
-    text.addEventListener("change", () => {
-      const value = text.value.trim();
-      if (!value) return;
-      setStyleForSelected(property, value);
-      if (/^#[0-9a-f]{6}$/i.test(value)) color.value = value;
-    });
-    control.append(color, text);
-    row.append(label, control);
-    section.appendChild(row);
-    return { row, color, text };
-  };
-
-  const textColor = createColorRow("Text color", "color", colorsSection);
-  const backgroundColor = createColorRow("Background", "background-color", colorsSection);
-
-  const opacity = document.createElement("input");
-  opacity.type = "range";
-  opacity.min = "0";
-  opacity.max = "1";
-  opacity.step = "0.05";
-  opacity.value = "1";
-  opacity.style.accentColor = PRIMARY;
-  opacity.addEventListener("input", () => setStyleForSelected("opacity", opacity.value));
-  colorsSection.appendChild(createField("Opacity", opacity));
-
-  const radius = createUnitInput("px", "0");
-  radius.min = "0";
-  radius.max = "300";
-  radius.addEventListener("input", () => {
-    if (radius.value) setStyleForSelected("border-radius", `${radius.value}px`);
-  });
-  bordersSection.appendChild(createField("Radius", radius));
-
-  const borderColor = createColorRow("Border color", "border-color", bordersSection);
-
-  const borderWidth = createUnitInput("px", "0");
-  borderWidth.min = "0";
-  borderWidth.max = "100";
-  borderWidth.addEventListener("input", () => {
-    if (borderWidth.value) {
-      setStyleForSelected("border-style", "solid");
-      setStyleForSelected("border-width", `${borderWidth.value}px`);
-    }
-  });
-  bordersSection.appendChild(createField("Border width", borderWidth));
-
-  const dimensions = document.createElement("div");
-  dimensions.style.cssText =
-    "display:grid;grid-template-columns:82px minmax(0,1fr);gap:8px;align-items:center";
-  const dimensionLabel = document.createElement("div");
-  dimensionLabel.className = "grid gap-2 font-sans text-xs font-medium text-muted-foreground";
-  dimensionLabel.innerHTML = "<span>Width</span><span>Height</span>";
-  const dimensionControls = document.createElement("div");
-  dimensionControls.style.cssText = "position:relative;display:grid;gap:3px;padding-left:22px";
-  const widthInput = createUnitInput("px", "auto");
-  const heightInput = createUnitInput("px", "auto");
-  styleControl(widthInput);
-  styleControl(heightInput);
-  const aspectLock = createButton("", "Lock aspect ratio");
-  aspectLock.setAttribute("aria-pressed", "true");
-  aspectLock.style.cssText +=
-    ";position:absolute;left:0;top:50%;transform:translateY(-50%);width:18px;height:38px;padding:0";
-  aspectLock.className += " bg-primary/10 text-primary";
-  dimensionControls.append(
-    createUnitControl(widthInput),
-    createUnitControl(heightInput),
-    aspectLock,
-  );
-  dimensions.append(dimensionLabel, dimensionControls);
-  sizingSection.appendChild(dimensions);
-
-  let aspectLocked = true;
-  let aspectRatio = 1;
-  const refreshAspectButton = (): void => {
-    aspectLock.innerHTML = aspectLocked
-      ? '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M8 6.5 9.5 5A3.5 3.5 0 0 1 14.5 10l-1.5 1.5M12 13.5 10.5 15A3.5 3.5 0 0 1 5.5 10L7 8.5M7.5 12.5l5-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'
-      : '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="m6 6 8 8M8 6.5 9.5 5A3.5 3.5 0 0 1 14 9M12 13.5 10.5 15A3.5 3.5 0 0 1 6 11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
-    aspectLock.setAttribute("aria-pressed", String(aspectLocked));
-    aspectLock.classList.toggle("bg-primary/10", aspectLocked);
-    aspectLock.classList.toggle("text-primary", aspectLocked);
-    aspectLock.classList.toggle("bg-muted", !aspectLocked);
-    aspectLock.classList.toggle("text-muted-foreground", !aspectLocked);
-  };
-  aspectLock.addEventListener("click", () => {
-    aspectLocked = !aspectLocked;
-    refreshAspectButton();
-  });
-  widthInput.addEventListener("input", () => {
-    const width = Number(widthInput.value);
-    if (!Number.isFinite(width) || width <= 0) return;
-    setStyleForSelected("width", `${width}px`);
-    if (aspectLocked && aspectRatio > 0) {
-      const height = Math.max(1, Math.round(width / aspectRatio));
-      heightInput.value = String(height);
-      setStyleForSelected("height", `${height}px`);
-    }
-  });
-  heightInput.addEventListener("input", () => {
-    const height = Number(heightInput.value);
-    if (!Number.isFinite(height) || height <= 0) return;
-    setStyleForSelected("height", `${height}px`);
-    if (aspectLocked && aspectRatio > 0) {
-      const width = Math.max(1, Math.round(height * aspectRatio));
-      widthInput.value = String(width);
-      setStyleForSelected("width", `${width}px`);
-    }
-  });
-  refreshAspectButton();
-
-  const addSpacingField = (
-    label: string,
-    property: string,
-    placeholder: string,
-  ): HTMLInputElement => {
-    const input = document.createElement("input");
-    input.type = "text";
-    input.placeholder = placeholder;
-    input.addEventListener("change", () => {
-      if (input.value.trim()) setStyleForSelected(property, input.value.trim());
-    });
-    sizingSection.appendChild(createField(label, input));
-    return input;
-  };
-  const padding = addSpacingField("Padding", "padding", "0 0 0 0");
-  const margin = addSpacingField("Margin", "margin", "0 0 0 0");
-  const gap = addSpacingField("Gap", "gap", "0px");
-
-  const syncStyleControls = (): void => {
-    const first = selected.values().next().value as SelectedElement | undefined;
-    if (!first) return;
-    const computed = getComputedStyle(first.element);
-    const rect = first.element.getBoundingClientRect();
-    aspectRatio = rect.height > 0 ? rect.width / rect.height : 1;
-    widthInput.value = String(Math.round(rect.width));
-    heightInput.value = String(Math.round(rect.height));
-    fontSize.value = String(Math.round(Number.parseFloat(computed.fontSize) || 16));
-    fontWeight.value = computed.fontWeight.match(/^[0-9]+$/) ? computed.fontWeight : "400";
-    lineHeight.value = computed.lineHeight;
-    fontFamily.value = Array.from(fontFamily.options).some(
-      (option) => option.value === computed.fontFamily,
-    )
-      ? computed.fontFamily
-      : "inherit";
-    textColor.text.value = computed.color;
-    backgroundColor.text.value = computed.backgroundColor;
-    borderColor.text.value = computed.borderColor;
-    opacity.value = computed.opacity;
-    radius.value = String(Math.round(Number.parseFloat(computed.borderRadius) || 0));
-    borderWidth.value = String(Math.round(Number.parseFloat(computed.borderWidth) || 0));
-    padding.value = computed.padding;
-    margin.value = computed.margin;
-    gap.value = computed.gap === "normal" ? "0px" : computed.gap;
-  };
 
   const tools: ReadonlyArray<[AnnotationTool, string, string]> = [
     ["select", "Select", "Select elements (V)"],
@@ -1281,8 +843,10 @@ ipcRenderer.on(START_PICK_CHANNEL, (_event, theme: DesktopPreviewAnnotationTheme
   if (theme) annotationTheme = theme;
   startAnnotation();
 });
+
 ipcRenderer.on(ANNOTATION_THEME_CHANNEL, (_event, theme: DesktopPreviewAnnotationTheme) => {
   annotationTheme = theme;
   activeSession?.applyTheme(theme);
 });
+
 ipcRenderer.on(CANCEL_PICK_CHANNEL, () => activeSession?.teardown(false));

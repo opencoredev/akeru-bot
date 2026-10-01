@@ -13,9 +13,9 @@ import {
   type ShowcaseConfig,
   type ShowcaseDevice,
   type ShowcaseScene,
-} from "../../mobile-showcase.config.ts";
+} from "../mobile-showcase.config.ts";
 
-import { SHOWCASE_THREAD_ID } from "../../mobile-showcase-environment.ts";
+import { SHOWCASE_THREAD_ID } from "../mobile-showcase-environment.ts";
 
 import { MOBILE_ROOT, APP_SCHEME, SERVER_HOST, MOBILE_BUILD_ENV } from "./paths.ts";
 

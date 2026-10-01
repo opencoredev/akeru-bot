@@ -7,7 +7,7 @@ import * as NodeProcess from "node:process";
 
 import { PNG } from "pngjs";
 
-import { type ShowcaseDevice, type ShowcaseStoreAssetSpec } from "../../mobile-showcase.config.ts";
+import { type ShowcaseDevice, type ShowcaseStoreAssetSpec } from "../mobile-showcase.config.ts";
 
 import { REPO_ROOT, type ShowcaseCapture } from "./paths.ts";
 

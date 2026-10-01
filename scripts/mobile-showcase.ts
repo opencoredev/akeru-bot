@@ -28,19 +28,15 @@ import {
   type ShowcaseCapture,
   type IosCaptureCleanup,
   type AndroidCaptureCleanup,
-} from "./lib/mobile-showcase/paths.ts";
+} from "./mobile-showcase/paths.ts";
 
-import {
-  readPngDimensions,
-  showcaseCaptureDirectory,
-  validateCaptureSet,
-} from "./lib/mobile-showcase/assets.ts";
+import { showcaseCaptureDirectory, validateCaptureSet } from "./mobile-showcase/assets.ts";
 
 import {
   parseShowcaseCliArgs,
   planShowcaseCaptures,
   printUsage,
-} from "./lib/mobile-showcase/options.ts";
+} from "./mobile-showcase/options.ts";
 
 import {
   runCommand,
@@ -49,7 +45,7 @@ import {
   waitForFileContent,
   reserveAvailablePort,
   existingArtifact,
-} from "./lib/mobile-showcase/process.ts";
+} from "./mobile-showcase/process.ts";
 
 import {
   lanIpv4Address,
@@ -58,28 +54,27 @@ import {
   startShowcaseServer,
   issuePairingCredential,
   buildShowcasePairingUrl,
-  encodeAndroidPairingUrls,
   startMetro,
   warmMetroBundle,
-} from "./lib/mobile-showcase/environment.ts";
+} from "./mobile-showcase/environment.ts";
 
-import { buildIos, captureIos } from "./lib/mobile-showcase/ios.ts";
+import { buildIos, captureIos } from "./mobile-showcase/ios.ts";
 
 import {
   buildAndroid,
   runAdb,
   captureAndroid,
   cleanupAndroidViewport,
-} from "./lib/mobile-showcase/android.ts";
+} from "./mobile-showcase/android.ts";
 
 export {
   selectLanIpv4Address,
   parsePairingCredentialOutput,
   showcaseSceneUrl,
   encodeAndroidPairingUrls,
-} from "./lib/mobile-showcase/environment.ts";
+} from "./mobile-showcase/environment.ts";
 
-export { parseShowcaseCliArgs, planShowcaseCaptures } from "./lib/mobile-showcase/options.ts";
+export { parseShowcaseCliArgs, planShowcaseCaptures } from "./mobile-showcase/options.ts";
 
 export {
   type PngMetadata,
@@ -89,9 +84,9 @@ export {
   validateStoreAsset,
   validateStoreAssetCount,
   showcaseCaptureDirectory,
-} from "./lib/mobile-showcase/assets.ts";
+} from "./mobile-showcase/assets.ts";
 
-export { resolveAndroidSdkRoot, type ShowcaseCapture } from "./lib/mobile-showcase/paths.ts";
+export { resolveAndroidSdkRoot, type ShowcaseCapture } from "./mobile-showcase/paths.ts";
 
 async function main(): Promise<void> {
   const options = parseShowcaseCliArgs(NodeProcess.argv.slice(2));
