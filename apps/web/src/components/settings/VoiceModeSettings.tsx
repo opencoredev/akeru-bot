@@ -299,7 +299,6 @@ function SynthesisVoicePicker({
   useEffect(() => {
     if (connected) void load(undefined);
     // The picker is keyed by provider and connection, so this runs once per pair.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!connected) {

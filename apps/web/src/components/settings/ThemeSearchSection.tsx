@@ -230,7 +230,6 @@ export function ThemeSearchSection({
     // while it was in flight (checked via lastSearchKeyRef, recorded only
     // once a search succeeds), so the install error the user needs to see is
     // preserved across that rerun.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, query, debouncedQuery, installingId, runSearch]);
 
   const handleSortChange = useCallback((value: OpenVsxThemeSort | null) => {
