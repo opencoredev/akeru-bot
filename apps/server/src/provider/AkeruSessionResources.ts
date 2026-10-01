@@ -311,6 +311,8 @@ export class AkeruSessionResources {
 
         this.mcpManagers.set(key, manager);
 
+        let computerUseFailed = false;
+
         try {
           await manager.init();
         } catch (cause) {
@@ -318,13 +320,13 @@ export class AkeruSessionResources {
             this.options.onMcpServerConnectionFailure?.(server.id);
           }
 
-          if (usesComputer) {
-            // eslint-disable-next-line preserve-caught-error -- MCP errors may contain private desktop paths.
-            throw new Error("Computer Use MCP failed to start.");
-          }
-
-          throw cause;
+          // Computer Use MCP errors can name private desktop paths, so they are replaced below
+          // rather than wrapped.
+          if (!usesComputer) throw cause;
+          computerUseFailed = true;
         }
+
+        if (computerUseFailed) throw new Error("Computer Use MCP failed to start.");
 
         const serversById = new Map(input.mcpServers.map((server) => [String(server.id), server]));
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useMemo } from "react";
@@ -59,7 +58,7 @@ export function Sparkline({
       bloom={bloom}
       bloomOnHover={bloomOnHover}
       margins={{ top: 0, right: 0, bottom: 0, left: 0 }}
-      className={className}
+      {...(className !== undefined ? { className } : {})}
     >
       <Area dataKey="v" variant={variant} />
     </AreaChart>

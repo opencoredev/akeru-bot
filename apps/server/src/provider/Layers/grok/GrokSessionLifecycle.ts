@@ -43,32 +43,24 @@ import {
 } from "../../Errors.ts";
 import { mapAcpToAdapterError } from "../../acp/AcpAdapterSupport.ts";
 import {
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
-  makeAcpAssistantItemEvent,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
-  makeAcpContentDeltaEvent,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
-  makeAcpRequestOpenedEvent,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
-  makeAcpRequestResolvedEvent,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
-  makeAcpToolCallEvent,
+  acpAssistantItemEvent,
+  acpContentDeltaEvent,
+  acpRequestOpenedEvent,
+  acpRequestResolvedEvent,
+  acpToolCallEvent,
 } from "../../acp/AcpCoreRuntimeEvents.ts";
 import { parsePermissionRequest } from "../../acp/AcpRuntimeModel.ts";
 
 import {
   applyGrokAcpModelSelection,
   currentGrokModelIdFromSessionSetup,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Provider composition root creates the configured, scoped ACP subprocess runtime.
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
 } from "../../acp/GrokAcpSupport.ts";
 import {
   extractXAiAskUserQuestions,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure Grok wire response builder; no Effect service is constructed.
-  makeXAiAskUserQuestionCancelledResponse,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure Grok wire response builder; no Effect service is constructed.
-  makeXAiAskUserQuestionResponse,
+  xAiAskUserQuestionCancelledResponse,
+  xAiAskUserQuestionResponse,
   XAiAskUserQuestionRequest,
 } from "../../acp/XAiAcpExtension.ts";
 import { type GrokAdapterShape } from "../../Services/GrokAdapter.ts";
@@ -298,9 +290,9 @@ export function createGrokSessionLifecycle(deps: {
 
                     return Match.value(resolved).pipe(
                       Match.tag("answered", ({ answers }) =>
-                        makeXAiAskUserQuestionResponse(params, answers),
+                        xAiAskUserQuestionResponse(params, answers),
                       ),
-                      Match.tag("cancelled", () => makeXAiAskUserQuestionCancelledResponse()),
+                      Match.tag("cancelled", () => xAiAskUserQuestionCancelledResponse()),
                       Match.exhaustive,
                     );
                   }),
@@ -333,7 +325,7 @@ export function createGrokSessionLifecycle(deps: {
                 const turnId = resolveSessionCallbackTurnId(deps.sessions, input.threadId);
                 pendingApprovals.set(requestId, { decision });
                 yield* deps.offerRuntimeEvent(
-                  makeAcpRequestOpenedEvent({
+                  acpRequestOpenedEvent({
                     stamp: yield* deps.makeEventStamp(),
                     provider: PROVIDER,
                     threadId: input.threadId,
@@ -352,7 +344,7 @@ export function createGrokSessionLifecycle(deps: {
                 const resolved = yield* Deferred.await(decision);
                 pendingApprovals.delete(requestId);
                 yield* deps.offerRuntimeEvent(
-                  makeAcpRequestResolvedEvent({
+                  acpRequestResolvedEvent({
                     stamp: yield* deps.makeEventStamp(),
                     provider: PROVIDER,
                     threadId: input.threadId,
@@ -474,7 +466,7 @@ export function createGrokSessionLifecycle(deps: {
               return yield* Match.value(event).pipe(
                 Match.tag("AssistantItemStarted", (event) =>
                   deps.offerRuntimeEvent(
-                    makeAcpAssistantItemEvent({
+                    acpAssistantItemEvent({
                       stamp,
                       provider: PROVIDER,
                       threadId: ctx.threadId,
@@ -486,7 +478,7 @@ export function createGrokSessionLifecycle(deps: {
                 ),
                 Match.tag("AssistantItemCompleted", (event) =>
                   deps.offerRuntimeEvent(
-                    makeAcpAssistantItemEvent({
+                    acpAssistantItemEvent({
                       stamp,
                       provider: PROVIDER,
                       threadId: ctx.threadId,
@@ -508,7 +500,7 @@ export function createGrokSessionLifecycle(deps: {
                 ),
                 Match.tag("ToolCallUpdated", (event) =>
                   deps.offerRuntimeEvent(
-                    makeAcpToolCallEvent({
+                    acpToolCallEvent({
                       stamp,
                       provider: PROVIDER,
                       threadId: ctx.threadId,
@@ -520,7 +512,7 @@ export function createGrokSessionLifecycle(deps: {
                 ),
                 Match.tag("ContentDelta", (event) =>
                   deps.offerRuntimeEvent(
-                    makeAcpContentDeltaEvent({
+                    acpContentDeltaEvent({
                       stamp,
                       provider: PROVIDER,
                       threadId: ctx.threadId,

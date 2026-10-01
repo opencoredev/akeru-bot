@@ -38,7 +38,6 @@ import {
 import { type CodexAdapterShape } from "../Services/CodexAdapter.ts";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root constructs the session runtime for this provider instance.
 import { makeCodexSessionRuntime } from "./CodexSessionRuntime.ts";
 import { type CodexSessionRuntimeError } from "./codex/CodexRuntimeErrors.ts";
 import {
@@ -46,7 +45,6 @@ import {
   type CodexSessionRuntimeShape,
 } from "./codex/CodexRuntimeState.ts";
 import { type EventNdjsonLogger } from "./logging/EventLogTypes.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root creates the scoped logger with this adapter configuration.
 import { makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import { resolveCodexLaunchArgs } from "./codexLaunchArgs.ts";
 

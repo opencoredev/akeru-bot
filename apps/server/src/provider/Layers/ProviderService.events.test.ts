@@ -9,13 +9,13 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
-import { makeProviderServiceLive } from "./ProviderService.ts";
+import { providerServiceLayerWith } from "./ProviderService.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
-import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
+import { adapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
 import {
   defaultServerSettingsLayer,
   serverConfigTestLayer,
@@ -37,7 +37,7 @@ it.effect("ProviderServiceLive writes canonical events to the emitting thread se
     const canonicalEvents: ProviderRuntimeEvent[] = [];
     const canonicalThreadIds: Array<string | null> = [];
 
-    const registry = makeAdapterRegistryMock({
+    const registry = adapterRegistryMock({
       [ProviderDriverKind.make("codex")]: codex.adapter,
     });
 
@@ -47,7 +47,7 @@ it.effect("ProviderServiceLive writes canonical events to the emitting thread se
 
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
 
-    const providerLayer = makeProviderServiceLive({
+    const providerLayer = providerServiceLayerWith({
       canonicalEventLogger: {
         filePath: "memory://provider-canonical-events",
         write: (event, threadId) => {

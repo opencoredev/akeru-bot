@@ -17,6 +17,7 @@ import {
 import { parseGrokResume } from "./grok/GrokProtocol.ts";
 import { parseOpenCodeResume, sessionErrorMessage } from "./opencode/OpenCodeProtocol.ts";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { partialSdkFixture } from "../test-support/partialSdkFixture.ts";
 
 describe("tolerant SDK field readers", () => {
   it("extracts text despite opaque properties and unsupported siblings", () => {
@@ -28,12 +29,13 @@ describe("tolerant SDK field readers", () => {
       "visible",
     );
 
-    // Partial SDK fixture deliberately omits unused message metadata.
-    // @ts-expect-error Malformed citations intentionally exercise the tolerant SDK reader.
-    const message = {
+    const message = partialSdkFixture<Extract<SDKMessage, { type: "assistant" }>>({
       type: "assistant",
-      message: { content: [{ type: "text", text: "visible", citations: undefined }] },
-    } as SDKMessage;
+      message: { content: [{ type: "text", text: "visible" }] },
+    });
+
+    // Runtime corruption exercises the tolerant reader independently of SDK typings.
+    Object.defineProperty(message.message.content[0], "citations", { value: undefined });
 
     expect(extractAssistantTextBlocks(message)).toEqual(["visible"]);
   });

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { ChartConfig } from "./chart-context";
 import { cn } from "./lib";
 import { rgb, seedOfColor } from "./palette";

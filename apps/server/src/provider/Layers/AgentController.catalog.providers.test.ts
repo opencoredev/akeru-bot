@@ -49,7 +49,7 @@ import {
   computerUseToolName,
   computerUseServer,
   computerUseMcpManager,
-  makeMastraHarness,
+  mastraHarnessFixture,
 } from "./test-support/agentControllerHarness.ts";
 import {
   makeBridge,
@@ -110,7 +110,7 @@ describe("AgentControllerLive", () => {
     "denies the legacy MCP memory tool while Memory is off and restores it on re-enable",
     () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       const memoryDir = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "akeru-mcp-gate-legacy-"),
@@ -235,7 +235,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("fails closed for MCP tools missing from the manager index", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const mcpManager = {
       init: vi.fn(async () => undefined),
@@ -331,7 +331,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("attaches the globally installed MCP servers selected for the bot", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-mastra-mcp-"));
 
     const mcpManager = {
@@ -488,7 +488,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("keeps Computer Use approval data and desktop content out of runtime events", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const toolName = computerUseToolName;
     const mcpManager = computerUseMcpManager();
     const server = computerUseServer();
@@ -612,7 +612,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("releases Computer Use when session setup and deletion fail", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const mcpManager = computerUseMcpManager();
     const nextThreadId = ThreadId.make("thread-mastra-codex-next");
     vi.mocked(mastra.session.state.set).mockRejectedValueOnce(new Error("setup failed"));

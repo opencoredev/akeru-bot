@@ -30,8 +30,7 @@ import type { ProviderAdapterShape } from "../../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../../Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../../Services/ProviderSessionDirectory.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured ProviderServiceLive double or Layer for isolated provider tests.
-import { makeProviderServiceLive } from "../ProviderService.ts";
+import { providerServiceLayerWith } from "../ProviderService.ts";
 import * as ProviderEventLoggers from "../ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "../ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -39,8 +38,7 @@ import * as ProviderSessionRuntime from "../../../persistence/ProviderSessionRun
 import { SqlitePersistenceMemory } from "../../../persistence/Layers/Sqlite.ts";
 import * as ServerConfig from "../../../config.ts";
 import * as ServerSettings from "../../../serverSettings.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured AdapterRegistryMock double or Layer for isolated provider tests.
-import { makeAdapterRegistryMock } from "../../testUtils/providerAdapterRegistryMock.ts";
+import { adapterRegistryMock } from "../../testUtils/providerAdapterRegistryMock.ts";
 
 export const defaultServerSettingsLayer = ServerSettings.ServerSettingsService.layerTest();
 
@@ -296,7 +294,7 @@ export function makeProviderServiceLayer(
   const claude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
   const cursor = makeFakeCodexAdapter(CURSOR_DRIVER);
 
-  const registry = makeAdapterRegistryMock({
+  const registry = adapterRegistryMock({
     [ProviderDriverKind.make("codex")]: codex.adapter,
     [ProviderDriverKind.make("claudeAgent")]: claude.adapter,
     [ProviderDriverKind.make("cursor")]: cursor.adapter,
@@ -318,7 +316,7 @@ export function makeProviderServiceLayer(
 
   const layer = it.layer(
     Layer.mergeAll(
-      makeProviderServiceLive().pipe(
+      providerServiceLayerWith().pipe(
         Layer.provide(providerAdapterLayer),
         Layer.provide(directoryLayer),
         Layer.provide(defaultServerSettingsLayer),
@@ -363,7 +361,7 @@ export const startSessionWith = (
 
     const providerAdapterLayer = Layer.succeed(
       ProviderAdapterRegistry.ProviderAdapterRegistry,
-      makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+      adapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
     );
 
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
@@ -372,7 +370,7 @@ export const startSessionWith = (
 
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
 
-    const providerLayer = makeProviderServiceLive({
+    const providerLayer = providerServiceLayerWith({
       issueMcpCredential: (request) =>
         Effect.sync(() => {
           issued.push(request.threadId);

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { type ReactNode, useEffect } from "react";
 import { type AreaVariant, type StrokeVariant, useChartPart } from "./chart-context";
 import { SeriesContext } from "./series-context";
@@ -52,17 +51,17 @@ export function Bar({
   return (
     <>
       {isClickable &&
-        band.map((b, i) => {
+        ctx.dataMarks.map(({ index: i, key }) => {
+          const b = band[i];
+
+          if (!b) return null;
           const slot = ctx.barSlot(i, si, n);
           const top = ctx.y(b[1]);
           const base = ctx.y(b[0]);
 
           return (
-            // biome-ignore lint/a11y/noStaticElementInteractions: progressive enhancement; the Legend offers the same toggle accessibly
             <rect
-              // biome-ignore lint/suspicious/noArrayIndexKey: index is the stable category position
-              // oxlint-disable-next-line react/no-array-index-key -- chart marks have stable positional identity; their geometry is updated in place when category data changes.
-              key={i}
+              key={key}
               x={slot.x}
               y={Math.min(top, base)}
               width={slot.width}

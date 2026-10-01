@@ -27,7 +27,7 @@ import { AgentController } from "../Services/AgentController.ts";
 import { makeAkeruMastraHarness } from "../AkeruMastraHarness.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
-import { makeAgentControllerLive, type AgentControllerLiveOptions } from "./AgentController.ts";
+import { agentControllerLayerWith, type AgentControllerLiveOptions } from "./AgentController.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import {
   claudeThreadId,
@@ -46,8 +46,8 @@ import {
   resolveKimi,
   mastraWireCases,
 } from "./test-support/agentControllerLayers.ts";
-import { makeUsageLedger } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { usageLedgerFixture } from "./test-support/agentControllerMemory.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   describe("Kimi Mastra normalization", () => {
@@ -57,8 +57,8 @@ describe("AgentControllerLive", () => {
       // (fresh createSession spies) proves nothing in-memory leaks across
       // the boundary, and the bridge never sees a session call.
       const bridge = makeBridge();
-      const mastraBefore = makeMastraHarness();
-      const mastraAfter = makeMastraHarness();
+      const mastraBefore = mastraHarnessFixture();
+      const mastraAfter = mastraHarnessFixture();
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-kimi-restart-"));
 
       const layer = (factory: NonNullable<AgentControllerLiveOptions["makeMastraHarness"]>) =>
@@ -135,7 +135,7 @@ describe("AgentControllerLive", () => {
   describe("Kimi Mastra normalization", () => {
     it.effect("normalizes a Kimi model switch in-session between turns", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       return provideController(
         Effect.gen(function* () {
@@ -287,7 +287,7 @@ describe("AgentControllerLive", () => {
           : originalFetch(input, init);
       });
 
-      const layer = makeAgentControllerLive({
+      const layer = agentControllerLayerWith({
         makeMastraHarness: makeAkeruMastraHarness,
         makeBotBrowser: () => ({
           tools: {},
@@ -299,7 +299,7 @@ describe("AgentControllerLive", () => {
         Layer.provideMerge(
           Layer.mergeAll(
             Layer.succeed(LegacyProviderBridge, bridge.service),
-            Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+            Layer.succeed(BotUsageLedger, usageLedgerFixture().service),
             Layer.mock(EntityMemoryRepository)({}),
             serverSettingsLayerTest({}),
             ServerConfig.layerTest(process.cwd(), baseDir).pipe(Layer.provide(NodeServices.layer)),
@@ -431,7 +431,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("does not fall back to the legacy Kimi loop when its Mastra session is absent", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -462,7 +462,7 @@ describe("AgentControllerLive", () => {
     for (const testCase of mastraWireCases) {
       it.effect(`sends the saved ${testCase.provider} model to the Mastra wire`, () => {
         const bridge = makeBridge();
-        const mastra = makeMastraHarness();
+        const mastra = mastraHarnessFixture();
 
         const modelSelection = {
           instanceId: testCase.instanceId,
@@ -528,7 +528,7 @@ describe("AgentControllerLive", () => {
   describe("per-driver wire-format model routing", () => {
     it.effect("sends the saved OpenCode model to the legacy bridge", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       const modelSelection = {
         instanceId: openCodeInstanceId,
@@ -620,7 +620,7 @@ describe("AgentControllerLive", () => {
       "fails closed for $provider when no credential transport is configured",
       ({ provider, instanceId: _instanceSlug, issue: expectedIssue }) => {
         const bridge = makeBridge();
-        const mastra = makeMastraHarness();
+        const mastra = mastraHarnessFixture();
         const threadId = ThreadId.make(`thread-${provider.toLowerCase()}-isolated`);
 
         const service: ProviderServiceShape = {
@@ -684,7 +684,7 @@ describe("AgentControllerLive", () => {
   describe("per-driver wire-format model routing", () => {
     it.effect("fails closed for a disabled saved provider instead of rerouting", () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       return provideController(
         Effect.gen(function* () {

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { ChartValue } from "./chartValue";
 import { Predicate } from "effect";
 import { scaleBand, scaleLinear, scalePoint } from "d3-scale";

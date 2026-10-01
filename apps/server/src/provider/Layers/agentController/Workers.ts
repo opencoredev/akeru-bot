@@ -11,7 +11,6 @@ import { type AkeruBotStateRuntime } from "../../AkeruBotStateRuntime.ts";
 
 import {
   AkeruWorkerError,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Controller composition root wires the worker runtime to this controller and its access policy.
   makeAkeruWorkerRuntime,
   WORKER_THREAD_ID_PREFIX,
 } from "../../AkeruWorkerRuntime.ts";

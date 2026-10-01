@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { cn } from "./lib";
 import { useChart } from "./chart-context";
 import { rgb, type Seed } from "./palette";
@@ -37,17 +36,13 @@ export function Dot({ variant = "border", r = 2 }: { variant?: DotVariant; r?: n
   return (
     // Fade in once the fill has drawn so dots don't float over the entrance.
     <g className={cn("transition-entrance-fade", ctx.entranceDone ? "opacity-100" : "opacity-0")}>
-      {band.map((b, i) => (
-        <circle
-          {...paint}
-          // biome-ignore lint/suspicious/noArrayIndexKey: index is the stable x position
-          // oxlint-disable-next-line react/no-array-index-key -- chart marks have stable positional identity; their geometry is updated in place when category data changes.
-          key={i}
-          cx={ctx.xCenter(i) ?? 0}
-          cy={ctx.y(b[1])}
-          r={r}
-        />
-      ))}
+      {ctx.dataMarks.map(({ index: i, key }) => {
+        const b = band[i];
+
+        if (!b) return null;
+
+        return <circle {...paint} key={key} cx={ctx.xCenter(i) ?? 0} cy={ctx.y(b[1])} r={r} />;
+      })}
     </g>
   );
 }

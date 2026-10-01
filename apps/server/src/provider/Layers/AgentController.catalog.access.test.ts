@@ -22,7 +22,7 @@ import { ServerConfig } from "../../config.ts";
 import { BotMemoryStore } from "../../memory/BotMemory.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
-import { makeAgentControllerLive, type AgentControllerLiveOptions } from "./AgentController.ts";
+import { agentControllerLayerWith, type AgentControllerLiveOptions } from "./AgentController.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import {
   codexThreadId,
@@ -30,13 +30,13 @@ import {
   codexSelection,
 } from "./test-support/agentControllerFixtures.ts";
 import { makeBridge, makeLayer, resolveCodex } from "./test-support/agentControllerLayers.ts";
-import { makeUsageLedger } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { usageLedgerFixture } from "./test-support/agentControllerMemory.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("enforces delegated MCP and memory grants for tools and prompt context", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-delegated-memory-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const readMemory = vi.spyOn(botMemoryStore, "readPromptSnapshot");
@@ -157,7 +157,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("re-acquires the user-computer workspace when cwd changes locally", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const makeBotBrowser = vi.fn(() => ({
       tools: {},
@@ -166,14 +166,14 @@ describe("AgentControllerLive", () => {
       close: vi.fn(async () => undefined),
     }));
 
-    const layer = makeAgentControllerLive({
+    const layer = agentControllerLayerWith({
       makeMastraHarness: mastra.factory,
       makeBotBrowser: makeBotBrowser as never,
     }).pipe(
       Layer.provide(
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
-          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          Layer.succeed(BotUsageLedger, usageLedgerFixture().service),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-cwd-change-test-",
           }).pipe(Layer.provide(NodeServices.layer)),

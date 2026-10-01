@@ -27,12 +27,12 @@ import {
 } from "./test-support/agentControllerFixtures.ts";
 import { makeBridge, provideController } from "./test-support/agentControllerLayers.ts";
 import { makeMemoryOnlyCredentialOptions } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("honors the Memory setting per turn on the legacy provider path", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const memoryDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "akeru-memory-toggle-legacy-"),
@@ -128,7 +128,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("feeds completed legacy-provider turns into observational memory", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const events: ProviderRuntimeEvent[] = [
       {

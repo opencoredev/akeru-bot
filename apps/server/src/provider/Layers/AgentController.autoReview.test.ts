@@ -22,7 +22,7 @@ import { assert, describe, expect, vi } from "vite-plus/test";
 import { ServerConfig } from "../../config.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
-import { makeAgentControllerLive } from "./AgentController.ts";
+import { agentControllerLayerWith } from "./AgentController.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import {
   codexThreadId,
@@ -35,13 +35,13 @@ import {
   provideController,
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
-import { makeUsageLedger } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { usageLedgerFixture } from "./test-support/agentControllerMemory.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("auto review allows safe commands and asks before destructive commands", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -197,7 +197,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("keeps a turn waiting while another suspended question is open", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -263,7 +263,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("keeps a question open when resuming its answer fails", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -338,7 +338,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("does not strand the turn on a failed answer to an unknown question", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -415,7 +415,7 @@ describe("AgentControllerLive", () => {
     "preserves attachment order and typed-array byte ranges during asynchronous reads",
     () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       const readAttachment = vi.fn(async (path: string) =>
         path.endsWith("image-1.png")
@@ -469,7 +469,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("creates no workspace for a delegated sandbox denial", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const access: AkeruDelegationAccessGrant = {
       allowedToolIds: ["Shell", "Read"],
@@ -529,7 +529,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("creates a credentialed remote workspace for a delegated sandbox grant", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const access: AkeruDelegationAccessGrant = {
       allowedToolIds: ["Shell", "Read"],
@@ -556,7 +556,7 @@ describe("AgentControllerLive", () => {
       close: vi.fn(async () => undefined),
     }));
 
-    const layer = makeAgentControllerLive({
+    const layer = agentControllerLayerWith({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
       makeBotBrowser: makeBotBrowser as never,
@@ -578,7 +578,7 @@ describe("AgentControllerLive", () => {
       Layer.provide(
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
-          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          Layer.succeed(BotUsageLedger, usageLedgerFixture().service),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-remote-sandbox-test-",
           }).pipe(Layer.provide(NodeServices.layer)),

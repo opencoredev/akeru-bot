@@ -9,7 +9,6 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { GrokSettings } from "@akeru/contracts";
 import { ServerConfig } from "../../../config.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured GrokAdapter double or Layer for isolated provider tests.
 import { makeGrokAdapter } from "../GrokAdapter.ts";
 
 export const decodeGrokSettings = Schema.decodeSync(GrokSettings);

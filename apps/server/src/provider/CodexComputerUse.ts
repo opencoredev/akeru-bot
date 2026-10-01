@@ -237,23 +237,23 @@ export async function resolveCodexComputerUseServer(options: {
   if (source.source !== "local") throw new Error("Codex Computer Use must use a local plugin.");
   let root: string;
   let manifestPath: string;
-  let manifest: ReturnType<typeof object>;
 
   try {
     root = NodeFS.realpathSync(string(source.path, "Codex Computer Use plugin path"));
     manifestPath = NodeFS.realpathSync(NodePath.join(root, ".mcp.json"));
+  } catch {
+    throw new Error("Could not read the Codex Computer Use plugin.");
+  }
 
-    if (!isWithin(root, manifestPath)) {
-      throw new Error("Computer Use MCP manifest escapes its plugin directory.");
-    }
+  if (!isWithin(root, manifestPath)) {
+    throw new Error("Computer Use MCP manifest escapes its plugin directory.");
+  }
 
+  let manifest: ReturnType<typeof object>;
+
+  try {
     manifest = object(JSON.parse(NodeFS.readFileSync(manifestPath, "utf8")), "MCP manifest");
-  } catch (cause) {
-    if (cause instanceof Error && cause.message.includes("escapes its plugin directory")) {
-      throw cause;
-    }
-
-    // eslint-disable-next-line preserve-caught-error -- Plugin paths must not reach persisted errors.
+  } catch {
     throw new Error("Could not read the Codex Computer Use plugin.");
   }
 

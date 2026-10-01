@@ -49,7 +49,6 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -151,8 +150,7 @@ const buildEntry = <R>(input: {
       };
     }
 
-    const decoder = Schema.decodeUnknownEffect(driver.configSchema);
-    const decodeResult = yield* decoder(entry.config ?? driver.defaultConfig()).pipe(Effect.result);
+    const decodeResult = yield* driver.prepare(entry.config).pipe(Effect.result);
 
     if (Predicate.isTagged(decodeResult, "Failure")) {
       const issue = decodeResult.failure;
@@ -175,7 +173,7 @@ const buildEntry = <R>(input: {
       };
     }
 
-    const typedConfig = decodeResult.success;
+    const preparedDriver = decodeResult.success;
     const childScope = yield* Scope.make();
     // Attach the child scope to the registry's parent scope: if the
     // registry scope closes, each surviving instance's child scope is
@@ -184,14 +182,13 @@ const buildEntry = <R>(input: {
     // finalizer is a no-op because `Scope.close` is idempotent.
     yield* Scope.addFinalizer(parentScope, Scope.close(childScope, Exit.void).pipe(Effect.ignore));
 
-    const createResult = yield* driver
+    const createResult = yield* preparedDriver
       .create({
         instanceId,
         displayName: entry.displayName,
         accentColor: entry.accentColor,
         environment: entry.environment ?? [],
-        enabled: resolveEntryEnabled(entry, typedConfig),
-        config: typedConfig,
+        enabled: resolveEntryEnabled(entry, preparedDriver.config),
       })
       .pipe(Effect.provideService(Scope.Scope, childScope), Effect.result);
 

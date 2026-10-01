@@ -6,8 +6,7 @@ import * as Effect from "effect/Effect";
 
 import { ProviderAdapterRequestError } from "../../Errors.ts";
 
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure ACP event builder; it has no contextual service or Layer.
-import { makeAcpPlanUpdatedEvent } from "../../acp/AcpCoreRuntimeEvents.ts";
+import { acpPlanUpdatedEvent } from "../../acp/AcpCoreRuntimeEvents.ts";
 
 import { type EventNdjsonLogger } from "../logging/EventLogTypes.ts";
 import { PROVIDER, type GrokSessionContext } from "./GrokAdapterState.ts";
@@ -75,7 +74,7 @@ export function createGrokEvents(deps: {
 
       ctx.lastPlanFingerprint = fingerprint;
       yield* deps.offerRuntimeEvent(
-        makeAcpPlanUpdatedEvent({
+        acpPlanUpdatedEvent({
           stamp,
           provider: PROVIDER,
           threadId: ctx.threadId,

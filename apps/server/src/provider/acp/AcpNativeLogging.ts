@@ -32,8 +32,19 @@ function summarizePayload<Payload>(payload: Payload) {
   }
 
   if (!Predicate.isObject(payload)) {
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Native logs record the JavaScript primitive category without reading the payload.
-    return { valueType: typeof payload };
+    const valueType = Predicate.isUndefined(payload)
+      ? "undefined"
+      : Predicate.isBoolean(payload)
+        ? "boolean"
+        : Predicate.isNumber(payload)
+          ? "number"
+          : Predicate.isBigInt(payload)
+            ? "bigint"
+            : Predicate.isSymbol(payload)
+              ? "symbol"
+              : "function";
+
+    return { valueType };
   }
 
   try {

@@ -35,7 +35,6 @@ import { sessionModelStateFromInitialize } from "../acp/AcpSessionModel.ts";
 import { discoverGrokSkills } from "../Drivers/GrokSkills.ts";
 import {
   GROK_DEFAULT_MODEL_SLUG,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Provider composition root creates the configured, scoped ACP subprocess runtime.
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
 } from "../acp/GrokAcpSupport.ts";

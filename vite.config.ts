@@ -214,6 +214,31 @@ export default defineConfig({
         rules: {
           "anti-slop/require-safety-comment-for-type-assertion": "off",
           "anti-slop-effect/no-manual-tagged-construction": "off",
+          // The rule already exempts *.test.ts; shared test harnesses build doubles the same way.
+          "anti-slop-effect/no-service-constructor-imports": "off",
+          // Proxy-based SDK doubles forward getters with their receiver, which needs Reflect.get.
+          "anti-slop/no-reflect-get": "off",
+        },
+      },
+      {
+        // Composition roots for per-instance provider runtimes. Each configured provider
+        // instance (or Grok text-generation request) gets its own scoped adapter, logger, and
+        // session runtime, so these files call the make* constructors directly instead of
+        // yielding a singleton service.
+        files: [
+          "apps/server/src/provider/Drivers/**",
+          "apps/server/src/provider/Layers/*Adapter.ts",
+          "apps/server/src/provider/Layers/AgentController.ts",
+          "apps/server/src/provider/Layers/GrokProvider.ts",
+          "apps/server/src/provider/Layers/agentController/Harness.ts",
+          "apps/server/src/provider/Layers/agentController/Workers.ts",
+          "apps/server/src/provider/Layers/grok/GrokSessionLifecycle.ts",
+          "apps/server/src/provider/acp/GrokAcpSupport.ts",
+          "apps/server/src/provider/providerMaintenanceRunner.ts",
+          "apps/server/src/textGeneration/GrokTextGeneration.ts",
+        ],
+        rules: {
+          "anti-slop-effect/no-service-constructor-imports": "off",
         },
       },
       {

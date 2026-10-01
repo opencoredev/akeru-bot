@@ -12,9 +12,9 @@ import { subscriptionRuntimeEnvironment } from "../../subscription-auth/runtime.
 import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import {
   claudeSignedOutMessage,
-  makeClaudeCapabilitiesCacheKey,
-  makeClaudeContinuationGroupKey,
-  makeClaudeEnvironment,
+  claudeCapabilitiesCacheKey,
+  claudeContinuationGroupKey,
+  claudeEnvironmentForConfig,
   resolveClaudeHomePath,
 } from "./ClaudeHome.ts";
 
@@ -26,7 +26,7 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
         const resolved = path.resolve(NodeOS.homedir());
 
         expect(yield* resolveClaudeHomePath({ homePath: "" })).toBe(resolved);
-        expect(yield* makeClaudeEnvironment({ homePath: "" })).toBe(process.env);
+        expect(yield* claudeEnvironmentForConfig({ homePath: "" })).toBe(process.env);
       }),
     );
 
@@ -37,9 +37,9 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
         const resolved = path.resolve(NodeOS.homedir(), ".claude-work");
 
         expect(yield* resolveClaudeHomePath({ homePath })).toBe(resolved);
-        expect((yield* makeClaudeEnvironment({ homePath })).CLAUDE_CONFIG_DIR).toBe(resolved);
-        expect(yield* makeClaudeContinuationGroupKey({ homePath })).toBe(`claude:home:${resolved}`);
-        expect(yield* makeClaudeCapabilitiesCacheKey({ binaryPath: "claude", homePath })).toBe(
+        expect((yield* claudeEnvironmentForConfig({ homePath })).CLAUDE_CONFIG_DIR).toBe(resolved);
+        expect(yield* claudeContinuationGroupKey({ homePath })).toBe(`claude:home:${resolved}`);
+        expect(yield* claudeCapabilitiesCacheKey({ binaryPath: "claude", homePath })).toBe(
           `claude\0${resolved}\0`,
         );
       }),
@@ -69,7 +69,7 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
 
           yield* Effect.promise(() => auth.completeLogin(login.loginId, "provider-wide-key"));
 
-          const environment = yield* makeClaudeEnvironment(
+          const environment = yield* claudeEnvironmentForConfig(
             { homePath: "~/.claude-work" },
             { CLAUDE_CODE_OAUTH_TOKEN: "native-oauth" },
           );
@@ -87,8 +87,8 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
     it.effect("separates capability probes by cwd", () =>
       Effect.gen(function* () {
         const config = { binaryPath: "claude", homePath: "" };
-        const first = yield* makeClaudeCapabilitiesCacheKey(config, "/repo-a");
-        const second = yield* makeClaudeCapabilitiesCacheKey(config, "/repo-b");
+        const first = yield* claudeCapabilitiesCacheKey(config, "/repo-a");
+        const second = yield* claudeCapabilitiesCacheKey(config, "/repo-b");
         expect(first).not.toBe(second);
       }),
     );
@@ -98,9 +98,7 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
         const path = yield* Path.Path;
         const resolved = path.resolve(NodeOS.homedir());
 
-        expect(yield* makeClaudeContinuationGroupKey({ homePath: "" })).toBe(
-          `claude:home:${resolved}`,
-        );
+        expect(yield* claudeContinuationGroupKey({ homePath: "" })).toBe(`claude:home:${resolved}`);
       }),
     );
   });

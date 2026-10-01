@@ -10,8 +10,7 @@ import {
   type SettingSource,
 } from "@anthropic-ai/claude-agent-sdk";
 import { resolveClaudeSdkExecutablePath } from "../../Drivers/ClaudeExecutable.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Provider composition root constructs an environment from this instance configuration.
-import { makeClaudeEnvironment } from "../../Drivers/ClaudeHome.ts";
+import { claudeEnvironmentForConfig } from "../../Drivers/ClaudeHome.ts";
 
 // ── SDK capability probe ────────────────────────────────────────────
 
@@ -179,7 +178,7 @@ export const probeClaudeCapabilities = (
   const abort = new AbortController();
 
   return Effect.gen(function* () {
-    const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
+    const claudeEnvironment = yield* claudeEnvironmentForConfig(claudeSettings, environment);
 
     const executablePath = yield* resolveClaudeSdkExecutablePath(
       claudeSettings.binaryPath,
@@ -190,10 +189,15 @@ export const probeClaudeCapabilities = (
       const q = claudeQuery({
         // Never yield — we only need initialization data, not a conversation.
         // This prevents any prompt from reaching the Anthropic API.
-        // oxlint-disable-next-line require-yield
-        prompt: (async function* (): AsyncGenerator<SDKUserMessage> {
-          await waitForAbortSignal(abort.signal);
-        })(),
+        prompt: {
+          [Symbol.asyncIterator]: () => ({
+            next: async (): Promise<IteratorResult<SDKUserMessage, void>> => {
+              await waitForAbortSignal(abort.signal);
+
+              return { done: true, value: undefined };
+            },
+          }),
+        },
         options: buildClaudeCapabilitiesProbeQueryOptions({
           executablePath,
           abortController: abort,

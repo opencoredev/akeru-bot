@@ -2,12 +2,12 @@ import { ProviderDriverKind, RuntimeRequestId, TurnId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  makeAcpAssistantItemEvent,
-  makeAcpContentDeltaEvent,
-  makeAcpPlanUpdatedEvent,
-  makeAcpRequestOpenedEvent,
-  makeAcpRequestResolvedEvent,
-  makeAcpToolCallEvent,
+  acpAssistantItemEvent,
+  acpContentDeltaEvent,
+  acpPlanUpdatedEvent,
+  acpRequestOpenedEvent,
+  acpRequestResolvedEvent,
+  acpToolCallEvent,
 } from "./AcpCoreRuntimeEvents.ts";
 
 describe("AcpCoreRuntimeEvents", () => {
@@ -29,7 +29,7 @@ describe("AcpCoreRuntimeEvents", () => {
     };
 
     expect(
-      makeAcpRequestOpenedEvent({
+      acpRequestOpenedEvent({
         stamp,
         provider: ProviderDriverKind.make("cursor"),
         threadId: "thread-1" as never,
@@ -50,7 +50,7 @@ describe("AcpCoreRuntimeEvents", () => {
     });
 
     expect(
-      makeAcpRequestResolvedEvent({
+      acpRequestResolvedEvent({
         stamp,
         provider: ProviderDriverKind.make("cursor"),
         threadId: "thread-1" as never,
@@ -84,7 +84,7 @@ describe("AcpCoreRuntimeEvents", () => {
       };
 
       expect(
-        makeAcpRequestOpenedEvent({
+        acpRequestOpenedEvent({
           ...request,
           detail: kind,
           source: "acp.jsonrpc",
@@ -97,7 +97,7 @@ describe("AcpCoreRuntimeEvents", () => {
       });
 
       expect(
-        makeAcpRequestResolvedEvent({
+        acpRequestResolvedEvent({
           ...request,
           decision: "accept",
         }),
@@ -113,7 +113,7 @@ describe("AcpCoreRuntimeEvents", () => {
     const turnId = TurnId.make("turn-1");
 
     expect(
-      makeAcpPlanUpdatedEvent({
+      acpPlanUpdatedEvent({
         stamp,
         provider: ProviderDriverKind.make("cursor"),
         threadId: "thread-1" as never,
@@ -133,7 +133,7 @@ describe("AcpCoreRuntimeEvents", () => {
     });
 
     expect(
-      makeAcpToolCallEvent({
+      acpToolCallEvent({
         stamp,
         provider: ProviderDriverKind.make("cursor"),
         threadId: "thread-1" as never,
@@ -157,7 +157,7 @@ describe("AcpCoreRuntimeEvents", () => {
     });
 
     expect(
-      makeAcpContentDeltaEvent({
+      acpContentDeltaEvent({
         stamp,
         provider: ProviderDriverKind.make("cursor"),
         threadId: "thread-1" as never,
@@ -175,7 +175,7 @@ describe("AcpCoreRuntimeEvents", () => {
     });
 
     expect(
-      makeAcpAssistantItemEvent({
+      acpAssistantItemEvent({
         stamp,
         provider: ProviderDriverKind.make("cursor"),
         threadId: "thread-1" as never,

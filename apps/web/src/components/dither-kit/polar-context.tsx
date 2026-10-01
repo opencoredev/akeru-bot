@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import type { ChartValue } from "./chartValue";
@@ -6,13 +5,7 @@ import type { ChartValue } from "./chartValue";
 import { Predicate } from "effect";
 
 import { createContext, use, useCallback, useMemo, useState } from "react";
-import {
-  type AreaVariant,
-  type ChartConfig,
-  type ChartType,
-  type Margins,
-  useRevision,
-} from "./chart-context";
+import { type AreaVariant, type ChartConfig, type Margins, useRevision } from "./chart-context";
 import type { CommonChart } from "./common-context";
 import type { BloomInput } from "./dither-paint";
 import type { Seed } from "./palette";
@@ -28,7 +21,7 @@ const ROOT_OF = {
 } satisfies Record<string, string>;
 
 export type PolarChartContextValue = {
-  chartType: ChartType;
+  chartType: "pie" | "radar";
   config: ChartConfig;
   configKeys: string[];
   data: Row[];

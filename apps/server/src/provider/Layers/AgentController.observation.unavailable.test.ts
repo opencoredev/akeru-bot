@@ -38,12 +38,12 @@ import {
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
 import { makeMemoryOnlyCredentialOptions } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("rejects conversation memory calls when the harness has no memory", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -75,7 +75,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("registers the file-backed memory tool for Mastra sessions", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const access = {
       tenantId: AkeruMemoryTenantId.make("local"),
@@ -148,7 +148,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("keeps group memory tools bound to the admitted responding bot", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const memoryDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-group-tool-scope-"));
     const botMemoryStore = new BotMemoryStore(memoryDir);
     const botA = BotId.make("bot-group-active-a");
@@ -265,7 +265,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("honors the Memory setting per turn on the Mastra path", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const memoryDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "akeru-memory-toggle-mastra-"),
@@ -368,7 +368,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("keeps group facts out of memory when group membership cannot be rechecked", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const botId = BotId.make("bot-entity-memory-stale-group");
 
     const access = {
@@ -427,7 +427,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("drops a Mastra admission interrupted while the memory settings read is held", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const memoryDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "akeru-mastra-admit-gate-"),
@@ -557,7 +557,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("dispatches a thread activity when an observation is dropped", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const dispatched: Array<{
       readonly type: string;

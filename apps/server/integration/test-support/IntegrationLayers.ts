@@ -14,22 +14,18 @@ import { ProjectionCheckpointRepositoryLive } from "../../src/persistence/Layers
 import { ProjectionPendingApprovalRepositoryLive } from "../../src/persistence/Layers/ProjectionPendingApprovals.ts";
 import { ProviderSessionRuntimeRepositoryLive } from "../../src/persistence/Layers/ProviderSessionRuntime.ts";
 import { sqlitePersistenceLayer } from "../../src/persistence/Layers/Sqlite.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root supplies its isolated adapter registry.
-import { makeAdapterRegistryMock } from "../../src/provider/testUtils/providerAdapterRegistryMock.ts";
+import { adapterRegistryMock } from "../../src/provider/testUtils/providerAdapterRegistryMock.ts";
 import { ProviderAdapterRegistry } from "../../src/provider/Services/ProviderAdapterRegistry.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root binds the provider registry to its test configuration.
 import { makeProviderRegistryLayer } from "../../src/provider/testUtils/providerRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../../src/provider/Layers/ProviderSessionDirectory.ts";
 import { ServerSettingsService } from "../../src/serverSettings.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root assembles the controller around fake provider runtimes.
-import { makeAgentControllerLive } from "../../src/provider/Layers/AgentController.ts";
+import { agentControllerLayerWith } from "../../src/provider/Layers/AgentController.ts";
 import { EntityMemoryRepository } from "../../src/memory/Services/EntityMemoryRepository.ts";
 import { type TestMastraHarness } from "../TestMastraHarness.integration.ts";
 import { EntityMemoryRepositoryLive } from "../../src/memory/Layers/EntityMemoryRepository.ts";
 import { MemoryRevisionWriteLockLive } from "../../src/memory/Services/MemoryRevisionWriteLock.ts";
 import { LegacyProviderBridgeLive } from "../../src/provider/Layers/LegacyProviderBridge.ts";
 import { ProviderServiceLive } from "../../src/provider/Layers/ProviderService.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This integration composition root supplies a test-configured Codex adapter.
 import { makeCodexAdapter } from "../../src/provider/Layers/CodexAdapter.ts";
 import {
   NoOpProviderEventLoggers,
@@ -78,7 +74,7 @@ export function createIntegrationLayers({
   const fakeRegistry = adapterHarness
     ? Layer.succeed(
         ProviderAdapterRegistry,
-        makeAdapterRegistryMock({ [adapterHarness.provider]: adapterHarness.adapter }),
+        adapterRegistryMock({ [adapterHarness.provider]: adapterHarness.adapter }),
       )
     : null;
 
@@ -105,7 +101,7 @@ export function createIntegrationLayers({
       const codexSettings = yield* decodeCodexSettings({});
       const codexAdapter = yield* makeCodexAdapter(codexSettings);
 
-      return makeAdapterRegistryMock({
+      return adapterRegistryMock({
         [ProviderDriverKind.make("codex")]: codexAdapter,
       });
     }),
@@ -135,7 +131,7 @@ export function createIntegrationLayers({
 
   const agentControllerLayer = Layer.unwrap(
     Effect.map(Effect.service(EntityMemoryRepository), (entityMemoryRepository) =>
-      makeAgentControllerLive({
+      agentControllerLayerWith({
         entityMemoryRepository,
         ...(mastraHarness ? { makeMastraHarness: mastraHarness.factory } : {}),
       }),

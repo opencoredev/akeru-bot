@@ -9,14 +9,14 @@ import * as Stream from "effect/Stream";
 import { ProviderUnsupportedError, ProviderValidationError } from "../Errors.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
-import { makeProviderServiceLive } from "./ProviderService.ts";
+import { providerServiceLayerWith } from "./ProviderService.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
 import * as ServerSettings from "../../serverSettings.ts";
-import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
+import { adapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
 import {
   defaultServerSettingsLayer,
   serverConfigTestLayer,
@@ -36,7 +36,7 @@ it.effect("ProviderServiceLive rejects new sessions for disabled providers", () 
     const codex = makeFakeCodexAdapter();
     const claude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
 
-    const registryBase = makeAdapterRegistryMock({
+    const registryBase = adapterRegistryMock({
       [CODEX_DRIVER]: codex.adapter,
       [CLAUDE_AGENT_DRIVER]: claude.adapter,
     });
@@ -69,7 +69,7 @@ it.effect("ProviderServiceLive rejects new sessions for disabled providers", () 
 
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
 
-    const providerLayer = makeProviderServiceLive().pipe(
+    const providerLayer = providerServiceLayerWith().pipe(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
       Layer.provide(defaultServerSettingsLayer),
@@ -169,7 +169,7 @@ it.effect(
         Layer.provide(runtimeRepositoryLayer),
       );
 
-      const providerLayer = makeProviderServiceLive().pipe(
+      const providerLayer = providerServiceLayerWith().pipe(
         Layer.provide(providerAdapterLayer),
         Layer.provide(directoryLayer),
         Layer.provide(serverSettingsLayer),
@@ -254,7 +254,7 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
 
     const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
 
-    const providerLayer = makeProviderServiceLive().pipe(
+    const providerLayer = providerServiceLayerWith().pipe(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
       Layer.provide(defaultServerSettingsLayer),

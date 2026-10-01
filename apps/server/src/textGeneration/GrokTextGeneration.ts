@@ -18,7 +18,6 @@ import { sanitizeThreadTitle } from "./TextGenerationUtils.ts";
 import {
   applyGrokAcpModelSelection,
   currentGrokModelIdFromSessionSetup,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Each text-generation request owns an ACP process scoped to that request.
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
 } from "../provider/acp/GrokAcpSupport.ts";

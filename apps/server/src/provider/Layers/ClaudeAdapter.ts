@@ -46,8 +46,7 @@ import * as Stream from "effect/Stream";
 import { ServerConfig } from "../../config.ts";
 
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Provider composition root constructs an environment from this instance configuration.
-import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
+import { claudeEnvironmentForConfig } from "../Drivers/ClaudeHome.ts";
 import { discoverClaudeSkills } from "../Drivers/ClaudeSkills.ts";
 import {
   getClaudeModelCapabilities,
@@ -63,7 +62,6 @@ import {
 } from "../Errors.ts";
 import { type ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
 import { type EventNdjsonLogger } from "./logging/EventLogTypes.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root creates the scoped logger with this adapter configuration.
 import { makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 import {
@@ -108,9 +106,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   const serverConfig = yield* ServerConfig;
   const crypto = yield* Crypto.Crypto;
 
-  const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, options?.environment).pipe(
-    Effect.provideService(Path.Path, path),
-  );
+  const claudeEnvironment = yield* claudeEnvironmentForConfig(
+    claudeSettings,
+    options?.environment,
+  ).pipe(Effect.provideService(Path.Path, path));
 
   const claudeSdkExecutablePath = yield* resolveClaudeSdkExecutablePath(
     claudeSettings.binaryPath,
