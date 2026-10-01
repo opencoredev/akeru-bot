@@ -1,6 +1,4 @@
 import {
-  DesktopUpdateChannelSchema,
-  type DesktopRuntimeInfo,
   type DesktopUpdateActionResult,
   type DesktopUpdateChannel,
   type DesktopUpdateCheckResult,
@@ -15,9 +13,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
-import * as Scope from "effect/Scope";
 
+import * as Scope from "effect/Scope";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
@@ -41,112 +38,44 @@ import {
   reduceDesktopUpdateStateOnNoUpdate,
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine.ts";
+import {
+  type AppUpdateYmlConfig,
+  decodeAppUpdateYmlConfig,
+  getAutoUpdateDisabledReason,
+  isArm64HostRunningIntelBuild,
+  decodeUpdateInfo,
+  getCanRetryFromState,
+  decodeDownloadProgressInfo,
+  shouldBroadcastDownloadProgress,
+  createBaseUpdateState,
+} from "./UpdatePolicy.ts";
+import {
+  type DesktopUpdateConfigureError,
+  type DesktopUpdateSetChannelError,
+  DesktopUpdateUnexpectedActionError,
+  DesktopUpdatePollerError,
+  DesktopUpdateEventHandlingError,
+  DesktopUpdaterReportedError,
+  DesktopUpdateActionInProgressError,
+  DesktopUpdateChannelPersistenceError,
+} from "./UpdateErrors.ts";
+export { DesktopUpdateActionInProgressError } from "./UpdateErrors.ts";
+export { DesktopUpdateChannelPersistenceError } from "./UpdateErrors.ts";
+export { DesktopUpdatePollerError } from "./UpdateErrors.ts";
+export { DesktopUpdateEventHandlingError } from "./UpdateErrors.ts";
+export { DesktopUpdaterReportedError } from "./UpdateErrors.ts";
+export { DesktopUpdateUnexpectedActionError } from "./UpdateErrors.ts";
+export type { DesktopUpdateConfigureError } from "./UpdateErrors.ts";
+export { DesktopUpdateSetChannelError } from "./UpdateErrors.ts";
+export { isDesktopUpdateSetChannelError } from "./UpdateErrors.ts";
 
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
+
 const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
 
 type UpdateAction = "check" | "download" | "install" | "channel";
 
-const AppUpdateYmlConfig = Schema.Record(Schema.String, Schema.String);
-type AppUpdateYmlConfig = typeof AppUpdateYmlConfig.Type;
-
-const UpdateInfo = Schema.Struct({
-  version: Schema.String,
-  // Left unvalidated on purpose: a malformed release-notes payload must never
-  // fail the decode and block the update state transition. The shape is
-  // validated defensively in normalizeDesktopUpdateReleaseNotes.
-  releaseNotes: Schema.optional(Schema.Unknown),
-});
-
-const DownloadProgressInfo = Schema.Struct({
-  percent: Schema.Number,
-});
-const decodeAppUpdateYmlConfig = Schema.decodeUnknownEffect(AppUpdateYmlConfig);
-const decodeUpdateInfo = Schema.decodeUnknownEffect(UpdateInfo);
-const decodeDownloadProgressInfo = Schema.decodeUnknownEffect(DownloadProgressInfo);
-
 const currentIsoTimestamp = DateTime.now.pipe(Effect.map(DateTime.formatIso));
-
-export class DesktopUpdateActionInProgressError extends Schema.TaggedErrorClass<DesktopUpdateActionInProgressError>()(
-  "DesktopUpdateActionInProgressError",
-  {
-    action: Schema.Literals(["check", "download", "install", "channel"]),
-    requestedChannel: DesktopUpdateChannelSchema,
-  },
-) {
-  override get message(): string {
-    return `Cannot change the desktop update channel to ${this.requestedChannel} while an update ${this.action} action is in progress.`;
-  }
-}
-
-export class DesktopUpdateChannelPersistenceError extends Schema.TaggedErrorClass<DesktopUpdateChannelPersistenceError>()(
-  "DesktopUpdateChannelPersistenceError",
-  {
-    channel: DesktopUpdateChannelSchema,
-    cause: Schema.instanceOf(DesktopAppSettings.DesktopSettingsWriteError),
-  },
-) {
-  override get message(): string {
-    return `Failed to persist the ${this.channel} desktop update channel.`;
-  }
-}
-
-export class DesktopUpdatePollerError extends Schema.TaggedErrorClass<DesktopUpdatePollerError>()(
-  "DesktopUpdatePollerError",
-  {
-    poller: Schema.Literals(["startup", "poll"]),
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Desktop update ${this.poller} poller failed.`;
-  }
-}
-
-export class DesktopUpdateEventHandlingError extends Schema.TaggedErrorClass<DesktopUpdateEventHandlingError>()(
-  "DesktopUpdateEventHandlingError",
-  {
-    event: Schema.Literals(["update-available", "download-progress", "update-downloaded"]),
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Failed to handle desktop update ${this.event} event.`;
-  }
-}
-
-export class DesktopUpdaterReportedError extends Schema.TaggedErrorClass<DesktopUpdaterReportedError>()(
-  "DesktopUpdaterReportedError",
-  {
-    operation: Schema.Literals(["check", "download", "install", "channel", "background"]),
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Desktop updater ${this.operation} operation reported an error.`;
-  }
-}
-
-export class DesktopUpdateUnexpectedActionError extends Schema.TaggedErrorClass<DesktopUpdateUnexpectedActionError>()(
-  "DesktopUpdateUnexpectedActionError",
-  {
-    action: Schema.Literals(["download", "install"]),
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Desktop update ${this.action} action failed unexpectedly.`;
-  }
-}
-
-export type DesktopUpdateConfigureError = never;
-
-export const DesktopUpdateSetChannelError = Schema.Union([
-  DesktopUpdateActionInProgressError,
-  DesktopUpdateChannelPersistenceError,
-]);
-export type DesktopUpdateSetChannelError = typeof DesktopUpdateSetChannelError.Type;
-export const isDesktopUpdateSetChannelError = Schema.is(DesktopUpdateSetChannelError);
 
 export class DesktopUpdates extends Context.Service<
   DesktopUpdates,
@@ -183,67 +112,6 @@ function parseAppUpdateYml(raw: string): Effect.Effect<Option.Option<AppUpdateYm
     Effect.map((config) => (config.provider ? Option.some(config) : Option.none())),
     Effect.orElseSucceed(() => Option.none<AppUpdateYmlConfig>()),
   );
-}
-
-function createBaseUpdateState(
-  channel: DesktopUpdateChannel,
-  enabled: boolean,
-  environment: DesktopEnvironment.DesktopEnvironment["Service"],
-): DesktopUpdateState {
-  return {
-    ...createInitialDesktopUpdateState(environment.appVersion, environment.runtimeInfo, channel),
-    enabled,
-    status: enabled ? "idle" : "disabled",
-  };
-}
-
-function getCanRetryFromState(state: DesktopUpdateState): boolean {
-  return state.availableVersion !== null || state.downloadedVersion !== null;
-}
-
-function shouldBroadcastDownloadProgress(
-  currentState: DesktopUpdateState,
-  nextPercent: number,
-): boolean {
-  if (currentState.status !== "downloading") {
-    return true;
-  }
-
-  const currentPercent = currentState.downloadPercent;
-  if (currentPercent === null) {
-    return true;
-  }
-
-  const previousStep = Math.floor(currentPercent / 10);
-  const nextStep = Math.floor(nextPercent / 10);
-  return nextStep !== previousStep || nextPercent === 100;
-}
-
-function getAutoUpdateDisabledReason(args: {
-  isDevelopment: boolean;
-  isPackaged: boolean;
-  platform: NodeJS.Platform;
-  appImage?: string | undefined;
-  disabledByEnv: boolean;
-  hasUpdateFeedConfig: boolean;
-}): string | null {
-  if (!args.hasUpdateFeedConfig) {
-    return "Automatic updates are not available because no update feed is configured.";
-  }
-  if (args.isDevelopment || !args.isPackaged) {
-    return "Automatic updates are only available in packaged production builds.";
-  }
-  if (args.disabledByEnv) {
-    return "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.";
-  }
-  if (args.platform === "linux" && !args.appImage) {
-    return "Automatic updates on Linux require running the AppImage build.";
-  }
-  return null;
-}
-
-function isArm64HostRunningIntelBuild(runtimeInfo: DesktopRuntimeInfo): boolean {
-  return runtimeInfo.hostArch === "arm64" && runtimeInfo.appArch === "x64";
 }
 
 export const make = Effect.gen(function* () {
