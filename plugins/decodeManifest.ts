@@ -1,5 +1,5 @@
 import { PLUGIN_APPROVAL_CLASSES, PLUGIN_CATEGORIES } from "./categories.ts";
-import { PLUGIN_SCHEMA_VERSION, type PluginPlatform, type PluginAuthentication, type PluginCatalogStatus, type Party, type PluginLogoManifest, type PluginTransport, type PluginConnection, type PluginSkill, type PluginPermission, type PluginManifest } from "./manifestTypes.ts";
+import { PLUGIN_SCHEMA_VERSION, type PluginPlatform, type PluginAuthentication, type PluginCatalogStatus, type Party, type PluginLogoManifest, type PluginTransport, type PluginConnection, type PluginSkill, type PluginPermission, type PluginManifest, } from "./manifestTypes.ts";
 
 const PLUGIN_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const PLATFORMS: readonly PluginPlatform[] = [

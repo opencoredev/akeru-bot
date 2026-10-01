@@ -1,4 +1,4 @@
-import type { PluginApprovalClass, CatalogCategory } from "./categories.ts";
+import type { PluginApprovalClass, CatalogCategory, } from "./categories.ts";
 
 export const PLUGIN_SCHEMA_VERSION = 1 as const;
 
