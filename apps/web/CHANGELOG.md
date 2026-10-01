@@ -1,5 +1,14 @@
 ## @akeru/web@0.0.41
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @akeru/contracts@0.2.1
+  - @akeru/client-runtime@0.0.4
+  - @akeru/shared@0.0.4
+
 ## 0.2.0
 
 ### Minor Changes

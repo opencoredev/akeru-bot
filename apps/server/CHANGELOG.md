@@ -1,5 +1,13 @@
 # akeru-bot
 
+## 0.2.1
+
+### Patch Changes
+
+- [#341](https://github.com/opencoredev/akeru-bot/pull/341) [`3b141ca`](https://github.com/opencoredev/akeru-bot/commit/3b141ca6b2f68b982e870e6b57ce1e5a886caa23) Thanks [@leoisadev1](https://github.com/leoisadev1)! - ChatGPT, Claude, and Grok sign-ins no longer require their CLIs to be installed. Chat titles and branch names use the saved Akeru connection too.
+
+  Existing Codex, Claude, and Grok model selections remain usable, connection status updates immediately after sign-in or sign-out, and generated titles and branch names retain model options and screenshot context. Writing requests have a three-minute deadline and continue with text when a screenshot is unavailable.
+
 ## 0.2.0
 
 ### Minor Changes
