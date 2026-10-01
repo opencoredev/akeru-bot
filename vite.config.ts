@@ -206,6 +206,15 @@ export default defineConfig({
         },
       },
       {
+        // Tests build partial fixtures and tagged values by hand on purpose; a SAFETY comment on
+        // every fixture cast or a constructor for every literal error adds noise, not safety.
+        files: ["**/*.test.{ts,tsx}", "**/test/**", "**/testUtils/**", "**/test-support/**"],
+        rules: {
+          "anti-slop/require-safety-comment-for-type-assertion": "off",
+          "anti-slop-effect/no-manual-tagged-construction": "off",
+        },
+      },
+      {
         files: ["apps/web/src/**/*.{ts,tsx}"],
         rules: {
           "shadcn/no-restyle": ["warn", NO_RESTYLE],

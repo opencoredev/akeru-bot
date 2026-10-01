@@ -119,6 +119,10 @@ Do not add a `warn` rule without a count, and do not move a rule back from `erro
 land a change. Fix the code or argue for turning the rule off, with the reason written next to it
 in the config.
 
+Test files (`*.test.*`, `test/`, `testUtils/`, `test-support/`) turn off
+`require-safety-comment-for-type-assertion` and `no-manual-tagged-construction`. Tests build
+partial fixtures and tagged values by hand on purpose, and annotating each one adds noise.
+
 A deliberate exception gets a disable comment with its reason after `--`:
 
 ```tsx
