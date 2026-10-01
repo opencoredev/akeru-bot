@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 import wasmDataUrl from "./vendor/ghostty-vt.wasm?inline";
 
 const decodeWasmResult = Schema.decodeUnknownSync(Schema.UndefinedOr(Schema.Number));
+
 export function decodeWasmDataUrl(dataUrl: string) {
   const encoded = dataUrl.split(",", 2)[1];
 
