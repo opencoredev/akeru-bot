@@ -40,6 +40,7 @@ policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../A
 - [Glossary](./internals/glossary.md)
 - [Scripts](./internals/scripts.md)
 - [Local verification](./internals/verification.md)
+- [Lint rules](./internals/lint.md)
 - [Interface translations](./internals/interface-translations.md)
 - [Connection runtime](./internals/connection-runtime.md)
 - [Providers](./internals/providers.md)

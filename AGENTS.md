@@ -122,6 +122,13 @@ Choose meaningful test data. Use deterministic visual fixtures for repeatable UI
 - The server is event-sourced and its async flows emit typed receipts. Wait on receipts and worker drains, never on sleeps or polling. A test that needs a timeout to pass is wrong.
 - Implementation requests include focused verification in isolated local clients. Follow [the verification policy](docs/internals/verification.md) for authorization, coverage, evidence, and environment lifetime. Use `test-t3-app` for web or desktop and `test-t3-mobile` for native mobile. The primary agent performs the integrated pass; subagents do not launch dev servers.
 
+## Lint
+
+- Oxlint runs anti-slop, Effect, and shadcn design-system rules on top of the built-ins. Run `vp lint <paths>` on the files you touched and fix what it reports there. Do not lower a rule from `error` to `warn` to get a change through.
+- Keep files under 800 lines. Split along real seams such as a component, a service, or a test fixture group, not at an arbitrary line.
+- New web UI uses the primitives in `apps/web/src/components/ui` and the theme tokens in `apps/web/src/index.css`. No raw palette colors, no arbitrary values such as `w-[13px]`, and no restyling a primitive through `className`. Pick a variant or size, or add one to the primitive.
+- Rule groups, the warn-to-error ratchet, and the shadcn contracts are in [docs/internals/lint.md](docs/internals/lint.md).
+
 ## Pull requests
 
 - Never make a PR unless the developer explicitly asks you to do so.
