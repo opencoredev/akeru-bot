@@ -264,6 +264,15 @@ export default defineConfig({
           "shadcn/no-inline-styles": "error",
           "shadcn/no-unknown-classes": "error",
           "shadcn/require-static-classes": "error",
+          "akeru/no-raw-palette-strings": "error",
+        },
+      },
+      {
+        // Tests pass hardcoded palette classes to class helpers (cn merging, theme inspection)
+        // to prove those helpers handle them. The strings are inputs, never rendered UI.
+        files: ["apps/web/src/**/*.test.{ts,tsx}"],
+        rules: {
+          "akeru/no-raw-palette-strings": "off",
         },
       },
       {
