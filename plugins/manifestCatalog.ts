@@ -1,5 +1,6 @@
 import { parsePluginManifest, type PluginManifest } from "./schema.ts";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Imported JSON modules are raw input; loadManifestCatalog validates each entry with parsePluginManifest before returning domain values.
 export type CatalogManifestModules = Readonly<Record<string, unknown>>;
 
 type PluginManifestInstallability = Pick<

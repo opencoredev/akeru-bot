@@ -1,11 +1,15 @@
+import { isJsonValue } from "./json.ts";
 import { decodePluginManifest } from "./decodeManifest.ts";
 import type { PluginManifest } from "./manifestTypes.ts";
 import { validateManifest } from "./validateManifest.ts";
 
 export { PLUGIN_SCHEMA_VERSION, type PluginManifest, type PluginSkill } from "./manifestTypes.ts";
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Public catalog parser receives untrusted module values and validates the JSON tree at this boundary.
 export function parsePluginManifest(input: unknown, source = "plugin manifest"): PluginManifest {
   try {
+    if (!isJsonValue(input)) throw new TypeError("plugin manifest must contain JSON values.");
+
     return validateManifest(decodePluginManifest(input));
   } catch (error) {
     throw new TypeError(`${source} is invalid: ${String(error)}`, { cause: error });
@@ -14,7 +18,9 @@ export function parsePluginManifest(input: unknown, source = "plugin manifest"):
 
 export function parsePluginManifestJson(input: string, source = "plugin manifest"): PluginManifest {
   try {
-    const value: unknown = JSON.parse(input);
+    const value = JSON.parse(input);
+
+    if (!isJsonValue(value)) throw new TypeError("plugin manifest must contain JSON values.");
 
     return validateManifest(decodePluginManifest(value));
   } catch (error) {
