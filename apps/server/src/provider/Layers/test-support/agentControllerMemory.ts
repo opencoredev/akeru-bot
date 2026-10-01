@@ -137,7 +137,7 @@ export function makeMemoryOnlyCredentialOptions() {
   };
 }
 
-export function makeUsageLedger() {
+export function usageLedgerFixture() {
   const reserve = vi.fn<BotUsageLedgerShape["reserve"]>(() => Effect.succeed({} as never));
   const settle = vi.fn<BotUsageLedgerShape["settle"]>(() => Effect.succeed({} as never));
 

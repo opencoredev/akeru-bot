@@ -71,7 +71,7 @@ function parseSkillFrontmatter(contents: string): SkillFrontmatter {
 /**
  * Resolve the Claude config directory the CLI would use, matching the
  * precedence the spawned CLI sees: the instance's `homePath` (exported as
- * `CLAUDE_CONFIG_DIR` by `makeClaudeEnvironment`), then a `CLAUDE_CONFIG_DIR`
+ * `CLAUDE_CONFIG_DIR` by `claudeEnvironment`), then a `CLAUDE_CONFIG_DIR`
  * already present in the process environment, then `~/.claude`.
  */
 const resolveClaudeConfigDirPath = Effect.fn("resolveClaudeConfigDirPath")(function* (

@@ -13,7 +13,6 @@ import * as FiberSet from "effect/FiberSet";
 import * as Scope from "effect/Scope";
 import { vi } from "vite-plus/test";
 import {
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The test composition root creates each harness in its own child scope.
   makeAkeruMastraHarness,
   type AkeruMastraHarness,
   type AkeruMastraHarnessOptions,
@@ -131,7 +130,6 @@ export function makeAkeruMastraHarnessTestSupport() {
               };
             }
 
-            // oxlint-disable-next-line anti-slop/no-reflect-get -- Forward SDK getters through the proxy while retaining their receiver and private state.
             const value = Reflect.get(target, property, receiver);
 
             return Predicate.isFunction(value) ? value.bind(target) : value;

@@ -60,10 +60,8 @@ import {
 import { toMcpElicitationResponse } from "./codex/CodexMcpElicitation.ts";
 import {
   type CodexServerNotification,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure method/params envelope builder; no Effect service is constructed.
-  makeCodexServerNotification,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure notification predicate factory; no Effect service is constructed.
-  makeMemoryConsolidationNotificationFilter,
+  codexServerNotification,
+  memoryConsolidationNotificationFilter,
   type CollabChildAgentState,
 } from "./codex/CodexRuntimeNotifications.ts";
 import {
@@ -91,7 +89,7 @@ export const makeCodexSessionRuntime = (
     const collabChildAgentsRef = yield* Ref.make(new Map<string, CollabChildAgentState>());
     /** Child provider-thread id → its currently running provider turn id. */
     const collabChildLiveTurnsRef = yield* Ref.make(new Map<string, string>());
-    const suppressMemoryConsolidationNotification = makeMemoryConsolidationNotificationFilter();
+    const suppressMemoryConsolidationNotification = memoryConsolidationNotificationFilter();
     const closedRef = yield* Ref.make(false);
 
     // `~` is not shell-expanded when env vars are set via
@@ -542,7 +540,7 @@ export const makeCodexSessionRuntime = (
 
     const registerServerNotification = <M extends CodexRpc.ServerNotificationMethod>(method: M) =>
       client.handleServerNotification(method, (params) =>
-        Queue.offer(serverNotifications, makeCodexServerNotification(method, params)).pipe(
+        Queue.offer(serverNotifications, codexServerNotification(method, params)).pipe(
           Effect.asVoid,
         ),
       );
@@ -927,7 +925,7 @@ export { describeMcpElicitation, toMcpElicitationResponse } from "./codex/CodexM
 export { isRecoverableThreadResumeError, openCodexThread } from "./codex/CodexRuntimeOpening.ts";
 
 export {
-  makeMemoryConsolidationNotificationFilter,
+  memoryConsolidationNotificationFilter,
   type CodexChildNotificationRoute,
   routeCodexChildNotification,
 } from "./codex/CodexRuntimeNotifications.ts";

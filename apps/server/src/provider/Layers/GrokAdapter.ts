@@ -39,13 +39,11 @@ import {
 } from "../Errors.ts";
 import { mapAcpToAdapterError } from "../acp/AcpAdapterSupport.ts";
 
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root configures its ACP native log factory.
 import { makeAcpNativeLoggerFactory } from "../acp/AcpNativeLogging.ts";
 import { applyGrokAcpModelSelection, resolveGrokAcpBaseModelId } from "../acp/GrokAcpSupport.ts";
 
 import { type GrokAdapterShape } from "../Services/GrokAdapter.ts";
 import { type EventNdjsonLogger } from "./logging/EventLogTypes.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Adapter composition root creates the scoped logger with this adapter configuration.
 import { makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 import { PROVIDER, type GrokSessionContext } from "./grok/GrokAdapterState.ts";

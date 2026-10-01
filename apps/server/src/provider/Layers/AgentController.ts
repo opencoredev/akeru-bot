@@ -95,9 +95,7 @@ import { createAkeruBotStateRuntime, type AkeruBotStateRuntime } from "../AkeruB
 import { AkeruMemoryTurnHarness, type AkeruMemoryTurn } from "../AkeruMemoryTurnHarness.ts";
 import { type AkeruDelegationChildOutcome } from "../AkeruDelegationRuntime.ts";
 
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Controller composition root captures its scoped runtime for provider callbacks.
 import { makeAkeruRuntimeSeam } from "../AkeruRuntimeSeam.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Controller composition root creates scope-owned waiters for this controller.
 import { makePendingWaiters } from "../PendingWaiters.ts";
 import {
   createAkeruPluginRuntime,
@@ -879,7 +877,7 @@ const make = (options?: AgentControllerLiveOptions) =>
     });
   });
 
-export const makeAgentControllerLive = (options?: AgentControllerLiveOptions) =>
+export const agentControllerLayerWith = (options?: AgentControllerLiveOptions) =>
   Layer.effect(AgentController, make(options));
 
 export const AgentControllerLive = Layer.effect(

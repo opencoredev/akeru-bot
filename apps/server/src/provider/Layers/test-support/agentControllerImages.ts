@@ -20,8 +20,7 @@ import { ProjectionBotRepository } from "../../../persistence/Services/Projectio
 import { ProjectionThreadMessageRepository } from "../../../persistence/Services/ProjectionThreadMessages.ts";
 import * as OrchestrationEngine from "../../../orchestration/Services/OrchestrationEngine.ts";
 import { BotUsageLedger } from "../../../usage/BotUsageLedger.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured UsageLedger double or Layer for isolated provider tests.
-import { makeUsageLedger } from "./agentControllerMemory.ts";
+import { usageLedgerFixture } from "./agentControllerMemory.ts";
 
 export function makeImageRuntimeTestLayer(input: {
   readonly baseDir: string;
@@ -111,7 +110,7 @@ export function makeImageRuntimeTestLayer(input: {
       Layer.succeed(
         BotUsageLedger,
         BotUsageLedger.of({
-          ...makeUsageLedger().service,
+          ...usageLedgerFixture().service,
           recordMeasurement: (measurement) =>
             Effect.sync(() => {
               imageUsage.push(measurement);

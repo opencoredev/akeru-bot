@@ -21,21 +21,17 @@ import * as Schema from "effect/Schema";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeOpenCodeTextGeneration } from "../../textGeneration/OpenCodeTextGeneration.ts";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderDriverError } from "../Errors.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeOpenCodeAdapter } from "../Layers/OpenCodeAdapter.ts";
 import {
   checkOpenCodeProviderStatus,
-  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
-  makePendingOpenCodeProvider,
+  pendingOpenCodeProvider,
 } from "../Layers/OpenCodeProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import { OpenCodeRuntime } from "../opencodeRuntime.ts";
 import {
@@ -173,7 +169,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
           streamSettings: snapshotSettings.streamSettings,
           haveSettingsChanged: haveProviderSnapshotSettingsChanged,
           initialSnapshot: (settings) =>
-            makePendingOpenCodeProvider(settings.provider).pipe(Effect.map(stampIdentity)),
+            pendingOpenCodeProvider(settings.provider).pipe(Effect.map(stampIdentity)),
           checkProvider,
           enrichSnapshot: ({ settings, snapshot, publishSnapshot }) =>
             enrichProviderSnapshotWithVersionAdvisory(snapshot, maintenanceCapabilities, {

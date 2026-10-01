@@ -1,3 +1,4 @@
+import { registeredProviderDriver } from "../registeredProviderDriver.ts";
 /**
  * Multi-instance validation slices for `ProviderInstanceRegistryLive`.
  *
@@ -41,7 +42,7 @@ import { LegacyProviderBridgeLive } from "./LegacyProviderBridge.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import { ProviderAdapterRegistry, makeProviderAdapterRegistry } from "./ProviderAdapterRegistry.ts";
 import { ProviderInstanceRegistry } from "../Services/ProviderInstanceRegistry.ts";
-import { makeProviderServiceLive } from "./ProviderService.ts";
+import { providerServiceLayerWith } from "./ProviderService.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
@@ -90,7 +91,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
       };
 
       const { registry } = yield* makeProviderInstanceRegistry({
-        drivers: [CodexDriver],
+        drivers: [registeredProviderDriver(CodexDriver)],
         configMap,
       });
 
@@ -151,7 +152,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
       };
 
       const { registry } = yield* makeProviderInstanceRegistry({
-        drivers: [CodexDriver],
+        drivers: [registeredProviderDriver(CodexDriver)],
         configMap,
       });
 
@@ -186,7 +187,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
       };
 
       const { registry, mutator } = yield* makeProviderInstanceRegistry({
-        drivers: [CodexDriver],
+        drivers: [registeredProviderDriver(CodexDriver)],
         configMap: enabledConfig,
       });
 
@@ -249,7 +250,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
         };
 
         const { registry } = yield* makeProviderInstanceRegistry({
-          drivers: [CodexDriver],
+          drivers: [registeredProviderDriver(CodexDriver)],
           configMap,
         });
 
@@ -320,7 +321,13 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       };
 
       const { registry } = yield* makeProviderInstanceRegistry<BuiltInDriversEnv>({
-        drivers: [CodexDriver, ClaudeDriver, GrokDriver, KimiDriver, OpenCodeDriver],
+        drivers: [
+          registeredProviderDriver(CodexDriver),
+          registeredProviderDriver(ClaudeDriver),
+          registeredProviderDriver(GrokDriver),
+          registeredProviderDriver(KimiDriver),
+          registeredProviderDriver(OpenCodeDriver),
+        ],
         configMap,
       });
 
@@ -436,7 +443,7 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
       };
 
       const { registry } = yield* makeProviderInstanceRegistry({
-        drivers: [KimiDriver],
+        drivers: [registeredProviderDriver(KimiDriver)],
         configMap,
       });
 
@@ -470,7 +477,7 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
       const bridgeContext = yield* Layer.build(
         LegacyProviderBridgeLive.pipe(
           Layer.provide(
-            makeProviderServiceLive().pipe(
+            providerServiceLayerWith().pipe(
               Layer.provide(Layer.succeed(ProviderAdapterRegistry, adapterRegistry)),
               Layer.provide(
                 ProviderSessionDirectoryLive.pipe(

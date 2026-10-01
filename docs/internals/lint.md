@@ -120,8 +120,15 @@ land a change. Fix the code or argue for turning the rule off, with the reason w
 in the config.
 
 Test files (`*.test.*`, `test/`, `testUtils/`, `test-support/`) turn off
-`require-safety-comment-for-type-assertion` and `no-manual-tagged-construction`. Tests build
-partial fixtures and tagged values by hand on purpose, and annotating each one adds noise.
+`require-safety-comment-for-type-assertion`, `no-manual-tagged-construction`,
+`no-service-constructor-imports`, and `no-reflect-get`. Tests build partial fixtures, tagged
+values, and service doubles by hand on purpose, and Proxy-based SDK doubles need `Reflect.get` to
+keep getter receivers.
+
+Provider composition roots (drivers, adapters, the agent controller, and the Grok session
+runtime) turn off `no-service-constructor-imports`. Each configured provider instance builds its
+own scoped runtime by calling `make*` constructors, so there is no singleton service to yield. The
+file list lives in `vite.config.ts`; add a file only when it owns per-instance construction.
 
 There are no inline exceptions. `akeru/no-lint-suppressions` reports every `oxlint-disable`,
 `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, and `@ts-nocheck` comment, and

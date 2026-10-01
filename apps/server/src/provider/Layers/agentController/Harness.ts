@@ -39,7 +39,6 @@ import {
   BotUsageLedger,
 } from "../../../usage/BotUsageLedger.ts";
 import { SubscriptionAuthService } from "../../../subscription-auth/service.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Session composition root constructs a harness with the resolved bot and provider configuration.
 import { makeAkeruMastraHarness } from "../../AkeruMastraHarness.ts";
 
 import { AKERU_ROUTINE_REVIEW_TIMEOUT, type PendingWaiters } from "../../PendingWaiters.ts";

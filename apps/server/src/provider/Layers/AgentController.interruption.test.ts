@@ -21,7 +21,7 @@ import { ServerConfig } from "../../config.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import type { ProviderServiceShape } from "../Services/ProviderService.ts";
-import { makeAgentControllerLive } from "./AgentController.ts";
+import { agentControllerLayerWith } from "./AgentController.ts";
 import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
 import {
   codexThreadId,
@@ -35,13 +35,13 @@ import {
   provideController,
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
-import { makeUsageLedger } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { usageLedgerFixture } from "./test-support/agentControllerMemory.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("runs parent-finished cleanup when a parent turn is interrupted", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const parentFinished = vi.fn(async () => undefined);
 
     const layer = makeLayer(
@@ -94,7 +94,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("does not revive a turn interrupted during dispatch admission", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -141,7 +141,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("releases dispatch admission when the caller is interrupted", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -177,7 +177,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("offers Enable Auto Review for workspace commands and then stops asking", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -261,7 +261,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("fails a cancelled Mastra suspension and accepts the next turn", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -353,7 +353,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("keeps same-thread turn order when an attachment waiter is interrupted", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     let readStarted!: () => void;
 
     const started = new Promise<void>((resolve) => {
@@ -438,7 +438,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("interrupts turns waiting for attachment preparation", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     let readStarted!: () => void;
 
     const started = new Promise<void>((resolve) => {
@@ -514,7 +514,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("destroys obsolete and stops final pooled remote workspaces", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const firstWorkspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: process.cwd() }),
@@ -535,14 +535,14 @@ describe("AgentControllerLive", () => {
       .mockResolvedValueOnce(firstWorkspace)
       .mockResolvedValueOnce(secondWorkspace);
 
-    const layer = makeAgentControllerLive({
+    const layer = agentControllerLayerWith({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
     }).pipe(
       Layer.provide(
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
-          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          Layer.succeed(BotUsageLedger, usageLedgerFixture().service),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-resource-finalizer-test-",
           }).pipe(Layer.provide(NodeServices.layer)),
@@ -579,7 +579,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("stops a legacy session after resolving the thread to Codex", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const legacySession = makeProviderSession(codexThreadId, "claudeAgent");
 
     const service: ProviderServiceShape = {

@@ -22,7 +22,6 @@ export function partialSdkFixture<Sdk extends object>(
       if (!(key in target))
         throw new Error(`SDK fixture member '${String(key)}' was not supplied.`);
 
-      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy forwarding must preserve SDK fixture getters and their receiver, including symbol keys.
       return Reflect.get(target, key, receiver);
     },
   }) as Sdk;

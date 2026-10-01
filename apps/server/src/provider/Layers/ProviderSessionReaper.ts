@@ -163,7 +163,7 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
     } satisfies ProviderSessionReaperShape;
   });
 
-export const makeProviderSessionReaperLive = (options?: ProviderSessionReaperLiveOptions) =>
+export const providerSessionReaperLayerWith = (options?: ProviderSessionReaperLiveOptions) =>
   Layer.effect(ProviderSessionReaper, makeProviderSessionReaper(options));
 
-export const ProviderSessionReaperLive = makeProviderSessionReaperLive();
+export const ProviderSessionReaperLive = providerSessionReaperLayerWith();

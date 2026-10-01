@@ -21,7 +21,7 @@ import { AgentController } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import {
   createAkeruMastraAuthStorage,
-  makeAgentControllerLive,
+  agentControllerLayerWith,
   recordProviderAccessHealth,
   toMcpServerConfigs,
 } from "./AgentController.ts";
@@ -38,8 +38,8 @@ import {
   provideController,
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
-import { makeUsageLedger } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { usageLedgerFixture } from "./test-support/agentControllerMemory.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("toMcpServerConfigs", () => {
   it("attaches browser metadata only to dependent connectors and preserves authentication", () => {
@@ -190,7 +190,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("passes Akeru subscription auth and memory storage to the custom harness", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -209,7 +209,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("preserves the Railway VM when an active session rotates credentials", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const destroy = vi.fn(async () => undefined);
 
     const makeRemoteWorkspace = vi.fn(
@@ -227,14 +227,14 @@ describe("AgentControllerLive", () => {
       }),
     );
 
-    const layer = makeAgentControllerLive({
+    const layer = agentControllerLayerWith({
       makeMastraHarness: mastra.factory,
       makeRemoteWorkspace,
     }).pipe(
       Layer.provide(
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
-          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          Layer.succeed(BotUsageLedger, usageLedgerFixture().service),
           ServerConfig.layerTest(process.cwd(), { prefix: "akeru-railway-rotation-test-" }).pipe(
             Layer.provide(NodeServices.layer),
           ),

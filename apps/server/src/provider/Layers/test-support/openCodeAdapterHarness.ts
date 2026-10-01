@@ -18,7 +18,6 @@ import {
   OpenCodeRuntimeError,
   type OpenCodeRuntimeShape,
 } from "../../opencodeRuntime.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition root builds the configured OpenCodeAdapter double or Layer for isolated provider tests.
 import { makeOpenCodeAdapter } from "../OpenCodeAdapter.ts";
 
 export class OpenCodeAdapter extends Context.Service<OpenCodeAdapter, OpenCodeAdapterShape>()(

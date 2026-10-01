@@ -45,9 +45,7 @@ const emptyCodexModelsFromSettings = (codexSettings: CodexSettings): ServerProvi
   }));
 };
 
-const makePendingCodexProvider = (
-  codexSettings: CodexSettings,
-): Effect.Effect<ServerProviderDraft> =>
+const pendingCodexProvider = (codexSettings: CodexSettings): Effect.Effect<ServerProviderDraft> =>
   Effect.gen(function* () {
     const checkedAt = yield* Effect.map(DateTime.now, DateTime.formatIso);
     const models = emptyCodexModelsFromSettings(codexSettings);
@@ -241,9 +239,9 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
 // snapshot per instance (each with its own `CodexSettings`) and hands the
 // resulting `ServerProviderShape` back as `ProviderInstance.snapshot`.
 //
-// The `makePendingCodexProvider` and `checkCodexProviderStatus` helpers are
+// The `pendingCodexProvider` and `checkCodexProviderStatus` helpers are
 // re-exported for use by `CodexDriver`.
-export { makePendingCodexProvider };
+export { pendingCodexProvider };
 
 export { type CodexAppServerProviderSnapshot } from "./codex/CodexProviderState.ts";
 

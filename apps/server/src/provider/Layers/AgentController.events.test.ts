@@ -30,7 +30,7 @@ import {
   provideController,
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("provider access health", () => {
   it("records a failed first request and recovery at the runtime event boundary", async () => {
@@ -120,7 +120,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("adds every Mastra step usage update", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -173,7 +173,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("adds every Mastra step usage update", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {

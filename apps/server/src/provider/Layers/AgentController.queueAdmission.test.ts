@@ -29,13 +29,13 @@ import {
   provideController,
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
-import { makeUsageLedger } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness, assistantMessage } from "./test-support/agentControllerHarness.ts";
+import { usageLedgerFixture } from "./test-support/agentControllerMemory.ts";
+import { mastraHarnessFixture, assistantMessage } from "./test-support/agentControllerHarness.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("serializes queued turns while dispatch admission is pending", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -90,7 +90,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("ignores a stale Mastra send failure after the next turn starts", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -142,7 +142,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("publishes the final text when Mastra rewrites a message snapshot", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -193,7 +193,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("publishes a same-id rewrite after a tool boundary", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -255,7 +255,7 @@ describe("AgentControllerLive", () => {
   for (const action of ["replace", "interrupt", "stop"] as const) {
     it.effect(`does not enqueue an attachment turn after session ${action}`, () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       return Effect.gen(function* () {
         let markReadStarted!: () => void;
@@ -340,7 +340,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("dispatches the drop activity without an active session", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const dispatched: Array<{ readonly type: string; readonly activity?: unknown }> = [];
 
     return provideController(
@@ -400,7 +400,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("keeps replies and status beats as separate completed messages", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -474,7 +474,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("recreates a Mastra session after sendMessage fails", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -531,8 +531,8 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("records human handoff requests in the bot inbox", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
-    const usageLedger = makeUsageLedger();
+    const mastra = mastraHarnessFixture();
+    const usageLedger = usageLedgerFixture();
     usageLedger.reserve.mockImplementation(() => Effect.die("usage reserve failed"));
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-handoff-inbox-"));
 

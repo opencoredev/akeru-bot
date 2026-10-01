@@ -27,7 +27,7 @@ import { ServerConfig } from "../../config.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import {
-  makeAgentControllerLive,
+  agentControllerLayerWith,
   mastraConnectionIssue,
   recordProviderAccessHealth,
   toMcpServerConfigs,
@@ -46,8 +46,8 @@ import {
   provideController,
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
-import { makeUsageLedger } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { usageLedgerFixture } from "./test-support/agentControllerMemory.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 
 describe("mastraConnectionIssue", () => {
   it("uses the exact instance transport when deciding readiness", () => {
@@ -199,7 +199,7 @@ describe("AgentControllerLive", () => {
   ] as const) {
     it.effect(`keeps unrelated connector browser acquisition lazy for ${provider}`, () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
       const attachment = vi.fn(async () => undefined);
 
       const manager = {
@@ -266,8 +266,8 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("records tool calls without holding bot token capacity", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
-    const usage = makeUsageLedger();
+    const mastra = mastraHarnessFixture();
+    const usage = usageLedgerFixture();
     const botId = BotId.make("bot-tool-usage");
 
     return provideController(
@@ -333,8 +333,8 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("records the whole tool entry at finish when the start write fails", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
-    const usage = makeUsageLedger();
+    const mastra = mastraHarnessFixture();
+    const usage = usageLedgerFixture();
     usage.recordStart.mockImplementation(() => Effect.die(new Error("ledger unavailable")));
     const botId = BotId.make("bot-tool-usage");
 
@@ -398,11 +398,11 @@ describe("AgentControllerLive", () => {
   it.effect("boots a real Mastra Code controller and creates a Codex session", () => {
     const bridge = makeBridge();
 
-    const layer = makeAgentControllerLive().pipe(
+    const layer = agentControllerLayerWith().pipe(
       Layer.provide(
         Layer.mergeAll(
           Layer.succeed(LegacyProviderBridge, bridge.service),
-          Layer.succeed(BotUsageLedger, makeUsageLedger().service),
+          Layer.succeed(BotUsageLedger, usageLedgerFixture().service),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "akeru-mastra-real-controller-test-",
           }).pipe(Layer.provide(NodeServices.layer)),
@@ -434,7 +434,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("keeps the current bot name in reused Mastra session state", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -486,7 +486,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("clears a stale bot name in reused Mastra session state", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -524,7 +524,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("queues Mastra follow-ups while the current turn is active", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -581,7 +581,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("rejects a queued Mastra turn when its provider is disabled", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {
@@ -636,7 +636,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("releases turn preparation when provider routing rejects a turn", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     return provideController(
       Effect.gen(function* () {

@@ -9,7 +9,7 @@ export type CodexServerNotification = {
   };
 }[CodexRpc.ServerNotificationMethod];
 
-export function makeCodexServerNotification<M extends CodexRpc.ServerNotificationMethod>(
+export function codexServerNotification<M extends CodexRpc.ServerNotificationMethod>(
   method: M,
   params: CodexRpc.ServerNotificationParamsByMethod[M],
 ): CodexServerNotification {
@@ -68,7 +68,7 @@ export function readNotificationThreadId(
   }
 }
 
-export function makeMemoryConsolidationNotificationFilter(): (
+export function memoryConsolidationNotificationFilter(): (
   notification: CodexServerNotification,
 ) => boolean {
   const threadIds = new Set<string>();

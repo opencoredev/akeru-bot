@@ -48,13 +48,13 @@ import {
   resolveCodex,
 } from "./test-support/agentControllerLayers.ts";
 import { makeMemoryOnlyCredentialOptions } from "./test-support/agentControllerMemory.ts";
-import { makeMastraHarness } from "./test-support/agentControllerHarness.ts";
+import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 import { makeImageRuntimeTestLayer } from "./test-support/agentControllerImages.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("exposes and runs the web, image, and MCP catalog tools in a live session", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-catalog-tools-"));
     const page = NodeHttp.createServer((_request, response) => response.end("catalog page"));
 
@@ -345,7 +345,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("routes the Mastra GenerateImage catalog tool through the image runtime", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-catalog-image-"));
     const grokCalls: Array<unknown> = [];
     let grokGate: (() => void) | undefined;
@@ -458,7 +458,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("falls back to the next image provider when a Mastra image attempt times out", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
 
     const baseDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "akeru-catalog-image-timeout-"),
@@ -607,7 +607,7 @@ describe("AgentControllerLive", () => {
 describe("AgentControllerLive", () => {
   it.effect("grants legacy sessions the image tool when an image provider is enabled", () => {
     const bridge = makeBridge();
-    const mastra = makeMastraHarness();
+    const mastra = mastraHarnessFixture();
     const credentials = makeMemoryOnlyCredentialOptions();
 
     return provideController(
@@ -646,7 +646,7 @@ describe("AgentControllerLive", () => {
     "hides the image tool on a reused Mastra session after image providers turn off",
     () => {
       const bridge = makeBridge();
-      const mastra = makeMastraHarness();
+      const mastra = mastraHarnessFixture();
 
       return provideController(
         Effect.gen(function* () {

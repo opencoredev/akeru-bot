@@ -23,7 +23,6 @@ import { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import { ProviderRegistry } from "./Services/ProviderRegistry.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The maintenance runner owns the coordinator lifetime and wires its command execution dependencies.
 import { makeProviderMaintenanceCommandCoordinator } from "./providerMaintenanceCommandCoordinator.ts";
 import { enrichProviderSnapshotWithVersionAdvisory } from "./providerMaintenance.ts";
 import type { ProviderMaintenanceCapabilities } from "./providerMaintenance.ts";

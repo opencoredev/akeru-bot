@@ -10,8 +10,8 @@ import { describe, expect } from "vite-plus/test";
 
 import {
   extractXAiAskUserQuestions,
-  makeXAiAskUserQuestionCancelledResponse,
-  makeXAiAskUserQuestionResponse,
+  xAiAskUserQuestionCancelledResponse,
+  xAiAskUserQuestionResponse,
   makeXAiPromptCompletionRuntime,
   XAiAskUserQuestionRequest,
 } from "./XAiAcpExtension.ts";
@@ -139,7 +139,7 @@ describe("XAiAcpExtension", () => {
   });
 
   it("maps UI question ids back to xAI question text in accepted responses", () => {
-    const response = makeXAiAskUserQuestionResponse(
+    const response = xAiAskUserQuestionResponse(
       {
         sessionId: "session-1",
         toolCallId: "tool-call-1",
@@ -167,7 +167,7 @@ describe("XAiAcpExtension", () => {
   });
 
   it("orders accepted answers by the original xAI question order", () => {
-    const response = makeXAiAskUserQuestionResponse(
+    const response = xAiAskUserQuestionResponse(
       {
         sessionId: "session-1",
         toolCallId: "tool-call-1",
@@ -202,7 +202,7 @@ describe("XAiAcpExtension", () => {
   });
 
   it("encodes typed custom answers as xAI Other annotations", () => {
-    const response = makeXAiAskUserQuestionResponse(
+    const response = xAiAskUserQuestionResponse(
       {
         method: "x.ai/ask_user_question",
         params: {
@@ -237,13 +237,13 @@ describe("XAiAcpExtension", () => {
   });
 
   it("encodes interrupted dialogs as xAI cancelled responses", () => {
-    expect(makeXAiAskUserQuestionCancelledResponse()).toEqual({
+    expect(xAiAskUserQuestionCancelledResponse()).toEqual({
       outcome: "cancelled",
     });
   });
 
   it("does not echo preview annotations for multi-select answers", () => {
-    const response = makeXAiAskUserQuestionResponse(
+    const response = xAiAskUserQuestionResponse(
       {
         sessionId: "session-1",
         toolCallId: "tool-call-1",
