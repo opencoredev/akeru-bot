@@ -113,9 +113,8 @@ export function useComposerDictation(
   };
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Provider dictation can reject with any thrown value; this helper only extracts an Error message.
-function describeDictationFailure(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
+function describeDictationFailure(cause: unknown): string {
+  if (cause instanceof Error && cause.message.trim()) return cause.message;
 
   return "Dictation failed.";
 }

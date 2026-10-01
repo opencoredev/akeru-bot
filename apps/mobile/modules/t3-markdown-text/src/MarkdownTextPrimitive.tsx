@@ -1,9 +1,34 @@
 import { Predicate } from "effect";
 import React from "react";
-import { Platform, StyleSheet, Text as RNText, type TextProps, type ViewStyle } from "react-native";
-import T3MarkdownTextRunNativeComponent from "./T3MarkdownTextRunNativeComponent";
-import T3MarkdownTextNativeComponent from "./T3MarkdownTextNativeComponent";
+import {
+  Platform,
+  StyleSheet,
+  Text as RNText,
+  type TextProps,
+  type ViewStyle,
+  type HostComponent,
+  type StyleProp,
+} from "react-native";
+import NativeTextRun from "./T3MarkdownTextRunNativeComponent";
+import NativeText from "./T3MarkdownTextNativeComponent";
 import { flattenStyles } from "./util";
+
+// The public primitive forwards TextProps. Codegen describes only the view props
+// and targeted events, so the bridge needs the inherited text callback contract.
+type InheritedTextProps<Native> = Omit<Native, keyof TextProps> &
+  Omit<TextProps, "style"> & {
+    readonly style?: StyleProp<ReturnType<typeof flattenStyles>>;
+  };
+
+// SAFETY: This is the same native host component; only its inherited TextProps are exposed.
+const T3MarkdownTextRunNativeComponent = NativeTextRun as HostComponent<
+  InheritedTextProps<React.ComponentProps<typeof NativeTextRun>>
+>;
+
+// SAFETY: This is the same native host component; only its inherited TextProps are exposed.
+const T3MarkdownTextNativeComponent = NativeText as HostComponent<
+  InheritedTextProps<React.ComponentProps<typeof NativeText>>
+>;
 
 const TextAncestorContext = React.createContext<[boolean, ViewStyle]>([
   false,
@@ -64,7 +89,6 @@ function MarkdownTextPrimitiveChild({ style, children, ...rest }: MarkdownTextPr
     const text = child.toString();
 
     return (
-      // @ts-expect-error The generated run props do not include inherited Text props.
       <T3MarkdownTextRunNativeComponent
         key={`text-${position}-${text.length}-${text}`}
         style={flattenedStyle}
@@ -82,7 +106,6 @@ function MarkdownTextPrimitiveChild({ style, children, ...rest }: MarkdownTextPr
           {...rest}
           // ellipsizeMode={rest.ellipsizeMode ?? rest.lineBreakMode ?? 'tail'}
           style={[flattenedStyle]}
-          // @ts-expect-error Weirdness
           onPress={undefined}
           onLongPress={undefined}
         >

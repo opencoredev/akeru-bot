@@ -55,9 +55,12 @@ export function dispatchHardwareKeyboardCommand(command: HardwareKeyboardCommand
 
   if (!commandHandlers) return false;
 
-  // .reverse() on a copy, not .toReversed(): Hermes lacks ES2023 change-by-copy.
-  // oxlint-disable-next-line unicorn/no-array-reverse
-  for (const handler of [...commandHandlers].reverse()) {
+  // Visit newest handlers first without ES2023 APIs absent from Hermes.
+  const newestHandlers = [...commandHandlers];
+
+  for (let index = newestHandlers.length - 1; index >= 0; index -= 1) {
+    const handler = newestHandlers[index]!;
+
     if (handler() !== false) return true;
   }
 

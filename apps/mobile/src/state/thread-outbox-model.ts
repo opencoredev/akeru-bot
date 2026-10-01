@@ -196,17 +196,16 @@ export function isQueuedThreadCreationSendable(message: QueuedThreadMessage): bo
   return message.creation.workspaceMode !== "worktree" || Boolean(message.creation.branch);
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Transport and storage rejections can be arbitrary thrown values; only string messages are retained.
-function errorMessage(error: unknown): string | null {
-  if (error instanceof Error) {
-    return error.message;
+function errorMessage(cause: unknown): string | null {
+  if (cause instanceof Error) {
+    return cause.message;
   }
 
-  if (Predicate.isObjectOrArray(error) && error !== null && "message" in error) {
-    return Predicate.isString(error.message) ? error.message : null;
+  if (Predicate.isObjectOrArray(cause) && cause !== null && "message" in cause) {
+    return Predicate.isString(cause.message) ? cause.message : null;
   }
 
-  return Predicate.isString(error) ? error : null;
+  return Predicate.isString(cause) ? cause : null;
 }
 
 /**
@@ -219,10 +218,9 @@ function errorMessage(error: unknown): string | null {
  * is just "An error occurred during Read". A wrong answer here restores the
  * pending task into a draft and it disappears from the list.
  */
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Classifies arbitrary thrown provider and transport values at the delivery failure boundary.
-export function shouldRetryThreadOutboxDelivery(error: unknown): boolean {
-  if (Predicate.isObjectOrArray(error) && error !== null && "_tag" in error) {
-    const taggedDecision = Match.value(error._tag).pipe(
+export function shouldRetryThreadOutboxDelivery(cause: unknown): boolean {
+  if (Predicate.isObjectOrArray(cause) && cause !== null && "_tag" in cause) {
+    const taggedDecision = Match.value(cause._tag).pipe(
       Match.when(
         Match.is("OrchestrationDispatchCommandError", "EnvironmentAuthorizationError"),
         () => false,
@@ -242,7 +240,7 @@ export function shouldRetryThreadOutboxDelivery(error: unknown): boolean {
     if (taggedDecision !== null) return taggedDecision;
   }
 
-  return isTransportConnectionErrorMessage(errorMessage(error));
+  return isTransportConnectionErrorMessage(errorMessage(cause));
 }
 
 const THREAD_OUTBOX_HYDRATION_RETRY_DELAYS_MS = [250, 1_000, 4_000] as const;
