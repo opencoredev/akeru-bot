@@ -9,7 +9,7 @@ import { AppIcon } from "../ui/app-icon";
 import { DialogHeader, DialogPanel, DialogTitle } from "../ui/dialog";
 import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
-import { pluginLabel } from "./PluginsCatalog";
+import { pluginLabel } from "./pluginLabel";
 import { PLUGIN_DIRECTORY_FILTERS } from "./pluginDirectoryCatalog";
 import type { PluginFilter } from "./pluginPresentation";
 
@@ -163,8 +163,8 @@ export function PluginFilterBar({
         >
           <SelectTrigger
             aria-label={t("Plugin category")}
-            className={cn("h-8 rounded-lg text-[13px]", category && "text-foreground")}
-            size="sm"
+            className={cn("h-8", category && "text-foreground")}
+            size="sm-dense"
             variant="ghost"
           >
             <SelectValue>{category ? pluginLabel(category, t) : t("All categories")}</SelectValue>

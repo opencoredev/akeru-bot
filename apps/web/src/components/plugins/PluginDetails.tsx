@@ -85,11 +85,7 @@ export function PluginDetailsContent({
                   {plugin.category}
                 </span>
                 {brokerName ? (
-                  <Badge
-                    className="border-border/60 bg-background/60 text-muted-foreground"
-                    size="sm"
-                    variant="outline"
-                  >
+                  <Badge size="sm" variant="quiet">
                     {brokerName}
                   </Badge>
                 ) : null}
@@ -103,8 +99,7 @@ export function PluginDetailsContent({
               {server ? (
                 <Button
                   aria-label={`Remove ${plugin.title}`}
-                  className="h-8 rounded-full px-3 text-xs"
-                  size="sm"
+                  size="pill-dense"
                   variant="ghost-muted"
                   disabled={pending}
                   onClick={onRemove}
@@ -114,8 +109,8 @@ export function PluginDetailsContent({
               ) : null}
               <Button
                 aria-label={`${action.label} ${plugin.title}`}
-                className="h-8 min-w-16 rounded-full px-3 text-xs"
-                size="sm"
+                className="min-w-16"
+                size="pill-dense"
                 variant={action.enable === false ? "secondary" : "default"}
                 disabled={pending || action.enable === null}
                 title={action.blocker}

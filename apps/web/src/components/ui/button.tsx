@@ -39,6 +39,9 @@ const buttonVariants = cva(
         micro:
           "h-5 gap-1 rounded-sm px-[calc(--spacing(1.5)-1px)] text-[11px] before:rounded-[calc(var(--radius-sm)-1px)] sm:text-[11px] [&_svg:not([class*='size-'])]:size-3 sm:[&_svg:not([class*='size-'])]:size-3",
         onboarding: "h-10 rounded-xl px-[calc(--spacing(3)-1px)] sm:h-8",
+        pill: "h-8 gap-1.5 rounded-full px-3.5 text-[13px] sm:h-7",
+        "pill-dense": "h-8 gap-1.5 rounded-full px-3 text-xs sm:h-7",
+        "pill-short": "h-7 gap-1.5 rounded-full px-[calc(--spacing(2.5)-1px)]",
         sm: "h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] sm:h-7",
         xl: "h-11 px-[calc(--spacing(4)-1px)] text-lg sm:h-10 sm:text-base [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
         xs: "h-7 gap-1 px-[calc(--spacing(2)-1px)] text-sm sm:h-6 sm:text-xs [&_svg:not([class*='size-'])]:size-4 sm:[&_svg:not([class*='size-'])]:size-3.5",

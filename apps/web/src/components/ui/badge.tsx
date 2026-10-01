@@ -26,6 +26,7 @@ const badgeVariants = cva(
         error: "bg-destructive/8 text-destructive-foreground dark:bg-destructive/16",
         info: "bg-info/8 text-info-foreground dark:bg-info/16",
         outline: "bg-secondary text-foreground [button&,a&]:hover:bg-accent/80",
+        quiet: "border-border/60 bg-background/60 text-muted-foreground",
         secondary: "bg-secondary text-secondary-foreground [button&,a&]:hover:bg-secondary/90",
         success: "bg-success/8 text-success-foreground dark:bg-success/16",
         warning: "bg-warning/8 text-warning-foreground dark:bg-warning/16",
