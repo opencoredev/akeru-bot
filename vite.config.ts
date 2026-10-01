@@ -217,6 +217,20 @@ export default defineConfig({
         },
       },
       {
+        // Standalone scripts and the plugin catalog run without the Effect runtime or any
+        // application dependency, so they read the host and check primitives directly.
+        files: [
+          "apps/desktop/scripts/**",
+          "packages/effect-codex-app-server/test/fixtures/**",
+          "plugins/**",
+          "scripts/**/*.{mjs,cjs}",
+        ],
+        rules: {
+          "akeru/no-global-process-runtime": "off",
+          "anti-slop/no-runtime-typeof": "off",
+        },
+      },
+      {
         files: ["apps/web/src/**/*.{ts,tsx}"],
         rules: {
           "shadcn/no-restyle": ["warn", NO_RESTYLE],

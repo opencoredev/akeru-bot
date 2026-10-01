@@ -33,7 +33,6 @@ const LAUNCHER_VERSION = 16;
 
 const productionMacIconPngPath = NodePath.join(repoRoot, "assets", "prod", "akeru-macos-1024.png");
 
-// oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone launcher script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
 
 function setPlistString(plistPath, key, value) {

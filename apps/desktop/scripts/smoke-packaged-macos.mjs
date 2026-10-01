@@ -162,7 +162,6 @@ async function readFailureLogs(stateRoot) {
 }
 
 async function main() {
-  // oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone release smoke script.
   if (process.platform !== "darwin")
     throw new Error("The packaged macOS smoke test requires macOS.");
   const dmgArgument = process.argv.slice(2).find((argument) => argument !== "--");

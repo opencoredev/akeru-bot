@@ -235,7 +235,6 @@ describe("desktop development process ownership", () => {
     expect(exit).toHaveBeenCalledExactlyOnceWith(143);
   });
 
-  // oxlint-disable-next-line akeru/no-global-process-runtime -- Process-group smoke tests require POSIX signals.
   it.skipIf(process.platform === "win32").each([false, true])(
     "cleans a real owned child and grandchild, with forced shutdown %s",
     async (forceShutdown) => {

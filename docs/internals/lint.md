@@ -123,6 +123,11 @@ Test files (`*.test.*`, `test/`, `testUtils/`, `test-support/`) turn off
 `require-safety-comment-for-type-assertion` and `no-manual-tagged-construction`. Tests build
 partial fixtures and tagged values by hand on purpose, and annotating each one adds noise.
 
+Standalone scripts (`apps/desktop/scripts/`, the `.mjs` and `.cjs` files in `scripts/`, and the
+Codex mock peer fixture) and the plugin catalog in `plugins/` turn off `no-global-process-runtime`
+and `no-runtime-typeof`. They run without the Effect runtime or any application dependency, so
+there is no `HostProcessPlatform` to inject and no `Predicate` to import.
+
 There are no inline exceptions. `akeru/no-lint-suppressions` reports every `oxlint-disable`,
 `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, and `@ts-nocheck` comment, and
 `typescript/no-explicit-any` reports `any`. A file-wide `oxlint-disable` would also silence that

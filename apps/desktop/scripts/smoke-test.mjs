@@ -90,7 +90,6 @@ export async function runSmokeTest({
   let timer;
   let closePromise;
   const signals = new Map();
-  // oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone smoke script has no Effect runtime.
   const grouped = runtime.platform() !== "win32";
 
   const signalChild = (signal) => {

@@ -42,7 +42,6 @@ const restartDebounceMs = 120;
 
 const remoteDebuggingPort = process.env.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT?.trim();
 
-// oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone dev script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
 
 await waitForResources({
