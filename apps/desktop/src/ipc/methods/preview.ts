@@ -115,36 +115,43 @@ export const goBack = tabMethod(
   "desktop.ipc.preview.goBack",
   (manager, tabId) => manager.goBack(tabId),
 );
+
 export const goForward = tabMethod(
   IpcChannels.PREVIEW_GO_FORWARD_CHANNEL,
   "desktop.ipc.preview.goForward",
   (manager, tabId) => manager.goForward(tabId),
 );
+
 export const refresh = tabMethod(
   IpcChannels.PREVIEW_REFRESH_CHANNEL,
   "desktop.ipc.preview.refresh",
   (manager, tabId) => manager.refresh(tabId),
 );
+
 export const zoomIn = tabMethod(
   IpcChannels.PREVIEW_ZOOM_IN_CHANNEL,
   "desktop.ipc.preview.zoomIn",
   (manager, tabId) => manager.zoomIn(tabId),
 );
+
 export const zoomOut = tabMethod(
   IpcChannels.PREVIEW_ZOOM_OUT_CHANNEL,
   "desktop.ipc.preview.zoomOut",
   (manager, tabId) => manager.zoomOut(tabId),
 );
+
 export const resetZoom = tabMethod(
   IpcChannels.PREVIEW_RESET_ZOOM_CHANNEL,
   "desktop.ipc.preview.resetZoom",
   (manager, tabId) => manager.resetZoom(tabId),
 );
+
 export const hardReload = tabMethod(
   IpcChannels.PREVIEW_HARD_RELOAD_CHANNEL,
   "desktop.ipc.preview.hardReload",
   (manager, tabId) => manager.hardReload(tabId),
 );
+
 export const setColorScheme = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_SET_COLOR_SCHEME_CHANNEL,
   payload: DesktopPreviewSetColorSchemeInputSchema,
@@ -154,6 +161,7 @@ export const setColorScheme = DesktopIpc.makeIpcMethod({
     yield* manager.setColorScheme(tabId, colorScheme);
   }),
 });
+
 export const setAudioMuted = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_SET_AUDIO_MUTED_CHANNEL,
   payload: DesktopPreviewSetAudioMutedInputSchema,
@@ -163,31 +171,37 @@ export const setAudioMuted = DesktopIpc.makeIpcMethod({
     yield* manager.setAudioMuted(tabId, audioMuted);
   }),
 });
+
 export const openDevTools = tabMethod(
   IpcChannels.PREVIEW_OPEN_DEVTOOLS_CHANNEL,
   "desktop.ipc.preview.openDevTools",
   (manager, tabId) => manager.openDevTools(tabId),
 );
+
 export const cancelPickElement = tabMethod(
   IpcChannels.PREVIEW_CANCEL_PICK_ELEMENT_CHANNEL,
   "desktop.ipc.preview.cancelPickElement",
   (manager, tabId) => manager.cancelPickElement(tabId),
 );
+
 export const startRecording = tabMethod(
   IpcChannels.PREVIEW_RECORDING_START_CHANNEL,
   "desktop.ipc.preview.startRecording",
   (manager, tabId) => manager.startRecording(tabId),
 );
+
 export const stopRecording = tabMethod(
   IpcChannels.PREVIEW_RECORDING_STOP_CHANNEL,
   "desktop.ipc.preview.stopRecording",
   (manager, tabId) => manager.stopRecording(tabId),
 );
+
 export const openPictureInPicture = tabMethod(
   IpcChannels.PREVIEW_PICTURE_IN_PICTURE_OPEN_CHANNEL,
   "desktop.ipc.preview.openPictureInPicture",
   (manager, tabId) => manager.openPictureInPicture(tabId),
 );
+
 export const closePictureInPicture = tabMethod(
   IpcChannels.PREVIEW_PICTURE_IN_PICTURE_CLOSE_CHANNEL,
   "desktop.ipc.preview.closePictureInPicture",
@@ -221,6 +235,7 @@ export const getPreviewConfig = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.preview.getConfig")(function* ({ environmentId }) {
     const manager = yield* PreviewManager.PreviewManager;
     yield* manager.getBrowserSession(environmentId);
+
     return {
       partition: yield* manager.getBrowserPartition(environmentId),
       webPreferences: PREVIEW_WEBVIEW_PREFERENCES,
@@ -245,6 +260,7 @@ export const pickElement = DesktopIpc.makeIpcMethod({
   result: Schema.NullOr(PreviewAnnotationSubmissionResultSchema),
   handler: Effect.fn("desktop.ipc.preview.pickElement")(function* ({ tabId }) {
     const manager = yield* PreviewManager.PreviewManager;
+
     return yield* manager.pickElement(tabId);
   }),
 });
@@ -255,6 +271,7 @@ export const captureScreenshot = DesktopIpc.makeIpcMethod({
   result: DesktopPreviewScreenshotArtifactSchema,
   handler: Effect.fn("desktop.ipc.preview.captureScreenshot")(function* ({ tabId }) {
     const manager = yield* PreviewManager.PreviewManager;
+
     return yield* manager.captureScreenshot(tabId);
   }),
 });
@@ -285,6 +302,7 @@ export const automationStatus = DesktopIpc.makeIpcMethod({
   result: PreviewAutomationStatus,
   handler: Effect.fn("desktop.ipc.preview.automationStatus")(function* ({ tabId }) {
     const manager = yield* PreviewManager.PreviewManager;
+
     return yield* manager.automationStatus(tabId);
   }),
 });
@@ -295,6 +313,7 @@ export const automationSnapshot = DesktopIpc.makeIpcMethod({
   result: PreviewAutomationSnapshot,
   handler: Effect.fn("desktop.ipc.preview.automationSnapshot")(function* ({ tabId }) {
     const manager = yield* PreviewManager.PreviewManager;
+
     return yield* manager.automationSnapshot(tabId);
   }),
 });
@@ -345,6 +364,7 @@ export const automationEvaluate = DesktopIpc.makeIpcMethod({
   result: Schema.Unknown,
   handler: Effect.fn("desktop.ipc.preview.automationEvaluate")(function* ({ tabId, input }) {
     const manager = yield* PreviewManager.PreviewManager;
+
     return yield* manager.automationEvaluate(tabId, input);
   }),
 });
@@ -365,6 +385,7 @@ export const saveRecording = DesktopIpc.makeIpcMethod({
   result: DesktopPreviewRecordingArtifactSchema,
   handler: Effect.fn("desktop.ipc.preview.saveRecording")(function* ({ tabId, mimeType, data }) {
     const manager = yield* PreviewManager.PreviewManager;
+
     return yield* manager.saveRecording(tabId, mimeType, data);
   }),
 });

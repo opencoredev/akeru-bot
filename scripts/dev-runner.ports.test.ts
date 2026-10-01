@@ -42,6 +42,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
               const overlapped = inFlightCount > 1;
               await Promise.resolve();
               inFlightCount -= 1;
+
               return !overlapped;
             }),
         );
@@ -97,6 +98,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           hasExplicitDevUrl: false,
           checkPortAvailability: (port, role) => {
             probed.push({ port, role });
+
             return Effect.succeed(true);
           },
         });
@@ -113,6 +115,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
     it.effect("uses a shared fallback offset for dev mode", () =>
       Effect.gen(function* () {
         const taken = new Set([13773, 5733]);
+
         const offsets = yield* resolveModePortOffsets({
           mode: "dev",
           startOffset: 0,
@@ -128,6 +131,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
     it.effect("keeps server offset stable for dev:web and only shifts web offset", () =>
       Effect.gen(function* () {
         const taken = new Set([5733]);
+
         const offsets = yield* resolveModePortOffsets({
           mode: "dev:web",
           startOffset: 0,
@@ -143,6 +147,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
     it.effect("shifts only server offset for dev:server", () =>
       Effect.gen(function* () {
         const taken = new Set([13773]);
+
         const offsets = yield* resolveModePortOffsets({
           mode: "dev:server",
           startOffset: 0,

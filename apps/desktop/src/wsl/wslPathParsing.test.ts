@@ -24,6 +24,7 @@ describe("parseWslDistroList", () => {
         "  Ubuntu-22.04     Running         1",
       ].join("\r\n"),
     );
+
     const distros = parseWslDistroList(output);
     expect(distros).toEqual([
       { name: "Ubuntu", isDefault: true, version: 2 },
@@ -51,6 +52,7 @@ describe("parseWslDistroList", () => {
         "  Debian           Stopped         2",
       ].join("\r\n"),
     );
+
     const distros = parseWslDistroList(output);
     expect(distros).toEqual([
       { name: "Ubuntu", isDefault: true, version: 2 },
@@ -63,6 +65,7 @@ describe("parseWslDistroList", () => {
       "  NAME            STATE           VERSION",
       "* Ubuntu           Running         2",
     ].join("\r\n");
+
     const output = Buffer.from(text, "utf16le");
     const distros = parseWslDistroList(output);
     expect(distros).toEqual([{ name: "Ubuntu", isDefault: true, version: 2 }]);
@@ -73,6 +76,7 @@ describe("parseWslDistroList", () => {
       "  NAME            STATE           VERSION",
       "* Debian           Running         2",
     ].join("\r\n");
+
     const distros = parseWslDistroList(Buffer.from(text, "utf8"));
     expect(distros).toEqual([{ name: "Debian", isDefault: true, version: 2 }]);
   });

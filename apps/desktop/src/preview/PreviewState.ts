@@ -68,6 +68,7 @@ export const createPreviewState = ({
   ): ReadonlyMap<K, V> => {
     const copy = new Map(source);
     update(copy);
+
     return copy;
   };
 
@@ -111,10 +112,13 @@ export const createPreviewState = ({
     patch: Partial<PreviewTabState>,
   ) {
     const updatedAt = yield* currentIso;
+
     const next = yield* SynchronizedRef.modify(tabsRef, (tabs) => {
       const current = tabs.get(tabId);
+
       if (!current) return [Option.none<PreviewTabState>(), tabs] as const;
       const state: PreviewTabState = { ...current, ...patch, updatedAt };
+
       return [
         Option.some(state),
         replaceMap(tabs, (copy) => {
@@ -122,6 +126,7 @@ export const createPreviewState = ({
         }),
       ] as const;
     });
+
     // emitIfCurrent, not emit: an event-driven writer such as syncTabAudible
     // can commit between the modify above and here, and republishing this
     // snapshot would roll the UI back to a value that writer will not send
@@ -137,8 +142,10 @@ export const createPreviewState = ({
    */
   const assertTabZoom = Effect.fn("PreviewManager.assertTabZoom")(function* (tabId: string) {
     const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
     if (!tab || tab.webContentsId == null) return;
     const wc = webContents.fromId(tab.webContentsId);
+
     if (!wc || wc.isDestroyed()) return;
     yield* attempt({ operation: "assertTabZoom", tabId, webContentsId: wc.id }, () =>
       wc.setZoomFactor(tab.zoomFactor),
@@ -158,8 +165,10 @@ export const createPreviewState = ({
     tabId: string,
   ) {
     const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
     if (!tab || tab.webContentsId == null) return;
     const wc = webContents.fromId(tab.webContentsId);
+
     if (!wc || wc.isDestroyed()) return;
     yield* attempt({ operation: "assertTabAudioMuted", tabId, webContentsId: wc.id }, () =>
       wc.setAudioMuted(tab.audioMuted),
@@ -180,8 +189,10 @@ export const createPreviewState = ({
   ) {
     if (wc.isDestroyed()) return;
     const updatedAt = yield* currentIso;
+
     const next = yield* SynchronizedRef.modify(tabsRef, (tabs) => {
       const current = tabs.get(tabId);
+
       if (
         !current ||
         current.webContentsId !== wc.id ||
@@ -190,7 +201,9 @@ export const createPreviewState = ({
       ) {
         return [Option.none<PreviewTabState>(), tabs] as const;
       }
+
       const state: PreviewTabState = { ...current, audible, updatedAt };
+
       return [
         Option.some(state),
         replaceMap(tabs, (copy) => {
@@ -198,6 +211,7 @@ export const createPreviewState = ({
         }),
       ] as const;
     });
+
     if (Option.isSome(next)) yield* emitIfCurrent(tabId, next.value);
   });
 
@@ -206,19 +220,24 @@ export const createPreviewState = ({
   ) {
     const tabs = yield* SynchronizedRef.get(tabsRef);
     const tab = tabs.get(tabId);
+
     if (!tab) {
       return yield* new PreviewTabNotFoundError({ tabId });
     }
+
     if (tab.webContentsId == null) {
       return yield* new PreviewWebviewNotInitializedError({ tabId });
     }
+
     const wc = webContents.fromId(tab.webContentsId);
+
     if (!wc) {
       return yield* new PreviewWebContentsNotFoundError({
         tabId,
         webContentsId: tab.webContentsId,
       });
     }
+
     return wc;
   });
 
@@ -226,6 +245,7 @@ export const createPreviewState = ({
     attempt({ operation: "resolveArtifactPath", artifactPath }, () => {
       const resolvedPath = path.resolve(artifactPath);
       const relativePath = path.relative(resolvedArtifactDirectory, resolvedPath);
+
       if (
         relativePath.length === 0 ||
         relativePath === ".." ||
@@ -234,6 +254,7 @@ export const createPreviewState = ({
       ) {
         return null;
       }
+
       return resolvedPath;
     }).pipe(
       Effect.flatMap((resolvedPath) =>
@@ -250,6 +271,7 @@ export const createPreviewState = ({
 
   const tabIdForWebContents = Effect.fnUntraced(function* (webContentsId: number) {
     const tabs = yield* SynchronizedRef.get(tabsRef);
+
     return (
       Array.from(tabs.entries()).find(([, tab]) => tab.webContentsId === webContentsId)?.[0] ?? null
     );
@@ -265,9 +287,11 @@ export const createPreviewState = ({
         Ref.update(ref, (listeners) => {
           const next = new Set(listeners);
           next.delete(listener);
+
           return next;
         }),
     ).pipe(Effect.asVoid);
+
   return {
     attempt,
     attemptPromise,

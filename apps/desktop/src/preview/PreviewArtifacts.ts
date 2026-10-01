@@ -40,6 +40,7 @@ export const createPreviewArtifacts = ({
     tabId: string,
   ) {
     const wc = yield* requireWebContents(tabId);
+
     const [createdAt, millis, image] = yield* Effect.all([
       currentIso,
       currentMillis,
@@ -52,6 +53,7 @@ export const createPreviewArtifacts = ({
         () => wc.capturePage(),
       ),
     ]);
+
     const id = `browser-screenshot-${artifactSiteSlug(wc.getURL())}-${millis.toString(36)}`;
     const artifactPath = path.join(resolvedArtifactDirectory, `${id}.png`);
     const data = image.toPNG();
@@ -79,6 +81,7 @@ export const createPreviewArtifacts = ({
           }),
       ),
     );
+
     return {
       id,
       tabId,
@@ -128,6 +131,7 @@ export const createPreviewArtifacts = ({
           }),
       ),
     );
+
     return {
       id,
       tabId,
@@ -151,17 +155,21 @@ export const createPreviewArtifacts = ({
     artifactPath: string,
   ) {
     const resolvedPath = yield* resolveArtifactPath(artifactPath);
+
     const image = yield* attempt(
       { operation: "copyArtifactToClipboard.load", artifactPath: resolvedPath },
       () => nativeImage.createFromPath(resolvedPath),
     );
+
     if (image.isEmpty()) {
       return yield* new PreviewArtifactImageLoadError({ artifactPath: resolvedPath });
     }
+
     yield* attempt({ operation: "copyArtifactToClipboard.write", artifactPath: resolvedPath }, () =>
       clipboard.writeImage(image),
     );
   });
+
   return {
     captureScreenshot,
     startRecording,

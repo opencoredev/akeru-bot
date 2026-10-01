@@ -103,6 +103,7 @@ function resolveDesktopAppBranding(input: {
   readonly appVersion: string;
 }): DesktopAppBranding {
   const stageLabel = resolveDesktopAppStageLabel(input);
+
   return {
     baseName: APP_BASE_NAME,
     stageLabel,
@@ -113,7 +114,9 @@ function resolveDesktopAppBranding(input: {
 
 function normalizeDesktopArch(arch: string): DesktopRuntimeArch {
   if (arch === "arm64") return "arm64";
+
   if (arch === "x64") return "x64";
+
   return "other";
 }
 
@@ -149,6 +152,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const homeDirectory = input.homeDirectory;
   const devServerUrl = config.devServerUrl;
   const isDevelopment = Option.isSome(devServerUrl);
+
   const appDataDirectory =
     input.platform === "win32"
       ? Option.getOrElse(config.appDataDirectory, () =>
@@ -157,35 +161,44 @@ const make = Effect.fn("desktop.environment.make")(function* (
       : input.platform === "darwin"
         ? path.join(homeDirectory, "Library", "Application Support")
         : Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config"));
+
   const baseDir = resolveDesktopBaseDir({
     homeDirectory,
     joinPath: path.join,
     t3Home: config.t3Home,
   });
+
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
+
   const serverRoot =
     input.isPackaged && input.platform === "win32"
       ? path.join(input.resourcesPath, "server.asar")
       : appRoot;
+
   const branding = resolveDesktopAppBranding({
     isDevelopment,
     isPackaged: input.isPackaged,
     appVersion: input.appVersion,
   });
+
   const displayName = branding.displayName;
+
   const stateDir = resolveDesktopStateDir({
     baseDir,
     isDevelopment,
     joinPath: path.join,
     t3Home: config.t3Home,
   });
+
   const userDataDirName = isDevelopment ? "akeru-bot-dev" : "akeru-bot";
   const legacyUserDataDirName = isDevelopment ? "Akeru Bot (Dev)" : "Akeru Bot (Alpha)";
+
   const linuxApplicationsDir = path.join(
     Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
     "applications",
   );
+
   const resourcesPath = input.resourcesPath;
 
   return DesktopEnvironment.of({
@@ -246,11 +259,13 @@ const make = Effect.fn("desktop.environment.make")(function* (
       }
 
       const { initialPath } = rawOptions as { initialPath?: unknown };
+
       if (typeof initialPath !== "string") {
         return Option.none();
       }
 
       const trimmedPath = initialPath.trim();
+
       if (trimmedPath.length === 0) {
         return Option.none();
       }

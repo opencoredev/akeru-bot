@@ -67,6 +67,7 @@ const makeEnvironmentLayer = (baseDir: string, isDevelopment = true) =>
 describe("DesktopObservability", () => {
   it("advances a retained output offset instead of repeatedly copying a full head chunk", () => {
     const maxBufferedBytes = 1024 * 1024;
+
     const initial = DesktopObservability.appendBoundedOutputChunk(
       {
         runId: "test-run",
@@ -77,6 +78,7 @@ describe("DesktopObservability", () => {
       "stderr",
       new Uint8Array(maxBufferedBytes),
     );
+
     const initialBackingBuffer = initial.chunks[0]?.chunk.buffer;
 
     const next = DesktopObservability.appendBoundedOutputChunk(initial, "stderr", Uint8Array.of(1));
@@ -89,16 +91,22 @@ describe("DesktopObservability", () => {
   it.effect("persists desktop Effect logs as span events in desktop.trace.ndjson", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-observability-test-",
       });
+
       const environmentLayer = makeEnvironmentLayer(baseDir);
+
       const tracePath = yield* Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
         return environment.path.join(environment.logDir, "desktop.trace.ndjson");
       }).pipe(Effect.provide(environmentLayer));
+
       const logPath = yield* Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
         return environment.path.join(environment.logDir, "desktop-main.log");
       }).pipe(Effect.provide(environmentLayer));
 
@@ -117,12 +125,15 @@ describe("DesktopObservability", () => {
         .split("\n")
         .filter((line) => line.length > 0)
         .map((line) => decodeTraceRecordLine(line));
+
       const record = records.find((entry) => entry.name === "desktop-observability-test");
 
       assert.notEqual(record, undefined);
+
       if (!record) {
         return;
       }
+
       assert.equal(record.attributes["desktop.test"], true);
       assert.equal(
         record.events.some((event) => event.name === "desktop trace event"),
@@ -143,22 +154,26 @@ describe("DesktopObservability", () => {
       yield* Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
         const shutdown = yield* DesktopShutdown.DesktopShutdown;
+
         const nativeQuit = yield* shutdown.awaitComplete.pipe(
           Effect.andThen(
             Effect.gen(function* () {
               const text = yield* fileSystem.readFileString(
                 environment.path.join(environment.logDir, "desktop.trace.ndjson"),
               );
+
               const records = text
                 .trim()
                 .split("\n")
                 .map((line) => decodeTraceRecordLine(line));
+
               assert.isTrue(records.some((record) => record.name === "desktop.app"));
               assert.isTrue(records.some((record) => record.name === "desktop.backend.stop.test"));
             }),
           ),
           Effect.forkScoped,
         );
+
         yield* Effect.scoped(
           Effect.gen(function* () {
             yield* Effect.addFinalizer(() =>
@@ -189,16 +204,22 @@ describe("DesktopObservability", () => {
   it.effect("buffers backend child output and persists it only when a failure is reported", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-output-log-test-",
       });
+
       const environmentLayer = makeEnvironmentLayer(baseDir, false);
+
       const logPath = yield* Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
         return environment.path.join(environment.logDir, "server-child.log");
       }).pipe(Effect.provide(environmentLayer));
+
       const tracePath = yield* Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
         return environment.path.join(environment.logDir, "desktop.trace.ndjson");
       }).pipe(Effect.provide(environmentLayer));
 
@@ -253,6 +274,7 @@ describe("DesktopObservability", () => {
         .split("\n")
         .filter((line) => line.length > 0)
         .map((line) => decodeTraceRecordLine(line));
+
       assert.isFalse(
         traceRecords.some(
           (record) => record.name === "desktop.observability.backendOutput.writeOutputChunk",
@@ -267,12 +289,16 @@ describe("DesktopObservability", () => {
   it.effect("keeps buffering output after a non-terminal failure snapshot", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-output-snapshot-test-",
       });
+
       const environmentLayer = makeEnvironmentLayer(baseDir, false);
+
       const logPath = yield* Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
         return environment.path.join(environment.logDir, "server-child.log");
       }).pipe(Effect.provide(environmentLayer));
 
@@ -293,6 +319,7 @@ describe("DesktopObservability", () => {
         (yield* fileSystem.readFileString(logPath)).trimEnd().split("\n"),
         (line) => decodeDesktopBackendChildLogRecord(line),
       );
+
       assert.equal(
         records.some((record) => record.annotations.text === "after timeout\n"),
         true,
@@ -307,14 +334,19 @@ describe("DesktopObservability", () => {
   it.effect("retains only the last mebibyte of backend child output", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-output-bound-test-",
       });
+
       const environmentLayer = makeEnvironmentLayer(baseDir, false);
+
       const logPath = yield* Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
         return environment.path.join(environment.logDir, "server-child.log");
       }).pipe(Effect.provide(environmentLayer));
+
       const maxBufferedBytes = 1024 * 1024;
       const discardedPrefixBytes = 128;
       const output = new Uint8Array(maxBufferedBytes + discardedPrefixBytes);
@@ -337,9 +369,11 @@ describe("DesktopObservability", () => {
       const record = yield* decodeDesktopBackendChildLogRecord(lines[1] ?? "");
       const text = record.annotations.text;
       assert.equal(typeof text, "string");
+
       if (typeof text !== "string") {
         return;
       }
+
       assert.equal(new TextEncoder().encode(text).byteLength, maxBufferedBytes);
       assert.isFalse(text.includes("y"));
     }).pipe(
@@ -351,12 +385,16 @@ describe("DesktopObservability", () => {
   it.effect("bounds the number of retained backend child output chunks", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-output-chunks-test-",
       });
+
       const environmentLayer = makeEnvironmentLayer(baseDir, false);
+
       const logPath = yield* Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
         return environment.path.join(environment.logDir, "server-child.log");
       }).pipe(Effect.provide(environmentLayer));
 
@@ -365,9 +403,11 @@ describe("DesktopObservability", () => {
           const factory = yield* DesktopObservability.DesktopBackendOutputLogFactory;
           const outputLog = yield* factory.forInstance("primary");
           yield* outputLog.beginSession({ details: "pid=123" });
+
           for (let index = 0; index < 300; index += 1) {
             yield* outputLog.writeOutputChunk("stderr", Uint8Array.of(index % 128));
           }
+
           yield* outputLog.persistFailure({ details: "code=1" });
         }).pipe(
           Effect.provide(DesktopObservability.layer.pipe(Layer.provideMerge(environmentLayer))),

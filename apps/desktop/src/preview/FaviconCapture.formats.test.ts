@@ -29,6 +29,7 @@ import {
 describe("captureFavicon", () => {
   it("retains bounded compatibility with common favicon formats", async () => {
     const { webContents, executeJavaScriptInIsolatedWorld } = makeWebContents();
+
     for (const [mime, buffer] of [
       ["image/gif", sourceGif(32, 32)],
       ["image/jpeg", sourceJpeg(32, 32)],
@@ -44,6 +45,7 @@ describe("captureFavicon", () => {
         }),
       ).toEqual({ kind: "captured", dataUrl: PNG });
     }
+
     expect(executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(4);
   });
 
@@ -69,6 +71,7 @@ describe("captureFavicon", () => {
         expect(code).toContain(`resizeHeight: ${testCase.resizeHeight}`);
         expect(code).toContain('resizeQuality: "high"');
         expect(code).toContain(testCase.draw);
+
         return PNG;
       },
     });
@@ -203,6 +206,7 @@ describe("captureFavicon", () => {
     const source = sourceJpegWithApp1Segments(64, 32, [
       sourceJpegExifWithOverlappingSubIfds(32, 32),
     ]);
+
     const { webContents, executeJavaScriptInIsolatedWorld } = makeWebContents();
 
     expect(
@@ -233,6 +237,7 @@ describe("captureFavicon", () => {
 
   it("rejects an unsafe PNG size before rasterization", async () => {
     const buffer = makeUnsafePng();
+
     const { webContents, executeJavaScriptInIsolatedWorld } = makeWebContents({
       fetch: async () =>
         new Response(new Uint8Array(buffer), {
@@ -287,6 +292,7 @@ describe("captureFavicon", () => {
         buffer.writeUInt16LE(1, 4);
         buffer.writeUInt32LE(100, 14);
         buffer.writeUInt32LE(22, 18);
+
         return buffer;
       })(),
     ],

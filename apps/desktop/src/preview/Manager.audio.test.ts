@@ -89,6 +89,7 @@ describe("PreviewManager", () => {
     let audible = false;
     let audibleAfterFirstRead = false;
     let audibleReads = 0;
+
     return {
       setAudioMuted,
       emitAudioState: (next: boolean) => {
@@ -116,7 +117,9 @@ describe("PreviewManager", () => {
         setAudioMuted,
         isCurrentlyAudible: () => {
           audibleReads += 1;
+
           if (audibleAfterFirstRead && audibleReads > 1) return true;
+
           return audible;
         },
         loadURL: vi.fn(async () => undefined),

@@ -17,11 +17,15 @@ const ClientSettingsDocumentSchema = Schema.Struct({
 });
 
 const ClientSettingsJson = fromLenientJson(ClientSettingsSchema);
+
 const LegacyClientSettingsDocumentJson = fromLenientJson(ClientSettingsDocumentSchema);
+
 const decodeLegacyClientSettingsDocumentJson = Schema.decodeEffect(
   LegacyClientSettingsDocumentJson,
 );
+
 const decodeClientSettingsJsonValue = Schema.decodeEffect(ClientSettingsJson);
+
 const decodeClientSettingsJson = (raw: string): Effect.Effect<ClientSettings, Schema.SchemaError> =>
   decodeLegacyClientSettingsDocumentJson(raw).pipe(
     Effect.map((document) => document.settings),
@@ -29,6 +33,7 @@ const decodeClientSettingsJson = (raw: string): Effect.Effect<ClientSettings, Sc
       SchemaError: () => decodeClientSettingsJsonValue(raw),
     }),
   );
+
 const encodeClientSettingsJson = Schema.encodeEffect(ClientSettingsJson);
 
 const DesktopClientSettingsWriteOperation = Schema.Literals([
@@ -104,6 +109,7 @@ const writeClientSettings = Effect.fnUntraced(function* (input: {
 }): Effect.fn.Return<void, DesktopClientSettingsWriteError> {
   const directory = input.path.dirname(input.settingsPath);
   const tempPath = `${input.settingsPath}.${process.pid}.${input.suffix}.tmp`;
+
   const encoded = yield* encodeClientSettingsJson(input.settings).pipe(
     Effect.mapError(
       (cause) =>
@@ -114,6 +120,7 @@ const writeClientSettings = Effect.fnUntraced(function* (input: {
         }),
     ),
   );
+
   yield* input.fileSystem.makeDirectory(directory, { recursive: true }).pipe(
     Effect.mapError(
       (cause) =>
@@ -188,6 +195,7 @@ export const layerTest = (initialSettings: Option.Option<ClientSettings> = Optio
     DesktopClientSettings,
     Effect.gen(function* () {
       const settingsRef = yield* Ref.make(initialSettings);
+
       return DesktopClientSettings.of({
         get: Ref.get(settingsRef),
         set: (settings) => Ref.set(settingsRef, Option.some(settings)),

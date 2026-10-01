@@ -116,12 +116,15 @@ export const createPreviewTabLifecycle = ({
         semaphore: Semaphore.makeUnsafe(1),
         users: 0,
       };
+
       lifecycle.users += 1;
       tabLifecycleLocks.set(tabId, lifecycle);
+
       return lifecycle.semaphore.withPermit(effect).pipe(
         Effect.ensuring(
           Effect.sync(() => {
             lifecycle.users -= 1;
+
             if (lifecycle.users === 0 && tabLifecycleLocks.get(tabId) === lifecycle) {
               tabLifecycleLocks.delete(tabId);
             }
@@ -135,6 +138,7 @@ export const createPreviewTabLifecycle = ({
     defaults?: DesktopPreviewTabDefaults,
   ) {
     const updatedAt = yield* currentIso;
+
     const result = yield* SynchronizedRef.modify(
       tabsRef,
       (
@@ -144,7 +148,9 @@ export const createPreviewTabLifecycle = ({
         ReadonlyMap<string, PreviewTabState>,
       ] => {
         const existing = tabs.get(tabId);
+
         if (existing) return [{ state: existing, created: false }, tabs] as const;
+
         const initial: PreviewTabState = {
           tabId,
           webContentsId: null,
@@ -159,6 +165,7 @@ export const createPreviewTabLifecycle = ({
           controller: "none",
           updatedAt,
         };
+
         return [
           { state: initial, created: true },
           replaceMap(tabs, (copy) => {
@@ -167,10 +174,13 @@ export const createPreviewTabLifecycle = ({
         ] as const;
       },
     );
+
     if (result.created) {
       tabLifecycleGenerations.set(tabId, (tabLifecycleGenerations.get(tabId) ?? 0) + 1);
     }
+
     yield* emit(tabId, result.state);
+
     return result.state;
   });
 
@@ -194,9 +204,12 @@ export const createPreviewTabLifecycle = ({
         discard: true,
       },
     );
+
     const tab = yield* SynchronizedRef.modify(tabsRef, (tabs) => {
       const current = tabs.get(tabId);
+
       if (!current) return [Option.none<PreviewTabState>(), tabs] as const;
+
       return [
         Option.some(current),
         replaceMap(tabs, (copy) => {
@@ -204,15 +217,19 @@ export const createPreviewTabLifecycle = ({
         }),
       ] as const;
     });
+
     if (Option.isNone(tab)) return;
     const closedTab = tab.value;
+
     if (closedTab.webContentsId != null) {
       yield* Effect.all(
         [detachControlSession(closedTab.webContentsId), detachListeners(closedTab.webContentsId)],
         { concurrency: 2, discard: true },
       );
     }
+
     const updatedAt = yield* currentIso;
+
     const closed: PreviewTabState = {
       ...closedTab,
       webContentsId: null,
@@ -227,21 +244,26 @@ export const createPreviewTabLifecycle = ({
       controller: "none",
       updatedAt,
     };
+
     yield* emit(tabId, closed);
   });
 
   const closeTab = Effect.fn("PreviewManager.closeTab")(function* (tabId: string) {
     const claimed = yield* Ref.modify(closingTabIdsRef, (closingTabIds) => {
       if (closingTabIds.has(tabId)) return [false, closingTabIds] as const;
+
       return [true, new Set([...closingTabIds, tabId])] as const;
     });
+
     if (!claimed) return;
+
     return yield* withTabLifecycleLock(tabId, closeTabUnlocked(tabId)).pipe(
       Effect.ensuring(
         Ref.update(closingTabIdsRef, (closingTabIds) => {
           if (!closingTabIds.has(tabId)) return closingTabIds;
           const next = new Set(closingTabIds);
           next.delete(tabId);
+
           return next;
         }),
       ),
@@ -254,6 +276,7 @@ export const createPreviewTabLifecycle = ({
     expectedGeneration: number | undefined,
   ) {
     const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
     if (
       !tab ||
       tabLifecycleGenerations.get(tabId) !== expectedGeneration ||
@@ -261,8 +284,10 @@ export const createPreviewTabLifecycle = ({
     ) {
       return yield* new PreviewTabNotFoundError({ tabId });
     }
+
     const wc = webContents.fromId(webContentsId);
     const mainWindow = yield* Ref.get(mainWindowRef);
+
     if (
       !wc ||
       wc.isDestroyed() ||
@@ -271,9 +296,11 @@ export const createPreviewTabLifecycle = ({
     ) {
       return yield* new PreviewWebContentsNotFoundError({ tabId, webContentsId });
     }
+
     const attached = yield* Ref.get(attachedRef);
     const annotationTheme = yield* Ref.get(annotationThemeRef);
     const currentAttachment = attached.get(webContentsId);
+
     if (tab.webContentsId === webContentsId && currentAttachment?.webContents === wc) {
       // The guest we already own re-announced itself, so nothing about the tab
       // changed. Only push its zoom back down — Chromium may have just handed
@@ -282,13 +309,16 @@ export const createPreviewTabLifecycle = ({
       yield* attempt({ operation: "registerWebview.sendTheme", tabId, webContentsId }, () =>
         wc.send(ANNOTATION_THEME_CHANNEL, annotationTheme),
       );
+
       return;
     }
+
     const replacedWebContentsId =
       tab.webContentsId != null &&
       (tab.webContentsId !== webContentsId || currentAttachment?.webContents !== wc)
         ? tab.webContentsId
         : null;
+
     if (replacedWebContentsId !== null) {
       yield* Effect.all(
         [
@@ -299,7 +329,9 @@ export const createPreviewTabLifecycle = ({
         { concurrency: 3, discard: true },
       );
     }
+
     const currentTab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
     if (
       !currentTab ||
       tabLifecycleGenerations.get(tabId) !== expectedGeneration ||
@@ -307,6 +339,7 @@ export const createPreviewTabLifecycle = ({
     ) {
       return yield* new PreviewTabNotFoundError({ tabId });
     }
+
     // Always assert the tab's own zoom rather than reading the guest's: a guest
     // attaching while the app UI is zoomed starts at the embedder's inherited
     // zoom level, which is not the preview's zoom. Done before the guest is
@@ -321,15 +354,19 @@ export const createPreviewTabLifecycle = ({
       wc.setAudioMuted(currentTab.audioMuted),
     );
     yield* attachListeners(tabId, wc);
+
     const readAudible = attempt(
       { operation: "registerWebview.readAudible", tabId, webContentsId },
       () => wc.isCurrentlyAudible(),
     ).pipe(Effect.orElseSucceed(() => false));
+
     const attachedAudible = yield* readAudible;
     const registeredAt = yield* currentIso;
+
     const registration = yield* SynchronizedRef.modifyEffect(tabsRef, (tabs) =>
       Effect.gen(function* () {
         const current = tabs.get(tabId);
+
         if (
           !current ||
           tabLifecycleGenerations.get(tabId) !== expectedGeneration ||
@@ -340,8 +377,10 @@ export const createPreviewTabLifecycle = ({
             tabs,
           ] as const;
         }
+
         const pendingUrl = current.navStatus.kind === "Loading" ? current.navStatus.url : null;
         const { favicon: _favicon, ...currentWithoutFavicon } = current;
+
         const next: PreviewTabState = {
           ...currentWithoutFavicon,
           webContentsId,
@@ -351,6 +390,7 @@ export const createPreviewTabLifecycle = ({
           audible: attachedAudible,
           updatedAt: registeredAt,
         };
+
         return [
           Option.some({
             state: next,
@@ -362,13 +402,16 @@ export const createPreviewTabLifecycle = ({
         ] as const;
       }),
     );
+
     if (Option.isNone(registration)) {
       yield* Effect.all([detachControlSession(webContentsId), detachListeners(webContentsId)], {
         concurrency: 2,
         discard: true,
       });
+
       return yield* new PreviewTabNotFoundError({ tabId });
     }
+
     const { state: registered, pendingUrl } = registration.value;
     // A zoom or mute action that landed while this attach was in flight
     // addressed the guest this one replaced, so settle the new guest on the
@@ -390,6 +433,7 @@ export const createPreviewTabLifecycle = ({
       wc.send(ANNOTATION_THEME_CHANNEL, annotationTheme),
     );
     const latestNavStatus = (yield* SynchronizedRef.get(tabsRef)).get(tabId)?.navStatus;
+
     if (
       pendingUrl &&
       latestNavStatus?.kind === "Loading" &&
@@ -409,6 +453,7 @@ export const createPreviewTabLifecycle = ({
     webContentsId: number,
   ) {
     const expectedGeneration = tabLifecycleGenerations.get(tabId);
+
     return yield* withTabLifecycleLock(
       tabId,
       registerWebviewUnlocked(tabId, webContentsId, expectedGeneration),
@@ -419,9 +464,12 @@ export const createPreviewTabLifecycle = ({
     const url = yield* attempt({ operation: "navigate.normalizeUrl", tabId }, () =>
       normalizePreviewUrl(rawUrl),
     );
+
     const updatedAt = yield* currentIso;
+
     const pending = yield* SynchronizedRef.modify(tabsRef, (tabs) => {
       const current = tabs.get(tabId);
+
       const next: PreviewTabState = {
         tabId,
         webContentsId: current?.webContentsId ?? null,
@@ -445,6 +493,7 @@ export const createPreviewTabLifecycle = ({
         ...(current?.favicon ? { favicon: current.favicon } : {}),
         updatedAt,
       };
+
       return [
         next,
         replaceMap(tabs, (copy) => {
@@ -452,13 +501,16 @@ export const createPreviewTabLifecycle = ({
         }),
       ] as const;
     });
+
     // emitIfCurrent for the same reason as update: this snapshot carries
     // audibility forward, and an audio-state-changed landing in between would
     // otherwise be rolled back with no follow-up transition to correct it.
     yield* emitIfCurrent(tabId, pending);
+
     if (pending.webContentsId == null) return;
     const webContentsId = pending.webContentsId;
     const wc = webContents.fromId(webContentsId);
+
     if (!wc || wc.isDestroyed()) {
       const expectedAttachment = (yield* Ref.get(attachedRef)).get(webContentsId);
       yield* withTabLifecycleLock(
@@ -467,6 +519,7 @@ export const createPreviewTabLifecycle = ({
           const currentTab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
           const currentAttachment = (yield* Ref.get(attachedRef)).get(webContentsId);
           const currentWebContents = webContents.fromId(webContentsId);
+
           if (
             currentTab?.webContentsId !== webContentsId ||
             currentAttachment !== expectedAttachment ||
@@ -474,6 +527,7 @@ export const createPreviewTabLifecycle = ({
           ) {
             return;
           }
+
           yield* Effect.all(
             [
               detachControlSession(webContentsId),
@@ -482,13 +536,17 @@ export const createPreviewTabLifecycle = ({
             ],
             { concurrency: 3, discard: true },
           );
+
           const detached = yield* SynchronizedRef.modify(tabsRef, (tabs) => {
             const current = tabs.get(tabId);
+
             if (current?.webContentsId !== webContentsId) {
               return [Option.none<PreviewTabState>(), tabs] as const;
             }
+
             const { favicon: _favicon, ...currentWithoutFavicon } = current;
             const next: PreviewTabState = { ...currentWithoutFavicon, webContentsId: null };
+
             return [
               Option.some(next),
               replaceMap(tabs, (copy) => {
@@ -496,17 +554,22 @@ export const createPreviewTabLifecycle = ({
               }),
             ] as const;
           });
+
           if (Option.isSome(detached)) yield* emitIfCurrent(tabId, detached.value);
         }),
       );
+
       return;
     }
+
     if (wc.getURL() === url) {
       yield* attempt({ operation: "navigate.reload", tabId, webContentsId: wc.id }, () =>
         wc.reload(),
       );
+
       return;
     }
+
     yield* attemptPromise({ operation: "navigate.loadURL", tabId, webContentsId: wc.id }, () =>
       wc.loadURL(url),
     );
@@ -538,12 +601,15 @@ export const createPreviewTabLifecycle = ({
 
   const openDevTools = Effect.fn("PreviewManager.openDevTools")(function* (tabId: string) {
     const wc = yield* requireWebContents(tabId);
+
     if (wc.isDevToolsOpened()) {
       yield* attempt({ operation: "openDevTools.focus", tabId, webContentsId: wc.id }, () =>
         wc.devToolsWebContents?.focus(),
       );
+
       return;
     }
+
     yield* detachControlSession(wc.id);
     yield* attempt({ operation: "openDevTools", tabId, webContentsId: wc.id }, () => {
       wc.once("devtools-closed", () => {
@@ -569,17 +635,22 @@ export const createPreviewTabLifecycle = ({
     transform: (current: number) => number,
   ) {
     const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
     if (!tab) return;
     const next = transform(tab.zoomFactor);
+
     if (Math.abs(next - tab.zoomFactor) < ZOOM_EPSILON) return;
+
     if (tab.webContentsId != null) {
       const wc = webContents.fromId(tab.webContentsId);
+
       if (wc && !wc.isDestroyed()) {
         yield* attempt({ operation: "applyZoom", tabId, webContentsId: wc.id }, () =>
           wc.setZoomFactor(next),
         );
       }
     }
+
     yield* update(tabId, { zoomFactor: next });
   });
 
@@ -588,20 +659,25 @@ export const createPreviewTabLifecycle = ({
     colorScheme: DesktopPreviewColorScheme,
   ) {
     const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
     if (!tab) {
       return yield* new PreviewTabNotFoundError({ tabId });
     }
+
     if (tab.colorScheme !== colorScheme) {
       // Record the choice even when the CDP call below can't run yet (no
       // webview, DevTools holding the debugger) — it is re-applied on the
       // next control-session (re)attach.
       yield* update(tabId, { colorScheme });
     }
+
     // Re-read after the update: registerWebview may have swapped the guest
     // in the meantime and the override must land on the current one.
     const webContentsId = (yield* SynchronizedRef.get(tabsRef)).get(tabId)?.webContentsId;
+
     if (webContentsId == null) return;
     const wc = webContents.fromId(webContentsId);
+
     if (!wc || wc.isDestroyed()) return;
     yield* applyColorScheme(tabId, wc, colorScheme);
   });
@@ -611,9 +687,11 @@ export const createPreviewTabLifecycle = ({
     audioMuted: boolean,
   ) {
     const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
     if (!tab) {
       return yield* new PreviewTabNotFoundError({ tabId });
     }
+
     // Commit and apply under the tab's lifecycle lock, then assert the
     // committed value rather than this call's argument. Two overlapping toggles
     // would otherwise be free to commit in one order and reach Chromium in the
@@ -625,9 +703,11 @@ export const createPreviewTabLifecycle = ({
         // re-applied by registerWebview when one arrives.
         const previous = (yield* SynchronizedRef.get(tabsRef)).get(tabId)?.audioMuted;
         const committed = previous !== undefined && previous !== audioMuted;
+
         if (committed) {
           yield* update(tabId, { audioMuted });
         }
+
         // Roll the commit back if Chromium refused: reporting success here
         // would leave the tab drawn as muted while it keeps playing.
         yield* assertTabAudioMuted(tabId).pipe(
@@ -638,6 +718,7 @@ export const createPreviewTabLifecycle = ({
       }),
     );
   });
+
   return {
     createTab,
     closeTab,

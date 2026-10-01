@@ -96,16 +96,20 @@ describe("PreviewManager", () => {
       Effect.gen(function* () {
         const firstJpeg = Buffer.from("first-recording-frame");
         const secondJpeg = Buffer.from("second-recording-frame");
+
         const firstCapturePage = vi.fn(async () => ({
           toJPEG: () => firstJpeg,
           getSize: () => ({ width: 800, height: 600 }),
         }));
+
         const secondCapturePage = vi.fn(async () => ({
           toJPEG: () => secondJpeg,
           getSize: () => ({ width: 390, height: 844 }),
         }));
+
         const firstSendCommand = vi.fn(async () => undefined);
         const secondSendCommand = vi.fn(async () => undefined);
+
         const makeWebContents = (
           id: number,
           capturePage: typeof firstCapturePage,
@@ -138,10 +142,12 @@ describe("PreviewManager", () => {
             },
             capturePage,
           }) as never;
+
         const webContentsById = new Map([
           [41, makeWebContents(41, firstCapturePage, firstSendCommand)],
           [42, makeWebContents(42, secondCapturePage, secondSendCommand)],
         ]);
+
         fromId.mockImplementation((id) =>
           id === undefined ? null : (webContentsById.get(id) ?? null),
         );
@@ -204,26 +210,35 @@ describe("PreviewManager", () => {
           toJPEG: vi.fn(() => Buffer.from("stale-recording-frame")),
           getSize: vi.fn(() => ({ width: 1280, height: 720 })),
         };
+
         let markCaptureStarted!: () => void;
+
         const captureStarted = new Promise<void>((resolve) => {
           markCaptureStarted = resolve;
         });
+
         let resolveCapture: ((image: TestCapturedPreviewImage) => void) | undefined;
+
         const staleCapturePage = vi.fn(() => {
           markCaptureStarted();
+
           return new Promise<TestCapturedPreviewImage>((resolve) => {
             resolveCapture = resolve;
           });
         });
+
         const replacementCapturePage = vi.fn(async () => ({
           toJPEG: () => Buffer.from("replacement-recording-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         const initialWebContents = makeTestPreviewWebContents(staleCapturePage, 42);
         const replacementWebContents = makeTestPreviewWebContents(replacementCapturePage, 43);
         fromId.mockImplementation((webContentsId?: number) => {
           if (webContentsId === 42) return initialWebContents;
+
           if (webContentsId === 43) return replacementWebContents;
+
           return null;
         });
         const frames: DesktopPreviewRecordingFrame[] = [];
@@ -235,9 +250,11 @@ describe("PreviewManager", () => {
         );
         yield* manager.createTab("tab_capture_replaced");
         yield* manager.registerWebview("tab_capture_replaced", 42);
+
         const recordingFiber = yield* manager
           .startRecording("tab_capture_replaced")
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Effect.promise(() => captureStarted);
 
         yield* manager.registerWebview("tab_capture_replaced", 43);
@@ -261,17 +278,23 @@ describe("PreviewManager", () => {
           toJPEG: vi.fn(() => Buffer.from("shared-in-flight-frame")),
           getSize: vi.fn(() => ({ width: 1280, height: 720 })),
         };
+
         let markCaptureStarted!: () => void;
+
         const captureStarted = new Promise<void>((resolve) => {
           markCaptureStarted = resolve;
         });
+
         let resolveCapture: ((captured: TestCapturedPreviewImage) => void) | undefined;
+
         const capturePage = vi.fn(() => {
           markCaptureStarted();
+
           return new Promise<TestCapturedPreviewImage>((resolve) => {
             resolveCapture = resolve;
           });
         });
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
         const { pictureInPictureWindow, send } = makeTestPictureInPictureWindow();
         browserWindowConstructor.mockImplementation(function () {
@@ -286,9 +309,11 @@ describe("PreviewManager", () => {
 
         yield* manager.createTab("tab_capture_consumer_added");
         yield* manager.registerWebview("tab_capture_consumer_added", 42);
+
         const recordingFiber = yield* manager
           .startRecording("tab_capture_consumer_added")
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Effect.promise(() => captureStarted);
 
         yield* manager.openPictureInPicture("tab_capture_consumer_added");
@@ -316,13 +341,16 @@ describe("PreviewManager", () => {
         let debuggerMessage:
           | ((event: unknown, method: string, params: Record<string, unknown>) => void)
           | undefined;
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => Buffer.from("scheduled-recording-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         const sendCommand = vi.fn(async (method: string) =>
           method === "Runtime.evaluate" ? { result: { value: null } } : undefined,
         );
+
         fromId.mockReturnValue({
           id: 42,
           isDestroyed: () => false,
@@ -405,10 +433,12 @@ describe("PreviewManager", () => {
         const setBackgroundThrottling = vi.fn();
         const mainWindowWebContents = { setBackgroundThrottling };
         const jpeg = Buffer.from("shared-preview-frame");
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => jpeg,
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue({
           id: 42,
           hostWebContents: mainWindowWebContents,
@@ -440,6 +470,7 @@ describe("PreviewManager", () => {
 
         const pictureInPictureListeners = new Map<string, () => void>();
         const pictureInPictureSend = vi.fn();
+
         const pictureInPictureWindow = {
           isDestroyed: vi.fn(() => false),
           once: vi.fn((event: string, listener: () => void) => {
@@ -461,6 +492,7 @@ describe("PreviewManager", () => {
             send: pictureInPictureSend,
           },
         };
+
         browserWindowConstructor.mockImplementation(function () {
           return pictureInPictureWindow;
         });
@@ -560,10 +592,12 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const unchanged = Buffer.from("unchanged-preview-frame");
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => unchanged,
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
         const frames: DesktopPreviewRecordingFrame[] = [];
 
@@ -603,16 +637,19 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const jpeg = Buffer.from("retry-recording-frame");
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => jpeg,
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
         let deliveries = 0;
 
         yield* manager.subscribeRecordingFrames(() =>
           Effect.sync(() => {
             deliveries += 1;
+
             if (deliveries === 1) throw new Error("recording delivery failed");
           }),
         );
@@ -633,10 +670,12 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const jpeg = Buffer.from("recovered-preview-frame");
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => jpeg,
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         capturePage.mockRejectedValueOnce(new Error("UnknownVizError"));
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
         const frames: DesktopPreviewRecordingFrame[] = [];

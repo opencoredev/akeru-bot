@@ -13,17 +13,25 @@ const mocks = vi.hoisted(() => ({
   platform: vi.fn(),
   resolve: vi.fn(),
 }));
+
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn, spawnSync: mocks.spawnSync }));
+
 vi.mock("node:fs", () => ({ ...mocks, constants: { X_OK: 1 } }));
+
 vi.mock("node:os", () => ({ platform: mocks.platform, tmpdir: () => "/tmp" }));
+
 vi.mock("node:module", () => ({ createRequire: () => ({ resolve: mocks.resolve }) }));
 
 import { createSmokeEnvironment, resolveSmokeElectronPath, runSmokeTest } from "./smoke-test.mjs";
 
 const root = "/tmp/akeru-desktop-smoke-owned";
+
 const ready = "[desktop-window] backend ready\n[desktop-window] main window created\n";
+
 let app;
+
 let kill;
+
 let signals;
 
 function launch() {
@@ -52,16 +60,19 @@ beforeEach(() => {
   app.stderr = new NodeEvents.EventEmitter();
   app.kill = vi.fn(() => {
     close();
+
     return true;
   });
   mocks.spawn.mockReturnValue(app);
   kill = vi.spyOn(process, "kill").mockImplementation(() => {
     close();
+
     return true;
   });
   signals = new Map();
   vi.spyOn(process, "once").mockImplementation((signal, listener) => {
     signals.set(signal, listener);
+
     return process;
   });
   vi.spyOn(process, "removeListener").mockReturnValue(process);
@@ -101,7 +112,9 @@ describe("desktop smoke isolation", () => {
       NODE_PATH: "/live/modules",
       PATH: "/bin",
     };
+
     const env = createSmokeEnvironment(root, inherited);
+
     for (const key of [
       "HOME",
       "USERPROFILE",
@@ -119,6 +132,7 @@ describe("desktop smoke isolation", () => {
     ]) {
       expect(env[key].startsWith(`${root}/`)).toBe(true);
     }
+
     for (const key of [
       "T3CODE_PORT",
       "T3CODE_DESKTOP_LAN_HOST",
@@ -249,6 +263,7 @@ describe("desktop startup evidence and cleanup", () => {
   it("escalates only the captured group and waits for close before deleting state", async () => {
     kill.mockImplementation((_pid, signal) => {
       if (signal === "SIGKILL") close();
+
       return true;
     });
     const result = launch();

@@ -17,12 +17,15 @@ export function selectMarqueeElements<ElementType>(input: {
   readonly measure: (element: ElementType) => ElementBounds;
 }): ElementType[] {
   const candidates: { element: ElementType; area: number }[] = [];
+
   if (input.limit <= 0) return [];
 
   for (const element of input.elements) {
     if (!input.eligible(element)) continue;
     const bounds = input.measure(element);
+
     if (bounds.width < 2 || bounds.height < 2) continue;
+
     if (
       bounds.right < input.rect.x ||
       bounds.left > input.rect.x + input.rect.width ||
@@ -33,6 +36,7 @@ export function selectMarqueeElements<ElementType>(input: {
 
     const centerX = bounds.left + bounds.width / 2;
     const centerY = bounds.top + bounds.height / 2;
+
     if (
       centerX < input.rect.x ||
       centerX > input.rect.x + input.rect.width ||
@@ -43,10 +47,12 @@ export function selectMarqueeElements<ElementType>(input: {
 
     const area = bounds.width * bounds.height;
     const insertionIndex = candidates.findIndex((candidate) => candidate.area > area);
+
     if (insertionIndex < 0) {
       if (candidates.length < input.limit) candidates.push({ element, area });
     } else {
       candidates.splice(insertionIndex, 0, { element, area });
+
       if (candidates.length > input.limit) candidates.pop();
     }
   }

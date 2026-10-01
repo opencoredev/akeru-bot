@@ -31,15 +31,25 @@ import {
   writeSettings,
   readSettings,
 } from "./DesktopSettingsPersistence.ts";
+
 export type { DesktopSettings } from "./DesktopSettingsDocument.ts";
+
 export type { DesktopSettingsChange } from "./DesktopSettingsDocument.ts";
+
 export { DEFAULT_TAILSCALE_SERVE_PORT } from "./DesktopSettingsDocument.ts";
+
 export { DesktopWindowBoundsSchema } from "./DesktopSettingsDocument.ts";
+
 export type { DesktopWindowBounds } from "./DesktopSettingsDocument.ts";
+
 export { DEFAULT_MAIN_WINDOW_SIZE } from "./DesktopSettingsDocument.ts";
+
 export { DEFAULT_DESKTOP_SETTINGS } from "./DesktopSettingsDocument.ts";
+
 export { resolveDefaultDesktopSettings } from "./DesktopSettingsDocument.ts";
+
 export { normalizeMainWindowBounds } from "./DesktopSettingsDocument.ts";
+
 export { DesktopSettingsWriteError } from "./DesktopSettingsPersistence.ts";
 
 export class DesktopAppSettings extends Context.Service<
@@ -88,6 +98,7 @@ export const make = Effect.gen(function* () {
   const updateInMemory = (update: (settings: DesktopSettings) => DesktopSettings) =>
     SynchronizedRef.modify(settingsRef, (settings) => {
       const nextSettings = update(settings);
+
       return [settingsChange(nextSettings, nextSettings !== settings), nextSettings] as const;
     });
 
@@ -96,6 +107,7 @@ export const make = Effect.gen(function* () {
   ): Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError> =>
     SynchronizedRef.modifyEffect(settingsRef, (settings) => {
       const nextSettings = update(settings);
+
       if (nextSettings === settings) {
         return Effect.succeed([settingsChange(settings, false), settings] as const);
       }
@@ -132,6 +144,7 @@ export const make = Effect.gen(function* () {
         environment.desktopSettingsPath,
         environment.appVersion,
       );
+
       return yield* SynchronizedRef.setAndGet(settingsRef, settings);
     }).pipe(Effect.withSpan("desktop.settings.load")),
     setMainWindowBounds: (bounds, isMaximized) =>
@@ -188,9 +201,11 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
     DesktopAppSettings,
     Effect.gen(function* () {
       const settingsRef = yield* SynchronizedRef.make(initialSettings);
+
       const update = (f: (settings: DesktopSettings) => DesktopSettings) =>
         SynchronizedRef.modify(settingsRef, (settings) => {
           const nextSettings = f(settings);
+
           return [
             {
               settings: nextSettings,

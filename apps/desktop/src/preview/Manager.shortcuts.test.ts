@@ -106,8 +106,10 @@ describe("isPreviewEditingShortcut", () => {
       for (const key of ["a", "c", "v", "x", "z", "V"]) {
         expect(PreviewManager.isPreviewEditingShortcut(input(platform, key), platform)).toBe(true);
       }
+
       const redo =
         platform === "win32" ? input(platform, "y") : input(platform, "z", { shift: true });
+
       expect(PreviewManager.isPreviewEditingShortcut(redo, platform)).toBe(true);
       expect(
         PreviewManager.isPreviewEditingShortcut(
@@ -119,6 +121,7 @@ describe("isPreviewEditingShortcut", () => {
       for (const key of ["k", ",", "w", "j", "q", "+", "=", "-", "0", "r", "F12"]) {
         expect(PreviewManager.isPreviewEditingShortcut(input(platform, key), platform)).toBe(false);
       }
+
       for (const modifiers of [
         { meta: false, control: false },
         { meta: true, control: true },
@@ -130,6 +133,7 @@ describe("isPreviewEditingShortcut", () => {
           PreviewManager.isPreviewEditingShortcut(input(platform, "v", modifiers), platform),
         ).toBe(false);
       }
+
       expect(
         PreviewManager.isPreviewEditingShortcut(input(platform, "a", { shift: true }), platform),
       ).toBe(false);
@@ -139,6 +143,7 @@ describe("isPreviewEditingShortcut", () => {
   it("recognizes macOS Paste and Match Style when Option changes the key to a symbol", () => {
     const pasteAndMatchStyle = input("darwin", "◊", { code: "KeyV", alt: true, shift: true });
     expect(PreviewManager.isPreviewEditingShortcut(pasteAndMatchStyle, "darwin")).toBe(true);
+
     for (const modifiers of [
       { code: "KeyC" },
       { alt: false },
@@ -188,6 +193,7 @@ describe("PreviewManager", () => {
           (preview.webContents as Electron.WebContents).setIgnoreMenuShortcuts,
         ).toHaveBeenCalledWith(true);
         const beforeInput = preview.listeners.get("before-input-event")!;
+
         for (const control of [false, true]) {
           for (const key of ["k", ",", "w", "j", "q", "+"]) {
             for (const type of ["keyDown", "keyUp"]) {
@@ -204,6 +210,7 @@ describe("PreviewManager", () => {
             }
           }
         }
+
         expect(sendInputEvent).not.toHaveBeenCalled();
 
         const preventDefault = vi.fn();
@@ -245,6 +252,7 @@ describe("PreviewManager", () => {
           getFocusedWebContents.mockReturnValue(browser.webContents as never);
           const beforeInput = browser.listeners.get("before-input-event")!;
           const preventDefault = vi.fn();
+
           const input = {
             type: "keyDown",
             key: "v",
@@ -253,6 +261,7 @@ describe("PreviewManager", () => {
             shift: false,
             alt: false,
           };
+
           beforeInput({ preventDefault } as never, input as never);
           expect(contents.setIgnoreMenuShortcuts).toHaveBeenLastCalledWith(false);
           // Releasing Command must not disable native fallback for the pending paste.

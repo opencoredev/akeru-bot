@@ -217,6 +217,7 @@ export const waitForHttpReady = (
   options: BackendProcessContext & { readonly timeout: Duration.Duration },
 ): Effect.Effect<void, BackendReadinessTimeoutError, HttpClient.HttpClient> => {
   const readinessUrl = new URL(BACKEND_READINESS_PATH, options.httpBaseUrl);
+
   return waitForHttpReadyShared({
     baseUrl: options.httpBaseUrl.href,
     path: BACKEND_READINESS_PATH,
@@ -285,6 +286,7 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
   options: RunBackendProcessOptions,
 ): Effect.fn.Return<BackendProcessExit, BackendProcessError, BackendProcessRunRequirements> {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
   const bootstrapJson = yield* encodeBootstrapJson(options.bootstrap).pipe(
     Effect.mapError(
       (cause) =>
@@ -297,26 +299,31 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
         }),
     ),
   );
+
   const onOutput = options.onOutput ?? (() => Effect.void);
   const bootstrapStream = Stream.encodeText(Stream.make(`${bootstrapJson}\n`));
   const additionalFds: Record<`fd${number}`, ChildProcess.AdditionalFdConfig> = {};
+
   if (options.bootstrapDelivery === "fd3") {
     additionalFds.fd3 = {
       type: "input",
       stream: bootstrapStream,
     };
+
     if (options.bootstrap.desktopTelemetryFd !== undefined) {
       additionalFds[`fd${options.bootstrap.desktopTelemetryFd}`] = {
         type: "input",
         stream: options.desktopTelemetryStream,
       };
     }
+
     if (options.bootstrap.desktopTelemetryControlFd !== undefined) {
       additionalFds[`fd${options.bootstrap.desktopTelemetryControlFd}`] = {
         type: "output",
       };
     }
   }
+
   const command = ChildProcess.make(options.executablePath, options.args, {
     cwd: options.cwd,
     env: options.env,
@@ -346,9 +353,11 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
         }),
     ),
   );
+
   const outputFibers: Array<Fiber.Fiber<void, never>> = [];
 
   yield* options.onStarted?.(handle.pid) ?? Effect.void;
+
   if (
     options.bootstrap.desktopTelemetryControlFd !== undefined &&
     options.onDesktopTelemetryControl !== undefined
@@ -386,6 +395,7 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
       Effect.forkScoped,
     );
   }
+
   if (options.captureOutput) {
     const outputContext = {
       executablePath: options.executablePath,
@@ -394,6 +404,7 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
       httpBaseUrl: options.httpBaseUrl,
       pid: Number(handle.pid),
     };
+
     const onOutputFailure = options.onOutputFailure ?? (() => Effect.void);
     outputFibers.push(
       yield* drainBackendOutput(
@@ -412,6 +423,7 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
       ).pipe(Effect.forkScoped),
     );
   }
+
   // Probe readiness in a loop while the backend process is still alive
   // instead of giving up after the first budget. A slow cold boot (the
   // WSL bundle loading across /mnt/c, or a first launch right after an
@@ -453,6 +465,7 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
     ),
     Effect.exit,
   );
+
   yield* options.onExitObserved?.() ?? Effect.void;
   yield* Effect.forEach(outputFibers, Fiber.await, {
     concurrency: "unbounded",
@@ -461,10 +474,13 @@ export const runBackendProcess = Effect.fn("runBackendProcess")(function* (
     Effect.timeout(options.outputDrainTimeout ?? DEFAULT_BACKEND_OUTPUT_DRAIN_TIMEOUT),
     Effect.ignore,
   );
+
   if (Exit.isFailure(exit)) {
     return yield* Effect.failCause(exit.cause);
   }
+
   const exitCode = exit.value;
+
   return {
     code: Option.some(exitCode),
     reason: `code=${exitCode}`,

@@ -9,10 +9,15 @@ import * as Tracer from "effect/Tracer";
 
 import { backendOutputLogFactoryLayer } from "./BackendOutputLogging.ts";
 import { tracerLayer } from "./DesktopOtlp.ts";
+
 export type { RotatingLogFileWriter } from "./RotatingLogWriter.ts";
+
 export type { DesktopBackendOutputLogShape } from "./BackendOutputLogging.ts";
+
 export { DesktopBackendOutputLogFactory } from "./BackendOutputLogging.ts";
+
 export { appendBoundedOutputChunk } from "./BackendOutputLogging.ts";
+
 export { DesktopTraceShutdown } from "./DesktopOtlp.ts";
 
 export type DesktopLogAnnotations = Record<string, unknown>;

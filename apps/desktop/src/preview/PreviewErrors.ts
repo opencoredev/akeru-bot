@@ -21,21 +21,27 @@ export const previewAutomationEvaluationDetail = (exceptionDetails: unknown) => 
   if (typeof exceptionDetails !== "object" || exceptionDetails === null) {
     return { detailKind: "unknown" as const };
   }
+
   const details = exceptionDetails as Record<string, unknown>;
   const exception = details["exception"];
+
   const description =
     typeof exception === "object" &&
     exception !== null &&
     typeof (exception as Record<string, unknown>)["description"] === "string"
       ? (exception as Record<string, unknown>)["description"]
       : undefined;
+
   if (typeof description === "string" && description.length > 0) {
     return { detailKind: "exception-description" as const, detail: description };
   }
+
   const text = details["text"];
+
   if (typeof text === "string" && text.length > 0) {
     return { detailKind: "exception-text" as const, detail: text };
   }
+
   return { detailKind: "unknown" as const };
 };
 
@@ -110,6 +116,7 @@ export class PreviewOperationError extends Schema.TaggedErrorClass<PreviewOperat
       this.webContentsId === undefined ? undefined : `WebContents ${this.webContentsId}`,
       this.artifactPath === undefined ? undefined : `artifact ${this.artifactPath}`,
     ].filter((value): value is string => value !== undefined);
+
     return `Desktop preview operation failed: ${this.operation}${context.length === 0 ? "" : ` (${context.join(", ")})`}`;
   }
 }
@@ -184,6 +191,7 @@ export class PreviewAutomationTargetNotFoundError extends Schema.TaggedErrorClas
 ) {
   override get message(): string {
     const target = previewAutomationTargetLabel(this.selectorKind, this.selectorLength);
+
     return `Preview automation ${this.operation} could not find ${target} in tab ${this.tabId}`;
   }
 }
@@ -198,6 +206,7 @@ export class PreviewAutomationTargetNotEditableError extends Schema.TaggedErrorC
 ) {
   override get message(): string {
     const target = previewAutomationTargetLabel(this.selectorKind, this.selectorLength);
+
     return `Preview automation type found ${target}, but it is not editable in tab ${this.tabId}`;
   }
 }
@@ -231,6 +240,7 @@ export class PreviewAutomationInvalidSelectorError extends Schema.TaggedErrorCla
   static toTimelineMessage(error: PreviewAutomationInvalidSelectorError): string {
     if (typeof error.cause !== "object" || error.cause === null) return error.message;
     const reason = (error.cause as Record<string, unknown>)["message"];
+
     return typeof reason === "string" && reason.length > 0 ? reason : error.message;
   }
 
@@ -246,6 +256,7 @@ export class PreviewAutomationInvalidSelectorError extends Schema.TaggedErrorCla
 
   override get message(): string {
     const target = previewAutomationTargetLabel(this.selectorKind, this.selectorLength);
+
     return `Preview automation ${this.operation} rejected ${target} in tab ${this.tabId}`;
   }
 }

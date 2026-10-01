@@ -94,6 +94,7 @@ describe("PreviewManager", () => {
       Effect.gen(function* () {
         let failKeyDown = false;
         let humanInput: ((_event: unknown, signal: unknown) => void) | undefined;
+
         const sendCommand = vi.fn(async (method: string, params?: Record<string, unknown>) => {
           if (
             failKeyDown &&
@@ -102,6 +103,7 @@ describe("PreviewManager", () => {
           ) {
             throw new Error("key dispatch failed");
           }
+
           if (
             method === "Input.dispatchKeyEvent" &&
             (params?.["type"] === "keyDown" || params?.["type"] === "rawKeyDown")
@@ -115,8 +117,10 @@ describe("PreviewManager", () => {
               },
             );
           }
+
           return method === "Runtime.evaluate" ? { result: { value: { ok: true } } } : undefined;
         });
+
         const restoreFocus = vi.fn();
         const focus = vi.fn();
         getFocusedWebContents.mockReturnValue({
@@ -167,21 +171,26 @@ describe("PreviewManager", () => {
         const calls = sendCommand.mock.calls;
         const methods = calls.map(([method]) => method);
         const enableIndex = methods.indexOf("Input.setIgnoreInputEvents");
+
         const focusOnIndex = calls.findIndex(
           ([method, params]) =>
             method === "Emulation.setFocusEmulationEnabled" && params?.["enabled"] === true,
         );
+
         const keyDownIndex = calls.findIndex(
           ([method, params]) =>
             method === "Input.dispatchKeyEvent" && params?.["type"] === "keyDown",
         );
+
         const keyUpIndex = calls.findIndex(
           ([method, params]) => method === "Input.dispatchKeyEvent" && params?.["type"] === "keyUp",
         );
+
         const focusOffIndex = calls.findIndex(
           ([method, params]) =>
             method === "Emulation.setFocusEmulationEnabled" && params?.["enabled"] === false,
         );
+
         const typeEvaluation = sendCommand.mock.calls.find(
           ([method, params]) =>
             method === "Runtime.evaluate" &&
@@ -191,7 +200,9 @@ describe("PreviewManager", () => {
             typeof params.expression === "string" &&
             params.expression.includes('document.execCommand("insertText"'),
         );
+
         expect(typeEvaluation).toBeDefined();
+
         const clearOnlyEvaluation = sendCommand.mock.calls.find(
           ([method, params]) =>
             method === "Runtime.evaluate" &&
@@ -202,6 +213,7 @@ describe("PreviewManager", () => {
             params.expression.includes('const text = ""') &&
             params.expression.includes("Object.getOwnPropertyDescriptor"),
         );
+
         expect(clearOnlyEvaluation).toBeDefined();
         expect(methods).not.toContain("Input.insertText");
         expect(enableIndex).toBeGreaterThanOrEqual(0);
@@ -268,6 +280,7 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         let humanInput: ((_event: unknown, signal: unknown) => void) | undefined;
+
         const sendCommand = vi.fn(async (method: string) => {
           if (method === "Runtime.evaluate") {
             return {
@@ -276,11 +289,14 @@ describe("PreviewManager", () => {
               },
             };
           }
+
           if (method === "Input.dispatchMouseEvent") {
             humanInput?.({}, { kind: "pointer", x: 400, y: 300, button: 0 });
           }
+
           return undefined;
         });
+
         fromId.mockReturnValue({
           id: 42,
           isDestroyed: () => false,
@@ -320,9 +336,11 @@ describe("PreviewManager", () => {
         const click = yield* manager
           .automationClick("tab_1", { x: 120, y: 80 })
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* TestClock.adjust(200);
         const exit = yield* Fiber.await(click);
         expect(Exit.isFailure(exit)).toBe(true);
+
         if (Exit.isSuccess(exit)) return;
         const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
         expect(error).toMatchObject({
@@ -332,9 +350,11 @@ describe("PreviewManager", () => {
           webContentsId: 42,
         });
         expect(error).toBeInstanceOf(Error);
+
         if (error instanceof Error) {
           expect(error.name).toBe("PreviewAutomationControlInterruptedError");
         }
+
         expect("cause" in error).toBe(false);
       }),
     ),

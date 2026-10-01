@@ -12,6 +12,7 @@ import * as TestClock from "effect/testing/TestClock";
 import * as DesktopState from "../app/DesktopState.ts";
 import * as DesktopUpdates from "./DesktopUpdates.ts";
 import { flushCallbacks, makeHarness } from "./test-support/UpdatesHarness.ts";
+
 describe("DesktopUpdates", () => {
   it.effect("preserves a queued installer when the feed has no update", () => {
     const harness = makeHarness();
@@ -49,6 +50,7 @@ describe("DesktopUpdates", () => {
       Effect.gen(function* () {
         const checkStarted = yield* Deferred.make<void>();
         const releaseCheck = yield* Deferred.make<void>();
+
         const harness = makeHarness({
           checkForUpdates: Deferred.succeed(checkStarted, undefined).pipe(
             Effect.andThen(Deferred.await(releaseCheck)),
@@ -84,6 +86,7 @@ describe("DesktopUpdates", () => {
     Effect.gen(function* () {
       const installStarted = yield* Deferred.make<void>();
       const releaseInstall = yield* Deferred.make<void>();
+
       const harness = makeHarness({
         stopBackend: Deferred.succeed(installStarted, undefined).pipe(
           Effect.andThen(Deferred.await(releaseInstall)),
@@ -138,6 +141,7 @@ describe("DesktopUpdates", () => {
 
   it.effect("restarts stopped backends when update installation fails", () => {
     let starts = 0;
+
     const harness = makeHarness({
       startBackend: Effect.sync(() => {
         starts += 1;

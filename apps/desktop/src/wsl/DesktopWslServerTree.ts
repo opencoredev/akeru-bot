@@ -26,10 +26,13 @@ export type WslServerTreeResult =
   | { readonly ok: false; readonly reason: string; readonly fatal: boolean };
 
 const MARKER_FILE_NAME = "t3code-wsl-server-tree.json";
+
 const COPY_CONCURRENCY = 8;
 
 const Marker = Schema.Struct({ version: Schema.String });
+
 const decodeMarker = Schema.decodeUnknownEffect(Schema.fromJsonString(Marker));
+
 const encodeMarker = Schema.encodeEffect(Schema.fromJsonString(Marker));
 
 export class DesktopWslServerTreeExtractError extends Schema.TaggedErrorClass<DesktopWslServerTreeExtractError>()(
@@ -65,11 +68,14 @@ export const forEachBoundedTree = <Node, E, R>(
 ): Effect.Effect<void, E, R> =>
   Effect.gen(function* () {
     const pending = [...roots];
+
     while (pending.length > 0) {
       const batch = pending.splice(-COPY_CONCURRENCY);
+
       const children = yield* Effect.forEach(batch, visit, {
         concurrency: COPY_CONCURRENCY,
       });
+
       for (const entries of children) {
         pending.push(...entries);
       }
@@ -95,20 +101,24 @@ const copyTree = (
     ({ sourcePath, targetPath }) =>
       Effect.gen(function* () {
         const info = yield* fs.stat(sourcePath);
+
         if (info.type === "Directory") {
           yield* fs.makeDirectory(targetPath, { recursive: true });
           const entries = yield* fs.readDirectory(sourcePath);
+
           return entries.map((entry) => ({
             sourcePath: join(sourcePath, entry),
             targetPath: join(targetPath, entry),
           }));
         }
+
         if (info.type === "File") {
           // Read and write stay in the same bounded task, so at most eight file
           // buffers can be retained while their writes complete.
           const bytes = yield* fs.readFile(sourcePath);
           yield* fs.writeFile(targetPath, bytes);
         }
+
         return [];
       }),
   );
@@ -138,12 +148,14 @@ export const make = Effect.gen(function* () {
   const markerMatches = Effect.gen(function* () {
     const raw = yield* fs.readFileString(join(versionDir, MARKER_FILE_NAME));
     const marker = yield* decodeMarker(raw);
+
     return marker.version === version;
   }).pipe(Effect.orElseSucceed(() => false));
 
   const extract = Effect.gen(function* () {
     yield* Effect.log(`[wsl-server-tree] Extracting ${serverRoot} to ${versionDir}...`);
     yield* fs.makeDirectory(treeRoot, { recursive: true });
+
     // Keep the temporary tree beside the target so rename is atomic. Cleanup
     // is owned explicitly because a scoped temp-directory finalizer treats the
     // successful rename (and therefore missing original path) as an error.
@@ -151,6 +163,7 @@ export const make = Effect.gen(function* () {
       directory: treeRoot,
       prefix: `.${version}.extract-`,
     });
+
     yield* Effect.gen(function* () {
       yield* copyTree(fs, join, serverRoot, partialDir);
       const markerJson = yield* encodeMarker({ version });
@@ -179,10 +192,13 @@ export const make = Effect.gen(function* () {
         if (!needsExtraction) {
           return { ok: true, root: serverRoot } as const;
         }
+
         if (yield* markerMatches) {
           yield* sweepStale;
+
           return { ok: true, root: versionDir } as const;
         }
+
         const result = yield* extract.pipe(
           Effect.map(() => ({ ok: true, root: versionDir }) as const),
           // Retryable: transient antivirus locks and slow disks are the common
@@ -197,9 +213,11 @@ export const make = Effect.gen(function* () {
             } as const),
           ),
         );
+
         if (result.ok) {
           yield* sweepStale;
         }
+
         return result;
       }),
     )
@@ -219,6 +237,7 @@ export const layerTest = (stub: DesktopWslServerTreeTestStub = {}) =>
     DesktopWslServerTree,
     Effect.gen(function* () {
       const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
       return DesktopWslServerTree.of({
         ensure: Effect.succeed(stub.result ?? { ok: true, root: environment.appRoot }),
       });

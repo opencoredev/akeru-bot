@@ -118,18 +118,23 @@ export const createPreviewBrowserControl = ({
     const timestamp = yield* currentIso;
     yield* Ref.update(diagnosticsRef, (allDiagnostics) => {
       const current = allDiagnostics.get(webContentsId);
+
       if (!current) return allDiagnostics;
       const requestId = typeof params["requestId"] === "string" ? params["requestId"] : null;
+
       const next = (() => {
         if (method === "Runtime.consoleAPICalled") {
           const args = Array.isArray(params["args"]) ? params["args"] : [];
+
           const text = args
             .map((arg) => {
               if (typeof arg !== "object" || arg === null) return String(arg);
               const value = arg as Record<string, unknown>;
+
               return String(value["value"] ?? value["description"] ?? "");
             })
             .join(" ");
+
           return {
             ...current,
             consoleEntries: pushBounded(current.consoleEntries, {
@@ -140,11 +145,13 @@ export const createPreviewBrowserControl = ({
             }),
           };
         }
+
         if (method === "Runtime.exceptionThrown") {
           const details =
             typeof params["exceptionDetails"] === "object" && params["exceptionDetails"] !== null
               ? (params["exceptionDetails"] as Record<string, unknown>)
               : {};
+
           return {
             ...current,
             consoleEntries: pushBounded(current.consoleEntries, {
@@ -155,11 +162,13 @@ export const createPreviewBrowserControl = ({
             }),
           };
         }
+
         if (method === "Log.entryAdded") {
           const entry =
             typeof params["entry"] === "object" && params["entry"] !== null
               ? (params["entry"] as Record<string, unknown>)
               : {};
+
           return {
             ...current,
             consoleEntries: pushBounded(current.consoleEntries, {
@@ -170,11 +179,13 @@ export const createPreviewBrowserControl = ({
             }),
           };
         }
+
         if (method === "Network.requestWillBeSent" && requestId) {
           const request =
             typeof params["request"] === "object" && params["request"] !== null
               ? (params["request"] as Record<string, unknown>)
               : {};
+
           return {
             ...current,
             requests: replaceMap(current.requests, (copy) => {
@@ -185,13 +196,17 @@ export const createPreviewBrowserControl = ({
             }),
           };
         }
+
         if (method === "Network.responseReceived" && requestId) {
           const request = current.requests.get(requestId);
+
           const response =
             typeof params["response"] === "object" && params["response"] !== null
               ? (params["response"] as Record<string, unknown>)
               : {};
+
           const status = typeof response["status"] === "number" ? response["status"] : null;
+
           return request && status !== null && status >= 400
             ? {
                 ...current,
@@ -204,8 +219,10 @@ export const createPreviewBrowserControl = ({
               }
             : current;
         }
+
         if (method === "Network.loadingFailed" && requestId) {
           const request = current.requests.get(requestId);
+
           return {
             ...current,
             requests: replaceMap(current.requests, (copy) => {
@@ -222,6 +239,7 @@ export const createPreviewBrowserControl = ({
               : current.networkEntries,
           };
         }
+
         if (method === "Network.loadingFinished" && requestId) {
           return {
             ...current,
@@ -230,8 +248,10 @@ export const createPreviewBrowserControl = ({
             }),
           };
         }
+
         return current;
       })();
+
       return replaceMap(allDiagnostics, (copy) => {
         copy.set(webContentsId, next);
       });
@@ -247,10 +267,13 @@ export const createPreviewBrowserControl = ({
         copy.delete(webContentsId);
       }),
     ]);
+
     if (control) {
       yield* Scope.close(control.scope, Exit.void).pipe(Effect.ignore);
+
       return;
     }
+
     yield* Ref.update(diagnosticsRef, (diagnostics) =>
       replaceMap(diagnostics, (copy) => {
         copy.delete(webContentsId);
@@ -270,7 +293,9 @@ export const createPreviewBrowserControl = ({
         PreviewManagerError
       > => {
         const existing = sessions.get(wc.id);
+
         if (existing) return Effect.succeed([existing, sessions] as const);
+
         if (wc.isDevToolsOpened()) {
           return Effect.fail(
             new PreviewAutomationDevToolsOpenError({
@@ -278,6 +303,7 @@ export const createPreviewBrowserControl = ({
             }),
           );
         }
+
         if (wc.debugger.isAttached()) {
           return Effect.fail(
             new PreviewAutomationDebuggerAttachedError({
@@ -285,16 +311,19 @@ export const createPreviewBrowserControl = ({
             }),
           );
         }
+
         const createControlSession = Effect.fn("PreviewManager.createControlSession")(function* () {
           const semaphore = yield* Semaphore.make(1);
           const scope = yield* Scope.fork(parentScope, "sequential");
           const wcDebugger = wc.debugger;
+
           const handleDebuggerMessage = Effect.fnUntraced(function* (
             method: string,
             params: Record<string, unknown>,
           ) {
             if (method === "Page.screencastFrame") {
               const sessionId = params["sessionId"];
+
               if (typeof sessionId === "number") {
                 yield* attemptPromise(
                   {
@@ -304,18 +333,23 @@ export const createPreviewBrowserControl = ({
                   () => wcDebugger.sendCommand("Page.screencastFrameAck", { sessionId }),
                 ).pipe(Effect.ignore);
               }
+
               const tabId = yield* tabIdForWebContents(wc.id);
+
               const metadata =
                 typeof params["metadata"] === "object" && params["metadata"] !== null
                   ? (params["metadata"] as Record<string, unknown>)
                   : {};
+
               if (tabId && typeof params["data"] === "string") {
                 const captureSession = (yield* SynchronizedRef.get(frameCaptureSessionsRef)).get(
                   tabId,
                 );
+
                 if (captureSession?.consumers.has("recording")) {
                   const receivedAt = yield* currentIso;
                   const listeners = yield* Ref.get(recordingFrameListenersRef);
+
                   const frame: DesktopPreviewRecordingFrame = {
                     tabId,
                     data: params["data"],
@@ -325,6 +359,7 @@ export const createPreviewBrowserControl = ({
                       typeof metadata["deviceHeight"] === "number" ? metadata["deviceHeight"] : 0,
                     receivedAt,
                   };
+
                   yield* Effect.forEach(
                     listeners,
                     (listener) =>
@@ -334,11 +369,14 @@ export const createPreviewBrowserControl = ({
                 }
               }
             }
+
             yield* captureDiagnosticMessage(wc.id, method, params);
           });
+
           const onMessage: BrowserControlSession["onMessage"] = (_event, method, params) => {
             runFork(handleDebuggerMessage(method, params));
           };
+
           yield* Scope.addFinalizer(
             scope,
             Effect.all(
@@ -350,12 +388,14 @@ export const createPreviewBrowserControl = ({
                 ),
                 attempt({ operation: "detachControlSession", webContentsId: wc.id }, () => {
                   wcDebugger.off("message", onMessage);
+
                   if (wcDebugger.isAttached()) wcDebugger.detach();
                 }).pipe(Effect.ignore),
               ],
               { discard: true },
             ),
           );
+
           const control: BrowserControlSession = {
             webContentsId: wc.id,
             debugger: wcDebugger,
@@ -363,6 +403,7 @@ export const createPreviewBrowserControl = ({
             scope,
             onMessage,
           };
+
           const initialize = Effect.fn("PreviewManager.initializeControlSession")(function* () {
             yield* Ref.update(diagnosticsRef, (diagnostics) =>
               replaceMap(diagnostics, (copy) => {
@@ -387,6 +428,7 @@ export const createPreviewBrowserControl = ({
               ),
               { concurrency: "unbounded", discard: true },
             );
+
             return [
               control,
               replaceMap(sessions, (copy) => {
@@ -394,10 +436,12 @@ export const createPreviewBrowserControl = ({
               }),
             ] as const;
           });
+
           return yield* initialize().pipe(
             Effect.onError(() => Scope.close(scope, Exit.void).pipe(Effect.ignore)),
           );
         });
+
         return createControlSession();
       },
     );
@@ -413,7 +457,9 @@ export const createPreviewBrowserControl = ({
   const replaceAction = (tabId: string, event: PreviewAutomationActionEvent) =>
     Ref.update(actionTimelineRef, (timelines) => {
       const timeline = timelines.get(tabId);
+
       if (!timeline) return timelines;
+
       return replaceMap(timelines, (copy) => {
         copy.set(
           tabId,
@@ -444,20 +490,25 @@ export const createPreviewBrowserControl = ({
     const sequence = yield* nextCounter(actionSequenceRef);
     const startedAt = yield* currentIso;
     const millis = yield* currentMillis;
+
     const actionEvent: PreviewAutomationActionEvent = {
       id: `browser-action-${millis.toString(36)}-${sequence.toString(36)}`,
       action,
       status: "running",
       startedAt,
     };
+
     yield* pushAction(tabId, actionEvent);
     const epoch = (yield* Ref.get(controlEpochRef)).get(tabId) ?? 0;
     const control = yield* ensureControlSession(wc);
+
     const execute = Effect.fn("PreviewManager.executeControlAction")(function* () {
       yield* update(tabId, { controller: "agent" });
+
       const send: SendCommand = Effect.fn("PreviewManager.sendCommand")(
         function* (method, commandParams) {
           const before = (yield* Ref.get(controlEpochRef)).get(tabId) ?? 0;
+
           if (before !== epoch) {
             return yield* new PreviewAutomationControlInterruptedError({
               operation: action,
@@ -465,11 +516,14 @@ export const createPreviewBrowserControl = ({
               webContentsId: wc.id,
             });
           }
+
           const result = yield* attemptPromise(
             { operation: `${action}.${method}`, tabId, webContentsId: wc.id },
             () => control.debugger.sendCommand(method, commandParams),
           );
+
           const after = (yield* Ref.get(controlEpochRef)).get(tabId) ?? 0;
+
           if (after !== epoch) {
             return yield* new PreviewAutomationControlInterruptedError({
               operation: action,
@@ -477,9 +531,11 @@ export const createPreviewBrowserControl = ({
               webContentsId: wc.id,
             });
           }
+
           return result;
         },
       );
+
       // Cleanup commands must still run after human input invalidates the action's
       // control epoch. Otherwise a partially dispatched input can leave Chromium
       // with a held key or focus emulation enabled for subsequent actions.
@@ -495,12 +551,15 @@ export const createPreviewBrowserControl = ({
           );
         },
       );
+
       return yield* use(send, sendCleanup);
     });
+
     const finalize = Effect.fn("PreviewManager.finalizeControlAction")(function* (
       exit: Exit.Exit<A, PreviewManagerError>,
     ) {
       const completedAt = yield* currentIso;
+
       if (exit._tag === "Success") {
         yield* replaceAction(tabId, {
           ...actionEvent,
@@ -510,6 +569,7 @@ export const createPreviewBrowserControl = ({
       } else {
         const error = Option.getOrNull(Cause.findErrorOption(exit.cause));
         const interrupted = isPreviewAutomationControlInterruptedError(error);
+
         const errorMessage = isPreviewOperationError(error)
           ? PreviewOperationError.toTimelineMessage(error)
           : isPreviewAutomationEvaluationError(error)
@@ -519,6 +579,7 @@ export const createPreviewBrowserControl = ({
               : error instanceof Error
                 ? error.message
                 : String(error);
+
         yield* replaceAction(tabId, {
           ...actionEvent,
           status: interrupted ? "interrupted" : "failed",
@@ -526,9 +587,12 @@ export const createPreviewBrowserControl = ({
           error: errorMessage,
         });
       }
+
       const tabs = yield* SynchronizedRef.get(tabsRef);
+
       if (tabs.has(tabId)) yield* update(tabId, { controller: "none" });
     });
+
     return yield* control.semaphore.withPermit(execute().pipe(Effect.onExit(finalize)));
   });
 
@@ -547,10 +611,13 @@ export const createPreviewBrowserControl = ({
     }).pipe(
       Effect.flatMap((rawResponse) => {
         const response = rawResponse as CdpEvaluationResult;
+
         if (!response.exceptionDetails) {
           return Effect.succeed(response.result?.value as A);
         }
+
         const detail = previewAutomationEvaluationDetail(response.exceptionDetails);
+
         return Effect.fail(
           new PreviewAutomationEvaluationError({
             tabId,
@@ -572,7 +639,9 @@ export const createPreviewBrowserControl = ({
       "Boolean(globalThis.__t3PlaywrightInjected)",
       true,
     );
+
     if (installed) return;
+
     const expression = yield* playwrightInstallExpression.pipe(
       Effect.mapError(
         (cause) =>
@@ -583,21 +652,26 @@ export const createPreviewBrowserControl = ({
           }),
       ),
     );
+
     yield* evaluateWithDebugger(tabId, send, expression, true);
   });
 
   const consumeExpectedAgentInput = Effect.fn("PreviewManager.consumeExpectedAgentInput")(
     function* (tabId: string, signal: PreviewInputSignal) {
       const now = yield* currentMillis;
+
       return yield* Ref.modify(expectedAgentInputsRef, (allExpected) => {
         const pending = (allExpected.get(tabId) ?? []).filter(
           (expected) => expected.expiresAt > now,
         );
+
         const index = pending.findIndex((expected) => inputSignalsMatch(expected.signal, signal));
         const matched = index >= 0;
+
         const nextPending = matched
           ? pending.filter((_, pendingIndex) => pendingIndex !== index)
           : pending;
+
         return [
           matched,
           replaceMap(allExpected, (copy) => {
@@ -619,6 +693,7 @@ export const createPreviewBrowserControl = ({
         const pending = (allExpected.get(tabId) ?? []).filter(
           (expected) => expected.expiresAt > now,
         );
+
         copy.set(tabId, [...pending, { signal, expiresAt: now + 1_000 }]);
       }),
     );
@@ -653,13 +728,17 @@ export const createPreviewBrowserControl = ({
   const restoreControlSession = (tabId: string, wc: Electron.WebContents) =>
     Effect.gen(function* () {
       const beforeAttach = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
       if (beforeAttach?.webContentsId !== wc.id) return;
       const control = yield* ensureControlSession(wc);
       const afterAttach = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
       if (afterAttach?.webContentsId !== wc.id) {
         yield* detachControlSession(wc.id);
+
         return;
       }
+
       if (afterAttach.colorScheme !== "system") {
         yield* attemptPromise({ operation: "applyColorScheme", tabId, webContentsId: wc.id }, () =>
           control.debugger.sendCommand("Emulation.setEmulatedMedia", {
@@ -676,8 +755,10 @@ export const createPreviewBrowserControl = ({
 
   const automationStatus = Effect.fn("PreviewManager.automationStatus")(function* (tabId: string) {
     const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
     if (!tab || tab.webContentsId == null) {
       const navStatus = tab?.navStatus;
+
       return {
         available: false,
         visible: true,
@@ -687,7 +768,9 @@ export const createPreviewBrowserControl = ({
         loading: navStatus?.kind === "Loading",
       };
     }
+
     const wc = webContents.fromId(tab.webContentsId);
+
     return !wc || wc.isDestroyed()
       ? {
           available: false,
@@ -706,6 +789,7 @@ export const createPreviewBrowserControl = ({
           loading: wc.isLoading(),
         };
   });
+
   return {
     detachControlSession,
     prepareAutomationInput,

@@ -32,13 +32,19 @@ const {
 // Astro.site comes from astro.config.mjs. Falling back to the request URL keeps
 // preview deployments and `astro dev` from emitting a broken absolute image URL.
 const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
+
 const canonicalPath =
   Astro.url.pathname === "/" ? "/" : Astro.url.pathname.replace(/\/+$/, "");
+
 const canonicalUrl = new URL(canonicalPath, siteOrigin);
+
 const socialImageUrl = new URL("/og-v2.jpg", siteOrigin);
+
 const socialImageAlt = "Meet Akeru Bot. Each bot keeps its own tools and its own memory.";
+
 const softwareDescription =
   "Open-source desktop and web application for running named Grok bots with separate tools, plugins, instructions, and long-term memory.";
+
 const structuredData = [
   {
     "@context": "https://schema.org",

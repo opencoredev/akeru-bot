@@ -51,6 +51,7 @@ export async function buildIos(): Promise<string> {
     ],
     { cwd: MOBILE_ROOT, env: MOBILE_BUILD_ENV },
   );
+
   return IOS_APP_PATH;
 }
 
@@ -67,10 +68,12 @@ async function findIosSimulator(name: string): Promise<SimctlDevice | null> {
   ) as {
     readonly devices: Readonly<Record<string, ReadonlyArray<SimctlDevice>>>;
   };
+
   const candidates = Object.entries(parsed.devices)
     .filter(([runtime]) => runtime.includes("iOS"))
     .flatMap(([, devices]) => devices)
     .filter((device) => device.isAvailable && device.name === name);
+
   return candidates.at(-1) ?? null;
 }
 
@@ -79,16 +82,21 @@ async function ensureIosSimulator(device: ShowcaseIosDevice): Promise<{
   readonly createdByRunner: boolean;
 }> {
   const existing = await findIosSimulator(device.simulator);
+
   if (existing) return { simulator: existing, createdByRunner: false };
+
   if (!device.simulatorDeviceType) {
     throw new Error(
       `iOS simulator '${device.simulator}' is not installed and has no simulatorDeviceType configured.`,
     );
   }
+
   const udid = (
     await commandOutput("xcrun", ["simctl", "create", device.simulator, device.simulatorDeviceType])
   ).trim();
+
   if (!udid) throw new Error(`Could not create iOS simulator '${device.simulator}'.`);
+
   return {
     simulator: {
       name: device.simulator,
@@ -134,7 +142,9 @@ async function ensureIosFullScreenAppsMode(udid: string): Promise<void> {
     "com.apple.springboard",
     "SBChamoisWindowingEnabled",
   ]).catch(() => "");
+
   if (current.trim() === "0") return;
+
   // The Settings toggle writes all three keys; SBChamoisWindowingEnabled
   // alone is not honored on a freshly created device.
   for (const key of [
@@ -154,12 +164,14 @@ async function ensureIosFullScreenAppsMode(udid: string): Promise<void> {
       "false",
     ]);
   }
+
   // A SpringBoard restart is not enough on a freshly created simulator (the
   // first CI run captured with windowing still active), so reboot the device
   // and verify the mode actually stuck.
   await runCommand("xcrun", ["simctl", "shutdown", udid]);
   await runCommand("xcrun", ["simctl", "boot", udid]);
   await runCommand("xcrun", ["simctl", "bootstatus", udid, "-b"]);
+
   const applied = await commandOutput("xcrun", [
     "simctl",
     "spawn",
@@ -169,6 +181,7 @@ async function ensureIosFullScreenAppsMode(udid: string): Promise<void> {
     "com.apple.springboard",
     "SBChamoisWindowingEnabled",
   ]).catch(() => "");
+
   if (applied.trim() !== "0") {
     throw new Error(`Simulator ${udid} did not switch to Full Screen Apps mode.`);
   }
@@ -190,12 +203,16 @@ async function waitForIosShowcaseScene(
     "Library/Caches",
     IOS_READY_FILENAME,
   );
+
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() < deadline) {
     const readyScene = await NodeFSP.readFile(readyPath, "utf8").catch(() => "");
+
     if (readyScene.trim() === scene) return;
     await delay(500);
   }
+
   throw new Error(`iOS showcase scene '${scene}' did not render within ${timeoutMs}ms.`);
 }
 
@@ -211,17 +228,22 @@ export async function captureIos(
   const { simulator, createdByRunner } = await ensureIosSimulator(capture.device);
   const startedByRunner = simulator.state !== "Booted";
   registerCleanup({ udid: simulator.udid, startedByRunner, createdByRunner });
+
   if (!startedByRunner) {
     // Clear transient SpringBoard state (permission prompts, stale URL-open
     // confirmations, keyboards) without erasing the developer's simulator.
     await runCommand("xcrun", ["simctl", "shutdown", simulator.udid]);
   }
+
   await runCommand("xcrun", ["simctl", "boot", simulator.udid]);
   await runCommand("xcrun", ["simctl", "bootstatus", simulator.udid, "-b"]);
+
   if (capture.device.orientation === "landscape") {
     await ensureIosFullScreenAppsMode(simulator.udid);
   }
+
   await normalizeIosSimulator(capture.appearance, simulator.udid);
+
   if (appPath) {
     await runCommand("xcrun", ["simctl", "uninstall", simulator.udid, ANDROID_PACKAGE]).catch(
       () => undefined,
@@ -248,16 +270,20 @@ export async function captureIos(
   }
 
   const metroUrl = `http://${metroHost}:${config.metroPort}?disableOnboarding=1`;
+
   const scenePath = NodePath.join(
     await iosAppContainer(simulator.udid),
     "Library/Caches/T3ShowcaseScene",
   );
+
   const readyPath = NodePath.join(
     await iosAppContainer(simulator.udid),
     "Library/Caches",
     IOS_READY_FILENAME,
   );
+
   const firstScene = capture.scenes[0] ?? "threads";
+
   const launchShowcaseApp = async (terminateRunningProcess: boolean) => {
     await runCommand("xcrun", [
       "simctl",
@@ -279,15 +305,19 @@ export async function captureIos(
       capture.device.orientation ?? "portrait",
     ]);
   };
+
   await NodeFSP.rm(readyPath, { force: true });
   await NodeFSP.writeFile(scenePath, firstScene);
   await launchShowcaseApp(false);
+
   for (const [sceneIndex, scene] of capture.scenes.entries()) {
     if (sceneIndex > 0) await NodeFSP.rm(readyPath, { force: true });
     await NodeFSP.writeFile(scenePath, scene);
+
     if (sceneIndex === 0) {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const isLastAttempt = attempt === 1;
+
         try {
           // A freshly installed Expo development build can spend well over 30s
           // applying an already-bundled update after it reaches 100%. Killing it
@@ -302,21 +332,27 @@ export async function captureIos(
     } else {
       await waitForIosShowcaseScene(simulator.udid, scene);
     }
+
     await delay(config.settleDelayMs);
+
     const destination = NodePath.join(
       showcaseCaptureDirectory(outputDirectory, capture),
       `${scene}.png`,
     );
+
     await runCommand("xcrun", ["simctl", "io", simulator.udid, "screenshot", destination]);
+
     if (capture.device.orientation === "landscape") {
       // A headless simulator keeps its display portrait while the rotated app
       // renders sideways inside it; with Simulator.app attached the display
       // itself rotates. Only post-rotate the former.
       const { width, height } = readPngDimensions(await NodeFSP.readFile(destination));
+
       if (height > width) {
         await runCommand("sips", ["--rotate", "270", destination]);
       }
     }
+
     await finalizeCapture(destination, capture.device);
   }
 }

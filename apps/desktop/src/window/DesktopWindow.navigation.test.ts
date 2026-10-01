@@ -146,7 +146,9 @@ describe("DesktopWindow", () => {
     }),
   );
 });
+
 import { vi } from "vite-plus/test";
+
 vi.mock("electron", async (importOriginal) => ({
   ...(await importOriginal<typeof import("electron")>()),
   session: {

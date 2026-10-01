@@ -154,6 +154,7 @@ export function makeTestInstance(input: MakeInstanceInput) {
     discardSession: Effect.void,
     ...input.backendOutputLog,
   };
+
   const servicesLayer = Layer.mergeAll(
     FileSystem.layerNoop({
       exists: () => Effect.succeed(true),

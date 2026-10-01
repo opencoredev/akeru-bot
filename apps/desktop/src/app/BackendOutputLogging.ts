@@ -103,6 +103,7 @@ export function appendBoundedOutputChunk(
     chunk.byteLength > DESKTOP_BACKEND_OUTPUT_BUFFER_MAX_BYTES
       ? chunk.slice(chunk.byteLength - DESKTOP_BACKEND_OUTPUT_BUFFER_MAX_BYTES)
       : chunk.slice();
+
   const chunks = [...session.chunks, { streamName, chunk: retainedChunk, offset: 0 }];
   let byteLength = session.byteLength + retainedChunk.byteLength;
   let overflow = Math.max(0, byteLength - DESKTOP_BACKEND_OUTPUT_BUFFER_MAX_BYTES);
@@ -110,8 +111,10 @@ export function appendBoundedOutputChunk(
 
   while (overflow > 0) {
     const first = chunks[firstRetainedIndex];
+
     if (!first) break;
     const retainedByteLength = first.chunk.byteLength - first.offset;
+
     if (retainedByteLength <= overflow) {
       overflow -= retainedByteLength;
       byteLength -= retainedByteLength;
@@ -131,10 +134,12 @@ export function appendBoundedOutputChunk(
     0,
     chunks.length - firstRetainedIndex - DESKTOP_BACKEND_OUTPUT_BUFFER_MAX_CHUNKS,
   );
+
   for (let index = firstRetainedIndex; index < firstRetainedIndex + excessChunks; index += 1) {
     const chunk = chunks[index];
     byteLength -= chunk ? chunk.chunk.byteLength - chunk.offset : 0;
   }
+
   firstRetainedIndex += excessChunks;
 
   return {
@@ -147,6 +152,7 @@ export function appendBoundedOutputChunk(
 export const currentDesktopRunId = Effect.gen(function* () {
   const annotations = yield* References.CurrentLogAnnotations;
   const runId = annotations.runId;
+
   return typeof runId === "string" && runId.length > 0 ? runId : "unknown";
 });
 
@@ -171,6 +177,7 @@ export const writeBackendChildLogRecord = Effect.fn(
 ): Effect.fn.Return<void> {
   return yield* Effect.gen(function* () {
     const timestamp = DateTime.formatIso(yield* DateTime.now);
+
     const encoded = yield* encodeDesktopBackendChildLogRecord({
       message: input.message,
       level: input.level,
@@ -179,6 +186,7 @@ export const writeBackendChildLogRecord = Effect.fn(
       spans: {},
       fiberId: DESKTOP_BACKEND_CHILD_LOG_FIBER_ID,
     });
+
     yield* logFile.writeText(`${encoded}\n`);
   }).pipe(Effect.ignore({ log: true }));
 });
@@ -197,7 +205,9 @@ export const backendLogFilePathForInstance = (
   if (id === PRIMARY_BACKEND_LOG_INSTANCE_ID) {
     return environment.path.join(environment.logDir, "server-child.log");
   }
+
   const sanitized = sanitizeInstanceIdForFileName(id);
+
   return environment.path.join(environment.logDir, `server-child-${sanitized}.log`);
 };
 
@@ -228,6 +238,7 @@ export const makeBackendOutputLogShape = (
     onSome: (logFile) =>
       Effect.gen(function* () {
         const sessionRef = yield* Ref.make(Option.none<BackendOutputSession>());
+
         const writeFailure = Effect.fn("desktop.observability.backendOutput.writeFailure")(
           function* (session: BackendOutputSession, details: string) {
             yield* writeBackendChildLogRecord(logFile, {
@@ -241,6 +252,7 @@ export const makeBackendOutputLogShape = (
                 details: session.startDetails,
               },
             });
+
             for (const output of session.chunks) {
               yield* writeBackendChildLogRecord(logFile, {
                 message: "backend child process output",
@@ -254,6 +266,7 @@ export const makeBackendOutputLogShape = (
                 },
               });
             }
+
             yield* writeBackendChildLogRecord(logFile, {
               message: "backend child process failure output end",
               level: "ERROR",
@@ -267,6 +280,7 @@ export const makeBackendOutputLogShape = (
             });
           },
         );
+
         return {
           beginSession: Effect.fn("desktop.observability.backendOutput.beginSession")(function* ({
             details,
@@ -286,6 +300,7 @@ export const makeBackendOutputLogShape = (
             if (environment.isDevelopment) {
               yield* writeDevelopmentConsoleOutput(streamName, chunk);
             }
+
             yield* Ref.update(
               sessionRef,
               Option.map((session) => appendBoundedOutputChunk(session, streamName, chunk)),
@@ -295,6 +310,7 @@ export const makeBackendOutputLogShape = (
             "desktop.observability.backendOutput.persistFailureSnapshot",
           )(function* ({ details }) {
             const session = yield* Ref.get(sessionRef);
+
             if (Option.isSome(session)) {
               yield* writeFailure(session.value, details);
             }
@@ -302,6 +318,7 @@ export const makeBackendOutputLogShape = (
           persistFailure: Effect.fn("desktop.observability.backendOutput.persistFailure")(
             function* ({ details }) {
               const session = yield* Ref.modify(sessionRef, (current) => [current, Option.none()]);
+
               if (Option.isNone(session)) return;
               yield* writeFailure(session.value, details);
             },
@@ -318,6 +335,7 @@ export const backendOutputLogFactoryLayer = Layer.effect(
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const factoryScope = yield* Scope.Scope;
+
     // Per-file-path cache of the IO sink only. The per-call shape
     // wraps the sink with the caller's instance id so a cache hit on
     // a path collision (e.g. "wsl:default" and "wsl_default" both
@@ -334,11 +352,13 @@ export const backendOutputLogFactoryLayer = Layer.effect(
       SynchronizedRef.modifyEffect(cacheRef, (cache) => {
         const cacheKey = backendLogFilePathForInstance(environment, id);
         const cached = cache.get(cacheKey);
+
         if (cached !== undefined) {
           return makeBackendOutputLogShape(environment, id, cached).pipe(
             Effect.map((outputLog) => [outputLog, cache] as const),
           );
         }
+
         return makeBackendOutputSinkForInstance(environment, id).pipe(
           Effect.provideService(FileSystem.FileSystem, fileSystem),
           Effect.provideService(Path.Path, path),
@@ -346,6 +366,7 @@ export const backendOutputLogFactoryLayer = Layer.effect(
           Effect.map((sink) => {
             const next = new Map(cache);
             next.set(cacheKey, sink);
+
             return { sink, next };
           }),
           Effect.flatMap(({ sink, next }) =>

@@ -9,6 +9,7 @@ class DownloadLinkStub extends EventTarget {
 
   removeAttribute(name: string) {
     this.attributes.delete(name);
+
     if (name === "href") this.href = "";
   }
 
@@ -42,6 +43,7 @@ describe("download link guards", () => {
       const unsigned = suffix !== "arm64.dmg";
       expect(click.defaultPrevented).toBe(unsigned);
       expect(confirm).toHaveBeenCalledTimes(unsigned ? 1 : 0);
+
       if (unsigned) expect(confirm).toHaveBeenCalledWith(UNSIGNED_INSTALL_PROMPT);
       expect(link.href).toBe(`https://downloads.example/${suffix}`);
     });
@@ -52,10 +54,12 @@ describe("download link guards", () => {
       const link = new DownloadLinkStub();
       const confirm = vi.fn(() => false);
       await resolveDownloadLink(link, "x64.exe", Promise.resolve(release), confirm);
+
       const result =
         failure === "missing"
           ? Promise.resolve({ ...release, assets: [] })
           : Promise.reject(new Error("offline"));
+
       expect(await resolveDownloadLink(link, "x64.exe", result, confirm)).toBeNull();
       const click = new Event("click", { cancelable: true });
       link.dispatchEvent(click);
@@ -69,9 +73,11 @@ describe("download link guards", () => {
     const slowLink = new DownloadLinkStub();
     const readyLink = new DownloadLinkStub();
     let finishSlow: (release: Release) => void = () => {};
+
     const slowRelease = new Promise<Release>((resolve) => {
       finishSlow = resolve;
     });
+
     const slowResolution = resolveDownloadLink(slowLink, "x64.exe", slowRelease, () => false);
     await resolveDownloadLink(readyLink, "x64.exe", Promise.resolve(release), () => false);
     const readyClick = new Event("click", { cancelable: true });

@@ -39,6 +39,7 @@ function generateMacIconSet(
     yield* fs.makeDirectory(iconsetDir, { recursive: true });
 
     const iconSizes = [16, 32, 128, 256, 512] as const;
+
     for (const size of iconSizes) {
       yield* runCommand(
         ChildProcess.make(
@@ -72,6 +73,7 @@ export function stageMacIcons(
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+
     if (!(yield* fs.exists(sourcePng))) {
       return yield* new DesktopIconSourceMissingError({
         platform: "mac",
@@ -107,6 +109,7 @@ export const stageDesktopDmgBackground = Effect.fn("stageDesktopDmgBackground")(
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const sourcePath = path.join(stageResourcesDir, "dmg", "dmg-background-latest.svg");
+
   if (!(yield* fs.exists(sourcePath))) {
     return yield* new DesktopDmgBackgroundSourceMissingError({ channel: "latest", sourcePath });
   }
@@ -120,6 +123,7 @@ export const stageDesktopDmgBackground = Effect.fn("stageDesktopDmgBackground")(
       "dmg",
       `dmg-background-latest${output.suffix}.png`,
     );
+
     yield* runCommand(
       ChildProcess.make(
         {},
@@ -136,6 +140,7 @@ export function stageLinuxIcons(stageResourcesDir: string, sourcePng: string, ve
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+
     if (!(yield* fs.exists(sourcePng))) {
       return yield* new DesktopIconSourceMissingError({
         platform: "linux",
@@ -148,6 +153,7 @@ export function stageLinuxIcons(stageResourcesDir: string, sourcePng: string, ve
 
     const iconsDir = path.join(stageResourcesDir, "icons");
     yield* fs.makeDirectory(iconsDir, { recursive: true });
+
     for (const iconSize of LINUX_ICON_SIZES) {
       yield* stageLinuxIconSize(
         sourcePng,
@@ -197,6 +203,7 @@ export function stageWindowsIcons(stageResourcesDir: string, sourceIco: string) 
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+
     if (!(yield* fs.exists(sourceIco))) {
       return yield* new DesktopIconSourceMissingError({
         platform: "win",
@@ -215,22 +222,29 @@ export function validateBundledClientAssets(clientDir: string) {
     const path = yield* Path.Path;
     const indexPath = path.join(clientDir, "index.html");
     const indexHtml = yield* fs.readFileString(indexPath);
+
     const refs = [...indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)]
       .map((match) => match[1])
       .filter((value): value is string => value !== undefined);
+
     const missing: string[] = [];
 
     for (const ref of refs) {
       const normalizedRef = ref.split("#")[0]?.split("?")[0] ?? "";
+
       if (!normalizedRef) continue;
+
       if (normalizedRef.startsWith("http://") || normalizedRef.startsWith("https://")) continue;
+
       if (normalizedRef.startsWith("data:") || normalizedRef.startsWith("mailto:")) continue;
 
       const ext = path.extname(normalizedRef);
+
       if (!ext) continue;
 
       const relativePath = normalizedRef.replace(/^\/+/, "");
       const assetPath = path.join(clientDir, relativePath);
+
       if (!(yield* fs.exists(assetPath))) {
         missing.push(normalizedRef);
       }

@@ -12,8 +12,10 @@ export async function initHomeDownloads() {
   // The markup ships with href={RELEASES_URL}, so the button works before this
   // script runs and when no platform is detected.
   const platform = detectDownloadTarget(navigator.userAgent);
+
   if (platform) {
     if (label) label.textContent = platform.label;
+
     if (button) {
       button.dataset.os = platform.os;
       button.dataset.asset = platform.assetSuffix;
@@ -23,15 +25,19 @@ export async function initHomeDownloads() {
   }
 
   const release = fetchLatestRelease();
+
   const cardDownloads = Array.from(cards, async (card) => {
     const suffix = card.dataset.asset;
+
     if (!suffix || card === button) return;
     await resolveDownloadLink(card, suffix, release);
   });
 
   if (button && platform) {
     const asset = await resolveDownloadLink(button, platform.assetSuffix, release);
+
     if (!asset && label) label.textContent = "All downloads";
   }
+
   await Promise.all(cardDownloads);
 }

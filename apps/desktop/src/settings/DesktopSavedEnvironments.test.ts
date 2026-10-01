@@ -16,6 +16,7 @@ import {
   makeLayer,
   withSavedEnvironments,
 } from "./test-support/SavedEnvironmentsHarness.ts";
+
 describe("DesktopSavedEnvironments", () => {
   it.effect("persists and reloads saved environment metadata", () =>
     withSavedEnvironments(
@@ -26,9 +27,11 @@ describe("DesktopSavedEnvironments", () => {
         yield* savedEnvironments.setRegistry([savedRegistryRecord]);
 
         assert.deepEqual(yield* savedEnvironments.getRegistry, [savedRegistryRecord]);
+
         const persisted = yield* decodeSavedEnvironmentRegistryDocumentProbe(
           yield* fileSystem.readFileString(environment.savedEnvironmentRegistryPath),
         );
+
         assert.equal(persisted.version, 1);
         assert.lengthOf(persisted.records, 1);
       }),
@@ -104,16 +107,20 @@ describe("DesktopSavedEnvironments", () => {
         );
         assert.equal(registryError.registryPath, environment.savedEnvironmentRegistryPath);
         assert.exists(registryError.cause);
+
         const secretError = yield* savedEnvironments
           .getSecret(savedRegistryRecord.environmentId)
           .pipe(Effect.flip);
+
         assert.instanceOf(
           secretError,
           DesktopSavedEnvironments.DesktopSavedEnvironmentsDocumentDecodeError,
         );
+
         const mutationError = yield* savedEnvironments
           .setRegistry([savedRegistryRecord])
           .pipe(Effect.flip);
+
         assert.instanceOf(
           mutationError,
           DesktopSavedEnvironments.DesktopSavedEnvironmentsDocumentDecodeError,
@@ -125,22 +132,27 @@ describe("DesktopSavedEnvironments", () => {
   it.effect("reports saved environment filesystem reads separately from document decoding", () =>
     Effect.gen(function* () {
       const baseFileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* baseFileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-saved-environments-test-",
       });
+
       const registryPath = `${baseDir}/userdata/saved-environments.json`;
+
       const permissionError = PlatformError.systemError({
         _tag: "PermissionDenied",
         module: "FileSystem",
         method: "readFileString",
         pathOrDescriptor: registryPath,
       });
+
       const fileSystemLayer = Layer.succeed(
         FileSystem.FileSystem,
         FileSystem.makeNoop({
           readFileString: () => Effect.fail(permissionError),
         }),
       );
+
       const savedEnvironments = yield* DesktopSavedEnvironments.DesktopSavedEnvironments.pipe(
         Effect.provide(makeLayer(baseDir, undefined, fileSystemLayer)),
       );
@@ -157,15 +169,18 @@ describe("DesktopSavedEnvironments", () => {
   it.effect("reports the failed saved environment write operation and path", () =>
     Effect.gen(function* () {
       const baseFileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* baseFileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-saved-environments-test-",
       });
+
       const permissionError = PlatformError.systemError({
         _tag: "PermissionDenied",
         module: "FileSystem",
         method: "makeDirectory",
         pathOrDescriptor: `${baseDir}/userdata`,
       });
+
       const fileSystemLayer = Layer.succeed(
         FileSystem.FileSystem,
         FileSystem.makeNoop({
@@ -173,6 +188,7 @@ describe("DesktopSavedEnvironments", () => {
           makeDirectory: () => Effect.fail(permissionError),
         }),
       );
+
       const savedEnvironments = yield* DesktopSavedEnvironments.DesktopSavedEnvironments.pipe(
         Effect.provide(makeLayer(baseDir, undefined, fileSystemLayer)),
       );

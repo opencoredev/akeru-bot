@@ -13,6 +13,7 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 
 import * as DesktopUpdates from "./DesktopUpdates.ts";
 import { flushCallbacks, makeHarness } from "./test-support/UpdatesHarness.ts";
+
 describe("DesktopUpdates", () => {
   it.effect("configures the updater and runs startup checks on the test clock", () => {
     const harness = makeHarness();
@@ -107,6 +108,7 @@ describe("DesktopUpdates", () => {
     Effect.gen(function* () {
       const checkStarted = yield* Deferred.make<void>();
       const releaseCheck = yield* Deferred.make<void>();
+
       const harness = makeHarness({
         checkForUpdates: Deferred.succeed(checkStarted, undefined).pipe(
           Effect.andThen(Deferred.await(releaseCheck)),
@@ -123,6 +125,7 @@ describe("DesktopUpdates", () => {
 
           const exit = yield* Effect.exit(updates.setChannel("latest"));
           assert.equal(exit._tag, "Failure");
+
           if (exit._tag === "Failure") {
             const error = Cause.squash(exit.cause);
             assert.instanceOf(error, DesktopUpdates.DesktopUpdateActionInProgressError);

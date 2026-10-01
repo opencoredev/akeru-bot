@@ -12,13 +12,16 @@ import { DesktopTraceShutdown } from "./DesktopObservability.ts";
 import * as DesktopShutdown from "./DesktopShutdown.ts";
 
 const writer = vi.hoisted(() => ({ append: vi.fn<(data: string) => Promise<void>>() }));
+
 vi.mock("node:fs/promises", async (importOriginal) => {
   const original = await importOriginal<typeof import("node:fs/promises")>();
+
   return {
     ...original,
     appendFile: (_path: unknown, data: Uint8Array) => writer.append(Buffer.from(data).toString()),
   };
 });
+
 afterEach(() => vi.clearAllMocks());
 
 for (const fail of [false, true]) {
@@ -34,18 +37,22 @@ for (const fail of [false, true]) {
         entered.resolve();
         await release.promise;
         events.push(fail ? "write-error" : "write-complete");
+
         if (fail) throw new Error("blocked writer failed");
       });
+
       return Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
           const directory = yield* fs.makeTempDirectoryScoped();
+
           const sink = yield* makeTraceSink({
             filePath: `${directory}/desktop.trace.ndjson`,
             maxBytes: 100_000,
             maxFiles: 1,
             batchWindowMs: 60_000,
           });
+
           const tracer = yield* makeLocalFileTracer({
             filePath: sink.filePath,
             maxBytes: 100_000,
@@ -53,7 +60,9 @@ for (const fail of [false, true]) {
             batchWindowMs: 60_000,
             sink,
           });
+
           const shutdown = yield* DesktopShutdown.DesktopShutdown;
+
           const exit = yield* shutdown.awaitComplete.pipe(
             Effect.andThen(
               Effect.sync(() => {
@@ -62,6 +71,7 @@ for (const fail of [false, true]) {
             ),
             Effect.forkChild,
           );
+
           const program = yield* Effect.void.pipe(
             Effect.withSpan("desktop.app"),
             Effect.provideService(Tracer.Tracer, tracer),
@@ -72,6 +82,7 @@ for (const fail of [false, true]) {
             ),
             Effect.forkChild,
           );
+
           yield* Effect.promise(() => entered.promise);
           expect(yield* shutdown.isComplete).toBe(false);
           expect(events).toEqual([]);

@@ -74,6 +74,7 @@ export const createPreviewTabListeners = ({
         copy.delete(webContentsId);
       }),
     ]);
+
     if (managed) {
       managed.cancelFaviconCapture();
       yield* Scope.close(managed.scope, Exit.void).pipe(Effect.ignore);
@@ -83,8 +84,11 @@ export const createPreviewTabListeners = ({
   const computeNavStatus = (wc: Electron.WebContents): PreviewNavStatus => {
     const url = wc.getURL();
     const title = wc.getTitle();
+
     if (url === "" || url === "about:blank") return { kind: "Idle" };
+
     if (wc.isLoading()) return { kind: "Loading", url, title };
+
     return { kind: "Success", url, title };
   };
 
@@ -96,17 +100,20 @@ export const createPreviewTabListeners = ({
     const attachmentId = Symbol();
     let documentId = 0;
     let nextRequestId = 0;
+
     let activeCapture: {
       readonly controller: AbortController;
       readonly documentId: number;
       readonly eventKey: string;
       readonly requestId: number;
     } | null = null;
+
     const cancelFaviconCapture = () => {
       documentId += 1;
       activeCapture?.controller.abort();
       activeCapture = null;
     };
+
     const syncState = Effect.fn("PreviewManager.syncWebContentsState")(function* (
       preserveLoadFailure: boolean,
       confirmedNavigation = false,
@@ -116,11 +123,14 @@ export const createPreviewTabListeners = ({
       const canGoBack = wc.navigationHistory.canGoBack();
       const canGoForward = wc.navigationHistory.canGoForward();
       const updatedAt = yield* currentIso;
+
       const next = yield* SynchronizedRef.modify(tabsRef, (tabs) => {
         const current = tabs.get(tabId);
+
         if (!current || current.webContentsId !== wc.id || webContents.fromId(wc.id) !== wc) {
           return [Option.none<PreviewTabState>(), tabs] as const;
         }
+
         // Electron emits did-stop-loading after did-fail-load. At that point the
         // failed guest is no longer "loading", but it has not successfully
         // navigated anywhere. Keep the failure until a new load actually starts.
@@ -130,12 +140,15 @@ export const createPreviewTabListeners = ({
           computedNavStatus.kind === "Success"
             ? current.navStatus
             : computedNavStatus;
+
         const clearFavicon =
           confirmedNavigation &&
           current.favicon !== undefined &&
           safeHttpOrigin(current.favicon.pageUrl) !==
             safeHttpOrigin(navStatus.kind === "Idle" ? wc.getURL() : navStatus.url);
+
         const { favicon: _favicon, ...currentWithoutFavicon } = current;
+
         const state: PreviewTabState = {
           ...(clearFavicon ? currentWithoutFavicon : current),
           navStatus,
@@ -146,6 +159,7 @@ export const createPreviewTabListeners = ({
           // would turn an app zoom into the preview's own zoom.
           updatedAt,
         };
+
         return [
           Option.some(state),
           replaceMap(tabs, (copy) => {
@@ -153,19 +167,24 @@ export const createPreviewTabListeners = ({
           }),
         ] as const;
       });
+
       if (Option.isSome(next)) yield* emitIfCurrent(tabId, next.value);
     });
+
     const sync = () => runFork(syncState(true));
     const syncNavigation = () => runFork(syncState(false, true));
     const syncInPageNavigation = () => runFork(syncState(false));
+
     const navigationStarted = (
       event: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
     ) => {
       if (event.isMainFrame && !event.isSameDocument) cancelFaviconCapture();
     };
+
     const audioStateChanged = (
       event: Electron.Event<Electron.WebContentsAudioStateChangedEventParams>,
     ) => runFork(syncTabAudible(tabId, wc, event.audible));
+
     const publishFavicon = Effect.fn("PreviewManager.publishFavicon")(function* (input: {
       readonly captureDocumentId: number;
       readonly dataUrl: string;
@@ -174,6 +193,7 @@ export const createPreviewTabListeners = ({
     }) {
       const pageOrigin = safeHttpOrigin(input.pageUrl);
       const managed = (yield* Ref.get(attachedRef)).get(wc.id);
+
       if (
         !pageOrigin ||
         wc.isDestroyed() ||
@@ -185,10 +205,13 @@ export const createPreviewTabListeners = ({
       ) {
         return;
       }
+
       const capturedAt = yield* currentMillis;
       const updatedAt = yield* currentIso;
+
       const next = yield* SynchronizedRef.modify(tabsRef, (tabs) => {
         const current = tabs.get(tabId);
+
         if (
           !current ||
           current.webContentsId !== wc.id ||
@@ -198,11 +221,13 @@ export const createPreviewTabListeners = ({
         ) {
           return [Option.none<PreviewTabState>(), tabs] as const;
         }
+
         const state: PreviewTabState = {
           ...current,
           favicon: { dataUrl: input.dataUrl, pageUrl: pageOrigin, capturedAt },
           updatedAt,
         };
+
         return [
           Option.some(state),
           replaceMap(tabs, (copy) => {
@@ -210,14 +235,19 @@ export const createPreviewTabListeners = ({
           }),
         ] as const;
       });
+
       if (Option.isSome(next)) yield* emitIfCurrent(tabId, next.value);
     });
+
     const faviconUpdated = (_event: Event, rawCandidates: ReadonlyArray<string>): void => {
       const pageUrl = wc.getURL();
+
       if (!safeHttpOrigin(pageUrl)) return;
       const candidates = selectFaviconCandidates(rawCandidates);
+
       if (candidates.length === 0) return;
       const eventKey = JSON.stringify([pageUrl, ...candidates]);
+
       if (activeCapture?.eventKey === eventKey) return;
       activeCapture?.controller.abort();
       const captureDocumentId = documentId;
@@ -259,6 +289,7 @@ export const createPreviewTabListeners = ({
         ),
       );
     };
+
     const failed = (
       _event: Event,
       code: number,
@@ -279,12 +310,14 @@ export const createPreviewTabListeners = ({
         }),
       );
     };
+
     const handleHumanInput = Effect.fn("PreviewManager.handleHumanInput")(function* (
       rawSignal?: unknown,
     ) {
       if (isPreviewInputSignal(rawSignal) && (yield* consumeExpectedAgentInput(tabId, rawSignal))) {
         return;
       }
+
       yield* Ref.update(controlEpochRef, (epochs) =>
         replaceMap(epochs, (copy) => {
           copy.set(tabId, (epochs.get(tabId) ?? 0) + 1);
@@ -293,18 +326,22 @@ export const createPreviewTabListeners = ({
       yield* update(tabId, { controller: "human" });
       yield* Effect.sleep(750);
       const tabs = yield* SynchronizedRef.get(tabsRef);
+
       if (tabs.get(tabId)?.controller === "human") {
         yield* update(tabId, { controller: "none" });
       }
     });
+
     const humanInput = (_event: unknown, rawSignal?: unknown): void => {
       runFork(handleHumanInput(rawSignal));
     };
+
     const mouseNavigate = (_event: unknown, payload?: unknown): void => {
       const direction =
         typeof payload === "object" && payload !== null && "direction" in payload
           ? (payload as { direction?: unknown }).direction
           : undefined;
+
       if (direction !== "back" && direction !== "forward") return;
       runFork(
         attempt({ operation: "mouseNavigate", tabId, webContentsId: wc.id }, () => {
@@ -316,6 +353,7 @@ export const createPreviewTabListeners = ({
         }).pipe(Effect.ignore),
       );
     };
+
     const syncMenuShortcuts = (contents: Electron.WebContents, input: Electron.Input): void => {
       if (input.type !== "keyDown") return;
       // Native editing roles must remain available after the page handles the key.
@@ -325,6 +363,7 @@ export const createPreviewTabListeners = ({
           webContents.getFocusedWebContents() !== contents,
       );
     };
+
     // Akeru currently denies window.open and loads the URL in the same guest.
     // If a popup is created anyway, keep its shortcuts isolated from the host.
     const windowCreated = (window: Electron.BrowserWindow): void => {
@@ -334,8 +373,10 @@ export const createPreviewTabListeners = ({
         syncMenuShortcuts(window.webContents, input);
       });
     };
+
     const beforeInput = (event: Electron.Event, input: Electron.Input): void => {
       syncMenuShortcuts(wc, input);
+
       if (isPreviewRefreshShortcut(input)) {
         event.preventDefault();
         runFork(
@@ -345,6 +386,7 @@ export const createPreviewTabListeners = ({
         );
       }
     };
+
     yield* Scope.addFinalizer(
       scope,
       attempt({ operation: "detachListeners", tabId, webContentsId: wc.id }, () => {
@@ -364,6 +406,7 @@ export const createPreviewTabListeners = ({
         wc.ipc.off(MOUSE_NAVIGATE_CHANNEL, mouseNavigate);
       }).pipe(Effect.ignore),
     );
+
     const install = Effect.fn("PreviewManager.installWebContentsListeners")(function* () {
       yield* attempt({ operation: "attachListeners", tabId, webContentsId: wc.id }, () => {
         // Only focused native editing shortcuts may reach the application menu.
@@ -386,6 +429,7 @@ export const createPreviewTabListeners = ({
               wc.loadURL(url),
             ).pipe(Effect.ignore),
           );
+
           return { action: "deny" };
         });
         wc.on("did-create-window", windowCreated);
@@ -397,7 +441,9 @@ export const createPreviewTabListeners = ({
         }),
       );
     });
+
     yield* install().pipe(Effect.onError(() => Scope.close(scope, Exit.void).pipe(Effect.ignore)));
   });
+
   return { detachListeners, computeNavStatus, attachListeners };
 };

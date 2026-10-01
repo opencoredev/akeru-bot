@@ -60,6 +60,7 @@ export const writeRegistryDocument = Effect.fn("desktop.savedEnvironments.writeR
   }): Effect.fn.Return<void, DesktopSavedEnvironmentsWriteError> {
     const directory = input.path.dirname(input.registryPath);
     const tempPath = `${input.registryPath}.${process.pid}.${input.suffix}.tmp`;
+
     const encoded = yield* encodeSavedEnvironmentRegistryDocumentJson(input.document).pipe(
       Effect.mapError(
         (cause) =>
@@ -70,6 +71,7 @@ export const writeRegistryDocument = Effect.fn("desktop.savedEnvironments.writeR
           }),
       ),
     );
+
     yield* input.fileSystem.makeDirectory(directory, { recursive: true }).pipe(
       Effect.mapError(
         (cause) =>

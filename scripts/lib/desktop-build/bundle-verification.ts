@@ -39,6 +39,7 @@ export const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBund
     const probeRoot = yield* fs.makeTempDirectoryScoped({
       prefix: "t3code-bundle-selfcheck-",
     });
+
     const extractedApp = path.join(probeRoot, "extracted");
     const probeApp = path.join(probeRoot, "app");
     yield* Effect.try({
@@ -71,6 +72,7 @@ export const verifyPackagedBundleIsSelfContained = Effect.fn("verifyPackagedBund
     }
 
     const entryPoint = path.join(probeApp, "apps/server/dist/bin.mjs");
+
     if (!(yield* fs.exists(entryPoint).pipe(Effect.orElseSucceed(() => false)))) {
       return yield* new BundleNotSelfContainedError({
         exitCode: -1,

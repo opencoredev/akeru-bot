@@ -47,6 +47,7 @@ export function unionRects(
   const y = Math.max(0, top - padding);
   const maxWidth = Math.max(1, window.innerWidth - x);
   const maxHeight = Math.max(1, window.innerHeight - y);
+
   return {
     x,
     y,
@@ -62,16 +63,21 @@ export function isAnnotationNode(element: Element): boolean {
 export function pickFromPoint(clientX: number, clientY: number): Element | null {
   for (const candidate of document.elementsFromPoint(clientX, clientY)) {
     if (!(candidate instanceof Element)) continue;
+
     if (isAnnotationNode(candidate)) continue;
+
     if (candidate === document.documentElement || candidate === document.body) continue;
+
     return candidate;
   }
+
   return null;
 }
 
 function describeRawElement(element: Element): string {
   const tag = element.tagName.toLowerCase();
   const id = element.id ? `#${element.id}` : "";
+
   const classes =
     element instanceof HTMLElement && typeof element.className === "string"
       ? element.className
@@ -82,6 +88,7 @@ function describeRawElement(element: Element): string {
           .map((name) => `.${name}`)
           .join("")
       : "";
+
   return `${tag}${id}${classes}`;
 }
 
@@ -98,6 +105,7 @@ export function createBox(color: string, fill: string): HTMLDivElement {
     "display:none",
     `z-index:${CONTENT_LAYER_Z_INDEX}`,
   ].join(";");
+
   return node;
 }
 
@@ -120,6 +128,7 @@ export function createLabel(): HTMLDivElement {
     "text-overflow:ellipsis",
     `z-index:${CONTENT_LAYER_Z_INDEX}`,
   ].join(";");
+
   return label;
 }
 
@@ -127,8 +136,10 @@ export function updateSelectedVisual(target: SelectedElement): void {
   if (!target.element.isConnected) {
     target.outline.style.display = "none";
     target.label.style.display = "none";
+
     return;
   }
+
   const rect = target.element.getBoundingClientRect();
   positionBox(target.outline, rectFromDomRect(rect));
   target.label.textContent = describeRawElement(target.element);
@@ -138,15 +149,19 @@ export function updateSelectedVisual(target: SelectedElement): void {
 
 export function pathFromPoints(points: ReadonlyArray<PreviewAnnotationPoint>): string {
   if (points.length === 0) return "";
+
   if (points.length === 1) return `M ${points[0]!.x} ${points[0]!.y} l 0.01 0.01`;
   let path = `M ${points[0]!.x} ${points[0]!.y}`;
+
   for (let index = 1; index < points.length - 1; index += 1) {
     const current = points[index]!;
     const next = points[index + 1]!;
     path += ` Q ${current.x} ${current.y} ${(current.x + next.x) / 2} ${(current.y + next.y) / 2}`;
   }
+
   const last = points[points.length - 1]!;
   path += ` L ${last.x} ${last.y}`;
+
   return path;
 }
 
@@ -161,5 +176,6 @@ export function strokeBounds(
   const top = Math.min(...ys) - padding;
   const right = Math.max(...xs) + padding;
   const bottom = Math.max(...ys) + padding;
+
   return { x: left, y: top, width: right - left, height: bottom - top };
 }

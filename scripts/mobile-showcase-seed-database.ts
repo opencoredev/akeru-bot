@@ -42,14 +42,17 @@ export function insertThread(
   const turnId = `${input.id}-turn`;
   const updatedAt = minutesBefore(now, input.minutesAgo);
   const isWorking = input.state === "working";
+
   const snoozedUntil =
     input.snoozeMinutes === undefined
       ? null
       : new Date(now + input.snoozeMinutes * 60_000).toISOString();
+
   const snoozedAt =
     input.snoozeMinutes === undefined
       ? null
       : minutesBefore(now, Math.max(1, Math.floor(input.minutesAgo / 2)));
+
   database
     .prepare(
       `INSERT INTO projection_threads (
@@ -122,23 +125,28 @@ export const SEEDED_THREAD_COLUMNS = ["snoozed_until", "snoozed_at"] as const;
 
 export function hasSeedableSchema(dbPath: string): boolean {
   let database: NodeSqlite.DatabaseSync;
+
   try {
     database = new NodeSqlite.DatabaseSync(dbPath, { readOnly: true });
   } catch {
     return false;
   }
+
   try {
     const tableCount = database
       .prepare(
         `SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name IN (${SEEDED_PROJECTION_TABLES.map(() => "?").join(", ")})`,
       )
       .get(...SEEDED_PROJECTION_TABLES) as { count: number };
+
     if (tableCount.count !== SEEDED_PROJECTION_TABLES.length) return false;
 
     const threadColumns = database.prepare("PRAGMA table_info(projection_threads)").all() as Array<{
       name: string;
     }>;
+
     const threadColumnNames = new Set(threadColumns.map((column) => column.name));
+
     return SEEDED_THREAD_COLUMNS.every((column) => threadColumnNames.has(column));
   } catch {
     return false;
@@ -149,10 +157,12 @@ export function hasSeedableSchema(dbPath: string): boolean {
 
 export async function waitForSeedableSchema(dbPath: string, timeoutMs = 60_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() < deadline) {
     if (hasSeedableSchema(dbPath)) return;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
+
   throw new Error(`The environment server did not migrate ${dbPath} within ${timeoutMs}ms.`);
 }
 
@@ -168,25 +178,32 @@ export function seedDatabase(
   // genuinely contended — without a busy timeout `BEGIN IMMEDIATE` fails
   // instantly with SQLITE_BUSY on a loaded machine.
   const database = new NodeSqlite.DatabaseSync(dbPath, { timeout: 30_000 });
+
   try {
     database.exec("BEGIN IMMEDIATE");
+
     for (const table of SEEDED_PROJECTION_TABLES) {
       database.exec(`DELETE FROM ${table}`);
     }
+
     const insertProject = database.prepare(
       `INSERT INTO projection_projects (
           project_id, title, workspace_root, default_model_selection_json, scripts_json,
           created_at, updated_at, deleted_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
     );
+
     for (const [index, project] of projects.entries()) {
       const workspaceRoot = workspaceRoots.get(project.id);
+
       if (!workspaceRoot) throw new Error(`Missing workspace root for ${project.id}.`);
+
       const latestThreadMinutes = Math.min(
         ...threads
           .filter((thread) => thread.projectId === project.id)
           .map((thread) => thread.minutesAgo),
       );
+
       insertProject.run(
         project.id,
         project.title,
@@ -200,6 +217,7 @@ export function seedDatabase(
 
     for (const thread of threads) {
       const workspaceRoot = workspaceRoots.get(thread.projectId);
+
       if (!workspaceRoot) throw new Error(`Missing workspace root for ${thread.projectId}.`);
       insertThread(database, now, {
         ...thread,
@@ -214,6 +232,7 @@ export function seedDatabase(
         created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?)`,
     );
+
     for (const thread of threads) {
       const turnId = `${thread.id}-turn`;
       const requestTime = minutesBefore(now, thread.minutesAgo + 5);
@@ -226,6 +245,7 @@ export function seedDatabase(
         requestTime,
         requestTime,
       );
+
       if (thread.response !== null) {
         const responseTime = minutesBefore(now, thread.minutesAgo);
         insertMessage.run(
@@ -241,11 +261,13 @@ export function seedDatabase(
     }
 
     const turnId = `${SHOWCASE_THREAD_ID}-turn`;
+
     const insertActivity = database.prepare(
       `INSERT INTO projection_thread_activities (
         activity_id, thread_id, turn_id, tone, kind, summary, payload_json, sequence, created_at
       ) VALUES (?, ?, ?, 'tool', 'tool.completed', ?, ?, ?, ?)`,
     );
+
     insertActivity.run(
       "trace-remote-handoff",
       SHOWCASE_THREAD_ID,
@@ -296,6 +318,7 @@ export function seedDatabase(
         )
         .run(projector, index + 1, minutesBefore(now, 1));
     }
+
     database.exec("COMMIT");
   } catch (error) {
     // A failed BEGIN (or an error SQLite already auto-rolled back) leaves no
@@ -306,6 +329,7 @@ export function seedDatabase(
     } catch {
       // Nothing to roll back.
     }
+
     throw error;
   } finally {
     database.close();

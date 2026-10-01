@@ -28,6 +28,7 @@ export async function waitForRasterLaunch(
       signal.removeEventListener("abort", finish);
       resolve();
     };
+
     signal.addEventListener("abort", finish, { once: true });
     void previous.then(finish);
   });
@@ -49,13 +50,16 @@ export async function normalizeFaviconBuffer(
   signal: AbortSignal,
 ): Promise<FaviconCaptureResult> {
   const declaredMime = mime?.trim().toLowerCase() || null;
+
   const normalizedMime =
     declaredMime === "application/x-icon"
       ? "image/x-icon"
       : declaredMime === "application/octet-stream" || declaredMime === "binary/octet-stream"
         ? null
         : declaredMime;
+
   const dimensions = sourceDimensions(buffer);
+
   if (
     (normalizedMime !== null && !/^image\/[a-z0-9.+-]+$/i.test(normalizedMime)) ||
     normalizedMime === "image/svg+xml" ||
@@ -72,7 +76,9 @@ export async function normalizeFaviconBuffer(
     dimensions,
     signal,
   );
+
   if (rasterized.kind === "timed-out") return rasterized;
+
   return typeof rasterized.value === "string" &&
     rasterized.value.startsWith("data:image/png;base64,") &&
     rasterized.value.length <= FAVICON_DATA_URL_MAX_LENGTH
@@ -91,9 +97,11 @@ export async function rasterizeFavicon(
   rasterizationGates.set(webContents, gate);
   const generation = ++gate.generation;
   const previousLaunchAllowed = gate.launchAllowed;
+
   if (previousLaunchAllowed) {
     await waitForRasterLaunch(previousLaunchAllowed, signal);
   }
+
   if (signal.aborted || generation !== gate.generation) {
     return { kind: "completed", value: null };
   }
@@ -105,6 +113,7 @@ export async function rasterizeFavicon(
   const decodeHeight = Math.max(1, Math.round(dimensions.height * scale));
   const drawX = (32 - decodeWidth) / 2;
   const drawY = (32 - decodeHeight) / 2;
+
   const code = `
     (() => {
       const rasterize = async () => {
@@ -148,6 +157,7 @@ export async function rasterizeFavicon(
     // the logical attempt; renderer work may finish after a newer attempt starts.
     const timeout = AbortSignal.timeout(FAVICON_RASTER_TIMEOUT_MS);
     let settled = false;
+
     const finish = (complete: () => void) => {
       if (settled) return;
       settled = true;
@@ -155,12 +165,15 @@ export async function rasterizeFavicon(
       signal.removeEventListener("abort", onAbort);
       complete();
     };
+
     const onTimeout = () => {
       finish(() => resolve({ kind: "timed-out" }));
     };
+
     const onAbort = () => {
       finish(() => resolve({ kind: "completed", value: null }));
     };
+
     timeout.addEventListener("abort", onTimeout, { once: true });
     signal.addEventListener("abort", onAbort, { once: true });
     void execution.then(
@@ -171,17 +184,21 @@ export async function rasterizeFavicon(
         finish(() => reject(cause));
       },
     );
+
     if (signal.aborted) onAbort();
   });
+
   // The logical timeout does not cancel Electron's renderer work. Keep the
   // gate closed until that physical execution actually settles.
   const launchAllowed = execution.then(
     () => undefined,
     () => undefined,
   );
+
   gate.launchAllowed = launchAllowed;
   void launchAllowed.then(() => {
     if (gate.launchAllowed === launchAllowed) delete gate.launchAllowed;
   });
+
   return await result;
 }

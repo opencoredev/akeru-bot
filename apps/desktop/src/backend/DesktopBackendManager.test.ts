@@ -57,12 +57,16 @@ describe("DesktopBackendManager", () => {
           ChildProcessSpawner.make((command) =>
             Effect.gen(function* () {
               spawnedCommand = command;
+
               if (command._tag === "StandardCommand") {
                 const fd3 = command.options.additionalFds?.fd3;
+
                 if (fd3?.type === "input" && fd3.stream) {
                   bootstrapJson = yield* fd3.stream.pipe(Stream.decodeText(), Stream.mkString);
                 }
+
                 const fd4 = command.options.additionalFds?.fd4;
+
                 if (fd4?.type === "input" && fd4.stream) {
                   telemetryJson = yield* fd4.stream.pipe(Stream.decodeText(), Stream.mkString);
                 }
@@ -97,6 +101,7 @@ describe("DesktopBackendManager", () => {
 
         assert.equal(readyCount, 1);
         assert.isDefined(spawnedCommand);
+
         if (spawnedCommand._tag !== "StandardCommand") {
           throw new Error("Expected backend to spawn a standard command.");
         }
@@ -128,6 +133,7 @@ describe("DesktopBackendManager", () => {
   it.effect("preserves the readiness timeout cause and process context", () =>
     Effect.gen(function* () {
       const requested = yield* Deferred.make<HttpClientRequest.HttpClientRequest>();
+
       const layer = Layer.merge(
         TestClock.layer(),
         httpClientLayer((request) =>
@@ -172,6 +178,7 @@ describe("DesktopBackendManager", () => {
         ChildProcessSpawner.ChildProcessSpawner,
         ChildProcessSpawner.make(() => Effect.die("unexpected backend spawn")),
       );
+
       const error = yield* DesktopBackendManager.runBackendProcess({
         ...baseConfig,
         desktopTelemetryStream: Stream.empty,
@@ -188,6 +195,7 @@ describe("DesktopBackendManager", () => {
       if (error._tag !== "BackendProcessBootstrapEncodeError") {
         return assert.fail(`Expected bootstrap encode error, received ${error._tag}`);
       }
+
       assert.equal(error.executablePath, "/electron");
       assert.equal(error.entryPath, "/server/bin.mjs");
       assert.equal(error.cwd, "/server");
@@ -210,10 +218,12 @@ describe("DesktopBackendManager", () => {
         pathOrDescriptor: baseConfig.executablePath,
         description: "low-level detail that must not become the public message",
       });
+
       const spawnerLayer = Layer.succeed(
         ChildProcessSpawner.ChildProcessSpawner,
         ChildProcessSpawner.make(() => Effect.fail(spawnCause)),
       );
+
       const error = yield* DesktopBackendManager.runBackendProcess({
         ...baseConfig,
         desktopTelemetryStream: Stream.empty,
@@ -226,6 +236,7 @@ describe("DesktopBackendManager", () => {
       if (error._tag !== "BackendProcessSpawnError") {
         return assert.fail(`Expected backend spawn error, received ${error._tag}`);
       }
+
       assert.equal(error.executablePath, "/electron");
       assert.equal(error.entryPath, "/server/bin.mjs");
       assert.equal(error.cwd, "/server");
@@ -248,6 +259,7 @@ describe("DesktopBackendManager", () => {
         method: "exitCode",
         description: "exit-status-secret-sentinel",
       });
+
       const spawnerLayer = Layer.succeed(
         ChildProcessSpawner.ChildProcessSpawner,
         ChildProcessSpawner.make(() =>
@@ -258,6 +270,7 @@ describe("DesktopBackendManager", () => {
           ),
         ),
       );
+
       const error = yield* DesktopBackendManager.runBackendProcess({
         ...baseConfig,
         desktopTelemetryStream: Stream.empty,
@@ -270,6 +283,7 @@ describe("DesktopBackendManager", () => {
       if (error._tag !== "BackendProcessExitStatusError") {
         return assert.fail(`Expected backend exit-status error, received ${error._tag}`);
       }
+
       assert.equal(error.pid, 123);
       assert.equal(error.executablePath, "/electron");
       assert.equal(error.entryPath, "/server/bin.mjs");
@@ -290,7 +304,9 @@ describe("DesktopBackendManager", () => {
         method: "stdout",
         description: "output-stream-secret-sentinel",
       });
+
       const reported = yield* Deferred.make<DesktopBackendManager.BackendProcessOutputError>();
+
       const spawnerLayer = Layer.succeed(
         ChildProcessSpawner.ChildProcessSpawner,
         ChildProcessSpawner.make(() =>
@@ -308,12 +324,15 @@ describe("DesktopBackendManager", () => {
         desktopTelemetryStream: Stream.empty,
         onOutputFailure: (error) => Deferred.succeed(reported, error).pipe(Effect.asVoid),
       }).pipe(Effect.scoped, Effect.provide(Layer.merge(spawnerLayer, healthyHttpClientLayer)));
+
       const error = yield* Deferred.await(reported);
 
       assert.equal(exit.code.pipe(Option.getOrUndefined), 0);
+
       if (error._tag !== "BackendProcessOutputReadError") {
         return assert.fail(`Expected output read error, received ${error._tag}`);
       }
+
       assert.equal(error.executablePath, "/electron");
       assert.equal(error.entryPath, "/server/bin.mjs");
       assert.equal(error.cwd, "/server");
@@ -334,6 +353,7 @@ describe("DesktopBackendManager", () => {
       const reported = yield* Deferred.make<DesktopBackendManager.BackendProcessOutputError>();
       const drained = yield* Deferred.make<void>();
       let outputCount = 0;
+
       const spawnerLayer = Layer.succeed(
         ChildProcessSpawner.ChildProcessSpawner,
         ChildProcessSpawner.make(() =>
@@ -351,18 +371,22 @@ describe("DesktopBackendManager", () => {
         desktopTelemetryStream: Stream.empty,
         onOutput: () => {
           outputCount += 1;
+
           return outputCount === 1
             ? Effect.fail(outputCause)
             : Deferred.succeed(drained, void 0).pipe(Effect.asVoid);
         },
         onOutputFailure: (error) => Deferred.succeed(reported, error).pipe(Effect.asVoid),
       }).pipe(Effect.scoped, Effect.provide(Layer.merge(spawnerLayer, healthyHttpClientLayer)));
+
       const error = yield* Deferred.await(reported);
 
       assert.equal(exit.code.pipe(Option.getOrUndefined), 0);
+
       if (error._tag !== "BackendProcessOutputHandlingError") {
         return assert.fail(`Expected output handling error, received ${error._tag}`);
       }
+
       assert.equal(error.executablePath, "/electron");
       assert.equal(error.entryPath, "/server/bin.mjs");
       assert.equal(error.cwd, "/server");
@@ -385,6 +409,7 @@ describe("DesktopBackendManager", () => {
       Effect.gen(function* () {
         const exitObserved = yield* Deferred.make<void>();
         const finishOutputDrain = yield* Deferred.make<void>();
+
         const spawnerLayer = Layer.succeed(
           ChildProcessSpawner.ChildProcessSpawner,
           ChildProcessSpawner.make(() =>
@@ -423,11 +448,13 @@ describe("DesktopBackendManager", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const handled = yield* Deferred.make<boolean>();
+
         const controlMessage = encodeDesktopTelemetryControl({
           version: 1,
           type: "setDiagnosticsDemand",
           enabled: true,
         });
+
         const spawnerLayer = Layer.succeed(
           ChildProcessSpawner.ChildProcessSpawner,
           ChildProcessSpawner.make(() =>
@@ -442,6 +469,7 @@ describe("DesktopBackendManager", () => {
             ),
           ),
         );
+
         const instance = yield* makeTestInstance({
           spawnerLayer,
           desktopTelemetryPublisher: {
@@ -464,6 +492,7 @@ describe("DesktopBackendManager", () => {
         const persistedOutput = yield* Deferred.make<ReadonlyArray<string>>();
         const outputDrainStarted = yield* Deferred.make<void>();
         const outputChunks = yield* Ref.make<Array<string>>([]);
+
         const spawnerLayer = Layer.succeed(
           ChildProcessSpawner.ChildProcessSpawner,
           ChildProcessSpawner.make(() =>
@@ -480,6 +509,7 @@ describe("DesktopBackendManager", () => {
             ),
           ),
         );
+
         const instance = yield* makeTestInstance({
           spawnerLayer,
           httpClientLayer: httpClientLayer(() => Effect.never),
@@ -532,6 +562,7 @@ describe("DesktopBackendManager", () => {
               assert.isDefined(status);
               requestUrls.push(request.url);
               yield* Deferred.succeed(firstRequest, void 0);
+
               return responseForRequest(request, status);
             }),
           ),
@@ -594,6 +625,7 @@ describe("DesktopBackendManager", () => {
               requestCount += 1;
               requestUrls.push(request.url);
               yield* Deferred.succeed(firstProbe, void 0);
+
               return responseForRequest(request, requestCount <= 2 ? 503 : 200);
             }),
           );

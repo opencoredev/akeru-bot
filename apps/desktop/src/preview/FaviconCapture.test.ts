@@ -20,6 +20,7 @@ describe("selectFaviconCandidates", () => {
       { length: MAX_FAVICON_CANDIDATES + 2 },
       (_, index) => `https://example.com/favicon-${index}.png`,
     );
+
     expect(
       selectFaviconCandidates([
         ...Array.from({ length: 64 }, () => "javascript:alert(1)"),
@@ -57,6 +58,7 @@ describe("captureFavicon", () => {
     },
   ])("uses the explicit credential policy for $label requests", async (testCase) => {
     const { webContents, fetch } = makeWebContents();
+
     const result = await captureFavicon({
       webContents,
       pageUrl: testCase.pageUrl,
@@ -73,6 +75,7 @@ describe("captureFavicon", () => {
 
   it("decodes base64 and percent-encoded inline images without fetching", async () => {
     const { webContents, fetch, executeJavaScriptInIsolatedWorld } = makeWebContents();
+
     const percentEncodedPng = [...SOURCE_PNG]
       .map((byte) => `%${byte.toString(16).padStart(2, "0")}`)
       .join("");
@@ -115,12 +118,14 @@ describe("captureFavicon", () => {
 
   it("cancels a rejected response body before trying the next candidate", async () => {
     const cancel = vi.fn();
+
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new Uint8Array(1));
       },
       cancel,
     });
+
     const { webContents, fetch } = makeWebContents({
       fetch: async (url) =>
         url.endsWith("first.png")
@@ -144,6 +149,7 @@ describe("captureFavicon", () => {
 
   it("stops a pending fetch when its capture is aborted", async () => {
     const controller = new AbortController();
+
     const { webContents } = makeWebContents({
       fetch: (_url, init) =>
         new Promise<Response>((_resolve, reject) => {
@@ -152,12 +158,14 @@ describe("captureFavicon", () => {
           });
         }),
     });
+
     const capture = captureFavicon({
       webContents,
       pageUrl: "https://example.com/page",
       candidates: ["https://example.com/favicon.png"],
       signal: controller.signal,
     });
+
     controller.abort();
     expect(await capture).toEqual({ kind: "none" });
   });
@@ -165,9 +173,11 @@ describe("captureFavicon", () => {
   it("ends candidate fallback when the overall capture deadline expires", async () => {
     const timeoutController = new AbortController();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
+
     const { webContents, fetch } = makeWebContents({
       fetch: (url, init) => {
         if (url.endsWith("first.png")) return Promise.resolve(new Response(null, { status: 404 }));
+
         return new Promise<Response>((_resolve, reject) => {
           init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
             once: true,
@@ -175,6 +185,7 @@ describe("captureFavicon", () => {
         });
       },
     });
+
     try {
       const capture = captureFavicon({
         webContents,
@@ -186,6 +197,7 @@ describe("captureFavicon", () => {
         ],
         signal: new AbortController().signal,
       });
+
       await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
       timeoutController.abort(new DOMException("capture timed out", "TimeoutError"));
 
@@ -200,18 +212,22 @@ describe("captureFavicon", () => {
   it("does not publish a rasterization that completes after the capture deadline", async () => {
     const captureTimeoutController = new AbortController();
     const rasterTimeoutController = new AbortController();
+
     const timeout = vi
       .spyOn(AbortSignal, "timeout")
       .mockImplementation((milliseconds) =>
         milliseconds === 5_000 ? captureTimeoutController.signal : rasterTimeoutController.signal,
       );
+
     let resolveRasterization!: (value: unknown) => void;
+
     const { webContents, executeJavaScriptInIsolatedWorld } = makeWebContents({
       rasterize: () =>
         new Promise((resolve) => {
           resolveRasterization = resolve;
         }),
     });
+
     try {
       const capture = captureFavicon({
         webContents,
@@ -219,6 +235,7 @@ describe("captureFavicon", () => {
         candidates: [SOURCE_PNG_URL],
         signal: new AbortController().signal,
       });
+
       await vi.waitFor(() => expect(executeJavaScriptInIsolatedWorld).toHaveBeenCalledOnce());
       captureTimeoutController.abort(new DOMException("capture timed out", "TimeoutError"));
 
@@ -233,6 +250,7 @@ describe("captureFavicon", () => {
     const timeoutController = new AbortController();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutController.signal);
     const cancel = vi.fn();
+
     const { webContents } = makeWebContents({
       fetch: async () =>
         new Response(
@@ -242,6 +260,7 @@ describe("captureFavicon", () => {
           { headers: { "content-type": "image/png" } },
         ),
     });
+
     try {
       const capture = captureFavicon({
         webContents,
@@ -249,6 +268,7 @@ describe("captureFavicon", () => {
         candidates: ["https://example.com/favicon.png"],
         signal: new AbortController().signal,
       });
+
       timeoutController.abort(new DOMException("capture timed out", "TimeoutError"));
 
       expect(await capture).toEqual({ kind: "timed-out" });
@@ -260,6 +280,7 @@ describe("captureFavicon", () => {
 
   it("rejects and cancels an oversized streamed response", async () => {
     const cancel = vi.fn();
+
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new Uint8Array(MAX_FAVICON_RESPONSE_BYTES));
@@ -267,6 +288,7 @@ describe("captureFavicon", () => {
       },
       cancel,
     });
+
     const { webContents, executeJavaScriptInIsolatedWorld } = makeWebContents({
       fetch: async () => new Response(body, { headers: { "content-type": "image/png" } }),
     });

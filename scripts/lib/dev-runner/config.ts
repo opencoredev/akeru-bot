@@ -122,6 +122,7 @@ export function resolveOffset(config: {
         }),
       );
     }
+
     return Effect.succeed({
       offset: config.portOffset,
       source: `T3CODE_PORT_OFFSET=${config.portOffset}`,
@@ -129,6 +130,7 @@ export function resolveOffset(config: {
   }
 
   const seed = config.devInstance?.trim();
+
   if (seed) {
     if (/^\d+$/.test(seed)) {
       return Effect.succeed({
@@ -138,6 +140,7 @@ export function resolveOffset(config: {
     }
 
     const offset = ((Hash.string(seed) >>> 0) % MAX_HASH_OFFSET) + 1;
+
     return Effect.succeed({ offset, source: `hashed T3CODE_DEV_INSTANCE=${seed}` });
   }
 
@@ -147,8 +150,10 @@ export function resolveOffset(config: {
   // so ports move under you between runs — which breaks any URL you already
   // shared. The main checkout keeps the documented 5733/13773.
   const worktreePath = config.worktreePath?.trim();
+
   if (worktreePath) {
     const offset = ((Hash.string(worktreePath) >>> 0) % MAX_HASH_OFFSET) + 1;
+
     return Effect.succeed({ offset, source: `worktree ${worktreePath}` });
   }
 
@@ -235,6 +240,7 @@ export function createDevRunnerEnv({
       // apps/web/vite.config.ts. Over a shared origin that is invisible: the
       // page loads and only HMR quietly dials the wrong machine.
       delete output.HOST;
+
       if (mode === "dev" || mode === "dev:web") {
         // Browser dev is single-origin: everything (including /ws) is proxied
         // through Vite, so the client must resolve its backend from

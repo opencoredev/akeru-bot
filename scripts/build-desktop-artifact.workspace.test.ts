@@ -95,6 +95,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
   });
 });
+
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
 // The self-containment check runs the packaged tree in a scratch directory. Its

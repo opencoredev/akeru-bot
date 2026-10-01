@@ -7,6 +7,7 @@ export function createButton(label: string, title: string): HTMLButtonElement {
   button.title = title;
   button.className =
     "inline-flex h-7 cursor-pointer items-center justify-center rounded-md border border-transparent px-2 font-sans text-xs font-medium text-foreground outline-none hover:bg-accent disabled:pointer-events-none disabled:opacity-60";
+
   return button;
 }
 
@@ -24,6 +25,7 @@ export function createUnitControl(input: HTMLInputElement): HTMLElement {
   unit.className =
     "pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 font-mono text-xs text-muted-foreground";
   wrapper.append(input, unit);
+
   return wrapper;
 }
 
@@ -41,12 +43,14 @@ export function createField(
     text,
     input instanceof HTMLInputElement && input.dataset.unit ? createUnitControl(input) : input,
   );
+
   return label;
 }
 
 export function createStyleSection(): HTMLElement {
   const section = document.createElement("section");
   section.className = "grid gap-1 border-t border-border py-2";
+
   return section;
 }
 
@@ -56,6 +60,7 @@ export function createUnitInput(unit: string, placeholder = "0"): HTMLInputEleme
   input.placeholder = placeholder;
   input.style.paddingRight = "30px";
   input.dataset.unit = unit;
+
   return input;
 }
 
@@ -72,12 +77,14 @@ export function createAnnotationStyleControls(input: {
   stylePanel.append(textSection, colorsSection, bordersSection, sizingSection);
 
   const fontFamily = document.createElement("select");
+
   for (const value of ["inherit", "system-ui", "sans-serif", "serif", "monospace"]) {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = value;
     fontFamily.appendChild(option);
   }
+
   fontFamily.addEventListener("change", () => setStyleForSelected("font-family", fontFamily.value));
   textSection.appendChild(createField("Font", fontFamily));
 
@@ -90,12 +97,14 @@ export function createAnnotationStyleControls(input: {
   textSection.appendChild(createField("Font size", fontSize));
 
   const fontWeight = document.createElement("select");
+
   for (const value of ["300", "400", "500", "600", "700", "800", "900"]) {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = value;
     fontWeight.appendChild(option);
   }
+
   fontWeight.addEventListener("change", () => setStyleForSelected("font-weight", fontWeight.value));
   textSection.appendChild(createField("Font weight", fontWeight));
 
@@ -136,13 +145,16 @@ export function createAnnotationStyleControls(input: {
     });
     text.addEventListener("change", () => {
       const value = text.value.trim();
+
       if (!value) return;
       setStyleForSelected(property, value);
+
       if (/^#[0-9a-f]{6}$/i.test(value)) color.value = value;
     });
     control.append(color, text);
     row.append(label, control);
     section.appendChild(row);
+
     return { row, color, text };
   };
 
@@ -207,6 +219,7 @@ export function createAnnotationStyleControls(input: {
 
   let aspectLocked = true;
   let aspectRatio = 1;
+
   const refreshAspectButton = (): void => {
     aspectLock.innerHTML = aspectLocked
       ? '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M8 6.5 9.5 5A3.5 3.5 0 0 1 14.5 10l-1.5 1.5M12 13.5 10.5 15A3.5 3.5 0 0 1 5.5 10L7 8.5M7.5 12.5l5-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'
@@ -217,14 +230,17 @@ export function createAnnotationStyleControls(input: {
     aspectLock.classList.toggle("bg-muted", !aspectLocked);
     aspectLock.classList.toggle("text-muted-foreground", !aspectLocked);
   };
+
   aspectLock.addEventListener("click", () => {
     aspectLocked = !aspectLocked;
     refreshAspectButton();
   });
   widthInput.addEventListener("input", () => {
     const width = Number(widthInput.value);
+
     if (!Number.isFinite(width) || width <= 0) return;
     setStyleForSelected("width", `${width}px`);
+
     if (aspectLocked && aspectRatio > 0) {
       const height = Math.max(1, Math.round(width / aspectRatio));
       heightInput.value = String(height);
@@ -233,8 +249,10 @@ export function createAnnotationStyleControls(input: {
   });
   heightInput.addEventListener("input", () => {
     const height = Number(heightInput.value);
+
     if (!Number.isFinite(height) || height <= 0) return;
     setStyleForSelected("height", `${height}px`);
+
     if (aspectLocked && aspectRatio > 0) {
       const width = Math.max(1, Math.round(height * aspectRatio));
       widthInput.value = String(width);
@@ -255,14 +273,17 @@ export function createAnnotationStyleControls(input: {
       if (input.value.trim()) setStyleForSelected(property, input.value.trim());
     });
     sizingSection.appendChild(createField(label, input));
+
     return input;
   };
+
   const padding = addSpacingField("Padding", "padding", "0 0 0 0");
   const margin = addSpacingField("Margin", "margin", "0 0 0 0");
   const gap = addSpacingField("Gap", "gap", "0px");
 
   const syncStyleControls = (): void => {
     const first = selected.values().next().value;
+
     if (!first) return;
     const computed = getComputedStyle(first.element);
     const rect = first.element.getBoundingClientRect();
@@ -287,5 +308,6 @@ export function createAnnotationStyleControls(input: {
     margin.value = computed.margin;
     gap.value = computed.gap === "normal" ? "0px" : computed.gap;
   };
+
   return syncStyleControls;
 }

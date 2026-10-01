@@ -29,6 +29,7 @@ export const WSL_SERVER_SYSTEM_PATH =
 
 export const getWslEnvEntryName = (entry: string): string => {
   const slashIndex = entry.indexOf("/");
+
   return slashIndex === -1 ? entry : entry.slice(0, slashIndex);
 };
 
@@ -55,6 +56,7 @@ export const mergeWslEnv = (
   // ours to normalize — and only append the secrets we need to forward
   // across the wsl.exe boundary.
   const parts = [existing, ...additions].filter((part) => part.length > 0);
+
   return parts.length > 0 ? parts.join(":") : undefined;
 };
 
@@ -100,6 +102,7 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
     const fileSystem = yield* FileSystem.FileSystem;
 
     const wslAvailable = yield* wslEnv.isAvailable;
+
     if (!wslAvailable) {
       return {
         _tag: "Failed",
@@ -112,6 +115,7 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
       Effect.map((distros) => ({ _tag: "Success", distros }) as const),
       Effect.catch((error) => Effect.succeed({ _tag: "Failure", error } as const)),
     );
+
     if (distroProbe._tag === "Failure") {
       return {
         _tag: "Failed",
@@ -121,11 +125,13 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
     }
 
     const installedDistros = distroProbe.distros;
+
     const runningDistro = input.distro
       ? (installedDistros.find(
           (installed) => installed.name.toLowerCase() === input.distro?.toLowerCase(),
         )?.name ?? null)
       : (installedDistros.find((installed) => installed.isDefault)?.name ?? null);
+
     if (runningDistro === null) {
       return {
         _tag: "Failed",
@@ -141,6 +147,7 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
     const entryExists = yield* fileSystem
       .exists(input.windowsEntryPath)
       .pipe(Effect.orElseSucceed(() => false));
+
     if (!entryExists) {
       return {
         _tag: "Failed",
@@ -150,6 +157,7 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
     }
 
     const linuxEntry = yield* wslEnv.windowsToWslPath(runningDistro, input.windowsEntryPath);
+
     if (Option.isNone(linuxEntry)) {
       return {
         _tag: "Failed",
@@ -162,6 +170,7 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
       allowBuild: input.allowBuild,
       nodeEngineRange: serverPackageJson.engines.node,
     });
+
     if (!nodePtyResult.ok) {
       return {
         _tag: "Failed",
@@ -187,8 +196,10 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
 // switch the renderer URL to loopback.
 const isLocalHostIpv4 = (ip: string): boolean => {
   const interfaces = NodeOS.networkInterfaces();
+
   for (const list of Object.values(interfaces)) {
     if (!list) continue;
+
     for (const entry of list) {
       // os.networkInterfaces() reports IPv4 `family` as the string "IPv4" on
       // the Node build Electron ships (41 / Node 22, verified), but some Node
@@ -196,9 +207,11 @@ const isLocalHostIpv4 = (ip: string): boolean => {
       // bump can't silently break mirrored-mode detection and leave the
       // renderer pointed at the distro IP instead of loopback.
       const family = String(entry.family);
+
       if ((family === "IPv4" || family === "4") && entry.address === ip) return true;
     }
   }
+
   return false;
 };
 
@@ -291,20 +304,25 @@ export const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.res
     // reports a host interface, so use loopback instead; a failed probe also
     // falls back to loopback and preserves the previous behavior.
     const distroIp = yield* wslEnvironment.getDistroIp(distroForConfig);
+
     const usesSharedNetworkStack = Option.match(distroIp, {
       onNone: () => false,
       onSome: (ip) => isLocalHostIpv4(ip),
     });
+
     const rendererHost = usesSharedNetworkStack
       ? "127.0.0.1"
       : Option.getOrElse(distroIp, () => "127.0.0.1");
+
     const httpBaseUrl = new URL(`http://${rendererHost}:${input.port}`);
 
     const distroArgs = distroForConfig ? ["-d", distroForConfig] : [];
     const forwardedEnv: Record<string, string> = {};
     const forwardedEnvNames: string[] = [];
+
     for (const name of WSL_FORWARDED_ENV_NAMES) {
       const value = process.env[name];
+
       if (value !== undefined && value.length > 0) {
         forwardedEnv[name] = value;
         forwardedEnvNames.push(name);
@@ -317,10 +335,12 @@ export const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.res
     // /mnt/c, which means both backends read/write the same database and
     // their env-ids collide).
     const parentEnvWithoutT3Home: Record<string, string | undefined> = {};
+
     for (const [key, value] of Object.entries(process.env)) {
       if (key === "AKERU_HOME" || key === "T3CODE_HOME") continue;
       parentEnvWithoutT3Home[key] = value;
     }
+
     const wslEnv = mergeWslEnv(parentEnvWithoutT3Home.WSLENV, forwardedEnvNames);
 
     const baseConfig = {
@@ -356,6 +376,7 @@ export const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.res
     if (preflight._tag === "Failed") {
       const retryLimit =
         preflight.retryLimit ?? (preflight.fatal ? undefined : WSL_TRANSIENT_PREFLIGHT_RETRY_LIMIT);
+
       return {
         ...baseConfig,
         args: [...distroArgs, "--", "node", "--version"],

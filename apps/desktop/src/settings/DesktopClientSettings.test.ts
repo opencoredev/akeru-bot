@@ -52,9 +52,11 @@ const clientSettings: ClientSettings = {
 };
 
 const decodeClientSettingsJson = Schema.decodeEffect(Schema.fromJsonString(ClientSettingsSchema));
+
 const decodeRecordJson = Schema.decodeEffect(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
 );
+
 function makeLayer(baseDir: string) {
   const environmentLayer = DesktopEnvironment.layer({
     dirname: "/repo/apps/desktop/src",
@@ -83,9 +85,11 @@ const withClientSettings = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     const baseDir = yield* fileSystem.makeTempDirectoryScoped({
       prefix: "t3-desktop-client-settings-test-",
     });
+
     return yield* effect.pipe(Effect.provide(makeLayer(baseDir)));
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped);
 
@@ -166,6 +170,7 @@ describe("DesktopClientSettings", () => {
 
         const persisted = yield* settings.get;
         assert.isTrue(Option.isSome(persisted));
+
         if (Option.isSome(persisted)) {
           assert.equal(persisted.value.timestampFormat, "24-hour");
         }
@@ -192,6 +197,7 @@ describe("DesktopClientSettings", () => {
 
         const persisted = yield* settings.get;
         assert.isTrue(Option.isSome(persisted));
+
         if (Option.isSome(persisted)) {
           assert.equal(persisted.value.timestampFormat, "12-hour");
           assert.equal(persisted.value.confirmQuit, "direct");
@@ -218,6 +224,7 @@ describe("DesktopClientSettings", () => {
 
         const persisted = yield* settings.get;
         assert.isTrue(Option.isSome(persisted));
+
         if (Option.isSome(persisted)) {
           assert.equal(persisted.value.confirmQuit, "hold");
         }

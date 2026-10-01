@@ -38,6 +38,7 @@ export function getIconOption(
 ): { icon: string } | Record<string, never> {
   if (platform === "darwin") return {}; // macOS uses .icns from app bundle
   const ext = platform === "win32" ? "ico" : "png";
+
   return Option.match(iconPaths[ext], {
     onNone: () => ({}),
     onSome: (icon) => ({ icon }),
@@ -84,6 +85,7 @@ export function resolveInitialMainWindowBounds(
   ) {
     return persistedBounds;
   }
+
   return DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE;
 }
 
@@ -96,6 +98,7 @@ export function buildConnectingSplashDataUrl(shouldUseDarkColors: boolean): stri
   const accent = shouldUseDarkColors ? "#f8fafc" : "#1f2937";
   const track = shouldUseDarkColors ? "rgba(248,250,252,0.18)" : "rgba(31,41,55,0.18)";
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>html,body{margin:0;height:100%}body{background:${background};color:${label};font-family:system-ui,-apple-system,'Segoe UI',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;-webkit-user-select:none;user-select:none;-webkit-app-region:drag}.spinner{width:26px;height:26px;border:3px solid ${track};border-top-color:${accent};border-radius:50%}.label{font-size:13px}</style></head><body><div class="spinner"></div><div class="label">Connecting to WSL…</div></body></html>`;
+
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
 
@@ -133,9 +136,11 @@ export function concealPendingQuitWindow(
   >,
 ): void {
   if (window.isDestroyed()) return;
+
   if (window.isFullScreen()) {
     window.setFullScreen(false);
   }
+
   // Electron implements window opacity on macOS and Windows. Linux keeps the
   // release-gated quit behavior but cannot make the pending window disappear.
   window.setOpacity(0);
@@ -174,6 +179,7 @@ export function syncWindowAppearance(
 
     window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors));
     const { titleBarOverlay } = getWindowTitleBarOptions(shouldUseDarkColors, platform);
+
     if (typeof titleBarOverlay === "object") {
       window.setTitleBarOverlay(titleBarOverlay);
     }
@@ -187,11 +193,13 @@ export function bindFirstRevealTrigger(
   reveal: () => void,
 ): void {
   let revealed = false;
+
   const fire = () => {
     if (revealed) return;
     revealed = true;
     reveal();
   };
+
   for (const subscribe of subscribers) {
     subscribe(fire);
   }

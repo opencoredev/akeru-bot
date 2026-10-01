@@ -80,9 +80,11 @@ export const createPreviewAutomationSnapshot = ({
     if (input.locator !== undefined) {
       return { selectorKind: "locator", selectorLength: input.locator.length };
     }
+
     if (input.selector !== undefined) {
       return { selectorKind: "selector", selectorLength: input.selector.length };
     }
+
     return { selectorKind: "focused-element" };
   };
 
@@ -97,6 +99,7 @@ export const createPreviewAutomationSnapshot = ({
         concurrency: 2,
         discard: true,
       });
+
       const page = yield* evaluateWithDebugger<{
         url: string;
         title: string;
@@ -159,6 +162,7 @@ export const createPreviewAutomationSnapshot = ({
         })()`,
         true,
       );
+
       const [accessibility, initialScreenshotResult, diagnostics, timelines] = yield* Effect.all([
         send("Accessibility.getFullAXTree"),
         send("Page.captureScreenshot", {
@@ -169,15 +173,20 @@ export const createPreviewAutomationSnapshot = ({
         Ref.get(diagnosticsRef),
         Ref.get(actionTimelineRef),
       ]);
+
       const hostScreenshot = yield* Effect.gen(function* () {
         const mainWindow = yield* Ref.get(mainWindowRef);
+
         if (Option.isNone(mainWindow) || mainWindow.value.isDestroyed()) return null;
         const host = mainWindow.value.webContents;
+
         if (host.isDestroyed()) return null;
+
         const tabIdJson = yield* encodeJson(
           { operation: "automationSnapshot.encodeTabId", tabId, webContentsId: wc.id },
           tabId,
         );
+
         const rawRect = yield* attemptPromise(
           {
             operation: "automationSnapshot.measureHostPreview",
@@ -223,8 +232,11 @@ export const createPreviewAutomationSnapshot = ({
           Effect.timeout("4 seconds"),
           Effect.orElseSucceed(() => null),
         );
+
         const rect = normalizeCaptureRect(rawRect);
+
         if (!rect) return null;
+
         const captured = yield* attemptPromise(
           {
             operation: "automationSnapshot.captureHostPreview",
@@ -233,7 +245,9 @@ export const createPreviewAutomationSnapshot = ({
           },
           () => host.capturePage(rect, { stayAwake: true }),
         ).pipe(Effect.orElseSucceed(() => null));
+
         if (captured && containsVisiblePngPixel(captured.toPNG())) return captured;
+
         const mediaSourceId = yield* attempt(
           {
             operation: "automationSnapshot.createTabCaptureSource",
@@ -242,6 +256,7 @@ export const createPreviewAutomationSnapshot = ({
           },
           () => wc.getMediaSourceId(host),
         ).pipe(Effect.orElseSucceed(() => null));
+
         if (mediaSourceId) {
           const mediaSourceIdJson = yield* encodeJson(
             {
@@ -251,6 +266,7 @@ export const createPreviewAutomationSnapshot = ({
             },
             mediaSourceId,
           );
+
           const tabCapture = yield* attemptPromise(
             {
               operation: "automationSnapshot.captureTabStream",
@@ -312,14 +328,18 @@ export const createPreviewAutomationSnapshot = ({
             Effect.timeout("4 seconds"),
             Effect.orElseSucceed(() => null),
           );
+
           if (typeof tabCapture === "string" && tabCapture.length > 0) {
             const tabData = Buffer.from(tabCapture, "base64");
             const tabImage = nativeImage.createFromBuffer(tabData);
+
             if (!tabImage.isEmpty() && containsVisiblePngPixel(tabData)) return tabImage;
           }
         }
+
         const windowBounds = mainWindow.value.getBounds();
         const contentBounds = mainWindow.value.getContentBounds();
+
         const sources = yield* attemptPromise(
           {
             operation: "automationSnapshot.captureDesktopWindow",
@@ -335,28 +355,35 @@ export const createPreviewAutomationSnapshot = ({
           Effect.timeout("3 seconds"),
           Effect.orElseSucceed(() => []),
         );
+
         const source = sources.find(
           (candidate) => candidate.id === mainWindow.value.getMediaSourceId(),
         );
+
         if (!source || source.thumbnail.isEmpty()) return null;
         const thumbnailSize = source.thumbnail.getSize();
         const desktopRect = scaleCaptureRect(rect, windowBounds, contentBounds, thumbnailSize);
+
         if (
           desktopRect.x + desktopRect.width > thumbnailSize.width ||
           desktopRect.y + desktopRect.height > thumbnailSize.height
         ) {
           return null;
         }
+
         const desktopImage = source.thumbnail.crop(desktopRect);
+
         return !desktopImage.isEmpty() && containsVisiblePngPixel(desktopImage.toPNG())
           ? desktopImage
           : null;
       });
+
       const refreshedScreenshotResult = yield* send("Page.captureScreenshot", {
         format: "png",
         fromSurface: false,
         captureBeyondViewport: false,
       });
+
       const refreshedScreenshotData =
         typeof refreshedScreenshotResult === "object" &&
         refreshedScreenshotResult !== null &&
@@ -364,7 +391,9 @@ export const createPreviewAutomationSnapshot = ({
         typeof refreshedScreenshotResult.data === "string"
           ? Buffer.from(refreshedScreenshotResult.data, "base64")
           : null;
+
       const hostScreenshotData = hostScreenshot?.toPNG() ?? null;
+
       const initialScreenshotData =
         typeof initialScreenshotResult === "object" &&
         initialScreenshotResult !== null &&
@@ -372,6 +401,7 @@ export const createPreviewAutomationSnapshot = ({
         typeof initialScreenshotResult.data === "string"
           ? Buffer.from(initialScreenshotResult.data, "base64")
           : null;
+
       const fallbackScreenshotResult =
         refreshedScreenshotData && containsVisiblePngPixel(refreshedScreenshotData)
           ? refreshedScreenshotResult
@@ -380,10 +410,12 @@ export const createPreviewAutomationSnapshot = ({
             : initialScreenshotData && containsVisiblePngPixel(initialScreenshotData)
               ? initialScreenshotResult
               : null;
+
       const screencastScreenshotResult = fallbackScreenshotResult
         ? null
         : yield* Effect.gen(function* () {
             const screencastFrame = yield* Deferred.make<{ readonly data: string }>();
+
             const onScreencastMessage = (
               _event: Electron.Event,
               method: string,
@@ -391,11 +423,13 @@ export const createPreviewAutomationSnapshot = ({
             ) => {
               if (method !== "Page.screencastFrame" || typeof params["data"] !== "string") return;
               const data = Buffer.from(params["data"], "base64");
+
               if (!containsVisiblePngPixel(data)) return;
               runFork(
                 Deferred.succeed(screencastFrame, { data: params["data"] }).pipe(Effect.asVoid),
               );
             };
+
             return yield* Effect.acquireUseRelease(
               attempt(
                 {
@@ -413,6 +447,7 @@ export const createPreviewAutomationSnapshot = ({
                     maxWidth: MAX_SCREENSHOT_WIDTH,
                     everyNthFrame: 1,
                   });
+
                   return yield* Deferred.await(screencastFrame).pipe(Effect.timeout("3 seconds"));
                 }).pipe(Effect.orElseSucceed(() => null)),
               () =>
@@ -429,8 +464,10 @@ export const createPreviewAutomationSnapshot = ({
                 ),
             );
           });
+
       const screenshotResult =
         screencastScreenshotResult ?? fallbackScreenshotResult ?? initialScreenshotResult;
+
       const screenshot = yield* Effect.try({
         try: () => {
           if (
@@ -442,15 +479,20 @@ export const createPreviewAutomationSnapshot = ({
           ) {
             throw new TypeError("Page.captureScreenshot returned no PNG data");
           }
+
           const sourceData = Buffer.from(screenshotResult.data, "base64");
           const image = nativeImage.createFromBuffer(sourceData);
+
           if (image.isEmpty()) {
             throw new TypeError("Page.captureScreenshot returned an invalid PNG");
           }
+
           if (!containsVisiblePngPixel(sourceData)) {
             throw new TypeError("Page.captureScreenshot returned an all-black PNG");
           }
+
           const sourceSize = image.getSize();
+
           if (
             !Number.isFinite(sourceSize.width) ||
             !Number.isFinite(sourceSize.height) ||
@@ -459,14 +501,18 @@ export const createPreviewAutomationSnapshot = ({
           ) {
             throw new TypeError("Page.captureScreenshot returned invalid image dimensions");
           }
+
           const output =
             sourceSize.width > MAX_SCREENSHOT_WIDTH
               ? image.resize({ width: MAX_SCREENSHOT_WIDTH })
               : image;
+
           if (output.isEmpty()) {
             throw new TypeError("Page.captureScreenshot could not be resized");
           }
+
           const size = output.getSize();
+
           if (
             !Number.isFinite(size.width) ||
             !Number.isFinite(size.height) ||
@@ -475,10 +521,13 @@ export const createPreviewAutomationSnapshot = ({
           ) {
             throw new TypeError("Page.captureScreenshot produced invalid output dimensions");
           }
+
           const data = sourceSize.width > MAX_SCREENSHOT_WIDTH ? output.toPNG() : sourceData;
+
           if (data.byteLength === 0) {
             throw new TypeError("Page.captureScreenshot produced an empty PNG");
           }
+
           return {
             mimeType: "image/png" as const,
             data: data.toString("base64"),
@@ -494,7 +543,9 @@ export const createPreviewAutomationSnapshot = ({
             cause,
           }),
       });
+
       const browserDiagnostics = diagnostics.get(wc.id);
+
       return {
         ...page,
         accessibilityTree: accessibility,
@@ -510,9 +561,11 @@ export const createPreviewAutomationSnapshot = ({
     tabId: string,
   ) {
     const wc = yield* requireWebContents(tabId);
+
     return yield* withControlSession(tabId, wc, "snapshot", (send, sendCleanup) =>
       captureAutomationSnapshot(tabId, wc, send, sendCleanup),
     );
   });
+
   return { automationLocator, automationSelectorDiagnostics, automationSnapshot };
 };

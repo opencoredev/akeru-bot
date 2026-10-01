@@ -64,6 +64,7 @@ export function makeFakeBrowserWindow() {
   const windowListeners = new Map<string, (...args: readonly unknown[]) => void>();
   const webContentsListeners = new Map<string, (...args: readonly unknown[]) => void>();
   let zoomLevel = 0;
+
   const webContents = {
     copyImageAt: vi.fn(),
     getURL: vi.fn(() => "akeru-dev://app/"),
@@ -216,6 +217,7 @@ export function makeTestLayer(input: {
   readonly onPopupTemplate?: (input: ElectronMenu.ElectronMenuTemplateInput) => Effect.Effect<void>;
 }) {
   let desktopSettings = input.desktopSettings ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS;
+
   const desktopAppSettingsLayer = Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
     get: Effect.sync(() => desktopSettings),
     load: Effect.sync(() => desktopSettings),
@@ -224,10 +226,12 @@ export function makeTestLayer(input: {
         if (input.beforeMainWindowBoundsUpdate) {
           yield* input.beforeMainWindowBoundsUpdate(bounds);
         }
+
         const changed =
           desktopSettings.mainWindowBounds === null ||
           !desktopWindowBoundsEquivalence(desktopSettings.mainWindowBounds, bounds) ||
           desktopSettings.mainWindowMaximized !== isMaximized;
+
         if (changed) {
           desktopSettings = {
             ...desktopSettings,
@@ -237,6 +241,7 @@ export function makeTestLayer(input: {
           input.mainWindowBoundsUpdates?.push(bounds);
           input.mainWindowMaximizedUpdates?.push(isMaximized);
         }
+
         return { settings: desktopSettings, changed };
       }),
     setServerExposureMode: () => Effect.die("unexpected server exposure update"),
@@ -288,6 +293,7 @@ export function makeTestLayer(input: {
           openExternal: (url) =>
             Effect.sync(() => {
               input.openedExternalUrls?.push(url);
+
               return true;
             }),
           copyText: (text) =>
@@ -323,16 +329,20 @@ export const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWin
     const createCalls = yield* Ref.make(0);
     const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
     const revealedWindows = yield* Ref.make<Electron.BrowserWindow[]>([]);
+
     const fallbackWindow = createOutcomes.find(
       (window): window is Electron.BrowserWindow => window !== null,
     );
 
     const currentMainOrFirst = Effect.gen(function* () {
       const registered = yield* Ref.get(mainWindow);
+
       if (Option.isSome(registered)) {
         return registered;
       }
+
       const created = yield* Ref.get(createdWindows);
+
       return Option.fromNullishOr(created[0] ?? null);
     });
 
@@ -341,6 +351,7 @@ export const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWin
         Effect.gen(function* () {
           const index = yield* Ref.getAndUpdate(createCalls, (count) => count + 1);
           const outcome = createOutcomes[index] ?? null;
+
           if (outcome === null) {
             return yield* new ElectronWindow.ElectronWindowCreateError({
               options: {
@@ -367,7 +378,9 @@ export const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWin
               cause: new Error("simulated window-open failure"),
             });
           }
+
           yield* Ref.update(createdWindows, (windows) => [...windows, outcome]);
+
           return outcome;
         }),
       main: Ref.get(mainWindow),

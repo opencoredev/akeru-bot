@@ -73,8 +73,10 @@ export const MAX_SCREENSHOT_WIDTH = 1280;
 export const containsVisiblePngPixel = (data: Buffer): boolean => {
   try {
     const png = PNG.sync.read(data);
+
     for (let offset = 0; offset + 3 < png.data.byteLength; offset += 4) {
       const alpha = png.data[offset + 3]!;
+
       if (
         alpha !== 0 &&
         (png.data[offset]! !== 0 || png.data[offset + 1]! !== 0 || png.data[offset + 2]! !== 0)
@@ -82,6 +84,7 @@ export const containsVisiblePngPixel = (data: Buffer): boolean => {
         return true;
       }
     }
+
     return false;
   } catch {
     return false;
@@ -96,6 +99,7 @@ export const scaleCaptureRect = (
 ): Rectangle => {
   const scaleX = thumbnailSize.width / windowBounds.width;
   const scaleY = thumbnailSize.height / windowBounds.height;
+
   return {
     x: Math.max(0, Math.round((contentBounds.x - windowBounds.x + rect.x) * scaleX)),
     y: Math.max(0, Math.round((contentBounds.y - windowBounds.y + rect.y) * scaleY)),
@@ -174,6 +178,7 @@ export const buildPreviewPictureInPictureDataUrl = (): string => {
     </script>
   </body>
 </html>`;
+
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 };
 
@@ -186,25 +191,30 @@ export const fitPictureInPictureContentSize = (
   const currentArea = currentWidth * currentHeight;
   let width = Math.sqrt(currentArea * aspectRatio);
   let height = width / aspectRatio;
+
   const minimumScale = Math.max(
     1,
     PICTURE_IN_PICTURE_MIN_WIDTH / width,
     PICTURE_IN_PICTURE_MIN_HEIGHT / height,
   );
+
   width *= minimumScale;
   height *= minimumScale;
+
   return [Math.round(width), Math.round(height)];
 };
 
 export const artifactSiteSlug = (rawUrl: string): string => {
   try {
     const url = new URL(rawUrl);
+
     const slug = url.hostname
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, MAX_ARTIFACT_SITE_SLUG_LENGTH)
       .replace(/-+$/g, "");
+
     return slug || "site";
   } catch {
     return "site";
@@ -229,6 +239,7 @@ export const normalizeCaptureRect = (value: unknown): PreviewAnnotationRect | nu
   const y = rect["y"];
   const width = rect["width"];
   const height = rect["height"];
+
   if (
     typeof x !== "number" ||
     !Number.isFinite(x) ||
@@ -243,6 +254,7 @@ export const normalizeCaptureRect = (value: unknown): PreviewAnnotationRect | nu
   ) {
     return null;
   }
+
   return {
     x: Math.max(0, Math.floor(x)),
     y: Math.max(0, Math.floor(y)),
@@ -278,6 +290,7 @@ export const captureAnnotationScreenshot = (
   }).pipe(
     Effect.map((image) => {
       const size = image.getSize();
+
       return {
         dataUrl: image.toDataURL(),
         width: size.width,
@@ -291,7 +304,9 @@ export const findZoomStep = (current: number): number => {
   const index = ZOOM_LEVELS.findIndex(
     (level) => Math.abs(level - current) < ZOOM_EPSILON || level > current,
   );
+
   if (index < 0) return ZOOM_LEVELS.length - 1;
+
   return Math.abs(ZOOM_LEVELS[index]! - current) < ZOOM_EPSILON ? index : index - 1;
 };
 
@@ -304,17 +319,21 @@ export const findZoomStep = (current: number): number => {
 export const normalizeZoomFactor = (value: number | undefined): number => {
   if (value === undefined || !Number.isFinite(value)) return DEFAULT_ZOOM_FACTOR;
   let closest = ZOOM_LEVELS[0]!;
+
   for (const level of ZOOM_LEVELS) {
     if (Math.abs(level - value) < Math.abs(closest - value)) closest = level;
   }
+
   return closest;
 };
 
 export const nextZoomLevel = (current: number, direction: "in" | "out"): number => {
   const step = findZoomStep(current);
+
   if (direction === "in") {
     return ZOOM_LEVELS[Math.min(step + 1, ZOOM_LEVELS.length - 1)] ?? current;
   }
+
   return ZOOM_LEVELS[Math.max(step - 1, 0)] ?? current;
 };
 
@@ -394,15 +413,22 @@ export const isPreviewEditingShortcut = (
   platform: NodeJS.Platform,
 ): boolean => {
   const isMac = platform === "darwin";
+
   if (isMac ? !input.meta || input.control : !input.control || input.meta) return false;
 
   const key = input.key.toLowerCase();
+
   // Option changes the DOM key for macOS Paste and Match Style (for example, to ◊).
   if (isMac && input.alt && input.shift && input.code === "KeyV") return true;
+
   if (key === "v" && input.shift) return input.alt === isMac;
+
   if (input.alt) return false;
+
   if (key === "z") return !input.shift || platform !== "win32";
+
   if (input.shift) return false;
+
   return (
     key === "a" ||
     key === "c" ||
@@ -414,6 +440,7 @@ export const isPreviewEditingShortcut = (
 
 export const isPreviewInputSignal = (value: unknown): value is PreviewInputSignal => {
   if (typeof value !== "object" || value === null || !("kind" in value)) return false;
+
   if (value.kind === "pointer") {
     return (
       "x" in value &&
@@ -424,6 +451,7 @@ export const isPreviewInputSignal = (value: unknown): value is PreviewInputSigna
       typeof value.button === "number"
     );
   }
+
   return (
     value.kind === "key" &&
     "key" in value &&
@@ -435,6 +463,7 @@ export const isPreviewInputSignal = (value: unknown): value is PreviewInputSigna
 
 export const inputSignalsMatch = (left: PreviewInputSignal, right: PreviewInputSignal): boolean => {
   if (left.kind !== right.kind) return false;
+
   if (left.kind === "pointer" && right.kind === "pointer") {
     return (
       Math.abs(left.x - right.x) <= 1 &&
@@ -442,6 +471,7 @@ export const inputSignalsMatch = (left: PreviewInputSignal, right: PreviewInputS
       left.button === right.button
     );
   }
+
   return (
     left.kind === "key" &&
     right.kind === "key" &&
@@ -449,6 +479,7 @@ export const inputSignalsMatch = (left: PreviewInputSignal, right: PreviewInputS
     left.code === right.code
   );
 };
+
 export type SendCommand = (
   method: string,
   commandParams?: Record<string, unknown>,

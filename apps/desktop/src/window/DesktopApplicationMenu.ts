@@ -84,6 +84,7 @@ const handleCheckForUpdatesMenuClick = Effect.gen(function* () {
   const updates = yield* DesktopUpdates.DesktopUpdates;
   const electronDialog = yield* ElectronDialog.ElectronDialog;
   const disabledReason = yield* updates.disabledReason;
+
   if (Option.isSome(disabledReason)) {
     yield* logUpdaterInfo("manual update check requested, but updates are disabled", {
       disabledReason: disabledReason.value,
@@ -95,6 +96,7 @@ const handleCheckForUpdatesMenuClick = Effect.gen(function* () {
       detail: disabledReason.value,
       buttons: ["OK"],
     });
+
     return;
   }
 
@@ -121,6 +123,7 @@ export const make = Effect.gen(function* () {
         Effect.withSpan("desktop.menu.action"),
         Effect.catchCause((cause) => {
           const error = new DesktopApplicationMenuActionError({ action, cause });
+
           return logMenuError(error.message, { error });
         }),
       ),
@@ -131,15 +134,19 @@ export const make = Effect.gen(function* () {
     const checkForUpdatesClick = () => {
       runMenuEffect("check-for-updates", handleCheckForUpdatesMenuClick);
     };
+
     const settingsClick = () => {
       runMenuEffect("open-settings", dispatchMenuAction("open-settings"));
     };
+
     const feedbackClick = () => {
       runMenuEffect("open-feedback", dispatchMenuAction("open-feedback"));
     };
+
     const zoomClick = (direction: DesktopWindow.MainWindowZoomDirection) => () => {
       runMenuEffect(`zoom-${direction}`, zoomMainWindow(direction));
     };
+
     const template: Electron.MenuItemConstructorOptions[] = [];
 
     if (environment.platform === "darwin") {

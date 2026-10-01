@@ -9,7 +9,9 @@ describe("marquee selection", () => {
       eligible: index % 100 === 0,
       width: 2 + (index % 7),
     }));
+
     let measurements = 0;
+
     const selected = selectMarqueeElements({
       elements,
       rect: { x: 0, y: 0, width: 100, height: 100 },
@@ -17,6 +19,7 @@ describe("marquee selection", () => {
       eligible: (element) => element.eligible,
       measure: (element) => {
         measurements += 1;
+
         return {
           left: 0,
           top: 0,
@@ -46,6 +49,7 @@ describe("marquee selection", () => {
       { left: 9, top: 0, right: 11, bottom: 2, width: 2, height: 2 },
       { left: 11, top: 0, right: 13, bottom: 2, width: 2, height: 2 },
     ];
+
     assert.deepEqual(
       selectMarqueeElements({
         elements,

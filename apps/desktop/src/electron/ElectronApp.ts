@@ -109,6 +109,7 @@ export const make = ElectronApp.of({
           cause,
         }),
     });
+
     const appPath = yield* Effect.try({
       try: () => Electron.app.getAppPath(),
       catch: (cause) =>
@@ -174,6 +175,7 @@ export const make = ElectronApp.of({
       if (path === undefined) {
         return Electron.app.setAsDefaultProtocolClient(protocol);
       }
+
       return Electron.app.setAsDefaultProtocolClient(protocol, path, [...(args ?? [])]);
     }),
   setDesktopName: (desktopName) =>
@@ -181,6 +183,7 @@ export const make = ElectronApp.of({
       const linuxApp = Electron.app as Electron.App & {
         setDesktopName?: (desktopName: string) => void;
       };
+
       linuxApp.setDesktopName?.(desktopName);
     }),
   setDockIcon: (iconPath) =>
@@ -191,8 +194,10 @@ export const make = ElectronApp.of({
     Effect.sync(() => {
       if (value === undefined) {
         Electron.app.commandLine.appendSwitch(switchName);
+
         return;
       }
+
       Electron.app.commandLine.appendSwitch(switchName, value);
     }),
   onBeforeQuitForUpdate: (listener) =>

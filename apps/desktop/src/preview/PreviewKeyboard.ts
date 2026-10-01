@@ -102,6 +102,7 @@ const MAC_EDITING_COMMANDS: Readonly<Record<string, string>> = {
   "Meta+KeyZ": "undo",
   "Shift+Meta+KeyZ": "redo",
 };
+
 const SHORTCUT_MODIFIER_ORDER = ["Shift", "Control", "Alt", "Meta"] as const;
 
 const macEditingCommands = (
@@ -112,7 +113,9 @@ const macEditingCommands = (
     ...SHORTCUT_MODIFIER_ORDER.filter((modifier) => modifiers?.includes(modifier)),
     code,
   ].join("+");
+
   const command = MAC_EDITING_COMMANDS[shortcut];
+
   return command ? [command] : [];
 };
 
@@ -132,11 +135,14 @@ const modifierMask = (modifiers: PreviewAutomationPressInput["modifiers"]): numb
 
 function resolveKeyDefinition(input: PreviewAutomationPressInput): KeyDefinition {
   const named = NAMED_KEYS[input.key];
+
   if (named) return named;
 
   const functionKey = /^F([1-9]|1[0-2])$/.exec(input.key);
+
   if (functionKey) {
     const number = Number(functionKey[1]);
+
     return { code: input.key, key: input.key, keyCode: 111 + number };
   }
 
@@ -144,18 +150,22 @@ function resolveKeyDefinition(input: PreviewAutomationPressInput): KeyDefinition
     const upper = input.key.toUpperCase();
     const shifted = input.modifiers?.includes("Shift") ?? false;
     const key = shifted || input.key === upper ? upper : input.key;
+
     return { code: `Key${upper}`, key, keyCode: upper.charCodeAt(0), text: key };
   }
 
   const printable = PRINTABLE_KEYS.find(
     (definition) => definition.key === input.key || definition.shiftedKey === input.key,
   );
+
   if (printable) {
     const shifted = input.modifiers?.includes("Shift") ?? false;
+
     const key =
       printable.shiftedKey && (shifted || input.key === printable.shiftedKey)
         ? printable.shiftedKey
         : printable.key;
+
     return { ...printable, key, text: key };
   }
 
@@ -181,6 +191,7 @@ export function makePreviewAutomationKeySequence(
   const text = suppressText ? "" : (definition.text ?? "");
   const location = definition.location ?? 0;
   const commands = options?.isMac ? macEditingCommands(definition.code, input.modifiers) : [];
+
   const shared = {
     key: definition.key,
     code: definition.code,

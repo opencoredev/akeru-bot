@@ -23,9 +23,11 @@ it.layer(NodeServices.layer)("mock-update-server", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "mock-update-server-root-",
       });
+
       const rootRealPath = yield* fileSystem.realPath(root);
       const filePath = path.join(root, "latest.yml");
 
@@ -49,12 +51,15 @@ it.layer(NodeServices.layer)("mock-update-server", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "mock-update-server-root-",
       });
+
       const outside = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "mock-update-server-outside-",
       });
+
       const rootRealPath = yield* fileSystem.realPath(root);
 
       yield* fileSystem.writeFileString(path.join(outside, "secret.txt"), "nope\n");
@@ -76,12 +81,15 @@ it.layer(NodeServices.layer)("mock-update-server", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "mock-update-server-root-",
       });
+
       const outside = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "mock-update-server-outside-",
       });
+
       const rootRealPath = yield* fileSystem.realPath(root);
       const outsideFile = path.join(outside, "outside.yml");
       const linksDir = path.join(root, "links");

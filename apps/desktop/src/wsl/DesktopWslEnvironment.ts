@@ -107,6 +107,7 @@ export const probeWslDistros: Effect.Effect<
 > = Effect.scoped(
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
     const command = ChildProcess.make("wsl.exe", ["--list", "--verbose"], {
       stdin: "ignore",
       stdout: "pipe",
@@ -114,14 +115,17 @@ export const probeWslDistros: Effect.Effect<
       killSignal: "SIGTERM",
       forceKillAfter: PROCESS_TERMINATE_GRACE,
     });
+
     const handle = yield* spawner.spawn(command);
     const stdoutBytes = yield* Stream.runCollect(handle.stdout);
     const exitCode = yield* handle.exitCode;
+
     if (exitCode !== 0) {
       return yield* new DesktopWslDistroListError({
         reason: `wsl.exe --list --verbose exited with code ${String(exitCode)}`,
       });
     }
+
     return parseWslDistroList(Buffer.from(concatChunks(stdoutBytes)));
   }),
 ).pipe(
@@ -150,6 +154,7 @@ const preWarmImpl = (
   Effect.scoped(
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
       const command = ChildProcess.make("wsl.exe", [...buildDistroArgs(distro), "--", "true"], {
         stdin: "ignore",
         stdout: "ignore",
@@ -157,6 +162,7 @@ const preWarmImpl = (
         killSignal: "SIGTERM",
         forceKillAfter: PROCESS_TERMINATE_GRACE,
       });
+
       const handle = yield* spawner.spawn(command);
       yield* handle.exitCode;
     }),
@@ -172,9 +178,11 @@ const windowsToWslPathImpl = (
 ): Effect.Effect<Option.Option<string>, never, ChildProcessSpawner.ChildProcessSpawner> => {
   // wsl.exe interprets backslashes as escape chars; normalize to forward slashes.
   const normalized = windowsPath.replaceAll("\\", "/");
+
   return Effect.scoped(
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
       const command = ChildProcess.make(
         "wsl.exe",
         [...buildDistroArgs(distro), "--", "wslpath", "-u", normalized],
@@ -186,11 +194,14 @@ const windowsToWslPathImpl = (
           forceKillAfter: PROCESS_TERMINATE_GRACE,
         },
       );
+
       const handle = yield* spawner.spawn(command);
       const stdoutBytes = yield* Stream.runCollect(handle.stdout);
       const exitCode = yield* handle.exitCode;
+
       if (exitCode !== 0) return Option.none<string>();
       const converted = decodeUtf8(concatChunks(stdoutBytes)).trim();
+
       return converted.length > 0 ? Option.some(converted) : Option.none<string>();
     }),
   ).pipe(
@@ -208,6 +219,7 @@ const getDistroIpImpl = (
   Effect.scoped(
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
       // `hostname -I` prints a space-separated list of all non-loopback
       // IPs the distro has bound. The first entry on the WSL2 default
       // network is always the eth0 vEthernet address Windows can reach
@@ -223,12 +235,15 @@ const getDistroIpImpl = (
           forceKillAfter: PROCESS_TERMINATE_GRACE,
         },
       );
+
       const handle = yield* spawner.spawn(command);
       const stdoutBytes = yield* Stream.runCollect(handle.stdout);
       const exitCode = yield* handle.exitCode;
+
       if (exitCode !== 0) return Option.none<string>();
       const raw = decodeUtf8(concatChunks(stdoutBytes)).trim();
       const candidate = raw.split(/\s+/).find((part) => IPV4_PATTERN.test(part));
+
       return candidate ? Option.some(candidate) : Option.none<string>();
     }),
   ).pipe(
@@ -243,6 +258,7 @@ const getUserHomeImpl = (
   Effect.scoped(
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
       const command = ChildProcess.make(
         "wsl.exe",
         // printf so there's no trailing newline noise; getent so we get the
@@ -262,11 +278,14 @@ const getUserHomeImpl = (
           forceKillAfter: PROCESS_TERMINATE_GRACE,
         },
       );
+
       const handle = yield* spawner.spawn(command);
       const stdoutBytes = yield* Stream.runCollect(handle.stdout);
       const exitCode = yield* handle.exitCode;
+
       if (exitCode !== 0) return Option.none<string>();
       const home = decodeUtf8(concatChunks(stdoutBytes)).trim();
+
       return home.startsWith("/") ? Option.some(home) : Option.none<string>();
     }),
   ).pipe(
@@ -284,6 +303,7 @@ const makeIsAvailable = (
     const path = yield* Path.Path;
     const fileSystem = yield* FileSystem.FileSystem;
     const wslExePath = path.join(windir, "System32", "wsl.exe");
+
     return yield* fileSystem.exists(wslExePath).pipe(Effect.orElseSucceed(() => false));
   });
 
@@ -305,6 +325,7 @@ export const layerTest = (stub: DesktopWslEnvironmentTestStub = {}) => {
   const probeDistros = stub.distroListError
     ? Effect.fail(stub.distroListError)
     : Effect.succeed(stub.distros ?? []);
+
   return Layer.succeed(
     DesktopWslEnvironment,
     DesktopWslEnvironment.of({
@@ -357,6 +378,7 @@ export const layer = Layer.effect(
       Effect.provideService(Path.Path, environment.path),
       Effect.withSpan("desktop.wsl.isAvailable"),
     );
+
     const isAvailable = Effect.succeed(wslAvailable);
 
     const windowsToWslPath = (distro: string | null, windowsPath: string) =>
@@ -369,13 +391,17 @@ export const layer = Layer.effect(
     // distro. Negative results aren't cached so a transient wsl.exe failure
     // doesn't permanently disable tilde expansion.
     const userHomeCache = new Map<string, string>();
+
     const getUserHome = (distro: string | null) =>
       Effect.gen(function* () {
         const key = distro ?? "__default__";
         const cached = userHomeCache.get(key);
+
         if (cached !== undefined) return Option.some(cached);
         const resolved = yield* provideSpawner(getUserHomeImpl(distro));
+
         if (Option.isSome(resolved)) userHomeCache.set(key, resolved.value);
+
         return resolved;
       }).pipe(Effect.withSpan("desktop.wsl.getUserHome"));
 

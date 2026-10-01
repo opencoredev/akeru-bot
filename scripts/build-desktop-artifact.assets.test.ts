@@ -56,6 +56,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
         undefined,
       );
+
       const release = yield* createBuildConfig(
         "mac",
         "dmg",
@@ -89,6 +90,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       const mac = yield* createBuildConfig("mac", "dmg", "1.2.3", false, false, undefined, {
         entitlementsPath: "/tmp/entitlements.mac.plist",
       });
+
       const linux = yield* createBuildConfig(
         "linux",
         "AppImage",
@@ -98,6 +100,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
         undefined,
       );
+
       const win = yield* createBuildConfig(
         "win",
         "nsis",
@@ -176,10 +179,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "/tmp/entitlements.mac.plist",
       );
       assert.match(String((mac.mac as Record<string, unknown>).sign), /\/scripts\/sign-macos\.ts$/);
+
       for (const config of [linux, win]) {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
       }
+
       assert.deepStrictEqual(mac.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
@@ -189,13 +194,16 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const repoRoot = yield* fs.makeTempDirectoryScoped({
           prefix: "t3-resource-monitor-cache-test-",
         });
+
         const binaryPath = path.join(
           repoRoot,
           "native/resource-monitor/target/x86_64-unknown-linux-gnu/release/t3-resource-monitor",
         );
+
         const stageResourcesDir = path.join(repoRoot, "stage");
         yield* fs.makeDirectory(path.dirname(binaryPath), { recursive: true });
         yield* fs.writeFileString(binaryPath, "cached monitor");
@@ -270,6 +278,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     Effect.scoped(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
+
         const stageResourcesDir = yield* fs.makeTempDirectoryScoped({
           prefix: "t3code-dmg-background-missing-",
         });
@@ -320,4 +329,5 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 });
+
 import * as NodeServices from "@effect/platform-node/NodeServices";

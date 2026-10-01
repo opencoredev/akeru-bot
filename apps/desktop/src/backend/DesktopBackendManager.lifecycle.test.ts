@@ -55,6 +55,7 @@ describe("DesktopBackendManager", () => {
               const scope = yield* Scope.Scope;
               startCount += 1;
               yield* Queue.offer(startedPids, 123);
+
               const close = Deferred.succeed(teardownStarted, undefined).pipe(
                 Effect.andThen(Deferred.await(finishTeardown)),
                 Effect.andThen(
@@ -105,6 +106,7 @@ describe("DesktopBackendManager", () => {
               }),
           },
         });
+
         assert.isTrue(Option.isNone(yield* instance.currentConfig));
 
         yield* instance.start;
@@ -155,6 +157,7 @@ describe("DesktopBackendManager", () => {
               const closed = yield* Deferred.make<void>();
               startCount += 1;
               yield* Queue.offer(starts, startCount);
+
               if (startCount === 1) {
                 yield* Scope.addFinalizer(
                   scope,
@@ -170,6 +173,7 @@ describe("DesktopBackendManager", () => {
                   Deferred.succeed(closed, undefined).pipe(Effect.asVoid),
                 );
               }
+
               return makeProcess({
                 exitCode: Deferred.await(closed).pipe(Effect.as(ChildProcessSpawner.ExitCode(0))),
               });
@@ -217,6 +221,7 @@ describe("DesktopBackendManager", () => {
           method: "configResolve",
           description: "transient configuration failure",
         });
+
         const spawnerLayer = Layer.succeed(
           ChildProcessSpawner.ChildProcessSpawner,
           ChildProcessSpawner.make(() =>
@@ -225,6 +230,7 @@ describe("DesktopBackendManager", () => {
               const closed = yield* Deferred.make<void>();
               startCount += 1;
               yield* Queue.offer(starts, startCount);
+
               if (startCount === 1) {
                 yield* Scope.addFinalizer(
                   scope,
@@ -240,17 +246,20 @@ describe("DesktopBackendManager", () => {
                   Deferred.succeed(closed, undefined).pipe(Effect.asVoid),
                 );
               }
+
               return makeProcess({
                 exitCode: Deferred.await(closed).pipe(Effect.as(ChildProcessSpawner.ExitCode(0))),
               });
             }),
           ),
         );
+
         const configResolve = Ref.updateAndGet(configAttempts, (attempt) => attempt + 1).pipe(
           Effect.flatMap((attempt) =>
             attempt === 2 ? Effect.fail(configFailure) : Effect.succeed(baseConfig),
           ),
         );
+
         const instance = yield* makeTestInstance({
           spawnerLayer,
           configResolve,
@@ -295,6 +304,7 @@ describe("DesktopBackendManager", () => {
               const closed = yield* Deferred.make<void>();
               startCount += 1;
               yield* Queue.offer(starts, startCount);
+
               if (startCount === 1) {
                 yield* Scope.addFinalizer(
                   scope,
@@ -310,6 +320,7 @@ describe("DesktopBackendManager", () => {
                   Deferred.succeed(closed, undefined).pipe(Effect.asVoid),
                 );
               }
+
               return makeProcess({
                 exitCode: Deferred.await(closed).pipe(Effect.as(ChildProcessSpawner.ExitCode(0))),
               });
@@ -328,6 +339,7 @@ describe("DesktopBackendManager", () => {
         const stopFiber = yield* instance
           .stop({ timeout: Duration.millis(100) })
           .pipe(Effect.forkChild);
+
         yield* Deferred.await(teardownStarted).pipe(Effect.timeout("1 second"));
         yield* instance.start;
         yield* TestClock.adjust(Duration.millis(100));
@@ -359,6 +371,7 @@ describe("DesktopBackendManager", () => {
             Effect.gen(function* () {
               yield* Queue.offer(startedPids, 123);
               const close = Deferred.succeed(closed, void 0).pipe(Effect.asVoid);
+
               return makeProcess({
                 exitCode: Deferred.await(closed).pipe(Effect.as(ChildProcessSpawner.ExitCode(0))),
                 kill: () => close,
@@ -394,6 +407,7 @@ describe("DesktopBackendManager", () => {
           ChildProcessSpawner.make(() =>
             Effect.sync(() => {
               startCount += 1;
+
               return makeProcess({
                 exitCode: Queue.offer(starts, startCount).pipe(
                   Effect.as(ChildProcessSpawner.ExitCode(1)),
@@ -463,6 +477,7 @@ describe("DesktopBackendManager", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const failures: string[] = [];
+
         const spawnerLayer = Layer.succeed(
           ChildProcessSpawner.ChildProcessSpawner,
           ChildProcessSpawner.make(() => Effect.die("unexpected backend spawn")),
@@ -504,6 +519,7 @@ describe("DesktopBackendManager", () => {
       Effect.gen(function* () {
         const failing = yield* Ref.make(true);
         const starts = yield* Queue.unbounded<number>();
+
         const spawnerLayer = Layer.succeed(
           ChildProcessSpawner.ChildProcessSpawner,
           ChildProcessSpawner.make(() =>
@@ -563,6 +579,7 @@ describe("DesktopBackendManager", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const failures: string[] = [];
+
         const spawnerLayer = Layer.succeed(
           ChildProcessSpawner.ChildProcessSpawner,
           ChildProcessSpawner.make(() => Effect.die("unexpected backend spawn")),
@@ -593,6 +610,7 @@ describe("DesktopBackendManager", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const failures: string[] = [];
+
         const spawnerLayer = Layer.succeed(
           ChildProcessSpawner.ChildProcessSpawner,
           ChildProcessSpawner.make(() => Effect.die("unexpected backend spawn")),
@@ -647,6 +665,7 @@ describe("DesktopBackendManager", () => {
               const scope = yield* Scope.Scope;
               const close = Deferred.succeed(secondClosed, void 0).pipe(Effect.asVoid);
               yield* Scope.addFinalizer(scope, close);
+
               return makeProcess({
                 exitCode: Deferred.await(secondClosed).pipe(
                   Effect.as(ChildProcessSpawner.ExitCode(0)),
@@ -666,8 +685,10 @@ describe("DesktopBackendManager", () => {
 
         assert.equal(yield* Queue.take(starts), 1);
         let restartScheduled = false;
+
         while (!restartScheduled) {
           restartScheduled = (yield* instance.snapshot).restartScheduled;
+
           if (!restartScheduled) {
             yield* Effect.yieldNow;
           }
@@ -695,6 +716,7 @@ describe("DesktopBackendManager", () => {
           ChildProcessSpawner.make(() =>
             Effect.sync(() => {
               startCount += 1;
+
               return makeProcess({
                 exitCode: Queue.offer(starts, startCount).pipe(
                   Effect.as(ChildProcessSpawner.ExitCode(1)),
@@ -713,8 +735,10 @@ describe("DesktopBackendManager", () => {
         assert.equal(yield* Queue.take(starts), 1);
 
         let restartScheduled = false;
+
         while (!restartScheduled) {
           restartScheduled = (yield* instance.snapshot).restartScheduled;
+
           if (!restartScheduled) {
             yield* Effect.yieldNow;
           }

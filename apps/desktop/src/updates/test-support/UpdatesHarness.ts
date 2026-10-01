@@ -47,10 +47,13 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
 
   const removeListener = (eventName: string, listener: (...args: readonly unknown[]) => void) => {
     const eventListeners = listeners.get(eventName);
+
     if (!eventListeners) {
       return;
     }
+
     eventListeners.delete(listener);
+
     if (eventListeners.size === 0) {
       listeners.delete(eventName);
     }
@@ -123,6 +126,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     }),
     waitForReady: () => Effect.succeed(true),
   };
+
   const backendLayer = DesktopBackendPool.layerTest([stubBackendInstance]);
 
   const environmentLayer = DesktopEnvironment.layer({
@@ -152,7 +156,9 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   let testSettings: DesktopAppSettings.DesktopSettings = {
     ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
   };
+
   const setUpdateChannelError = options.setUpdateChannelError;
+
   const settingsLayer =
     setUpdateChannelError || options.beforeSetUpdateChannel
       ? Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
@@ -173,6 +179,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
                         updateChannel: channel,
                         updateChannelConfiguredByUser: true,
                       };
+
                       return { settings: testSettings, changed };
                     }),
                   ),

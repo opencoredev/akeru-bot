@@ -86,6 +86,7 @@ it.effect("preserves git tag spawn context and the exact platform cause", () => 
     if (error._tag !== "ReleaseTagListProcessError") {
       return assert.fail(`Unexpected error: ${error._tag}`);
     }
+
     assert.equal(error.operation, "spawn");
     assert.equal(error.executable, "git");
     assert.equal(error.argumentCount, 2);
@@ -108,6 +109,7 @@ it.effect("distinguishes stdout and stderr read failures", () =>
         method: stream,
         description: `${stream} unavailable`,
       });
+
       const error = yield* listGitTags("/repo").pipe(
         Effect.scoped,
         Effect.provideService(
@@ -127,6 +129,7 @@ it.effect("distinguishes stdout and stderr read failures", () =>
       if (error._tag !== "ReleaseTagListProcessError") {
         return assert.fail(`Unexpected error: ${error._tag}`);
       }
+
       assert.equal(error.operation, operation);
       assert.strictEqual(error.cause, cause);
     }
@@ -155,6 +158,7 @@ it.effect("reports git tag non-zero exits without manufacturing a cause", () =>
     if (error._tag !== "ReleaseTagListProcessExitError") {
       return assert.fail(`Unexpected error: ${error._tag}`);
     }
+
     assert.equal(error.executable, "git");
     assert.equal(error.argumentCount, 2);
     assert.equal(error.cwd, "/repo");
@@ -169,6 +173,7 @@ it.effect("reports git tag non-zero exits without manufacturing a cause", () =>
 
 it.effect("preserves the GITHUB_OUTPUT append path and exact cause", () => {
   const outputPath = "/tmp/previous-tag-github-output";
+
   const appendCause = PlatformError.systemError({
     _tag: "PermissionDenied",
     module: "FileSystem",
@@ -194,6 +199,7 @@ it.effect("preserves the GITHUB_OUTPUT append path and exact cause", () => {
     if (appendError._tag !== "PreviousReleaseTagGitHubOutputAppendError") {
       return assert.fail(`Unexpected error: ${appendError._tag}`);
     }
+
     assert.equal(appendError.outputPath, outputPath);
     assert.strictEqual(appendError.cause, appendCause);
     assert.notProperty(appendError, "contents");

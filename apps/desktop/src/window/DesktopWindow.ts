@@ -167,6 +167,7 @@ export const make = Effect.gen(function* () {
 
   const dismissConnectingSplash = Effect.gen(function* () {
     const splash = yield* Ref.getAndSet(splashWindowRef, Option.none());
+
     if (Option.isSome(splash) && !splash.value.isDestroyed()) {
       splash.value.close();
     }
@@ -202,6 +203,7 @@ export const make = Effect.gen(function* () {
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
     const persistedSettings = yield* desktopSettings.get;
     const persistedBounds = persistedSettings.mainWindowBounds;
+
     const displayBoundsResult = yield* Effect.sync(() => {
       try {
         return {
@@ -212,17 +214,21 @@ export const make = Effect.gen(function* () {
         return { _tag: "Failure" as const, cause };
       }
     });
+
     const displayBounds =
       displayBoundsResult._tag === "Success"
         ? displayBoundsResult.bounds
         : yield* logWindowWarning("failed to read connected displays; using defaults", {
             cause: displayBoundsResult.cause,
           }).pipe(Effect.as<readonly Electron.Rectangle[]>([]));
+
     const initialBounds = resolveInitialMainWindowBounds(persistedBounds, displayBounds);
     const restoredPersistedBounds = persistedBounds !== null && initialBounds === persistedBounds;
+
     if (persistedBounds !== null && initialBounds === DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE) {
       yield* logWindowWarning("saved main window bounds could not be restored; using defaults");
     }
+
     const window = yield* electronWindow.create({
       ...initialBounds,
       minWidth: 840,
@@ -252,17 +258,21 @@ export const make = Effect.gen(function* () {
     if (environment.platform === "darwin") {
       window.setAutoHideCursor(false);
     }
+
     let boundsPersistFiber: Fiber.Fiber<void, never> | undefined;
     let pendingBoundsPersistFiber: Fiber.Fiber<void, never> | undefined;
     let boundsPersistenceEnabled = persistedBounds === null || restoredPersistedBounds;
+
     const readPersistableBounds = (): DesktopAppSettings.DesktopWindowBounds | null => {
       if (window.isDestroyed()) {
         return null;
       }
+
       const bounds =
         window.isFullScreen() || window.isMaximized() || window.isMinimized()
           ? window.getNormalBounds()
           : window.getBounds();
+
       return DesktopAppSettings.normalizeMainWindowBounds({
         x: Math.round(bounds.x),
         y: Math.round(bounds.y),
@@ -270,16 +280,21 @@ export const make = Effect.gen(function* () {
         height: Math.round(bounds.height),
       });
     };
+
     const fallbackWindowBounds = boundsPersistenceEnabled ? null : readPersistableBounds();
     const fallbackWindowMaximized = persistedSettings.mainWindowMaximized;
+
     const persistCurrentBounds = (): Fiber.Fiber<void, never> | undefined => {
       if (!boundsPersistenceEnabled) {
         return pendingBoundsPersistFiber;
       }
+
       const bounds = readPersistableBounds();
+
       if (bounds === null) {
         return pendingBoundsPersistFiber;
       }
+
       pendingBoundsPersistFiber = runFork(
         desktopSettings.setMainWindowBounds(bounds, window.isMaximized()).pipe(
           Effect.asVoid,
@@ -290,11 +305,14 @@ export const make = Effect.gen(function* () {
           ),
         ),
       );
+
       return pendingBoundsPersistFiber;
     };
+
     const scheduleBoundsPersist = () => {
       if (!boundsPersistenceEnabled) {
         const currentBounds = readPersistableBounds();
+
         if (
           currentBounds === null ||
           (fallbackWindowBounds !== null &&
@@ -304,12 +322,15 @@ export const make = Effect.gen(function* () {
           return;
         }
       }
+
       boundsPersistenceEnabled = true;
+
       if (boundsPersistFiber !== undefined) {
         const fiber = boundsPersistFiber;
         boundsPersistFiber = undefined;
         runFork(Fiber.interrupt(fiber));
       }
+
       boundsPersistFiber = runFork(
         Effect.sleep(MAIN_WINDOW_BOUNDS_PERSIST_DEBOUNCE_MS).pipe(
           Effect.andThen(
@@ -321,22 +342,27 @@ export const make = Effect.gen(function* () {
         ),
       );
     };
+
     const clearBoundsPersist = () => {
       if (boundsPersistFiber === undefined) {
         return;
       }
+
       const fiber = boundsPersistFiber;
       boundsPersistFiber = undefined;
       runFork(Fiber.interrupt(fiber));
     };
+
     const flushBoundsPersist = Effect.sync(() => {
       clearBoundsPersist();
+
       return persistCurrentBounds();
     }).pipe(
       Effect.flatMap((fiber) =>
         fiber === undefined ? Effect.void : Fiber.join(fiber).pipe(Effect.asVoid),
       ),
     );
+
     flushMainWindowBounds = flushBoundsPersist;
 
     yield* previewManager.setMainWindow(window);
@@ -346,8 +372,10 @@ export const make = Effect.gen(function* () {
         !previewManager.isBrowserPartition(params.partition)
       ) {
         event.preventDefault();
+
         return;
       }
+
       webPreferences.sandbox = true;
       webPreferences.nodeIntegration = false;
       webPreferences.nodeIntegrationInSubFrames = false;
@@ -355,6 +383,7 @@ export const make = Effect.gen(function* () {
     });
 
     const contextMenuContents = new WeakSet<Electron.WebContents>();
+
     const installContextMenu = (
       ownerWindow: Electron.BrowserWindow,
       contents: Electron.WebContents,
@@ -363,6 +392,7 @@ export const make = Effect.gen(function* () {
       contextMenuContents.add(contents);
       contents.on("context-menu", (event, params) => {
         event.preventDefault();
+
         if (contents.isDestroyed() || ownerWindow.isDestroyed()) return;
         // Native editing roles act on the focused contents, which may still be
         // the host renderer when the user right-clicks inside a browser guest.
@@ -379,9 +409,11 @@ export const make = Effect.gen(function* () {
               },
             });
           }
+
           if (params.dictionarySuggestions.length === 0) {
             menuTemplate.push({ label: "No suggestions", enabled: false });
           }
+
           menuTemplate.push({ type: "separator" });
         }
 
@@ -426,6 +458,7 @@ export const make = Effect.gen(function* () {
         installContextMenu(popup, popup.webContents);
       });
     };
+
     installContextMenu(window, window.webContents);
     window.webContents.on("did-attach-webview", (_event, contents) => {
       installContextMenu(window, contents);
@@ -435,6 +468,7 @@ export const make = Effect.gen(function* () {
       if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
         void runPromise(electronShell.openExternal(url));
       }
+
       return { action: "deny" };
     });
     window.webContents.on("will-navigate", (event, url) => {
@@ -448,6 +482,7 @@ export const make = Effect.gen(function* () {
       }
 
       event.preventDefault();
+
       if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
         void runPromise(electronShell.openExternal(url));
       }
@@ -483,10 +518,13 @@ export const make = Effect.gen(function* () {
         void runPromise(electronApp.quit);
       },
     });
+
     window.webContents.on("before-input-event", (event, input) => {
       quitShortcutHandler(event, input);
+
       if (input.type !== "keyDown" || !input.isAutoRepeat) return;
       const modifier = environment.platform === "darwin" ? input.meta : input.control;
+
       if (modifier && !input.alt && !input.shift && input.key.toLowerCase() === "w") {
         event.preventDefault();
       }
@@ -516,20 +554,25 @@ export const make = Effect.gen(function* () {
     let developmentLoadRetryIndex = 0;
     let developmentLoadRetryFiber: Fiber.Fiber<void, never> | undefined;
     let rendererRecoveryTimestamps: number[] = [];
+
     const clearDevelopmentLoadRetry = () => {
       if (developmentLoadRetryFiber === undefined) {
         return;
       }
+
       const retryFiber = developmentLoadRetryFiber;
       developmentLoadRetryFiber = undefined;
       runFork(Fiber.interrupt(retryFiber));
     };
+
     const loadApplication = () => {
       if (window.isDestroyed()) {
         return;
       }
+
       void window.loadURL(applicationUrl).catch(() => undefined);
     };
+
     const scheduleDevelopmentLoadRetry = () => {
       if (developmentLoadRetryFiber !== undefined || window.isDestroyed()) {
         return undefined;
@@ -539,6 +582,7 @@ export const make = Effect.gen(function* () {
         developmentLoadRetryIndex,
         DEVELOPMENT_LOAD_RETRY_DELAYS_MS.length - 1,
       );
+
       const retryInMs = DEVELOPMENT_LOAD_RETRY_DELAYS_MS[retryIndex] ?? 2_000;
       developmentLoadRetryIndex += 1;
       developmentLoadRetryFiber = runFork(
@@ -546,6 +590,7 @@ export const make = Effect.gen(function* () {
           Effect.andThen(
             Effect.sync(() => {
               developmentLoadRetryFiber = undefined;
+
               if (!window.isDestroyed()) {
                 loadApplication();
               }
@@ -553,6 +598,7 @@ export const make = Effect.gen(function* () {
           ),
         ),
       );
+
       return retryInMs;
     };
 
@@ -566,6 +612,7 @@ export const make = Effect.gen(function* () {
       ) {
         return;
       }
+
       clearDevelopmentLoadRetry();
       developmentLoadRetryIndex = 0;
       window.setTitle(environment.displayName);
@@ -576,6 +623,7 @@ export const make = Effect.gen(function* () {
         if (!isMainFrame) {
           return;
         }
+
         const retryInMs =
           environment.isDevelopment &&
           isRetryableDevelopmentRendererLoadFailure({
@@ -586,6 +634,7 @@ export const make = Effect.gen(function* () {
           })
             ? scheduleDevelopmentLoadRetry()
             : undefined;
+
         void runPromise(
           logWindowWarning("main window failed to load", {
             errorCode,
@@ -601,6 +650,7 @@ export const make = Effect.gen(function* () {
         details.reason === "crashed" ||
         details.reason === "oom" ||
         details.reason === "abnormal-exit";
+
       // Long sessions can OOM the renderer (V8 heap exhaustion from
       // accumulated thread state). Without a reload the user is left staring
       // at a dead white window while agents keep running invisibly, so
@@ -613,20 +663,25 @@ export const make = Effect.gen(function* () {
           rendererRecoveryTimestamps = rendererRecoveryTimestamps.filter(
             (timestamp) => now - timestamp < RENDERER_RECOVERY_WINDOW_MS,
           );
+
           const shouldRecover =
             recoverable &&
             !window.isDestroyed() &&
             rendererRecoveryTimestamps.length < RENDERER_RECOVERY_MAX_ATTEMPTS;
+
           yield* logWindowWarning("main window render process gone", {
             reason: details.reason,
             exitCode: details.exitCode,
             recovering: shouldRecover,
           });
+
           if (!shouldRecover) {
             return;
           }
+
           rendererRecoveryTimestamps.push(now);
           yield* Effect.sleep(RENDERER_RECOVERY_RELOAD_DELAY_MS);
+
           if (!window.isDestroyed()) {
             loadApplication();
           }
@@ -635,20 +690,24 @@ export const make = Effect.gen(function* () {
     });
 
     const revealSubscribers: RevealSubscription[] = [(fire) => window.once("ready-to-show", fire)];
+
     if (environment.platform === "linux") {
       revealSubscribers.push((fire) => window.webContents.once("did-finish-load", fire));
     }
+
     bindFirstRevealTrigger(revealSubscribers, () => {
       // Boot is done; hand the window back to normal hidden-window throttling
       // (see the backgroundThrottling comment on the create options above).
       if (!window.isDestroyed()) {
         window.webContents.setBackgroundThrottling(true);
       }
+
       // Reveal the real window, then close the connecting splash (if any) so the
       // two don't overlap and there's no blank gap between them.
       if (persistedSettings.mainWindowMaximized) {
         window.maximize();
       }
+
       void runPromise(Effect.andThen(electronWindow.reveal(window), dismissConnectingSplash));
     });
 
@@ -666,27 +725,33 @@ export const make = Effect.gen(function* () {
     const window = yield* createWindow();
     yield* electronWindow.setMain(window);
     yield* logWindowInfo("main window created");
+
     return window;
   }).pipe(Effect.withSpan("desktop.window.createMain"));
 
   const ensureMain = Effect.gen(function* () {
     const existingWindow = yield* currentMainWindow;
+
     if (Option.isSome(existingWindow)) {
       return existingWindow.value;
     }
+
     return yield* createMain;
   }).pipe(Effect.withSpan("desktop.window.ensureMain"));
 
   const revealOrCreateMain = Effect.gen(function* () {
     const window = yield* ensureMain;
     yield* electronWindow.reveal(window);
+
     return window;
   }).pipe(Effect.withSpan("desktop.window.revealOrCreateMain"));
 
   const createMainIfBackendReady = Effect.gen(function* () {
     const backendReady = yield* Ref.get(backendReadyRef);
+
     if (!backendReady) return;
     const existingWindow = yield* currentMainWindow;
+
     if (Option.isSome(existingWindow)) return;
     yield* createMain;
   }).pipe(Effect.withSpan("desktop.window.createMainIfBackendReady"));
@@ -694,11 +759,14 @@ export const make = Effect.gen(function* () {
   const showConnectingSplash = Effect.gen(function* () {
     // Only when nothing is shown yet: no real window, no existing splash.
     const existingSplash = yield* Ref.get(splashWindowRef);
+
     if (Option.isSome(existingSplash)) return;
     const existingWindow = yield* electronWindow.currentMainOrFirst;
+
     if (Option.isSome(existingWindow)) return;
 
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+
     const splash = yield* electronWindow.create({
       width: 360,
       height: 220,
@@ -718,6 +786,7 @@ export const make = Effect.gen(function* () {
         sandbox: true,
       },
     });
+
     yield* Ref.set(splashWindowRef, Option.some(splash));
     splash.once("closed", () => {
       void runPromise(Ref.set(splashWindowRef, Option.none()));
@@ -743,23 +812,30 @@ export const make = Effect.gen(function* () {
     revealOrCreateMain,
     activate: Effect.gen(function* () {
       const existingWindow = yield* currentMainWindow;
+
       if (Option.isSome(existingWindow)) {
         yield* electronWindow.reveal(existingWindow.value);
+
         return;
       }
+
       // No real main window yet. While the backend is still cold-booting,
       // re-reveal the connecting splash so taskbar/dock activation brings it
       // back instead of doing nothing. Once the backend is ready we fall
       // through to (re)create the real main -- including retrying a previously
       // failed open the pool swallowed -- rather than latching onto the splash.
       const backendReady = yield* Ref.get(backendReadyRef);
+
       if (!backendReady) {
         const splash = yield* Ref.get(splashWindowRef);
+
         if (Option.isSome(splash)) {
           yield* electronWindow.reveal(splash.value);
+
           return;
         }
       }
+
       yield* createMainIfBackendReady;
     }).pipe(Effect.withSpan("desktop.window.activate")),
     createMainIfBackendReady,
@@ -778,9 +854,11 @@ export const make = Effect.gen(function* () {
     dispatchMenuAction: Effect.fn("desktop.window.dispatchMenuAction")(function* (action) {
       yield* Effect.annotateCurrentSpan({ action });
       const existingWindow = yield* focusedMainWindow;
+
       if (Option.isNone(existingWindow) && !(yield* Ref.get(backendReadyRef))) {
         return;
       }
+
       const targetWindow = Option.isSome(existingWindow) ? existingWindow.value : yield* ensureMain;
 
       const send = () => {
@@ -791,6 +869,7 @@ export const make = Effect.gen(function* () {
 
       if (targetWindow.webContents.isLoadingMainFrame()) {
         targetWindow.webContents.once("did-finish-load", send);
+
         return;
       }
 
@@ -799,9 +878,11 @@ export const make = Effect.gen(function* () {
     zoomMain: Effect.fn("desktop.window.zoomMain")(function* (direction) {
       yield* Effect.annotateCurrentSpan({ direction });
       const window = yield* focusedMainWindow;
+
       if (Option.isNone(window) || window.value.isDestroyed()) {
         return;
       }
+
       const webContents = window.value.webContents;
       // Same step size as the Electron zoomIn/zoomOut menu roles.
       webContents.setZoomLevel(

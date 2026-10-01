@@ -116,10 +116,12 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const jpeg = Buffer.from("shared-preview-frame");
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => jpeg,
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
         const { pictureInPictureWindow, send } = makeTestPictureInPictureWindow();
         browserWindowConstructor.mockImplementation(function () {
@@ -159,6 +161,7 @@ describe("PreviewManager", () => {
           toJPEG: () => Buffer.from("native-close-preview-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
         const { pictureInPictureWindow } = makeTestPictureInPictureWindow();
         browserWindowConstructor.mockImplementation(function () {
@@ -190,10 +193,12 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const jpeg = Buffer.from("retry-preview-frame");
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => jpeg,
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
         const { pictureInPictureWindow, send } = makeTestPictureInPictureWindow();
         send.mockImplementationOnce(() => {
@@ -221,13 +226,17 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const jpeg = Buffer.from("reloaded-preview-frame");
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => jpeg,
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
+
         const { pictureInPictureWindow, send, webContentsListeners } =
           makeTestPictureInPictureWindow();
+
         browserWindowConstructor.mockImplementation(function () {
           return pictureInPictureWindow;
         });
@@ -253,6 +262,7 @@ describe("PreviewManager", () => {
           toJPEG: () => Buffer.from("valid-preview-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         };
+
         const capturePage = vi.fn(async () => validImage);
         capturePage.mockResolvedValueOnce({
           toJPEG: () => Buffer.from("empty-preview-frame"),
@@ -288,6 +298,7 @@ describe("PreviewManager", () => {
           toJPEG: () => Buffer.from("closing-preview-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
         const { pictureInPictureWindow } = makeTestPictureInPictureWindow();
         pictureInPictureWindow.showInactive.mockImplementationOnce(() => {
@@ -322,13 +333,16 @@ describe("PreviewManager", () => {
           toJPEG: () => Buffer.from("serialized-preview-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
+
         const { pictureInPictureWindow: initializingWindow } = makeTestPictureInPictureWindow(
           () =>
             new Promise<void>(() => {
               // Simulate a renderer load that never settles.
             }),
         );
+
         const { pictureInPictureWindow: reopenedWindow } = makeTestPictureInPictureWindow();
         browserWindowConstructor
           .mockImplementationOnce(function () {
@@ -349,23 +363,30 @@ describe("PreviewManager", () => {
         const firstOpen = yield* manager
           .openPictureInPicture("tab_concurrent_pip")
           .pipe(Effect.forkChild);
+
         yield* Effect.yieldNow;
+
         const secondOpen = yield* manager
           .openPictureInPicture("tab_concurrent_pip")
           .pipe(Effect.forkChild);
+
         yield* Effect.yieldNow;
+
         const close = yield* manager
           .closePictureInPicture("tab_concurrent_pip")
           .pipe(Effect.forkChild);
+
         yield* Effect.yieldNow;
 
         expect(browserWindowConstructor).toHaveBeenCalledOnce();
         expect(initializingWindow.loadURL).toHaveBeenCalledOnce();
         expect(initializingWindow.close).toHaveBeenCalledOnce();
+
         const [firstOpenExit, secondOpenExit] = yield* Effect.all([
           Fiber.await(firstOpen),
           Fiber.await(secondOpen),
         ]);
+
         yield* Fiber.join(close);
 
         expect(Exit.hasInterrupts(firstOpenExit)).toBe(true);
@@ -400,47 +421,59 @@ describe("PreviewManager", () => {
           toJPEG: () => Buffer.from("stale-preview-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         const replacementCapturePage = vi.fn(async () => ({
           toJPEG: () => Buffer.from("replacement-preview-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         const initialWebContents = makeTestPreviewWebContents(initialCapturePage, 42);
         const replacementWebContents = makeTestPreviewWebContents(replacementCapturePage, 43);
         fromId.mockImplementation((webContentsId?: number) => {
           if (webContentsId === 42) return initialWebContents;
+
           if (webContentsId === 43) return replacementWebContents;
+
           return null;
         });
         let resolveLoad: (() => void) | undefined;
+
         const { pictureInPictureWindow } = makeTestPictureInPictureWindow(
           () =>
             new Promise<void>((resolve) => {
               resolveLoad = resolve;
             }),
         );
+
         browserWindowConstructor.mockImplementation(function () {
           return pictureInPictureWindow;
         });
 
         yield* manager.createTab("tab_replaced_webview");
         yield* manager.registerWebview("tab_replaced_webview", 42);
+
         const open = yield* manager
           .openPictureInPicture("tab_replaced_webview")
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Effect.yieldNow;
         expect(pictureInPictureWindow.loadURL).toHaveBeenCalledOnce();
         expect(resolveLoad).toBeDefined();
+
         const concurrentOpen = yield* manager
           .openPictureInPicture("tab_replaced_webview")
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Effect.yieldNow;
 
         yield* manager.registerWebview("tab_replaced_webview", 43);
         resolveLoad?.();
 
         const openExits = yield* Effect.all([Fiber.await(open), Fiber.await(concurrentOpen)]);
+
         for (const openExit of openExits) {
           expect(Exit.isFailure(openExit)).toBe(true);
+
           if (Exit.isSuccess(openExit)) continue;
           const error = Option.getOrThrow(Cause.findErrorOption(openExit.cause));
           expect(error).toMatchObject({
@@ -450,6 +483,7 @@ describe("PreviewManager", () => {
             webContentsId: 42,
           });
         }
+
         expect(browserWindowConstructor).toHaveBeenCalledOnce();
         expect(pictureInPictureWindow.close).toHaveBeenCalledOnce();
         expect(pictureInPictureWindow.showInactive).not.toHaveBeenCalled();

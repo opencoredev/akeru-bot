@@ -34,13 +34,16 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("resolvePrimary starts from server.asar without materializing the WSL tree", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
+
       const resourcesPath = `${baseDir}/resources`;
 
       const config = yield* Effect.gen(function* () {
         const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+
         return yield* configuration.resolvePrimary;
       }).pipe(
         Effect.provide(
@@ -76,16 +79,20 @@ describe("DesktopBackendConfiguration", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
+
       const entryPath = path.join(baseDir, "apps/server/dist/bin.mjs");
       yield* fileSystem.makeDirectory(path.dirname(entryPath), { recursive: true });
       yield* fileSystem.writeFileString(entryPath, "");
 
       const observedDistros: Array<string | null> = [];
+
       const config = yield* Effect.gen(function* () {
         const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+
         return yield* configuration.resolveWsl({ port: 5000, distro: null });
       }).pipe(
         Effect.provide(
@@ -102,14 +109,17 @@ describe("DesktopBackendConfiguration", () => {
                 ],
                 windowsToWslPath: (distro) => {
                   observedDistros.push(distro);
+
                   return Option.some("/repo/apps/server/dist/bin.mjs");
                 },
                 ensureNodePty: (distro) => {
                   observedDistros.push(distro);
+
                   return { ok: true, nodePath: "/usr/bin/node", resolvedPath: "/usr/bin:/bin" };
                 },
                 getDistroIp: (distro) => {
                   observedDistros.push(distro);
+
                   return Option.some("172.27.0.99");
                 },
               }),
@@ -135,6 +145,7 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("resolveWsl preserves existing WSLENV entries when forwarding backend secrets", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
@@ -142,6 +153,7 @@ describe("DesktopBackendConfiguration", () => {
       const previousWslEnv = process.env.WSLENV;
       const previousOpenAiKey = process.env.OPENAI_API_KEY;
       const previousAnthropicKey = process.env.ANTHROPIC_API_KEY;
+
       try {
         process.env.WSLENV = "GOPATH/p:OPENAI_API_KEY/u:EMPTY::AZURE_DEVOPS_EXT_PAT/u";
         process.env.OPENAI_API_KEY = "openai-key";
@@ -201,6 +213,7 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("resolveWsl keeps a transient distro-list failure retryable", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
@@ -237,6 +250,7 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("resolveWsl surfaces sidecar extraction failures through typed preflight", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
@@ -279,6 +293,7 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("resolveWsl marks a missing selected distro as a fatal preflight failure", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
@@ -312,6 +327,7 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("resolvePrimaryLabel reports the WSL distro when wsl-only and WSL is available", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
@@ -344,6 +360,7 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("resolvePrimaryLabel reports Windows when wsl-only but WSL is unavailable", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
@@ -405,10 +422,12 @@ describe("DesktopBackendConfiguration", () => {
         Layer.provide(NodeServices.layer),
       ),
     );
+
     try {
       const configuration = await runtime.runPromise(
         DesktopBackendConfiguration.DesktopBackendConfiguration,
       );
+
       // oxlint-disable-next-line akeru/no-manual-effect-runtime-in-tests -- Same reason: this is the synchronous resolution the IPC handler performs.
       const label = Effect.runSync(configuration.resolvePrimaryLabel);
       assert.equal(typeof label, "string");

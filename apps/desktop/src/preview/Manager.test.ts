@@ -141,6 +141,7 @@ describe("PreviewManager", () => {
         const exit = yield* Effect.exit(manager.registerWebview("tab_destroyed_registration", 42));
 
         expect(Exit.isFailure(exit)).toBe(true);
+
         if (Exit.isFailure(exit)) {
           expect(Option.getOrThrow(Cause.findErrorOption(exit.cause))).toMatchObject({
             _tag: "PreviewWebContentsNotFoundError",
@@ -148,6 +149,7 @@ describe("PreviewManager", () => {
             webContentsId: 42,
           });
         }
+
         expect(getType).not.toHaveBeenCalled();
       }),
     ),
@@ -155,6 +157,7 @@ describe("PreviewManager", () => {
 
   effectIt.effect("isolates failed state listeners and continues delivery", () => {
     const loggedErrors: Array<unknown> = [];
+
     const logger = Logger.make(({ message }) => {
       for (const value of Array.isArray(message) ? message : [message]) {
         if (typeof value === "object" && value !== null && "cause" in value) {
@@ -162,6 +165,7 @@ describe("PreviewManager", () => {
         }
       }
     });
+
     const deliveryError = new ElectronWindow.ElectronWindowOperationError({
       operation: "send-window-message",
       platform: "darwin",
@@ -169,6 +173,7 @@ describe("PreviewManager", () => {
       channel: "preview:state-change",
       cause: new Error("renderer unavailable"),
     });
+
     const delivered = vi.fn();
 
     return withManager((manager) =>
@@ -207,11 +212,13 @@ describe("PreviewManager", () => {
         const exit = yield* Effect.scoped(
           Effect.gen(function* () {
             yield* manager.subscribeStateChanges(() => Effect.interrupt);
+
             return yield* Effect.exit(manager.createTab("tab_interrupted_listener"));
           }),
         );
 
         expect(Exit.isFailure(exit)).toBe(true);
+
         if (Exit.isFailure(exit)) {
           expect(Cause.hasInterrupts(exit.cause)).toBe(true);
         }
@@ -311,16 +318,21 @@ describe("PreviewManager", () => {
           toJPEG: () => Buffer.from("close-race-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         const firstWebContents = makeTestPreviewWebContents(capturePage, 42);
         const replacementWebContents = makeTestPreviewWebContents(capturePage, 43);
+
         const replacementListenerSpies = replacementWebContents as unknown as {
           readonly on: ReturnType<typeof vi.fn>;
           readonly off: ReturnType<typeof vi.fn>;
           readonly ipc: { readonly off: ReturnType<typeof vi.fn> };
         };
+
         fromId.mockImplementation((id) => {
           if (id === 42) return firstWebContents;
+
           if (id === 43) return replacementWebContents;
+
           return null;
         });
         const { pictureInPictureWindow } = makeTestPictureInPictureWindow();
@@ -345,13 +357,17 @@ describe("PreviewManager", () => {
         const closeFiber = yield* manager
           .closeTab("tab_close_register_race")
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Deferred.await(closeCleanupPaused);
+
         const recreateFiber = yield* manager
           .createTab("tab_close_register_race")
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         const registrationFiber = yield* manager
           .registerWebview("tab_close_register_race", 43)
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* Effect.yieldNow;
         expect(replacementListenerSpies.on).not.toHaveBeenCalled();
         yield* manager.closeTab("tab_close_register_race");
@@ -363,12 +379,14 @@ describe("PreviewManager", () => {
 
         for (const exit of [registrationExit, recordingExit]) {
           expect(Exit.isFailure(exit)).toBe(true);
+
           if (Exit.isSuccess(exit)) continue;
           expect(Option.getOrThrow(Cause.findErrorOption(exit.cause))).toMatchObject({
             _tag: "PreviewTabNotFoundError",
             tabId: "tab_close_register_race",
           });
         }
+
         expect(replacementListenerSpies.on).not.toHaveBeenCalled();
         expect(replacementListenerSpies.off).not.toHaveBeenCalled();
         expect(replacementListenerSpies.ipc.off).not.toHaveBeenCalled();

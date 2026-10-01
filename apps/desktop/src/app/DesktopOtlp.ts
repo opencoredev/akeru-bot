@@ -28,19 +28,23 @@ export const readPersistedOtlpTracesUrl: Effect.Effect<
   const fileSystem = yield* FileSystem.FileSystem;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const raw = yield* fileSystem.readFileString(environment.serverSettingsPath).pipe(Effect.option);
+
   if (Option.isNone(raw)) {
     return Option.none();
   }
 
   const parsed = parsePersistedServerObservabilitySettings(raw.value);
+
   return Option.fromNullishOr(parsed.otlpTracesUrl);
 });
 
 export const resolveOtlpTracesUrl = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
   if (Option.isSome(environment.otlpTracesUrl)) {
     return environment.otlpTracesUrl;
   }
+
   return yield* readPersistedOtlpTracesUrl;
 });
 
@@ -49,12 +53,14 @@ export const tracerLayer = Layer.unwrap(
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     const otlpTracesUrl = yield* resolveOtlpTracesUrl;
     const tracePath = environment.path.join(environment.logDir, "desktop.trace.ndjson");
+
     const sink = yield* makeTraceSink({
       filePath: tracePath,
       maxBytes: DESKTOP_LOG_FILE_MAX_BYTES,
       maxFiles: DESKTOP_LOG_FILE_MAX_FILES,
       batchWindowMs: DESKTOP_TRACE_BATCH_WINDOW_MS,
     });
+
     const delegate = Option.isNone(otlpTracesUrl)
       ? undefined
       : yield* OtlpTracer.make({
@@ -68,6 +74,7 @@ export const tracerLayer = Layer.unwrap(
             },
           },
         });
+
     const tracer = yield* makeLocalFileTracer({
       filePath: tracePath,
       maxBytes: DESKTOP_LOG_FILE_MAX_BYTES,

@@ -72,6 +72,7 @@ export const migrateSavedEnvironmentRecords = Effect.fn(
         wsBaseUrl: record.wsBaseUrl,
       }),
     );
+
     const token = yield* savedEnvironments.getSecret(record.environmentId).pipe(
       Effect.mapError(
         (cause) =>
@@ -83,6 +84,7 @@ export const migrateSavedEnvironmentRecords = Effect.fn(
           }),
       ),
     );
+
     if (Option.isSome(token)) {
       credentials.push({
         connectionId: id,

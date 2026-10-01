@@ -46,7 +46,9 @@ const destination = {
   installationId: "67890",
   privateKey: "private-key",
 };
+
 const signJwt = () => "app-jwt";
+
 const installationTokenResponse = () => Response.json({ token: "installation-token" });
 
 describe("GitHub feedback delivery", () => {
@@ -63,11 +65,13 @@ describe("GitHub feedback delivery", () => {
     const { privateKey, publicKey } = NodeCrypto.generateKeyPairSync("rsa", {
       modulusLength: 2_048,
     });
+
     const jwt = createGitHubAppJwt(
       "12345",
       privateKey.export({ format: "pem", type: "pkcs1" }).toString(),
       new Date("2026-09-14T12:00:00.000Z"),
     );
+
     const [header, payload, signature] = jwt.split(".");
 
     expect(JSON.parse(NodeBuffer.Buffer.from(header ?? "", "base64url").toString())).toEqual({
@@ -91,6 +95,7 @@ describe("GitHub feedback delivery", () => {
 
   it("creates and records a normal GitHub issue", async () => {
     const store = outbox();
+
     const request = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(installationTokenResponse())
@@ -135,6 +140,7 @@ describe("GitHub feedback delivery", () => {
 
   it("retries a confirmed GitHub rejection", async () => {
     const store = outbox();
+
     const request = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(installationTokenResponse())
@@ -163,6 +169,7 @@ describe("GitHub feedback delivery", () => {
   it("flags an ambiguous issue-creation failure without retrying into a duplicate", async () => {
     const store = outbox();
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
     const request = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(installationTokenResponse())

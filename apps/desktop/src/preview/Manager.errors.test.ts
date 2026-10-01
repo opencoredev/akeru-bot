@@ -8,6 +8,7 @@ const encodePreviewManagerError = Schema.encodeSync(PreviewManager.PreviewManage
 describe("PreviewOperationError", () => {
   it("keeps timeline detail separate from its structured message", () => {
     const cause = new Error("CDP command failed with an invalid node id");
+
     const error = new PreviewManager.PreviewOperationError({
       operation: "click.DOM.resolveNode",
       tabId: "tab_1",
@@ -24,11 +25,13 @@ describe("Preview automation diagnostics", () => {
   it("keeps browser exception detail out of structural diagnostics", () => {
     const secret = "unrelated-browser-payload-secret";
     const detail = "ReferenceError: missingValue is not defined";
+
     const cause = {
       text: "Uncaught Error",
       exception: { description: detail },
       unsafePayload: secret,
     };
+
     const error = new PreviewManager.PreviewAutomationEvaluationError({
       tabId: "tab_1",
       detailKind: "exception-description",
@@ -37,6 +40,7 @@ describe("Preview automation diagnostics", () => {
     });
 
     const encoded = encodePreviewManagerError(error);
+
     const { cause: encodedCause, ...encodedDiagnostics } = encoded as typeof encoded & {
       readonly cause?: unknown;
     };
@@ -57,6 +61,7 @@ describe("Preview automation diagnostics", () => {
     const selector = "role=button[name='selector-secret']";
     const reason = "Unexpected token near reason-secret";
     const cause = { invalidSelector: true as const, message: reason };
+
     const error = new PreviewManager.PreviewAutomationInvalidSelectorError({
       operation: "click",
       tabId: "tab_1",
@@ -67,6 +72,7 @@ describe("Preview automation diagnostics", () => {
     });
 
     const encoded = encodePreviewManagerError(error);
+
     const { cause: encodedCause, ...encodedDiagnostics } = encoded as typeof encoded & {
       readonly cause?: unknown;
     };
@@ -93,6 +99,7 @@ describe("Preview automation diagnostics", () => {
 
   it("does not retain a missing target locator", () => {
     const selector = "[data-token='target-secret']";
+
     const error = new PreviewManager.PreviewAutomationTargetNotFoundError({
       operation: "scroll",
       tabId: "tab_1",

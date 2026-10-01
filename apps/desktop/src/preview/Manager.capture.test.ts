@@ -152,6 +152,7 @@ describe("PreviewManager", () => {
         capturePage.mockRejectedValueOnce(captureCause);
         const exit = yield* Effect.exit(manager.captureScreenshot("tab_1"));
         expect(Exit.isFailure(exit)).toBe(true);
+
         if (Exit.isSuccess(exit)) return;
         const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
         expect(error).toMatchObject({
@@ -169,14 +170,17 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const setBackgroundThrottling = vi.fn();
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => Buffer.from("recording-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         const webContentsById = new Map([
           [41, makeTestPreviewWebContents(capturePage, 41)],
           [42, makeTestPreviewWebContents(capturePage, 42)],
         ]);
+
         fromId.mockImplementation((id) =>
           id === undefined ? null : (webContentsById.get(id) ?? null),
         );
@@ -208,10 +212,12 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const setBackgroundThrottling = vi.fn<(enabled: boolean) => void>();
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => Buffer.from("recording-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
 
         yield* manager.createTab("tab_capture_throttling_failure");
@@ -225,9 +231,11 @@ describe("PreviewManager", () => {
         setBackgroundThrottling.mockImplementationOnce(() => {
           throw new Error("start throttling update failed");
         });
+
         const failedStart = yield* Effect.exit(
           manager.startRecording("tab_capture_throttling_failure"),
         );
+
         expect(Exit.isFailure(failedStart)).toBe(true);
 
         yield* manager.startRecording("tab_capture_throttling_failure");
@@ -259,10 +267,12 @@ describe("PreviewManager", () => {
         const setBackgroundThrottling = vi.fn(() => {
           throw new Error("replacement throttling update failed");
         });
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => Buffer.from("recording-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
 
         yield* manager.createTab("tab_capture_replacement_failure");
@@ -276,6 +286,7 @@ describe("PreviewManager", () => {
             webContents: { setBackgroundThrottling },
           } as never),
         );
+
         expect(Exit.isFailure(failedReplacement)).toBe(true);
 
         yield* manager.stopRecording("tab_capture_replacement_failure");
@@ -290,10 +301,12 @@ describe("PreviewManager", () => {
         let closeFirstWindow: (() => void) | undefined;
         const firstWindowThrottling = vi.fn();
         const replacementWindowThrottling = vi.fn();
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => Buffer.from("recording-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage));
 
         yield* manager.createTab("tab_replaced_window_close");
@@ -327,14 +340,17 @@ describe("PreviewManager", () => {
         let closeMainWindow: (() => void) | undefined;
         const firstWindowThrottling = vi.fn();
         const replacementWindowThrottling = vi.fn();
+
         const capturePage = vi.fn(async () => ({
           toJPEG: () => Buffer.from("recording-frame"),
           getSize: () => ({ width: 1280, height: 720 }),
         }));
+
         const webContentsById = new Map([
           [42, makeTestPreviewWebContents(capturePage, 42)],
           [43, makeTestPreviewWebContents(capturePage, 43)],
         ]);
+
         fromId.mockImplementation((id) =>
           id === undefined ? null : (webContentsById.get(id) ?? null),
         );
@@ -356,12 +372,14 @@ describe("PreviewManager", () => {
         closeMainWindow?.();
         const racedStart = yield* Effect.exit(manager.startRecording("tab_window_close_race"));
         expect(Exit.isFailure(racedStart)).toBe(true);
+
         if (Exit.isFailure(racedStart)) {
           expect(Option.getOrThrow(Cause.findErrorOption(racedStart.cause))).toMatchObject({
             _tag: "PreviewMainWindowClosedError",
             tabId: "tab_window_close_race",
           });
         }
+
         yield* Effect.yieldNow;
         yield* Effect.yieldNow;
 
@@ -503,6 +521,7 @@ describe("PreviewManager", () => {
         );
         const exit = yield* Effect.exit(manager.revealArtifact("/tmp/t3/dev/settings.json"));
         expect(Exit.isFailure(exit)).toBe(true);
+
         if (Exit.isSuccess(exit)) return;
         const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
         expect(error).toMatchObject({
@@ -524,10 +543,13 @@ describe("PreviewManager", () => {
 
         expect(createFromPath).toHaveBeenCalledWith(artifactPath);
         expect(writeImage).toHaveBeenCalledOnce();
+
         const exit = yield* Effect.exit(
           manager.copyArtifactToClipboard("/tmp/t3/dev/settings.json"),
         );
+
         expect(Exit.isFailure(exit)).toBe(true);
+
         if (Exit.isSuccess(exit)) return;
         const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
         expect(error).toMatchObject({
@@ -540,6 +562,7 @@ describe("PreviewManager", () => {
         createFromPath.mockReturnValueOnce({ isEmpty: () => true });
         const invalidImageExit = yield* Effect.exit(manager.copyArtifactToClipboard(artifactPath));
         expect(Exit.isFailure(invalidImageExit)).toBe(true);
+
         if (Exit.isSuccess(invalidImageExit)) return;
         expect(Option.getOrThrow(Cause.findErrorOption(invalidImageExit.cause))).toMatchObject({
           _tag: "PreviewArtifactImageLoadError",

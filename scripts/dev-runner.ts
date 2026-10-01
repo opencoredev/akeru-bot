@@ -85,6 +85,7 @@ const DEV_PORT_PROBE_HOSTS = ["127.0.0.1", "::1"] as const;
  */
 export function isProxiableBindHost(host: string): boolean {
   const normalized = host.trim();
+
   return (
     normalized === "" ||
     normalized === "localhost" ||
@@ -226,9 +227,11 @@ export function checkPortAvailabilityOnHosts<R>(
  */
 export function devPortProbeHosts(configuredHost: string | undefined): ReadonlyArray<string> {
   const host = configuredHost?.trim();
+
   if (!host || DEV_PORT_PROBE_HOSTS.includes(host as (typeof DEV_PORT_PROBE_HOSTS)[number])) {
     return DEV_PORT_PROBE_HOSTS;
   }
+
   return [...DEV_PORT_PROBE_HOSTS, host];
 }
 
@@ -238,6 +241,7 @@ const makeDefaultCheckPortAvailability =
     Effect.gen(function* () {
       const net = yield* NetService.NetService;
       const hosts = role === "web" ? DEV_PORT_PROBE_HOSTS : devPortProbeHosts(configuredHost);
+
       return yield* checkPortAvailabilityOnHosts(port, hosts, (candidatePort, host) =>
         net.canListenOnHost(candidatePort, host),
       );
@@ -280,9 +284,11 @@ export function findFirstAvailableOffset<R = NetService.NetService>({
       }
 
       const checks: Array<Effect.Effect<boolean, never, R>> = [];
+
       if (requireServerPort) {
         checks.push(checkPort(serverPort, "server"));
       }
+
       if (requireWebPort) {
         checks.push(checkPort(webPort, "web"));
       }
@@ -292,6 +298,7 @@ export function findFirstAvailableOffset<R = NetService.NetService>({
       }
 
       const availability = yield* Effect.all(checks);
+
       if (availability.every(Boolean)) {
         return candidate;
       }
@@ -342,6 +349,7 @@ export function resolveModePortOffsets<R = NetService.NetService>({
         requireWebPort: true,
         checkPortAvailability: checkPort,
       });
+
       return { serverOffset: startOffset, webOffset };
     }
 
@@ -356,6 +364,7 @@ export function resolveModePortOffsets<R = NetService.NetService>({
         requireWebPort: false,
         checkPortAvailability: checkPort,
       });
+
       return { serverOffset, webOffset: serverOffset };
     }
 
@@ -432,6 +441,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
     // (gitignored) `.akeru` — see @akeru/shared/devHome for why this must
     // outrank an ambient T3CODE_HOME. `--home-dir` still wins.
     const worktreeHome = yield* resolveWorktreeT3Home(yield* HostProcessWorkingDirectory);
+
     // Trim before choosing: `--home-dir ""` is not a selection, and treating it
     // as one would skip the worktree default and land on the shared home —
     // exactly the outcome this precedence exists to prevent.
@@ -439,6 +449,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       (input.t3Home?.trim() || undefined) ??
       worktreeHome ??
       (hostEnvironment.T3CODE_HOME?.trim() || undefined);
+
     const env = yield* createDevRunnerEnv({
       mode: input.mode,
       baseEnv: hostEnvironment,
@@ -457,6 +468,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       serverOffset !== offset || webOffset !== offset
         ? ` selectedOffset(server=${serverOffset},web=${webOffset})`
         : "";
+
     const baseDir = env.T3CODE_HOME ?? (yield* DEFAULT_T3_HOME);
 
     yield* Effect.logInfo(
@@ -471,6 +483,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
     }
 
     const sharedWebPort = BASE_WEB_PORT + webOffset;
+
     if (input.share) {
       if (input.mode === "dev:server") {
         yield* Effect.logInfo("[dev-runner] --share has no effect for dev:server (no web server).");
@@ -536,12 +549,14 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
           ]
             .filter((entry) => entry && entry.length > 0)
             .join(",");
+
           // The server builds its pairing URL from this, so the URL printed at
           // startup is already the shareable one — no rewriting by hand. An
           // explicit --dev-url still wins.
           if (input.devUrl === undefined) {
             env.VITE_DEV_SERVER_URL = shared.url;
           }
+
           // A shared origin serves a remote browser, where unbundled dev's
           // per-module requests each pay a tailnet round trip — a cold module
           // graph takes minutes to first paint. Bundled dev collapses that to
@@ -550,6 +565,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
           if (env.T3CODE_BUNDLED_DEV === undefined) {
             env.T3CODE_BUNDLED_DEV = "1";
           }
+
           yield* Effect.logInfo(`[dev-runner] shared on tailnet: ${shared.url}`);
         }
       }
@@ -560,12 +576,14 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       [...MODE_ARGS[input.mode], ...input.runArgs],
       { env },
     );
+
     const processContext = {
       mode: input.mode,
       executable: "vp" as const,
       argumentCount: spawnCommand.args.length,
       shell: spawnCommand.shell,
     } as const;
+
     const child = yield* ChildProcess.make(spawnCommand.command, spawnCommand.args, {
       stdin: "inherit",
       stdout: "inherit",
@@ -599,6 +617,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
           }),
       ),
     );
+
     if (exitCode !== 0) {
       return yield* new DevRunnerProcessExitError({
         ...processContext,

@@ -88,6 +88,7 @@ describe("PreviewManager", () => {
         const preview = makeFaviconWebContents({
           url: `http://localhost:3200/${"x".repeat(3_000)}`,
         });
+
         preview.setLoading(true);
         fromId.mockReturnValue(preview.webContents);
         const states: PreviewManager.PreviewTabState[] = [];
@@ -118,9 +119,11 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         let resolveFirst!: (response: Response) => void;
+
         const firstResponse = new Promise<Response>((resolve) => {
           resolveFirst = resolve;
         });
+
         const preview = makeFaviconWebContents({
           fetch: (url) =>
             url.endsWith("first.png")
@@ -131,6 +134,7 @@ describe("PreviewManager", () => {
                   }),
                 ),
         });
+
         fromId.mockReturnValue(preview.webContents);
         const states: PreviewManager.PreviewTabState[] = [];
         yield* manager.subscribeStateChanges((_tabId, state) =>
@@ -164,9 +168,11 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         let rasterizations = 0;
+
         const preview = makeFaviconWebContents({
           rasterize: async () => (++rasterizations === 1 ? null : TEST_FAVICON),
         });
+
         fromId.mockReturnValue(preview.webContents);
         const states: PreviewManager.PreviewTabState[] = [];
         yield* manager.subscribeStateChanges((_tabId, state) =>
@@ -194,12 +200,14 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         let resolveFetch!: (response: Response) => void;
+
         const preview = makeFaviconWebContents({
           fetch: () =>
             new Promise<Response>((resolve) => {
               resolveFetch = resolve;
             }),
         });
+
         fromId.mockReturnValue(preview.webContents);
         const states: PreviewManager.PreviewTabState[] = [];
         yield* manager.subscribeStateChanges((_tabId, state) =>
@@ -363,7 +371,9 @@ describe("PreviewManager", () => {
         const replacement = makeFaviconWebContents({ id: 43 });
         fromId.mockImplementation((id?: number) => {
           if (id === 42) return initial.webContents;
+
           if (id === 43) return replacement.webContents;
+
           return null;
         });
         const states: PreviewManager.PreviewTabState[] = [];
@@ -392,6 +402,7 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         let resolveFetch!: (response: Response) => void;
+
         const initial = makeFaviconWebContents({
           id: 42,
           fetch: () =>
@@ -399,6 +410,7 @@ describe("PreviewManager", () => {
               resolveFetch = resolve;
             }),
         });
+
         const replacement = makeFaviconWebContents({ id: 43 });
         fromId.mockImplementation((id?: number) =>
           id === 42 ? initial.webContents : id === 43 ? replacement.webContents : null,

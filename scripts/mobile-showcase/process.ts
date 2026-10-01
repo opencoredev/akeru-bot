@@ -72,8 +72,10 @@ export async function stopProcess(child: NodeChildProcess.ChildProcess): Promise
   const exited = new Promise<void>((resolve) => {
     child.once("exit", () => resolve());
   });
+
   child.kill("SIGTERM");
   await Promise.race([exited, delay(5_000)]);
+
   if (child.exitCode !== null || child.signalCode !== null) return;
 
   child.kill("SIGKILL");
@@ -86,6 +88,7 @@ export async function waitForPort(
   timeoutMs = 60_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() < deadline) {
     const open = await new Promise<boolean>((resolve) => {
       const socket = NodeNet.createConnection({ host: "127.0.0.1", port });
@@ -99,9 +102,11 @@ export async function waitForPort(
         resolve(false);
       });
     });
+
     if (open) return;
     await delay(500);
   }
+
   throw new Error(`${label} did not begin listening on port ${port} within ${timeoutMs}ms.`);
 }
 
@@ -111,14 +116,17 @@ export async function waitForFileContent(
   timeoutMs = 60_000,
 ): Promise<string> {
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() < deadline) {
     const content = await NodeFSP.readFile(filePath, "utf8").then(
       (value) => value.trim(),
       () => "",
     );
+
     if (content) return content;
     await delay(250);
   }
+
   throw new Error(`${label} was not written to ${filePath} within ${timeoutMs}ms.`);
 }
 
@@ -128,11 +136,14 @@ export async function reserveAvailablePort(): Promise<number> {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
+
       if (!address || typeof address === "string") {
         server.close();
         reject(new Error("Could not reserve a local port for the showcase environment."));
+
         return;
       }
+
       server.close((error) => (error ? reject(error) : resolve(address.port)));
     });
   });

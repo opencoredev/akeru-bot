@@ -68,6 +68,7 @@ export const createRotatingLogFileWriter = Effect.fn("createRotatingLogFileWrite
         value: maxBytes,
       });
     }
+
     if (maxFiles < 1) {
       return yield* new DesktopLogFileWriterConfigurationError({
         option: "maxFiles",
@@ -85,9 +86,11 @@ export const createRotatingLogFileWriter = Effect.fn("createRotatingLogFileWrite
       const entries = yield* fileSystem
         .readDirectory(directory)
         .pipe(Effect.orElseSucceed(() => []));
+
       for (const entry of entries) {
         if (!entry.startsWith(`${baseName}.`)) continue;
         const suffix = Number(entry.slice(baseName.length + 1));
+
         if (!Number.isInteger(suffix) || suffix <= maxFiles) continue;
         yield* fileSystem.remove(path.join(directory, entry), { force: true }).pipe(Effect.ignore);
       }
@@ -95,21 +98,27 @@ export const createRotatingLogFileWriter = Effect.fn("createRotatingLogFileWrite
 
     const rotate = Effect.gen(function* () {
       yield* fileSystem.remove(withSuffix(maxFiles), { force: true }).pipe(Effect.ignore);
+
       for (let index = maxFiles - 1; index >= 1; index -= 1) {
         const source = withSuffix(index);
+
         const sourceExists = yield* fileSystem
           .exists(source)
           .pipe(Effect.orElseSucceed(() => false));
+
         if (sourceExists) {
           yield* fileSystem.rename(source, withSuffix(index + 1));
         }
       }
+
       const currentExists = yield* fileSystem
         .exists(input.filePath)
         .pipe(Effect.orElseSucceed(() => false));
+
       if (currentExists) {
         yield* fileSystem.rename(input.filePath, withSuffix(1));
       }
+
       yield* Ref.set(currentSize, 0);
     }).pipe(
       Effect.catch(() =>
@@ -125,6 +134,7 @@ export const createRotatingLogFileWriter = Effect.fn("createRotatingLogFileWrite
       return mutex.withPermits(1)(
         Effect.gen(function* () {
           const beforeSize = yield* Ref.get(currentSize);
+
           if (beforeSize > 0 && beforeSize + chunk.byteLength > maxBytes) {
             yield* rotate;
           }

@@ -69,6 +69,7 @@ export const writeSettings = Effect.fn("desktop.settings.writeSettings")(functio
 }): Effect.fn.Return<void, DesktopSettingsWriteError> {
   const directory = input.path.dirname(input.settingsPath);
   const tempPath = `${input.settingsPath}.${process.pid}.${input.suffix}.tmp`;
+
   const encoded = yield* encodeDesktopSettingsJson(
     toDesktopSettingsDocument(input.settings, input.defaultSettings),
   ).pipe(
@@ -81,6 +82,7 @@ export const writeSettings = Effect.fn("desktop.settings.writeSettings")(functio
         }),
     ),
   );
+
   yield* input.fileSystem.makeDirectory(directory, { recursive: true }).pipe(
     Effect.mapError(
       (cause) =>

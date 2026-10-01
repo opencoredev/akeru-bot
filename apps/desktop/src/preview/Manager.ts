@@ -84,6 +84,7 @@ export {
   isPreviewAutomationEvaluationError,
   isPreviewAutomationInvalidSelectorError,
 } from "./PreviewErrors.ts";
+
 import {
   type PreviewTabState,
   DEFAULT_ZOOM_FACTOR,
@@ -100,13 +101,16 @@ import {
   type PointerEventListener,
   type ExpectedAgentInput,
 } from "./PreviewModel.ts";
+
 export {
   buildPreviewPictureInPictureDataUrl,
   fitPictureInPictureContentSize,
   isPreviewRefreshShortcut,
   isPreviewEditingShortcut,
 } from "./PreviewModel.ts";
+
 export type { PreviewNavStatus, PreviewTabState } from "./PreviewModel.ts";
+
 import { createPreviewState } from "./PreviewState.ts";
 import { createPreviewBrowserControl } from "./PreviewBrowserControl.ts";
 import { createPreviewAnnotations } from "./PreviewAnnotations.ts";
@@ -118,6 +122,7 @@ import { createPreviewArtifacts } from "./PreviewArtifacts.ts";
 import { createPreviewAutomationSnapshot } from "./PreviewAutomationSnapshot.ts";
 import { createPreviewAutomationInput } from "./PreviewAutomationInput.ts";
 import { createPreviewAutomationQuery } from "./PreviewAutomationQuery.ts";
+
 const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function* (
   artifactDirectory: string,
   pictureInPicturePreloadPath: string,
@@ -218,6 +223,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     tabIdForWebContents,
     subscribe,
   } = createPreviewState({ listenersRef, tabsRef, path, resolvedArtifactDirectory });
+
   const {
     detachControlSession,
     prepareAutomationInput,
@@ -252,6 +258,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     playwrightInstallExpression,
     expectedAgentInputsRef,
   });
+
   const { cancelPickElement, setAnnotationTheme, pickElement } = createPreviewAnnotations({
     pickSessionsRef,
     annotationThemeRef,
@@ -261,6 +268,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     replaceMap,
     runFork,
   });
+
   const { detachListeners, computeNavStatus, attachListeners } = createPreviewTabListeners({
     attachedRef,
     replaceMap,
@@ -278,6 +286,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     hostPlatform,
     attemptPromise,
   });
+
   const { setWindowBackgroundThrottling, stopFrameCapture, stopAllRecordings, startFrameCapture } =
     createPreviewFrameCapture({
       attempt,
@@ -296,6 +305,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       closingTabIdsRef,
       parentScope,
     });
+
   const { closePictureInPicture, closeAllPictureInPicture, openPictureInPicture } =
     createPreviewPictureInPicture({
       pictureInPictureSessionsRef,
@@ -315,6 +325,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       startFrameCapture,
       pictureInPicturePreloadPath,
     });
+
   const {
     createTab,
     closeTab,
@@ -357,6 +368,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     update,
     applyColorScheme,
   });
+
   const {
     captureScreenshot,
     startRecording,
@@ -377,6 +389,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     resolveArtifactPath,
     attempt,
   });
+
   const { automationLocator, automationSelectorDiagnostics, automationSnapshot } =
     createPreviewAutomationSnapshot({
       evaluateWithDebugger,
@@ -390,6 +403,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       requireWebContents,
       withControlSession,
     });
+
   const { automationClick, automationType, automationPress } = createPreviewAutomationInput({
     automationLocator,
     ensurePlaywrightInjected,
@@ -408,6 +422,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     hostPlatform,
     attempt,
   });
+
   const { automationScroll, automationEvaluate, automationWaitFor } = createPreviewAutomationQuery({
     automationLocator,
     ensurePlaywrightInjected,
@@ -426,11 +441,13 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       yield* Fiber.join(mainWindowCleanupFiber);
       mainWindowCleanupFiber = undefined;
     }
+
     yield* SynchronizedRef.modifyEffect(frameCaptureSessionsRef, (sessions) =>
       Effect.gen(function* () {
         if (sessions.size > 0) {
           yield* setWindowBackgroundThrottling(window, false);
         }
+
         yield* Ref.set(mainWindowRef, Option.some(window));
         currentMainWindow = window;
         frameCaptureWindowOpen = true;
@@ -445,6 +462,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
             }).pipe(Effect.ignore),
           );
         });
+
         return [undefined, sessions] as const;
       }),
     ).pipe(Effect.uninterruptible);
@@ -612,6 +630,7 @@ export class PreviewManager extends Context.Service<
 export const make = Effect.gen(function* PreviewManagerMake() {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const browserSession = yield* BrowserSession.BrowserSession;
+
   const operations = yield* makeNativeOperations(
     environment.browserArtifactsDir,
     environment.path.join(environment.dirname, "preview-pip-preload.cjs"),

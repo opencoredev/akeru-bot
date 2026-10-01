@@ -50,6 +50,7 @@ export function makePreviewManagerMocks() {
 
 export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreviewManagerMocks>) {
   const { mkdir, webviewSend, writeFile } = mocks;
+
   const browserSessionLayer = Layer.succeed(
     BrowserSession.BrowserSession,
     BrowserSession.BrowserSession.of({
@@ -99,12 +100,14 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
     color: readonly [red: number, green: number, blue: number, alpha: number],
   ) => {
     const png = new PNG({ width, height });
+
     for (let offset = 0; offset < png.data.byteLength; offset += 4) {
       png.data[offset] = color[0];
       png.data[offset + 1] = color[1];
       png.data[offset + 2] = color[2];
       png.data[offset + 3] = color[3];
     }
+
     return PNG.sync.write(png);
   };
 
@@ -115,6 +118,7 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
   ) =>
     Effect.gen(function* () {
       const manager = yield* PreviewManager.PreviewManager;
+
       return yield* use(manager);
     }).pipe(Effect.provide(layer), Effect.scoped);
 
@@ -167,6 +171,7 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(buffer);
     buffer.writeUInt32BE(width, 16);
     buffer.writeUInt32BE(height, 20);
+
     return buffer;
   };
 
@@ -181,6 +186,7 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
     let currentUrl = options?.url ?? "http://localhost:3200/";
     let destroyed = false;
     let loading = false;
+
     const fetch = vi.fn(
       options?.fetch ??
         (async () =>
@@ -188,16 +194,21 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
             headers: { "content-type": "image/png" },
           })),
     );
+
     const executeJavaScriptInIsolatedWorld = vi.fn(
       async (_worldId: number, scripts: ReadonlyArray<{ readonly code: string }>) =>
         options?.rasterize ? options.rasterize(scripts[0]?.code ?? "") : TEST_FAVICON,
     );
+
     const reload = vi.fn();
+
     const loadURL = vi.fn(async (url: string) => {
       currentUrl = url;
     });
+
     const off = vi.fn();
     const debuggerOff = vi.fn();
+
     const webContents = {
       id: options?.id ?? 42,
       isDestroyed: () => destroyed,
@@ -232,6 +243,7 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
         off: debuggerOff,
       },
     };
+
     return {
       executeJavaScriptInIsolatedWorld,
       fetch,
@@ -264,6 +276,7 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
     const webContentsListeners = new Map<string, () => void>();
     const send = vi.fn();
     let destroyed = false;
+
     const webContents = {
       on: vi.fn((event: string, listener: () => void) => {
         webContentsListeners.set(event, listener);
@@ -273,6 +286,7 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
       }),
       send,
     };
+
     const pictureInPictureWindow = {
       isDestroyed: vi.fn(() => destroyed),
       once: vi.fn((event: string, listener: () => void) => {
@@ -294,11 +308,14 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
       }),
       get webContents() {
         if (destroyed) throw new Error("Picture-in-picture window is closed.");
+
         return webContents;
       },
     };
+
     return { pictureInPictureWindow, send, webContentsListeners };
   };
+
   return {
     browserSessionLayer,
     environmentLayer,

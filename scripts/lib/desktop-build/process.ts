@@ -29,6 +29,7 @@ const COMMAND_OUTPUT_TAIL_LENGTH = 20_000;
 
 function appendOutputTail(acc: string, chunk: string): string {
   const next = acc + chunk;
+
   return next.length > COMMAND_OUTPUT_TAIL_LENGTH ? next.slice(-COMMAND_OUTPUT_TAIL_LENGTH) : next;
 }
 
@@ -83,10 +84,13 @@ export const resolveGitCommitHash = Effect.fn("resolveGitCommitHash")(function* 
   if (result.exitCode !== 0) {
     return "unknown";
   }
+
   const hash = result.stdout.trim();
+
   if (!/^[0-9a-f]{7,40}$/i.test(hash)) {
     return "unknown";
   }
+
   return hash.toLowerCase();
 });
 
@@ -94,6 +98,7 @@ export const resolvePythonForNodeGyp = Effect.fn("resolvePythonForNodeGyp")(func
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const hostPlatform = yield* HostProcessPlatform;
+
   const env = yield* Config.all({
     configuredPython: Config.string("npm_config_python").pipe(
       Config.orElse(() => Config.string("PYTHON")),
@@ -101,16 +106,20 @@ export const resolvePythonForNodeGyp = Effect.fn("resolvePythonForNodeGyp")(func
     ),
     localAppData: Config.string("LOCALAPPDATA").pipe(Config.option),
   });
+
   const configured = Option.getOrUndefined(env.configuredPython);
+
   if (configured && (yield* fs.exists(configured))) {
     return configured;
   }
 
   if (hostPlatform === "win32") {
     const localAppData = Option.getOrUndefined(env.localAppData);
+
     if (localAppData) {
       for (const version of ["Python313", "Python312", "Python311", "Python310"]) {
         const candidate = path.join(localAppData, "Programs", "Python", version, "python.exe");
+
         if (yield* fs.exists(candidate)) {
           return candidate;
         }
@@ -133,6 +142,7 @@ export const resolvePythonForNodeGyp = Effect.fn("resolvePythonForNodeGyp")(func
   }
 
   const executable = probe.stdout.trim();
+
   if (!executable || !(yield* fs.exists(executable))) {
     return undefined;
   }
@@ -149,6 +159,7 @@ export const runCommand = Effect.fn("runCommand")(function* (
 ) {
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const child = yield* commandSpawner.spawn(command);
+
   const [stdout, stderr, exitCode] = yield* Effect.all(
     [
       collectCommandStream(child.stdout, process.stdout, options.verbose),

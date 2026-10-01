@@ -50,10 +50,12 @@ export class ElectronWindowCreateError extends Schema.TaggedErrorClass<ElectronW
 ) {
   override get message(): string {
     const title = this.options.title === null ? "" : ` "${this.options.title}"`;
+
     const dimensions =
       this.options.width === null || this.options.height === null
         ? ""
         : ` (${this.options.width}x${this.options.height})`;
+
     return `Failed to create Electron BrowserWindow${title}${dimensions}.`;
   }
 }
@@ -73,6 +75,7 @@ export class ElectronWindowOperationError extends Schema.TaggedErrorClass<Electr
   override get message(): string {
     const window = this.windowId === null ? "" : ` for window ${this.windowId}`;
     const channel = this.channel === null ? "" : ` on channel ${JSON.stringify(this.channel)}`;
+
     return `Electron window operation ${JSON.stringify(this.operation)} failed${window}${channel} on ${this.platform}.`;
   }
 }
@@ -128,22 +131,27 @@ export const make = Effect.gen(function* () {
 
   const liveMain = Effect.gen(function* () {
     const main = yield* Ref.get(mainWindowRef);
+
     if (Option.isNone(main) || (yield* isWindowDestroyed(main.value))) {
       return Option.none<Electron.BrowserWindow>();
     }
+
     return main;
   });
 
   const currentMainOrFirst = Effect.gen(function* () {
     const main = yield* liveMain;
+
     if (Option.isSome(main)) {
       return main;
     }
 
     const first = Option.fromNullishOr((yield* listWindows)[0] ?? null);
+
     if (Option.isNone(first) || (yield* isWindowDestroyed(first.value))) {
       return Option.none<Electron.BrowserWindow>();
     }
+
     return first;
   });
 
@@ -159,15 +167,18 @@ export const make = Effect.gen(function* () {
           cause,
         }),
     }).pipe(Effect.orDie);
+
     if (Option.isSome(focused) && !(yield* isWindowDestroyed(focused.value))) {
       return focused;
     }
+
     return yield* currentMainOrFirst;
   });
 
   return ElectronWindow.of({
     create: (options) => {
       const webPreferences = options.webPreferences;
+
       const diagnosticOptions = {
         title: options.title ?? null,
         width: options.width ?? null,
@@ -204,9 +215,11 @@ export const make = Effect.gen(function* () {
         if (Option.isNone(current)) {
           return current;
         }
+
         if (Option.isSome(window) && current.value !== window.value) {
           return current;
         }
+
         return Option.none();
       }),
     reveal: (window) =>
@@ -245,6 +258,7 @@ export const make = Effect.gen(function* () {
           if (yield* isWindowDestroyed(window)) {
             continue;
           }
+
           yield* Effect.try({
             try: () => window.webContents.send(channel, ...args),
             catch: (cause) =>
@@ -260,6 +274,7 @@ export const make = Effect.gen(function* () {
       }),
     destroyAll: Effect.gen(function* () {
       let firstFailure: Cause.Cause<never> | undefined;
+
       for (const window of yield* listWindows) {
         const exit = yield* Effect.exit(
           Effect.try({
@@ -274,10 +289,12 @@ export const make = Effect.gen(function* () {
               }),
           }).pipe(Effect.orDie),
         );
+
         if (Exit.isFailure(exit)) {
           firstFailure ??= exit.cause;
         }
       }
+
       if (firstFailure !== undefined) {
         return yield* Effect.failCause(firstFailure);
       }
@@ -286,10 +303,12 @@ export const make = Effect.gen(function* () {
       sync: (window: Electron.BrowserWindow) => Effect.Effect<void, E, R>,
     ) {
       const windows = yield* listWindows;
+
       for (const window of windows) {
         if (yield* isWindowDestroyed(window)) {
           continue;
         }
+
         yield* sync(window);
       }
     }),

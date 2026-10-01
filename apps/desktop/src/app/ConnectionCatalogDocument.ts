@@ -120,6 +120,7 @@ export class DesktopConnectionCatalogStoreMigrationError extends Schema.TaggedEr
   override get message(): string {
     const environment =
       this.environmentId === undefined ? "" : ` for environment ${this.environmentId}`;
+
     return `Legacy desktop saved-environment migration failed during ${this.operation}${environment} into ${this.catalogPath}.`;
   }
 }
@@ -181,6 +182,7 @@ export const writeDocument = Effect.fn("desktop.connectionCatalogStore.writeDocu
   }): Effect.fn.Return<void, DesktopConnectionCatalogStoreWriteError> {
     const directory = input.path.dirname(input.catalogPath);
     const tempPath = `${input.catalogPath}.${process.pid}.${input.suffix}.tmp`;
+
     const encoded = yield* encodeEncryptedConnectionCatalogDocumentJson(input.document).pipe(
       Effect.mapError(
         (cause) =>
@@ -191,6 +193,7 @@ export const writeDocument = Effect.fn("desktop.connectionCatalogStore.writeDocu
           }),
       ),
     );
+
     yield* input.fileSystem.makeDirectory(directory, { recursive: true }).pipe(
       Effect.mapError(
         (cause) =>

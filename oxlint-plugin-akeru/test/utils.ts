@@ -93,8 +93,10 @@ export const createOxlintRuleHarness = (
   options: RuleHarnessOptions = {},
 ): RuleHarness => {
   const [pluginName, shortRuleName] = ruleName.split("/");
+
   const diagnosticRuleName =
     pluginName && shortRuleName ? `${pluginName}\\(${shortRuleName}\\)` : ruleName;
+
   const test = it.layer(NodeServices.layer);
 
   const run: RuleHarness["run"] = Effect.fnUntraced(function* (source: string) {

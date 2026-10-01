@@ -97,6 +97,7 @@ describe("PreviewManager", () => {
       Effect.gen(function* () {
         let humanInput: ((_event: unknown, signal: unknown) => void) | undefined;
         const activity: string[] = [];
+
         const sendCommand = vi.fn(async (method: string, params?: Record<string, unknown>) => {
           if (method === "Runtime.evaluate") {
             return {
@@ -105,12 +106,15 @@ describe("PreviewManager", () => {
               },
             };
           }
+
           if (method === "Input.dispatchMouseEvent" && params?.type === "mousePressed") {
             activity.push("mousePressed");
             humanInput?.({}, { kind: "pointer", x: params.x, y: params.y, button: 0 });
           }
+
           return undefined;
         });
+
         fromId.mockReturnValue({
           id: 42,
           isDestroyed: () => false,
@@ -151,9 +155,11 @@ describe("PreviewManager", () => {
         );
         yield* manager.createTab("tab_1");
         yield* manager.registerWebview("tab_1", 42);
+
         const click = yield* manager
           .automationClick("tab_1", { x: 120, y: 80 })
           .pipe(Effect.forkChild({ startImmediately: true }));
+
         yield* TestClock.adjust(200);
         yield* Fiber.join(click);
 
@@ -180,18 +186,22 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const png = makePng(800, 600, [255, 255, 255, 255]);
+
         const image = {
           getSize: () => ({ width: 800, height: 600 }),
           isEmpty: () => false,
           resize: vi.fn(),
           toPNG: () => png,
         };
+
         createFromBuffer.mockReturnValue(image);
+
         const capturePage = vi.fn(async () => ({
           getSize: () => ({ width: 800, height: 600 }),
           toJPEG: () => Buffer.from("black-webview-capture"),
           toPNG: () => Buffer.from("black-webview-capture"),
         }));
+
         const sendCommand = vi.fn(async (method: string) => {
           if (method === "Runtime.evaluate") {
             return {
@@ -206,12 +216,16 @@ describe("PreviewManager", () => {
               },
             };
           }
+
           if (method === "Accessibility.getFullAXTree") return { nodes: [] };
+
           if (method === "Page.captureScreenshot") {
             return { data: png.toString("base64") };
           }
+
           return undefined;
         });
+
         fromId.mockReturnValue(makeTestPreviewWebContents(capturePage, 42, sendCommand));
 
         yield* manager.createTab("tab_snapshot");
@@ -240,22 +254,26 @@ describe("PreviewManager", () => {
       Effect.gen(function* () {
         const guestPng = makePng(1280, 800, [0, 0, 0, 255]);
         const hostPng = makePng(320, 180, [255, 255, 255, 255]);
+
         const guestImage = {
           getSize: () => ({ width: 1280, height: 800 }),
           isEmpty: () => false,
           resize: vi.fn(),
           toPNG: () => guestPng,
         };
+
         const hostImage = {
           getSize: () => ({ width: 320, height: 180 }),
           isEmpty: () => false,
           resize: vi.fn(),
           toPNG: () => hostPng,
         };
+
         createFromBuffer.mockImplementation((buffer: Buffer) =>
           buffer.equals(hostPng) ? hostImage : guestImage,
         );
         const hostCapturePage = vi.fn(async () => hostImage);
+
         const hostWebContents = {
           capturePage: hostCapturePage,
           executeJavaScript: vi.fn(async () => ({ x: 20, y: 40, width: 320, height: 180 })),
@@ -265,11 +283,13 @@ describe("PreviewManager", () => {
           send: vi.fn(),
           setBackgroundThrottling: vi.fn(),
         };
+
         const mainWindow = {
           isDestroyed: () => false,
           once: vi.fn(),
           webContents: hostWebContents,
         };
+
         const sendCommand = vi.fn(async (method: string) => {
           if (method === "Runtime.evaluate") {
             return {
@@ -284,12 +304,16 @@ describe("PreviewManager", () => {
               },
             };
           }
+
           if (method === "Accessibility.getFullAXTree") return { nodes: [] };
+
           if (method === "Page.captureScreenshot") {
             return { data: guestPng.toString("base64") };
           }
+
           return undefined;
         });
+
         fromId.mockReturnValue({
           ...(makeTestPreviewWebContents(vi.fn(), 42, sendCommand) as unknown as object),
           hostWebContents,
@@ -323,13 +347,16 @@ describe("PreviewManager", () => {
         const blackPng = makePng(1280, 800, [0, 0, 0, 255]);
         const visiblePng = makePng(1280, 800, [255, 255, 255, 255]);
         const listeners = new Set<TestDebuggerMessageListener>();
+
         const image = {
           getSize: () => ({ width: 1280, height: 800 }),
           isEmpty: () => false,
           resize: vi.fn(),
           toPNG: () => visiblePng,
         };
+
         createFromBuffer.mockReturnValue(image);
+
         const sendCommand = vi.fn(async (method: string) => {
           if (method === "Runtime.evaluate") {
             return {
@@ -344,10 +371,13 @@ describe("PreviewManager", () => {
               },
             };
           }
+
           if (method === "Accessibility.getFullAXTree") return { nodes: [] };
+
           if (method === "Page.captureScreenshot") {
             return { data: blackPng.toString("base64") };
           }
+
           if (method === "Page.startScreencast") {
             for (const listener of listeners) {
               listener({} as Electron.Event, "Page.screencastFrame", {
@@ -360,14 +390,17 @@ describe("PreviewManager", () => {
               });
             }
           }
+
           return undefined;
         });
+
         const webContents = makeTestPreviewWebContents(
           vi.fn(),
           42,
           sendCommand,
           listeners,
         ) as Electron.WebContents;
+
         fromId.mockReturnValue(webContents as never);
 
         yield* manager.createTab("tab_screencast_snapshot");
@@ -390,13 +423,16 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const text = "ReferenceError: fallbackDetail is not defined";
+
         const exceptionDetails = {
           text,
           exception: { description: "" },
         };
+
         const sendCommand = vi.fn(async (method: string) =>
           method === "Runtime.evaluate" ? { exceptionDetails } : undefined,
         );
+
         fromId.mockReturnValue({
           id: 42,
           isDestroyed: () => false,
@@ -427,11 +463,13 @@ describe("PreviewManager", () => {
 
         yield* manager.createTab("tab_1");
         yield* manager.registerWebview("tab_1", 42);
+
         const exit = yield* Effect.exit(
           manager.automationEvaluate("tab_1", { expression: "fallbackDetail" }),
         );
 
         expect(Exit.isFailure(exit)).toBe(true);
+
         if (Exit.isSuccess(exit)) return;
         const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
         expect(error).toMatchObject({

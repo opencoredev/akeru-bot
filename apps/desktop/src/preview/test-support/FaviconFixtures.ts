@@ -32,6 +32,7 @@ export function sourceGif(
   buffer.writeUInt16LE(width, 6);
   buffer.writeUInt16LE(height, 8);
   let offset = 13;
+
   for (const frame of frames) {
     buffer[offset] = 0x2c;
     buffer.writeUInt16LE(frame.left ?? 0, offset + 1);
@@ -43,7 +44,9 @@ export function sourceGif(
     buffer[offset + 1] = 0;
     offset += 2;
   }
+
   buffer[offset] = 0x3b;
+
   return buffer;
 }
 
@@ -65,9 +68,11 @@ export function sourceJpeg(
     width >>> 8,
     width & 0xff,
   ]);
+
   const app1Segments = (typeof orientations === "number" ? [orientations] : orientations).map(
     (orientation) => sourceJpegExifSegment([orientation]),
   );
+
   return Buffer.concat([frame.subarray(0, 2), ...app1Segments, frame.subarray(2)]);
 }
 
@@ -77,6 +82,7 @@ export function sourceJpegApp1Segment(payload: Buffer): Buffer {
   app1[1] = 0xe1;
   app1.writeUInt16BE(payload.byteLength + 2, 2);
   payload.copy(app1, 4);
+
   return app1;
 }
 
@@ -93,10 +99,13 @@ export function sourceJpegExifSegment(
   exif[5] = options?.padding ?? 0;
   const littleEndian = options?.byteOrder !== "MM";
   exif.write(littleEndian ? "II" : "MM", 6, "ascii");
+
   const writeUInt16 = (value: number, offset: number) =>
     littleEndian ? exif.writeUInt16LE(value, offset) : exif.writeUInt16BE(value, offset);
+
   const writeUInt32 = (value: number, offset: number) =>
     littleEndian ? exif.writeUInt32LE(value, offset) : exif.writeUInt32BE(value, offset);
+
   writeUInt16(options?.magic ?? 42, 8);
   writeUInt32(8, 10);
   writeUInt16(orientations.length, 14);
@@ -107,6 +116,7 @@ export function sourceJpegExifSegment(
     writeUInt32(1, entryOffset + 4);
     writeUInt16(orientation, entryOffset + 8);
   });
+
   return sourceJpegApp1Segment(exif);
 }
 
@@ -116,6 +126,7 @@ export function sourceJpegWithApp1Segments(
   segments: ReadonlyArray<Buffer>,
 ): Buffer {
   const frame = sourceJpeg(width, height);
+
   return Buffer.concat([frame.subarray(0, 2), ...segments, frame.subarray(2)]);
 }
 
@@ -131,6 +142,7 @@ export function sourceJpegWithEndianAlias(alias: number, byteOrder: "II" | "MM")
   const exif = sourceJpegExifSegment([6], { byteOrder });
   exif[10] = alias;
   exif[11] = alias;
+
   return sourceJpegWithApp1Segments(64, 32, [exif]);
 }
 
@@ -155,6 +167,7 @@ export function sourceJpegExifWithSubIfd(options: {
     exif.writeUInt32LE(1, offset + 4);
     exif.writeUInt16LE(orientation, offset + 8);
   };
+
   const writeSubIfdPointer = (offset: number) => {
     exif.writeUInt16LE(0x8769, offset);
     exif.writeUInt16LE(4, offset + 2);
@@ -163,6 +176,7 @@ export function sourceJpegExifWithSubIfd(options: {
   };
 
   const firstRootEntryOffset = rootIfdOffset + 2;
+
   if (options.rootOrientation === undefined) {
     writeSubIfdPointer(firstRootEntryOffset);
   } else if (options.subIfdFirst) {
@@ -175,6 +189,7 @@ export function sourceJpegExifWithSubIfd(options: {
 
   exif.writeUInt16LE(1, subIfdOffset);
   writeOrientation(subIfdOffset + 2, options.subIfdOrientation);
+
   return sourceJpegApp1Segment(exif);
 }
 
@@ -192,6 +207,7 @@ export function sourceJpegExifWithSubIfdPointers(options: {
   exif.writeUInt16LE(42, 8);
   exif.writeUInt32LE(8, 10);
   exif.writeUInt16LE(rootEntries, rootIfdOffset);
+
   for (let index = 0; index < pointerCount; index += 1) {
     const entryOffset = rootIfdOffset + 2 + index * 12;
     exif.writeUInt16LE(0x8769, entryOffset);
@@ -199,6 +215,7 @@ export function sourceJpegExifWithSubIfdPointers(options: {
     exif.writeUInt32LE(1, entryOffset + 4);
     exif.writeUInt32LE(subIfdOffset - 6, entryOffset + 8);
   }
+
   const orientationOffset = rootIfdOffset + 2 + pointerCount * 12;
   exif.writeUInt16LE(0x0112, orientationOffset);
   exif.writeUInt16LE(3, orientationOffset + 2);
@@ -206,12 +223,14 @@ export function sourceJpegExifWithSubIfdPointers(options: {
   exif.writeUInt16LE(6, orientationOffset + 8);
 
   exif.writeUInt16LE(subIfdEntries, subIfdOffset);
+
   for (let index = 0; index < subIfdEntries; index += 1) {
     const entryOffset = subIfdOffset + 2 + index * 12;
     exif.writeUInt16LE(1, entryOffset);
     exif.writeUInt16LE(3, entryOffset + 2);
     exif.writeUInt32LE(1, entryOffset + 4);
   }
+
   return sourceJpegApp1Segment(exif);
 }
 
@@ -227,6 +246,7 @@ export function sourceJpegExifWithOverlappingSubIfds(
   exif.write("II", 6, "ascii");
   exif.writeUInt32LE(8, 10);
   exif.writeUInt16LE(rootEntries, rootIfdOffset);
+
   for (let index = 0; index < pointerCount; index += 1) {
     const entryOffset = rootIfdOffset + 2 + index * 12;
     exif.writeUInt16LE(0x8769, entryOffset);
@@ -235,11 +255,13 @@ export function sourceJpegExifWithOverlappingSubIfds(
     exif.writeUInt32LE(subIfdOffset + index * 2 - 6, entryOffset + 8);
     exif.writeUInt16LE(subIfdEntries, subIfdOffset + index * 2);
   }
+
   const orientationOffset = rootIfdOffset + 2 + pointerCount * 12;
   exif.writeUInt16LE(0x0112, orientationOffset);
   exif.writeUInt16LE(3, orientationOffset + 2);
   exif.writeUInt32LE(1, orientationOffset + 4);
   exif.writeUInt16LE(6, orientationOffset + 8);
+
   return sourceJpegApp1Segment(exif);
 }
 
@@ -250,6 +272,7 @@ export function sourceWebp(width: number, height: number): Buffer {
   buffer.write("VP8X", 12, "ascii");
   buffer.writeUIntLE(width - 1, 24, 3);
   buffer.writeUIntLE(height - 1, 27, 3);
+
   return buffer;
 }
 
@@ -260,6 +283,7 @@ export function sourceIco(embedded: Buffer): Buffer {
   buffer.writeUInt32LE(embedded.byteLength, 14);
   buffer.writeUInt32LE(22, 18);
   embedded.copy(buffer, 22);
+
   return buffer;
 }
 
@@ -267,6 +291,7 @@ export function makeUnsafePng(): Buffer {
   const buffer = Buffer.from(SOURCE_PNG);
   buffer.writeUInt32BE(4096, 16);
   buffer.writeUInt32BE(4096, 20);
+
   return buffer;
 }
 
@@ -274,6 +299,7 @@ export function sourcePng(width: number, height: number): Buffer {
   const buffer = Buffer.from(SOURCE_PNG);
   buffer.writeUInt32BE(width, 16);
   buffer.writeUInt32BE(height, 20);
+
   return buffer;
 }
 
@@ -282,6 +308,7 @@ export function makeUnsafeDib(): Buffer {
   buffer.writeUInt32LE(40, 0);
   buffer.writeInt32LE(4096, 4);
   buffer.writeInt32LE(4096, 8);
+
   return buffer;
 }
 
@@ -296,10 +323,12 @@ export function makeWebContents(options?: {
           headers: { "content-type": "image/png" },
         })),
   );
+
   const executeJavaScriptInIsolatedWorld = vi.fn(
     async (_worldId: number, scripts: ReadonlyArray<{ readonly code: string }>) =>
       options?.rasterize ? options.rasterize(scripts[0]?.code ?? "") : PNG,
   );
+
   return {
     webContents: {
       session: { fetch },
@@ -331,6 +360,7 @@ export async function expectJpegLayout(
       expect(code).toContain(`resizeWidth: ${layout.resizeWidth}`);
       expect(code).toContain(`resizeHeight: ${layout.resizeHeight}`);
       expect(code).toContain(layout.draw);
+
       return PNG;
     },
   });

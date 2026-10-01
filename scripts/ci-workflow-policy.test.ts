@@ -36,6 +36,7 @@ function workflow(path: string): Workflow {
 describe("CI workflow budget", () => {
   it("validates ready pull requests in one 4-vCPU job", () => {
     const ci = workflow(".github/workflows/ci.yml");
+
     const commands = Object.values(ci.jobs).flatMap((job) =>
       job.steps.flatMap((step) => (step.run ? [step.run] : [])),
     );
@@ -70,9 +71,11 @@ describe("CI workflow budget", () => {
     expect(ci.jobs.check?.steps.find((step) => step.name === "Checkout")?.with?.ref).toBe(
       "${{ inputs.expected_sha || github.sha }}",
     );
+
     const dispatchAuthorization = ci.jobs.check?.steps.find(
       (step) => step.name === "Authorize version-branch dispatch",
     );
+
     expect(dispatchAuthorization?.if).toBe("${{ github.event_name == 'workflow_dispatch' }}");
     expect(dispatchAuthorization?.run).toContain(".head.ref");
     expect(dispatchAuthorization?.run).toContain(".head.sha");
@@ -84,9 +87,11 @@ describe("CI workflow budget", () => {
     const stableVersionGuard = ci.jobs.check?.steps.find(
       (step) => step.name === "Protect stable release versions",
     );
+
     const changesetGuard = ci.jobs.check?.steps.find(
       (step) => step.name === "Require a changeset decision",
     );
+
     for (const guard of [stableVersionGuard, changesetGuard]) {
       expect(guard?.if).toContain("github.head_ref == 'changeset-release/main'");
       expect(guard?.if).toContain(
@@ -94,6 +99,7 @@ describe("CI workflow budget", () => {
       );
       expect(guard?.if).toContain("github.event.pull_request.user.login == 'github-actions[bot]'");
     }
+
     expect(stableVersionGuard?.run).toContain(
       "Only the repository-owned Changesets version PR may change release versions.",
     );
@@ -127,8 +133,10 @@ describe("CI workflow budget", () => {
     }
 
     expect(ci.jobs.check).not.toHaveProperty("strategy");
+
     const serverCommand =
       commands.find((command) => command.includes("vp run --filter akeru-bot test")) ?? "";
+
     expect(serverCommand).toContain("vp run --filter akeru-bot test");
     expect(serverCommand).toContain(
       "--exclude integration/orchestrationEngine.integration.test.ts",
@@ -160,9 +168,11 @@ describe("CI workflow budget", () => {
     expect(changesets?.run).toContain(".head.ref == ");
     expect(changesets?.run).toContain("gh pr edit");
     expect(changesets?.run).not.toContain("gh release");
+
     const dispatch = versionJob?.steps.find(
       (step) => step.name === "Run checks for the updated version branch",
     );
+
     expect(dispatch?.if).toBe("steps.changesets.outputs.pullRequestNumber != ''");
     expect(dispatch?.if).not.toContain("hasChangesets");
     expect(dispatch?.run).toContain(".head.sha");
@@ -174,6 +184,7 @@ describe("CI workflow budget", () => {
 
   it("uses 4-vCPU Linux runners in the manual release smoke workflow", () => {
     const releaseSmoke = workflow(".github/workflows/release-smoke.yml");
+
     const text = NodeFS.readFileSync(
       new URL("../.github/workflows/release-smoke.yml", import.meta.url),
       "utf8",
@@ -240,11 +251,13 @@ describe("CI workflow budget", () => {
 
   it("publishes the Akeru Remote archives and signed manifest the installers download", () => {
     const release = workflow(".github/workflows/release.yml");
+
     const remote = release.jobs.remote as Job & {
       readonly strategy: {
         readonly matrix: { readonly include: ReadonlyArray<Record<string, string>> };
       };
     };
+
     expect(
       remote.strategy.matrix.include.map((entry) => [entry.runner, entry.platform, entry.arch]),
     ).toEqual([

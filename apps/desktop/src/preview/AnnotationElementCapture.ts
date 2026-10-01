@@ -21,6 +21,7 @@ export async function captureElement(element: Element): Promise<PickedElementPay
   try {
     const context = await getElementContext(element);
     const stack = (context.stack ?? []).map(toStackFrame);
+
     return {
       pageUrl: location.href,
       pageTitle: document.title?.trim() || null,

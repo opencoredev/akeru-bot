@@ -82,12 +82,15 @@ export const createPreviewAutomationInput = ({
     if (!("selector" in input) && !("locator" in input)) {
       return { x: input.x!, y: input.y! };
     }
+
     const locator = automationLocator(input)!;
     yield* ensurePlaywrightInjected(tabId, send);
+
     const locatorJson = yield* encodeJson(
       { operation: "automationClick.encodeLocator", tabId },
       locator,
     );
+
     const point = yield* evaluateWithDebugger<
       { x: number; y: number } | { invalidSelector: true; message: string } | { notFound: true }
     >(
@@ -111,6 +114,7 @@ export const createPreviewAutomationInput = ({
         })()`,
       true,
     );
+
     if ("invalidSelector" in point) {
       return yield* new PreviewAutomationInvalidSelectorError({
         operation: "click",
@@ -120,6 +124,7 @@ export const createPreviewAutomationInput = ({
         cause: point,
       });
     }
+
     if ("notFound" in point) {
       return yield* new PreviewAutomationTargetNotFoundError({
         operation: "click",
@@ -127,6 +132,7 @@ export const createPreviewAutomationInput = ({
         ...automationSelectorDiagnostics(input),
       });
     }
+
     return point;
   });
 
@@ -148,12 +154,14 @@ export const createPreviewAutomationInput = ({
   ) {
     yield* prepareAutomationInput(send, true);
     const point = yield* resolveClickPoint(tabId, send, input);
+
     const viewport = yield* evaluateWithDebugger<{ width: number; height: number }>(
       tabId,
       send,
       "({ width: window.innerWidth, height: window.innerHeight })",
       true,
     );
+
     if (point.x < 0 || point.y < 0 || point.x > viewport.width || point.y > viewport.height) {
       return yield* new PreviewAutomationCoordinatesOutsideViewportError({
         tabId,
@@ -163,6 +171,7 @@ export const createPreviewAutomationInput = ({
         viewportHeight: viewport.height,
       });
     }
+
     const moveSequence = yield* nextCounter(pointerSequenceRef);
     const moveCreatedAt = yield* currentIso;
     yield* emitPointerEvent({
@@ -214,14 +223,18 @@ export const createPreviewAutomationInput = ({
     input: PreviewAutomationTypeInput,
   ) {
     const locator = automationLocator(input);
+
     if (locator) yield* ensurePlaywrightInjected(tabId, send);
+
     const locatorJson = locator
       ? yield* encodeJson({ operation: "automationType.encodeLocator", tabId }, locator)
       : null;
+
     const textJson = yield* encodeJson(
       { operation: "automationType.encodeText", tabId },
       input.text,
     );
+
     const result = yield* evaluateWithDebugger<
       | { ok: true }
       | { invalidSelector: true; message: string }
@@ -289,6 +302,7 @@ export const createPreviewAutomationInput = ({
         })()`,
       true,
     );
+
     if ("invalidSelector" in result) {
       return yield* new PreviewAutomationInvalidSelectorError({
         operation: "type",
@@ -298,6 +312,7 @@ export const createPreviewAutomationInput = ({
         cause: result,
       });
     }
+
     if ("notFound" in result) {
       return yield* new PreviewAutomationTargetNotFoundError({
         operation: "type",
@@ -305,6 +320,7 @@ export const createPreviewAutomationInput = ({
         ...automationSelectorDiagnostics(input),
       });
     }
+
     if ("notEditable" in result) {
       return yield* new PreviewAutomationTargetNotEditableError({
         tabId,
@@ -342,21 +358,27 @@ export const createPreviewAutomationInput = ({
     sendCleanup: SendCommand,
   ) {
     yield* prepareAutomationInput(send, false);
+
     const keySequence = makePreviewAutomationKeySequence(input, {
       isMac: hostPlatform === "darwin",
     });
+
     const previouslyFocused = yield* attempt(
       { operation: "automationPress.getFocusedWebContents", tabId, webContentsId: wc.id },
       () => webContents.getFocusedWebContents(),
     );
+
     let keyDownAttempted = false;
+
     const releaseInput = Effect.gen(function* () {
       if (keyDownAttempted) {
         yield* sendCleanup("Input.dispatchKeyEvent", keySequence.keyUp).pipe(Effect.ignore);
       }
+
       yield* sendCleanup("Emulation.setFocusEmulationEnabled", { enabled: false }).pipe(
         Effect.ignore,
       );
+
       if (previouslyFocused && previouslyFocused.id !== wc.id && !previouslyFocused.isDestroyed()) {
         yield* attempt(
           {
@@ -395,5 +417,6 @@ export const createPreviewAutomationInput = ({
       performAutomationPress(tabId, wc, input, send, sendCleanup),
     );
   });
+
   return { automationClick, automationType, automationPress };
 };

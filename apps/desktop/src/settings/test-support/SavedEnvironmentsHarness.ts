@@ -81,6 +81,7 @@ export function makeSafeStorageLayer(input: {
       }
 
       const decoded = textDecoder.decode(value);
+
       if (!decoded.startsWith("enc:")) {
         return Effect.fail(
           new ElectronSafeStorage.ElectronSafeStorageDecryptError({
@@ -88,6 +89,7 @@ export function makeSafeStorageLayer(input: {
           }),
         );
       }
+
       return Effect.succeed(decoded.slice("enc:".length));
     },
     selectedStorageBackend: Effect.succeed(Option.none()),
@@ -126,6 +128,7 @@ export function makeLayer(
     encryptError: options?.encryptError,
     decryptError: options?.decryptError,
   });
+
   const dependencies = Layer.mergeAll(
     environmentLayer,
     safeStorageLayer,
@@ -147,8 +150,10 @@ export const withSavedEnvironments = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     const baseDir = yield* fileSystem.makeTempDirectoryScoped({
       prefix: "t3-desktop-saved-environments-test-",
     });
+
     return yield* effect.pipe(Effect.provide(makeLayer(baseDir, options)));
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped);

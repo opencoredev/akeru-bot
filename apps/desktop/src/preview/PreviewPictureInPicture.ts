@@ -77,6 +77,7 @@ export const createPreviewPictureInPicture = ({
       if (sessions.get(tabId) !== expectedSession) {
         return [false, sessions] as const;
       }
+
       return [
         true,
         replaceMap(sessions, (copy) => {
@@ -84,6 +85,7 @@ export const createPreviewPictureInPicture = ({
         }),
       ] as const;
     });
+
     if (!removed) return;
     yield* Deferred.interrupt(expectedSession.ready);
     yield* Scope.close(expectedSession.initializationScope, Exit.void).pipe(Effect.ignore);
@@ -94,9 +96,11 @@ export const createPreviewPictureInPicture = ({
     );
     yield* stopFrameCapture(tabId, "picture-in-picture");
     const tabs = yield* SynchronizedRef.get(tabsRef);
+
     if (tabs.has(tabId)) {
       yield* update(tabId, { pictureInPicture: false });
     }
+
     if (closeWindow && !expectedSession.window.isDestroyed()) {
       yield* attempt({ operation: "pictureInPicture.close", tabId }, () =>
         expectedSession.window.close(),
@@ -109,14 +113,18 @@ export const createPreviewPictureInPicture = ({
       const pictureInPictureSession = (yield* SynchronizedRef.get(pictureInPictureSessionsRef)).get(
         tabId,
       );
+
       if (!pictureInPictureSession) {
         yield* stopFrameCapture(tabId, "picture-in-picture");
         const tabs = yield* SynchronizedRef.get(tabsRef);
+
         if (tabs.has(tabId)) {
           yield* update(tabId, { pictureInPicture: false });
         }
+
         return;
       }
+
       yield* releasePictureInPicture(tabId, pictureInPictureSession, true);
     },
   );
@@ -143,13 +151,17 @@ export const createPreviewPictureInPicture = ({
     const claim = yield* pictureInPictureMutationSemaphore.withPermit(
       Effect.gen(function* () {
         const existing = (yield* SynchronizedRef.get(pictureInPictureSessionsRef)).get(tabId);
+
         if (existing && !existing.window.isDestroyed()) {
           return { kind: "existing" as const, session: existing };
         }
+
         if (existing) {
           yield* releasePictureInPicture(tabId, existing, false);
         }
+
         const wc = yield* requireWebContents(tabId);
+
         const title = yield* attempt(
           {
             operation: "pictureInPicture.readTitle",
@@ -158,6 +170,7 @@ export const createPreviewPictureInPicture = ({
           },
           () => wc.getTitle().trim(),
         );
+
         const pictureInPictureWindow = yield* attempt(
           {
             operation: "pictureInPicture.create",
@@ -190,14 +203,17 @@ export const createPreviewPictureInPicture = ({
               },
             }),
         );
+
         const initializationScope = yield* Scope.fork(parentScope, "sequential");
         const ready = yield* Deferred.make<void, PreviewManagerError>();
+
         const session: PictureInPictureSession = {
           window: pictureInPictureWindow,
           webContentsId: wc.id,
           ready,
           initializationScope,
         };
+
         const onClosed = () => {
           runFork(
             pictureInPictureMutationSemaphore.withPermit(
@@ -205,17 +221,21 @@ export const createPreviewPictureInPicture = ({
             ),
           );
         };
+
         const onDidFinishLoad = () => {
           runFork(
             SynchronizedRef.update(frameCaptureSessionsRef, (sessions) => {
               const current = sessions.get(tabId);
+
               if (!current?.consumers.has("picture-in-picture")) return sessions;
+
               return replaceMap(sessions, (copy) => {
                 copy.set(tabId, { ...current, lastPictureInPictureFrame: null });
               });
             }),
           );
         };
+
         const pipWebContents = pictureInPictureWindow.webContents;
         yield* attempt(
           {
@@ -229,6 +249,7 @@ export const createPreviewPictureInPicture = ({
               true,
               hostPlatform === "darwin" ? "floating" : "normal",
             );
+
             if (hostPlatform === "darwin") {
               pictureInPictureWindow.setVisibleOnAllWorkspaces(true, {
                 visibleOnFullScreen: true,
@@ -237,6 +258,7 @@ export const createPreviewPictureInPicture = ({
                 skipTransformProcessType: true,
               });
             }
+
             pipWebContents.on("did-finish-load", onDidFinishLoad);
           },
         ).pipe(
@@ -263,15 +285,20 @@ export const createPreviewPictureInPicture = ({
             copy.set(tabId, session);
           }),
         );
+
         return { kind: "created" as const, session };
       }),
     );
+
     const pictureInPictureSession = claim.session;
+
     if (claim.kind === "existing") {
       yield* Deferred.await(pictureInPictureSession.ready);
+
       return yield* pictureInPictureMutationSemaphore.withPermit(
         Effect.gen(function* () {
           const current = (yield* SynchronizedRef.get(pictureInPictureSessionsRef)).get(tabId);
+
           if (current !== pictureInPictureSession || pictureInPictureSession.window.isDestroyed()) {
             return yield* new PreviewOperationError({
               operation: "pictureInPicture.showExisting",
@@ -280,6 +307,7 @@ export const createPreviewPictureInPicture = ({
               cause: new Error("Picture-in-picture session closed before it became visible."),
             });
           }
+
           yield* attempt(
             {
               operation: "pictureInPicture.showExisting",
@@ -302,6 +330,7 @@ export const createPreviewPictureInPicture = ({
         () => pictureInPictureSession.window.loadURL(buildPreviewPictureInPictureDataUrl()),
       );
       const currentWebContents = yield* requireWebContents(tabId);
+
       if (
         currentWebContents.id !== pictureInPictureSession.webContentsId ||
         currentWebContents.isDestroyed()
@@ -313,6 +342,7 @@ export const createPreviewPictureInPicture = ({
           cause: new Error("Preview webview changed while picture-in-picture was opening."),
         });
       }
+
       yield* startFrameCapture(tabId, "picture-in-picture");
       yield* attempt(
         {
@@ -323,11 +353,13 @@ export const createPreviewPictureInPicture = ({
         () => pictureInPictureSession.window.showInactive(),
       );
     });
+
     const initializationExit = yield* Effect.gen(function* () {
       const initializationFiber = yield* Effect.forkIn(
         initialize,
         pictureInPictureSession.initializationScope,
       );
+
       return yield* Fiber.await(initializationFiber);
     }).pipe(
       Effect.onInterrupt(() =>
@@ -336,32 +368,43 @@ export const createPreviewPictureInPicture = ({
         ),
       ),
     );
+
     if (Exit.isSuccess(initializationExit)) {
       const published = yield* pictureInPictureMutationSemaphore.withPermit(
         Effect.gen(function* () {
           const current = (yield* SynchronizedRef.get(pictureInPictureSessionsRef)).get(tabId);
+
           if (current !== pictureInPictureSession || pictureInPictureSession.window.isDestroyed()) {
             if (current === pictureInPictureSession) {
               yield* releasePictureInPicture(tabId, pictureInPictureSession, false);
             }
+
             return false;
           }
+
           yield* update(tabId, { pictureInPicture: true });
           yield* Deferred.done(pictureInPictureSession.ready, initializationExit);
+
           return true;
         }),
       );
+
       if (published) return;
+
       return yield* Deferred.await(pictureInPictureSession.ready);
     }
+
     yield* Deferred.done(pictureInPictureSession.ready, initializationExit);
     const current = (yield* SynchronizedRef.get(pictureInPictureSessionsRef)).get(tabId);
+
     if (current === pictureInPictureSession) {
       yield* pictureInPictureMutationSemaphore.withPermit(
         releasePictureInPicture(tabId, pictureInPictureSession, true),
       );
     }
+
     return yield* Effect.failCause(initializationExit.cause);
   });
+
   return { closePictureInPicture, closeAllPictureInPicture, openPictureInPicture };
 };

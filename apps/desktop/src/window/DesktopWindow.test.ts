@@ -567,6 +567,7 @@ describe("DesktopWindow", () => {
     }),
   );
 });
+
 vi.mock("electron", async (importOriginal) => ({
   ...(await importOriginal<typeof import("electron")>()),
   session: {

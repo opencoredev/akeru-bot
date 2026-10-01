@@ -39,8 +39,11 @@ interface BuildCliInput {
 
 function detectHostBuildPlatform(hostPlatform: string): typeof BuildPlatform.Type | undefined {
   if (hostPlatform === "darwin") return "mac";
+
   if (hostPlatform === "linux") return "linux";
+
   if (hostPlatform === "win32") return "win";
+
   return undefined;
 }
 
@@ -95,6 +98,7 @@ export const resolveMockUpdateServerPort = Effect.fn("resolveMockUpdateServerPor
   mockUpdateServerPort: string | undefined,
 ) {
   const port = mockUpdateServerPort?.trim();
+
   if (!port) {
     return undefined;
   }
@@ -124,6 +128,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
   const defaultArch = yield* getDefaultBuildArch(PLATFORM_CONFIG[platform].archChoices);
   const arch = mergeOptions(input.arch, env.arch, defaultArch);
   const supportedArchitectures = PLATFORM_CONFIG[platform].archChoices;
+
   if (!supportedArchitectures.includes(arch)) {
     return yield* new UnsupportedDesktopBuildArchitectureError({
       platform,
@@ -131,10 +136,13 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
       supportedArchitectures: [...supportedArchitectures],
     });
   }
+
   const version = mergeOptions(input.buildVersion, env.version, undefined);
+
   const releaseDir = resolveBooleanFlag(input.mockUpdates, env.mockUpdates)
     ? "release-mock"
     : "release";
+
   const outputDir = path.resolve(
     repoRoot,
     mergeOptions(input.outputDir, env.outputDir, releaseDir),
@@ -147,6 +155,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
 
   const mockUpdates = resolveBooleanFlag(input.mockUpdates, env.mockUpdates);
   const configuredMockUpdateServerPort = Option.getOrUndefined(env.mockUpdateServerPort);
+
   const mockUpdateServerPort =
     Option.getOrUndefined(input.mockUpdateServerPort) ??
     (configuredMockUpdateServerPort === undefined

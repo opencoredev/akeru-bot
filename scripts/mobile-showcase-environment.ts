@@ -13,12 +13,19 @@ import {
   SHOWCASE_PROJECT_ID,
 } from "./mobile-showcase-fixtures.ts";
 import { waitForSeedableSchema, seedDatabase } from "./mobile-showcase-seed-database.ts";
+
 export { SHOWCASE_PROJECT_ID } from "./mobile-showcase-fixtures.ts";
+
 export { SHOWCASE_THREAD_ID } from "./mobile-showcase-fixtures.ts";
+
 export { SHOWCASE_SCENES } from "./mobile-showcase-fixtures.ts";
+
 export type { ShowcaseScene } from "./mobile-showcase-fixtures.ts";
+
 export { SHOWCASE_PROJECTS } from "./mobile-showcase-fixtures.ts";
+
 export { SHOWCASE_ENVIRONMENTS } from "./mobile-showcase-fixtures.ts";
+
 export { SHOWCASE_THREADS } from "./mobile-showcase-fixtures.ts";
 
 const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
@@ -98,32 +105,42 @@ export async function seedShowcaseEnvironment(input: {
   readonly now?: number;
 }): Promise<{ readonly dbPath: string; readonly workspaceRoot: string }> {
   const now = input.now ?? Date.now();
+
   const selectedProjectIds = new Set(
     input.projectIds ?? SHOWCASE_PROJECTS.map((project) => project.id),
   );
+
   const projects = SHOWCASE_PROJECTS.filter((project) => selectedProjectIds.has(project.id));
+
   if (projects.length === 0) throw new Error("At least one showcase project must be selected.");
   const threads = SHOWCASE_THREADS.filter((thread) => selectedProjectIds.has(thread.projectId));
   const workspaceBase = NodePath.join(input.baseDir, "workspace");
+
   const workspaceRoots = new Map(
     projects.map(
       (project) => [project.id, NodePath.join(workspaceBase, project.directory)] as const,
     ),
   );
+
   const primaryProject =
     projects.find((project) => project.id === SHOWCASE_PROJECT_ID) ?? projects[0];
+
   if (!primaryProject) throw new Error("The primary showcase workspace is not configured.");
   const workspaceRoot = workspaceRoots.get(primaryProject.id);
+
   if (!workspaceRoot) throw new Error("The primary showcase workspace is not configured.");
   const dbPath = NodePath.join(input.baseDir, "userdata", "state.sqlite");
+
   if (primaryProject.id === SHOWCASE_PROJECT_ID) {
     await seedT3CodeWorkspace(workspaceRoot);
   }
+
   await Promise.all(
     projects
       .filter((project) => project.id !== SHOWCASE_PROJECT_ID)
       .map(async (project) => {
         const projectWorkspaceRoot = workspaceRoots.get(project.id);
+
         if (!projectWorkspaceRoot) throw new Error(`Missing workspace root for ${project.id}.`);
         await seedCompanionWorkspace({
           workspaceRoot: projectWorkspaceRoot,

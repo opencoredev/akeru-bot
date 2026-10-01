@@ -16,24 +16,29 @@ import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 
 import * as DesktopUpdates from "./DesktopUpdates.ts";
 import { flushCallbacks, makeHarness } from "./test-support/UpdatesHarness.ts";
+
 describe("DesktopUpdates", () => {
   it("preserves complete causes for update poller and event failures", () => {
     const cause = Cause.combine(
       Cause.fail(new Error("updater failed")),
       Cause.die(new Error("updater defect")),
     );
+
     const pollerError = new DesktopUpdates.DesktopUpdatePollerError({
       poller: "startup",
       cause,
     });
+
     const eventError = new DesktopUpdates.DesktopUpdateEventHandlingError({
       event: "download-progress",
       cause,
     });
+
     const reportedError = new DesktopUpdates.DesktopUpdaterReportedError({
       operation: "download",
       cause,
     });
+
     const unexpectedActionError = new DesktopUpdates.DesktopUpdateUnexpectedActionError({
       action: "install",
       cause,
@@ -118,6 +123,7 @@ describe("DesktopUpdates", () => {
 
   it.effect("keeps raw updater event failures out of update state", () => {
     const harness = makeHarness();
+
     const cause = new Error(
       "request failed for https://user:secret@example.com/update?token=secret",
     );
@@ -142,14 +148,18 @@ describe("DesktopUpdates", () => {
     const cause = new Error(
       "request failed for https://user:secret@example.com/update?token=secret",
     );
+
     const updaterError = new ElectronUpdater.ElectronUpdaterCheckForUpdatesError({
       channel: null,
       cause,
     });
+
     const harness = makeHarness({ checkForUpdates: Effect.fail(updaterError) });
     const loggedAnnotations: Array<Record<string, unknown>> = [];
+
     const logger = Logger.make(({ fiber }) => {
       const annotations = fiber.getRef(References.CurrentLogAnnotations);
+
       if (annotations.errorTag === "ElectronUpdaterCheckForUpdatesError") {
         loggedAnnotations.push(annotations);
       }
@@ -188,9 +198,11 @@ describe("DesktopUpdates", () => {
 
   it.effect("recovers download state after an unexpected setup failure", () => {
     let disableDifferentialCalls = 0;
+
     const harness = makeHarness({
       setDisableDifferentialDownload: Effect.suspend(() => {
         disableDifferentialCalls += 1;
+
         return disableDifferentialCalls === 1
           ? Effect.void
           : Effect.die(new Error("download setup failed"));
@@ -220,15 +232,19 @@ describe("DesktopUpdates", () => {
     Effect.gen(function* () {
       const actionStarted = yield* Deferred.make<void>();
       let disableDifferentialCalls = 0;
+
       const harness = makeHarness({
         setDisableDifferentialDownload: Effect.suspend(() => {
           disableDifferentialCalls += 1;
+
           if (disableDifferentialCalls === 1) {
             return Effect.void;
           }
+
           if (disableDifferentialCalls === 2) {
             return Deferred.succeed(actionStarted, undefined).pipe(Effect.andThen(Effect.never));
           }
+
           return Effect.void;
         }),
       });

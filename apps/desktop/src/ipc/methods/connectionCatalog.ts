@@ -12,6 +12,7 @@ export const getConnectionCatalog = DesktopIpc.makeIpcMethod({
   result: Schema.NullOr(Schema.String),
   handler: Effect.fn("desktop.ipc.connectionCatalog.get")(function* () {
     const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
+
     return Option.getOrNull(yield* store.get);
   }),
 });
@@ -22,6 +23,7 @@ export const setConnectionCatalog = DesktopIpc.makeIpcMethod({
   result: Schema.Boolean,
   handler: Effect.fn("desktop.ipc.connectionCatalog.set")(function* (catalog) {
     const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
+
     return yield* store.set(catalog);
   }),
 });

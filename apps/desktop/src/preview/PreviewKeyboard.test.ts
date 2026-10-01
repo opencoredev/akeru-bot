@@ -83,6 +83,7 @@ describe("preview keyboard packets", () => {
       key: "1",
       modifiers: ["Control", "Shift"],
     });
+
     expect(sequence.keyDown).toEqual({
       type: "rawKeyDown",
       key: "!",

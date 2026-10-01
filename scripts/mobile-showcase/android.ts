@@ -46,6 +46,7 @@ export async function buildAndroid(abis: ReadonlyArray<string>): Promise<string>
       env: MOBILE_BUILD_ENV,
     },
   );
+
   return ANDROID_APK_PATH;
 }
 
@@ -63,32 +64,43 @@ export async function runAdb(serial: string, args: ReadonlyArray<string>): Promi
 
 async function runningAndroidAvds(): Promise<ReadonlyMap<string, string>> {
   const adb = androidSdkTool("platform-tools/adb");
+
   const devices = (await commandOutput(adb, ["devices"]))
     .split("\n")
     .map((line) => line.trim().split(/\s+/u))
     .filter((parts) => parts[0]?.startsWith("emulator-") && parts[1] === "device")
     .map((parts) => parts[0] as string);
+
   const result = new Map<string, string>();
+
   for (const serial of devices) {
     const avdName = (await adbOutput(serial, ["emu", "avd", "name"])).split("\n")[0]?.trim();
+
     if (avdName) result.set(avdName, serial);
   }
+
   return result;
 }
 
 async function waitForAndroidSerial(avd: string, timeoutMs = 120_000): Promise<string> {
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() < deadline) {
     const serial = (await runningAndroidAvds()).get(avd);
+
     if (serial) {
       await runAdb(serial, ["wait-for-device"]);
+
       const bootCompleted = (
         await adbOutput(serial, ["shell", "getprop", "sys.boot_completed"])
       ).trim();
+
       if (bootCompleted === "1") return serial;
     }
+
     await delay(1_000);
   }
+
   throw new Error(`Android AVD '${avd}' did not finish booting within ${timeoutMs}ms.`);
 }
 
@@ -143,6 +155,7 @@ async function normalizeAndroidEmulator(
     "plugged",
     "false",
   ]);
+
   if (device.viewport) {
     await runAdb(serial, [
       "shell",
@@ -150,6 +163,7 @@ async function normalizeAndroidEmulator(
       "size",
       `${device.viewport.width}x${device.viewport.height}`,
     ]);
+
     if (device.viewport.density) {
       await runAdb(serial, ["shell", "wm", "density", String(device.viewport.density)]);
     }
@@ -162,6 +176,7 @@ async function waitForAndroidShowcaseScene(
   timeoutMs = 90_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() < deadline) {
     const readyScene = await adbOutput(serial, [
       "shell",
@@ -170,9 +185,11 @@ async function waitForAndroidShowcaseScene(
       "cat",
       "files/t3-showcase-ready",
     ]).catch(() => "");
+
     if (readyScene.trim() === scene) return;
     await delay(500);
   }
+
   throw new Error(`Android showcase scene '${scene}' did not render within ${timeoutMs}ms.`);
 }
 
@@ -193,6 +210,7 @@ async function prepareAndroidShowcaseApp(serial: string): Promise<void> {
   <boolean name="touchGestureEnabled" value="false" />
   <boolean name="keyCommandsEnabled" value="false" />
 </map>`;
+
   const encodedPreferences = Buffer.from(preferences).toString("base64");
   await runAdb(serial, [
     "shell",
@@ -212,15 +230,18 @@ export async function captureAndroid(
   const existingSerial = running.get(capture.device.avd);
   const startedByRunner = !existingSerial;
   let launchedEmulator: NodeChildProcess.ChildProcess | null = null;
+
   if (startedByRunner) {
     const installedAvds = (await commandOutput(androidSdkTool("emulator/emulator"), ["-list-avds"]))
       .split("\n")
       .map((value) => value.trim());
+
     if (!installedAvds.includes(capture.device.avd)) {
       throw new Error(
         `Android AVD '${capture.device.avd}' is not installed. Run emulator -list-avds.`,
       );
     }
+
     launchedEmulator = spawnProcess(
       androidSdkTool("emulator/emulator"),
       ["-avd", capture.device.avd, "-no-snapshot-load", "-no-boot-anim"],
@@ -228,17 +249,21 @@ export async function captureAndroid(
     );
     launchedEmulator.unref();
   }
+
   const serial =
     existingSerial ??
     (await waitForAndroidSerial(capture.device.avd).catch(async (error: unknown) => {
       if (launchedEmulator) await stopProcess(launchedEmulator);
       throw error;
     }));
+
   registerCleanup({ device: capture.device, serial, startedByRunner });
   await normalizeAndroidEmulator(capture.device, capture.appearance, serial);
+
   if (apkPath) {
     await runAdb(serial, ["install", "-r", apkPath]);
   }
+
   await runAdb(serial, ["shell", "pm", "clear", ANDROID_PACKAGE]);
   await prepareAndroidShowcaseApp(serial);
   await runAdb(serial, ["reverse", `tcp:${config.metroPort}`, `tcp:${config.metroPort}`]);
@@ -264,14 +289,17 @@ export async function captureAndroid(
     capture.theme,
     ANDROID_PACKAGE,
   ]);
+
   for (const [sceneIndex, scene] of capture.scenes.entries()) {
     if (sceneIndex > 0) await writeAndroidShowcaseScene(serial, scene);
     await waitForAndroidShowcaseScene(serial, scene);
     await delay(Math.max(config.settleDelayMs, 5_000));
+
     const destination = NodePath.join(
       showcaseCaptureDirectory(outputDirectory, capture),
       `${scene}.png`,
     );
+
     const png = await new Promise<Buffer>((resolve, reject) => {
       NodeChildProcess.execFile(
         androidSdkTool("platform-tools/adb"),
@@ -283,6 +311,7 @@ export async function captureAndroid(
         },
       );
     });
+
     await NodeFSP.writeFile(destination, png);
     await finalizeCapture(destination, capture.device);
   }
@@ -302,8 +331,10 @@ export async function cleanupAndroidViewport(
     "command",
     "exit",
   ]);
+
   if (!device.viewport) return;
   await runAdb(serial, ["shell", "wm", "size", "reset"]);
+
   if (device.viewport.density) {
     await runAdb(serial, ["shell", "wm", "density", "reset"]);
   }

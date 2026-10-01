@@ -43,6 +43,7 @@ describe("linuxSecretStorage", () => {
 
   it("does not force a password-store for desktops Electron already recognizes", () => {
     expect(autoSwitch({ XDG_CURRENT_DESKTOP: "GNOME" })).toBeNull();
+
     for (const desktop of ["Deepin", "Pantheon", "UKUI", "Unity", "X-Cinnamon", "XFCE"]) {
       expect(autoSwitch({ XDG_CURRENT_DESKTOP: desktop })).toBeNull();
     }
@@ -81,6 +82,7 @@ describe("linuxSecretStorage", () => {
     // basic text for the rest. Either way these are the variables a previous session leaves behind,
     // so they are treated as unproven and forced to a real keyring rather than a guessed wallet.
     expect(autoSwitch({ XDG_CURRENT_DESKTOP: "plasma" })).toBe("gnome-libsecret");
+
     for (const session of [
       "kde",
       "kde-plasma",
@@ -95,6 +97,7 @@ describe("linuxSecretStorage", () => {
       expect(autoSwitch({ XDG_SESSION_DESKTOP: session })).toBe("gnome-libsecret");
       expect(autoSwitch({ GDMSESSION: session })).toBe("gnome-libsecret");
     }
+
     expect(autoSwitch({ DESKTOP_SESSION: "kde", KDE_SESSION_VERSION: "6" })).toBe(
       "gnome-libsecret",
     );

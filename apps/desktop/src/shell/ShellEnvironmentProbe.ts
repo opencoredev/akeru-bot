@@ -78,6 +78,7 @@ export const runCommandOutput = Effect.fn("desktop.shellEnvironment.runCommandOu
     readonly shell?: boolean;
   }): Effect.fn.Return<string, never, ChildProcessSpawner.ChildProcessSpawner> {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
     const output = yield* spawner
       .string(
         ChildProcess.make(input.command, input.args, {
@@ -105,6 +106,7 @@ export const runCommandOutput = Effect.fn("desktop.shellEnvironment.runCommandOu
         }),
         Effect.timeoutOption(input.timeout),
       );
+
     if (Option.isSome(output)) {
       return output.value;
     }
@@ -115,7 +117,9 @@ export const runCommandOutput = Effect.fn("desktop.shellEnvironment.runCommandOu
       argumentCount: input.args.length,
       timeoutMs: Duration.toMillis(input.timeout),
     });
+
     yield* logShellEnvironmentCommandError(error);
+
     return "";
   },
 );
@@ -162,7 +166,9 @@ export const readWindowsEnvironment = Effect.fn("desktop.shellEnvironment.readWi
         args,
         timeout: LOGIN_SHELL_TIMEOUT,
       });
+
       const environment = extractEnvironment(output, names);
+
       if (Object.keys(environment).length > 0) {
         return environment;
       }

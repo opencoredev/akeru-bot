@@ -26,8 +26,11 @@ import {
   readLoginShellEnvironment,
   readLaunchctlPath,
 } from "./ShellEnvironmentProbe.ts";
+
 export { resolveDefaultLinuxDbusSessionBusAddress } from "./ShellEnvironmentPolicy.ts";
+
 export { DesktopShellEnvironmentCommandError } from "./ShellEnvironmentProbe.ts";
+
 export { DesktopShellEnvironmentCommandTimeoutError } from "./ShellEnvironmentProbe.ts";
 
 export class DesktopShellEnvironment extends Context.Service<
@@ -53,6 +56,7 @@ const installWindowsEnvironment = Effect.fn("desktop.shellEnvironment.installWin
       ],
       { concurrency: 2 },
     );
+
     const mergedPath = mergePaths("win32", [
       trimNonEmpty(profile.PATH),
       trimNonEmpty(knownWindowsCliDirs(config.env).join(";")),
@@ -63,9 +67,11 @@ const installWindowsEnvironment = Effect.fn("desktop.shellEnvironment.installWin
     if (Option.isSome(mergedPath)) {
       config.env.PATH = mergedPath.value;
     }
+
     if (!config.env.FNM_DIR && profile.FNM_DIR) {
       config.env.FNM_DIR = profile.FNM_DIR;
     }
+
     if (!config.env.FNM_MULTISHELL_PATH && profile.FNM_MULTISHELL_PATH) {
       config.env.FNM_MULTISHELL_PATH = profile.FNM_MULTISHELL_PATH;
     }
@@ -88,6 +94,7 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
         shellEnvironment,
         yield* readLoginShellEnvironment(shell, LOGIN_SHELL_ENV_NAMES),
       );
+
       if (shellEnvironment.PATH) break;
     }
 
@@ -95,6 +102,7 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
       config.platform === "darwin" && !shellEnvironment.PATH
         ? yield* readLaunchctlPath
         : Option.none<string>();
+
     const mergedPath = mergePaths(config.platform, [
       trimNonEmpty(shellEnvironment.PATH).pipe(Option.orElse(() => launchctlPath)),
       readEnvPath(config.env),
@@ -103,6 +111,7 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
     if (Option.isSome(mergedPath)) {
       config.env.PATH = mergedPath.value;
     }
+
     if (!config.env.SSH_AUTH_SOCK && shellEnvironment.SSH_AUTH_SOCK) {
       config.env.SSH_AUTH_SOCK = shellEnvironment.SSH_AUTH_SOCK;
     }
@@ -113,6 +122,7 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
       "XDG_SESSION_DESKTOP",
       "XDG_SESSION_TYPE",
     ] as const;
+
     for (const name of shellPreferredEnvNames) {
       if (shellEnvironment[name]) {
         config.env[name] = shellEnvironment[name];
@@ -142,6 +152,7 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
     ) {
       for (const name of LOCALE_ENV_NAMES) {
         const value = trimNonEmpty(shellEnvironment[name]);
+
         if (Option.isSome(value)) {
           config.env[name] = value.value;
         }
@@ -163,9 +174,11 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
     ) {
       for (const runtimeDir of linuxRuntimeDirCandidates(config.env, process.getuid?.())) {
         const dbusSessionBusPath = `${runtimeDir}/bus`;
+
         const busExists = yield* fileSystem
           .exists(dbusSessionBusPath)
           .pipe(Effect.orElseSucceed(() => false));
+
         if (busExists) {
           config.env.DBUS_SESSION_BUS_ADDRESS = `unix:path=${dbusSessionBusPath}`;
           break;
@@ -181,9 +194,11 @@ const installShellEnvironment = (
   if (config.platform === "win32") {
     return installWindowsEnvironment(config);
   }
+
   if (config.platform === "darwin" || config.platform === "linux") {
     return installPosixEnvironment(config);
   }
+
   return Effect.void;
 };
 
@@ -191,6 +206,7 @@ export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
   const installIntoProcess: DesktopShellEnvironment["Service"]["installIntoProcess"] =
     installShellEnvironment({
       env: process.env,

@@ -69,7 +69,9 @@ function addScopedListener<Args extends ReadonlyArray<unknown>>(
     on: (eventName: string, listener: (...args: Array<unknown>) => void) => unknown;
     removeListener: (eventName: string, listener: (...args: Array<unknown>) => void) => unknown;
   };
+
   const untypedListener = listener as unknown as (...args: Array<unknown>) => void;
+
   return Effect.acquireRelease(
     Effect.sync(() => {
       eventTarget.on(eventName, untypedListener);
@@ -111,6 +113,7 @@ function handleBeforeQuit(
         yield* logLifecycleInfo("before-quit received");
       }).pipe(Effect.withSpan("desktop.lifecycle.beforeQuit")),
     );
+
     return;
   }
 
@@ -165,6 +168,7 @@ function quitFromSignal(
       const electronApp = yield* ElectronApp.ElectronApp;
       const state = yield* DesktopState.DesktopState;
       const wasQuitting = yield* Ref.getAndSet(state.quitting, true);
+
       if (wasQuitting) return;
       yield* logLifecycleInfo("process signal received", { signal });
       yield* requestDesktopShutdownAndWait();
@@ -183,10 +187,13 @@ export const make = DesktopLifecycle.of({
       yield* Effect.yieldNow;
       yield* Ref.set(state.quitting, true);
       yield* requestDesktopShutdownAndWait();
+
       if (environment.isDevelopment) {
         yield* electronApp.exit(75);
+
         return;
       }
+
       yield* electronApp.relaunch({
         execPath: process.execPath,
         args: process.argv.slice(1),
@@ -195,6 +202,7 @@ export const make = DesktopLifecycle.of({
     }).pipe(
       Effect.catchCause((cause) => {
         const error = new DesktopLifecycleRelaunchError({ reason, cause });
+
         return logLifecycleError(error.message, { error });
       }),
       Effect.forkDetach,
@@ -240,6 +248,7 @@ export const make = DesktopLifecycle.of({
       void runEffect(
         Effect.gen(function* () {
           const state = yield* DesktopState.DesktopState;
+
           if (yield* Ref.get(state.quitting)) return;
           yield* desktopWindow.activate;
         }).pipe(Effect.withSpan("desktop.lifecycle.activate")),
@@ -250,6 +259,7 @@ export const make = DesktopLifecycle.of({
         Effect.gen(function* () {
           const app = yield* ElectronApp.ElectronApp;
           const state = yield* DesktopState.DesktopState;
+
           if (environment.platform !== "darwin" && !(yield* Ref.get(state.quitting))) {
             yield* app.quit;
           }

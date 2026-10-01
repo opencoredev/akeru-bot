@@ -257,6 +257,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const workspaceAllowBuilds = workspaceConfig.allowBuilds ?? {};
 
   const platformConfig = PLATFORM_CONFIG[options.platform];
+
   if (!platformConfig) {
     return yield* new UnsupportedDesktopBuildPlatformError({
       platform: options.platform,
@@ -266,6 +267,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const electronVersion = desktopPackageJson.dependencies.electron;
 
   const serverDependencies = serverPackageJson.dependencies;
+
   if (!serverDependencies || Object.keys(serverDependencies).length === 0) {
     return yield* new MissingServerProductionDependenciesError({
       manifestPath: "apps/server/package.json",
@@ -291,9 +293,11 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
         cause,
       }),
   });
+
   const resolvedServerPackagedRuntimeDependencies = selectCliPackagedRuntimeDependencies(
     resolvedServerDependencies,
   );
+
   const resolvedDesktopRuntimeDependencies = yield* Effect.try({
     try: () => resolveDesktopRuntimeDependencies(desktopPackageJson.dependencies, workspaceCatalog),
     catch: (cause) =>
@@ -308,17 +312,20 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const iconAssets = DESKTOP_BUILD_ICON_ASSETS;
   const commitHash = yield* resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
+
   const stageRoot = yield* mkdir({
     prefix: `t3code-desktop-${options.platform}-stage-`,
   });
 
   const stageAppDir = path.join(stageRoot, "app");
   const stageResourcesDir = path.join(stageAppDir, "apps/desktop/resources");
+
   const distDirs = {
     desktopDist: path.join(repoRoot, "apps/desktop/dist-electron"),
     desktopResources: path.join(repoRoot, "apps/desktop/resources"),
     serverDist: path.join(repoRoot, "apps/server/dist"),
   };
+
   const bundledClientEntry = path.join(distDirs.serverDist, "client/index.html");
 
   if (!options.skipBuild) {
@@ -338,6 +345,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     { artifact: "desktop-resources", artifactPath: distDirs.desktopResources },
     { artifact: "server-dist", artifactPath: distDirs.serverDist },
   ] as const;
+
   for (const input of requiredBuildInputs) {
     if (!(yield* fs.exists(input.artifactPath))) {
       return yield* new MissingDesktopBuildInputError({
@@ -358,21 +366,27 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     const chunkNames = (yield* fs.readDirectory(distDirs.serverDist)).filter((entry) =>
       entry.endsWith(".mjs"),
     );
+
     let totalRegions = 0;
     const inlined = new Set<string>();
     const inlinedPackages = new Set<string>();
+
     for (const chunkName of chunkNames) {
       const source = yield* fs.readFileString(path.join(distDirs.serverDist, chunkName));
       const scan = findInlinedExternalPackages(source);
       totalRegions += scan.regionCount;
+
       for (const name of scan.inlined) inlined.add(name);
+
       for (const name of scan.inlinedPackages) inlinedPackages.add(name);
     }
+
     if (inlined.size > 0) {
       return yield* new InlinedExternalPackageError({
         packages: [...inlined].sort(),
       });
     }
+
     // No regions at all means the scan went blind (marker format changed), not
     // that the bundle is clean.
     if (totalRegions === 0) {
@@ -380,6 +394,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
         packages: ["<no module regions found; the bundle scan needs updating>"],
       });
     }
+
     // The check above is one-directional: it only proves nothing external got
     // inlined. A regression to externalizing everything would also pass it,
     // since source-file regions still exist -- and that is the failure this
@@ -392,11 +407,15 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     // native, but absent from the list, so nothing flagged them. Ask the store
     // what each inlined package actually is instead.
     const nativeInlined: string[] = [];
+
     for (const name of [...inlinedPackages].sort()) {
       const packageDir = yield* findStorePackageDirectory(repoRoot, name);
+
       if (packageDir === null) continue;
+
       if (yield* hasNativeLoaderMarkers(packageDir)) nativeInlined.push(name);
     }
+
     if (nativeInlined.length > 0) {
       return yield* new InlinedNativePackageError({ packages: nativeInlined });
     }
@@ -423,6 +442,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* validateBundledClientAssets(path.dirname(bundledClientEntry));
 
   yield* fs.makeDirectory(path.join(stageAppDir, "apps/desktop"), { recursive: true });
+
   if (options.platform !== "win") {
     yield* fs.makeDirectory(path.join(stageAppDir, "apps/server"), { recursive: true });
   }
@@ -434,14 +454,17 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     repoRoot,
     destination: path.join(stageAppDir, "legal"),
   });
+
   if (options.platform === "mac" && options.target === "dmg") {
     yield* stageDesktopDmgBackground(stageResourcesDir, options.verbose);
   }
+
   // On Windows the server tree ships in the server.asar sidecar instead of
   // app.asar (see stageWindowsServerSidecar), so the app stage omits it.
   if (options.platform !== "win") {
     yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
   }
+
   yield* stageResourceMonitor({
     repoRoot,
     stageResourcesDir,
@@ -472,6 +495,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   const macEntitlementsPath =
     options.platform === "mac" ? path.join(stageAppDir, "entitlements.mac.plist") : undefined;
+
   if (macEntitlementsPath) {
     yield* fs.writeFileString(macEntitlementsPath, renderMacEntitlements());
   }
@@ -500,14 +524,17 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
               serverPackageJson.dependencies["@ff-labs/fff-node"],
             ),
           };
+
   const stagePatchedDependencies = createStagePatchedDependencies(
     workspacePatchedDependencies,
     stageDependencies,
   );
+
   const windowsServerAsarPath =
     options.platform === "win"
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
+
   const stagePackageJson: StagePackageJson = {
     // Electron derives app.name (and therefore the macOS safe-storage
     // keychain service) from this manifest name. Keep the packaged identity
@@ -539,6 +566,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   const stagePackageJsonString = yield* encodeJsonString(stagePackageJson);
   yield* fs.writeFileString(path.join(stageAppDir, "package.json"), `${stagePackageJsonString}\n`);
+
   const stageWorkspaceConfig = createStageWorkspaceConfig({
     platform: options.platform,
     arch: options.arch,
@@ -546,6 +574,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     patchedDependencies: stagePatchedDependencies,
     overrides: resolvedOverrides,
   });
+
   const stageWorkspaceConfigString = yield* encodeStageWorkspaceConfig(stageWorkspaceConfig);
   yield* fs.writeFileString(
     path.join(stageAppDir, "pnpm-workspace.yaml"),
@@ -593,12 +622,15 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const buildEnv: NodeJS.ProcessEnv = {
     ...process.env,
   };
+
   buildEnv.npm_config_user_agent = resolvePackageManagerUserAgent(rootPackageJson.packageManager);
+
   for (const [key, value] of Object.entries(buildEnv)) {
     if (value === "") {
       delete buildEnv[key];
     }
   }
+
   if (!options.signed) {
     buildEnv.CSC_IDENTITY_AUTO_DISCOVERY = "false";
     delete buildEnv.CSC_LINK;
@@ -610,25 +642,30 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   if (hostPlatform === "win32") {
     const python = yield* resolvePythonForNodeGyp();
+
     if (python) {
       buildEnv.PYTHON = python;
       buildEnv.npm_config_python = python;
     }
+
     buildEnv.npm_config_msvs_version = buildEnv.npm_config_msvs_version ?? "2022";
     buildEnv.GYP_MSVS_VERSION = buildEnv.GYP_MSVS_VERSION ?? "2022";
   }
+
   if (options.verbose) {
     const debugNamespaces = [
       "electron-builder",
       "electron-builder:*",
       ...(options.platform === "mac" ? ["electron-osx-sign*", "electron-notarize*"] : []),
     ];
+
     buildEnv.DEBUG = [buildEnv.DEBUG, ...debugNamespaces].filter(Boolean).join(",");
   }
 
   yield* Effect.log(
     `[desktop-artifact] Building ${options.platform}/${options.target} (arch=${options.arch}, version=${appVersion})...`,
   );
+
   const builderArgs = [
     "exec",
     "--filter",
@@ -642,6 +679,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     "--publish",
     "never",
   ];
+
   const builderCommand = yield* resolveSpawnCommand("vp", builderArgs, { env: buildEnv });
   yield* runCommand(
     ChildProcess.make(builderCommand.command, builderCommand.args, {
@@ -656,6 +694,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   );
 
   const stageDistDir = path.join(stageAppDir, "dist");
+
   if (!(yield* fs.exists(stageDistDir))) {
     return yield* new DesktopBuildDistDirectoryMissingError({
       distPath: stageDistDir,
@@ -689,9 +728,11 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.makeDirectory(options.outputDir, { recursive: true });
 
   const copiedArtifacts: string[] = [];
+
   for (const entry of stageEntries) {
     const from = path.join(stageDistDir, entry);
     const stat = yield* fs.stat(from).pipe(Effect.orElseSucceed(() => null));
+
     if (!stat || stat.type !== "File") continue;
 
     const to = path.join(options.outputDir, entry);

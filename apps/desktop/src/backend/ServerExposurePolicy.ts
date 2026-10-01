@@ -51,6 +51,7 @@ export const DESKTOP_MANUAL_ENDPOINT_PROVIDER: AdvertisedEndpointProvider = {
 
 export const normalizeOptionalHost = (value: string | undefined): string | undefined => {
   const normalized = value?.trim();
+
   return normalized && normalized.length > 0 ? normalized : undefined;
 };
 
@@ -72,6 +73,7 @@ export const resolveLanAdvertisedHost = (
   explicitHost: string | undefined,
 ): string | null => {
   const normalizedExplicitHost = normalizeOptionalHost(explicitHost);
+
   if (normalizedExplicitHost) {
     return normalizedExplicitHost;
   }
@@ -81,8 +83,11 @@ export const resolveLanAdvertisedHost = (
 
     for (const address of interfaceAddresses) {
       if (address.internal) continue;
+
       if (address.family !== "IPv4") continue;
+
       if (!isUsableLanIpv4Address(address.address)) continue;
+
       return address.address;
     }
   }
@@ -293,12 +298,14 @@ export function resolveRuntimeState(input: {
   readonly advertisedHostOverride: Option.Option<string>;
 }): ResolvedRuntimeState {
   const advertisedHostOverride = Option.getOrUndefined(input.advertisedHostOverride);
+
   const requestedExposure = resolveDesktopServerExposure({
     mode: input.requestedMode,
     port: input.port,
     networkInterfaces: input.networkInterfaces,
     ...(advertisedHostOverride ? { advertisedHostOverride } : {}),
   });
+
   const unavailable =
     input.requestedMode === "network-accessible" &&
     requestedExposure.endpointUrl === null &&
@@ -308,6 +315,7 @@ export function resolveRuntimeState(input: {
           !address.internal && address.family === "IPv4" && isTailscaleIpv4Address(address.address),
       ),
     );
+
   const exposure = unavailable
     ? resolveDesktopServerExposure({
         mode: "local-only",

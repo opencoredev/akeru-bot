@@ -7,13 +7,16 @@ import {
 import { SHOWCASE_SCENES, type ShowcaseScene } from "./mobile-showcase-environment.ts";
 
 export { SHOWCASE_SCENES };
+
 export type { ShowcaseScene };
 
 export type ShowcaseAppearance = "light" | "dark";
 
 /** Every palette the mobile appearance settings can select. */
 export const SHOWCASE_THEMES = MOBILE_THEME_IDS;
+
 export const DEFAULT_SHOWCASE_THEME = MOBILE_DEFAULT_THEME_ID;
+
 export type ShowcaseTheme = MobileThemeId;
 
 export interface ShowcaseStoreAssetSpec {
@@ -80,9 +83,11 @@ export function resolveShowcaseAndroidAbi(
   value: string | undefined,
 ): NonNullable<ShowcaseAndroidDevice["abi"]> {
   if (!value) return "arm64-v8a";
+
   if (ANDROID_ABIS.some((abi) => abi === value)) {
     return value as NonNullable<ShowcaseAndroidDevice["abi"]>;
   }
+
   throw new Error(
     `Unsupported T3_SHOWCASE_ANDROID_ABI '${value}'. Use ${ANDROID_ABIS.join(", ")}.`,
   );

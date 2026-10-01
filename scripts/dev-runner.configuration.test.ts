@@ -53,6 +53,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           portOffset: undefined,
           devInstance: "feature-branch",
         });
+
         assert.ok(result.offset >= 1);
         assert.ok(result.offset <= 3000);
       }),
@@ -138,6 +139,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
     it.effect("supports explicit typed overrides", () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
+
         const env = yield* createDevRunnerEnv({
           mode: "dev:server",
           baseEnv: {},
@@ -236,6 +238,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
     it.effect("uses custom t3Home when provided", () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
+
         const env = yield* createDevRunnerEnv({
           mode: "dev",
           baseEnv: {},
@@ -257,6 +260,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
     it.effect("pins desktop dev to a stable backend port and websocket url", () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
+
         const env = yield* createDevRunnerEnv({
           mode: "dev:desktop",
           baseEnv: {

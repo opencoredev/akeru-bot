@@ -16,6 +16,7 @@ const homeSource = () =>
     sourceFile("components/home/DemoGallery.astro"),
     sourceFile("components/home/DownloadSection.astro"),
   ].join("\n");
+
 const layoutSource = () =>
   [
     sourceFile("layouts/Layout.astro"),
@@ -33,6 +34,7 @@ const jpegFrameMarker = (image: Buffer) => {
     offset += 1;
 
     if (marker >= 0xc0 && marker <= 0xc3) return marker;
+
     if (marker === 0xda || marker === undefined) break;
 
     const segmentLength = image.readUInt16BE(offset);
@@ -99,18 +101,22 @@ describe("marketing search metadata", () => {
     expect(openSource).toContain('href="/guides/self-hosted-grok-bot#first-task"');
     expect(openSource).toContain("Does self-hosting keep my prompts offline?");
     expect(openSource).toContain("Your Grok subscription and any server you rent");
+
     for (const page of [openSource, selfHosted]) {
       expect(page).toContain("<code>~/.akeru</code> by default");
       expect(page).not.toContain("under Subscriptions");
     }
+
     expect(selfHosted).toContain('id="first-task"');
     expect(selfHosted).toContain("A prompt is not a permission boundary");
     expect(selfHosted).toContain("Do not edit files, install dependencies, or run commands.");
+
     for (const path of ["/", "/open-source-grok-bot", "/guides/self-hosted-grok-bot"]) {
       expect(sitemap).toContain(
         `<loc>https://www.akeru-bot.com${path}</loc><lastmod>2026-09-07</lastmod>`,
       );
     }
+
     expect(openSource).toContain('dateModified="2026-09-07"');
     expect(selfHosted).toContain('dateModified="2026-09-07"');
   });
@@ -185,9 +191,11 @@ describe("marketing search metadata", () => {
 
   it("serves a crawler-compatible social card from a cache-busted URL", () => {
     const layout = layoutSource();
+
     const socialImage = NodeFS.readFileSync(
       NodePath.resolve(import.meta.dirname, "../public/og-v2.jpg"),
     );
+
     const decoded = JPEG.decode(socialImage, { formatAsRGBA: false, useTArray: true });
 
     expect(layout).toContain('new URL("/og-v2.jpg", siteOrigin)');

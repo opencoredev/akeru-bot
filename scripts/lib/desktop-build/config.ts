@@ -136,14 +136,17 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
     updateRepository: Config.string("T3CODE_DESKTOP_UPDATE_REPOSITORY").pipe(Config.option),
     githubRepository: Config.string("GITHUB_REPOSITORY").pipe(Config.option),
   });
+
   const rawRepo = (
     Option.getOrUndefined(env.updateRepository)?.trim() ||
     Option.getOrUndefined(env.githubRepository)?.trim() ||
     ""
   ).trim();
+
   if (!rawRepo) return undefined;
 
   const [owner, repo, ...rest] = rawRepo.split("/");
+
   if (!owner || !repo || rest.length > 0) return undefined;
 
   return {
@@ -170,6 +173,7 @@ export function resolveMockUpdateServerUrl(mockUpdateServerPort: number | undefi
 export function resolvePackageManagerUserAgent(packageManager: string): string {
   const trimmed = packageManager.trim();
   const versionSeparator = trimmed.lastIndexOf("@");
+
   if (versionSeparator <= 0 || versionSeparator === trimmed.length - 1) {
     return trimmed;
   }
@@ -216,9 +220,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ...(platform === "win" ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
     ],
   };
+
   const updateChannel = DESKTOP_UPDATE_CHANNEL;
+
   if (!isDesktopPreviewVersion(version)) {
     const publishConfig = yield* resolveGitHubPublishConfig();
+
     if (publishConfig) {
       buildConfig.publish = [publishConfig];
     } else if (mockUpdates) {
@@ -334,6 +341,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         schemes: ["akeru"],
       },
     ];
+
     const winConfig: Record<string, unknown> = {
       target: [target],
       icon: "icon.ico",
@@ -342,9 +350,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // packaged executable with Electron's stock icon.
       signAndEditExecutable: true,
     };
+
     if (signed) {
       winConfig.azureSignOptions = yield* AzureTrustedSigningOptionsConfig;
     }
+
     buildConfig.win = winConfig;
   }
 
@@ -364,11 +374,13 @@ export const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResour
       iconAssets.macIconComposer,
       verbose,
     );
+
     return;
   }
 
   if (platform === "linux") {
     yield* stageLinuxIcons(stageResourcesDir, iconAssets.linuxIconPng, verbose);
+
     return;
   }
 

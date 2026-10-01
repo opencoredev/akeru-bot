@@ -20,16 +20,20 @@ describe("desktop atomic writes", () => {
         it.effect(`${target}: cleans up after ${failure}, cleanup failure=${cleanupFails}`, () =>
           Effect.gen(function* () {
             const baseFileSystem = yield* FileSystem.FileSystem;
+
             const baseDir = yield* baseFileSystem.makeTempDirectoryScoped({
               prefix: "akeru-atomic-writes-",
             });
+
             const removedPaths: string[] = [];
+
             const writeError = PlatformError.systemError({
               _tag: "PermissionDenied",
               module: "FileSystem",
               method: failure === "write" ? "writeFileString" : "rename",
               pathOrDescriptor: baseDir,
             });
+
             const fileSystemLayer = Layer.succeed(FileSystem.FileSystem, {
               ...baseFileSystem,
               writeFileString: (path, contents, options) =>
@@ -44,11 +48,13 @@ describe("desktop atomic writes", () => {
                   : baseFileSystem.rename(source, destination),
               remove: (path, options) => {
                 removedPaths.push(String(path));
+
                 return baseFileSystem
                   .remove(path, options)
                   .pipe(Effect.andThen(cleanupFails ? Effect.fail(writeError) : Effect.void));
               },
             });
+
             const environmentLayer = DesktopEnvironment.layer({
               dirname: "/repo/apps/desktop/src",
               homeDirectory: baseDir,
@@ -67,6 +73,7 @@ describe("desktop atomic writes", () => {
                 ),
               ),
             );
+
             const dependencies = Layer.mergeAll(
               NodeServices.layer,
               environmentLayer,
@@ -78,6 +85,7 @@ describe("desktop atomic writes", () => {
                 selectedStorageBackend: Effect.succeed(Option.none()),
               }),
             );
+
             const save = Effect.gen(function* () {
               if (target === "settings") {
                 yield* Effect.gen(function* () {
@@ -98,13 +106,16 @@ describe("desktop atomic writes", () => {
               yield* save;
             } else {
               const error = yield* save.pipe(Effect.flip);
+
               if (
                 !Schema.is(DesktopAppSettings.DesktopSettingsWriteError)(error) &&
                 !Schema.is(DesktopSavedEnvironments.DesktopSavedEnvironmentsWriteError)(error)
               ) {
                 assert.fail(`Unexpected save error: ${error._tag}`);
+
                 return;
               }
+
               assert.equal(
                 error.operation,
                 failure === "write"
@@ -115,6 +126,7 @@ describe("desktop atomic writes", () => {
               );
               assert.strictEqual(error.cause, writeError);
             }
+
             assert.lengthOf(removedPaths, 1);
             const tempPath = removedPaths[0]!;
             assert.isTrue(tempPath.startsWith(`${baseDir}/userdata/`));

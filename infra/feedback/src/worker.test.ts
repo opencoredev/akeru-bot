@@ -34,6 +34,7 @@ function emptyInboxDatabase(): D1Database {
     first: async () => null,
     run: async () => ({ meta: { changes: 1 } }),
   };
+
   return { prepare: () => statement } as unknown as D1Database;
 }
 

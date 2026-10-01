@@ -79,6 +79,7 @@ const applyAnnotationTheme = (
 ): void => {
   if (!theme) return;
   host.style.colorScheme = theme.colorScheme;
+
   const variables = {
     "--t3-radius": theme.radius,
     "--t3-background": theme.background,
@@ -97,6 +98,7 @@ const applyAnnotationTheme = (
     "--t3-font-sans": theme.fontSans,
     "--t3-font-mono": theme.fontMono,
   };
+
   for (const [name, value] of Object.entries(variables)) {
     host.style.setProperty(name, value);
   }
@@ -132,7 +134,9 @@ const MOUSE_BUTTON_FORWARD = 4;
 
 const navigationDirectionForButton = (button: number): "back" | "forward" | null => {
   if (button === MOUSE_BUTTON_BACK) return "back";
+
   if (button === MOUSE_BUTTON_FORWARD) return "forward";
+
   return null;
 };
 
@@ -150,6 +154,7 @@ const suppressNavigationButton = (event: MouseEvent): void => {
 const requestNavigationForButton = (event: MouseEvent): void => {
   if (!event.isTrusted) return;
   const direction = navigationDirectionForButton(event.button);
+
   if (direction === null) return;
   event.preventDefault();
   event.stopImmediatePropagation();
@@ -164,6 +169,7 @@ window.addEventListener("auxclick", suppressNavigationButton, true);
 
 const nextId = (prefix: string): string => {
   idSequence += 1;
+
   return `${prefix}_${idSequence.toString(36)}`;
 };
 
@@ -277,6 +283,7 @@ function startAnnotation(): void {
     comment.style.overflowY = comment.scrollHeight > maxHeight ? "auto" : "hidden";
     queueEditorLayout();
   };
+
   comment.addEventListener("input", resizeComment);
 
   const updateStatus = (): void => {
@@ -287,6 +294,7 @@ function startAnnotation(): void {
     adjust.disabled = !hasTargets;
     stylePanel.style.display = editorExpanded && selected.size > 0 ? "grid" : "none";
     queueEditorLayout();
+
     if (hasTargets && !editorWasShown) {
       editorWasShown = true;
       window.setTimeout(() => comment.focus({ preventScroll: true }), 0);
@@ -300,7 +308,9 @@ function startAnnotation(): void {
       button.classList.toggle("text-primary", active);
       button.classList.toggle("text-foreground", !active);
     }
+
     if (tool !== "select") hoverOutline.style.display = "none";
+
     if (tool !== "marquee") marqueeBox.style.display = "none";
     document.documentElement.setAttribute("data-t3code-annotation-tool", tool);
   };
@@ -312,17 +322,21 @@ function startAnnotation(): void {
         else target.element.style.removeProperty(property);
       }
     }
+
     selected.delete(target.element);
     target.outline.remove();
     target.label.remove();
+
     for (const [key, change] of styleChanges) {
       if (change.targetId === target.id) styleChanges.delete(key);
     }
+
     updateStatus();
   };
 
   const addSelected = (element: Element): void => {
     if (selected.has(element)) return;
+
     const target: SelectedElement = {
       id: nextId("element"),
       element,
@@ -330,10 +344,12 @@ function startAnnotation(): void {
       label: createLabel(),
       baselineStyles: new Map(),
     };
+
     selected.set(element, target);
     root.append(target.outline, target.label);
     updateSelectedVisual(target);
     updateStatus();
+
     if (editorExpanded) {
       stylePanel.style.display = "grid";
       syncStyleControls();
@@ -342,13 +358,17 @@ function startAnnotation(): void {
 
   const toggleSelected = (element: Element, additive: boolean): void => {
     const existing = selected.get(element);
+
     if (existing) {
       removeSelected(existing);
+
       return;
     }
+
     if (!additive) {
       for (const target of Array.from(selected.values())) removeSelected(target);
     }
+
     addSelected(element);
   };
 
@@ -356,13 +376,17 @@ function startAnnotation(): void {
     for (const target of selected.values()) {
       if (!(target.element instanceof HTMLElement || target.element instanceof SVGElement))
         continue;
+
       if (!target.baselineStyles.has(property)) {
         target.baselineStyles.set(property, target.element.style.getPropertyValue(property));
       }
+
       const key = `${target.id}:${property}`;
+
       const previousValue =
         styleChanges.get(key)?.previousValue ??
         getComputedStyle(target.element).getPropertyValue(property).trim();
+
       target.element.style.setProperty(property, value, "important");
       styleChanges.set(key, {
         targetId: target.id,
@@ -387,6 +411,7 @@ function startAnnotation(): void {
     ["draw", "Draw", "Draw freehand (D)"],
     ["erase", "Erase", "Remove an annotation target (E)"],
   ];
+
   for (const [candidate, label, title] of tools) {
     const button = createButton(label, title);
     button.className += " h-8 px-2.5 text-sm";
@@ -401,6 +426,7 @@ function startAnnotation(): void {
   const clampEditorPosition = (left: number, top: number): { left: number; top: number } => {
     const margin = 8;
     const rect = editor.getBoundingClientRect();
+
     return {
       left: Math.min(
         Math.max(margin, left),
@@ -419,6 +445,7 @@ function startAnnotation(): void {
     editor.style.top = `${clamped.top}px`;
     editor.style.right = "auto";
     editor.style.bottom = "auto";
+
     if (editorExpanded) editorPosition = clamped;
   };
 
@@ -436,9 +463,11 @@ function startAnnotation(): void {
 
   const positionCompactEditor = (): void => {
     const bounds = getAnnotationBounds();
+
     if (!bounds) return;
     const editorRect = editor.getBoundingClientRect();
     const gap = 8;
+
     const candidates = [
       { left: bounds.x + bounds.width + gap, top: bounds.y },
       { left: bounds.x - editorRect.width - gap, top: bounds.y },
@@ -451,14 +480,17 @@ function startAnnotation(): void {
         top: bounds.y - editorRect.height - gap,
       },
     ];
+
     const overflow = (position: { left: number; top: number }): number =>
       Math.max(0, -position.left) +
       Math.max(0, -position.top) +
       Math.max(0, position.left + editorRect.width - window.innerWidth) +
       Math.max(0, position.top + editorRect.height - window.innerHeight);
+
     const best = candidates.reduce((current, candidate) =>
       overflow(candidate) < overflow(current) ? candidate : current,
     );
+
     applyEditorPosition(best);
   };
 
@@ -466,7 +498,9 @@ function startAnnotation(): void {
     if (editorLayoutFrame !== null) window.cancelAnimationFrame(editorLayoutFrame);
     editorLayoutFrame = window.requestAnimationFrame(() => {
       editorLayoutFrame = null;
+
       if (editor.style.display === "none") return;
+
       if (editorExpanded && editorPosition) applyEditorPosition(editorPosition);
       else positionCompactEditor();
     });
@@ -474,6 +508,7 @@ function startAnnotation(): void {
 
   adjust.addEventListener("click", () => {
     if (selected.size === 0) return;
+
     if (!editorExpanded) {
       const rect = editor.getBoundingClientRect();
       editorExpanded = true;
@@ -483,6 +518,7 @@ function startAnnotation(): void {
       adjust.setAttribute("aria-expanded", "true");
       adjust.title = "Collapse annotation editor";
       adjust.setAttribute("aria-label", "Collapse annotation editor");
+
       if (selected.size > 0) syncStyleControls();
     } else {
       editorExpanded = false;
@@ -493,6 +529,7 @@ function startAnnotation(): void {
       adjust.title = "Expand annotation editor";
       adjust.setAttribute("aria-label", "Expand annotation editor");
     }
+
     queueEditorLayout();
   });
 
@@ -524,11 +561,13 @@ function startAnnotation(): void {
     if (!editorDrag || editorDrag.pointerId !== event.pointerId) return;
     editorDrag = null;
     dragHandle.style.cursor = "grab";
+
     if (dragHandle.hasPointerCapture(event.pointerId))
       dragHandle.releasePointerCapture(event.pointerId);
     event.preventDefault();
     event.stopPropagation();
   };
+
   dragHandle.addEventListener("pointerdown", onEditorPointerDown);
   dragHandle.addEventListener("pointermove", onEditorPointerMove);
   dragHandle.addEventListener("pointerup", onEditorPointerUp);
@@ -542,11 +581,14 @@ function startAnnotation(): void {
   const removeTargetAtPoint = (x: number, y: number): boolean => {
     for (const target of Array.from(selected.values()).toReversed()) {
       const rect = target.element.getBoundingClientRect();
+
       if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
         removeSelected(target);
+
         return true;
       }
     }
+
     const regionIndex = regions.findIndex(
       (region) =>
         x >= region.rect.x &&
@@ -554,12 +596,15 @@ function startAnnotation(): void {
         y >= region.rect.y &&
         y <= region.rect.y + region.rect.height,
     );
+
     if (regionIndex >= 0) {
       const [removed] = regions.splice(regionIndex, 1);
       root.querySelector(`[data-region-id="${removed?.id}"]`)?.remove();
       updateStatus();
+
       return true;
     }
+
     const strokeIndex = strokes.findIndex(
       (stroke) =>
         x >= stroke.bounds.x &&
@@ -567,12 +612,15 @@ function startAnnotation(): void {
         y >= stroke.bounds.y &&
         y <= stroke.bounds.y + stroke.bounds.height,
     );
+
     if (strokeIndex >= 0) {
       const [removed] = strokes.splice(strokeIndex, 1);
       svg.querySelector(`[data-stroke-id="${removed?.id}"]`)?.remove();
       updateStatus();
+
       return true;
     }
+
     return false;
   };
 
@@ -589,7 +637,9 @@ function startAnnotation(): void {
           element.getAttribute("role") === "button"),
       measure: (element) => element.getBoundingClientRect(),
     });
+
     for (const candidate of candidates) addSelected(candidate);
+
     return candidates.length;
   };
 
@@ -600,22 +650,30 @@ function startAnnotation(): void {
   const onPointerMove = (event: PointerEvent): void => {
     if (isAnnotationNode(event.target as Element)) {
       clearHoverOutline();
+
       return;
     }
+
     if (tool === "select" && dragStart === null) {
       const target = pickFromPoint(event.clientX, event.clientY);
+
       if (target) positionBox(hoverOutline, rectFromDomRect(target.getBoundingClientRect()));
       else clearHoverOutline();
+
       return;
     }
+
     clearHoverOutline();
+
     if (tool === "marquee" && dragStart) {
       positionBox(
         marqueeBox,
         normalizeRect(dragStart.x, dragStart.y, event.clientX, event.clientY),
       );
+
       return;
     }
+
     if (tool === "draw" && activeStroke) {
       activeStroke.target.points = [
         ...activeStroke.target.points,
@@ -633,16 +691,23 @@ function startAnnotation(): void {
     if (event.button !== 0 || isAnnotationNode(event.target as Element)) return;
     event.preventDefault();
     event.stopPropagation();
+
     if (tool === "select") {
       const target = pickFromPoint(event.clientX, event.clientY);
+
       if (target) toggleSelected(target, event.shiftKey);
+
       return;
     }
+
     if (tool === "erase") {
       removeTargetAtPoint(event.clientX, event.clientY);
+
       return;
     }
+
     dragStart = { x: event.clientX, y: event.clientY };
+
     if (tool === "draw") {
       const stroke: PreviewAnnotationStrokeTarget = {
         id: nextId("stroke"),
@@ -651,6 +716,7 @@ function startAnnotation(): void {
         points: [dragStart],
         bounds: { x: dragStart.x, y: dragStart.y, width: 1, height: 1 },
       };
+
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute(OVERLAY_ATTRIBUTE, "");
       path.setAttribute("data-stroke-id", stroke.id);
@@ -668,18 +734,23 @@ function startAnnotation(): void {
     if (!dragStart) return;
     event.preventDefault();
     event.stopPropagation();
+
     if (tool === "marquee") {
       const rect = normalizeRect(dragStart.x, dragStart.y, event.clientX, event.clientY);
       marqueeBox.style.display = "none";
+
       if (isUsableRect(rect)) {
         const found = selectElementsInRect(rect);
+
         if (found === 0) {
           const region: PreviewAnnotationRegionTarget = { id: nextId("region"), rect };
           regions.push(region);
+
           const regionBox = createBox(
             PRIMARY,
             "color-mix(in srgb, var(--t3-primary) 6%, transparent)",
           );
+
           regionBox.setAttribute("data-region-id", region.id);
           positionBox(regionBox, rect);
           root.appendChild(regionBox);
@@ -690,6 +761,7 @@ function startAnnotation(): void {
       else activeStroke.path.remove();
       activeStroke = null;
     }
+
     dragStart = null;
     updateStatus();
   };
@@ -712,6 +784,7 @@ function startAnnotation(): void {
     for (const target of selected.values()) {
       if (!(target.element instanceof HTMLElement || target.element instanceof SVGElement))
         continue;
+
       for (const [property, baseline] of target.baselineStyles) {
         if (baseline) target.element.style.setProperty(property, baseline);
         else target.element.style.removeProperty(property);
@@ -736,6 +809,7 @@ function startAnnotation(): void {
     dragHandle.removeEventListener("pointermove", onEditorPointerMove);
     dragHandle.removeEventListener("pointerup", onEditorPointerUp);
     dragHandle.removeEventListener("pointercancel", onEditorPointerUp);
+
     if (editorLayoutFrame !== null) window.cancelAnimationFrame(editorLayoutFrame);
     ipcRenderer.off(CANCEL_PICK_CHANNEL, onCancel);
     ipcRenderer.off(ANNOTATION_CAPTURED_CHANNEL, onCaptured);
@@ -743,19 +817,24 @@ function startAnnotation(): void {
     cursorStyle.remove();
     host.remove();
     activeSession = null;
+
     if (notifyMain) ipcRenderer.send(ELEMENT_PICKED_CHANNEL, null);
   };
 
   const onCancel = (): void => teardown(false);
   const onCaptured = (): void => teardown(false);
+
   const onKeyDown = (event: KeyboardEvent): void => {
     if (isAnnotationNode(event.target as Element) && event.key !== "Escape") return;
+
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
       teardown(true);
+
       return;
     }
+
     if (event.key === "v") tool = "select";
     else if (event.key === "r") tool = "marquee";
     else if (event.key === "d") tool = "draw";
@@ -773,10 +852,13 @@ function startAnnotation(): void {
     void Promise.all(
       Array.from(selected.values()).map(async (target) => {
         const element = await captureElement(target.element);
+
         if (!element) return null;
+
         for (const change of styleChanges.values()) {
           if (change.targetId === target.id) change.selector = element.selector;
         }
+
         return {
           id: target.id,
           element,
@@ -785,6 +867,7 @@ function startAnnotation(): void {
       }),
     ).then((captured) => {
       const elements = captured.filter((target) => target !== null);
+
       const annotation: PreviewAnnotationPayload = {
         id: nextId("annotation"),
         pageUrl: location.href,
@@ -797,23 +880,28 @@ function startAnnotation(): void {
         screenshot: null,
         createdAt: new Date().toISOString(),
       };
+
       editor.style.display = "none";
       toolbar.style.display = "none";
       hoverOutline.style.display = "none";
+
       const screenshotRect = unionRects([
         ...elements.map((target) => target.rect),
         ...regions.map((region) => region.rect),
         ...strokes.map((stroke) => stroke.bounds),
       ]);
+
       ipcRenderer.send(ELEMENT_PICKED_CHANNEL, annotation, screenshotRect, submission);
     });
   };
+
   submit.addEventListener("click", () => submitAnnotation("attach"));
   root.addEventListener("keydown", (event) => {
     const submission = event.target === comment ? resolveAnnotationSubmission(event) : null;
     // Keep this in the bubble phase so editor inputs receive the event before
     // it is isolated from listeners installed by the inspected page.
     event.stopImmediatePropagation();
+
     if (!submission) return;
     event.preventDefault();
     submitAnnotation(submission);

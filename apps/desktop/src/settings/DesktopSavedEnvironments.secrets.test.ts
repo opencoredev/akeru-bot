@@ -13,6 +13,7 @@ import {
   encodeSavedEnvironmentRegistryDocumentProbe,
   withSavedEnvironments,
 } from "./test-support/SavedEnvironmentsHarness.ts";
+
 describe("DesktopSavedEnvironments", () => {
   it.effect("persists encrypted saved environment secrets when encryption is available", () =>
     withSavedEnvironments(
@@ -42,15 +43,18 @@ describe("DesktopSavedEnvironments", () => {
         const fileSystem = yield* FileSystem.FileSystem;
         const savedEnvironments = yield* DesktopSavedEnvironments.DesktopSavedEnvironments;
         yield* fileSystem.makeDirectory(environment.stateDir, { recursive: true });
+
         const encoded = yield* encodeSavedEnvironmentRegistryDocumentProbe({
           version: 1,
           records: [{ ...savedRegistryRecord, encryptedBearerToken: "%%%" }],
         });
+
         yield* fileSystem.writeFileString(environment.savedEnvironmentRegistryPath, `${encoded}\n`);
 
         const error = yield* savedEnvironments
           .getSecret(savedRegistryRecord.environmentId)
           .pipe(Effect.flip);
+
         assert.instanceOf(error, DesktopSavedEnvironments.DesktopSavedEnvironmentSecretDecodeError);
         assert.equal(error.environmentId, savedRegistryRecord.environmentId);
         assert.equal(error.registryPath, environment.savedEnvironmentRegistryPath);
@@ -84,6 +88,7 @@ describe("DesktopSavedEnvironments", () => {
 
   it.effect("adds saved-environment context to safe storage availability failures", () => {
     const cause = new Error("safe storage unavailable");
+
     return withSavedEnvironments(
       Effect.gen(function* () {
         const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -105,8 +110,10 @@ describe("DesktopSavedEnvironments", () => {
         assert.equal(error.environmentId, savedRegistryRecord.environmentId);
         assert.equal(error.registryPath, environment.savedEnvironmentRegistryPath);
         assert.instanceOf(error.cause, ElectronSafeStorage.ElectronSafeStorageAvailabilityError);
+
         const availabilityError =
           error.cause as ElectronSafeStorage.ElectronSafeStorageAvailabilityError;
+
         assert.strictEqual(availabilityError.cause, cause);
         assert.equal(
           error.message,

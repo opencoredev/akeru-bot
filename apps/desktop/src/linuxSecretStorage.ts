@@ -4,6 +4,7 @@ export type LinuxPasswordStorePreference =
   | "kwallet"
   | "kwallet5"
   | "kwallet6";
+
 export type LinuxPasswordStoreSwitch = Exclude<LinuxPasswordStorePreference, "auto">;
 
 export const DEFAULT_LINUX_PASSWORD_STORE: LinuxPasswordStorePreference = "auto";
@@ -20,12 +21,15 @@ const ELECTRON_LIBSECRET_DESKTOPS = new Set([
   "X-Cinnamon",
   "XFCE",
 ]);
+
 // Chromium selects a KWallet generation for KDE from KDE_SESSION_VERSION, so it needs no help.
 const ELECTRON_KDE_DESKTOP = "KDE";
+
 // Chromium recognizes LXQt and still selects basic text for it, so it does need a forced backend.
 const ELECTRON_UNPROTECTED_DESKTOPS = new Set(["LXQt"]);
 
 const KDE_NAME_PREFIXES = ["kde", "plasma"];
+
 const NEGATIVE_FLAG_VALUES = new Set(["0", "false", "no", "off"]);
 
 export function normalizeLinuxPasswordStorePreference(
@@ -63,12 +67,15 @@ export function resolveLinuxPasswordStoreSwitch(input: {
 function electronSelectsProtectedBackend(env: NodeJS.ProcessEnv): boolean {
   for (const name of splitDesktopNameList(env.XDG_CURRENT_DESKTOP)) {
     const trimmed = name.trim();
+
     if (trimmed.length === 0) {
       continue;
     }
+
     if (trimmed === ELECTRON_KDE_DESKTOP || ELECTRON_LIBSECRET_DESKTOPS.has(trimmed)) {
       return true;
     }
+
     if (ELECTRON_UNPROTECTED_DESKTOPS.has(trimmed)) {
       return false;
     }
@@ -95,6 +102,7 @@ export function resolveLinuxSecretStorageUnavailableMessage(input: {
   }
 
   const backend = normalizeSelectedStorageBackend(input.selectedBackend);
+
   if (backend === "gnome-libsecret") {
     return getGnomeKeyringRemediationMessage();
   }
@@ -124,11 +132,13 @@ function getKWalletRemediationMessage(): string {
 // rather than an unprotected credential store.
 function looksLikeKdeSession(env: NodeJS.ProcessEnv): boolean {
   const currentDesktopNames = nonEmptyDesktopNames(env.XDG_CURRENT_DESKTOP);
+
   if (currentDesktopNames.length > 0) {
     return currentDesktopNames.some(isKdeDesktopName);
   }
 
   const legacyNames = legacyDesktopNames(env);
+
   if (legacyNames.length > 0) {
     return legacyNames.some(isKdeDesktopName);
   }
@@ -143,6 +153,7 @@ function isKdeDesktopName(name: string): boolean {
 function legacyDesktopNames(env: NodeJS.ProcessEnv): string[] {
   return [env.XDG_SESSION_DESKTOP, env.DESKTOP_SESSION, env.GDMSESSION].flatMap((entry) => {
     const normalized = normalizeDesktopName(entry);
+
     return normalized ? [normalized] : [];
   });
 }
@@ -150,6 +161,7 @@ function legacyDesktopNames(env: NodeJS.ProcessEnv): string[] {
 function nonEmptyDesktopNames(value: string | undefined): string[] {
   return splitDesktopNameList(value).flatMap((entry) => {
     const normalized = normalizeDesktopName(entry);
+
     return normalized ? [normalized] : [];
   });
 }
@@ -160,6 +172,7 @@ function isSet(value: string | undefined): boolean {
 
 function isAffirmativeFlag(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase();
+
   return normalized ? !NEGATIVE_FLAG_VALUES.has(normalized) : false;
 }
 
@@ -169,10 +182,12 @@ function splitDesktopNameList(value: string | undefined): string[] {
 
 function normalizeDesktopName(value: string | undefined): string | null {
   const normalized = value?.trim().toLowerCase();
+
   return normalized && normalized.length > 0 ? normalized : null;
 }
 
 function normalizeSelectedStorageBackend(value: string | null): string | null {
   const normalized = value?.trim().toLowerCase().replace(/_/gu, "-");
+
   return normalized && normalized.length > 0 ? normalized : null;
 }

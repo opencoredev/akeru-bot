@@ -22,11 +22,17 @@ import {
   readDocument,
 } from "./ConnectionCatalogDocument.ts";
 import { migrateSavedEnvironmentRecords } from "./LegacyConnectionCatalogMigration.ts";
+
 export { DesktopConnectionCatalogStoreWriteError } from "./ConnectionCatalogDocument.ts";
+
 export { DesktopConnectionCatalogStoreDecodeError } from "./ConnectionCatalogDocument.ts";
+
 export { DesktopConnectionCatalogStoreReadError } from "./ConnectionCatalogDocument.ts";
+
 export { DesktopConnectionCatalogStoreDocumentDecodeError } from "./ConnectionCatalogDocument.ts";
+
 export { DesktopConnectionCatalogStoreMigrationError } from "./ConnectionCatalogDocument.ts";
+
 export { DesktopConnectionCatalogStoreProtectionError } from "./ConnectionCatalogDocument.ts";
 
 export class DesktopConnectionCatalogStore extends Context.Service<
@@ -74,6 +80,7 @@ export const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const savedEnvironments = yield* DesktopSavedEnvironments.DesktopSavedEnvironments;
   const catalogPath = path.join(environment.stateDir, "connection-catalog.json");
+
   const encryptionAvailable = safeStorage.isEncryptionAvailable.pipe(
     Effect.mapError(
       (cause) =>
@@ -100,6 +107,7 @@ export const make = Effect.gen(function* () {
         ),
       ),
     );
+
     const suffix = (yield* crypto.randomUUIDv4.pipe(
       Effect.mapError(
         (cause) =>
@@ -110,6 +118,7 @@ export const make = Effect.gen(function* () {
           }),
       ),
     )).replace(/-/g, "");
+
     yield* writeDocument({
       fileSystem,
       path,
@@ -130,16 +139,20 @@ export const make = Effect.gen(function* () {
           }),
       ),
     );
+
     if (records.length === 0) {
       return Option.none<string>();
     }
+
     // A brand-new install has no catalog and no legacy records. Do not touch
     // Electron safe storage in that case: on macOS the availability check can
     // open the keychain prompt even though there is nothing to decrypt.
     if (!(yield* encryptionAvailable)) {
       return Option.none<string>();
     }
+
     const catalog = yield* migrateSavedEnvironmentRecords(records, savedEnvironments, catalogPath);
+
     const encoded = yield* encodeRuntimeConnectionCatalogDocumentJson(catalog).pipe(
       Effect.mapError(
         (cause) =>
@@ -150,6 +163,7 @@ export const make = Effect.gen(function* () {
           }),
       ),
     );
+
     yield* writeCatalog(encoded).pipe(
       Effect.mapError(
         (cause) =>
@@ -160,18 +174,22 @@ export const make = Effect.gen(function* () {
           }),
       ),
     );
+
     return Option.some(encoded);
   });
 
   return DesktopConnectionCatalogStore.of({
     get: Effect.gen(function* () {
       const document = yield* readDocument(fileSystem, catalogPath);
+
       if (Option.isNone(document)) {
         return yield* migrateLegacyCatalog;
       }
+
       if (!(yield* encryptionAvailable)) {
         return Option.none<string>();
       }
+
       const decrypted = yield* decodeSecretBytes(catalogPath, document.value.encryptedCatalog).pipe(
         Effect.flatMap((encryptedCatalog) =>
           safeStorage.decryptString(encryptedCatalog).pipe(
@@ -186,13 +204,16 @@ export const make = Effect.gen(function* () {
           ),
         ),
       );
+
       return Option.some(decrypted);
     }).pipe(Effect.withSpan("desktop.connectionCatalogStore.get")),
     set: Effect.fn("desktop.connectionCatalogStore.set")(function* (catalog) {
       if (!(yield* encryptionAvailable)) {
         return false;
       }
+
       yield* writeCatalog(catalog);
+
       return true;
     }),
     clear: fileSystem.remove(catalogPath, { force: true }).pipe(

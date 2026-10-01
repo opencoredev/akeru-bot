@@ -29,10 +29,12 @@ interface FeedbackRow {
 }
 
 const TurnstileResponse = Schema.Struct({ success: Schema.Boolean });
+
 const decodeStoredProductFeedbackSubmission = Schema.decodeUnknownExit(
   StoredProductFeedbackSubmission,
   { onExcessProperty: "error" },
 );
+
 const decodeTurnstileResponse = Schema.decodeUnknownExit(TurnstileResponse);
 
 export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedbackRepository {
@@ -44,6 +46,7 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
         )
         .bind(hash, since)
         .first<{ count: number }>();
+
       return row?.count ?? 0;
     },
     findLatestByInstallHash: async (hash) => {
@@ -53,11 +56,14 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
         )
         .bind(hash)
         .first<FeedbackRow>();
+
       if (!row) return null;
       const decoded = decodeStoredProductFeedbackSubmission(JSON.parse(row.payload_json));
+
       if (Exit.isFailure(decoded)) {
         throw new Error("Stored feedback payload is invalid.");
       }
+
       return {
         feedbackId: row.feedback_id,
         receivedAt: row.received_at,
@@ -103,7 +109,9 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
           constraints.duplicateSince,
         )
         .run();
+
       if (result.meta.changes === 1) return "accepted";
+
       if (
         ((
           await database
@@ -116,6 +124,7 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
       ) {
         return "rate_limited";
       }
+
       if (
         (await database
           .prepare(
@@ -126,6 +135,7 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
       ) {
         return "cooldown";
       }
+
       if (
         (await database
           .prepare(
@@ -136,6 +146,7 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
       ) {
         return "cooldown";
       }
+
       return "duplicate";
     },
     deleteExpired: async (now) => {
@@ -149,7 +160,9 @@ export function makeRepository(database: FeedbackWorkerEnv["DB"]): ProductFeedba
 
 function deliveryRecord(row: FeedbackRow) {
   const decoded = decodeStoredProductFeedbackSubmission(JSON.parse(row.payload_json));
+
   if (Exit.isFailure(decoded)) throw new Error("Stored feedback payload is invalid.");
+
   return {
     feedbackId: row.feedback_id,
     claimId: row.github_delivery_claim_id ?? "",
@@ -181,11 +194,14 @@ export function makeGitHubIssueOutbox(database: FeedbackWorkerEnv["DB"]): Feedba
         )
         .bind(claimId, leaseExpiresAt, feedbackId, now, now, now)
         .run();
+
       if (result.meta.changes !== 1) return null;
+
       const row = await database
         .prepare("SELECT * FROM akeru_feedback_inbox WHERE feedback_id = ? LIMIT 1")
         .bind(feedbackId)
         .first<FeedbackRow>();
+
       return row ? deliveryRecord(row) : null;
     },
     listEligible: async (now, limit) => {
@@ -203,6 +219,7 @@ export function makeGitHubIssueOutbox(database: FeedbackWorkerEnv["DB"]): Feedba
         )
         .bind(now, now, now, limit)
         .all<{ feedback_id: string }>();
+
       return result.results.map((row) => row.feedback_id);
     },
     markDelivered: async (feedbackId, claimId, issueNumber, issueUrl) => {
@@ -261,6 +278,7 @@ export function makeGitHubIssueOutbox(database: FeedbackWorkerEnv["DB"]): Feedba
           "SELECT COUNT(*) AS count FROM akeru_feedback_inbox WHERE github_issue_status = 'unknown'",
         )
         .first<{ count: number }>();
+
       return row?.count ?? 0;
     },
   };
@@ -268,6 +286,7 @@ export function makeGitHubIssueOutbox(database: FeedbackWorkerEnv["DB"]): Feedba
 
 function makeTurnstile(env: FeedbackWorkerEnv) {
   if (!env.TURNSTILE_SITE_KEY || !env.TURNSTILE_SECRET_KEY) return undefined;
+
   return {
     siteKey: env.TURNSTILE_SITE_KEY,
     verify: async (token: string, remoteIp: string) => {
@@ -279,8 +298,10 @@ function makeTurnstile(env: FeedbackWorkerEnv) {
           remoteip: remoteIp,
         }),
       });
+
       if (!response.ok) return false;
       const decoded = decodeTurnstileResponse(await response.json());
+
       return Exit.isSuccess(decoded) && decoded.value.success;
     },
   };
@@ -299,6 +320,7 @@ function githubDestination(env: FeedbackWorkerEnv): GitHubIssueDestination | nul
   ) {
     return null;
   }
+
   return {
     repository: env.GITHUB_REPOSITORY,
     appId: env.GITHUB_APP_ID,
@@ -314,10 +336,13 @@ export default {
     context: ExecutionContext,
   ): Promise<Response> {
     const url = new URL(request.url);
+
     if (url.pathname !== "/v1/feedback") {
       return new Response("Not Found", { status: 404 });
     }
+
     if (request.method === "OPTIONS") return productFeedbackOptionsResponse();
+
     if (!validHmacSecret(env.HMAC_SECRET)) {
       return Response.json(
         { reason: "disabled", message: "Product feedback is not configured." },
@@ -327,11 +352,13 @@ export default {
         },
       );
     }
+
     // Without Turnstile keys the endpoint still runs, but the suspicious-traffic
     // threshold becomes a hard network limit instead of a challenge.
     const turnstile = makeTurnstile(env);
     const destination = githubDestination(env);
     const outbox = destination ? makeGitHubIssueOutbox(env.DB) : null;
+
     return makeProductFeedbackEndpoint({
       repository: makeRepository(env.DB),
       hmacSecret: env.HMAC_SECRET,
@@ -358,10 +385,12 @@ export default {
     const now = new Date().toISOString();
     await makeRepository(env.DB).deleteExpired(now);
     const destination = githubDestination(env);
+
     if (destination) {
       const outbox = makeGitHubIssueOutbox(env.DB);
       await drainFeedbackToGitHub({ destination, outbox });
       const unknownCount = await outbox.countUnknown();
+
       if (unknownCount > 0) {
         console.error(
           JSON.stringify({ event: "feedback.github_delivery_unknown_outstanding", unknownCount }),

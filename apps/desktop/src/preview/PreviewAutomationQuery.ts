@@ -51,10 +51,13 @@ export const createPreviewAutomationQuery = ({
   ) {
     yield* send("Runtime.enable");
     const locator = automationLocator(input);
+
     if (locator) yield* ensurePlaywrightInjected(tabId, send);
+
     const locatorJson = locator
       ? yield* encodeJson({ operation: "automationScroll.encodeLocator", tabId }, locator)
       : null;
+
     const result = yield* evaluateWithDebugger<
       { ok: true } | { invalidSelector: true; message: string } | { notFound: true }
     >(
@@ -72,6 +75,7 @@ export const createPreviewAutomationQuery = ({
       })()`,
       true,
     );
+
     if ("invalidSelector" in result) {
       return yield* new PreviewAutomationInvalidSelectorError({
         operation: "scroll",
@@ -81,6 +85,7 @@ export const createPreviewAutomationQuery = ({
         cause: result,
       });
     }
+
     if ("notFound" in result) {
       return yield* new PreviewAutomationTargetNotFoundError({
         operation: "scroll",
@@ -103,6 +108,7 @@ export const createPreviewAutomationQuery = ({
   const performAutomationEvaluate = Effect.fn("PreviewManager.performAutomationEvaluate")(
     function* (tabId: string, input: PreviewAutomationEvaluateInput, send: SendCommand) {
       yield* send("Runtime.enable");
+
       const value = yield* evaluateWithDebugger(
         tabId,
         send,
@@ -110,11 +116,14 @@ export const createPreviewAutomationQuery = ({
         input.returnByValue ?? true,
         input.awaitPromise ?? true,
       );
+
       const serialized = yield* encodeJson(
         { operation: "automationEvaluate.encodeResult", tabId },
         value,
       );
+
       const actualBytes = Buffer.byteLength(serialized, "utf8");
+
       if (actualBytes > MAX_EVALUATION_BYTES) {
         return yield* new PreviewAutomationResultTooLargeError({
           tabId,
@@ -122,6 +131,7 @@ export const createPreviewAutomationQuery = ({
           maximumBytes: MAX_EVALUATION_BYTES,
         });
       }
+
       return value;
     },
   );
@@ -131,6 +141,7 @@ export const createPreviewAutomationQuery = ({
     input: PreviewAutomationEvaluateInput,
   ) {
     const wc = yield* requireWebContents(tabId);
+
     return yield* withControlSession(tabId, wc, "evaluate", (send) =>
       performAutomationEvaluate(tabId, input, send),
     );
@@ -144,7 +155,9 @@ export const createPreviewAutomationQuery = ({
     const timeoutMs = input.timeoutMs ?? 15_000;
     yield* send("Runtime.enable");
     const locator = automationLocator(input);
+
     if (locator) yield* ensurePlaywrightInjected(tabId, send);
+
     const [locatorJson, textJson, urlIncludesJson] = yield* Effect.all([
       locator
         ? encodeJson({ operation: "automationWaitFor.encodeLocator", tabId }, locator)
@@ -156,7 +169,9 @@ export const createPreviewAutomationQuery = ({
         ? encodeJson({ operation: "automationWaitFor.encodeUrl", tabId }, input.urlIncludes)
         : Effect.succeed(null),
     ]);
+
     const deadline = (yield* currentMillis) + timeoutMs;
+
     while ((yield* currentMillis) <= deadline) {
       const result = yield* evaluateWithDebugger<
         { matched: boolean } | { invalidSelector: true; message: string }
@@ -179,6 +194,7 @@ export const createPreviewAutomationQuery = ({
             })()`,
         true,
       );
+
       if ("invalidSelector" in result) {
         return yield* new PreviewAutomationInvalidSelectorError({
           operation: "waitFor",
@@ -188,9 +204,11 @@ export const createPreviewAutomationQuery = ({
           cause: result,
         });
       }
+
       if (result.matched) return;
       yield* Effect.sleep(100);
     }
+
     return yield* new PreviewAutomationTimeoutError({
       tabId,
       timeoutMs,
@@ -206,5 +224,6 @@ export const createPreviewAutomationQuery = ({
       performAutomationWaitFor(tabId, input, send),
     );
   });
+
   return { automationScroll, automationEvaluate, automationWaitFor };
 };

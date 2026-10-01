@@ -195,33 +195,43 @@ export function toDesktopSettingsDocument(
   if (settings.linuxPasswordStore !== defaults.linuxPasswordStore) {
     document.linuxPasswordStore = settings.linuxPasswordStore;
   }
+
   if (settings.mainWindowBounds !== null) {
     document.mainWindowBounds = settings.mainWindowBounds;
   }
+
   if (settings.mainWindowMaximized) {
     document.mainWindowMaximized = true;
   }
+
   if (settings.serverExposureMode !== defaults.serverExposureMode) {
     document.serverExposureMode = settings.serverExposureMode;
   }
+
   if (settings.tailscaleServeEnabled !== defaults.tailscaleServeEnabled) {
     document.tailscaleServeEnabled = settings.tailscaleServeEnabled;
   }
+
   if (settings.tailscaleServePort !== defaults.tailscaleServePort) {
     document.tailscaleServePort = settings.tailscaleServePort;
   }
+
   if (settings.updateChannel !== defaults.updateChannel) {
     document.updateChannel = settings.updateChannel;
   }
+
   if (settings.updateChannelConfiguredByUser !== defaults.updateChannelConfiguredByUser) {
     document.updateChannelConfiguredByUser = settings.updateChannelConfiguredByUser;
   }
+
   if (settings.wslBackendEnabled !== defaults.wslBackendEnabled) {
     document.wslBackendEnabled = settings.wslBackendEnabled;
   }
+
   if (settings.wslDistro !== defaults.wslDistro) {
     document.wslDistro = settings.wslDistro;
   }
+
   if (settings.wslOnly !== defaults.wslOnly) {
     document.wslOnly = settings.wslOnly;
   }
@@ -265,6 +275,7 @@ export function setTailscaleServe(
     onNone: () => settings.tailscaleServePort,
     onSome: normalizeTailscaleServePort,
   });
+
   return settings.tailscaleServeEnabled === input.enabled && settings.tailscaleServePort === port
     ? settings
     : {
@@ -298,6 +309,7 @@ export function setWslBackendEnabled(settings: DesktopSettings, enabled: boolean
 
 export function setWslDistro(settings: DesktopSettings, distro: string | null): DesktopSettings {
   const normalized = normalizeWslDistro(distro);
+
   return settings.wslDistro === normalized
     ? settings
     : {

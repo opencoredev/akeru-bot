@@ -77,6 +77,7 @@ export const createPreviewFrameCapture = ({
 
   const setFrameCaptureBackgroundThrottling = Effect.fnUntraced(function* (enabled: boolean) {
     const mainWindow = yield* Ref.get(mainWindowRef);
+
     if (Option.isNone(mainWindow)) return;
     yield* setWindowBackgroundThrottling(mainWindow.value, enabled);
   });
@@ -88,11 +89,14 @@ export const createPreviewFrameCapture = ({
     yield* SynchronizedRef.modifyEffect(frameCaptureSessionsRef, (sessions) =>
       Effect.gen(function* () {
         const current = sessions.get(tabId);
+
         if (!current || !current.consumers.has(consumer)) {
           return [undefined, sessions] as const;
         }
+
         const consumers = new Set(current.consumers);
         consumers.delete(consumer);
+
         if (consumers.size > 0) {
           return [
             undefined,
@@ -106,9 +110,11 @@ export const createPreviewFrameCapture = ({
             }),
           ] as const;
         }
+
         const remainingSessions = replaceMap(sessions, (copy) => {
           copy.delete(tabId);
         });
+
         if (remainingSessions.size === 0) {
           yield* setFrameCaptureBackgroundThrottling(true).pipe(
             Effect.retry({ times: 2 }),
@@ -117,6 +123,7 @@ export const createPreviewFrameCapture = ({
             ),
           );
         }
+
         return [current.scope, remainingSessions] as const;
       }),
     ).pipe(
@@ -139,8 +146,10 @@ export const createPreviewFrameCapture = ({
     tabId: string,
   ) {
     const captureSession = (yield* SynchronizedRef.get(frameCaptureSessionsRef)).get(tabId);
+
     if (!captureSession) return;
     const wc = yield* requireWebContents(tabId);
+
     const image = yield* attemptPromise(
       {
         operation: "frameCapture.capturePage",
@@ -149,12 +158,14 @@ export const createPreviewFrameCapture = ({
       },
       () => wc.capturePage(),
     );
+
     const currentCaptureSession = yield* Effect.all(
       [SynchronizedRef.get(frameCaptureSessionsRef), SynchronizedRef.get(tabsRef)],
       { concurrency: 2 },
     ).pipe(
       Effect.map(([captureSessions, tabs]) => {
         const current = captureSessions.get(tabId);
+
         return current?.scope === captureSession.scope &&
           tabs.get(tabId)?.webContentsId === wc.id &&
           !wc.isDestroyed()
@@ -162,7 +173,9 @@ export const createPreviewFrameCapture = ({
           : undefined;
       }),
     );
+
     if (!currentCaptureSession) return;
+
     const size = yield* attempt(
       {
         operation: "frameCapture.measureFrame",
@@ -171,6 +184,7 @@ export const createPreviewFrameCapture = ({
       },
       () => image.getSize(),
     );
+
     if (
       !Number.isFinite(size.width) ||
       !Number.isFinite(size.height) ||
@@ -179,6 +193,7 @@ export const createPreviewFrameCapture = ({
     ) {
       return;
     }
+
     const encoded = yield* attempt(
       {
         operation: "frameCapture.encodeFrame",
@@ -187,14 +202,19 @@ export const createPreviewFrameCapture = ({
       },
       () => image.toJPEG(RECORDING_JPEG_QUALITY),
     );
+
     const frameSession = (yield* SynchronizedRef.get(frameCaptureSessionsRef)).get(tabId);
+
     if (frameSession?.scope !== captureSession.scope) return;
     const recording = frameSession.consumers.has("recording");
+
     const pictureInPicture =
       frameSession.consumers.has("picture-in-picture") &&
       frameSession.lastPictureInPictureFrame?.equals(encoded) !== true;
+
     if (!recording && !pictureInPicture) return;
     const receivedAt = yield* currentIso;
+
     const frame: DesktopPreviewRecordingFrame = {
       tabId,
       data: encoded.toString("base64"),
@@ -202,7 +222,9 @@ export const createPreviewFrameCapture = ({
       height: size.height,
       receivedAt,
     };
+
     const deliveries: Array<Effect.Effect<void>> = [];
+
     if (recording) {
       const listeners = yield* Ref.get(recordingFrameListenersRef);
       deliveries.push(
@@ -213,17 +235,21 @@ export const createPreviewFrameCapture = ({
         ),
       );
     }
+
     if (pictureInPicture) {
       const pictureInPictureWindow = (yield* SynchronizedRef.get(pictureInPictureSessionsRef)).get(
         tabId,
       )?.window;
+
       if (pictureInPictureWindow && !pictureInPictureWindow.isDestroyed()) {
         deliveries.push(
           Effect.gen(function* () {
             const previousAspectRatio = (yield* Ref.get(pictureInPictureAspectRatiosRef)).get(
               tabId,
             );
+
             const aspectRatio = frame.width / frame.height;
+
             if (
               previousAspectRatio === undefined ||
               Math.abs(previousAspectRatio - aspectRatio) > PICTURE_IN_PICTURE_ASPECT_RATIO_EPSILON
@@ -239,6 +265,7 @@ export const createPreviewFrameCapture = ({
                     pictureInPictureWindow.getContentSize(),
                     aspectRatio,
                   );
+
                   pictureInPictureWindow.setAspectRatio(0);
                   pictureInPictureWindow.setContentSize(contentSize[0], contentSize[1], false);
                   pictureInPictureWindow.setAspectRatio(aspectRatio);
@@ -250,6 +277,7 @@ export const createPreviewFrameCapture = ({
                 }),
               );
             }
+
             yield* attempt(
               {
                 operation: "pictureInPicture.deliverFrame",
@@ -265,6 +293,7 @@ export const createPreviewFrameCapture = ({
             );
             yield* SynchronizedRef.update(frameCaptureSessionsRef, (sessions) => {
               if (sessions.get(tabId) !== frameSession) return sessions;
+
               return replaceMap(sessions, (copy) => {
                 copy.set(tabId, {
                   ...frameSession,
@@ -283,6 +312,7 @@ export const createPreviewFrameCapture = ({
         );
       }
     }
+
     yield* Effect.all(deliveries, { concurrency: 2, discard: true });
   });
 
@@ -295,6 +325,7 @@ export const createPreviewFrameCapture = ({
     // warming its first compositor frame; the scheduled loop should keep the
     // consumer alive and recover instead of tearing recording/PiP back down.
     yield* requireWebContents(tabId);
+
     const captureNextFrame = Effect.sleep(RECORDING_FRAME_INTERVAL_MS).pipe(
       Effect.andThen(capturePreviewFrame(tabId)),
       Effect.catch((error) =>
@@ -304,20 +335,26 @@ export const createPreviewFrameCapture = ({
         }),
       ),
     );
+
     const created = yield* SynchronizedRef.modifyEffect(frameCaptureSessionsRef, (sessions) => {
       return Effect.gen(function* () {
         if (!frameCaptureWindowOpen()) {
           return yield* new PreviewMainWindowClosedError({ tabId });
         }
+
         const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+
         if (!tab || (yield* Ref.get(closingTabIdsRef)).has(tabId)) {
           return yield* new PreviewTabNotFoundError({ tabId });
         }
+
         const current = sessions.get(tabId);
+
         if (current) {
           if (current.consumers.has(consumer)) {
             return [false, sessions] as const;
           }
+
           return [
             false,
             replaceMap(sessions, (copy) => {
@@ -328,11 +365,14 @@ export const createPreviewFrameCapture = ({
             }),
           ] as const;
         }
+
         if (sessions.size === 0) {
           yield* setFrameCaptureBackgroundThrottling(false);
         }
+
         const scope = yield* Scope.fork(parentScope, "sequential");
         yield* Effect.forkIn(Effect.forever(captureNextFrame), scope);
+
         return [
           true,
           replaceMap(sessions, (copy) => {
@@ -345,6 +385,7 @@ export const createPreviewFrameCapture = ({
         ] as const;
       });
     }).pipe(Effect.uninterruptible);
+
     if (!created) return;
     yield* capturePreviewFrame(tabId).pipe(
       Effect.catch((error) =>
@@ -356,5 +397,6 @@ export const createPreviewFrameCapture = ({
       ),
     );
   });
+
   return { setWindowBackgroundThrottling, stopFrameCapture, stopAllRecordings, startFrameCapture };
 };

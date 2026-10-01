@@ -17,6 +17,7 @@ import {
 } from "./lib/update-manifest.ts";
 
 const UpdateManifestPlatform = Schema.Literals(["mac", "win"]);
+
 export type UpdateManifestPlatform = typeof UpdateManifestPlatform.Type;
 
 function getPlatformLabel(platform: UpdateManifestPlatform): string {
@@ -66,11 +67,13 @@ export const mergeUpdateManifestFiles = Effect.fn("mergeUpdateManifestFiles")(fu
     yield* fs.readFileString(primaryPath),
     primaryPath,
   );
+
   const secondaryManifest = parsePlatformUpdateManifest(
     platform,
     yield* fs.readFileString(secondaryPath),
     secondaryPath,
   );
+
   const merged = mergePlatformUpdateManifests(platform, primaryManifest, secondaryManifest);
 
   yield* fs.writeFileString(outputPath, serializePlatformUpdateManifest(platform, merged));

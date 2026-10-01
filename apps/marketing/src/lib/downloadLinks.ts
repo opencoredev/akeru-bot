@@ -26,8 +26,10 @@ export async function resolveDownloadLink(
 
   const releaseInfo = await release.catch(() => null);
   const asset = releaseInfo ? selectReleaseAsset(releaseInfo, assetSuffix) : null;
+
   if (asset && requiresUnsignedInstall(assetSuffix)) {
     link.setAttribute("data-unsigned", "true");
+
     if (!guardedLinks.has(link)) {
       link.addEventListener("click", (event) => {
         if (
@@ -42,5 +44,6 @@ export async function resolveDownloadLink(
   }
 
   enableDownload(asset?.browser_download_url ?? RELEASES_URL);
+
   return asset;
 }

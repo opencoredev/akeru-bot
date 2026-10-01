@@ -24,11 +24,14 @@ export function resolveResourceMonitorRustTargets(
     if (arch === "universal") {
       return ["aarch64-apple-darwin", "x86_64-apple-darwin"];
     }
+
     return [arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin"];
   }
+
   if (platform === "linux") {
     return [arch === "arm64" ? "aarch64-unknown-linux-gnu" : "x86_64-unknown-linux-gnu"];
   }
+
   return [arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc"];
 }
 
@@ -67,9 +70,11 @@ export const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* 
   const targetDirectory = path.join(input.repoRoot, "native/resource-monitor/target");
   const executableName = resourceMonitorExecutableName(input.platform);
   const rustTargets = resolveResourceMonitorRustTargets(input.platform, input.arch);
+
   const reuseResourceMonitor = yield* Config.boolean("T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR").pipe(
     Config.withDefault(false),
   );
+
   const builtBinaries: string[] = [];
 
   for (const rustTarget of rustTargets) {
@@ -78,6 +83,7 @@ export const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* 
         "cargo",
         resolveResourceMonitorCargoBuildArgs(manifestPath, targetDirectory, rustTarget),
       );
+
       yield* runCommand(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
           cwd: input.repoRoot,
@@ -91,6 +97,7 @@ export const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* 
     }
 
     const binaryPath = path.join(targetDirectory, rustTarget, "release", executableName);
+
     if (!(yield* fs.exists(binaryPath))) {
       return yield* new ResourceMonitorBuildOutputMissingError({
         binaryPath,
@@ -99,9 +106,11 @@ export const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* 
         arch: input.arch,
       });
     }
+
     if (reuseResourceMonitor) {
       yield* Effect.log(`[desktop-artifact] Reusing cached resource monitor (${rustTarget}).`);
     }
+
     builtBinaries.push(binaryPath);
   }
 

@@ -42,22 +42,27 @@ export const resolveDevStatusHome = Effect.fn("resolveDevStatusHome")(function* 
   const worktree = yield* resolveGitWorktreePath(input.cwd);
   const worktreeHome = yield* resolveWorktreeT3Home(input.cwd);
   const selected = input.homeDir?.trim() || worktreeHome || input.env.T3CODE_HOME?.trim();
+
   const expanded =
     selected === "~"
       ? input.userHome
       : selected?.startsWith("~/") || selected?.startsWith("~\\")
         ? path.join(input.userHome, selected.slice(2))
         : selected;
+
   const home = expanded
     ? path.resolve(input.cwd, expanded)
     : path.join(input.userHome, PRODUCT_HOME_DIRNAME);
+
   return { worktree, home, dataDir: path.join(home, selected ? "userdata" : "dev") };
 });
 
 export function statusOrigin(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
+
   try {
     const url = new URL(raw);
+
     return url.protocol === "http:" || url.protocol === "https:" ? url.origin : undefined;
   } catch {
     return undefined;
@@ -66,8 +71,10 @@ export function statusOrigin(raw: string | undefined): string | undefined {
 
 export function isStatusProcessAlive(pid: number): boolean {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+
   try {
     process.kill(pid, 0);
+
     return true;
   } catch (error) {
     return error instanceof Error && "code" in error && error.code === "EPERM";
@@ -77,15 +84,20 @@ export function isStatusProcessAlive(pid: number): boolean {
 /** Probe only numeric loopback addresses, without credentials or redirects. */
 export const probeStatusOrigin = Effect.fn("probeStatusOrigin")(function* (origin: string) {
   const safe = statusOrigin(origin);
+
   if (!safe) return "unknown (invalid HTTP origin)";
   const url = new URL(safe);
+
   if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
     return "unknown (non-loopback; not checked)";
   }
+
   const hosts = url.hostname === "localhost" ? ["127.0.0.1", "[::1]"] : [url.hostname];
+
   for (const host of hosts) {
     const target = new URL(url);
     target.hostname = host;
+
     const result = yield* HttpClient.head(target).pipe(
       Effect.timeout("1500 millis"),
       Effect.map(
@@ -99,15 +111,19 @@ export const probeStatusOrigin = Effect.fn("probeStatusOrigin")(function* (origi
         credentials: "omit",
       }),
     );
+
     if (Option.isSome(result)) return result.value;
   }
+
   return "unavailable (loopback HTTP check failed)";
 });
 
 export function describeStatusClients(env: Readonly<Record<string, string | undefined>>) {
   const debugPort = env.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT?.trim();
+
   const validDebugPort =
     debugPort && /^\d+$/.test(debugPort) && Number(debugPort) > 0 && Number(debugPort) <= 65535;
+
   return {
     desktop: `${validDebugPort ? `debug port ${String(Number(debugPort))} configured` : debugPort ? "invalid debug port" : "debug port not configured"}; running unknown`,
     mobile:
@@ -126,33 +142,46 @@ export const collectDevStatus = Effect.fn("collectDevStatus")(function* (input: 
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   let root = path.resolve(input.cwd);
+
   while (!(yield* fs.exists(path.join(root, ".git")))) {
     const parent = path.dirname(root);
+
     if (parent === root) break;
     root = parent;
   }
+
   const hasRoot = yield* fs.exists(path.join(root, ".git"));
+
   if (!hasRoot) root = path.resolve(input.cwd);
   const env = input.env ?? loadRepoEnv({ repoRoot: root });
+
   const home = yield* resolveDevStatusHome({
     ...input,
     env,
     userHome: input.userHome ?? NodeOS.homedir(),
   });
+
   const runtimePath = path.join(home.dataDir, "server-runtime.json");
   const tracePath = path.join(home.dataDir, "logs", "server.trace.ndjson");
+
   // Decode diagnostics can contain file contents; status must never print them.
   const runtime = yield* fs
     .readFileString(runtimePath)
     .pipe(Effect.flatMap(decodeRuntime), Effect.option);
+
   const missing: string[] = [];
+
   if (!hasRoot) missing.push("Git checkout root not found");
+
   if (!(yield* fs.exists(path.join(root, "node_modules"))))
     missing.push("dependencies (node_modules)");
+
   if (Number(process.versions.node.split(".")[0]) < 24) missing.push("Node 24 or newer");
+
   if (!(yield* fs.exists(home.dataDir))) missing.push("data directory");
   // Desktop artifacts are optional for web-only development; report them separately.
   const desktopArtifactsMissing: string[] = [];
+
   for (const artifact of [
     "apps/desktop/dist-electron/main.cjs",
     "apps/desktop/dist-electron/preload.cjs",
@@ -160,6 +189,7 @@ export const collectDevStatus = Effect.fn("collectDevStatus")(function* (input: 
   ]) {
     if (!(yield* fs.exists(path.join(root, artifact)))) desktopArtifactsMissing.push(artifact);
   }
+
   const tracePresent = yield* fs.exists(tracePath);
   const clients = describeStatusClients(env);
   let descriptor = "missing, empty, invalid, or unreadable; running unknown";
@@ -167,6 +197,7 @@ export const collectDevStatus = Effect.fn("collectDevStatus")(function* (input: 
   let webOrigin: string | undefined;
   let serverReadiness = "unknown (no usable runtime descriptor)";
   let webReadiness = serverReadiness;
+
   if (Option.isSome(runtime)) {
     const state = runtime.value;
     serverOrigin = statusOrigin(state.origin);
@@ -191,6 +222,7 @@ export const collectDevStatus = Effect.fn("collectDevStatus")(function* (input: 
   } else {
     missing.push("usable server-runtime.json");
   }
+
   return {
     root,
     ...home,

@@ -33,6 +33,7 @@ export const DesktopLocalEnvironmentAuthError = Schema.Union([
   DesktopLocalEnvironmentAuthBackendNotConfiguredError,
   DesktopLocalEnvironmentAuthSessionBootstrapError,
 ]);
+
 export type DesktopLocalEnvironmentAuthError = typeof DesktopLocalEnvironmentAuthError.Type;
 
 export class DesktopLocalEnvironmentAuth extends Context.Service<
@@ -52,6 +53,7 @@ export const make = Effect.gen(function* () {
     .withPermits(1)(
       Effect.gen(function* () {
         const cached = yield* Ref.get(tokenRef);
+
         if (Option.isSome(cached)) {
           return cached.value;
         }
@@ -59,14 +61,18 @@ export const make = Effect.gen(function* () {
         const instances = yield* pool.list;
         const primary = instances.find((instance) => instance.id === PRIMARY_LOCAL_ENVIRONMENT_ID);
         const configOption = primary === undefined ? Option.none() : yield* primary.currentConfig;
+
         if (Option.isNone(configOption)) {
           return yield* new DesktopLocalEnvironmentAuthBackendNotConfiguredError();
         }
+
         const config = configOption.value;
         const credential = config.bootstrap.desktopBootstrapToken;
+
         if (!credential) {
           return yield* new DesktopLocalEnvironmentAuthBackendNotConfiguredError();
         }
+
         const session = yield* bootstrapRemoteBearerSession({
           httpBaseUrl: config.httpBaseUrl.href,
           credential,
@@ -83,7 +89,9 @@ export const make = Effect.gen(function* () {
               }),
           ),
         );
+
         yield* Ref.set(tokenRef, Option.some(session.access_token));
+
         return session.access_token;
       }),
     )

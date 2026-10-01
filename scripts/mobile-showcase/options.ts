@@ -15,9 +15,11 @@ import { type CliOptions, type ShowcaseCapture } from "./paths.ts";
 
 function argumentValue(args: ReadonlyArray<string>, index: number, flag: string): string {
   const value = args[index + 1];
+
   if (!value || value.startsWith("--")) {
     throw new Error(`${flag} requires a value.`);
   }
+
   return value;
 }
 
@@ -35,42 +37,52 @@ export function parseShowcaseCliArgs(args: ReadonlyArray<string>): CliOptions {
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
+
     if (argument === "--platform") {
       const value = argumentValue(args, index, argument);
+
       if (value !== "ios" && value !== "android" && value !== "all") {
         throw new Error(`Unsupported platform '${value}'. Use ios, android, or all.`);
       }
+
       if (value === "all") {
         platforms.add("ios");
         platforms.add("android");
       } else {
         platforms.add(value);
       }
+
       index += 1;
     } else if (argument === "--device") {
       deviceIds.add(argumentValue(args, index, argument));
       index += 1;
     } else if (argument === "--scene") {
       const value = argumentValue(args, index, argument);
+
       if (!SHOWCASE_SCENES.includes(value as ShowcaseScene)) {
         throw new Error(`Unsupported scene '${value}'. Use ${SHOWCASE_SCENES.join(", ")}.`);
       }
+
       scenes.add(value as ShowcaseScene);
       index += 1;
     } else if (argument === "--appearance") {
       const value = argumentValue(args, index, argument);
+
       if (value !== "light" && value !== "dark" && value !== "both") {
         throw new Error(`Unsupported appearance '${value}'. Use light, dark, or both.`);
       }
+
       if (value === "both") {
         appearances.add("light");
         appearances.add("dark");
       } else {
         appearances.add(value);
       }
+
       index += 1;
     } else if (argument === "--theme") {
       const value = argumentValue(args, index, argument);
+
       if (value === "all") {
         for (const theme of SHOWCASE_THEMES) themes.add(theme);
       } else if (SHOWCASE_THEMES.some((theme) => theme === value)) {
@@ -80,6 +92,7 @@ export function parseShowcaseCliArgs(args: ReadonlyArray<string>): CliOptions {
         // so reject it here rather than shipping a mislabeled screenshot.
         throw new Error(`Unsupported theme '${value}'. Use ${SHOWCASE_THEMES.join(", ")}, or all.`);
       }
+
       index += 1;
     } else if (argument === "--skip-build") {
       skipBuild = true;
@@ -122,7 +135,9 @@ export function planShowcaseCaptures(
     .flatMap((device) => {
       const appearances =
         options.appearances.size === 0 ? [device.appearance] : options.appearances;
+
       const themes = options.themes.size === 0 ? [device.theme] : options.themes;
+
       return [...appearances].flatMap((appearance) =>
         [...themes].map((theme) => ({
           device,
@@ -138,14 +153,17 @@ export function planShowcaseCaptures(
     .filter((capture) => capture.scenes.length > 0);
 
   const knownDeviceIds = new Set(config.devices.map((device) => device.id));
+
   for (const id of options.deviceIds) {
     if (!knownDeviceIds.has(id)) {
       throw new Error(`Unknown device '${id}'. Run with --list to see configured devices.`);
     }
   }
+
   if (captures.length === 0) {
     throw new Error("No captures match the selected platform, device, and scene filters.");
   }
+
   return captures;
 }
 
@@ -175,6 +193,7 @@ Configured devices:
 ${config.devices
   .map((device) => {
     const target = device.platform === "ios" ? device.simulator : device.avd;
+
     return `  ${device.id.padEnd(18)} ${device.platform.padEnd(8)} ${target} -> ${device.storeAsset.directory}/{light|dark}/<theme> (${device.storeAsset.width}×${device.storeAsset.height}, default ${device.appearance} ${device.theme}) [${device.scenes.join(", ")}]`;
   })
   .join("\n")}

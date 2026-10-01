@@ -61,15 +61,18 @@ const { title, description, heading, lede, status, lastUpdated, sections } = Ast
   const navLinks = Array.from(
     document.querySelectorAll<HTMLAnchorElement>("[data-legal-nav-link]"),
   );
+
   const sections = navLinks
     .map((link) => {
       const id = link.dataset.legalNavLink;
       const section = id ? document.getElementById(id) : null;
+
       return section ? { link, section } : null;
     })
     .filter((entry): entry is { link: HTMLAnchorElement; section: HTMLElement } => entry !== null);
 
   let activeId = "";
+
   let frame = 0;
 
   const updateActiveSection = () => {
@@ -104,7 +107,9 @@ const { title, description, heading, lede, status, lastUpdated, sections } = Ast
   };
 
   updateActiveSection();
+
   window.addEventListener("scroll", scheduleUpdate, { passive: true });
+
   window.addEventListener("resize", scheduleUpdate);
 </script>
 

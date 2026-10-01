@@ -8,13 +8,21 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 const require = NodeModule.createRequire(import.meta.url);
+
 const encodeUnknownJson = Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+
 const PLAYWRIGHT_PACKAGE_SPECIFIER = "playwright-core/package.json";
+
 const PLAYWRIGHT_SOURCE_MARKER = "source3 = ";
+
 const PLAYWRIGHT_SOURCE_TERMINATOR = ";\n  }\n});";
+
 const PLAYWRIGHT_SOURCE_MINIMUM_LENGTH = 100_000;
+
 const PLAYWRIGHT_SOURCE_EVALUATION_TIMEOUT_MS = 1_000;
+
 const PLAYWRIGHT_SDK_LANGUAGE = "javascript";
+
 const PLAYWRIGHT_BROWSER_NAME = "chromium";
 
 export class PlaywrightPackageResolveError extends Schema.TaggedErrorClass<PlaywrightPackageResolveError>()(
@@ -92,6 +100,7 @@ export class PlaywrightSourceValidationError extends Schema.TaggedErrorClass<Pla
       this.actualLength === null
         ? this.actualType
         : `${this.actualType} with ${this.actualLength} characters`;
+
     return `Playwright injected runtime from ${this.bundlePath} was ${actual}; expected a string with at least ${this.minimumLength} characters`;
   }
 }
@@ -118,27 +127,33 @@ export const PlaywrightInjectedRuntimeError = Schema.Union([
   PlaywrightSourceValidationError,
   PlaywrightOptionsEncodeError,
 ]);
+
 export type PlaywrightInjectedRuntimeError = typeof PlaywrightInjectedRuntimeError.Type;
 
 export const extractPlaywrightInjectedRuntimeSource = Effect.fn(
   "PlaywrightInjectedRuntime.extractSource",
 )(function* (coreBundle: string, bundlePath: string) {
   const start = coreBundle.indexOf(PLAYWRIGHT_SOURCE_MARKER);
+
   if (start < 0) {
     return yield* new PlaywrightSourceMarkerNotFoundError({
       bundlePath,
       marker: PLAYWRIGHT_SOURCE_MARKER,
     });
   }
+
   const literalStart = start + PLAYWRIGHT_SOURCE_MARKER.length;
   const literalEnd = coreBundle.indexOf(PLAYWRIGHT_SOURCE_TERMINATOR, literalStart);
+
   if (literalEnd < 0) {
     return yield* new PlaywrightSourceTerminatorNotFoundError({
       bundlePath,
       terminator: PLAYWRIGHT_SOURCE_TERMINATOR,
     });
   }
+
   const literal = coreBundle.slice(literalStart, literalEnd);
+
   const source = yield* Effect.try({
     try: () =>
       NodeVM.runInNewContext(literal, Object.create(null), {
@@ -151,6 +166,7 @@ export const extractPlaywrightInjectedRuntimeSource = Effect.fn(
         cause,
       }),
   });
+
   if (typeof source !== "string" || source.length < PLAYWRIGHT_SOURCE_MINIMUM_LENGTH) {
     return yield* new PlaywrightSourceValidationError({
       bundlePath,
@@ -159,6 +175,7 @@ export const extractPlaywrightInjectedRuntimeSource = Effect.fn(
       minimumLength: PLAYWRIGHT_SOURCE_MINIMUM_LENGTH,
     });
   }
+
   return source;
 });
 
@@ -172,11 +189,14 @@ export const playwrightInjectedRuntimeSource = Effect.fn("PlaywrightInjectedRunt
           cause,
         }),
     });
+
     const bundlePath = NodePath.join(NodePath.dirname(packageJsonPath), "lib/coreBundle.js");
+
     const coreBundle = yield* Effect.tryPromise({
       try: () => NodeFSP.readFile(bundlePath, "utf8"),
       catch: (cause) => new PlaywrightCoreBundleReadError({ bundlePath, cause }),
     });
+
     return yield* extractPlaywrightInjectedRuntimeSource(coreBundle, bundlePath);
   },
 );
@@ -185,6 +205,7 @@ export const playwrightInjectedRuntimeInstallExpression = Effect.fn(
   "PlaywrightInjectedRuntime.installExpression",
 )(function* () {
   const source = yield* playwrightInjectedRuntimeSource();
+
   const options = yield* encodeUnknownJson({
     isUnderTest: false,
     sdkLanguage: PLAYWRIGHT_SDK_LANGUAGE,
@@ -204,6 +225,7 @@ export const playwrightInjectedRuntimeInstallExpression = Effect.fn(
         }),
     ),
   );
+
   return `(() => {
     if (globalThis.__t3PlaywrightInjected) return true;
     const module = { exports: {} };

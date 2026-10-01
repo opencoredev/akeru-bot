@@ -23,6 +23,7 @@ import {
   resolveResourceMonitorPath,
 } from "./BackendBootstrapConfig.ts";
 import { resolveWslStartConfig } from "./WslStartConfiguration.ts";
+
 export { DesktopBackendObservabilitySettingsReadError } from "./BackendBootstrapConfig.ts";
 
 export class DesktopBackendConfiguration extends Context.Service<
@@ -124,6 +125,7 @@ export const make = Effect.gen(function* () {
   // invariant the renderer relies on. modifyEffect serializes the whole
   // get-or-create so the first caller wins and the rest reuse its token.
   const tokenRef = yield* SynchronizedRef.make(Option.none<string>());
+
   const getOrCreateBootstrapToken = SynchronizedRef.modifyEffect(tokenRef, (current) =>
     Option.match(current, {
       onSome: (token) => Effect.succeed([token, current] as const),
@@ -131,6 +133,7 @@ export const make = Effect.gen(function* () {
         crypto.randomBytes(24).pipe(
           Effect.map((bytes) => {
             const token = Encoding.encodeHex(bytes);
+
             return [token, Option.some(token)] as const;
           }),
         ),
@@ -144,10 +147,12 @@ export const make = Effect.gen(function* () {
   // restart cycle without having to bounce the desktop process.
   const sharedInputs = Effect.gen(function* () {
     const bootstrapToken = yield* getOrCreateBootstrapToken;
+
     const observabilitySettings = yield* readPersistedBackendObservabilitySettings.pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
     );
+
     return { bootstrapToken, observabilitySettings } satisfies SharedBootstrapInput;
   });
 
@@ -162,6 +167,7 @@ export const make = Effect.gen(function* () {
     const persistedSettings = yield* settings.get;
     const shared = yield* sharedInputs;
     yield* wslEnvironment.preWarm(persistedSettings.wslDistro);
+
     return yield* resolveWslStartConfig({
       ...shared,
       port: backendExposure.port,
@@ -176,10 +182,12 @@ export const make = Effect.gen(function* () {
 
   const buildWindowsPrimaryConfig = Effect.gen(function* () {
     const shared = yield* sharedInputs;
+
     const resourceMonitorPath = yield* resolveResourceMonitorPath().pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
     );
+
     return yield* resolvePrimaryStartConfig({ ...shared, resourceMonitorPath }).pipe(
       Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
       Effect.provideService(DesktopServerExposure.DesktopServerExposure, serverExposure),
@@ -203,32 +211,39 @@ export const make = Effect.gen(function* () {
     // control is hidden while WSL is unavailable, so a stuck WSL primary
     // would otherwise leave no in-app way back to Windows.
     const useWsl = wslRequested && (yield* wslEnvironment.isAvailable);
+
     return { useWsl, wslRequested, distro: persistedSettings.wslDistro };
   });
 
   return DesktopBackendConfiguration.of({
     resolvePrimary: Effect.gen(function* () {
       const { useWsl, wslRequested } = yield* describePrimary;
+
       if (useWsl) {
         return yield* buildWslPrimaryConfig;
       }
+
       if (wslRequested) {
         yield* Effect.logWarning(
           "WSL-only backend requested but WSL is unavailable; starting the Windows primary instead.",
         );
       }
+
       return yield* buildWindowsPrimaryConfig;
     }).pipe(Effect.withSpan("desktop.backendConfiguration.resolvePrimary")),
     resolvePrimaryLabel: Effect.gen(function* () {
       const { useWsl, distro } = yield* describePrimary;
+
       if (!useWsl) {
         return environment.platform === "win32" ? "Windows" : "Local environment";
       }
+
       return distro ? `WSL (${distro})` : "WSL";
     }).pipe(Effect.withSpan("desktop.backendConfiguration.resolvePrimaryLabel")),
     resolveWsl: (input) =>
       Effect.gen(function* () {
         const shared = yield* sharedInputs;
+
         return yield* resolveWslStartConfig({ ...shared, ...input }).pipe(
           Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
           Effect.provideService(DesktopWslEnvironment.DesktopWslEnvironment, wslEnvironment),

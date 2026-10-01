@@ -2,14 +2,17 @@ import { pickMostVisibleDemo } from "./demoPlayback";
 
 export function initDemoVideos() {
   const videos = Array.from(document.querySelectorAll<HTMLVideoElement>("video[data-demo-video]"));
+
   if (videos.length === 0) return;
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const visibility = new Map<HTMLVideoElement, number>();
+
   const preloadVideos = () => {
     videos.forEach((video) => {
       if (video.src) return;
       const source = video.dataset.src;
+
       if (source) video.src = source;
     });
   };
@@ -17,6 +20,7 @@ export function initDemoVideos() {
   const updatePlayback = () => {
     if (document.hidden || reduceMotion) {
       videos.forEach((video) => video.pause());
+
       return;
     }
 
@@ -41,6 +45,7 @@ export function initDemoVideos() {
 
   videos.forEach((video) => observer.observe(video));
   document.addEventListener("visibilitychange", updatePlayback);
+
   if (document.readyState === "complete") preloadVideos();
   else window.addEventListener("load", preloadVideos, { once: true });
 }

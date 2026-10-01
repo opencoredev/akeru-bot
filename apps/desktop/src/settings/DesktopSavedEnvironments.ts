@@ -31,14 +31,23 @@ import {
   readRegistryDocument,
   decodeSecretBytes,
 } from "./SavedEnvironmentPersistence.ts";
+
 export { DesktopSavedEnvironmentsWriteError } from "./SavedEnvironmentErrors.ts";
+
 export { DesktopSavedEnvironmentsReadError } from "./SavedEnvironmentErrors.ts";
+
 export { DesktopSavedEnvironmentsDocumentDecodeError } from "./SavedEnvironmentErrors.ts";
+
 export { DesktopSavedEnvironmentSecretDecodeError } from "./SavedEnvironmentErrors.ts";
+
 export { DesktopSavedEnvironmentSecretProtectionError } from "./SavedEnvironmentErrors.ts";
+
 export type { DesktopSavedEnvironmentsReadRegistryError } from "./SavedEnvironmentErrors.ts";
+
 export type { DesktopSavedEnvironmentsMutationError } from "./SavedEnvironmentErrors.ts";
+
 export type { DesktopSavedEnvironmentsGetSecretError } from "./SavedEnvironmentErrors.ts";
+
 export type { DesktopSavedEnvironmentsSetSecretError } from "./SavedEnvironmentErrors.ts";
 
 export class DesktopSavedEnvironments extends Context.Service<
@@ -108,15 +117,18 @@ export const make = Effect.gen(function* () {
         fileSystem,
         environment.savedEnvironmentRegistryPath,
       );
+
       yield* writeDocument(preserveExistingSecrets(currentDocument, records));
     }),
     removeEnvironment: Effect.fn("desktop.savedEnvironments.removeEnvironment")(
       function* (environmentId) {
         yield* Effect.annotateCurrentSpan({ environmentId });
+
         const document = yield* readRegistryDocument(
           fileSystem,
           environment.savedEnvironmentRegistryPath,
         );
+
         if (!document.records.some((record) => record.environmentId === environmentId)) {
           return;
         }
@@ -129,17 +141,21 @@ export const make = Effect.gen(function* () {
     ),
     getSecret: Effect.fn("desktop.savedEnvironments.getSecret")(function* (environmentId) {
       yield* Effect.annotateCurrentSpan({ environmentId });
+
       const document = yield* readRegistryDocument(
         fileSystem,
         environment.savedEnvironmentRegistryPath,
       );
+
       const encoded = Option.fromNullishOr(
         document.records.find((record) => record.environmentId === environmentId)
           ?.encryptedBearerToken,
       );
+
       if (Option.isNone(encoded)) {
         return Option.none<string>();
       }
+
       const encryptionAvailable = yield* safeStorage.isEncryptionAvailable.pipe(
         Effect.mapError(
           (cause) =>
@@ -151,6 +167,7 @@ export const make = Effect.gen(function* () {
             }),
         ),
       );
+
       if (!encryptionAvailable) {
         return Option.none<string>();
       }
@@ -160,6 +177,7 @@ export const make = Effect.gen(function* () {
         environment.savedEnvironmentRegistryPath,
         encoded.value,
       );
+
       return Option.some(
         yield* safeStorage.decryptString(secretBytes).pipe(
           Effect.mapError(
@@ -177,6 +195,7 @@ export const make = Effect.gen(function* () {
     setSecret: Effect.fn("desktop.savedEnvironments.setSecret")(function* (input) {
       const { environmentId, secret } = input;
       yield* Effect.annotateCurrentSpan({ environmentId });
+
       const document = yield* readRegistryDocument(
         fileSystem,
         environment.savedEnvironmentRegistryPath,
@@ -193,6 +212,7 @@ export const make = Effect.gen(function* () {
             }),
         ),
       );
+
       if (!encryptionAvailable) {
         return false;
       }
@@ -210,7 +230,9 @@ export const make = Effect.gen(function* () {
           ),
         ),
       );
+
       let found = false;
+
       const nextDocument: SavedEnvironmentRegistryDocument = {
         version: document.version,
         records: document.records.map((record) => {
@@ -219,6 +241,7 @@ export const make = Effect.gen(function* () {
           }
 
           found = true;
+
           return toSavedEnvironmentStorageRecord(record, Option.some(encryptedBearerToken));
         }),
       };
@@ -226,14 +249,17 @@ export const make = Effect.gen(function* () {
       if (found) {
         yield* writeDocument(nextDocument);
       }
+
       return found;
     }),
     removeSecret: Effect.fn("desktop.savedEnvironments.removeSecret")(function* (environmentId) {
       yield* Effect.annotateCurrentSpan({ environmentId });
+
       const document = yield* readRegistryDocument(
         fileSystem,
         environment.savedEnvironmentRegistryPath,
       );
+
       if (
         !document.records.some(
           (record) =>
@@ -249,6 +275,7 @@ export const make = Effect.gen(function* () {
           if (record.environmentId !== environmentId) {
             return record;
           }
+
           return toPersistedSavedEnvironmentRecord(record);
         }),
       });
@@ -279,6 +306,7 @@ export const layerTest = (input?: {
               Ref.update(secretsRef, (secrets) => {
                 const nextSecrets = new Map(secrets);
                 nextSecrets.delete(environmentId);
+
                 return nextSecrets;
               }),
             ),
@@ -293,9 +321,11 @@ export const layerTest = (input?: {
               if (!records.some((record) => record.environmentId === environmentId)) {
                 return Effect.succeed(false);
               }
+
               return Ref.update(secretsRef, (secrets) => {
                 const nextSecrets = new Map(secrets);
                 nextSecrets.set(environmentId, secret);
+
                 return nextSecrets;
               }).pipe(Effect.as(true));
             }),
@@ -304,6 +334,7 @@ export const layerTest = (input?: {
           Ref.update(secretsRef, (secrets) => {
             const nextSecrets = new Map(secrets);
             nextSecrets.delete(environmentId);
+
             return nextSecrets;
           }),
       });

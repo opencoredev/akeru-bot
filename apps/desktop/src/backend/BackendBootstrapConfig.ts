@@ -53,6 +53,7 @@ export const logBackendObservabilitySettingsReadFailure = (
   cause: PlatformError.PlatformError,
 ) => {
   const error = new DesktopBackendObservabilitySettingsReadError({ settingsPath, cause });
+
   return Effect.logWarning(error).pipe(
     Effect.annotateLogs({
       component: "desktop-backend-configuration",
@@ -71,6 +72,7 @@ export const resolveResourceMonitorPath = Effect.fn(
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const binaryName = resourceMonitorBinaryName(environment.platform);
+
   const candidates = environment.isDevelopment
     ? [
         environment.path.join(
@@ -102,6 +104,7 @@ export const resolveResourceMonitorPath = Effect.fn(
 export const readPersistedBackendObservabilitySettings = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
+
   const raw = yield* fileSystem.readFileString(environment.serverSettingsPath).pipe(
     Effect.map(Option.some),
     Effect.catchTags({
@@ -113,11 +116,13 @@ export const readPersistedBackendObservabilitySettings = Effect.gen(function* ()
             ),
     }),
   );
+
   if (Option.isNone(raw)) {
     return emptyBackendObservabilitySettings;
   }
 
   const parsed = parsePersistedServerObservabilitySettings(raw.value);
+
   return {
     otlpTracesUrl: Option.fromNullishOr(parsed.otlpTracesUrl),
     otlpMetricsUrl: Option.fromNullishOr(parsed.otlpMetricsUrl),

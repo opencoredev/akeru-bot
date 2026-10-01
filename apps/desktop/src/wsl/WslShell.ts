@@ -22,13 +22,16 @@ export const buildDistroArgs = (distro: string | null): ReadonlyArray<string> =>
 
 export const concatChunks = (arrays: ReadonlyArray<Uint8Array>): Uint8Array => {
   let totalLength = 0;
+
   for (const arr of arrays) totalLength += arr.byteLength;
   const out = new Uint8Array(totalLength);
   let offset = 0;
+
   for (const arr of arrays) {
     out.set(arr, offset);
     offset += arr.byteLength;
   }
+
   return out;
 };
 
@@ -82,6 +85,7 @@ export const runWslShell = (
   options: EnsureWslNodePtyOptions = {},
 ): Effect.Effect<ShellResult, never, ChildProcessSpawner.ChildProcessSpawner> => {
   const spawner = ChildProcessSpawner.ChildProcessSpawner;
+
   // -l picks up profile-managed PATH; the shared resolver covers supported
   // version managers that non-interactive login shells can miss. -s so bash
   // reads the script from stdin.
@@ -102,12 +106,14 @@ export const runWslShell = (
   return Effect.scoped(
     Effect.gen(function* () {
       const spawnerService = yield* spawner;
+
       const spawnResult = yield* spawnerService.spawn(command).pipe(
         Effect.match({
           onFailure: (error) => ({ _tag: "Failure", error }) as const,
           onSuccess: (handle) => ({ _tag: "Success", handle }) as const,
         }),
       );
+
       if (spawnResult._tag === "Failure") {
         return {
           exitCode: 127,
@@ -116,13 +122,16 @@ export const runWslShell = (
           transportFailure: "spawn",
         } satisfies ShellResult;
       }
+
       const handle = spawnResult.handle;
+
       // Drain stdout and stderr concurrently so neither pipe buffer can fill
       // and stall the child (node-gyp rebuild emits large output on both).
       const [stdoutBytes, stderrBytes, exitCode] = yield* Effect.all(
         [Stream.runCollect(handle.stdout), Stream.runCollect(handle.stderr), handle.exitCode],
         { concurrency: "unbounded" },
       );
+
       return {
         exitCode: exitCode,
         stdout: decodeUtf8(concatChunks(stdoutBytes)),

@@ -125,21 +125,25 @@ const stageWslNodePtyPrebuild = Effect.fn("stageWslNodePtyPrebuild")(function* (
     yield* Effect.logWarning(
       "[desktop-artifact] No WSL node-pty prebuild provided (--wsl-prebuild / T3CODE_DESKTOP_WSL_PREBUILD); the packaged WSL backend will not start until a Linux pty.node is bundled.",
     );
+
     return;
   }
 
   // WSL runs the same CPU arch as the Windows host; universal is mac-only.
   const linuxArch = input.arch === "x64" ? "x64" : input.arch === "arm64" ? "arm64" : undefined;
+
   if (linuxArch === undefined) {
     yield* Effect.logWarning(
       `[desktop-artifact] No WSL node-pty prebuild mapping for arch "${input.arch}"; skipping WSL backend bundling.`,
     );
+
     return;
   }
 
   const prebuildExists = yield* fs
     .exists(input.prebuildPath)
     .pipe(Effect.orElseSucceed(() => false));
+
   if (!prebuildExists) {
     return yield* new WslNodePtyPrebuildMissingError({
       prebuildPath: input.prebuildPath,
@@ -153,6 +157,7 @@ const stageWslNodePtyPrebuild = Effect.fn("stageWslNodePtyPrebuild")(function* (
 
   const manifestPath = path.join(nodePtyDir, "package.json");
   const pkgRaw = yield* fs.readFileString(manifestPath);
+
   const manifest = yield* decodeNodePtyManifest(pkgRaw).pipe(
     Effect.mapError(
       (cause) =>
@@ -162,6 +167,7 @@ const stageWslNodePtyPrebuild = Effect.fn("stageWslNodePtyPrebuild")(function* (
         }),
     ),
   );
+
   const nodePtyVersion = manifest.version;
 
   const prebuildDir = path.join(nodePtyDir, "prebuilds", `linux-${linuxArch}`);
@@ -197,6 +203,7 @@ export const packWindowsServerAsar = Effect.fn("packWindowsServerAsar")(function
     catch: (cause) => new WindowsServerSidecarPackError({ asarPath: input.asarPath, cause }),
   });
   const unpackedDirPath = `${input.asarPath}.unpacked`;
+
   if (!(yield* fs.exists(unpackedDirPath))) {
     return yield* new WindowsServerSidecarPackError({
       asarPath: input.asarPath,
@@ -235,10 +242,12 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
     ...resolveFffNativeDependencies("win", input.arch, input.fffNodeVersion),
     ...resolveFffNativeDependencies("linux", input.arch, input.fffNodeVersion),
   };
+
   const sidecarPatchedDependencies = createStagePatchedDependencies(
     input.patchedDependencies,
     sidecarDependencies,
   );
+
   const sidecarPackageJson = {
     name: "t3code-server",
     version: input.appVersion,
@@ -246,11 +255,13 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
     packageManager: rootPackageJson.packageManager,
     dependencies: sidecarDependencies,
   };
+
   const sidecarPackageJsonString = yield* encodeJsonString(sidecarPackageJson);
   yield* fs.writeFileString(
     path.join(serverStageDir, "package.json"),
     `${sidecarPackageJsonString}\n`,
   );
+
   const sidecarWorkspaceConfig = createStageWorkspaceConfig({
     platform: "win",
     arch: input.arch,
@@ -259,11 +270,13 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
     overrides: input.overrides,
     linuxServerBackend: true,
   });
+
   const sidecarWorkspaceConfigString = yield* encodeStageWorkspaceConfig(sidecarWorkspaceConfig);
   yield* fs.writeFileString(
     path.join(serverStageDir, "pnpm-workspace.yaml"),
     sidecarWorkspaceConfigString,
   );
+
   if (Object.keys(sidecarPatchedDependencies).length > 0) {
     yield* fs.copy(path.join(input.repoRoot, "patches"), path.join(serverStageDir, "patches"));
   }
@@ -304,12 +317,14 @@ function collectUnpackedAsarFiles(
 ): readonly string[] {
   for (const [name, entry] of Object.entries(directory.files)) {
     const entryPath = parentPath.length === 0 ? name : `${parentPath}/${name}`;
+
     if ("files" in entry) {
       collectUnpackedAsarFiles(entry, entryPath, output);
     } else if (entry.unpacked) {
       output.push(entryPath);
     }
   }
+
   return output;
 }
 
@@ -325,11 +340,14 @@ const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(functio
 
   while (pendingDirectories.length > 0) {
     const directory = pendingDirectories.pop();
+
     if (directory === undefined) break;
     const entries = yield* fs.readDirectory(directory);
+
     for (const entry of entries) {
       const entryPath = path.join(directory, entry);
       const stat = yield* fs.stat(entryPath);
+
       if (stat.type === "Directory") {
         if (!excludedDirectories.has(entryPath)) pendingDirectories.push(entryPath);
       } else if (stat.type === "File") {
@@ -356,6 +374,7 @@ export const verifyWindowsPrimaryFffNativeLoad = Effect.fn(
   const path = yield* Path.Path;
   const executablePath = path.join(input.packagedAppDir, input.appExecutableName);
   const executableStat = yield* fs.stat(executablePath).pipe(Effect.orElseSucceed(() => null));
+
   if (executableStat?.type !== "File") {
     return yield* new WindowsPrimaryNativeProbeError({
       executablePath,
@@ -363,15 +382,18 @@ export const verifyWindowsPrimaryFffNativeLoad = Effect.fn(
       output: "The unpacked application does not contain its expected primary executable.",
     });
   }
+
   if (hostPlatform !== "win32" || hostArchitecture !== input.targetArch) return;
 
   const probeRoot = yield* fs.makeTempDirectoryScoped({
     prefix: "t3code-windows-primary-native-probe-",
   });
+
   const fffEntryPath = path.join(
     input.asarPath,
     "node_modules/@ff-labs/fff-node/dist/src/index.js",
   );
+
   const probeEnv = { ...process.env };
   delete probeEnv.ELECTRON_NO_ASAR;
   delete probeEnv.NODE_OPTIONS;
@@ -437,11 +459,13 @@ export const validateWindowsPackagedPayload = Effect.fn(
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const fileLimit = input.fileLimit ?? WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT;
+
   const isFile = (filePath: string) =>
     fs.stat(filePath).pipe(
       Effect.map((stat) => stat.type === "File"),
       Effect.orElseSucceed(() => false),
     );
+
   const stageEntries = yield* fs.readDirectory(input.stageDistDir);
   let packagedAppDir: string | undefined;
 
@@ -449,6 +473,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
     if (!entry.endsWith("-unpacked")) continue;
     const candidate = path.join(input.stageDistDir, entry);
     const stat = yield* fs.stat(candidate).pipe(Effect.orElseSucceed(() => null));
+
     if (stat?.type === "Directory") {
       packagedAppDir = candidate;
       break;
@@ -464,6 +489,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
 
   const resourcesDir = path.join(packagedAppDir, "resources");
   const asarPath = path.join(resourcesDir, WINDOWS_SERVER_ASAR_RESOURCE);
+
   if (!(yield* fs.exists(asarPath).pipe(Effect.orElseSucceed(() => false)))) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "sidecar-missing",
@@ -481,6 +507,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
       // POSIX separators work on Linux/macOS but fail on Windows even when the
       // entry is present in the archive.
       statFile(asarPath, path.join("apps", "server", "dist", "bin.mjs"));
+
       return [...collectUnpackedAsarFiles(getRawHeader(asarPath).header)].sort();
     },
     catch: (cause) =>
@@ -490,6 +517,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
         cause,
       }),
   });
+
   if (unpackedFiles.length === 0) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "sidecar-invalid",
@@ -499,16 +527,19 @@ export const validateWindowsPackagedPayload = Effect.fn(
   }
 
   const missingFiles: string[] = [];
+
   for (const unpackedFile of unpackedFiles) {
     const unpackedPath = path.join(
       resourcesDir,
       `${WINDOWS_SERVER_ASAR_RESOURCE}.unpacked`,
       ...unpackedFile.split("/"),
     );
+
     if (!(yield* isFile(unpackedPath))) {
       missingFiles.push(`${WINDOWS_SERVER_ASAR_RESOURCE}.unpacked/${unpackedFile}`);
     }
   }
+
   if (missingFiles.length > 0) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "unpacked-native-missing",
@@ -522,6 +553,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
     "resource-monitor",
     resourceMonitorExecutableName("win"),
   );
+
   if (!(yield* isFile(resourceMonitorPath))) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "resource-monitor-missing",
@@ -534,6 +566,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
     root: packagedAppDir,
     excludedDirectories: [path.join(resourcesDir, "plugins")],
   });
+
   if (fileCount > fileLimit) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "file-limit-exceeded",
@@ -560,5 +593,6 @@ export const validateWindowsPackagedPayload = Effect.fn(
   yield* Effect.log(
     `[desktop-artifact] Validated Windows payload (${String(fileCount)} files, ${String(unpackedFiles.length)} sidecar natives).`,
   );
+
   return { packagedAppDir, fileCount, unpackedFiles } as const;
 });

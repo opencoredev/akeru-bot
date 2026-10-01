@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 import { describe, it } from "vite-plus/test";
 
 const scriptPath = NodePath.resolve(import.meta.dirname, "./install-windows.ps1");
+
 const script = NodeFS.readFileSync(scriptPath, "utf8");
 
 describe("install-windows.ps1", () => {

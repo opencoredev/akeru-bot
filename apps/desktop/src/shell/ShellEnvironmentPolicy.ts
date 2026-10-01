@@ -67,12 +67,15 @@ export const linuxRuntimeDirCandidates = (
 ): ReadonlyArray<string> => {
   const candidates: string[] = [];
   const fromEnv = trimNonEmpty(env.XDG_RUNTIME_DIR);
+
   if (Option.isSome(fromEnv)) {
     candidates.push(normalizeRuntimeDir(fromEnv.value));
   }
+
   if (uid !== undefined) {
     candidates.push(`/run/user/${uid}`);
   }
+
   return candidates.filter((candidate) => candidate.length > 0);
 };
 
@@ -83,6 +86,7 @@ export function resolveDefaultLinuxDbusSessionBusPath(input: {
 }): string | null {
   for (const runtimeDir of linuxRuntimeDirCandidates(input.env, input.uid)) {
     const busPath = `${runtimeDir}/bus`;
+
     if (input.exists(busPath)) {
       return busPath;
     }
@@ -97,11 +101,13 @@ export function resolveDefaultLinuxDbusSessionBusAddress(input: {
   readonly uid: number | undefined;
 }): string | null {
   const busPath = resolveDefaultLinuxDbusSessionBusPath(input);
+
   return busPath !== null ? `unix:path=${busPath}` : null;
 }
 
 export const pathComparisonKey = (entry: string, platform: NodeJS.Platform) => {
   const normalized = entry.trim().replace(/^"+|"+$/g, "");
+
   return platform === "win32" ? normalized.toLowerCase() : normalized;
 };
 
@@ -118,9 +124,11 @@ export const mergePaths = (
 
     for (const entry of value.value.split(delimiter)) {
       const trimmed = entry.trim();
+
       if (trimmed.length === 0) continue;
 
       const key = pathComparisonKey(trimmed, platform);
+
       if (key.length === 0 || seen.has(key)) continue;
 
       seen.add(key);
@@ -134,6 +142,7 @@ export const mergePaths = (
 export const listLoginShellCandidates = (config: ShellEnvironmentConfig): ReadonlyArray<string> => {
   const fallback =
     config.platform === "darwin" ? "/bin/zsh" : config.platform === "linux" ? "/bin/bash" : "";
+
   const seen = new Set<string>();
   const candidates: string[] = [];
 
@@ -210,16 +219,19 @@ export const extractEnvironment = (
 
   for (const name of names) {
     const start = output.indexOf(startMarker(name));
+
     if (start === -1) continue;
 
     const valueStart = start + startMarker(name).length;
     const end = output.indexOf(endMarker(name), valueStart);
+
     if (end === -1) continue;
 
     const value = output
       .slice(valueStart, end)
       .replace(/^\r?\n/, "")
       .replace(/\r?\n$/, "");
+
     if (value.length > 0) {
       environment[name] = value;
     }

@@ -85,9 +85,11 @@ describe("DesktopBackendConfiguration", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const baseDir = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-desktop-backend-config-test-",
         });
+
         const entryPath = path.join(baseDir, "apps/server/dist/bin.mjs");
         yield* fileSystem.makeDirectory(path.dirname(entryPath), { recursive: true });
         yield* fileSystem.writeFileString(entryPath, "");
@@ -96,8 +98,10 @@ describe("DesktopBackendConfiguration", () => {
         const linuxEntryPath = "/tmp/t3 code's launch/entry file.mjs";
         const resolvedPath = "/home/test user/bin:/opt/test's tools/bin:/usr/bin:/bin";
         const devServerUrl = "http://127.0.0.1:5733/dev%20assets/?label=hello%20world";
+
         const config = yield* Effect.gen(function* () {
           const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+
           return yield* configuration.resolveWsl({ port: 5000, distro: "Ubuntu" });
         }).pipe(
           Effect.provide(
@@ -211,20 +215,26 @@ describe("DesktopBackendConfiguration", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
+
       const settingsPath = path.join(baseDir, "userdata", "settings.json");
+
       const cause = PlatformError.systemError({
         _tag: "PermissionDenied",
         module: "FileSystem",
         method: "readFileString",
         pathOrDescriptor: settingsPath,
       });
+
       const messages: Array<unknown> = [];
+
       const logger = Logger.make(({ message }) => {
         messages.push(message);
       });
+
       const failingFileSystemLayer = Layer.succeed(
         FileSystem.FileSystem,
         FileSystem.makeNoop({
@@ -234,6 +244,7 @@ describe("DesktopBackendConfiguration", () => {
 
       const config = yield* Effect.gen(function* () {
         const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+
         return yield* configuration.resolvePrimary;
       }).pipe(
         Effect.provide(
@@ -257,6 +268,7 @@ describe("DesktopBackendConfiguration", () => {
       const error = messages
         .flatMap((message) => (Array.isArray(message) ? message : [message]))
         .find(isDesktopBackendObservabilitySettingsReadError);
+
       assert.isDefined(error);
       assert.equal(error.settingsPath, settingsPath);
       assert.equal(error.cause, cause);
@@ -270,6 +282,7 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("resolvePrimary captures backend output in dev so child logs can be persisted", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
@@ -302,6 +315,7 @@ describe("DesktopBackendConfiguration", () => {
     () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
+
         const baseDir = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-desktop-backend-config-test-",
         });
@@ -342,6 +356,7 @@ describe("DesktopBackendConfiguration", () => {
     () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
+
         const baseDir = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-desktop-backend-config-test-",
         });
@@ -383,6 +398,7 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("resolveWsl marks a missing packaged server entry as fatal", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
@@ -416,9 +432,11 @@ describe("DesktopBackendConfiguration", () => {
   it.effect("prefers the external packaged resource monitor over the copy inside the asar", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
+
       const resourcesPath = `${baseDir}/resources`;
       const dirname = `${resourcesPath}/app.asar/apps/desktop/dist-electron`;
       const embeddedMonitorPath = `${resourcesPath}/app.asar/apps/desktop/prod-resources/resource-monitor/t3-resource-monitor`;
@@ -465,18 +483,23 @@ describe("DesktopBackendConfiguration", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-desktop-backend-config-test-",
       });
+
       const dirname = path.join(baseDir, "apps/desktop/src");
+
       const releaseMonitorPath = path.join(
         baseDir,
         "native/resource-monitor/target/release/t3-resource-monitor",
       );
+
       const debugMonitorPath = path.join(
         baseDir,
         "native/resource-monitor/target/debug/t3-resource-monitor",
       );
+
       yield* fileSystem.makeDirectory(path.dirname(releaseMonitorPath), { recursive: true });
       yield* fileSystem.makeDirectory(path.dirname(debugMonitorPath), { recursive: true });
       yield* fileSystem.writeFileString(releaseMonitorPath, "release");

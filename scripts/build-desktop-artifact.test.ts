@@ -35,6 +35,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+
       const config = yield* createBuildConfig(
         "mac",
         "dmg",
@@ -44,11 +45,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
         undefined,
       );
+
       const parsed = yield* Schema.decodeUnknownEffect(
         Schema.Struct({
           mac: Schema.Struct({ sign: Schema.String }),
         }),
       )(config);
+
       assert.equal(parsed.mac.sign, path.join(repoRoot, "scripts/sign-macos.ts"));
     }),
   );
@@ -77,6 +80,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ),
         ),
       );
+
       assert.deepStrictEqual(latestConfig, {
         provider: "github",
         owner: "pingdotgg",
@@ -140,6 +144,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("rejects non-numeric or out-of-range mock update ports", () =>
     Effect.gen(function* () {
       const invalidPorts = ["abc", "12.5", "0", "65536"];
+
       for (const port of invalidPorts) {
         const exit = yield* Effect.exit(resolveMockUpdateServerPort(port));
         assert.equal(exit._tag, "Failure");
@@ -245,4 +250,5 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 });
+
 import * as NodeServices from "@effect/platform-node/NodeServices";

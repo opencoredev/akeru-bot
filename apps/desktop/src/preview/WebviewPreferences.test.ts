@@ -27,16 +27,20 @@ import { PREVIEW_WEBVIEW_PREFERENCES } from "./WebviewPreferences.ts";
  */
 function parseWebPreferences(input: string): Record<string, unknown> {
   const out: Record<string, unknown> = {};
+
   for (const pair of input.split(",")) {
     if (pair !== pair.trim()) {
       // Electron's parser doesn't trim; surface the bug as undefined-key.
       out[pair] = pair.split("=")[1];
       continue;
     }
+
     const [key, value] = pair.split("=");
+
     if (!key) continue;
     out[key] = value;
   }
+
   return out;
 }
 

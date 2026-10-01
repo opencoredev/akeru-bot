@@ -129,6 +129,7 @@ describe("ElectronDialog", () => {
       const exit = yield* Effect.exit(dialog.showErrorBox("Startup failed", "Could not start."));
 
       assert.isTrue(exit._tag === "Failure");
+
       if (exit._tag === "Success") return;
       const error = Cause.squash(exit.cause);
       assert.instanceOf(error, ElectronDialog.ElectronDialogShowErrorBoxError);

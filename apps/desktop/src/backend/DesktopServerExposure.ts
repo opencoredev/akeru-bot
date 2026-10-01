@@ -34,15 +34,25 @@ import {
   DesktopServerExposureNoNetworkAddressError,
   DesktopServerExposureModePersistenceError,
 } from "./ServerExposureErrors.ts";
+
 export { DESKTOP_LOOPBACK_HOST } from "./ServerExposurePolicy.ts";
+
 export type { DesktopServerExposureBackendConfig } from "./ServerExposurePolicy.ts";
+
 export type { DesktopServerExposureChange } from "./ServerExposurePolicy.ts";
+
 export { DesktopServerExposureNoNetworkAddressError } from "./ServerExposureErrors.ts";
+
 export { DesktopServerExposureModePersistenceError } from "./ServerExposureErrors.ts";
+
 export { DesktopTailscaleServePersistenceError } from "./ServerExposureErrors.ts";
+
 export { DesktopServerExposureSetModeError } from "./ServerExposureErrors.ts";
+
 export { isDesktopServerExposureSetModeError } from "./ServerExposureErrors.ts";
+
 export { DesktopServerExposureError } from "./ServerExposureErrors.ts";
+
 export { isDesktopServerExposureError } from "./ServerExposureErrors.ts";
 
 const TAILSCALE_STATUS_CACHE_TTL = Duration.seconds(60);
@@ -96,6 +106,7 @@ export const make = Effect.gen(function* () {
       yield* Effect.annotateCurrentSpan({ port });
       const settings = yield* desktopSettings.get;
       const currentNetworkInterfaces = yield* readNetworkInterfaces;
+
       const resolved = resolveRuntimeState({
         requestedMode: settings.serverExposureMode,
         settings,
@@ -103,7 +114,9 @@ export const make = Effect.gen(function* () {
         networkInterfaces: currentNetworkInterfaces,
         advertisedHostOverride: config.desktopLanHostOverride,
       });
+
       yield* Ref.set(stateRef, resolved.state);
+
       return toContractState(resolved.state);
     },
   );
@@ -114,11 +127,14 @@ export const make = Effect.gen(function* () {
     yield* Effect.annotateCurrentSpan({ mode });
     const previous = yield* Ref.get(stateRef);
     const currentSettings = yield* desktopSettings.get;
+
     const nextSettings = {
       ...currentSettings,
       serverExposureMode: mode,
     };
+
     const currentNetworkInterfaces = yield* readNetworkInterfaces;
+
     const resolved = resolveRuntimeState({
       requestedMode: mode,
       settings: nextSettings,
@@ -142,6 +158,7 @@ export const make = Effect.gen(function* () {
     );
 
     yield* Ref.set(stateRef, resolved.state);
+
     return {
       state: toContractState(resolved.state),
       requiresRelaunch: change.changed || requiresBackendRelaunch(previous, resolved.state),
@@ -154,6 +171,7 @@ export const make = Effect.gen(function* () {
         enabled: input.enabled,
         ...(input.port === undefined ? {} : { port: input.port }),
       });
+
       const result = yield* desktopSettings
         .setTailscaleServe({
           enabled: input.enabled,
@@ -186,6 +204,7 @@ export const make = Effect.gen(function* () {
   const getAdvertisedEndpoints = Effect.gen(function* () {
     const state = yield* Ref.get(stateRef);
     const currentNetworkInterfaces = yield* readNetworkInterfaces;
+
     const coreEndpoints = resolveDesktopCoreAdvertisedEndpoints({
       port: state.port,
       exposure: toResolvedExposure(state),
@@ -209,6 +228,7 @@ export const make = Effect.gen(function* () {
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
       Effect.provideService(HttpClient.HttpClient, httpClient),
     );
+
     return [...coreEndpoints, ...tailscaleEndpoints];
   }).pipe(Effect.withSpan("desktop.serverExposure.getAdvertisedEndpoints"));
 

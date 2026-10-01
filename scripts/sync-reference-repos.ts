@@ -97,10 +97,13 @@ export const ReferenceRepoSyncError = Schema.Union([
   ReferenceRepoVersionResolutionError,
   ReferenceRepoGitSubtreeError,
 ]);
+
 export type ReferenceRepoSyncError = typeof ReferenceRepoSyncError.Type;
+
 export const isReferenceRepoSyncError = Schema.is(ReferenceRepoSyncError);
 
 const decodeJsonSource = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+
 const decodeYamlSource = Schema.decodeEffect(fromYaml(Schema.Unknown));
 
 const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
@@ -114,12 +117,15 @@ const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.
 
 function readNestedString(input: unknown, keys: ReadonlyArray<string>): string | undefined {
   let value = input;
+
   for (const key of keys) {
     if (typeof value !== "object" || value === null || !(key in value)) {
       return undefined;
     }
+
     value = (value as Record<string, unknown>)[key];
   }
+
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
@@ -132,6 +138,7 @@ function decodeVersionSource(
     repo.versionSourcePath.endsWith(".yaml") || repo.versionSourcePath.endsWith(".yml")
       ? decodeYamlSource
       : decodeJsonSource;
+
   return decode(content).pipe(
     Effect.mapError(
       (cause) =>
@@ -153,6 +160,7 @@ function getSelectedRepos(
   }
 
   const repo = referenceRepos.find((candidate) => candidate.id === repoId);
+
   return repo
     ? Effect.succeed([repo])
     : Effect.fail(
@@ -175,6 +183,7 @@ export const resolveReferenceRepoRef = Effect.fn("resolveReferenceRepoRef")(func
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const versionSourcePath = path.join(rootDir, repo.versionSourcePath);
+
   const versionSourceContent = yield* fs.readFileString(versionSourcePath).pipe(
     Effect.mapError(
       (cause) =>
@@ -186,6 +195,7 @@ export const resolveReferenceRepoRef = Effect.fn("resolveReferenceRepoRef")(func
         }),
     ),
   );
+
   const versionSource = yield* decodeVersionSource(repo, versionSourcePath, versionSourceContent);
   const version = readNestedString(versionSource, repo.packageVersionPath);
 
@@ -207,9 +217,11 @@ export const planReferenceRepoSync = Effect.fn("planReferenceRepoSync")(function
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
   const action: ReferenceRepoSyncAction = (yield* fs.exists(path.join(rootDir, repo.prefix)))
     ? "pull"
     : "add";
+
   const ref = yield* resolveReferenceRepoRef(repo, rootDir, latest);
 
   return {
@@ -222,6 +234,7 @@ export const planReferenceRepoSync = Effect.fn("planReferenceRepoSync")(function
 
 const runGit = Effect.fn("runGit")(function* (rootDir: string, plan: ReferenceRepoSyncPlan) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
   const errorContext = {
     repoId: plan.repo.id,
     action: plan.action,
@@ -230,6 +243,7 @@ const runGit = Effect.fn("runGit")(function* (rootDir: string, plan: ReferenceRe
     rootDir,
     argumentCount: plan.args.length,
   } as const;
+
   const child = yield* spawner.spawn(ChildProcess.make("git", plan.args, { cwd: rootDir })).pipe(
     Effect.mapError(
       (cause) =>
@@ -240,6 +254,7 @@ const runGit = Effect.fn("runGit")(function* (rootDir: string, plan: ReferenceRe
         }),
     ),
   );
+
   const [stdout, stderr, exitCode] = yield* Effect.all(
     [
       collectStreamAsString(child.stdout),
@@ -285,6 +300,7 @@ export const syncReferenceRepos = Effect.fn("syncReferenceRepos")(function* (
     const plan = yield* planReferenceRepoSync(repo, rootDir, options.latest ?? false);
     plans.push(plan);
     yield* Console.log(`Syncing ${repo.id} from ${plan.ref} with git subtree ${plan.action}.`);
+
     if (!(options.dryRun ?? false)) {
       yield* runGit(rootDir, plan).pipe(Effect.scoped);
     }

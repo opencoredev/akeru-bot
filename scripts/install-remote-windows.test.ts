@@ -64,6 +64,7 @@ describe("Windows remote installer", () => {
       "catch { Write-Warning",
       "Start-ScheduledTask -TaskName $TaskName",
     ].map((step) => script.indexOf(step));
+
     expect(order.every((index) => index >= 0)).toBe(true);
     expect([...order].toSorted((a, b) => a - b)).toEqual(order);
     expect(script).not.toContain("Remove-Item -LiteralPath $Pinned");

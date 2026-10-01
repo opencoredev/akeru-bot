@@ -40,9 +40,11 @@ export function lanIpv4Address(): string {
   const address = selectLanIpv4Address(
     Object.values(NodeOS.networkInterfaces()).flatMap((addresses) => addresses ?? []),
   );
+
   if (!address) {
     throw new Error("No LAN IPv4 address is available for the iOS Simulator to reach Metro.");
   }
+
   return address;
 }
 
@@ -58,12 +60,14 @@ exec /bin/cat
 `,
     { mode: 0o755 },
   );
+
   return shellPath;
 }
 
 export async function createShowcaseLabelProbe(baseDir: string, label: string): Promise<string> {
   const binDirectory = NodePath.join(baseDir, "showcase-bin");
   await NodeFSP.mkdir(binDirectory, { recursive: true });
+
   const probeScript = `#!/bin/sh
 if [ "$1" = "--get" ] && [ "$2" = "ComputerName" ]; then
   printf '%s\\n' ${JSON.stringify(label)}
@@ -75,11 +79,13 @@ if [ "$1" = "--pretty" ]; then
 fi
 exit 1
 `;
+
   await Promise.all(
     ["scutil", "hostnamectl"].map((executable) =>
       NodeFSP.writeFile(NodePath.join(binDirectory, executable), probeScript, { mode: 0o755 }),
     ),
   );
+
   return binDirectory;
 }
 
@@ -119,15 +125,19 @@ export function startShowcaseServer(
 export function parsePairingCredentialOutput(output: string): string {
   const jsonStart = output.indexOf("{");
   const jsonEnd = output.lastIndexOf("}");
+
   if (jsonStart === -1 || jsonEnd < jsonStart) {
     throw new Error("Pairing credential command did not return JSON.");
   }
+
   const parsed = JSON.parse(output.slice(jsonStart, jsonEnd + 1)) as {
     readonly credential?: unknown;
   };
+
   if (typeof parsed.credential !== "string" || parsed.credential.length === 0) {
     throw new Error("Pairing credential command returned no credential.");
   }
+
   return parsed.credential;
 }
 
@@ -137,19 +147,23 @@ export async function issuePairingCredential(baseDir: string): Promise<string> {
     ["apps/server/src/bin.ts", "auth", "pairing", "create", "--base-dir", baseDir, "--json"],
     { env: { ...NodeProcess.env, NO_COLOR: "1" } },
   );
+
   return parsePairingCredentialOutput(output);
 }
 
 export function buildShowcasePairingUrl(host: string, port: number, credential: string): string {
   const url = new URL(`http://${host}:${port}/`);
   url.hash = new URLSearchParams([["token", credential]]).toString();
+
   return url.toString();
 }
 
 export function showcaseSceneUrl(scene: ShowcaseScene, environmentId: string): string {
   if (scene === "threads") return `${APP_SCHEME}://`;
+
   if (scene === "environments") return `${APP_SCHEME}://settings/environments`;
   const threadPath = `threads/${encodeURIComponent(environmentId)}/${SHOWCASE_THREAD_ID}`;
+
   return `${APP_SCHEME}://${threadPath}`;
 }
 

@@ -12,12 +12,14 @@ const temporaryDirectories: string[] = [];
 function fixtureRoot(): URL {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-plugins-"));
   temporaryDirectories.push(directory);
+
   return NodeURL.pathToFileURL(`${directory}/`);
 }
 
 function copyEntry(id: string, root: URL): URL {
   const target = new URL(`${id}/`, root);
   NodeFS.cpSync(new URL(`../plugins/entries/${id}/`, import.meta.url), target, { recursive: true });
+
   return target;
 }
 

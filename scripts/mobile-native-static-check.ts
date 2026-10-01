@@ -79,6 +79,7 @@ const tools = [
 ] as const satisfies ReadonlyArray<NativeStaticTool>;
 
 const sourceExtensions = new Set([".swift", ".kt", ".kts"]);
+
 const excludedDirectories = new Set([
   ".expo",
   ".git",
@@ -88,9 +89,11 @@ const excludedDirectories = new Set([
   "Pods",
   "Vendor",
 ]);
+
 const generatedNativeProjectDirectories = new Set(["android", "ios"]);
 
 const mobileAppRootUrl = new URL("../apps/mobile", import.meta.url);
+
 const appRoot = Effect.service(Path.Path).pipe(
   Effect.flatMap((path) => path.fromFileUrl(mobileAppRootUrl)),
   Effect.mapError(
@@ -125,12 +128,14 @@ export const runCommand = Effect.fn("runCommand")(function* (
   yield* Console.log(`$ ${[command, ...args].join(" ")}`);
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const spawnCommand = yield* resolveSpawnCommand(command, args);
+
   const processContext = {
     command,
     argumentCount: spawnCommand.args.length,
     cwd,
     shell: spawnCommand.shell,
   } as const;
+
   const child = yield* spawner
     .spawn(
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
@@ -149,6 +154,7 @@ export const runCommand = Effect.fn("runCommand")(function* (
           }),
       ),
     );
+
   const exitCode = Number(
     yield* child.exitCode.pipe(
       Effect.mapError(
@@ -181,6 +187,7 @@ export function collectSources(
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+
     const entries = yield* fs.readDirectory(directory).pipe(
       Effect.mapError(
         (cause) =>
@@ -191,10 +198,12 @@ export function collectSources(
           }),
       ),
     );
+
     const sources: Array<string> = [];
 
     for (const entry of entries) {
       const entryPath = path.join(directory, entry);
+
       const stat = yield* fs.stat(entryPath).pipe(
         Effect.mapError(
           (cause) =>
@@ -232,10 +241,13 @@ const runNativeStaticChecks = Effect.fn("runNativeStaticChecks")(function* () {
   const root = yield* appRoot;
   const sources = yield* collectSources(root, root);
   const swiftSources = sources.filter((source) => path.extname(source) === ".swift");
+
   const kotlinSources = sources.filter((source) => {
     const extension = path.extname(source);
+
     return extension === ".kt" || extension === ".kts";
   });
+
   const availableTools = new Map<string, boolean>();
 
   for (const tool of tools) {

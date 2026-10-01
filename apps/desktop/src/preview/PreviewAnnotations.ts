@@ -55,6 +55,7 @@ export const createPreviewAnnotations = ({
     tabId: string,
   ) {
     const session = (yield* Ref.get(pickSessionsRef)).get(tabId);
+
     if (session) yield* session.cancel;
   });
 
@@ -68,6 +69,7 @@ export const createPreviewAnnotations = ({
       (tab) => {
         if (tab.webContentsId == null) return Effect.void;
         const wc = webContents.fromId(tab.webContentsId);
+
         return !wc || wc.isDestroyed()
           ? Effect.void
           : attempt(
@@ -87,6 +89,7 @@ export const createPreviewAnnotations = ({
     const wc = yield* requireWebContents(tabId);
     yield* cancelPickElement(tabId);
     const annotationTheme = yield* Ref.get(annotationThemeRef);
+
     return yield* Effect.callback<PreviewAnnotationSubmissionResult | null, PreviewManagerError>(
       (resume) => {
         const cleanup = Effect.fn("PreviewManager.cleanupPickElement")(function* () {
@@ -101,23 +104,29 @@ export const createPreviewAnnotations = ({
             }),
           );
         });
+
         const settlePick = Effect.fn("PreviewManager.settlePickElement")(function* (
           payload: PreviewAnnotationSubmissionResult | null,
         ) {
           const active = (yield* Ref.get(pickSessionsRef)).get(tabId);
+
           if (!active || active.cancel !== cancel) return;
           yield* cleanup();
           resume(Effect.succeed(payload));
         });
+
         const settle = (payload: PreviewAnnotationSubmissionResult | null) => {
           runFork(settlePick(payload));
         };
+
         const cancelPickSession = Effect.fn("PreviewManager.cancelPickSession")(function* () {
           yield* cleanup();
           const tabs = yield* SynchronizedRef.get(tabsRef);
           const activeTab = tabs.get(tabId);
+
           if (activeTab?.webContentsId != null) {
             const activeWc = webContents.fromId(activeTab.webContentsId);
+
             if (activeWc && !activeWc.isDestroyed()) {
               yield* attempt(
                 {
@@ -129,15 +138,21 @@ export const createPreviewAnnotations = ({
               ).pipe(Effect.ignore);
             }
           }
+
           resume(Effect.succeed(null));
         });
+
         const cancel = cancelPickSession();
+
         const onMessage = (_event: Electron.IpcMainEvent, ...args: unknown[]): void => {
           const payload = args[0];
+
           if (!isPreviewAnnotationPayload(payload)) {
             settle(null);
+
             return;
           }
+
           const cropRect = normalizeCaptureRect(args[1]);
           const submission = args[2] === "send" ? "send" : "attach";
           runFork(
@@ -158,7 +173,9 @@ export const createPreviewAnnotations = ({
             ),
           );
         };
+
         const onDestroyed = () => settle(null);
+
         const onNavigated = (
           _event: Electron.Event,
           _url: string,
@@ -167,11 +184,13 @@ export const createPreviewAnnotations = ({
         ) => {
           if (isMainFrame) settle(null);
         };
+
         const registerPickElement = Effect.fn("PreviewManager.registerPickElement")(function* () {
           yield* attempt({ operation: "pickElement.register", tabId, webContentsId: wc.id }, () => {
             wc.ipc.on(ELEMENT_PICKED_CHANNEL, onMessage);
             wc.once("destroyed", onDestroyed);
             wc.once("did-start-navigation", onNavigated);
+
             if (!wc.isFocused()) wc.focus();
             wc.send(START_PICK_CHANNEL, annotationTheme);
           });
@@ -181,17 +200,21 @@ export const createPreviewAnnotations = ({
             }),
           );
         });
+
         runFork(
           registerPickElement().pipe(
             Effect.catch((error: PreviewManagerError) => {
               resume(Effect.fail(error));
+
               return cleanup();
             }),
           ),
         );
+
         return cancel;
       },
     );
   });
+
   return { cancelPickElement, setAnnotationTheme, pickElement };
 };

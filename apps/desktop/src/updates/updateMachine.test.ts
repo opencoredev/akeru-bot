@@ -65,10 +65,12 @@ describe("updateMachine", () => {
       releaseNotes: [{ version: "1.1.0", items: ["fix: queued update"] }],
       downloadPercent: 100,
     };
+
     const checking = reduceDesktopUpdateStateOnCheckStart(
       downloadedState,
       "2026-03-04T00:00:00.000Z",
     );
+
     const failed = reduceDesktopUpdateStateOnCheckFailure(
       checking,
       "network unavailable",
@@ -86,6 +88,7 @@ describe("updateMachine", () => {
 
   it("keeps the installer when the feed still offers its version", () => {
     const releaseNotes = [{ version: "1.1.0", items: ["fix: queued update"] }];
+
     const state = reduceDesktopUpdateStateOnUpdateAvailable(
       {
         ...createInitialDesktopUpdateState("1.0.0", runtimeInfo, "latest"),
@@ -134,6 +137,7 @@ describe("updateMachine", () => {
       },
       "1.1.0",
     );
+
     const failedInstall = reduceDesktopUpdateStateOnInstallFailure(
       downloaded,
       "backend shutdown timed out",
@@ -148,6 +152,7 @@ describe("updateMachine", () => {
 
   it("preserves a downloaded update when no update is available", () => {
     const releaseNotes = [{ version: "1.1.0", items: ["fix: queued update"] }];
+
     const state = reduceDesktopUpdateStateOnNoUpdate(
       {
         ...createInitialDesktopUpdateState("1.0.0", runtimeInfo, "latest"),
@@ -203,6 +208,7 @@ describe("updateMachine", () => {
         items: ["feat: add update release notes"],
       },
     ];
+
     const available = reduceDesktopUpdateStateOnUpdateAvailable(
       {
         ...createInitialDesktopUpdateState("1.0.0", runtimeInfo, "latest"),
@@ -213,6 +219,7 @@ describe("updateMachine", () => {
       "2026-03-04T00:00:00.000Z",
       releaseNotes,
     );
+
     const downloading = reduceDesktopUpdateStateOnDownloadStart(available);
     const progress = reduceDesktopUpdateStateOnDownloadProgress(downloading, 55.5);
 

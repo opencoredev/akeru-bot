@@ -9,6 +9,7 @@ function fixture(run: (root: string, worktree: string) => void) {
   const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-setup-"));
   const worktree = NodePath.join(root, "worktree with spaces");
   NodeFS.mkdirSync(worktree);
+
   try {
     run(root, worktree);
   } finally {

@@ -200,10 +200,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
           const path = yield* Path.Path;
+
           const tempDir = yield* fs.makeTempDirectoryScoped({
             prefix: "t3-windows-architecture-test-",
           });
+
           const sourceDir = path.join(tempDir, "server");
+
           const nativeFiles = [
             "node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe",
             "node_modules/node-pty/prebuilds/win32-arm64/conpty/OpenConsole.exe",
@@ -255,6 +258,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+
         const result = yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
@@ -267,6 +271,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           asarPath: secondAsarPath,
           arch: "x64",
         });
+
         const [firstAsar, secondAsar] = yield* Effect.all([
           fs.readFile(fixture.generatedAsarPath),
           fs.readFile(secondAsarPath),
@@ -286,11 +291,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+
         const baseline = yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
           targetArch: "x64",
         });
+
         const pluginDir = path.join(fixture.packagedAppDir, "resources/plugins/entries/example");
         yield* fs.makeDirectory(pluginDir, { recursive: true });
         yield* Effect.forEach(
@@ -320,10 +327,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         readonly env?: Readonly<Record<string, string | undefined>>;
       };
     }> = [];
+
     const spawnerLayer = Layer.succeed(
       ChildProcessSpawner.ChildProcessSpawner,
       ChildProcessSpawner.make((command) => {
         commands.push(command as unknown as (typeof commands)[number]);
+
         return Effect.succeed(mockProcess(0));
       }),
     );
@@ -341,6 +350,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         const primaryProbe = commands.find(
           (command) => command.options.env?.ELECTRON_RUN_AS_NODE === "1",
         );
+
         if (primaryProbe === undefined) return assert.fail("Windows primary probe was not spawned");
 
         assert.equal(
@@ -381,10 +391,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         readonly env?: Readonly<Record<string, string | undefined>>;
       };
     }> = [];
+
     const spawnerLayer = Layer.succeed(
       ChildProcessSpawner.ChildProcessSpawner,
       ChildProcessSpawner.make((command) => {
         commands.push(command as unknown as (typeof commands)[number]);
+
         return Effect.succeed(mockProcess(0));
       }),
     );
@@ -455,6 +467,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     Effect.scoped(
       Effect.gen(function* () {
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: false });
+
         const error = yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
@@ -476,10 +489,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+
         const nativePath = path.join(
           fixture.packagedAppDir,
           "resources/server.asar.unpacked/node_modules/native/addon.node",
         );
+
         yield* fs.remove(nativePath);
         yield* fs.makeDirectory(nativePath);
 
@@ -488,6 +503,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           appExecutableName: fixture.appExecutableName,
           targetArch: "x64",
         }).pipe(Effect.flip);
+
         assert.instanceOf(nativeError, WindowsPackagedPayloadValidationError);
         assert.equal(nativeError.reason, "unpacked-native-missing");
         assert.deepStrictEqual(nativeError.missingFiles, [
@@ -496,10 +512,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
         yield* fs.remove(nativePath, { recursive: true });
         yield* fs.writeFileString(nativePath, "native-binary");
+
         const resourceMonitorPath = path.join(
           fixture.packagedAppDir,
           "resources/resource-monitor/t3-resource-monitor.exe",
         );
+
         yield* fs.remove(resourceMonitorPath);
         yield* fs.makeDirectory(resourceMonitorPath);
 
@@ -508,6 +526,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           appExecutableName: fixture.appExecutableName,
           targetArch: "x64",
         }).pipe(Effect.flip);
+
         assert.instanceOf(resourceMonitorError, WindowsPackagedPayloadValidationError);
         assert.equal(resourceMonitorError.reason, "resource-monitor-missing");
         assert.deepStrictEqual(resourceMonitorError.missingFiles, [
@@ -521,6 +540,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     Effect.scoped(
       Effect.gen(function* () {
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+
         const error = yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
@@ -542,6 +562,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           copyUnpackedNatives: true,
           serverEntrySource: 'import "t3code-deliberately-missing-package";\n',
         });
+
         const error = yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
@@ -561,6 +582,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           copyUnpackedNatives: true,
           includeLazyRuntimePackage: false,
         });
+
         const error = yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
@@ -682,4 +704,5 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 });
+
 import * as NodeServices from "@effect/platform-node/NodeServices";

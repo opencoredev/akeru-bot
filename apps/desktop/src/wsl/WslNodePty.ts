@@ -124,13 +124,17 @@ export const parseToolchainReport = (stdout: string): ToolchainReport => {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
+
   const missingTools = lines
     .filter((line) => line.startsWith("missing:"))
     .map((line) => line.slice("missing:".length));
+
   const nodeVersionLine = lines.find((line) => line.startsWith("nodeVersion:"));
+
   const nodeVersion = nodeVersionLine
     ? nodeVersionLine.slice("nodeVersion:".length).trim() || null
     : null;
+
   return { missingTools, nodeVersion };
 };
 
@@ -145,6 +149,7 @@ export const parseNodePath = (stdout: string): string | null => {
     .filter((line) => line.startsWith("nodePath:"))
     .map((line) => line.slice("nodePath:".length).trim())
     .find((value) => value.length > 0);
+
   return path ?? null;
 };
 
@@ -155,6 +160,7 @@ export const parseNodeVersion = (stdout: string): string | null => {
     .filter((line) => line.startsWith("nodeVersion:"))
     .map((line) => line.slice("nodeVersion:".length).trim())
     .find((value) => value.length > 0);
+
   return version ?? null;
 };
 
@@ -164,8 +170,10 @@ export const parseNodeVersion = (stdout: string): string | null => {
 export const parseResolvedPath = (stdout: string): string | null => {
   const prefix = "resolvedPath:";
   const line = stdout.split("\n").find((candidate) => candidate.startsWith(prefix));
+
   if (line === undefined) return null;
   const resolvedPath = line.slice(prefix.length).replace(/\r$/, "");
+
   return resolvedPath.length > 0 ? resolvedPath : null;
 };
 
@@ -174,11 +182,13 @@ export const formatMissingToolsReason = (
   requiredRange: string | null,
 ): string | null => {
   const nodeMissing = report.missingTools.includes("node");
+
   const nodeOutOfRange =
     !nodeMissing &&
     requiredRange !== null &&
     report.nodeVersion !== null &&
     !satisfiesSemverRange(report.nodeVersion, requiredRange);
+
   const buildToolsMissing = report.missingTools.filter((tool) => tool !== "node");
 
   if (!nodeMissing && !nodeOutOfRange && buildToolsMissing.length === 0) {
@@ -221,6 +231,7 @@ export const ensureNodePtyImpl = (
 ): Effect.Effect<EnsureWslNodePtyResult, never, ChildProcessSpawner.ChildProcessSpawner> =>
   Effect.gen(function* () {
     const linuxRepoRootOption = yield* windowsToWslPath(distro, windowsRepoRoot);
+
     if (Option.isNone(linuxRepoRootOption)) {
       return {
         ok: false,
@@ -228,6 +239,7 @@ export const ensureNodePtyImpl = (
         fatal: false,
       } as const;
     }
+
     const linuxRepoRoot = linuxRepoRootOption.value;
     // node-pty lives in the apps/server workspace's node_modules; resolve from
     // there rather than the monorepo root, where Bun's hoist layout omits it.
@@ -239,10 +251,12 @@ export const ensureNodePtyImpl = (
       PROBE_TIMEOUT,
       options,
     );
+
     const nodePath = parseNodePath(probe.stdout);
     const resolvedPath = parseResolvedPath(probe.stdout);
 
     const transportFailureReason = formatWslShellTransportFailureReason(probe.transportFailure);
+
     if (transportFailureReason !== null) {
       return {
         ok: false,
@@ -261,9 +275,11 @@ export const ensureNodePtyImpl = (
         TOOLCHAIN_TIMEOUT,
         options,
       );
+
       const toolchainTransportFailure = formatWslShellTransportFailureReason(
         toolchainCheck.transportFailure,
       );
+
       if (toolchainTransportFailure !== null) {
         return {
           ok: false,
@@ -272,10 +288,13 @@ export const ensureNodePtyImpl = (
           retryLimit: TOOLCHAIN_TRANSPORT_RETRY_LIMIT,
         } as const;
       }
+
       const report = parseToolchainReport(toolchainCheck.stdout);
+
       const reason =
         formatMissingToolsReason(report, options.nodeEngineRange?.trim() || null) ??
         "Node.js was not found in the WSL distro. Install it (e.g. via nvm) and restart the desktop app.";
+
       return { ok: false, reason, fatal: true } as const;
     }
 
@@ -304,23 +323,27 @@ export const ensureNodePtyImpl = (
 
     if (probe.exitCode === 0) {
       const rawVersion = parseNodeVersion(probe.stdout);
+
       if (
         rawVersion !== null &&
         options.nodeEngineRange &&
         !satisfiesSemverRange(rawVersion, options.nodeEngineRange.trim())
       ) {
         const range = options.nodeEngineRange.trim();
+
         return {
           ok: false,
           reason: `WSL Node.js ${rawVersion} does not satisfy the server's required engine range (${range}). Install a compatible version, and restart the desktop app.`,
           fatal: true,
         } as const;
       }
+
       return { ok: true, nodePath, resolvedPath } as const;
     }
 
     if (options.allowBuild !== true) {
       const packagedProbeFailure = formatNodePtyProbeFailureReason(probe.exitCode);
+
       if (packagedProbeFailure !== null) {
         return {
           ok: false,
@@ -337,9 +360,11 @@ export const ensureNodePtyImpl = (
       TOOLCHAIN_TIMEOUT,
       options,
     );
+
     const toolchainTransportFailure = formatWslShellTransportFailureReason(
       toolchainCheck.transportFailure,
     );
+
     if (toolchainTransportFailure !== null) {
       return {
         ok: false,
@@ -348,6 +373,7 @@ export const ensureNodePtyImpl = (
         retryLimit: TOOLCHAIN_TRANSPORT_RETRY_LIMIT,
       } as const;
     }
+
     const report = parseToolchainReport(toolchainCheck.stdout);
 
     if (options.allowBuild !== true) {
@@ -364,6 +390,7 @@ export const ensureNodePtyImpl = (
         },
         options.nodeEngineRange?.trim() || null,
       );
+
       return {
         ok: false,
         reason:
@@ -378,6 +405,7 @@ export const ensureNodePtyImpl = (
     // Node surfaces a specific, actionable message instead of an opaque node-gyp
     // failure. Developers have the toolchain; end users never reach this path.
     const missingReason = formatMissingToolsReason(report, options.nodeEngineRange?.trim() || null);
+
     if (missingReason !== null) {
       return { ok: false, reason: missingReason, fatal: true } as const;
     }
@@ -388,7 +416,9 @@ export const ensureNodePtyImpl = (
       BUILD_TIMEOUT,
       options,
     );
+
     const buildTransportFailure = formatWslShellTransportFailureReason(build.transportFailure);
+
     if (buildTransportFailure !== null) {
       return {
         ok: false,
@@ -397,8 +427,10 @@ export const ensureNodePtyImpl = (
         retryLimit: BUILD_TRANSPORT_RETRY_LIMIT,
       } as const;
     }
+
     if (build.exitCode === 0) return { ok: true, nodePath, resolvedPath } as const;
     const trimmedTail = `${build.stdout}${build.stderr}`.trim().slice(-500);
+
     return {
       ok: false,
       reason: `node-pty Linux build failed (exit ${build.exitCode}): ${trimmedTail || "no stderr captured"}`,

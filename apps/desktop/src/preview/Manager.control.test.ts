@@ -94,9 +94,11 @@ describe("PreviewManager", () => {
         let destroyed = false;
         let attached = false;
         const debuggerOff = vi.fn();
+
         const debuggerDetach = vi.fn(() => {
           attached = false;
         });
+
         const wcDebugger = {
           isAttached: () => attached,
           attach: vi.fn(() => {
@@ -107,6 +109,7 @@ describe("PreviewManager", () => {
           on: vi.fn(),
           off: debuggerOff,
         };
+
         fromId.mockReturnValue({
           id: 42,
           isDestroyed: () => destroyed,
@@ -130,6 +133,7 @@ describe("PreviewManager", () => {
           setWindowOpenHandler: vi.fn(),
           get debugger() {
             if (destroyed) throw new Error("Object has been destroyed");
+
             return wcDebugger;
           },
         } as never);
@@ -154,17 +158,21 @@ describe("PreviewManager", () => {
         const replacement = makeFaviconWebContents({ url: "https://example.com/" });
         let current = previous.webContents;
         let startReplacementRegistration: () => void = () => void 0;
+
         const replacementReady = new Promise<void>((resolve) => {
           startReplacementRegistration = resolve;
         });
+
         fromId.mockImplementation(() => current);
         yield* manager.createTab("tab_destroyed_replacement_race");
         yield* manager.registerWebview("tab_destroyed_replacement_race", 42);
         yield* manager.setColorScheme("tab_destroyed_replacement_race", "dark");
+
         const replacementRegistration = yield* Effect.promise(() => replacementReady).pipe(
           Effect.flatMap(() => manager.registerWebview("tab_destroyed_replacement_race", 42)),
           Effect.forkChild({ startImmediately: true }),
         );
+
         previous.setDestroyed(true);
         previous.debuggerOff.mockImplementationOnce(() => {
           current = replacement.webContents;
@@ -211,6 +219,7 @@ describe("PreviewManager", () => {
           isLoading: () => false,
           getZoomFactor: () => {
             if (!zoomReadable) throw new Error("zoom unavailable");
+
             return effectiveZoom;
           },
           setZoomFactor,
@@ -413,6 +422,7 @@ describe("PreviewManager", () => {
       Effect.gen(function* () {
         const makeWebContents = (id: number) => {
           const sendCommand = vi.fn(async () => undefined);
+
           return {
             sendCommand,
             wc: {
@@ -444,6 +454,7 @@ describe("PreviewManager", () => {
             } as never,
           };
         };
+
         const first = makeWebContents(42);
         fromId.mockReturnValue(first.wc);
         const states: PreviewManager.PreviewTabState[] = [];

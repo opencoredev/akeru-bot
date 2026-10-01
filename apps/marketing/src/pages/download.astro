@@ -77,8 +77,10 @@ import { RELEASES_URL } from "../lib/releases";
     // Only release-asset links; mobile store cards have no data-asset and keep their href.
     const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
     const releasePromise = fetchLatestRelease();
+
     const cardDownloads = Array.from(cards, async (card) => {
       const suffix = card.dataset.asset;
+
       if (!suffix) return;
       await resolveDownloadLink(card, suffix, releasePromise);
     });
@@ -91,6 +93,7 @@ import { RELEASES_URL } from "../lib/releases";
       }
 
       const changelogLink = document.getElementById("changelog-link") as HTMLAnchorElement | null;
+
       if (changelogLink && release.html_url) {
         changelogLink.href = release.html_url;
         changelogLink.style.display = "";
@@ -101,6 +104,7 @@ import { RELEASES_URL } from "../lib/releases";
         versionLabel.textContent = "Could not load release info.";
       }
     }
+
     await Promise.all(cardDownloads);
 
   }

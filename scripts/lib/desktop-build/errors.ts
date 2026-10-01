@@ -68,7 +68,9 @@ export class BuildCommandFailedError extends Schema.TaggedErrorClass<BuildComman
       formatOutputSection("stdout", this.stdoutTail ?? ""),
       formatOutputSection("stderr", this.stderrTail ?? ""),
     ].filter((section): section is string => section !== undefined);
+
     const outputSuffix = outputSections.length > 0 ? `\n\n${outputSections.join("\n\n")}` : "";
+
     return `Command exited with non-zero exit code (${this.exitCode})${outputSuffix}`;
   }
 }
@@ -127,6 +129,7 @@ export class BundledClientAssetsMissingError extends Schema.TaggedErrorClass<Bun
   override get message(): string {
     const preview = this.missingFiles.slice(0, 6).join(", ");
     const suffix = this.missingFiles.length > 6 ? ` (+${this.missingFiles.length - 6} more)` : "";
+
     return `Bundled client references missing files in ${this.indexPath}: ${preview}${suffix}. Rebuild web/server artifacts.`;
   }
 }
@@ -341,18 +344,23 @@ export class WindowsPackagedPayloadValidationError extends Schema.TaggedErrorCla
     if (this.reason === "file-limit-exceeded") {
       return `Windows packaged payload contains ${String(this.fileCount)} files; expected at most ${String(this.fileLimit)}.`;
     }
+
     if (this.reason === "unpacked-native-missing") {
       return `Windows server sidecar is missing ${String(this.missingFiles?.length ?? 0)} unpacked native files.`;
     }
+
     if (this.reason === "resource-monitor-missing") {
       return "Windows packaged payload is missing the resource monitor executable.";
     }
+
     if (this.reason === "sidecar-invalid") {
       return "Windows packaged payload contains an invalid server.asar sidecar.";
     }
+
     if (this.reason === "sidecar-missing") {
       return "Windows packaged payload is missing resources/server.asar.";
     }
+
     return `Windows packaged application directory was not found at ${this.packagedAppDir}.`;
   }
 }
@@ -386,7 +394,9 @@ export class LinuxIconResizeError extends Schema.TaggedErrorClass<LinuxIconResiz
 
 function formatOutputSection(label: string, output: string): string | undefined {
   const trimmed = output.trim();
+
   if (!trimmed) return undefined;
+
   return `${label} tail:\n${trimmed}`;
 }
 
@@ -394,9 +404,13 @@ function invalidMockUpdateServerPortReason(
   configuredPort: string,
 ): typeof InvalidMockUpdateServerPortReason.Type {
   const parsed = Number(configuredPort);
+
   if (!Number.isFinite(parsed)) return "not-numeric";
+
   if (!Number.isInteger(parsed)) return "not-integer";
+
   if (parsed < 1 || parsed > 65535) return "out-of-range";
+
   // This mapper is only called after schema decoding failed. An otherwise
   // valid integer therefore used a representation the decoder did not accept.
   return "not-numeric";
