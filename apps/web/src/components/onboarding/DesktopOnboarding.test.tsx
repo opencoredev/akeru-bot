@@ -3,6 +3,7 @@ import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ProviderApiKeyForm } from "../settings/ProvidersPanel";
 import {
@@ -392,6 +393,17 @@ describe("onboarding API-key connections", () => {
   it("lets an already connected API-only user continue without OAuth", async () => {
     mocks.connected = true;
     await render();
+    expect(
+      renderToStaticMarkup(
+        <SubscriptionStep
+          environmentId={environmentId}
+          draft={{ ...DEFAULT_DESKTOP_ONBOARDING_DRAFT, providerId: "openai-codex" }}
+          captureMode={false}
+          onChange={vi.fn()}
+          onContinue={mocks.next}
+        />,
+      ),
+    ).toContain("text-success-indicator-foreground");
     await click("Continue");
     expect(mocks.next).toHaveBeenCalledOnce();
     expect(mocks.start).not.toHaveBeenCalled();

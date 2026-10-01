@@ -408,7 +408,7 @@ export function SubscriptionStep({
                   )}
                 </span>
                 {providerConnected ? (
-                  <span className="flex size-5 items-center justify-center rounded-full bg-success/15 text-success-foreground">
+                  <span className="flex size-5 items-center justify-center rounded-full bg-success/15 text-success-indicator-foreground">
                     <CheckIcon className="size-3" />
                   </span>
                 ) : null}
