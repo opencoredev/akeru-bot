@@ -14,6 +14,7 @@ import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import {
   type ProviderMaintenanceCapabilities,
   makeManualProviderMaintenanceCapabilities,
+  nonEmptyString,
 } from "./ProviderMaintenanceCapabilities.ts";
 
 export const LATEST_VERSION_CACHE_TTL_MS = 60 * 60 * 1_000;
@@ -38,10 +39,6 @@ export const ProviderVersionCache = Context.Reference<Map<string, ProviderVersio
 export const NpmLatestVersionResponse = Schema.Struct({
   version: Schema.optional(Schema.String),
 });
-
-export function nonEmptyString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-}
 
 export function deriveVersionAdvisory(input: {
   readonly currentVersion: string | null;
