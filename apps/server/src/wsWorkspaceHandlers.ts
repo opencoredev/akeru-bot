@@ -41,15 +41,14 @@ export const createWsWorkspaceHandlers = ({
       observeRpcEffect(
         WS_METHODS.projectsSearchEntries,
         workspaceEntries.search(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new ProjectSearchEntriesError({
-                cwd: input.cwd,
-                queryLength: input.query.length,
-                limit: input.limit,
-                ...projectEntriesFailureContext(cause),
-                cause,
-              }),
+          Effect.mapError((cause) =>
+            ProjectSearchEntriesError.fromContext({
+              cwd: input.cwd,
+              queryLength: input.query.length,
+              limit: input.limit,
+              ...projectEntriesFailureContext(cause),
+              cause,
+            }),
           ),
         ),
         { "rpc.aggregate": "workspace" },
@@ -59,13 +58,12 @@ export const createWsWorkspaceHandlers = ({
       observeRpcEffect(
         WS_METHODS.projectsListEntries,
         workspaceEntries.list(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new ProjectListEntriesError({
-                ...input,
-                ...projectEntriesFailureContext(cause),
-                cause,
-              }),
+          Effect.mapError((cause) =>
+            ProjectListEntriesError.fromContext({
+              ...input,
+              ...projectEntriesFailureContext(cause),
+              cause,
+            }),
           ),
         ),
         { "rpc.aggregate": "workspace" },
@@ -75,13 +73,12 @@ export const createWsWorkspaceHandlers = ({
       observeRpcEffect(
         WS_METHODS.projectsReadFile,
         workspaceFileSystem.readFile(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new ProjectReadFileError({
-                ...input,
-                ...projectFileFailureContext(cause),
-                cause,
-              }),
+          Effect.mapError((cause) =>
+            ProjectReadFileError.fromContext({
+              ...input,
+              ...projectFileFailureContext(cause),
+              cause,
+            }),
           ),
         ),
         { "rpc.aggregate": "workspace" },
@@ -91,14 +88,13 @@ export const createWsWorkspaceHandlers = ({
       observeRpcEffect(
         WS_METHODS.projectsWriteFile,
         workspaceFileSystem.writeFile(input).pipe(
-          Effect.mapError(
-            (cause) =>
-              new ProjectWriteFileError({
-                cwd: input.cwd,
-                relativePath: input.relativePath,
-                ...projectFileFailureContext(cause),
-                cause,
-              }),
+          Effect.mapError((cause) =>
+            ProjectWriteFileError.fromContext({
+              cwd: input.cwd,
+              relativePath: input.relativePath,
+              ...projectFileFailureContext(cause),
+              cause,
+            }),
           ),
         ),
         { "rpc.aggregate": "workspace" },
