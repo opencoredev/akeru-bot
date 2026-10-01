@@ -1,38 +1,32 @@
-import type { StartThreadTurnInput } from "@akeru/client-runtime/operations";
 import {
-  type EnvironmentId,
   isProviderDriverKind,
   PLACEHOLDER_THREAD_TITLE,
-  ProjectId,
+  type EnvironmentId,
   type MessageId,
   type ModelSelection,
   type ProviderDriverKind,
-  type ServerProvider,
   type ScopedProjectRef,
   type ScopedThreadRef,
+  type ServerProvider,
   type ThreadId,
   type TurnId,
 } from "@akeru/contracts";
-import { type ChatMessage, type SessionPhase, type Thread, type ThreadShell } from "../types";
+import type { ComposerSubmissionIntent } from "../composer-logic";
+import type { DraftThreadEnvMode } from "../composerDraftStore";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
-import * as Schema from "effect/Schema";
-import { appAtomRegistry } from "../rpc/atomRegistry";
-import { environmentThreadDetails } from "../state/threads";
 import {
   filterTerminalContextsWithText,
   stripInlineTerminalContextPlaceholders,
   type TerminalContextDraft,
 } from "../lib/terminalContext";
-import type { DraftThreadEnvMode } from "../composerDraftStore";
-import type { ComposerSubmissionIntent } from "../composer-logic";
+import { appAtomRegistry } from "../rpc/atomRegistry";
 import type { TimelineEntry } from "../session-logic";
+import { environmentThreadDetails } from "../state/threads";
+import { type ChatMessage, type Thread, type ThreadShell } from "../types";
 
-export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "akeru:last-invoked-script-by-project";
-export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
 export const MAX_HIDDEN_MOUNTED_PREVIEW_THREADS = 3;
-export const ENVIRONMENT_RECONNECT_WARNING_GRACE_MS = 2_000;
 
-export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.String);
+export const ENVIRONMENT_RECONNECT_WARNING_GRACE_MS = 2_000;
 
 export function shouldDockDraftHeroForSubmission(input: {
   isDraftHeroState: boolean;
@@ -220,37 +214,6 @@ export function buildThreadTurnInterruptInput(thread: Pick<Thread, "id" | "sessi
   };
 }
 
-export function reconcileRetainedMountedThreadIds(input: {
-  currentThreadIds: ReadonlyArray<string>;
-  openThreadIds: ReadonlyArray<string>;
-  activeThreadId: string | null;
-  activeThreadOpen: boolean;
-  maxHiddenThreadCount: number;
-  retainInactiveActiveThread?: boolean;
-}): string[] {
-  const openThreadIdSet = new Set(input.openThreadIds);
-  const hiddenThreadIds = input.currentThreadIds.filter(
-    (threadId) =>
-      (threadId !== input.activeThreadId || input.retainInactiveActiveThread === true) &&
-      openThreadIdSet.has(threadId),
-  );
-  const maxHiddenThreadCount = Math.max(0, input.maxHiddenThreadCount);
-  const nextThreadIds =
-    hiddenThreadIds.length > maxHiddenThreadCount
-      ? hiddenThreadIds.slice(-maxHiddenThreadCount)
-      : hiddenThreadIds;
-
-  if (
-    input.activeThreadId &&
-    input.activeThreadOpen &&
-    !nextThreadIds.includes(input.activeThreadId)
-  ) {
-    nextThreadIds.push(input.activeThreadId);
-  }
-
-  return nextThreadIds;
-}
-
 export function revokeBlobPreviewUrl(previewUrl: string | undefined): void {
   if (!previewUrl || typeof URL === "undefined" || !previewUrl.startsWith("blob:")) {
     return;
@@ -308,6 +271,7 @@ export function resolveSendEnvMode(input: {
 }
 
 export const WORKTREE_BRANCHES_LOADING_REASON = "Loading repository branches";
+
 export const WORKTREE_BASE_BRANCH_MISSING_ERROR =
   "No base branch found. Create or check out a Git branch, or choose Current checkout in Project settings.";
 
@@ -362,117 +326,6 @@ export async function crossWorktreeSendBoundary<Result>(input: {
   return { outcome: "sent", result: await input.send() };
 }
 
-type FirstSendTurnInput = Required<
-  Pick<
-    StartThreadTurnInput,
-    "threadId" | "message" | "modelSelection" | "runtimeMode" | "interactionMode" | "createdAt"
-  >
-> &
-  Pick<StartThreadTurnInput, "bootstrap">;
-
-/** Builds the complete `thread.turn.start` input for ChatView's first-send path. */
-export function buildFirstSendTurnInput(input: FirstSendTurnInput): StartThreadTurnInput {
-  return {
-    threadId: input.threadId,
-    message: input.message,
-    modelSelection: input.modelSelection,
-    runtimeMode: input.runtimeMode,
-    interactionMode: input.interactionMode,
-    ...(input.bootstrap === undefined ? {} : { bootstrap: input.bootstrap }),
-    createdAt: input.createdAt,
-  };
-}
-
-/**
- * Builds the first-turn bootstrap for a send. A local draft always carries
- * `createThread` so the server can materialize it; `prepareWorktree` is added
- * only when a worktree send resolved its base branch. Any other send carries
- * no bootstrap.
- */
-export function buildFirstSendBootstrap<CreateThread>(input: {
-  isLocalDraftThread: boolean;
-  baseBranchForWorktree: string | null;
-  createThread: CreateThread;
-  projectCwd: string;
-  worktreeBranch: string;
-  startFromOrigin: boolean;
-}):
-  | {
-      createThread?: CreateThread;
-      prepareWorktree?: {
-        projectCwd: string;
-        baseBranch: string;
-        branch: string;
-        startFromOrigin?: boolean;
-      };
-      runSetupScript?: boolean;
-    }
-  | undefined {
-  if (!input.isLocalDraftThread && input.baseBranchForWorktree === null) {
-    return undefined;
-  }
-  return {
-    ...(input.isLocalDraftThread ? { createThread: input.createThread } : {}),
-    ...(input.baseBranchForWorktree !== null
-      ? {
-          prepareWorktree: {
-            projectCwd: input.projectCwd,
-            baseBranch: input.baseBranchForWorktree,
-            branch: input.worktreeBranch,
-            ...(input.startFromOrigin ? { startFromOrigin: true } : {}),
-          },
-          runSetupScript: true,
-        }
-      : {}),
-  };
-}
-
-/**
- * Resolves the branch a send carries now that the composer has no branch
- * selector. An explicit choice (draft context, thread metadata, or a pending
- * override) always wins. A first send in worktree mode falls back to the repo
- * default branch (origin/HEAD), then the checked-out branch, once refs have
- * loaded. Local sends and existing worktrees never invent a base branch, and
- * an unresolved worktree base keeps the existing send-time error.
- */
-export function resolveComposerBranchForSend(input: {
-  effectiveEnvMode: DraftThreadEnvMode;
-  explicitBranch: string | null;
-  activeWorktreePath: string | null;
-  defaultBranchName: string | null;
-  currentGitBranch: string | null;
-  refsLoadPending: boolean;
-}): string | null {
-  if (input.explicitBranch) {
-    return input.explicitBranch;
-  }
-  if (input.effectiveEnvMode !== "worktree" || input.activeWorktreePath) {
-    return null;
-  }
-  if (input.refsLoadPending) {
-    return null;
-  }
-  return input.defaultBranchName ?? input.currentGitBranch;
-}
-
-export function resolveBackgroundDraftWorkspaceOptions(input: {
-  envMode: DraftThreadEnvMode;
-  branch: string | null;
-  startFromOrigin: boolean;
-}): {
-  envMode: DraftThreadEnvMode;
-  branch: string | null;
-  worktreePath: null;
-  startFromOrigin: boolean;
-} {
-  return {
-    envMode: input.envMode,
-    branch: input.branch,
-    worktreePath: null,
-    startFromOrigin: input.envMode === "worktree" && input.startFromOrigin,
-  };
-}
-
 export function cloneComposerImageForRetry(
   image: ComposerImageAttachment,
 ): ComposerImageAttachment {
@@ -520,46 +373,6 @@ export function deriveComposerSendState(options: {
       sendableTerminalContexts.length > 0 ||
       elementContextCount > 0,
   };
-}
-
-export function branchMismatchKey(
-  threadId: string | null,
-  mismatch: { threadBranch: string; currentBranch: string } | null,
-): string | null {
-  if (!threadId || !mismatch) {
-    return null;
-  }
-  return `${threadId}:${mismatch.threadBranch}:${mismatch.currentBranch}`;
-}
-
-// The mismatch banner only matters when the user is about to send: passive
-// reading of an old thread carries no risk (the branch picker tint already
-// covers ambient awareness). Draft content is the intent signal — composer
-// focus is useless here because ChatView autofocuses the composer on every
-// thread open. `wasShownForCurrentMismatch` keeps the banner mounted once
-// revealed so it doesn't flicker away when the draft is cleared.
-export function shouldShowBranchMismatchBanner(input: {
-  hasMismatch: boolean;
-  isDismissed: boolean;
-  composerHasContent: boolean;
-  wasShownForCurrentMismatch: boolean;
-}): boolean {
-  if (!input.hasMismatch || input.isDismissed) {
-    return false;
-  }
-  return input.composerHasContent || input.wasShownForCurrentMismatch;
-}
-
-// Session-scoped (module-level so it survives ChatView remounts, e.g. route
-// changes). Durable cross-device dismissal is planned as a server-side ack.
-const sessionDismissedBranchMismatchKeys = new Set<string>();
-
-export function dismissBranchMismatchForSession(key: string): void {
-  sessionDismissedBranchMismatchKeys.add(key);
-}
-
-export function isBranchMismatchDismissedForSession(key: string | null): boolean {
-  return key !== null && sessionDismissedBranchMismatchKeys.has(key);
 }
 
 export function threadHasStarted(thread: Thread | null | undefined): boolean {
@@ -685,101 +498,21 @@ export async function waitForStartedServerThread(
     }, timeoutMs);
   });
 }
-
-export interface LocalDispatchSnapshot {
-  startedAt: string;
-  preparingWorktree: boolean;
-  submissionIntent: ComposerSubmissionIntent;
-  latestUserMessageId: ChatMessage["id"] | null;
-  latestTurnTurnId: TurnId | null;
-  latestTurnRequestedAt: string | null;
-  latestTurnStartedAt: string | null;
-  latestTurnCompletedAt: string | null;
-  sessionStatus: NonNullable<Thread["session"]>["status"] | null;
-  sessionUpdatedAt: string | null;
-}
-
-export function createLocalDispatchSnapshot(
-  activeThread: Thread | undefined,
-  options?: {
-    preparingWorktree?: boolean;
-    submissionIntent?: ComposerSubmissionIntent;
-  },
-): LocalDispatchSnapshot {
-  const latestTurn = activeThread?.latestTurn ?? null;
-  const session = activeThread?.session ?? null;
-  const latestUserMessage = activeThread?.messages.findLast((message) => message.role === "user");
-  return {
-    startedAt: new Date().toISOString(),
-    preparingWorktree: Boolean(options?.preparingWorktree),
-    submissionIntent: options?.submissionIntent ?? "foreground",
-    latestUserMessageId: latestUserMessage?.id ?? null,
-    latestTurnTurnId: latestTurn?.turnId ?? null,
-    latestTurnRequestedAt: latestTurn?.requestedAt ?? null,
-    latestTurnStartedAt: latestTurn?.startedAt ?? null,
-    latestTurnCompletedAt: latestTurn?.completedAt ?? null,
-    sessionStatus: session?.status ?? null,
-    sessionUpdatedAt: session?.updatedAt ?? null,
-  };
-}
-
-export function hasServerAcknowledgedLocalDispatch(input: {
-  localDispatch: LocalDispatchSnapshot | null;
-  phase: SessionPhase;
-  latestTurn: Thread["latestTurn"] | null;
-  latestUserMessageId: ChatMessage["id"] | null;
-  session: Thread["session"] | null;
-  hasPendingApproval: boolean;
-  hasPendingUserInput: boolean;
-  threadError: string | null | undefined;
-}): boolean {
-  if (!input.localDispatch) {
-    return false;
-  }
-  if (input.hasPendingApproval || input.hasPendingUserInput || Boolean(input.threadError)) {
-    return true;
-  }
-  if (input.phase === "connecting") {
-    return false;
-  }
-
-  const latestTurn = input.latestTurn ?? null;
-  const session = input.session ?? null;
-  const latestUserMessageChanged =
-    input.localDispatch.latestUserMessageId !== input.latestUserMessageId;
-  const latestTurnChanged =
-    input.localDispatch.latestTurnTurnId !== (latestTurn?.turnId ?? null) ||
-    input.localDispatch.latestTurnRequestedAt !== (latestTurn?.requestedAt ?? null) ||
-    input.localDispatch.latestTurnStartedAt !== (latestTurn?.startedAt ?? null) ||
-    input.localDispatch.latestTurnCompletedAt !== (latestTurn?.completedAt ?? null);
-
-  if (input.phase === "running") {
-    // Steering adds a user message to the current running turn without
-    // necessarily changing any of the turn timestamps. Treat that projected
-    // message as the server acknowledgment so the composer does not remain
-    // stuck in its local "Sending" state until the turn settles.
-    if (latestUserMessageChanged) {
-      return true;
-    }
-    if (!latestTurnChanged) {
-      return false;
-    }
-    if (latestTurn?.startedAt === null || latestTurn === null) {
-      return false;
-    }
-    if (
-      session?.activeTurnId !== null &&
-      session?.activeTurnId !== undefined &&
-      latestTurn?.turnId !== session.activeTurnId
-    ) {
-      return false;
-    }
-    return true;
-  }
-
-  return (
-    latestTurnChanged ||
-    input.localDispatch.sessionStatus !== (session?.status ?? null) ||
-    input.localDispatch.sessionUpdatedAt !== (session?.updatedAt ?? null)
-  );
-}
+export {
+  buildFirstSendBootstrap,
+  buildFirstSendTurnInput,
+  resolveBackgroundDraftWorkspaceOptions,
+  resolveComposerBranchForSend,
+} from "./chat/firstSend.logic";
+export {
+  createLocalDispatchSnapshot,
+  hasServerAcknowledgedLocalDispatch,
+  type LocalDispatchSnapshot,
+} from "./chat/localDispatch.logic";
+export {
+  branchMismatchKey,
+  dismissBranchMismatchForSession,
+  isBranchMismatchDismissedForSession,
+  reconcileRetainedMountedThreadIds,
+  shouldShowBranchMismatchBanner,
+} from "./chat/threadLifecycle.logic";
