@@ -41,6 +41,32 @@ describe("provider health checks", () => {
     return calls;
   }
 
+  it("keeps OAuth transport failure messages and sends only the original headers", async () => {
+    const { authPath } = fixture();
+    seedOAuth(authPath, "anthropic");
+    const calls: Headers[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Headers(init?.headers));
+        throw new TypeError("fetch failed");
+      }),
+    );
+
+    try {
+      const service = await makeTestSubscriptionAuthService(authPath);
+      await service.testHealth("anthropic");
+      expect(
+        service.statuses().find((status) => status.provider === "anthropic")?.lastFailedRequest
+          ?.message,
+      ).toBe("fetch failed");
+      expect(calls[0]?.has("traceparent")).toBe(false);
+      expect(calls[0]?.has("b3")).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("checks Claude OAuth against the OAuth usage endpoint with a bearer token", async () => {
     const { authPath } = fixture();
     seedOAuth(authPath, "anthropic");
@@ -129,7 +155,10 @@ describe("provider health checks", () => {
     release(new Response("{}", { status: 200 }));
     await service.awaitHealthCheck("opencode-go");
 
-    expect(request).toHaveBeenCalledWith("https://opencode.ai/zen/go/v1/usage", expect.any(Object));
+    expect(request).toHaveBeenCalledWith(
+      new URL("https://opencode.ai/zen/go/v1/usage"),
+      expect.objectContaining({ redirect: "error" }),
+    );
     await runWithNodeServices(observer.reload());
     const checked = observer.statuses().find((s) => s.provider === "opencode-go");
     expect(checked).toMatchObject({ health: "healthy", healthTest: { status: "passed" } });

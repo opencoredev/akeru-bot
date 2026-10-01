@@ -1,6 +1,7 @@
 import * as Predicate from "effect/Predicate";
 import * as NodeCrypto from "node:crypto";
 import * as Effect from "effect/Effect";
+import type * as Clock from "effect/Clock";
 import { type SubscriptionAuthData, type SubscriptionCredentialStore } from "./credentialStore.ts";
 import { isKimiCodingDeviceId } from "./providers/kimi.ts";
 import type { ApiKeyCredential, OAuthCredential, OAuthCredentials } from "./types.ts";
@@ -15,9 +16,15 @@ import {
 import { SubscriptionHealthService } from "./healthService.ts";
 
 export class SubscriptionCredentialAccess {
+  private readonly clock: Clock.Clock;
   private readonly store: SubscriptionCredentialStore;
   private readonly healthService: SubscriptionHealthService;
-  constructor(store: SubscriptionCredentialStore, healthService: SubscriptionHealthService) {
+  constructor(
+    store: SubscriptionCredentialStore,
+    healthService: SubscriptionHealthService,
+    clock: Clock.Clock,
+  ) {
+    this.clock = clock;
     this.store = store;
     this.healthService = healthService;
   }
@@ -49,7 +56,7 @@ export class SubscriptionCredentialAccess {
 
     if (credential.type === "api-key") return credential.access;
 
-    if (Date.now() < credential.expires) {
+    if (this.clock.currentTimeMillisUnsafe() < credential.expires) {
       return credential.access;
     }
 
