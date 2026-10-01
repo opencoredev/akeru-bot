@@ -1,5 +1,5 @@
+import { readSdkRecord } from "../ProtocolJson.ts";
 import { readProtocolRecord } from "../ProtocolJson.ts";
-import { readProtocolJson } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 import {
   type ProviderSession,
@@ -41,7 +41,7 @@ import {
 export function parseOpenCodeResume<Input0>(
   rawInput: Input0,
 ): { readonly sessionId: string } | undefined {
-  const raw = readProtocolJson(rawInput);
+  const raw = rawInput;
 
   if (!Predicate.isObject(raw) || raw === null || Array.isArray(raw)) {
     return undefined;
@@ -357,13 +357,13 @@ export function normalizeQuestionRequest(
 }
 
 export function sessionErrorMessage<Input0>(errorInput: Input0): string {
-  const error = readProtocolJson(errorInput);
+  const error = readSdkRecord(errorInput);
 
   if (!error || !Predicate.isObject(error)) {
     return "OpenCode session failed.";
   }
 
-  const data = "data" in error && error.data && Predicate.isObject(error.data) ? error.data : null;
+  const data = error.data && Predicate.isObject(error.data) ? error.data : null;
 
   const message = data && "message" in data ? data.message : null;
 

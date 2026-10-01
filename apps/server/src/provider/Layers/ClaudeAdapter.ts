@@ -1,4 +1,4 @@
-import { readProtocolRecord } from "./ProtocolJson.ts";
+import { readSdkRecord } from "./ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 import { createClaudeTextStreams } from "./claude/ClaudeTextStreams.ts";
 import { createClaudeMessages } from "./claude/ClaudeMessages.ts";
@@ -435,7 +435,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         // Exhaustiveness guard (see handleSystemMessage): new SDK top-level
         // message types fail typecheck here instead of warning at runtime.
         message satisfies never;
-        const unknownMessage = readProtocolRecord(message);
+        const unknownMessage = readSdkRecord(message);
         yield* emitRuntimeWarning(
           context,
           describeUnknownSdkMessage(`Claude SDK message '${unknownMessage?.type}'`, message),

@@ -473,73 +473,63 @@ export function createGrokSessionLifecycle(deps: {
 
               return yield* Match.value(event).pipe(
                 Match.tag("AssistantItemStarted", (event) =>
-                  Effect.gen(function* () {
-                    yield* deps.offerRuntimeEvent(
-                      makeAcpAssistantItemEvent({
-                        stamp,
-                        provider: PROVIDER,
-                        threadId: ctx.threadId,
-                        turnId: notificationTurnId,
-                        itemId: event.itemId,
-                        lifecycle: "item.started",
-                      }),
-                    );
-                  }),
+                  deps.offerRuntimeEvent(
+                    makeAcpAssistantItemEvent({
+                      stamp,
+                      provider: PROVIDER,
+                      threadId: ctx.threadId,
+                      turnId: notificationTurnId,
+                      itemId: event.itemId,
+                      lifecycle: "item.started",
+                    }),
+                  ),
                 ),
                 Match.tag("AssistantItemCompleted", (event) =>
-                  Effect.gen(function* () {
-                    yield* deps.offerRuntimeEvent(
-                      makeAcpAssistantItemEvent({
-                        stamp,
-                        provider: PROVIDER,
-                        threadId: ctx.threadId,
-                        turnId: notificationTurnId,
-                        itemId: event.itemId,
-                        lifecycle: "item.completed",
-                      }),
-                    );
-                  }),
+                  deps.offerRuntimeEvent(
+                    makeAcpAssistantItemEvent({
+                      stamp,
+                      provider: PROVIDER,
+                      threadId: ctx.threadId,
+                      turnId: notificationTurnId,
+                      itemId: event.itemId,
+                      lifecycle: "item.completed",
+                    }),
+                  ),
                 ),
                 Match.tag("PlanUpdated", (event) =>
-                  Effect.gen(function* () {
-                    yield* deps.emitPlanUpdate(
-                      ctx,
-                      notificationTurnId,
-                      stamp,
-                      event.payload,
-                      event.rawPayload,
-                      "session/update",
-                    );
-                  }),
+                  deps.emitPlanUpdate(
+                    ctx,
+                    notificationTurnId,
+                    stamp,
+                    event.payload,
+                    event.rawPayload,
+                    "session/update",
+                  ),
                 ),
                 Match.tag("ToolCallUpdated", (event) =>
-                  Effect.gen(function* () {
-                    yield* deps.offerRuntimeEvent(
-                      makeAcpToolCallEvent({
-                        stamp,
-                        provider: PROVIDER,
-                        threadId: ctx.threadId,
-                        turnId: notificationTurnId,
-                        toolCall: event.toolCall,
-                        rawPayload: event.rawPayload,
-                      }),
-                    );
-                  }),
+                  deps.offerRuntimeEvent(
+                    makeAcpToolCallEvent({
+                      stamp,
+                      provider: PROVIDER,
+                      threadId: ctx.threadId,
+                      turnId: notificationTurnId,
+                      toolCall: event.toolCall,
+                      rawPayload: event.rawPayload,
+                    }),
+                  ),
                 ),
                 Match.tag("ContentDelta", (event) =>
-                  Effect.gen(function* () {
-                    yield* deps.offerRuntimeEvent(
-                      makeAcpContentDeltaEvent({
-                        stamp,
-                        provider: PROVIDER,
-                        threadId: ctx.threadId,
-                        turnId: notificationTurnId,
-                        ...(event.itemId ? { itemId: event.itemId } : {}),
-                        text: event.text,
-                        rawPayload: event.rawPayload,
-                      }),
-                    );
-                  }),
+                  deps.offerRuntimeEvent(
+                    makeAcpContentDeltaEvent({
+                      stamp,
+                      provider: PROVIDER,
+                      threadId: ctx.threadId,
+                      turnId: notificationTurnId,
+                      ...(event.itemId ? { itemId: event.itemId } : {}),
+                      text: event.text,
+                      rawPayload: event.rawPayload,
+                    }),
+                  ),
                 ),
                 Match.exhaustive,
               );

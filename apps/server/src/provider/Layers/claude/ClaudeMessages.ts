@@ -1,4 +1,4 @@
-import { isProtocolRecord } from "../ProtocolJson.ts";
+import { isSdkRecord } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
@@ -332,7 +332,7 @@ export function createClaudeMessages(deps: {
 
     if (Array.isArray(content)) {
       for (const block of content) {
-        if (!block || !isProtocolRecord(block)) {
+        if (!block || !isSdkRecord(block)) {
           continue;
         }
 

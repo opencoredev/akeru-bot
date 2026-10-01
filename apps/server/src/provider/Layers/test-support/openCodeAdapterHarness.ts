@@ -1,3 +1,4 @@
+import type { OpencodeClient } from "@opencode-ai/sdk/v2";
 import { openCodeClientFixture } from "./partialFixtures.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Context from "effect/Context";
@@ -61,7 +62,7 @@ export function makeOpenCodeAdapterHarness() {
     state: {
       startCalls: [] as string[],
       sessionCreateUrls: [] as string[],
-      sessionCreateInputs: [] as Array<Schema.JsonObject>,
+      sessionCreateInputs: [] as Array<Parameters<OpencodeClient["session"]["create"]>[0]>,
       authHeaders: [] as Array<string | null>,
       abortCalls: [] as string[],
       abortImplementation: null as ((sessionID: string) => Promise<void>) | null,
@@ -180,7 +181,7 @@ export function makeOpenCodeAdapterHarness() {
     createOpenCodeSdkClient: ({ baseUrl, serverPassword }) =>
       openCodeClientFixture({
         session: {
-          create: async (input: Schema.JsonObject) => {
+          create: async (input) => {
             runtimeMock.state.sessionCreateUrls.push(baseUrl);
             runtimeMock.state.sessionCreateInputs.push(input);
             runtimeMock.state.authHeaders.push(
@@ -219,7 +220,7 @@ export function makeOpenCodeAdapterHarness() {
               },
             };
           },
-          update: async ({ sessionID, permission }: { sessionID: string; permission: unknown }) => {
+          update: async ({ sessionID, permission }) => {
             runtimeMock.state.sessionUpdateCalls.push({ sessionID, permission });
 
             return { data: { id: sessionID } };
@@ -284,10 +285,7 @@ export function makeOpenCodeAdapterHarness() {
           }),
         },
         permission: {
-          reply: async (
-            { requestID, reply }: { requestID: string; reply: string },
-            options?: { signal?: AbortSignal },
-          ) => {
+          reply: async ({ requestID, reply = "once" }, options) => {
             runtimeMock.state.permissionReplyCalls.push({ requestID, reply });
 
             if (runtimeMock.state.permissionReplyError) {
@@ -297,7 +295,7 @@ export function makeOpenCodeAdapterHarness() {
             await runtimeMock.state.permissionReplyImplementation?.(
               requestID,
               reply,
-              options?.signal,
+              options?.signal ?? undefined,
             );
           },
         },
@@ -311,8 +309,9 @@ export function makeOpenCodeAdapterHarness() {
           },
         },
         mcp: {
-          add: async (input: { name: string; config: unknown }) => {
-            runtimeMock.state.mcpAddCalls.push(input);
+          add: async (input) => {
+            if (!input?.name || !input.config) throw new Error("Expected MCP name and config");
+            runtimeMock.state.mcpAddCalls.push({ name: input.name, config: input.config });
 
             return { data: true };
           },

@@ -1,5 +1,5 @@
 import * as Match from "effect/Match";
-import { readProtocolRecord } from "../ProtocolJson.ts";
+import { readSdkRecord } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
@@ -91,7 +91,7 @@ export function createClaudeSystemMessages(deps: {
     base: Omit<ProviderRuntimeEvent, "type" | "payload">,
     message: Extract<SDKMessage, { type: "system"; subtype: "task_progress" }>,
   ) {
-    const progress = parseWorkflowProgress(readProtocolRecord(message)?.workflow_progress);
+    const progress = parseWorkflowProgress(readSdkRecord(message)?.workflow_progress);
 
     if (!progress) {
       return;
@@ -382,7 +382,7 @@ export function createClaudeSystemMessages(deps: {
         // with this full row, and the thinner upsert overwrote usage and
         // progress text (review finding).
         const workflowPhases = parseWorkflowProgress(
-          readProtocolRecord(message)?.workflow_progress,
+          readSdkRecord(message)?.workflow_progress,
         )?.phases;
 
         yield* deps.offerRuntimeEvent({
@@ -570,7 +570,7 @@ export function createClaudeSystemMessages(deps: {
         // warning at runtime. The runtime fallback still catches undeclared
         // wire-only subtypes (like background_tasks_changed used to be).
         message satisfies never;
-        const unknownMessage = readProtocolRecord(message);
+        const unknownMessage = readSdkRecord(message);
         yield* deps.emitRuntimeWarning(
           context,
           describeUnknownSdkMessage(`Claude system message '${unknownMessage?.subtype}'`, message),

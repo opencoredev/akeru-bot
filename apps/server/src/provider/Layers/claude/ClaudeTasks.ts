@@ -1,8 +1,7 @@
 import * as Match from "effect/Match";
-import { readProtocolRecord } from "../ProtocolJson.ts";
-import { isProtocolRecord } from "../ProtocolJson.ts";
-import { readProtocolJson } from "../ProtocolJson.ts";
-import * as Schema from "effect/Schema";
+import { readSdkRecord } from "../ProtocolJson.ts";
+import { isSdkRecord } from "../ProtocolJson.ts";
+import type { SdkRecord } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 import { type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import {
@@ -50,7 +49,7 @@ export function isTodoTool(toolName: string): boolean {
   return toolName.toLowerCase().includes("todowrite");
 }
 
-export function extractPlanStepsFromTodoInput(input: Schema.JsonObject): PlanStep[] | null {
+export function extractPlanStepsFromTodoInput(input: SdkRecord): PlanStep[] | null {
   // TodoWrite format: { todos: [{ content, status, activeForm? }] }
   const todos = input.todos;
 
@@ -59,7 +58,7 @@ export function extractPlanStepsFromTodoInput(input: Schema.JsonObject): PlanSte
   }
 
   return todos
-    .filter((t): t is Schema.JsonObject => t !== null && isProtocolRecord(t))
+    .filter((t): t is SdkRecord => t !== null && isSdkRecord(t))
     .map((todo) => ({
       step:
         Predicate.isString(todo.content) && todo.content.trim().length > 0
@@ -77,52 +76,50 @@ export function isClaudeTaskTool(toolName: string): boolean {
   return toolName === "TaskCreate" || toolName === "TaskUpdate" || toolName === "TaskList";
 }
 
-export function normalizeClaudeTaskStatus<Input0>(valueInput: Input0): PlanStep["status"] {
-  const value = readProtocolJson(valueInput);
+const matchClaudeTaskStatus = Match.type<string | undefined>().pipe(
+  Match.when("completed", () => "completed" as const),
+  Match.when("in_progress", () => "inProgress" as const),
+  Match.orElse(() => "pending" as const),
+);
 
-  return Match.value(value).pipe(
-    Match.when("completed", () => "completed" as const),
-    Match.when("in_progress", () => "inProgress" as const),
-    Match.orElse(() => "pending" as const),
-  );
+export function normalizeClaudeTaskStatus<Input>(value: Input): PlanStep["status"] {
+  return matchClaudeTaskStatus(Predicate.isString(value) ? value : undefined);
 }
 
 export function readString<Input0>(valueInput: Input0): string | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
   return Predicate.isString(value) && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 export function readStringArray<Input0>(valueInput: Input0): Array<string> {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
   return Array.isArray(value)
     ? value.filter((entry): entry is string => Predicate.isString(entry) && entry.length > 0)
     : [];
 }
 
-export function readClaudeToolUseResult(message: SDKMessage): Schema.JsonObject | undefined {
+export function readClaudeToolUseResult(message: SDKMessage): SdkRecord | undefined {
   if (message.type !== "user") {
     return undefined;
   }
 
-  const result = readProtocolRecord(message.tool_use_result);
+  const result = readSdkRecord(message.tool_use_result);
 
-  return result !== null && isProtocolRecord(result) && !Array.isArray(result) ? result : undefined;
+  return result !== null && isSdkRecord(result) && !Array.isArray(result) ? result : undefined;
 }
 
-export function readClaudeTaskFromResult(
-  result: Schema.JsonObject | undefined,
-): Schema.JsonObject | undefined {
-  const task = readProtocolRecord(result?.task);
+export function readClaudeTaskFromResult(result: SdkRecord | undefined): SdkRecord | undefined {
+  const task = readSdkRecord(result?.task);
 
-  return task !== null && isProtocolRecord(task) && !Array.isArray(task) ? task : undefined;
+  return task !== null && isSdkRecord(task) && !Array.isArray(task) ? task : undefined;
 }
 
 export function applyClaudeTaskToolResult(
   tasks: Map<string, ClaudeTaskState>,
   tool: ToolInFlight,
-  result: Schema.JsonObject | undefined,
+  result: SdkRecord | undefined,
 ): boolean {
   if (!isClaudeTaskTool(tool.toolName)) {
     return false;
@@ -140,7 +137,7 @@ export function applyClaudeTaskToolResult(
     tasks.clear();
 
     for (const entry of resultTasks) {
-      if (entry === null || !isProtocolRecord(entry) || Array.isArray(entry)) {
+      if (entry === null || !isSdkRecord(entry) || Array.isArray(entry)) {
         continue;
       }
 
@@ -240,7 +237,7 @@ export function planStepsFromClaudeTasks(tasks: Map<string, ClaudeTaskState>): P
 
 /** Only http/https survive; anything else (javascript:, file:, …) is dropped. */
 export function sanitizeSessionUrl<Input0>(valueInput: Input0): string | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
   if (!Predicate.isString(value)) {
     return undefined;
@@ -256,7 +253,7 @@ export function sanitizeSessionUrl<Input0>(valueInput: Input0): string | undefin
 }
 
 export function nonNegativeInt<Input0>(valueInput: Input0): number | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
   return Predicate.isNumber(value) && Number.isFinite(value) && value >= 0
     ? Math.floor(value)
@@ -264,7 +261,7 @@ export function nonNegativeInt<Input0>(valueInput: Input0): number | undefined {
 }
 
 export function trimmedString<Input0>(valueInput: Input0): string | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
   if (!Predicate.isString(value)) {
     return undefined;
@@ -281,9 +278,9 @@ export function trimmedString<Input0>(valueInput: Input0): string | undefined {
  * malformed input yields undefined rather than a partial guess.
  */
 export function normalizeTaskUsage<Input0>(usageInput: Input0): RuntimeTaskUsage | undefined {
-  const usage = readProtocolJson(usageInput);
+  const usage = usageInput;
 
-  if (!isProtocolRecord(usage) || usage === null) {
+  if (!isSdkRecord(usage) || usage === null) {
     return undefined;
   }
 
@@ -405,7 +402,7 @@ export interface ClaudeWorkflowProgress {
 export function parseWorkflowProgress<Input0>(
   valueInput: Input0,
 ): ClaudeWorkflowProgress | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
   if (!Array.isArray(value) || value.length === 0) {
     return undefined;
@@ -415,7 +412,7 @@ export function parseWorkflowProgress<Input0>(
   const agentsByIndex = new Map<number, ClaudeWorkflowAgentEntry>();
 
   for (const entry of value) {
-    if (!isProtocolRecord(entry) || entry === null) {
+    if (!isSdkRecord(entry) || entry === null) {
       continue;
     }
 

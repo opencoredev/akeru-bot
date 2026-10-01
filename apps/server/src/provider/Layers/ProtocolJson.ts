@@ -18,3 +18,13 @@ export const readProtocolRecord = flow(
 export const isProtocolRecord = Schema.is(Schema.Record(Schema.String, Schema.Json));
 
 export const isInspectionRecord = Predicate.isObject;
+
+// SDK objects may carry undefined or opaque properties. Inspect consumed fields
+// independently instead of requiring the entire object to be JSON.
+export const isSdkRecord = Predicate.isObject;
+
+export function readSdkRecord<Input>(input: Input): SdkRecord | undefined {
+  return isSdkRecord(input) ? input : undefined;
+}
+
+export type SdkRecord = Pick<Predicate.Refinement.Out<typeof Predicate.isObject>, string>;

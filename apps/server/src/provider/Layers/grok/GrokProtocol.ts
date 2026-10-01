@@ -1,7 +1,6 @@
 import * as Match from "effect/Match";
 import { UserInputResolution } from "./GrokAdapterState.ts";
 import { isProtocolRecord } from "../ProtocolJson.ts";
-import { readProtocolJson } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 import {
   ApprovalRequestId,
@@ -89,9 +88,9 @@ export const resolveSessionCallbackTurnId = (
 };
 
 export function parseGrokResume<Input0>(rawInput: Input0): { sessionId: string } | undefined {
-  const raw = readProtocolJson(rawInput);
+  const raw = rawInput;
 
-  if (!isRecord(raw)) return undefined;
+  if (!Predicate.isObject(raw)) return undefined;
 
   if (raw.schemaVersion !== GROK_RESUME_VERSION) return undefined;
 

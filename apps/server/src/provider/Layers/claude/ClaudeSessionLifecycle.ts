@@ -1,6 +1,6 @@
-import { readProtocolRecord } from "../ProtocolJson.ts";
-import { isProtocolRecord } from "../ProtocolJson.ts";
-import * as Schema from "effect/Schema";
+import type { SdkRecord } from "../ProtocolJson.ts";
+import { readSdkRecord } from "../ProtocolJson.ts";
+import { isSdkRecord } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
@@ -208,7 +208,7 @@ export function createClaudeSessionLifecycle(deps: {
        */
       const handleAskUserQuestion = Effect.fn("handleAskUserQuestion")(function* (
         context: ClaudeSessionContext,
-        toolInput: Schema.JsonObject,
+        toolInput: SdkRecord,
         callbackOptions: {
           readonly signal: AbortSignal;
           readonly toolUseID?: string;
@@ -224,12 +224,12 @@ export function createClaudeSessionLifecycle(deps: {
         const rawQuestions = Array.isArray(toolInput.questions) ? toolInput.questions : [];
 
         const questions: Array<UserInputQuestion> = rawQuestions.map(
-          (q: Schema.JsonObject, idx: number) => ({
+          (q: SdkRecord, idx: number) => ({
             id: Predicate.isString(q.question) && q.question.length > 0 ? q.question : `q-${idx}`,
             header: Predicate.isString(q.header) ? q.header : `Question ${idx + 1}`,
             question: Predicate.isString(q.question) ? q.question : "",
             options: Array.isArray(q.options)
-              ? q.options.map((opt: Schema.JsonObject) => ({
+              ? q.options.map((opt: SdkRecord) => ({
                   label: Predicate.isString(opt.label) ? opt.label : "",
                   description: Predicate.isString(opt.description) ? opt.description : "",
                 }))
@@ -411,7 +411,7 @@ export function createClaudeSessionLifecycle(deps: {
         const answers = result.updatedInput.answers;
 
         const selection =
-          answers && isProtocolRecord(answers) && !Array.isArray(answers)
+          answers && isSdkRecord(answers) && !Array.isArray(answers)
             ? answers[question]
             : undefined;
 
@@ -445,7 +445,7 @@ export function createClaudeSessionLifecycle(deps: {
         if (toolName === "AskUserQuestion") {
           return yield* handleAskUserQuestion(
             context,
-            readProtocolRecord(toolInput) ?? {},
+            readSdkRecord(toolInput) ?? {},
             callbackOptions,
           );
         }
@@ -484,7 +484,7 @@ export function createClaudeSessionLifecycle(deps: {
 
         const requestId = ApprovalRequestId.make(yield* deps.randomUUIDv4);
         const requestType = classifyRequestType(toolName);
-        const detail = summarizeToolRequest(toolName, readProtocolRecord(toolInput) ?? {});
+        const detail = summarizeToolRequest(toolName, readSdkRecord(toolInput) ?? {});
         const decisionDeferred = yield* Deferred.make<ProviderApprovalDecision>();
 
         const pendingApproval: PendingApproval = {

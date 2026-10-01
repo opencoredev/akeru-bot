@@ -1,4 +1,4 @@
-import { isProtocolRecord } from "../ProtocolJson.ts";
+import { isSdkRecord } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
@@ -515,7 +515,7 @@ export function createClaudeTextStreams(deps: {
       const toolName = block.name;
       const itemType = classifyToolItemType(toolName);
 
-      const toolInput = isProtocolRecord(block.input) && block.input !== null ? block.input : {};
+      const toolInput = isSdkRecord(block.input) && block.input !== null ? block.input : {};
 
       const itemId = block.id;
       const detail = summarizeToolRequest(toolName, toolInput);

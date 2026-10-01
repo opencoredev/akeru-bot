@@ -1,4 +1,4 @@
-import * as Schema from "effect/Schema";
+import type { SdkRecord } from "../ProtocolJson.ts";
 import {
   type Options as ClaudeQueryOptions,
   type PermissionMode,
@@ -134,7 +134,7 @@ export interface ToolInFlight {
   readonly toolName: string;
   readonly title: string;
   readonly detail?: string;
-  readonly input: Schema.JsonObject;
+  readonly input: SdkRecord;
   readonly partialInputJson: string;
   readonly lastEmittedInputFingerprint?: string;
   /** Owning agent when this tool ran inside a subagent (see attribution note). */

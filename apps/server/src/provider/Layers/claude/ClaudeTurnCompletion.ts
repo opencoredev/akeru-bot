@@ -1,4 +1,4 @@
-import { isProtocolRecord } from "../ProtocolJson.ts";
+import { isSdkRecord } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
@@ -209,7 +209,7 @@ export function createClaudeTurnCompletion(deps: {
 
     // Avoid getContextUsage because its token-count fallback can make extra model requests.
     const resultUsageRecord =
-      result?.usage && isProtocolRecord(result.usage) && !Array.isArray(result.usage)
+      result?.usage && isSdkRecord(result.usage) && !Array.isArray(result.usage)
         ? result.usage
         : undefined;
 

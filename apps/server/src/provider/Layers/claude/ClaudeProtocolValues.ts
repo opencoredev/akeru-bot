@@ -1,7 +1,8 @@
 import * as Match from "effect/Match";
-import { readProtocolRecord } from "../ProtocolJson.ts";
-import { isProtocolRecord } from "../ProtocolJson.ts";
-import { readProtocolJson } from "../ProtocolJson.ts";
+import { readSdkRecord } from "../ProtocolJson.ts";
+import { isSdkRecord } from "../ProtocolJson.ts";
+import { readProtocolRecord as readJsonRecord } from "../ProtocolJson.ts";
+import type { SdkRecord } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 import { type PermissionUpdate, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import {
@@ -163,9 +164,9 @@ export function asRuntimeRequestId(value: ApprovalRequestId): RuntimeRequestId {
 export function readClaudeResumeState<Input0>(
   resumeCursorInput: Input0,
 ): ClaudeResumeState | undefined {
-  const resumeCursor = readProtocolJson(resumeCursorInput);
+  const resumeCursor = readSdkRecord(resumeCursorInput);
 
-  if (!resumeCursor || !isProtocolRecord(resumeCursor)) {
+  if (!resumeCursor || !isSdkRecord(resumeCursor)) {
     return undefined;
   }
 
@@ -281,7 +282,7 @@ export function classifyRequestType(toolName: string): CanonicalRequestType {
   );
 }
 
-export function summarizeToolRequest(toolName: string, input: Schema.JsonObject): string {
+export function summarizeToolRequest(toolName: string, input: SdkRecord): string {
   const commandValue = input.command ?? input.cmd;
   const command = Predicate.isString(commandValue) ? commandValue : undefined;
 
@@ -370,7 +371,7 @@ export function extractAssistantTextBlocks(message: SDKMessage): Array<string> {
   const fragments: string[] = [];
 
   for (const block of content) {
-    if (!block || !isProtocolRecord(block)) {
+    if (!block || !isSdkRecord(block)) {
       continue;
     }
 
@@ -389,9 +390,9 @@ export function extractAssistantTextBlocks(message: SDKMessage): Array<string> {
 }
 
 export function extractContentBlockText<Input0>(blockInput: Input0): string {
-  const block = readProtocolJson(blockInput);
+  const block = readSdkRecord(blockInput);
 
-  if (!block || !isProtocolRecord(block)) {
+  if (!block || !isSdkRecord(block)) {
     return "";
   }
 
@@ -401,23 +402,19 @@ export function extractContentBlockText<Input0>(blockInput: Input0): string {
 }
 
 export function extractTextContent<Input>(input: Input): string {
-  return textContent(readProtocolJson(input));
+  return textContent(input);
 }
 
-function isJsonArray(value: Schema.Json | undefined): value is Schema.JsonArray {
-  return Array.isArray(value);
-}
-
-function textContent(value: Schema.Json | undefined): string {
+function textContent<Input>(value: Input): string {
   if (Predicate.isString(value)) {
     return value;
   }
 
-  if (isJsonArray(value)) {
+  if (Array.isArray(value)) {
     return value.map(textContent).join("");
   }
 
-  if (!value || Predicate.isNumber(value) || Predicate.isBoolean(value)) {
+  if (!isSdkRecord(value)) {
     return "";
   }
 
@@ -431,9 +428,9 @@ function textContent(value: Schema.Json | undefined): string {
 }
 
 export function extractExitPlanModePlan<Input0>(valueInput: Input0): string | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = readSdkRecord(valueInput);
 
-  if (!value || !isProtocolRecord(value)) {
+  if (!value || !isSdkRecord(value)) {
     return undefined;
   }
 
@@ -460,12 +457,12 @@ export function tryParseJsonRecord(value: string): Schema.JsonObject | undefined
     return undefined;
   }
 
-  const parsed = readProtocolJson(result.value);
+  const parsed = result.value;
 
-  return parsed && isProtocolRecord(parsed) && !Array.isArray(parsed) ? parsed : undefined;
+  return readJsonRecord(parsed);
 }
 
-export function toolInputFingerprint(input: Schema.JsonObject): string | undefined {
+export function toolInputFingerprint(input: SdkRecord): string | undefined {
   return encodeJsonStringForDiagnostics(input);
 }
 
@@ -484,7 +481,7 @@ export function toolResultStreamKind(
 
 export function toolResultBlocksFromUserMessage(message: SDKMessage): Array<{
   readonly toolUseId: string;
-  readonly block: Schema.JsonObject;
+  readonly block: SdkRecord;
   readonly text: string;
   readonly isError: boolean;
 }> {
@@ -500,17 +497,17 @@ export function toolResultBlocksFromUserMessage(message: SDKMessage): Array<{
 
   const blocks: Array<{
     readonly toolUseId: string;
-    readonly block: Schema.JsonObject;
+    readonly block: SdkRecord;
     readonly text: string;
     readonly isError: boolean;
   }> = [];
 
   for (const entry of content) {
-    if (!entry || !isProtocolRecord(entry)) {
+    if (!entry || !isSdkRecord(entry)) {
       continue;
     }
 
-    const block = readProtocolRecord(entry);
+    const block = readSdkRecord(entry);
 
     if (!block) continue;
 
@@ -580,9 +577,9 @@ export function toRequestError(
 }
 
 export function sdkMessageType<Input0>(valueInput: Input0): string | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = readSdkRecord(valueInput);
 
-  if (!value || !isProtocolRecord(value)) {
+  if (!value || !isSdkRecord(value)) {
     return undefined;
   }
 
@@ -592,9 +589,9 @@ export function sdkMessageType<Input0>(valueInput: Input0): string | undefined {
 }
 
 export function sdkMessageSubtype<Input0>(valueInput: Input0): string | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = readSdkRecord(valueInput);
 
-  if (!value || !isProtocolRecord(value)) {
+  if (!value || !isSdkRecord(value)) {
     return undefined;
   }
 
@@ -647,9 +644,9 @@ export const SDK_MESSAGE_NOISE_KEYS = new Set([
 // text) instead of an opaque "unhandled subtype" placeholder. Nested structures
 // are left to the full payload retained in the event's `detail`.
 export function previewUnknownSdkContent<Input0>(messageInput: Input0): string | undefined {
-  const message = readProtocolJson(messageInput);
+  const message = readSdkRecord(messageInput);
 
-  if (!message || !isProtocolRecord(message)) {
+  if (!message || !isSdkRecord(message)) {
     return undefined;
   }
 
@@ -681,7 +678,7 @@ export function previewUnknownSdkContent<Input0>(messageInput: Input0): string |
 }
 
 export function describeUnknownSdkMessage<Input0>(kind: string, messageInput: Input0): string {
-  const message = readProtocolJson(messageInput);
+  const message = readSdkRecord(messageInput);
 
   const preview = previewUnknownSdkContent(message);
 

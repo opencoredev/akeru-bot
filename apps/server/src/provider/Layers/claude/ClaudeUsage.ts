@@ -1,7 +1,6 @@
-import { readProtocolRecord } from "../ProtocolJson.ts";
-import { isProtocolRecord } from "../ProtocolJson.ts";
-import { readProtocolJson } from "../ProtocolJson.ts";
-import * as Schema from "effect/Schema";
+import { readSdkRecord } from "../ProtocolJson.ts";
+import { isSdkRecord } from "../ProtocolJson.ts";
+import type { SdkRecord } from "../ProtocolJson.ts";
 import * as Predicate from "effect/Predicate";
 import {
   type SDKRateLimitInfo,
@@ -186,7 +185,7 @@ export function selectedClaudeContextWindow(
 }
 
 export function finiteNonNegativeInteger<Input0>(valueInput: Input0): number | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
   return Predicate.isNumber(value) && Number.isFinite(value) && value >= 0
     ? Math.round(value)
@@ -194,14 +193,14 @@ export function finiteNonNegativeInteger<Input0>(valueInput: Input0): number | u
 }
 
 export function finitePositiveInteger<Input0>(valueInput: Input0): number | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
   return Predicate.isNumber(value) && Number.isFinite(value) && value > 0
     ? Math.round(value)
     : undefined;
 }
 
-export function claudeUsageInputTokens(usage: Schema.JsonObject): number {
+export function claudeUsageInputTokens(usage: SdkRecord): number {
   return (
     (finiteNonNegativeInteger(usage.input_tokens) ?? 0) +
     (finiteNonNegativeInteger(usage.cache_creation_input_tokens) ?? 0) +
@@ -209,27 +208,27 @@ export function claudeUsageInputTokens(usage: Schema.JsonObject): number {
   );
 }
 
-export function claudeUsageOutputTokens(usage: Schema.JsonObject): number {
+export function claudeUsageOutputTokens(usage: SdkRecord): number {
   return finiteNonNegativeInteger(usage.output_tokens) ?? 0;
 }
 
-export function lastClaudeUsageIteration(value: Schema.JsonObject): Schema.JsonObject | undefined {
+export function lastClaudeUsageIteration(value: SdkRecord): SdkRecord | undefined {
   const iterations = Array.isArray(value.iterations) ? value.iterations : [];
 
   return iterations.findLast(
-    (iteration): iteration is Schema.JsonObject =>
-      iteration !== null && isProtocolRecord(iteration) && !Array.isArray(iteration),
+    (iteration): iteration is SdkRecord =>
+      iteration !== null && isSdkRecord(iteration) && !Array.isArray(iteration),
   );
 }
 
 export function claudeTotalProcessedTokens<Input0>(valueInput: Input0): number | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
-  if (!value || !isProtocolRecord(value) || Array.isArray(value)) {
+  if (!value || !isSdkRecord(value) || Array.isArray(value)) {
     return undefined;
   }
 
-  const usage = readProtocolRecord(value);
+  const usage = readSdkRecord(value);
 
   if (!usage) return undefined;
   const explicitTotal = finiteNonNegativeInteger(usage.total_tokens);
@@ -299,13 +298,13 @@ export function normalizeClaudeActiveTokenUsage<Input0>(
   contextWindow?: number,
   totalProcessedTokens?: number,
 ): ThreadTokenUsageSnapshot | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
-  if (!value || !isProtocolRecord(value)) {
+  if (!value || !isSdkRecord(value)) {
     return undefined;
   }
 
-  const usage = readProtocolRecord(value);
+  const usage = readSdkRecord(value);
 
   if (!usage) return undefined;
   const activeUsage = lastClaudeUsageIteration(usage) ?? usage;
@@ -329,13 +328,13 @@ export function normalizeClaudeActiveTokenUsage<Input0>(
 }
 
 export function compactBoundaryTokenUsageSnapshot(
-  message: Schema.JsonObject,
+  message: SdkRecord,
   contextWindow?: number,
   totalProcessedTokens?: number,
 ): ThreadTokenUsageSnapshot | undefined {
   const metadata = message.compact_metadata;
 
-  if (!metadata || !isProtocolRecord(metadata) || Array.isArray(metadata)) {
+  if (!metadata || !isSdkRecord(metadata) || Array.isArray(metadata)) {
     return undefined;
   }
 
@@ -360,7 +359,7 @@ export function normalizeClaudeTaskProgressTokenUsage<Input0>(
   valueInput: Input0,
   context: ClaudeSessionContext,
 ): ThreadTokenUsageSnapshot | undefined {
-  const value = readProtocolJson(valueInput);
+  const value = valueInput;
 
   const totalTokens = claudeTotalProcessedTokens(value);
 
@@ -377,7 +376,7 @@ export function normalizeClaudeTaskProgressTokenUsage<Input0>(
     return undefined;
   }
 
-  const usage = readProtocolRecord(value);
+  const usage = readSdkRecord(value);
 
   if (!usage) return undefined;
 

@@ -1,4 +1,3 @@
-import { decodeCodexTurnStartParamsWithCollaborationMode } from "./codex/CodexRuntimeRequests.ts";
 import * as NodeAssert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -27,24 +26,18 @@ describe("buildTurnStartParams", () => {
     const secret = "codex-turn-input-secret-sentinel";
 
     const error = Effect.runSync(
-      decodeCodexTurnStartParamsWithCollaborationMode({
+      buildTurnStartParams({
         threadId: "provider-thread-1",
-        input: [
+        runtimeMode: "full-access",
+        attachments: [
           {
             type: "image",
+            // Intentionally malformed fixture exercises the builder's diagnostic boundary.
+            // @ts-expect-error The protocol must reject a non-string image URL.
             url: { secret },
           },
         ],
-      }).pipe(
-        Effect.mapError((cause) =>
-          CodexErrors.CodexAppServerProtocolParseError.fromSchemaError(
-            "decode-request-payload",
-            cause,
-            { method: "turn/start" },
-          ),
-        ),
-        Effect.flip,
-      ),
+      }).pipe(Effect.flip),
     );
 
     const { cause, ...directDiagnostics } = error;

@@ -1,4 +1,4 @@
-import { readProtocolRecord } from "../ProtocolJson.ts";
+import { readSdkRecord } from "../ProtocolJson.ts";
 import * as Match from "effect/Match";
 import { omitNullToolFields } from "./Policy.ts";
 import * as Predicate from "effect/Predicate";
@@ -531,7 +531,7 @@ export function createEvents(deps: {
         turn.waiting = true;
         publishSessionState(threadId, active, "waiting");
 
-        const suspendPayload = readProtocolRecord(event.suspendPayload) ?? {};
+        const suspendPayload = readSdkRecord(event.suspendPayload) ?? {};
 
         const question =
           Predicate.isString(suspendPayload.question) && suspendPayload.question.trim()
@@ -540,7 +540,7 @@ export function createEvents(deps: {
 
         const options = Array.isArray(suspendPayload.options)
           ? suspendPayload.options.flatMap((option) => {
-              const value = readProtocolRecord(option);
+              const value = readSdkRecord(option);
 
               if (!value) return [];
 
