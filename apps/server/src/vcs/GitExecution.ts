@@ -256,3 +256,5 @@ export const makeGitExecution = () =>
       runGitStdout,
     };
   });
+
+export type GitExecutionServices = Effect.Success<ReturnType<typeof makeGitExecution>>;

@@ -1,4 +1,6 @@
-// @effect-diagnostics nodeBuiltinImport:off
+import { isUsageJsonObject, decodeUsageJson } from "./usageJson.ts";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 import type { UsagePlanWindow } from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -6,16 +8,21 @@ import * as Effect from "effect/Effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { FETCH_TIMEOUT_MS, SESSION_MS, WEEK_MS } from "./usagePlanTypes.ts";
 
-export function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+interface ParsedPlanUsage {
+  readonly plan: string | null;
+  readonly windows: readonly UsagePlanWindow[];
 }
 
-export function asNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
+// @effect-diagnostics nodeBuiltinImport:off
 
-  if (typeof value === "string" && value.trim().length > 0) {
+export function asRecord(value: Schema.Json | undefined): Schema.JsonObject | null {
+  return isUsageJsonObject(value) ? value : null;
+}
+
+export function asNumber(value: Schema.Json | undefined): number | null {
+  if (Predicate.isNumber(value) && Number.isFinite(value)) return value;
+
+  if (Predicate.isString(value) && value.trim().length > 0) {
     const parsed = Number(value);
 
     return Number.isFinite(parsed) ? parsed : null;
@@ -24,15 +31,15 @@ export function asNumber(value: unknown): number | null {
   return null;
 }
 
-export function asString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+export function asString(value: Schema.Json | undefined): string | null {
+  return Predicate.isString(value) && value.trim().length > 0 ? value.trim() : null;
 }
 
 export function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
 
-export function isoFromUnknown(value: unknown): string | null {
+export function isoFromUnknown(value: Schema.Json | undefined): string | null {
   const text = asString(value);
 
   if (text !== null) {
@@ -64,7 +71,7 @@ export function isoFromEpoch(value: number): string {
   return DateTime.formatIso(DateTime.makeUnsafe(millis));
 }
 
-export function cycleEndFromUsage(root: Record<string, unknown>): string | null {
+export function cycleEndFromUsage(root: Schema.JsonObject): string | null {
   const keys = [
     "billingCycleEnd",
     "billing_cycle_end",
@@ -99,10 +106,7 @@ export function windowFromDuration(durationMs: number | null): UsagePlanWindow["
   return null;
 }
 
-export function parseClaudeUsage(body: unknown): {
-  readonly plan: string | null;
-  readonly windows: readonly UsagePlanWindow[];
-} {
+export function parseClaudeUsage(body: Schema.Json): ParsedPlanUsage {
   const root = asRecord(body);
 
   if (root === null) return { plan: null, windows: [] };
@@ -142,7 +146,7 @@ export function parseClaudeUsage(body: unknown): {
 }
 
 export function parseClaudeWindow(
-  value: unknown,
+  value: Schema.Json | undefined,
   kind: UsagePlanWindow["kind"],
   label: string,
 ): UsagePlanWindow | null {
@@ -168,12 +172,9 @@ export function parseClaudeWindow(
 }
 
 export function parseCodexUsage(
-  body: unknown,
+  body: Schema.Json,
   headerPercents?: { readonly primary?: number; readonly secondary?: number },
-): {
-  readonly plan: string | null;
-  readonly windows: readonly UsagePlanWindow[];
-} {
+): ParsedPlanUsage {
   const root = asRecord(body);
 
   if (root === null) return { plan: null, windows: [] };
@@ -209,7 +210,7 @@ export function parseCodexUsage(
 }
 
 export function classifyCodexWindows(
-  rateLimit: Record<string, unknown> | null,
+  rateLimit: Schema.JsonObject | null,
   labels: { readonly session: string; readonly weekly: string },
   headerPercents?: { readonly primary?: number; readonly secondary?: number },
 ): UsagePlanWindow[] {
@@ -227,7 +228,7 @@ export function classifyCodexWindows(
 }
 
 export function codexCandidate(
-  value: unknown,
+  value: Schema.Json | undefined,
   headerPercent: number | undefined,
   fallback: "session" | "weekly",
 ) {
@@ -247,7 +248,7 @@ export function codexCandidate(
 
 export function pickCodexWindow(
   candidates: readonly {
-    readonly window: Record<string, unknown>;
+    readonly window: Schema.JsonObject;
     readonly usedPercent: number | null;
     readonly fallback: "session" | "weekly";
     readonly kind: UsagePlanWindow["kind"] | null;
@@ -283,7 +284,7 @@ export function pickCodexWindow(
   };
 }
 
-export function formatCodexPlan(value: unknown): string | null {
+export function formatCodexPlan(value: Schema.Json | undefined): string | null {
   const raw = asString(value);
 
   if (raw === null) return null;
@@ -298,10 +299,7 @@ export function formatCodexPlan(value: unknown): string | null {
   }
 }
 
-export function parseGrokUsage(body: unknown): {
-  readonly plan: string | null;
-  readonly windows: readonly UsagePlanWindow[];
-} {
+export function parseGrokUsage(body: Schema.Json): ParsedPlanUsage {
   const config = asRecord(asRecord(body)?.config);
 
   if (config === null) return { plan: null, windows: [] };
@@ -324,10 +322,7 @@ export function parseGrokUsage(body: unknown): {
   };
 }
 
-export function parseKimiUsage(body: unknown): {
-  readonly plan: string | null;
-  readonly windows: readonly UsagePlanWindow[];
-} {
+export function parseKimiUsage(body: Schema.Json): ParsedPlanUsage {
   const root = asRecord(body);
 
   if (root === null) return { plan: null, windows: [] };
@@ -364,7 +359,7 @@ export async function fetchJson(
     readonly headers: Record<string, string>;
     readonly body?: string;
   },
-): Promise<{ readonly status: number; readonly body: unknown; readonly headers: Headers }> {
+): Promise<{ readonly status: number; readonly body: Schema.Json; readonly headers: Headers }> {
   const request = HttpClientRequest.make(init.method)(url, {
     headers: init.headers,
   }).pipe(
@@ -380,10 +375,10 @@ export async function fetchJson(
     ),
   );
 
-  let body: unknown = null;
+  let body: Schema.Json = null;
 
   try {
-    body = await Effect.runPromise(response.json);
+    body = decodeUsageJson(await Effect.runPromise(response.json));
   } catch {
     body = null;
   }
@@ -392,10 +387,9 @@ export async function fetchJson(
     status: response.status,
     body,
     headers: new Headers(
-      Object.entries(response.headers).filter(([, value]) => typeof value === "string") as [
-        string,
-        string,
-      ][],
+      Object.entries(response.headers).flatMap(([key, value]) =>
+        Predicate.isString(value) ? [[key, value]] : [],
+      ),
     ),
   };
 }

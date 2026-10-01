@@ -198,8 +198,10 @@ export class UsageAggregator {
     for (const [key, bucket] of this.#buckets) {
       const [day = "", hourStart = "", provider = "", model = ""] = key.split("\u0000");
       buckets.push({
+        // SAFETY: Bucket keys are built only from the UsageDay passed to add.
         day: day as UsageDay,
         ...(hourStart === "" ? {} : { hourStart }),
+        // SAFETY: Bucket keys preserve the provider from the typed UsageRecord.
         provider: provider as UsageBucket["provider"],
         model,
         totals: bucket.totals,

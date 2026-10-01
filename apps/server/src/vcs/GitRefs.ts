@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Cache from "effect/Cache";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -19,34 +20,22 @@ import {
   parseWorktreeBranchPaths,
   isMissingGitCwdError,
 } from "./GitCoreHelpers.ts";
-import type { makeGitExecution } from "./GitExecution.ts";
-import type { makeGitRepositoryPaths } from "./GitRepositoryPaths.ts";
-import type { makeGitRemoteStatus } from "./GitRemoteStatus.ts";
-import type { makeGitWorktrees } from "./GitWorktrees.ts";
+import type { GitExecutionServices } from "./GitExecution.ts";
+import type { GitRepositoryPathsServices } from "./GitRepositoryPaths.ts";
+import type { GitRemoteStatusServices } from "./GitRemoteStatus.ts";
+import type { GitWorktreesServices } from "./GitWorktrees.ts";
 
 export const makeGitRefs = (dependencies: {
-  fileSystem: Effect.Success<ReturnType<typeof makeGitExecution>>["fileSystem"];
-  path: Effect.Success<ReturnType<typeof makeGitExecution>>["path"];
-  executeGit: Effect.Success<ReturnType<typeof makeGitExecution>>["executeGit"];
-  executeGitWithStableDiagnostics: Effect.Success<
-    ReturnType<typeof makeGitExecution>
-  >["executeGitWithStableDiagnostics"];
-  repositoryPathsCache: Effect.Success<
-    ReturnType<typeof makeGitRepositoryPaths>
-  >["repositoryPathsCache"];
-  repositoryPathsRefreshCache: Effect.Success<
-    ReturnType<typeof makeGitRepositoryPaths>
-  >["repositoryPathsRefreshCache"];
-  normalizeRepositoryPathsCacheKey: Effect.Success<
-    ReturnType<typeof makeGitRepositoryPaths>
-  >["normalizeRepositoryPathsCacheKey"];
-  resolveRepositoryPaths: Effect.Success<
-    ReturnType<typeof makeGitRepositoryPaths>
-  >["resolveRepositoryPaths"];
-  invalidateStatusStaticCaches: Effect.Success<
-    ReturnType<typeof makeGitRemoteStatus>
-  >["invalidateStatusStaticCaches"];
-  initRepo: Effect.Success<ReturnType<typeof makeGitWorktrees>>["initRepo"];
+  fileSystem: GitExecutionServices["fileSystem"];
+  path: GitExecutionServices["path"];
+  executeGit: GitExecutionServices["executeGit"];
+  executeGitWithStableDiagnostics: GitExecutionServices["executeGitWithStableDiagnostics"];
+  repositoryPathsCache: GitRepositoryPathsServices["repositoryPathsCache"];
+  repositoryPathsRefreshCache: GitRepositoryPathsServices["repositoryPathsRefreshCache"];
+  normalizeRepositoryPathsCacheKey: GitRepositoryPathsServices["normalizeRepositoryPathsCacheKey"];
+  resolveRepositoryPaths: GitRepositoryPathsServices["resolveRepositoryPaths"];
+  invalidateStatusStaticCaches: GitRemoteStatusServices["invalidateStatusStaticCaches"];
+  initRepo: GitWorktreesServices["initRepo"];
 }) =>
   Effect.gen(function* () {
     const {
@@ -386,12 +375,11 @@ export const makeGitRefs = (dependencies: {
           return leftPriority - rightPriority;
         });
 
-        const branchesForKind =
-          input.refKind === "local"
-            ? allBranches.filter((ref) => !ref.isRemote)
-            : input.refKind === "remote"
-              ? allBranches.filter((ref) => ref.isRemote)
-              : allBranches;
+        const branchesForKind = Match.value(input.refKind).pipe(
+          Match.when("local", () => allBranches.filter((ref) => !ref.isRemote)),
+          Match.when("remote", () => allBranches.filter((ref) => ref.isRemote)),
+          Match.orElse(() => allBranches),
+        );
 
         const refs = paginateBranches({
           refs: filterBranchesForListQuery(branchesForKind, input.query),

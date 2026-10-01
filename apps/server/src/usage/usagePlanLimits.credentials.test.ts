@@ -6,22 +6,32 @@ import * as Duration from "effect/Duration";
 import * as TestClock from "effect/testing/TestClock";
 import { makePlanLimitsReader } from "./usagePlanLimits.ts";
 
-const fetchMock = vi.fn<(input: unknown, init?: RequestInit) => Promise<Response>>();
+const fetchMock =
+  vi.fn<(input: Parameters<typeof fetch>[0], init?: RequestInit) => Promise<Response>>();
 
 // Kept in its own file: the HTTP client caches the first global fetch it sees.
 it.effect("drops the previous account's windows when credentials change", () =>
   Effect.gen(function* () {
-    const usedByToken: Record<string, number> = { "token-a": 95, "token-b": 10 };
-    fetchMock.mockReset().mockImplementation(async (_input: unknown, init?: RequestInit) => {
-      const token = new Headers(init?.headers).get("authorization")?.replace("Bearer ", "") ?? "";
+    const usedByToken = new Map([
+      ["token-a", 95],
+      ["token-b", 10],
+    ]);
 
-      return new Response(
-        JSON.stringify({
-          five_hour: { utilization: usedByToken[token], resets_at: "2026-08-27T12:00:00.000Z" },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    });
+    fetchMock
+      .mockReset()
+      .mockImplementation(async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        const token = new Headers(init?.headers).get("authorization")?.replace("Bearer ", "") ?? "";
+
+        return new Response(
+          JSON.stringify({
+            five_hour: {
+              utilization: usedByToken.get(token),
+              resets_at: "2026-08-27T12:00:00.000Z",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      });
     vi.stubGlobal("fetch", fetchMock);
     let token = "token-a";
     let accountId = "account-a";

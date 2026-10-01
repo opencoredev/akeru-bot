@@ -71,8 +71,10 @@ export const selectEntryForTurn = (
     LIMIT 1
   `;
 
+const decodeUsageEntry = Schema.decodeUnknownEffect(AkeruUsageEntry);
+
 export const decodeEntry = (row: UsageRow) =>
-  Schema.decodeUnknownEffect(AkeruUsageEntry)(row).pipe(
+  decodeUsageEntry(row).pipe(
     Effect.mapError(toPersistenceDecodeError("BotUsageLedger.decodeEntry")),
   );
 

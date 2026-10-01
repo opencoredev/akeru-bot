@@ -12,15 +12,13 @@ import {
   gitCommandContext,
   isNonRepositoryGitStderr,
 } from "./GitCoreHelpers.ts";
-import type { makeGitExecution } from "./GitExecution.ts";
+import type { GitExecutionServices } from "./GitExecution.ts";
 
 export const makeGitRepositoryPaths = (dependencies: {
-  fileSystem: Effect.Success<ReturnType<typeof makeGitExecution>>["fileSystem"];
-  path: Effect.Success<ReturnType<typeof makeGitExecution>>["path"];
-  executeGit: Effect.Success<ReturnType<typeof makeGitExecution>>["executeGit"];
-  executeGitWithStableDiagnostics: Effect.Success<
-    ReturnType<typeof makeGitExecution>
-  >["executeGitWithStableDiagnostics"];
+  fileSystem: GitExecutionServices["fileSystem"];
+  path: GitExecutionServices["path"];
+  executeGit: GitExecutionServices["executeGit"];
+  executeGitWithStableDiagnostics: GitExecutionServices["executeGitWithStableDiagnostics"];
 }) =>
   Effect.gen(function* () {
     const { fileSystem, path, executeGit, executeGitWithStableDiagnostics } = dependencies;
@@ -161,3 +159,5 @@ export const makeGitRepositoryPaths = (dependencies: {
       resolveRepositoryPaths,
     };
   });
+
+export type GitRepositoryPathsServices = Effect.Success<ReturnType<typeof makeGitRepositoryPaths>>;

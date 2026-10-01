@@ -9,14 +9,14 @@ import {
   parseUpstreamRefByFirstSeparator,
   gitCommandContext,
 } from "./GitCoreHelpers.ts";
-import type { makeGitExecution } from "./GitExecution.ts";
+import type { GitExecutionServices } from "./GitExecution.ts";
 
 export const makeGitBranches = (dependencies: {
-  path: Effect.Success<ReturnType<typeof makeGitExecution>>["path"];
-  executeGit: Effect.Success<ReturnType<typeof makeGitExecution>>["executeGit"];
-  runGitStdout: Effect.Success<ReturnType<typeof makeGitExecution>>["runGitStdout"];
+  path: GitExecutionServices["path"];
+  executeGit: GitExecutionServices["executeGit"];
+  runGitStdout: GitExecutionServices["runGitStdout"];
 }) =>
-  Effect.gen(function* () {
+  Effect.sync(() => {
     const { path, executeGit, runGitStdout } = dependencies;
 
     const branchExists = (cwd: string, refName: string): Effect.Effect<boolean, GitCommandError> =>
@@ -108,3 +108,5 @@ export const makeGitBranches = (dependencies: {
       fetchRemoteForStatus,
     };
   });
+
+export type GitBranchesServices = Effect.Success<ReturnType<typeof makeGitBranches>>;

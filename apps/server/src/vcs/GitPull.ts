@@ -2,15 +2,15 @@ import * as Effect from "effect/Effect";
 import { GitCommandError } from "@akeru/contracts";
 import type * as GitVcsDriver from "./GitVcsDriver.ts";
 import { gitCommandContext } from "./GitCoreHelpers.ts";
-import type { makeGitExecution } from "./GitExecution.ts";
-import type { makeGitLocalStatus } from "./GitLocalStatus.ts";
+import type { GitExecutionServices } from "./GitExecution.ts";
+import type { GitLocalStatusServices } from "./GitLocalStatus.ts";
 
 export const makeGitPull = (dependencies: {
-  executeGit: Effect.Success<ReturnType<typeof makeGitExecution>>["executeGit"];
-  runGitStdout: Effect.Success<ReturnType<typeof makeGitExecution>>["runGitStdout"];
-  statusDetails: Effect.Success<ReturnType<typeof makeGitLocalStatus>>["statusDetails"];
+  executeGit: GitExecutionServices["executeGit"];
+  runGitStdout: GitExecutionServices["runGitStdout"];
+  statusDetails: GitLocalStatusServices["statusDetails"];
 }) =>
-  Effect.gen(function* () {
+  Effect.sync(() => {
     const { executeGit, runGitStdout, statusDetails } = dependencies;
 
     const pullCurrentBranch: GitVcsDriver.GitVcsDriver["Service"]["pullCurrentBranch"] = Effect.fn(

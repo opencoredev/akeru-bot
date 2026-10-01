@@ -39,6 +39,7 @@ import { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { ProviderUsageHistory } from "./ProviderUsageHistory.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
 import { parseRateTable, priceUsage, type PricedUsage, type RateTable } from "./usagePricing.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- UsageService owns the lifetime of its private plan-limit cache.
 import { makePlanLimitsReader } from "./usagePlanLimits.ts";
 import type { UsageRecord } from "./usageTranscripts.ts";
 
@@ -55,18 +56,16 @@ const MAX_HOURLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const DAILY_QUERY_SLACK_HOURS = 36;
 
+const decodeRateDocument = Schema.decodeUnknownEffect(Schema.Json);
+
 const RatesCacheFile = Schema.Struct({
   fetchedAtMs: Schema.Number,
-  document: Schema.Unknown,
+  document: Schema.Json,
 });
 
-const decodeRatesCache = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(RatesCacheFile as unknown as Schema.Codec<typeof RatesCacheFile.Type>),
-);
+const decodeRatesCache = Schema.decodeUnknownEffect(Schema.fromJsonString(RatesCacheFile));
 
-const encodeRatesCache = Schema.encodeEffect(
-  Schema.fromJsonString(RatesCacheFile as unknown as Schema.Codec<typeof RatesCacheFile.Type>),
-);
+const encodeRatesCache = Schema.encodeEffect(Schema.fromJsonString(RatesCacheFile));
 
 const DRIVER_CONNECTIONS = {
   claudeAgent: { provider: "claude", connection: "anthropic" },
@@ -103,7 +102,10 @@ export function usageRecordFromEntry(
   connectedProviders: ReadonlySet<SubscriptionProviderId>,
 ): UsageRecord | null {
   if (entry.provider === null || entry.model === null) return null;
-  const mapping = DRIVER_CONNECTIONS[entry.provider as keyof typeof DRIVER_CONNECTIONS];
+
+  const mapping = Object.entries(DRIVER_CONNECTIONS).find(
+    ([driver]) => driver === entry.provider,
+  )?.[1];
 
   if (mapping === undefined || !connectedProviders.has(mapping.connection)) return null;
 
@@ -263,6 +265,7 @@ export const make = Effect.gen(function* () {
       const fetched = yield* httpClient.get(LITELLM_RATES_URL).pipe(
         Effect.flatMap(HttpClientResponse.filterStatusOk),
         Effect.flatMap((response) => response.json),
+        Effect.flatMap(decodeRateDocument),
         Effect.timeout(10_000),
         Effect.catchCause(() => Effect.succeed(null)),
       );

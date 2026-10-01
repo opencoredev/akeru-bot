@@ -24,29 +24,21 @@ import {
   isNonRepositoryGitStderr,
   isUnbornHeadStderr,
 } from "./GitCoreHelpers.ts";
-import type { makeGitExecution } from "./GitExecution.ts";
-import type { makeGitBranches } from "./GitBranches.ts";
-import type { makeGitRepositoryPaths } from "./GitRepositoryPaths.ts";
+import type { GitExecutionServices } from "./GitExecution.ts";
+import type { GitBranchesServices } from "./GitBranches.ts";
+import type { GitRepositoryPathsServices } from "./GitRepositoryPaths.ts";
 
 export const makeGitRemoteStatus = (dependencies: {
-  path: Effect.Success<ReturnType<typeof makeGitExecution>>["path"];
-  executeGit: Effect.Success<ReturnType<typeof makeGitExecution>>["executeGit"];
-  executeGitWithStableDiagnostics: Effect.Success<
-    ReturnType<typeof makeGitExecution>
-  >["executeGitWithStableDiagnostics"];
-  runGit: Effect.Success<ReturnType<typeof makeGitExecution>>["runGit"];
-  runGitStdout: Effect.Success<ReturnType<typeof makeGitExecution>>["runGitStdout"];
-  branchExists: Effect.Success<ReturnType<typeof makeGitBranches>>["branchExists"];
-  resolveCurrentUpstream: Effect.Success<
-    ReturnType<typeof makeGitBranches>
-  >["resolveCurrentUpstream"];
-  fetchRemoteForStatus: Effect.Success<ReturnType<typeof makeGitBranches>>["fetchRemoteForStatus"];
-  normalizeRepositoryPathsCacheKey: Effect.Success<
-    ReturnType<typeof makeGitRepositoryPaths>
-  >["normalizeRepositoryPathsCacheKey"];
-  resolveRepositoryPaths: Effect.Success<
-    ReturnType<typeof makeGitRepositoryPaths>
-  >["resolveRepositoryPaths"];
+  path: GitExecutionServices["path"];
+  executeGit: GitExecutionServices["executeGit"];
+  executeGitWithStableDiagnostics: GitExecutionServices["executeGitWithStableDiagnostics"];
+  runGit: GitExecutionServices["runGit"];
+  runGitStdout: GitExecutionServices["runGitStdout"];
+  branchExists: GitBranchesServices["branchExists"];
+  resolveCurrentUpstream: GitBranchesServices["resolveCurrentUpstream"];
+  fetchRemoteForStatus: GitBranchesServices["fetchRemoteForStatus"];
+  normalizeRepositoryPathsCacheKey: GitRepositoryPathsServices["normalizeRepositoryPathsCacheKey"];
+  resolveRepositoryPaths: GitRepositoryPathsServices["resolveRepositoryPaths"];
 }) =>
   Effect.gen(function* () {
     const {
@@ -521,3 +513,5 @@ export const makeGitRemoteStatus = (dependencies: {
       readStatusDetailsRemote,
     };
   });
+
+export type GitRemoteStatusServices = Effect.Success<ReturnType<typeof makeGitRemoteStatus>>;
