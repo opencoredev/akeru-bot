@@ -8,7 +8,7 @@ import { McpServerId, type McpServer } from "@akeru/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { isInstallableManifest, loadManifestCatalog } from "../../../../plugins/manifestCatalog.ts";
-import { startHttpMcpFixture } from "./pluginLifecycleFixtures.ts";
+import { startHttpMcpFixture } from "./pluginLifecycleFixtures.test-support.ts";
 import { toMcpServerConfigs } from "./Layers/AgentController.ts";
 import { withMcpRuntimeHeaders } from "./McpServerConfig.ts";
 
