@@ -9,6 +9,8 @@ type InputProps = Omit<InputPrimitive.Props & React.RefAttributes<HTMLInputEleme
   size?: "sm" | "compact" | "default" | "lg" | number;
   unstyled?: boolean;
   nativeInput?: boolean;
+  /** "color-value" is the compact mono field beside a color swatch; pair it with `unstyled`. */
+  variant?: "default" | "color-value";
 };
 
 function Input({
@@ -16,6 +18,7 @@ function Input({
   size = "default",
   unstyled = false,
   nativeInput = false,
+  variant = "default",
   ...props
 }: InputProps) {
   const inputClassName = cn(
@@ -63,6 +66,8 @@ function Input({
           !unstyled &&
             size === "compact" &&
             "rounded-md before:rounded-[calc(var(--radius-md)-1px)]",
+          variant === "color-value" &&
+            "rounded-md border-0 bg-black/10 font-mono text-xs text-foreground shadow-none focus-within:bg-black/15 focus-within:ring-0 dark:bg-black/20 dark:focus-within:bg-black/25 [&_[data-slot=input]]:text-right",
           className,
         ) || undefined
       }

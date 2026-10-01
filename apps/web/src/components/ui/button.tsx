@@ -53,6 +53,15 @@ const buttonVariants = cva(
           "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent bg-secondary text-foreground [:active,[data-pressed]]:bg-accent [:hover,[data-pressed]]:bg-accent/80",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground [:active,[data-pressed]]:bg-secondary/80 [:hover,[data-pressed]]:bg-secondary/90",
+        // Segmented choice: an unselected option, dimmed while aria-disabled.
+        segment:
+          "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent bg-secondary text-foreground [:active,[data-pressed]]:bg-accent [:hover,[data-pressed]]:bg-accent/80 aria-disabled:opacity-50",
+        // Segmented choice: the selected option, outlined with the focus ring color.
+        "segment-selected":
+          "border-transparent bg-secondary text-secondary-foreground inset-ring inset-ring-ring [:active,[data-pressed]]:bg-secondary/80 [:hover,[data-pressed]]:bg-secondary/90 aria-disabled:opacity-50",
+        // Muted icon action that fades out while aria-hidden.
+        "ghost-fade":
+          "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent text-muted-foreground transition-opacity data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent aria-hidden:pointer-events-none aria-hidden:opacity-0",
       },
     },
   },

@@ -8,6 +8,15 @@ const PopoverCreateHandle = PopoverPrimitive.createHandle;
 
 const Popover = PopoverPrimitive.Root;
 
+const POPOVER_POPUP_VARIANT_CLASSES = {
+  default: undefined,
+  // Edge-to-edge picker surface: no viewport padding, so the picker owns its layout.
+  "color-picker":
+    "rounded-2xl border border-border/70 p-0 shadow-2xl [--viewport-inline-padding:0px] [&_[data-slot=popover-viewport]]:p-0",
+  "accent-picker":
+    "rounded-md p-0 [--viewport-inline-padding:0px] [&_[data-slot=popover-viewport]]:p-0",
+} as const;
+
 function PopoverTrigger({ className, children, ...props }: PopoverPrimitive.Trigger.Props) {
   return (
     <PopoverPrimitive.Trigger className={className} data-slot="popover-trigger" {...props}>
@@ -26,6 +35,7 @@ function PopoverPopup({
   alignOffset = 0,
   tooltipStyle = false,
   anchor,
+  variant = "default",
   ...props
 }: PopoverPrimitive.Popup.Props & {
   viewportClassName?: string;
@@ -35,6 +45,7 @@ function PopoverPopup({
   alignOffset?: PopoverPrimitive.Positioner.Props["alignOffset"];
   tooltipStyle?: boolean;
   anchor?: PopoverPrimitive.Positioner.Props["anchor"];
+  variant?: keyof typeof POPOVER_POPUP_VARIANT_CLASSES;
 }) {
   return (
     <PopoverPrimitive.Portal>
@@ -54,6 +65,7 @@ function PopoverPopup({
               "w-fit text-balance rounded-md text-xs shadow-md/5 before:rounded-[calc(var(--radius-md)-1px)]",
             !tooltipStyle &&
               "shadow-[0_16px_40px_-18px_rgb(0_0_0/55%)] dark:shadow-[0_18px_44px_-18px_rgb(0_0_0/80%)]",
+            POPOVER_POPUP_VARIANT_CLASSES[variant],
             className,
           )}
           data-slot="popover-popup"
