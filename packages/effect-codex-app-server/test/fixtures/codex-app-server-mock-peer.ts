@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeOS from "node:os";
 
 let nextServerRequestId = 10_000;
@@ -34,7 +35,7 @@ const sendRequest = (method: string, params: unknown) => {
 const handleMethod = (message: Record<string, unknown>) => {
   const method = message.method;
 
-  if (typeof method !== "string") {
+  if (!Predicate.isString(method)) {
     return;
   }
 

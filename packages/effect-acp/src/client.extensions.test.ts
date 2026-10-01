@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Path from "effect/Path";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -99,7 +100,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
           );
         }).pipe(Effect.provide(context), Effect.ensuring(Scope.close(scope, Exit.void)));
 
-        if (result._tag !== "Failure") {
+        if (!Predicate.isTagged(result, "Failure")) {
           assert.fail("Expected prompt to fail for invalid typed extension payload");
         }
 

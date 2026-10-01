@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -100,7 +101,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function isIncomingRequest(value: unknown): value is CodexAppServerIncomingRequest {
-  if (!isObject(value) || typeof value.method !== "string") {
+  if (!isObject(value) || !Predicate.isString(value.method)) {
     return false;
   }
 
@@ -108,7 +109,7 @@ function isIncomingRequest(value: unknown): value is CodexAppServerIncomingReque
 }
 
 function isIncomingNotification(value: unknown): value is CodexAppServerIncomingNotification {
-  return isObject(value) && typeof value.method === "string" && !("id" in value);
+  return isObject(value) && Predicate.isString(value.method) && !("id" in value);
 }
 
 function isIncomingResponse(value: unknown): value is typeof JsonRpcResponseEnvelope.Type {
@@ -125,10 +126,10 @@ const encodeWireMessage = (
   encodeJsonString(message).pipe(
     Effect.map((encoded) => `${encoded}\n`),
     Effect.mapError((cause) => {
-      const method = typeof message.method === "string" ? message.method : undefined;
+      const method = Predicate.isString(message.method) ? message.method : undefined;
 
       const requestId =
-        typeof message.id === "string" || typeof message.id === "number"
+        Predicate.isString(message.id) || Predicate.isNumber(message.id)
           ? String(message.id)
           : undefined;
 

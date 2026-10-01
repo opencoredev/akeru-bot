@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import {
   NonNegativeInt,
@@ -117,7 +118,7 @@ type ProjectEntriesFailureContext = {
 function decodedProjectErrorMessage(props: object): string | undefined {
   if (!("message" in props)) return undefined;
 
-  return typeof props.message === "string" ? props.message : undefined;
+  return Predicate.isString(props.message) ? props.message : undefined;
 }
 
 export class ProjectSearchEntriesError extends Schema.TaggedErrorClass<ProjectSearchEntriesError>()(

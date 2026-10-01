@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type DesktopSshEnvironmentTarget,
   EnvironmentId,
@@ -209,7 +210,10 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
           return next;
         });
 
-        if (target._tag === "BearerConnectionTarget" || target._tag === "SshConnectionTarget") {
+        if (
+          Predicate.isTagged(target, "BearerConnectionTarget") ||
+          Predicate.isTagged(target, "SshConnectionTarget")
+        ) {
           yield* Ref.update(storedProfiles, (current) => {
             const next = new Map(current);
             next.delete(target.connectionId);

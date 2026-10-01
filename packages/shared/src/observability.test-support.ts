@@ -7,6 +7,7 @@ import * as Logger from "effect/Logger";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Tracer from "effect/Tracer";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition builds isolated runtime fixtures.
 import { makeLocalFileTracer, type TraceRecord } from "./observability.ts";
 
 const TraceRecordLine = Schema.Struct({

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -354,7 +355,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
                 ),
               );
 
-              if (probeEvent._tag === "ProbeCompleted") {
+              if (Predicate.isTagged(probeEvent, "ProbeCompleted")) {
                 if (Exit.isFailure(probeEvent.exit)) {
                   yield* Ref.set(wakeProbeFailed, true);
                 }
@@ -427,7 +428,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
       ),
     ]);
 
-    if (establishment._tag === "Interrupted") {
+    if (isEstablishmentInterrupted(establishment)) {
       return {
         _tag: "Interrupted",
         established: false,
@@ -436,7 +437,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
       } satisfies AttemptOutcome;
     }
 
-    if (establishment._tag === "TimedOut") {
+    if (isEstablishmentTimedOut(establishment)) {
       return {
         _tag: "Failure",
         established: false,
@@ -538,7 +539,9 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
 
   const waitForSignal = Queue.take(signals).pipe(
     Effect.map(
-      (next) => next._tag === "Wakeup" && ConnectionWakeups.isApplicationActiveWakeup(next.reason),
+      (next) =>
+        Predicate.isTagged(next, "Wakeup") &&
+        ConnectionWakeups.isApplicationActiveWakeup(next.reason),
     ),
   );
 
@@ -600,7 +603,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
         }
       }
 
-      if (outcome._tag === "Interrupted") {
+      if (Predicate.isTagged(outcome, "Interrupted")) {
         if (outcome.resetRetry) {
           resetRetryLadder();
         }
@@ -611,7 +614,7 @@ export const make = Effect.fn("EnvironmentSupervisor.make")(function* (
       const error: ConnectionAttemptError = outcome.failure;
       latestFailure = error;
 
-      if (error._tag === "ConnectionBlockedError") {
+      if (Predicate.isTagged(error, "ConnectionBlockedError")) {
         const blockedIntent = yield* Ref.get(intent);
         yield* setState({
           desired: blockedIntent.desired,
@@ -740,3 +743,15 @@ export const layer = (
   | ConnectionDriver.ConnectionDriver
   | ConnectionWakeups.ConnectionWakeups
 > => Layer.effect(EnvironmentSupervisor, make(entry, options));
+
+function isEstablishmentInterrupted(
+  value: EstablishmentEvent,
+): value is Extract<EstablishmentEvent, { readonly _tag: "Interrupted" }> {
+  return Predicate.isTagged(value, "Interrupted");
+}
+
+function isEstablishmentTimedOut(
+  value: EstablishmentEvent,
+): value is Extract<EstablishmentEvent, { readonly _tag: "TimedOut" }> {
+  return Predicate.isTagged(value, "TimedOut");
+}

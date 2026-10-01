@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { isToolLifecycleItemType } from "@akeru/contracts";
 import { requestKindFromRequestType } from "./pendingRequests.ts";
 
@@ -6,7 +7,7 @@ export function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 export function asTrimmedString(value: unknown): string | null {
-  if (typeof value !== "string") {
+  if (!Predicate.isString(value)) {
     return null;
   }
 
@@ -253,7 +254,7 @@ export function stripTrailingExitCode(value: string): {
 }
 
 export function extractWorkLogItemType(payload: Record<string, unknown> | null) {
-  if (typeof payload?.itemType === "string" && isToolLifecycleItemType(payload.itemType)) {
+  if (Predicate.isString(payload?.itemType) && isToolLifecycleItemType(payload.itemType)) {
     return payload.itemType;
   }
 

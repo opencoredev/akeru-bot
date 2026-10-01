@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ToolLifecycleItemType } from "@akeru/contracts";
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -7,7 +8,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function asTrimmedString(value: unknown): string | undefined {
-  if (typeof value !== "string") {
+  if (!Predicate.isString(value)) {
     return undefined;
   }
 

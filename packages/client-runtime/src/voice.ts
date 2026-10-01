@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { OrchestrationLatestTurn, OrchestrationMessage } from "@akeru/contracts";
 
 export interface VoiceAudio {
@@ -289,7 +290,7 @@ function stringField(value: unknown, field: string): string | null {
   if (typeof value !== "object" || value === null) return null;
   const candidate = (value as Record<string, unknown>)[field];
 
-  return typeof candidate === "string" ? candidate : null;
+  return Predicate.isString(candidate) ? candidate : null;
 }
 
 const VOICE_EVENT_ID_MEMORY = 4_096;

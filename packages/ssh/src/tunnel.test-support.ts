@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NetService from "@akeru/shared/Net";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -80,5 +81,5 @@ export const testNetService = NetService.NetService.of({
 });
 
 export function commandArgs(command: ChildProcess.Command): ReadonlyArray<string> {
-  return command._tag === "StandardCommand" ? command.args : [];
+  return Predicate.isTagged(command, "StandardCommand") ? command.args : [];
 }

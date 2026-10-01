@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeOS from "node:os";
 import * as NodeChildProcess from "node:child_process";
@@ -245,15 +246,13 @@ export function readEnvironmentFromWindowsShell(
     return {};
   }
 
-  const options =
-    typeof optionsOrExecFile === "function"
-      ? ({} satisfies WindowsEnvironmentProbeOptions)
-      : (optionsOrExecFile ?? {});
+  const options = Predicate.isFunction(optionsOrExecFile)
+    ? ({} satisfies WindowsEnvironmentProbeOptions)
+    : (optionsOrExecFile ?? {});
 
-  const execFile: ExecFileSyncLike =
-    typeof optionsOrExecFile === "function"
-      ? optionsOrExecFile
-      : (maybeExecFile ?? (NodeChildProcess.execFileSync as ExecFileSyncLike));
+  const execFile: ExecFileSyncLike = Predicate.isFunction(optionsOrExecFile)
+    ? optionsOrExecFile
+    : (maybeExecFile ?? (NodeChildProcess.execFileSync as ExecFileSyncLike));
 
   const command = buildWindowsEnvironmentCaptureCommand(names);
 

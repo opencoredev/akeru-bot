@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -29,12 +30,12 @@ function truncateDiagnostic(value: string, maxLength: number): string {
 }
 
 function formatDiagnosticPathSegment(key: PropertyKey): string {
-  if (typeof key === "number") {
+  if (Predicate.isNumber(key)) {
     return `[${key}]`;
   }
 
   const value = truncateDiagnostic(
-    typeof key === "symbol" ? String(key) : key,
+    Predicate.isSymbol(key) ? String(key) : key,
     MAX_SCHEMA_DIAGNOSTIC_PATH_SEGMENT_LENGTH,
   );
 
@@ -87,7 +88,7 @@ function collectSchemaDiagnosticIssues(
     case "Encoding":
       return collectSchemaDiagnosticIssues(issue.issue, path, diagnostics);
     case "Filter":
-      if (issue.issue._tag !== "InvalidValue") {
+      if (!Predicate.isTagged(issue.issue, "InvalidValue")) {
         return collectSchemaDiagnosticIssues(issue.issue, path, diagnostics);
       }
 

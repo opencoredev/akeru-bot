@@ -1,6 +1,8 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { TrimmedString } from "../baseSchemas.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This module composes provider setting schemas, not an Effect service.
 import { makeBinaryPathSetting, makeProviderSettingsSchema } from "./providerForms.ts";
 
 export const CodexSettings = makeProviderSettingsSchema(
@@ -249,7 +251,7 @@ export const providerInstanceConfigEnabledFlag = (config: unknown): boolean | un
 
   const enabled = "enabled" in config ? config.enabled : undefined;
 
-  return typeof enabled === "boolean" ? enabled : undefined;
+  return Predicate.isBoolean(enabled) ? enabled : undefined;
 };
 
 export const CodexSettingsPatch = Schema.Struct({

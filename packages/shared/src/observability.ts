@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import type * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Tracer from "effect/Tracer";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Tracer composition owns its sink and lifecycle.
 import { makeTraceSink } from "./observability/traceSink.ts";
 import {
   type EffectTraceRecord,

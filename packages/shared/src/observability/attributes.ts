@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import type * as Exit from "effect/Exit";
 import * as ExitRuntime from "effect/Exit";
@@ -6,7 +7,7 @@ import { type TraceAttributes, type EffectTraceRecord } from "./types.ts";
 
 function isStructuralTag(value: unknown): value is string {
   return (
-    typeof value === "string" &&
+    Predicate.isString(value) &&
     value.length > 0 &&
     value.length <= 128 &&
     /^[A-Za-z][A-Za-z0-9._:/-]*$/.test(value)
@@ -57,14 +58,14 @@ function normalizeJsonValue(value: unknown, seen: WeakSet<object> = new WeakSet(
   if (
     value === null ||
     value === undefined ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
   ) {
     return value ?? null;
   }
 
-  if (typeof value === "bigint") {
+  if (Predicate.isBigInt(value)) {
     return value.toString();
   }
 
@@ -166,7 +167,7 @@ const ALWAYS_TRUNCATED_TRACE_ATTRIBUTES: ReadonlySet<string> = new Set(["db.quer
 // plain objects from normalizeJsonValue, e.g. an Error's `stack`). Returns the
 // input reference when nothing was clamped.
 function truncateNestedValue(value: unknown): unknown {
-  if (typeof value === "string") {
+  if (Predicate.isString(value)) {
     return value.length <= TRACE_ATTRIBUTE_MAX_LENGTH
       ? value
       : `${value.slice(0, TRACE_ATTRIBUTE_MAX_LENGTH)}${TRACE_ATTRIBUTE_TRUNCATION_SUFFIX}`;
@@ -205,7 +206,7 @@ export function truncateTraceAttributes(attributes: TraceAttributes): TraceAttri
   let truncated: Record<string, unknown> | undefined;
 
   for (const [key, value] of Object.entries(attributes)) {
-    if (typeof value === "string" && ALWAYS_TRUNCATED_TRACE_ATTRIBUTES.has(key)) {
+    if (Predicate.isString(value) && ALWAYS_TRUNCATED_TRACE_ATTRIBUTES.has(key)) {
       if (value.length <= TRACE_ATTRIBUTE_TRUNCATED_LENGTH) continue;
       truncated ??= { ...attributes };
       truncated[key] =

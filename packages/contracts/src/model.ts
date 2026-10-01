@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
@@ -107,15 +108,15 @@ function coerceLegacyOptionsObjectToArray(
   const entries: Array<ProviderOptionSelection> = [];
 
   for (const [rawKey, rawValue] of Object.entries(record)) {
-    const id = typeof rawKey === "string" ? rawKey.trim() : "";
+    const id = Predicate.isString(rawKey) ? rawKey.trim() : "";
 
     if (id.length === 0) continue;
 
-    if (typeof rawValue === "string") {
+    if (Predicate.isString(rawValue)) {
       const trimmed = rawValue.trim();
 
       if (trimmed.length > 0) entries.push({ id, value: trimmed });
-    } else if (typeof rawValue === "boolean") {
+    } else if (Predicate.isBoolean(rawValue)) {
       entries.push({ id, value: rawValue });
     }
     // Drop anything else (numbers, null, nested objects/arrays) to match the

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -201,6 +202,8 @@ export function scheduleAtomCommandEffect<W, A, E, R>(
       }),
     );
 
-    return result._tag === "Success" ? result.value : yield* Effect.failCause(result.cause);
+    return Predicate.isTagged(result, "Success")
+      ? result.value
+      : yield* Effect.failCause(result.cause);
   });
 }

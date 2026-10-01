@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -31,7 +32,7 @@ describe("runtime command runner", () => {
     const result = await command.run(registry, undefined);
     expect(result._tag).toBe("Failure");
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       expect(Cause.hasDies(result.cause)).toBe(true);
       expect(Cause.squash(result.cause)).toBe(defect);
     }

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type * as SchemaIssue from "effect/SchemaIssue";
 
@@ -263,7 +264,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
   }
 
   static fromCoreHandlerError(error: AcpError, method: string) {
-    if (error._tag === "AcpRequestError") {
+    if (Predicate.isTagged(error, "AcpRequestError")) {
       return error;
     }
 
@@ -279,7 +280,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
   }
 
   static fromExtensionHandlerError(error: AcpError, method: string) {
-    if (error._tag === "AcpRequestError") {
+    if (Predicate.isTagged(error, "AcpRequestError")) {
       return error;
     }
 

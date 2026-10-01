@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { pipe } from "effect/Function";
 import * as Arr from "effect/Array";
 
@@ -43,7 +44,7 @@ export function isResolvableContextWindowActivity(activity: OrchestrationThreadA
 
   const usedTokens = payload?.usedTokens;
 
-  return typeof usedTokens === "number" && Number.isFinite(usedTokens) && usedTokens >= 0;
+  return Predicate.isNumber(usedTokens) && Number.isFinite(usedTokens) && usedTokens >= 0;
 }
 
 export function applyActivityAppendedEvent(

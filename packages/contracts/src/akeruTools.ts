@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { AKERU_DELEGATION_MAX_CONCURRENCY, AKERU_DELEGATION_MAX_DEPTH } from "./akeruDelegation.ts";
 import { AKERU_WORKER_MAX_DEPTH } from "./akeruWorkers.ts";
 import {
@@ -93,22 +94,22 @@ export function akeruToolApprovalForInput(
   if (
     (tool.id === "Shell" || tool.id === "ExternalShell") &&
     "command" in input &&
-    typeof input.command === "string"
+    Predicate.isString(input.command)
   ) {
     const protectedClass = classifyAkeruExternalCommand(input.command);
 
     if (protectedClass) return protectedClass;
   }
 
-  if (tool.id === "ExternalRead" && "path" in input && typeof input.path === "string") {
+  if (tool.id === "ExternalRead" && "path" in input && Predicate.isString(input.path)) {
     return classifyAkeruSensitivePath(input.path) ?? tool.approval;
   }
 
-  if (tool.id === "CopyToBox" && "sourcePath" in input && typeof input.sourcePath === "string") {
+  if (tool.id === "CopyToBox" && "sourcePath" in input && Predicate.isString(input.sourcePath)) {
     return classifyAkeruSensitivePath(input.sourcePath) ?? tool.approval;
   }
 
-  if (tool.id === "CopyFromBox" && "sourcePath" in input && typeof input.sourcePath === "string") {
+  if (tool.id === "CopyFromBox" && "sourcePath" in input && Predicate.isString(input.sourcePath)) {
     return classifyAkeruSensitivePath(input.sourcePath) ?? tool.approval;
   }
 

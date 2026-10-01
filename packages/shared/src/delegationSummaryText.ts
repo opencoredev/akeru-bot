@@ -1,3 +1,5 @@
+import * as Predicate from "effect/Predicate";
+
 export type DelegationSummaryOutcome =
   | { readonly _tag: "Completed"; readonly summary: string }
   | { readonly _tag: "Failed"; readonly message: string };
@@ -38,16 +40,15 @@ export function delegationSummaryText(input: DelegationSummaryTextInput): string
   const task = plainText(input.task).replace(/\s+/g, " ");
 
   const detail = plainText(
-    input.outcome._tag === "Completed" ? input.outcome.summary : input.outcome.message,
+    Predicate.isTagged(input.outcome, "Completed") ? input.outcome.summary : input.outcome.message,
   );
 
   const bounded =
     detail.length > maxDetailChars ? `${detail.slice(0, maxDetailChars).trimEnd()}…` : detail;
 
-  const head =
-    input.outcome._tag === "Completed"
-      ? `${input.botName} finished "${task}"`
-      : `${input.botName} could not finish "${task}"`;
+  const head = Predicate.isTagged(input.outcome, "Completed")
+    ? `${input.botName} finished "${task}"`
+    : `${input.botName} could not finish "${task}"`;
 
   return bounded ? `${head}: ${bounded}` : `${head}.`;
 }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import * as Predicate from "effect/Predicate";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -178,7 +179,7 @@ function normalizeNullableTypes(value: Schema.Json): Schema.Json {
     return normalizedObject;
   }
 
-  const normalizedTypes = typeValue.filter((entry): entry is string => typeof entry === "string");
+  const normalizedTypes = typeValue.filter((entry): entry is string => Predicate.isString(entry));
 
   if (normalizedTypes.length !== typeValue.length || !normalizedTypes.includes("null")) {
     return normalizedObject;

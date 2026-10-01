@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { ORCHESTRATION_WS_METHODS, WS_METHODS } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -239,12 +240,14 @@ export function subscribeDynamic<TTag extends EnvironmentSubscriptionRpcTag>(
                         Stream.catchCause((cause) => {
                           const hasOnlyExpectedFailures =
                             cause.reasons.length > 0 &&
-                            cause.reasons.every((reason) => reason._tag === "Fail");
+                            cause.reasons.every((reason) => Predicate.isTagged(reason, "Fail"));
 
                           const isTransportFailure =
                             hasOnlyExpectedFailures &&
                             cause.reasons.every(
-                              (reason) => reason._tag === "Fail" && isRpcClientError(reason.error),
+                              (reason) =>
+                                Predicate.isTagged(reason, "Fail") &&
+                                isRpcClientError(reason.error),
                             );
 
                           if (isTransportFailure) {

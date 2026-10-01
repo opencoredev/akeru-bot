@@ -21,6 +21,7 @@ import {
   decodeExtRequestRegistration,
   runHandler,
 } from "./_internal/shared.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The client composition root owns the child-process transport.
 import { makeChildStdio, makeTerminationError } from "./_internal/stdio.ts";
 
 export interface AcpClientOptions extends Pick<

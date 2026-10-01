@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type {
   ComputerAction,
   ComputerError,
@@ -152,7 +153,7 @@ export function createComputerViewerController(options: {
     const last = queue.at(-1);
 
     if (
-      action._tag === "scroll" &&
+      Predicate.isTagged(action, "scroll") &&
       last?._tag === "scroll" &&
       last.direction === action.direction
     ) {
@@ -165,7 +166,7 @@ export function createComputerViewerController(options: {
     }
 
     if (queue.length >= COMPUTER_VIEWER_INPUT_QUEUE_LIMIT) {
-      const moveIndex = queue.findIndex((queued) => queued._tag === "move");
+      const moveIndex = queue.findIndex((queued) => Predicate.isTagged(queued, "move"));
 
       if (moveIndex === -1) return;
       queue.splice(moveIndex, 1);
@@ -185,8 +186,9 @@ export function createComputerViewerController(options: {
     receive: (event) => {
       if (!state.visible) return;
 
-      if (event._tag === "state") dispatch({ type: "server-state", state: event.state });
-      else if (event._tag === "frame") dispatch({ type: "frame", frame: event.frame });
+      if (Predicate.isTagged(event, "state"))
+        dispatch({ type: "server-state", state: event.state });
+      else if (Predicate.isTagged(event, "frame")) dispatch({ type: "frame", frame: event.frame });
     },
     show: async () => {
       if (closing) await closing;

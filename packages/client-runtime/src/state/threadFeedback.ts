@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   MessageId,
   type OrchestrationMessage,
@@ -70,7 +71,7 @@ export async function submitCodexFeedback<E>(input: {
 
   const result = await input.upload();
 
-  if (result._tag === "Success") {
+  if (Predicate.isTagged(result, "Success")) {
     input.onUpdate({
       ...input.submission,
       status: "sent",

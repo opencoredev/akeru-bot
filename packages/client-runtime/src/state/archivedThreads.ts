@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { EnvironmentId, type OrchestrationShellSnapshot } from "@akeru/contracts";
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
@@ -61,7 +62,7 @@ export function createArchivedThreadSnapshotsAtomFamily<E>(options: {
           snapshots.push({ environmentId, snapshot });
         }
 
-        if (error === null && result._tag === "Failure") {
+        if (error === null && Predicate.isTagged(result, "Failure")) {
           error = "Failed to load archived chats.";
         }
       }

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ServerConfig } from "@akeru/contracts";
 import * as Option from "effect/Option";
 
@@ -107,11 +108,13 @@ export function connectionCatalogDisplayUrl(entry: ConnectionCatalogEntry): stri
     case "PrimaryConnectionTarget":
       return entry.target.httpBaseUrl;
     case "BearerConnectionTarget":
-      return Option.isSome(entry.profile) && entry.profile.value._tag === "BearerConnectionProfile"
+      return Option.isSome(entry.profile) &&
+        Predicate.isTagged(entry.profile.value, "BearerConnectionProfile")
         ? entry.profile.value.httpBaseUrl
         : null;
     case "SshConnectionTarget":
-      return Option.isSome(entry.profile) && entry.profile.value._tag === "SshConnectionProfile"
+      return Option.isSome(entry.profile) &&
+        Predicate.isTagged(entry.profile.value, "SshConnectionProfile")
         ? `${entry.profile.value.target.username}@${entry.profile.value.target.hostname}`
         : null;
   }

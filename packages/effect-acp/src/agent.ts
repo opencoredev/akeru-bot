@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -296,7 +297,7 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
     ...(options.logger ? { logger: options.logger } : {}),
     onNotification: (notification) => {
       if (
-        notification._tag === "ExtNotification" &&
+        Predicate.isTagged(notification, "ExtNotification") &&
         notification.method === AGENT_METHODS.session_cancel
       ) {
         return decodeCancelNotification(notification.params).pipe(
@@ -313,7 +314,7 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
         );
       }
 
-      if (notification._tag !== "ExtNotification") {
+      if (!Predicate.isTagged(notification, "ExtNotification")) {
         return Effect.void;
       }
 

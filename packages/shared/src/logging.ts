@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
@@ -114,7 +115,7 @@ export class RotatingFileSink {
   }
 
   write(chunk: string | Buffer): Promise<void> {
-    const bytes = typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length;
+    const bytes = Predicate.isString(chunk) ? Buffer.byteLength(chunk) : chunk.length;
 
     if (this.closed) {
       return Promise.reject(this.error("closed", new Error("Log sink is closed")));

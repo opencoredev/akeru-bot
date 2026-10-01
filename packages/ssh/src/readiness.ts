@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { waitForHttpReady as waitForHttpReadyShared } from "@akeru/shared/httpReadiness";
 import * as Effect from "effect/Effect";
 import { HttpClient } from "effect/unstable/http";
@@ -51,7 +52,7 @@ export const resolveLoopbackSshHttpBaseUrl = Effect.fn("ssh/tunnel.resolveLoopba
   function* (rawHttpBaseUrl: unknown): Effect.fn.Return<string, SshHttpBridgeError> {
     return yield* Effect.try({
       try: () => {
-        if (typeof rawHttpBaseUrl !== "string" || rawHttpBaseUrl.trim().length === 0) {
+        if (!Predicate.isString(rawHttpBaseUrl) || rawHttpBaseUrl.trim().length === 0) {
           throw new Error("Invalid SSH forwarded http base URL.");
         }
 

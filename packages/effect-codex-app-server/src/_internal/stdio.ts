@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
@@ -16,7 +17,7 @@ export const makeChildStdio = (handle: ChildProcessSpawner.ChildProcessHandle) =
     stdin: handle.stdout,
     stdout: () =>
       Sink.mapInput(handle.stdin, (chunk: string | Uint8Array) =>
-        typeof chunk === "string" ? encoder.encode(chunk) : chunk,
+        Predicate.isString(chunk) ? encoder.encode(chunk) : chunk,
       ),
     stderr: () => Sink.drain,
   });
@@ -34,7 +35,7 @@ export const makeInMemoryStdio = Effect.fn("makeInMemoryStdio")(function* () {
         Sink.forEach((chunk: string | Uint8Array) =>
           Queue.offer(
             output,
-            typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true }),
+            Predicate.isString(chunk) ? chunk : decoder.decode(chunk, { stream: true }),
           ),
         ),
       stderr: () => Sink.drain,

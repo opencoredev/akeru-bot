@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
@@ -159,7 +160,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
   ) {
     // RpcClient emits `@effect/rpc/Interrupt` when a pending request's fiber is interrupted.
     // ACP has no such method; agents log it as an error and cannot act on it, so drop it.
-    if (message._tag === "Interrupt") {
+    if (Predicate.isTagged(message, "Interrupt")) {
       return;
     }
 
@@ -169,14 +170,13 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
       payload: message,
     });
 
-    const method = message._tag === "Request" ? message.tag : undefined;
+    const method = Predicate.isTagged(message, "Request") ? message.tag : undefined;
 
-    const encodedRequestId =
-      message._tag === "Request"
-        ? message.id
-        : "requestId" in message
-          ? message.requestId
-          : undefined;
+    const encodedRequestId = Predicate.isTagged(message, "Request")
+      ? message.id
+      : "requestId" in message
+        ? message.requestId
+        : undefined;
 
     const requestId = encodedRequestId === "" ? undefined : encodedRequestId;
 
@@ -189,7 +189,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
       yield* logProtocol({
         direction: "outgoing",
         stage: "raw",
-        payload: typeof encoded === "string" ? encoded : new TextDecoder().decode(encoded),
+        payload: Predicate.isString(encoded) ? encoded : new TextDecoder().decode(encoded),
       });
 
       yield* Queue.offer(outgoing, encoded).pipe(Effect.asVoid);
@@ -426,11 +426,11 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
           return Queue.offer(clientQueue, message).pipe(Effect.asVoid);
         }
 
-        if (message.exit._tag === "Success") {
+        if (Predicate.isTagged(message.exit, "Success")) {
           return completeExtPendingSuccess(message.requestId, message.exit.value);
         }
 
-        const failure = message.exit.cause.find((entry) => entry._tag === "Fail");
+        const failure = message.exit.cause.find((entry) => Predicate.isTagged(entry, "Fail"));
 
         if (failure && isProtocolError(failure.error)) {
           return completeExtPendingFailure(
@@ -495,7 +495,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
       logProtocol({
         direction: "incoming",
         stage: "raw",
-        payload: typeof data === "string" ? data : new TextDecoder().decode(data),
+        payload: Predicate.isString(data) ? data : new TextDecoder().decode(data),
       }).pipe(
         Effect.flatMap(() =>
           Effect.try({
@@ -666,8 +666,8 @@ function isProtocolError(
     typeof value === "object" &&
     value !== null &&
     "code" in value &&
-    typeof value.code === "number" &&
+    Predicate.isNumber(value.code) &&
     "message" in value &&
-    typeof value.message === "string"
+    Predicate.isString(value.message)
   );
 }

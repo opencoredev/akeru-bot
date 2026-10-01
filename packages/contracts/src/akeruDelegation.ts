@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
@@ -284,17 +285,17 @@ const LegacyToTagged = LegacyDelegationRecord.pipe(
       },
       encode: ({ phase, ...base }) => ({
         ...base,
-        childThreadId: phase._tag === "Queued" ? null : phase.childThreadId,
-        childTurnId: phase._tag === "Queued" ? null : phase.childTurnId,
+        childThreadId: isQueuedPhase(phase) ? null : phase.childThreadId,
+        childTurnId: isQueuedPhase(phase) ? null : phase.childTurnId,
         state: akeruDelegationStateOf(phase),
-        result: phase._tag === "Completed" ? phase.result : null,
-        failure: phase._tag === "Failed" ? phase.failure : null,
-        startedAt: phase._tag === "Queued" ? null : phase.startedAt,
+        result: Predicate.isTagged(phase, "Completed") ? phase.result : null,
+        failure: Predicate.isTagged(phase, "Failed") ? phase.failure : null,
+        startedAt: isQueuedPhase(phase) ? null : phase.startedAt,
         completedAt: "completedAt" in phase ? phase.completedAt : null,
-        ...(phase._tag === "Running" ? { progress: phase.progress } : {}),
-        ...(phase._tag === "Blocked" ? { blockedReason: phase.reason } : {}),
-        ...(phase._tag === "Completed" ? { acknowledgedAt: phase.acknowledgedAt } : {}),
-        ...(phase._tag === "Canceled" ? { canceledBy: phase.canceledBy } : {}),
+        ...(Predicate.isTagged(phase, "Running") ? { progress: phase.progress } : {}),
+        ...(Predicate.isTagged(phase, "Blocked") ? { blockedReason: phase.reason } : {}),
+        ...(Predicate.isTagged(phase, "Completed") ? { acknowledgedAt: phase.acknowledgedAt } : {}),
+        ...(Predicate.isTagged(phase, "Canceled") ? { canceledBy: phase.canceledBy } : {}),
       }),
     }),
   ),
@@ -347,7 +348,7 @@ export const isAkeruDelegationResultPending = (
 ): record is AkeruDelegationRecord & {
   readonly phase: Extract<AkeruDelegationPhase, { _tag: "Completed" | "Failed" }>;
 } =>
-  (record.phase._tag === "Completed" || record.phase._tag === "Failed") &&
+  (Predicate.isTagged(record.phase, "Completed") || Predicate.isTagged(record.phase, "Failed")) &&
   record.phase.acknowledgedAt === null;
 
 /** Stamps a pending result as delivered to the parent bot. */
@@ -373,7 +374,7 @@ export const acknowledgeAkeruDelegation = (
 export const releaseAkeruDelegationAcknowledgement = (
   record: AkeruDelegationRecord,
 ): AkeruDelegationRecord =>
-  (record.phase._tag === "Completed" || record.phase._tag === "Failed") &&
+  (Predicate.isTagged(record.phase, "Completed") || Predicate.isTagged(record.phase, "Failed")) &&
   record.phase.acknowledgedAt !== null
     ? { ...record, phase: { ...record.phase, acknowledgedAt: null } }
     : record;
@@ -415,4 +416,10 @@ export class AkeruDelegationProviderUnsupportedError extends Schema.TaggedErrorC
   override get message(): string {
     return `${this.botName} runs on the ${this.driverKind} provider, which cannot receive handed-off work. Do the work yourself or pick a bot on another provider.`;
   }
+}
+
+function isQueuedPhase(
+  value: AkeruDelegationPhase,
+): value is Extract<AkeruDelegationPhase, { readonly _tag: "Queued" }> {
+  return Predicate.isTagged(value, "Queued");
 }

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -261,7 +262,7 @@ describe("executeAtomQuery", () => {
     expect(first._tag).toBe("Success");
     expect(second._tag).toBe("Success");
 
-    if (first._tag === "Success" && second._tag === "Success") {
+    if (Predicate.isTagged(first, "Success") && Predicate.isTagged(second, "Success")) {
       expect(first.value).toBe("first");
       expect(second.value).toBe("second");
     }

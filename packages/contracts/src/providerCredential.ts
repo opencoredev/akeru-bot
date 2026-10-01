@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ProviderInstanceConfig } from "./providerInstance.ts";
 import type { SubscriptionProviderId } from "./subscriptionAuth.ts";
 
@@ -60,7 +61,7 @@ export function instanceUsesSavedCredential(
         ? config.homePath
         : undefined;
 
-    if (typeof homePath === "string" && homePath.trim().length > 0) return false;
+    if (Predicate.isString(homePath) && homePath.trim().length > 0) return false;
   }
 
   if (provider === "openai-codex") {
@@ -71,7 +72,7 @@ export function instanceUsesSavedCredential(
         ? config.homePath
         : undefined;
 
-    if (typeof homePath === "string" && homePath.trim().length > 0) return false;
+    if (Predicate.isString(homePath) && homePath.trim().length > 0) return false;
   }
 
   return true;

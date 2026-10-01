@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "vite-plus/test";
 
 import { readImageDimensions } from "./imageDimensions.ts";
@@ -6,8 +7,8 @@ function bytes(...parts: ReadonlyArray<number | string | ReadonlyArray<number>>)
   const out: number[] = [];
 
   for (const part of parts) {
-    if (typeof part === "string") for (const c of part) out.push(c.charCodeAt(0));
-    else if (typeof part === "number") out.push(part);
+    if (Predicate.isString(part)) for (const c of part) out.push(c.charCodeAt(0));
+    else if (Predicate.isNumber(part)) out.push(part);
     else out.push(...part);
   }
 

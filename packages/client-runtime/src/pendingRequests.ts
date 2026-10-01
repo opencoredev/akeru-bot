@@ -58,9 +58,9 @@ function parseQuestions(value: unknown): UserInputQuestion[] {
     if (!Predicate.isObject(question) || !Array.isArray(question.options)) continue;
 
     if (
-      typeof question.id !== "string" ||
-      typeof question.header !== "string" ||
-      typeof question.question !== "string"
+      !Predicate.isString(question.id) ||
+      !Predicate.isString(question.header) ||
+      !Predicate.isString(question.question)
     ) {
       continue;
     }
@@ -68,7 +68,7 @@ function parseQuestions(value: unknown): UserInputQuestion[] {
     const options = question.options.flatMap((option) => {
       if (!Predicate.isObject(option)) return [];
 
-      if (typeof option.label !== "string" || typeof option.description !== "string") return [];
+      if (!Predicate.isString(option.label) || !Predicate.isString(option.description)) return [];
 
       return [{ label: option.label, description: option.description }];
     });
@@ -115,7 +115,7 @@ function isStaleRequestFailure(
   kind: keyof typeof staleRequestFailureDetails,
   payload: Record<string, unknown>,
 ): boolean {
-  const detail = typeof payload.detail === "string" ? payload.detail.toLowerCase() : "";
+  const detail = Predicate.isString(payload.detail) ? payload.detail.toLowerCase() : "";
 
   return staleRequestFailureDetails[kind].some((fragment) => detail.includes(fragment));
 }
@@ -135,13 +135,13 @@ export function derivePendingRequests(activities: ReadonlyArray<OrchestrationThr
     const payload = Predicate.isObject(activity.payload) ? activity.payload : undefined;
 
     if (!payload) continue;
-    const toolCallId = typeof payload.toolCallId === "string" ? payload.toolCallId : null;
+    const toolCallId = Predicate.isString(payload.toolCallId) ? payload.toolCallId : null;
     const data = Predicate.isObject(payload.data) ? payload.data : null;
 
     if (!toolCallId || !data) continue;
 
     const toolArgs =
-      data.args ?? (typeof data.command === "string" ? { command: data.command } : undefined);
+      data.args ?? (Predicate.isString(data.command) ? { command: data.command } : undefined);
 
     if (toolArgs !== undefined) toolArgsByCallId.set(toolCallId, toolArgs);
   }
@@ -181,11 +181,11 @@ export function derivePendingRequests(activities: ReadonlyArray<OrchestrationThr
         requestId,
         requestKind: requestKind ?? "command",
         createdAt: activity.createdAt,
-        ...(typeof payload.detail === "string" && payload.detail ? { detail: payload.detail } : {}),
-        ...(typeof payload.appName === "string" && payload.appName
+        ...(Predicate.isString(payload.detail) && payload.detail ? { detail: payload.detail } : {}),
+        ...(Predicate.isString(payload.appName) && payload.appName
           ? { appName: payload.appName }
           : {}),
-        ...(typeof payload.toolName === "string" && payload.toolName
+        ...(Predicate.isString(payload.toolName) && payload.toolName
           ? { toolName: payload.toolName }
           : {}),
         ...(args !== undefined ? { args } : {}),

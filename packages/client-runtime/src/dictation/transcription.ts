@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 
 import {
@@ -101,9 +102,11 @@ function failureReason(cause: unknown): string | null {
   const error = Cause.isCause(cause) ? Cause.squash(cause) : cause;
 
   if (typeof error !== "object" || error === null) return null;
-  const record = error as { readonly _tag?: unknown; readonly reason?: unknown };
+  const record = error;
 
-  return record._tag === "VoiceCallError" && typeof record.reason === "string"
+  return Predicate.isTagged(record, "VoiceCallError") &&
+    "reason" in record &&
+    Predicate.isString(record.reason)
     ? record.reason
     : null;
 }
@@ -151,7 +154,7 @@ export function createVoiceDictationTranscriber(options: {
 
       signal.throwIfAborted();
 
-      if (result._tag === "Success") return result.value.text;
+      if (Predicate.isTagged(result, "Success")) return result.value.text;
       const reason = failureReason(result.cause);
       throw new Error((reason && FAILURE_MESSAGES[reason]) ?? "Transcription failed. Try again.");
     } finally {

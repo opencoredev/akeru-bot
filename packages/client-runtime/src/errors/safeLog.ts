@@ -1,3 +1,5 @@
+import * as Predicate from "effect/Predicate";
+
 const SAFE_ERROR_LABEL =
   /^(?:Error|EvalError|RangeError|ReferenceError|SyntaxError|TypeError|URIError|AggregateError|DOMException|[A-Za-z][A-Za-z0-9]*(?:Error|Failure))$/;
 
@@ -14,7 +16,7 @@ export interface SafeErrorLogAttributes {
 }
 
 function readSafeLabel(value: unknown): string | undefined {
-  return typeof value === "string" && SAFE_ERROR_LABEL.test(value) ? value : undefined;
+  return Predicate.isString(value) && SAFE_ERROR_LABEL.test(value) ? value : undefined;
 }
 
 function sanitizeStackUrl(value: string): string {
@@ -70,7 +72,7 @@ function readTraceId(error: unknown): string | undefined {
       seen.add(current);
       const record = current as { readonly cause?: unknown; readonly traceId?: unknown };
 
-      if (typeof record.traceId === "string" && SAFE_TRACE_ID.test(record.traceId)) {
+      if (Predicate.isString(record.traceId) && SAFE_TRACE_ID.test(record.traceId)) {
         return record.traceId;
       }
 

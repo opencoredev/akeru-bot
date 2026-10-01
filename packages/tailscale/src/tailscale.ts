@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -168,7 +169,7 @@ const decodeTailscaleStatusJson = Schema.decodeEffect(Schema.fromJsonString(Tail
 function normalizeMagicDnsName(status: TailscaleStatusJson): string | null {
   const dnsName = status.Self?.DNSName;
 
-  if (typeof dnsName !== "string") {
+  if (!Predicate.isString(dnsName)) {
     return null;
   }
 
@@ -218,7 +219,7 @@ export const parseTailscaleStatus = (
 
       if (Array.isArray(rawIps)) {
         for (const address of rawIps) {
-          if (typeof address === "string" && isTailscaleIpv4Address(address)) {
+          if (Predicate.isString(address) && isTailscaleIpv4Address(address)) {
             tailnetIpv4Addresses.push(address);
           }
         }

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -39,7 +40,7 @@ function assertCarriesNoSecret(error: object, secret: string): void {
   const seen = new WeakSet<object>();
 
   const walk = (value: unknown, path: string): void => {
-    if (typeof value === "string") {
+    if (Predicate.isString(value)) {
       assert.notInclude(value, secret, `${path} leaked stderr`);
 
       return;

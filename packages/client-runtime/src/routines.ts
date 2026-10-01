@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off -- Routine labels format wall-clock run times with Intl for display.
 import type {
   BotId,
@@ -415,10 +416,10 @@ export function routineApprovalSummary(
       ? (record.schedule as Record<string, unknown>)
       : null;
 
-  const time = typeof schedule?.time === "string" ? schedule.time : null;
+  const time = Predicate.isString(schedule?.time) ? schedule.time : null;
 
   const weekdays = Array.isArray(schedule?.weekdays)
-    ? schedule.weekdays.filter((day): day is string => typeof day === "string")
+    ? schedule.weekdays.filter((day): day is string => Predicate.isString(day))
     : [];
 
   const kind =
@@ -439,12 +440,12 @@ export function routineApprovalSummary(
   const base = time ? t("{schedule} at {time}", { schedule: kind, time }) : null;
 
   const timezone =
-    typeof record?.timezone === "string" && record.timezone.trim() ? record.timezone.trim() : null;
+    Predicate.isString(record?.timezone) && record.timezone.trim() ? record.timezone.trim() : null;
 
   return {
-    name: typeof record?.name === "string" && record.name.trim() ? record.name : t("New routine"),
+    name: Predicate.isString(record?.name) && record.name.trim() ? record.name : t("New routine"),
     instructions:
-      typeof record?.instructions === "string" && record.instructions.trim()
+      Predicate.isString(record?.instructions) && record.instructions.trim()
         ? record.instructions
         : null,
     schedule: base && timezone ? `${base} (${timezone})` : base,

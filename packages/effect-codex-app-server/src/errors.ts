@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type * as SchemaIssue from "effect/SchemaIssue";
 
@@ -230,10 +231,10 @@ export class CodexAppServerProtocolParseError extends Schema.TaggedErrorClass<Co
     const presentFields = protocolMessageFields.filter((field) => field in message);
 
     const method =
-      "method" in message && typeof message.method === "string" ? message.method : undefined;
+      "method" in message && Predicate.isString(message.method) ? message.method : undefined;
 
     const requestId =
-      "id" in message && (typeof message.id === "string" || typeof message.id === "number")
+      "id" in message && (Predicate.isString(message.id) || Predicate.isNumber(message.id))
         ? String(message.id)
         : undefined;
 
@@ -318,7 +319,7 @@ export class CodexAppServerRequestError extends Schema.TaggedErrorClass<CodexApp
   }
 
   static fromAppServerError(error: CodexAppServerError, method: string) {
-    if (error._tag === "CodexAppServerRequestError") {
+    if (Predicate.isTagged(error, "CodexAppServerRequestError")) {
       return error;
     }
 

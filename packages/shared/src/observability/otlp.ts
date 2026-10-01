@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { OtlpResource, OtlpTracer } from "effect/unstable/observability";
 import {
   type TraceRecordEvent,
@@ -38,7 +39,7 @@ export function decodeOtlpTraceRecords(
             ),
             scopeName: scopeSpan.scope.name,
             scopeVersion:
-              "version" in scopeSpan.scope && typeof scopeSpan.scope.version === "string"
+              "version" in scopeSpan.scope && Predicate.isString(scopeSpan.scope.version)
                 ? scopeSpan.scope.version
                 : undefined,
             span,

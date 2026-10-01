@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { AkeruDelegationRecord, MessageId, TurnId } from "@akeru/contracts";
 
 /** The message fields the timeline needs to place rows. */
@@ -85,7 +86,7 @@ export function botChatTimeline<
   const positionByMessageId = new Map<string, number>();
   const lastPositionByTurnId = new Map<string, number>();
   rows.forEach((row, position) => {
-    if (row._tag !== "Message") return;
+    if (!Predicate.isTagged(row, "Message")) return;
     positionByMessageId.set(row.message.id, position);
 
     if (row.message.turnId !== null) lastPositionByTurnId.set(row.message.turnId, position);

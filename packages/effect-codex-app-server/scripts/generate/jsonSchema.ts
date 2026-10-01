@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import { type GithubContentEntry } from "./upstream.ts";
 import { type JsonSchemaFile } from "./types.ts";
@@ -24,7 +25,7 @@ export function normalizeNullableTypes(value: Schema.Json): Schema.Json {
     return normalizedObject;
   }
 
-  const normalizedTypes = typeValue.filter((entry): entry is string => typeof entry === "string");
+  const normalizedTypes = typeValue.filter((entry): entry is string => Predicate.isString(entry));
 
   if (normalizedTypes.length !== typeValue.length || !normalizedTypes.includes("null")) {
     return normalizedObject;
@@ -128,7 +129,7 @@ export function rewriteExternalRefs(
 
   return Object.fromEntries(
     Object.entries(value).map(([key, child]) => {
-      if (key === "$ref" && typeof child === "string" && child.startsWith("#/definitions/")) {
+      if (key === "$ref" && Predicate.isString(child) && child.startsWith("#/definitions/")) {
         const definitionName = child.slice("#/definitions/".length);
         const localRewrite = localDefinitionNames.get(definitionName);
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type AkeruMemoryArchiveV2,
   type AkeruMemoryImportClassification,
@@ -101,7 +102,7 @@ export function resolveImportConflicts(
 export function memoryArchiveSchemaVersion(value: unknown): number | null {
   if (typeof value !== "object" || value === null || !("schemaVersion" in value)) return null;
 
-  return typeof value.schemaVersion === "number" ? value.schemaVersion : null;
+  return Predicate.isNumber(value.schemaVersion) ? value.schemaVersion : null;
 }
 
 export function durableMemoryExportFileName(scope: DurableMemoryExportScope, threadId: string) {

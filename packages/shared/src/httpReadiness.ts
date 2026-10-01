@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -45,7 +46,7 @@ export function describeReadinessCause(cause: unknown): unknown {
     const nested = cause.cause;
 
     return {
-      ...(typeof tag === "string" ? { _tag: tag } : { name: cause.name }),
+      ...(Predicate.isString(tag) ? { _tag: tag } : { name: cause.name }),
       message: cause.message,
       ...(nested === undefined ? {} : { cause: describeReadinessCause(nested) }),
     };
@@ -58,8 +59,8 @@ export function describeReadinessCause(cause: unknown): unknown {
   const record = cause as Readonly<Record<string, unknown>>;
 
   return {
-    ...(typeof record._tag === "string" ? { _tag: record._tag } : {}),
-    ...(typeof record.message === "string" ? { message: record.message } : {}),
+    ...(Predicate.isString(record._tag) ? { _tag: record._tag } : {}),
+    ...(Predicate.isString(record.message) ? { message: record.message } : {}),
     ...(record.reason === undefined ? {} : { reason: describeReadinessCause(record.reason) }),
     ...(record.cause === undefined ? {} : { cause: describeReadinessCause(record.cause) }),
   };

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type {
   OrchestrationThreadActivity,
   ServerProvider,
@@ -235,12 +236,11 @@ export function latestTurnFailure(
         ? (activity.payload as Record<string, unknown>)
         : {};
 
-    const detail =
-      typeof payload.detail === "string"
-        ? payload.detail
-        : typeof payload.message === "string"
-          ? payload.message
-          : activity.summary;
+    const detail = Predicate.isString(payload.detail)
+      ? payload.detail
+      : Predicate.isString(payload.message)
+        ? payload.message
+        : activity.summary;
 
     return {
       detail,
@@ -266,7 +266,7 @@ const UNAVAILABILITY_VALUES = new Set<string>([
 export function isServerProviderUnavailability(
   value: unknown,
 ): value is ServerProviderUnavailability {
-  return typeof value === "string" && UNAVAILABILITY_VALUES.has(value);
+  return Predicate.isString(value) && UNAVAILABILITY_VALUES.has(value);
 }
 
 function boundedDetail(detail: string | null | undefined): string {

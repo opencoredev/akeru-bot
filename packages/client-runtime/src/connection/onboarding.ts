@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { DesktopSshEnvironmentTarget, EnvironmentId } from "@akeru/contracts";
 import { resolveRemotePairingTarget } from "@akeru/shared/remote";
 import * as Context from "effect/Context";
@@ -142,10 +143,9 @@ export const updateBearerConnection = Effect.fn(
   const credentials = yield* ConnectionCredentialStore.ConnectionCredentialStore;
   const entry = (yield* SubscriptionRef.get(registry.entries)).get(input.environmentId);
 
-  const credential =
-    entry?.target._tag === "BearerConnectionTarget"
-      ? yield* credentials.get(entry.target.connectionId)
-      : Option.none();
+  const credential = Predicate.isTagged(entry?.target, "BearerConnectionTarget")
+    ? yield* credentials.get(entry.target.connectionId)
+    : Option.none();
 
   const registration = yield* prepareBearerConnectionUpdate({
     input,
@@ -168,7 +168,7 @@ export const prepareBearerConnectionUpdate = Effect.fn(
   if (
     entry === undefined ||
     entry === null ||
-    entry.target._tag !== "BearerConnectionTarget" ||
+    !Predicate.isTagged(entry.target, "BearerConnectionTarget") ||
     Option.isNone(entry.profile) ||
     !isBearerProfile(entry.profile.value)
   ) {

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 
 const MAX_ERROR_TRACE_NODES = 128;
@@ -23,7 +24,7 @@ export function findErrorTraceId(error: unknown): string | null {
       readonly traceId?: unknown;
     };
 
-    if (typeof record.traceId === "string" && record.traceId.trim().length > 0) {
+    if (Predicate.isString(record.traceId) && record.traceId.trim().length > 0) {
       return record.traceId;
     }
 
