@@ -1,3 +1,5 @@
+import { testRpcClient } from "../test-support/services.ts";
+import * as Predicate from "effect/Predicate";
 import {
   type DesktopSshEnvironmentTarget,
   EnvironmentId,
@@ -174,29 +176,28 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
           return next;
         });
 
-        switch (registration._tag) {
-          case "BearerConnectionRegistration":
-            yield* Ref.update(storedProfiles, (current) => {
-              const next = new Map(current);
-              next.set(registration.profile.connectionId, registration.profile);
+        if (Predicate.isTagged(registration, "BearerConnectionRegistration")) {
+          yield* Ref.update(storedProfiles, (current) => {
+            const next = new Map(current);
+            next.set(registration.profile.connectionId, registration.profile);
 
-              return next;
-            });
-            yield* Ref.update(storedCredentials, (current) => {
-              const next = new Map(current);
-              next.set(registration.target.connectionId, registration.credential);
+            return next;
+          });
+          yield* Ref.update(storedCredentials, (current) => {
+            const next = new Map(current);
+            next.set(registration.target.connectionId, registration.credential);
 
-              return next;
-            });
+            return next;
+          });
 
-            return;
-          case "SshConnectionRegistration":
-            yield* Ref.update(storedProfiles, (current) => {
-              const next = new Map(current);
-              next.set(registration.profile.connectionId, registration.profile);
+          return;
+        } else if (Predicate.isTagged(registration, "SshConnectionRegistration")) {
+          yield* Ref.update(storedProfiles, (current) => {
+            const next = new Map(current);
+            next.set(registration.profile.connectionId, registration.profile);
 
-              return next;
-            });
+            return next;
+          });
         }
       }),
     remove: (target) =>
@@ -209,7 +210,10 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
           return next;
         });
 
-        if (target._tag === "BearerConnectionTarget" || target._tag === "SshConnectionTarget") {
+        if (
+          Predicate.isTagged(target, "BearerConnectionTarget") ||
+          Predicate.isTagged(target, "SshConnectionTarget")
+        ) {
           yield* Ref.update(storedProfiles, (current) => {
             const next = new Map(current);
             next.delete(target.connectionId);
@@ -337,7 +341,7 @@ export const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(func
 
         const session = yield* Effect.acquireRelease(
           Effect.succeed({
-            client: {} as RpcSession.RpcSession["client"],
+            client: testRpcClient({}),
             initialConfig: Effect.die(new Error("Config is not used by registry tests.")),
             ready: Effect.void,
             probe: Effect.void,

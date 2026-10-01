@@ -1,5 +1,7 @@
+import { testRpcClient } from "../test-support/services.ts";
 import {
   EnvironmentId,
+  DEFAULT_SERVER_SETTINGS,
   type ServerConfig,
   type ServerConfigStreamEvent,
   type ServerLifecycleWelcomePayload,
@@ -44,15 +46,34 @@ import {
   voiceCallHangupConcurrencyKey,
 } from "./server.ts";
 
-const CONFIG = {
+const CONFIG: ServerConfig = {
+  environment: {
+    environmentId: EnvironmentId.make("environment-1"),
+    label: "Test environment",
+    platform: { os: "linux", arch: "x64" },
+    serverVersion: "0.0.29",
+    capabilities: { repositoryIdentity: false },
+  },
+  auth: {
+    policy: "loopback-browser",
+    bootstrapMethods: [],
+    sessionMethods: [],
+    sessionCookieName: "t3_session",
+  },
+  cwd: "/tmp/workspace",
   availableEditors: [],
   issues: [],
-  keybindings: {},
-  keybindingsConfigPath: null,
-  observability: null,
+  keybindings: [],
+  keybindingsConfigPath: "/tmp/keybindings.json",
+  observability: {
+    logsDirectoryPath: "/tmp/logs",
+    localTracingEnabled: false,
+    otlpTracesEnabled: false,
+    otlpMetricsEnabled: false,
+  },
   providers: [],
-  settings: {},
-} as unknown as ServerConfig;
+  settings: DEFAULT_SERVER_SETTINGS,
+};
 
 const snapshotEvent = (config: ServerConfig): ServerConfigStreamEvent => ({
   version: 1,
@@ -348,9 +369,9 @@ describe("server state projection", () => {
     const config = (source: string, serverVersion: string) =>
       ({
         ...CONFIG,
-        environment: { serverVersion },
-        settings: { source },
-      }) as unknown as ServerConfig;
+        environment: { ...CONFIG.environment, serverVersion },
+        settings: Object.assign({}, CONFIG.settings, { source }),
+      }) satisfies ServerConfig;
 
     const cached = config("cache", "0.0.29");
     const staleLive = config("stale-live", "0.0.29");
@@ -393,9 +414,9 @@ describe("server state projection", () => {
     Effect.gen(function* () {
       const events = yield* Queue.unbounded<ServerConfigStreamEvent>();
 
-      const client = {
+      const client = testRpcClient({
         [WS_METHODS.subscribeServerConfig]: () => Stream.fromQueue(events),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
         target: TARGET,
@@ -457,9 +478,9 @@ describe("server state projection", () => {
 
   it.effect("does not rewrite cached configuration when no live update arrives", () =>
     Effect.gen(function* () {
-      const client = {
+      const client = testRpcClient({
         [WS_METHODS.subscribeServerConfig]: () => Stream.empty,
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
         target: TARGET,

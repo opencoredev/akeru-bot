@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import { type GithubContentEntry } from "./upstream.ts";
 import { type JsonSchemaFile } from "./types.ts";
@@ -8,23 +9,28 @@ export function normalizeNullableTypes(value: Schema.Json): Schema.Json {
     return value.map(normalizeNullableTypes);
   }
 
-  if (value === null || typeof value !== "object") {
+  if (
+    value === null ||
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
+  ) {
     return value;
   }
 
-  const normalizedEntries = Object.entries(value).map(([key, child]) => [
+  const normalizedEntries = Object.entries(value).map(([key, child]): [string, Schema.Json] => [
     key,
     normalizeNullableTypes(child),
   ]);
 
-  const normalizedObject = Object.fromEntries(normalizedEntries) as Record<string, Schema.Json>;
+  const normalizedObject = Object.fromEntries(normalizedEntries);
   const typeValue = normalizedObject.type;
 
   if (!Array.isArray(typeValue)) {
     return normalizedObject;
   }
 
-  const normalizedTypes = typeValue.filter((entry): entry is string => typeof entry === "string");
+  const normalizedTypes = typeValue.filter((entry): entry is string => Predicate.isString(entry));
 
   if (normalizedTypes.length !== typeValue.length || !normalizedTypes.includes("null")) {
     return normalizedObject;
@@ -62,7 +68,12 @@ export function stripNullDefaults(value: Schema.Json): Schema.Json {
     return value.map(stripNullDefaults);
   }
 
-  if (value === null || typeof value !== "object") {
+  if (
+    value === null ||
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
+  ) {
     return value;
   }
 
@@ -70,7 +81,7 @@ export function stripNullDefaults(value: Schema.Json): Schema.Json {
     Object.entries(value)
       .filter(([key, child]) => !(key === "default" && child === null))
       .map(([key, child]) => [key, stripNullDefaults(child)]),
-  ) as Schema.Json;
+  );
 }
 
 export function buildJsonSchemaFiles(
@@ -122,13 +133,18 @@ export function rewriteExternalRefs(
     );
   }
 
-  if (value === null || typeof value !== "object") {
+  if (
+    value === null ||
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
+  ) {
     return value;
   }
 
   return Object.fromEntries(
     Object.entries(value).map(([key, child]) => {
-      if (key === "$ref" && typeof child === "string" && child.startsWith("#/definitions/")) {
+      if (key === "$ref" && Predicate.isString(child) && child.startsWith("#/definitions/")) {
         const definitionName = child.slice("#/definitions/".length);
         const localRewrite = localDefinitionNames.get(definitionName);
 
@@ -167,5 +183,5 @@ export function rewriteExternalRefs(
         ),
       ];
     }),
-  ) as Schema.Json;
+  );
 }

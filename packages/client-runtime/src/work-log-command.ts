@@ -1,19 +1,25 @@
+import { flow } from "effect/Function";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import { TrimmedNonEmptyString } from "@akeru/contracts";
+import * as Predicate from "effect/Predicate";
 import { isToolLifecycleItemType } from "@akeru/contracts";
 import { requestKindFromRequestType } from "./pendingRequests.ts";
 
-export function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
-}
+const RuntimeRecord = Schema.declare(
+  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Tool data is an opaque provider object; each presentation field is decoded separately.
+  (value: unknown): value is Record<string, unknown> => Predicate.isObjectOrArray(value),
+);
 
-export function asTrimmedString(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
+type RuntimeRecord = typeof RuntimeRecord.Type;
 
-  const trimmed = value.trim();
+const decodeRuntimeRecord = Schema.decodeUnknownOption(RuntimeRecord);
 
-  return trimmed.length > 0 ? trimmed : null;
-}
+const decodeTrimmedString = Schema.decodeUnknownOption(TrimmedNonEmptyString);
+
+export const asRecord = flow(decodeRuntimeRecord, Option.getOrNull);
+
+export const asTrimmedString = flow(decodeTrimmedString, Option.getOrNull);
 
 function trimMatchingOuterQuotes(value: string): string {
   const trimmed = value.trim();
@@ -97,7 +103,7 @@ const SHELL_WRAPPER_SPECS = [
 
 function findShellWrapperSpec(shell: string) {
   return SHELL_WRAPPER_SPECS.find((spec) =>
-    (spec.executables as ReadonlyArray<string>).includes(shell),
+    spec.executables.some((executable) => executable === shell),
   );
 }
 
@@ -145,7 +151,13 @@ function formatCommandArrayPart(value: string): string {
   return /[\s"'`]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
 }
 
-function formatCommandValue(value: unknown): string | null {
+const CommandValue = Schema.Union([Schema.String, Schema.Array(Schema.Unknown)]);
+
+type CommandValue = typeof CommandValue.Type;
+
+const decodeCommandValue = Schema.decodeUnknownOption(CommandValue);
+
+function formatDecodedCommandValue(value: CommandValue): string | null {
   const direct = asTrimmedString(value);
 
   if (direct) {
@@ -173,13 +185,22 @@ function formatCommandValue(value: unknown): string | null {
   return parts.map((part) => formatCommandArrayPart(part)).join(" ");
 }
 
-function normalizeCommandValue(value: unknown): string | null {
+const formatCommandValue = flow(
+  decodeCommandValue,
+  Option.map(formatDecodedCommandValue),
+  Option.getOrNull,
+);
+
+function normalizeCommandValue(value: Parameters<typeof formatCommandValue>[0]): string | null {
   const formatted = formatCommandValue(value);
 
   return formatted ? unwrapKnownShellCommandWrapper(formatted) : null;
 }
 
-function toRawToolCommand(value: unknown, normalizedCommand: string | null): string | null {
+function toRawToolCommand(
+  value: Parameters<typeof formatCommandValue>[0],
+  normalizedCommand: string | null,
+): string | null {
   const formatted = formatCommandValue(value);
 
   if (!formatted || normalizedCommand === null) {
@@ -189,10 +210,12 @@ function toRawToolCommand(value: unknown, normalizedCommand: string | null): str
   return formatted === normalizedCommand ? null : formatted;
 }
 
-export function extractToolCommand(payload: Record<string, unknown> | null): {
+type ExtractToolCommandResult = {
   command: string | null;
   rawCommand: string | null;
-} {
+};
+
+export function extractToolCommand(payload: RuntimeRecord | null): ExtractToolCommandResult {
   const data = asRecord(payload?.data);
   const item = asRecord(data?.item);
   const itemResult = asRecord(item?.result);
@@ -227,10 +250,12 @@ export function extractToolCommand(payload: Record<string, unknown> | null): {
   };
 }
 
-export function stripTrailingExitCode(value: string): {
+type StripTrailingExitCodeResult = {
   output: string | null;
   exitCode?: number | undefined;
-} {
+};
+
+export function stripTrailingExitCode(value: string): StripTrailingExitCodeResult {
   const trimmed = value.trim();
 
   const match = /^(?<output>[\s\S]*?)(?:\s*<exited with exit code (?<code>\d+)>)\s*$/i.exec(
@@ -252,15 +277,15 @@ export function stripTrailingExitCode(value: string): {
   };
 }
 
-export function extractWorkLogItemType(payload: Record<string, unknown> | null) {
-  if (typeof payload?.itemType === "string" && isToolLifecycleItemType(payload.itemType)) {
+export function extractWorkLogItemType(payload: RuntimeRecord | null) {
+  if (Predicate.isString(payload?.itemType) && isToolLifecycleItemType(payload.itemType)) {
     return payload.itemType;
   }
 
   return undefined;
 }
 
-export function extractWorkLogRequestKind(payload: Record<string, unknown> | null) {
+export function extractWorkLogRequestKind(payload: RuntimeRecord | null) {
   if (
     payload?.requestKind === "command" ||
     payload?.requestKind === "file-read" ||
@@ -272,7 +297,11 @@ export function extractWorkLogRequestKind(payload: Record<string, unknown> | nul
   return requestKindFromRequestType(payload?.requestType) ?? undefined;
 }
 
-function pushChangedFile(target: string[], seen: Set<string>, value: unknown) {
+function pushChangedFile(
+  target: string[],
+  seen: Set<string>,
+  value: Parameters<typeof asTrimmedString>[0],
+) {
   const normalized = asTrimmedString(value);
 
   if (!normalized || seen.has(normalized)) {
@@ -283,7 +312,12 @@ function pushChangedFile(target: string[], seen: Set<string>, value: unknown) {
   target.push(normalized);
 }
 
-function collectChangedFiles(value: unknown, target: string[], seen: Set<string>, depth: number) {
+function collectChangedFiles(
+  value: Parameters<typeof asRecord>[0],
+  target: string[],
+  seen: Set<string>,
+  depth: number,
+) {
   if (depth > 4 || target.length >= 12) {
     return;
   }
@@ -337,7 +371,7 @@ function collectChangedFiles(value: unknown, target: string[], seen: Set<string>
   }
 }
 
-export function extractChangedFiles(payload: Record<string, unknown> | null): string[] {
+export function extractChangedFiles(payload: RuntimeRecord | null): string[] {
   const changedFiles: string[] = [];
   const seen = new Set<string>();
   collectChangedFiles(asRecord(payload?.data), changedFiles, seen, 0);

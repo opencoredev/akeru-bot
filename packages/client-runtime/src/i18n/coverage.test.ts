@@ -106,7 +106,7 @@ function literals(source: string, pattern: RegExp): string[] {
   return Array.from(source.matchAll(pattern), (match) => JSON.parse(match[1] ?? '""') as string);
 }
 
-function finiteLabelSources(): Record<string, string[]> {
+function finiteLabelSources() {
   const settings = read("apps/web/src/components/settings/settingsSearch.ts");
   const dialog = read("apps/web/src/components/settings/SettingsDialog.tsx");
   const pairing = read("apps/web/src/components/auth/PairingRouteSurface.tsx");

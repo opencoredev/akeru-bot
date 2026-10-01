@@ -1,3 +1,5 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { OtlpResource, OtlpTracer } from "effect/unstable/observability";
 import {
   type TraceRecordEvent,
@@ -10,13 +12,13 @@ import {
 } from "./types.ts";
 import { compactTraceAttributes } from "./attributes.ts";
 
-const SPAN_KIND_MAP: Record<number, OtlpTraceRecord["kind"]> = {
-  1: "internal",
-  2: "server",
-  3: "client",
-  4: "producer",
-  5: "consumer",
-};
+const SPAN_KIND_MAP = new Map<number, string>([
+  [1, "internal"],
+  [2, "server"],
+  [3, "client"],
+  [4, "producer"],
+  [5, "consumer"],
+]);
 
 export function decodeOtlpTraceRecords(
   payload: OtlpTracer.TraceData,
@@ -38,7 +40,7 @@ export function decodeOtlpTraceRecords(
             ),
             scopeName: scopeSpan.scope.name,
             scopeVersion:
-              "version" in scopeSpan.scope && typeof scopeSpan.scope.version === "string"
+              "version" in scopeSpan.scope && Predicate.isString(scopeSpan.scope.version)
                 ? scopeSpan.scope.version
                 : undefined,
             span,
@@ -52,8 +54,8 @@ export function decodeOtlpTraceRecords(
 }
 
 function otlpSpanToTraceRecord(input: {
-  readonly resourceAttributes: Readonly<Record<string, unknown>>;
-  readonly scopeAttributes: Readonly<Record<string, unknown>>;
+  readonly resourceAttributes: Readonly<Record<string, Schema.Json>>;
+  readonly scopeAttributes: Readonly<Record<string, Schema.Json>>;
   readonly scopeName: string | undefined;
   readonly scopeVersion: string | undefined;
   readonly span: OtlpSpan;
@@ -117,8 +119,8 @@ function decodeLinks(input: ReadonlyArray<OtlpSpanLink>): ReadonlyArray<TraceRec
 
 function decodeAttributes(
   input: ReadonlyArray<OtlpResource.KeyValue>,
-): Readonly<Record<string, unknown>> {
-  const entries: Record<string, unknown> = {};
+): Readonly<Record<string, Schema.Json>> {
+  const entries: Record<string, Schema.Json> = {};
 
   for (const attribute of input) {
     entries[attribute.key] = decodeValue(attribute.value);
@@ -127,7 +129,7 @@ function decodeAttributes(
   return compactTraceAttributes(entries);
 }
 
-function decodeValue(input: OtlpResource.AnyValue | null | undefined): unknown {
+function decodeValue(input: OtlpResource.AnyValue | null | undefined): Schema.Json {
   if (input == null) {
     return null;
   }
@@ -149,7 +151,12 @@ function decodeValue(input: OtlpResource.AnyValue | null | undefined): unknown {
   }
 
   if ("bytesValue" in input) {
-    return input.bytesValue;
+    return Object.fromEntries(
+      Array.from(input.bytesValue.entries(), ([key, value]): [string, number] => [
+        String(key),
+        value,
+      ]),
+    );
   }
 
   if (input.arrayValue) {
@@ -164,7 +171,7 @@ function decodeValue(input: OtlpResource.AnyValue | null | undefined): unknown {
 }
 
 function normalizeSpanKind(input: number): OtlpTraceRecord["kind"] {
-  return SPAN_KIND_MAP[input] || "internal";
+  return SPAN_KIND_MAP.get(input) || "internal";
 }
 
 function parseBigInt(input: string): bigint {

@@ -1,5 +1,9 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import type { ProviderInstanceConfig } from "./providerInstance.ts";
 import type { SubscriptionProviderId } from "./subscriptionAuth.ts";
+
+const decodeConfigJson = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 /** Environment variables that give a provider instance its own connection. */
 export const SUBSCRIPTION_CONNECTION_ENV_KEYS: Partial<
@@ -35,13 +39,23 @@ export function instanceUsesSavedCredential(
 
     if (inlineConfig) {
       try {
-        const config = JSON.parse(inlineConfig) as {
-          readonly provider?: {
-            readonly "opencode-go"?: { readonly options?: Record<string, unknown> };
-          };
-        };
+        const config = decodeConfigJson(inlineConfig);
 
-        const options = config.provider?.["opencode-go"]?.options;
+        if (config === null) return false;
+
+        // Optional access also accepts JSON primitives, matching provider CLI config handling.
+        const providerConfig =
+          Predicate.isObject(config) && "provider" in config ? config.provider : undefined;
+
+        const instanceConfig =
+          Predicate.isObject(providerConfig) && "opencode-go" in providerConfig
+            ? providerConfig["opencode-go"]
+            : undefined;
+
+        const options =
+          Predicate.isObject(instanceConfig) && "options" in instanceConfig
+            ? instanceConfig.options
+            : undefined;
 
         if (options && (Object.hasOwn(options, "apiKey") || Object.hasOwn(options, "baseURL"))) {
           return false;
@@ -56,22 +70,18 @@ export function instanceUsesSavedCredential(
     const config = instance.config;
 
     const homePath =
-      typeof config === "object" && config !== null && "homePath" in config
-        ? config.homePath
-        : undefined;
+      Predicate.isObjectOrArray(config) && "homePath" in config ? config.homePath : undefined;
 
-    if (typeof homePath === "string" && homePath.trim().length > 0) return false;
+    if (Predicate.isString(homePath) && homePath.trim().length > 0) return false;
   }
 
   if (provider === "openai-codex") {
     const config = instance.config;
 
     const homePath =
-      typeof config === "object" && config !== null && "homePath" in config
-        ? config.homePath
-        : undefined;
+      Predicate.isObjectOrArray(config) && "homePath" in config ? config.homePath : undefined;
 
-    if (typeof homePath === "string" && homePath.trim().length > 0) return false;
+    if (Predicate.isString(homePath) && homePath.trim().length > 0) return false;
   }
 
   return true;

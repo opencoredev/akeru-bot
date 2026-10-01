@@ -192,7 +192,11 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
         "ACP protocol operation 'encode-message' failed for method 'x/test'.",
       );
 
-      const circular: Record<string, unknown> = {};
+      interface CircularPayload {
+        self?: CircularPayload;
+      }
+
+      const circular: CircularPayload = {};
       circular.self = circular;
       const circularError = yield* transport.notify("x/test", circular).pipe(Effect.flip);
       assert.instanceOf(circularError, AcpError.AcpProtocolParseError);

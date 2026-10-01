@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -208,7 +209,7 @@ describe("PreviewAutomationError", () => {
 
     expect(error._tag).toBe("PreviewAutomationTargetNotEditableError");
 
-    if (error._tag === "PreviewAutomationTargetNotEditableError") {
+    if (Predicate.isTagged(error, "PreviewAutomationTargetNotEditableError")) {
       expect(error.selectorKind).toBe("focused-element");
       expect(error.message).toBe("Preview automation type requires an editable focused element.");
     }

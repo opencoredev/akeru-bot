@@ -15,9 +15,15 @@ export function createCatalogLoader(registry: CatalogRegistry = catalogRegistry)
   const listeners = new Set<() => void>();
   let selection = 0;
 
-  let snapshot = {
+  interface CatalogSnapshot {
+    selectedLocale: string;
+    status: "ready" | "loading" | "error";
+    translator: ReturnType<typeof createTranslator>;
+  }
+
+  let snapshot: CatalogSnapshot = {
     selectedLocale: "en",
-    status: "ready" as "ready" | "loading" | "error",
+    status: "ready",
     translator: createTranslator("en"),
   };
 

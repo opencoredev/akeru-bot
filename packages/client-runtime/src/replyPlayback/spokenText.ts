@@ -34,18 +34,18 @@ function delimiterEnds(source: string, open: string, close: string) {
 }
 
 function decodeEntity(entity: string) {
-  const named: Record<string, string> = {
-    amp: "&",
-    lt: "<",
-    gt: ">",
-    quot: '"',
-    apos: "'",
-    nbsp: " ",
-  };
+  const named = new Map<string, string>([
+    ["amp", "&"],
+    ["lt", "<"],
+    ["gt", ">"],
+    ["quot", '"'],
+    ["apos", "'"],
+    ["nbsp", " "],
+  ]);
 
   const name = entity.slice(1, -1);
 
-  if (!name.startsWith("#")) return named[name] ?? entity;
+  if (!name.startsWith("#")) return named.get(name) ?? entity;
   const hexadecimal = name[1]?.toLowerCase() === "x";
   const value = Number.parseInt(name.slice(hexadecimal ? 2 : 1), hexadecimal ? 16 : 10);
 

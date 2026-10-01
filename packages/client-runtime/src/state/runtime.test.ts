@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "@effect/vitest";
 import { EnvironmentId } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
@@ -74,7 +75,7 @@ describe("atom command result helpers", () => {
 
     expect(result._tag).toBe("Success");
 
-    if (result._tag === "Success") {
+    if (Predicate.isTagged(result, "Success")) {
       expect(result.value).toBe(6);
     }
   });
@@ -87,7 +88,7 @@ describe("atom command result helpers", () => {
 
     expect(result._tag).toBe("Failure");
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       expect(Cause.squash(result.cause)).toBe("nope");
     }
   });
@@ -109,7 +110,7 @@ describe("atom command result helpers", () => {
     const failure = await settlePromise(() => Promise.reject(defect));
     expect(failure._tag).toBe("Failure");
 
-    if (failure._tag === "Failure") {
+    if (Predicate.isTagged(failure, "Failure")) {
       expect(Cause.hasDies(failure.cause)).toBe(true);
       expect(Cause.squash(failure.cause)).toBe(defect);
     }
@@ -319,7 +320,7 @@ describe("runtime command runner", () => {
 
     expect(result._tag).toBe("Failure");
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       expect(Cause.hasDies(result.cause)).toBe(true);
       expect(Cause.squash(result.cause)).toBe(defect);
     }

@@ -1,3 +1,4 @@
+import type { PreviewAutomationResponse } from "./previewAutomation.ts";
 import {
   PreviewAutomationClickInput,
   PreviewAutomationEvaluateInput,
@@ -201,7 +202,10 @@ export interface DesktopPreviewBridge {
     type: (tabId: string, input: PreviewAutomationTypeInput) => Promise<void>;
     press: (tabId: string, input: PreviewAutomationPressInput) => Promise<void>;
     scroll: (tabId: string, input: PreviewAutomationScrollInput) => Promise<void>;
-    evaluate: (tabId: string, input: PreviewAutomationEvaluateInput) => Promise<unknown>;
+    evaluate: (
+      tabId: string,
+      input: PreviewAutomationEvaluateInput,
+    ) => Promise<PreviewAutomationResponse["result"]>;
     waitFor: (tabId: string, input: PreviewAutomationWaitForInput) => Promise<void>;
   };
   onStateChange: (listener: (tabId: string, state: DesktopPreviewTabState) => void) => () => void;

@@ -1,6 +1,9 @@
+import type { ProviderInstanceConfig } from "../providerInstance.ts";
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { TrimmedString } from "../baseSchemas.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This module composes provider setting schemas, not an Effect service.
 import { makeBinaryPathSetting, makeProviderSettingsSchema } from "./providerForms.ts";
 
 export const CodexSettings = makeProviderSettingsSchema(
@@ -242,14 +245,20 @@ export type OpenCodeSettings = typeof OpenCodeSettings.Type;
  * flag going forward; this reader exists for legacy `providers.<kind>`
  * blobs and old settings files that still carry the flag in-config.
  */
-export const providerInstanceConfigEnabledFlag = (config: unknown): boolean | undefined => {
-  if (config === null || typeof config !== "object" || Array.isArray(config)) {
+export const providerInstanceConfigEnabledFlag = (
+  config: ProviderInstanceConfig["config"],
+): boolean | undefined => {
+  if (
+    config === null ||
+    !(Predicate.isObjectOrArray(config) || config === null) ||
+    Array.isArray(config)
+  ) {
     return undefined;
   }
 
   const enabled = "enabled" in config ? config.enabled : undefined;
 
-  return typeof enabled === "boolean" ? enabled : undefined;
+  return Predicate.isBoolean(enabled) ? enabled : undefined;
 };
 
 export const CodexSettingsPatch = Schema.Struct({

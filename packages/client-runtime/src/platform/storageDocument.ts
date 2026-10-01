@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Schema from "effect/Schema";
 
 import {
@@ -49,13 +50,19 @@ export function removeCatalogValue<A>(
 }
 
 function connectionIdOf(target: ConnectionTarget): string | null {
-  switch (target._tag) {
-    case "PrimaryConnectionTarget":
-      return null;
-    case "BearerConnectionTarget":
-    case "SshConnectionTarget":
-      return target.connectionId;
-  }
+  return Match.value(target).pipe(
+    Match.tagsExhaustive({
+      PrimaryConnectionTarget: () => {
+        return null;
+      },
+      BearerConnectionTarget: (target) => {
+        return target.connectionId;
+      },
+      SshConnectionTarget: (target) => {
+        return target.connectionId;
+      },
+    }),
+  );
 }
 
 function removeConnectionMetadata(
@@ -99,30 +106,34 @@ export function registerConnectionInCatalog(
     targets: replaceCatalogValue(cleaned.targets, (value) => value.environmentId, target),
   };
 
-  switch (registration._tag) {
-    case "BearerConnectionRegistration":
-      return {
-        ...next,
-        profiles: replaceCatalogValue(
-          next.profiles,
-          (value) => value.connectionId,
-          registration.profile,
-        ),
-        credentials: replaceCatalogValue(next.credentials, (value) => value.connectionId, {
-          connectionId: registration.target.connectionId,
-          credential: registration.credential,
-        }),
-      };
-    case "SshConnectionRegistration":
-      return {
-        ...next,
-        profiles: replaceCatalogValue(
-          next.profiles,
-          (value) => value.connectionId,
-          registration.profile,
-        ),
-      };
-  }
+  return Match.value(registration).pipe(
+    Match.tagsExhaustive({
+      BearerConnectionRegistration: (registration) => {
+        return {
+          ...next,
+          profiles: replaceCatalogValue(
+            next.profiles,
+            (value) => value.connectionId,
+            registration.profile,
+          ),
+          credentials: replaceCatalogValue(next.credentials, (value) => value.connectionId, {
+            connectionId: registration.target.connectionId,
+            credential: registration.credential,
+          }),
+        };
+      },
+      SshConnectionRegistration: (registration) => {
+        return {
+          ...next,
+          profiles: replaceCatalogValue(
+            next.profiles,
+            (value) => value.connectionId,
+            registration.profile,
+          ),
+        };
+      },
+    }),
+  );
 }
 
 export function removeConnectionFromCatalog(

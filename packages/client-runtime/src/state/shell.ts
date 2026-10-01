@@ -125,12 +125,12 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         },
   );
 
-  const setStreamError = (error: unknown) =>
+  const setStreamError = (cause: unknown) =>
     Ref.set(awaitingCompletion, false).pipe(
       Effect.andThen(Effect.logWarning("Could not synchronize the environment shell.")),
       Effect.annotateLogs({
         environmentId,
-        ...safeErrorLogAttributes(error),
+        ...safeErrorLogAttributes(cause),
       }),
       Effect.andThen(
         SubscriptionRef.update(state, (current) => ({

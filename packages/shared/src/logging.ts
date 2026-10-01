@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
@@ -84,10 +85,17 @@ export class RotatingFileSink {
       maxBufferedChunks: options.maxBufferedChunks ?? 512,
     };
 
-    for (const [option, received] of Object.entries(limits)) {
+    for (const option of [
+      "maxBytes",
+      "maxFiles",
+      "maxBufferedBytes",
+      "maxBufferedChunks",
+    ] as const) {
+      const received = limits[option];
+
       if (!Number.isSafeInteger(received) || received < 1) {
         throw new RotatingFileSinkConfigurationError({
-          option: option as keyof typeof limits,
+          option,
           received,
           minimum: 1,
         });
@@ -114,7 +122,7 @@ export class RotatingFileSink {
   }
 
   write(chunk: string | Buffer): Promise<void> {
-    const bytes = typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length;
+    const bytes = Predicate.isString(chunk) ? Buffer.byteLength(chunk) : chunk.length;
 
     if (this.closed) {
       return Promise.reject(this.error("closed", new Error("Log sink is closed")));

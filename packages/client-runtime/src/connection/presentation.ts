@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import type { ServerConfig } from "@akeru/contracts";
 import * as Option from "effect/Option";
 
@@ -103,18 +105,25 @@ export function presentEnvironmentConnection(
 }
 
 export function connectionCatalogDisplayUrl(entry: ConnectionCatalogEntry): string | null {
-  switch (entry.target._tag) {
-    case "PrimaryConnectionTarget":
-      return entry.target.httpBaseUrl;
-    case "BearerConnectionTarget":
-      return Option.isSome(entry.profile) && entry.profile.value._tag === "BearerConnectionProfile"
-        ? entry.profile.value.httpBaseUrl
-        : null;
-    case "SshConnectionTarget":
-      return Option.isSome(entry.profile) && entry.profile.value._tag === "SshConnectionProfile"
-        ? `${entry.profile.value.target.username}@${entry.profile.value.target.hostname}`
-        : null;
-  }
+  return Match.value(entry.target).pipe(
+    Match.tagsExhaustive({
+      PrimaryConnectionTarget: (value) => {
+        return value.httpBaseUrl;
+      },
+      BearerConnectionTarget: () => {
+        return Option.isSome(entry.profile) &&
+          Predicate.isTagged(entry.profile.value, "BearerConnectionProfile")
+          ? entry.profile.value.httpBaseUrl
+          : null;
+      },
+      SshConnectionTarget: () => {
+        return Option.isSome(entry.profile) &&
+          Predicate.isTagged(entry.profile.value, "SshConnectionProfile")
+          ? `${entry.profile.value.target.username}@${entry.profile.value.target.hostname}`
+          : null;
+      },
+    }),
+  );
 }
 
 export function connectionPhaseMessage(

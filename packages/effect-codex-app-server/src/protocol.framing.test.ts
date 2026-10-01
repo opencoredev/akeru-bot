@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -10,6 +11,33 @@ import { makeInMemoryStdio } from "./_internal/stdio.ts";
 import { encodeUnknownJsonString, encoder, encodeJsonl } from "./protocol.test-support.ts";
 
 it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
+  it.effect("routes notification payloads containing overflowing JSON numbers", () =>
+    Effect.gen(function* () {
+      const { stdio, input } = yield* makeInMemoryStdio();
+      const notifications: Array<CodexProtocol.CodexAppServerIncomingNotification> = [];
+      const termination = yield* Deferred.make<CodexError.CodexAppServerError>();
+      yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
+        stdio,
+        onNotification: (notification) =>
+          Effect.sync(() => {
+            notifications.push(notification);
+          }),
+        onTermination: (error) => Deferred.succeed(termination, error).pipe(Effect.asVoid),
+      });
+
+      yield* Queue.offer(input, encoder.encode('{"method":"x/probe","params":{"value":1e400}}\n'));
+      yield* Queue.end(input);
+
+      assert.instanceOf(
+        yield* Deferred.await(termination),
+        CodexError.CodexAppServerInputStreamEndedError,
+      );
+      assert.deepEqual(notifications, [
+        { method: "x/probe", params: { value: Number.POSITIVE_INFINITY } },
+      ]);
+    }),
+  );
+
   it.effect("routes a large notification fragmented across thousands of input chunks", () =>
     Effect.gen(function* () {
       const { stdio, input, output } = yield* makeInMemoryStdio();
@@ -150,7 +178,8 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
       const event = events.find(({ stage }) => stage === "decode_failed");
       assert.exists(event);
       assert.equal(event.direction, "incoming");
-      const payload = event.payload as Record<string, unknown>;
+      const payload = event.payload;
+      assert(Predicate.isObject(payload));
       assert.equal(payload.operation, "decode-wire-message");
       assert.isNumber(payload.issueCount);
       assert.isArray(payload.issueKinds);

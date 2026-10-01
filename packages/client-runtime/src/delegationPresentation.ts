@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   AKERU_DELEGATION_TRANSITIONS,
   akeruDelegationStateOf,
@@ -40,7 +41,7 @@ export function presentDelegation(delegation: AkeruDelegationRecord): Delegation
   const state = akeruDelegationStateOf(phase);
 
   const delivery: DelegationDelivery | null =
-    phase._tag === "Completed" || phase._tag === "Failed"
+    Predicate.isTagged(phase, "Completed") || Predicate.isTagged(phase, "Failed")
       ? phase.acknowledgedAt === null
         ? "pending"
         : "delivered"
@@ -51,16 +52,15 @@ export function presentDelegation(delegation: AkeruDelegationRecord): Delegation
     terminal: isAkeruDelegationTerminal(phase),
     // Records written before the phase union can decode without details; the text is then empty.
     // Older failures stored a full server stack, so only its first readable line is shown.
-    outcome:
-      phase._tag === "Completed"
-        ? { kind: "result", text: phase.result?.summary ?? "" }
-        : phase._tag === "Failed"
-          ? { kind: "failure", text: withoutErrorStack(phase.failure?.message ?? "") }
-          : phase._tag === "Blocked"
-            ? { kind: "blocked", text: withoutErrorStack(phase.reason) }
-            : null,
+    outcome: Predicate.isTagged(phase, "Completed")
+      ? { kind: "result", text: phase.result?.summary ?? "" }
+      : Predicate.isTagged(phase, "Failed")
+        ? { kind: "failure", text: withoutErrorStack(phase.failure?.message ?? "") }
+        : Predicate.isTagged(phase, "Blocked")
+          ? { kind: "blocked", text: withoutErrorStack(phase.reason) }
+          : null,
     delivery,
-    childThreadId: phase._tag === "Queued" ? null : phase.childThreadId,
+    childThreadId: isQueuedPhase(phase) ? null : phase.childThreadId,
     trigger: delegation.trigger,
     retried: delegation.retryOfDelegationId !== null,
   };
@@ -74,11 +74,13 @@ export function delegationElapsedMs(delegation: AkeruDelegationRecord, now: numb
   const phase = delegation.phase;
 
   const startedAt = Date.parse(
-    phase._tag === "Queued" || phase.startedAt === null ? delegation.createdAt : phase.startedAt,
+    isQueuedPhase(phase) || phase.startedAt === null ? delegation.createdAt : phase.startedAt,
   );
 
   const endedAt =
-    phase._tag === "Failed" || phase._tag === "Canceled" || phase._tag === "Completed"
+    Predicate.isTagged(phase, "Failed") ||
+    Predicate.isTagged(phase, "Canceled") ||
+    Predicate.isTagged(phase, "Completed")
       ? Date.parse(phase.completedAt)
       : now;
 
@@ -88,13 +90,15 @@ export function delegationElapsedMs(delegation: AkeruDelegationRecord, now: numb
 }
 
 /** Delegations a chat started, oldest first, and whether any are still working. */
+type ThreadDelegationsResult = {
+  readonly delegations: ReadonlyArray<AkeruDelegationRecord>;
+  readonly waitingOnChildren: boolean;
+};
+
 export function threadDelegations(
   delegations: ReadonlyArray<AkeruDelegationRecord>,
   threadId: ThreadId,
-): {
-  readonly delegations: ReadonlyArray<AkeruDelegationRecord>;
-  readonly waitingOnChildren: boolean;
-} {
+): ThreadDelegationsResult {
   return {
     delegations: delegations.filter((delegation) => delegation.parentThreadId === threadId),
     waitingOnChildren: isThreadWaitingOnChildren(delegations, threadId),
@@ -138,4 +142,10 @@ export function delegationActions(
   if (AKERU_DELEGATION_TRANSITIONS[phase].has("Canceled")) actions.push("cancel");
 
   return actions;
+}
+
+function isQueuedPhase(
+  value: AkeruDelegationRecord["phase"],
+): value is Extract<AkeruDelegationRecord["phase"], { readonly _tag: "Queued" }> {
+  return Predicate.isTagged(value, "Queued");
 }

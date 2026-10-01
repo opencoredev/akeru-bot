@@ -1,10 +1,7 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 
-import {
-  VOICE_AUDIO_MAX_BYTES,
-  type EnvironmentId,
-  type VoiceTranscribeInput,
-} from "@akeru/contracts";
+import { VOICE_AUDIO_MAX_BYTES, EnvironmentId, type VoiceTranscribeInput } from "@akeru/contracts";
 
 import type { DictationAudio, DictationDependencies, DictationLimits } from "./session.ts";
 
@@ -43,22 +40,22 @@ export function dictationTranscriptionCapability(input: {
     : { available: false, reason: DICTATION_TRANSCRIPTION_UNAVAILABLE.noProvider };
 }
 
-const MEDIA_TYPES: Readonly<Record<string, VoiceTranscribeInput["mimeType"]>> = {
-  "audio/webm": "audio/webm",
-  "audio/ogg": "audio/ogg",
-  "audio/mp4": "audio/mp4",
-  "audio/m4a": "audio/mp4",
-  "audio/x-m4a": "audio/mp4",
-  "audio/aac": "audio/mp4",
-  "audio/mpeg": "audio/mpeg",
-  "audio/wav": "audio/wav",
-  "audio/x-wav": "audio/wav",
-  "video/webm": "audio/webm",
-};
+const MEDIA_TYPES = new Map<string, VoiceTranscribeInput["mimeType"]>([
+  ["audio/webm", "audio/webm"],
+  ["audio/ogg", "audio/ogg"],
+  ["audio/mp4", "audio/mp4"],
+  ["audio/m4a", "audio/mp4"],
+  ["audio/x-m4a", "audio/mp4"],
+  ["audio/aac", "audio/mp4"],
+  ["audio/mpeg", "audio/mpeg"],
+  ["audio/wav", "audio/wav"],
+  ["audio/x-wav", "audio/wav"],
+  ["video/webm", "audio/webm"],
+]);
 
 /** Drops codec parameters so recorder output such as `audio/webm;codecs=opus` fits the RPC schema. */
 export function dictationAudioMediaType(mediaType: string) {
-  return MEDIA_TYPES[mediaType.split(";", 1)[0]!.trim().toLowerCase()] ?? null;
+  return MEDIA_TYPES.get(mediaType.split(";", 1)[0]!.trim().toLowerCase()) ?? null;
 }
 
 const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -81,17 +78,21 @@ export function encodeDictationAudioBase64(bytes: Uint8Array): string {
   return output;
 }
 
-const FAILURE_MESSAGES: Readonly<Record<string, string>> = {
-  "voice-disabled": DICTATION_TRANSCRIPTION_UNAVAILABLE.disabled,
-  "provider-unavailable": DICTATION_TRANSCRIPTION_UNAVAILABLE.noProvider,
-  busy: "Too many voice requests are running. Try again in a moment.",
-  "invalid-input": "The recording could not be transcribed. Try a shorter recording.",
-  "provider-auth":
+const FAILURE_MESSAGES = new Map<string, string>([
+  ["voice-disabled", DICTATION_TRANSCRIPTION_UNAVAILABLE.disabled],
+  ["provider-unavailable", DICTATION_TRANSCRIPTION_UNAVAILABLE.noProvider],
+  ["busy", "Too many voice requests are running. Try again in a moment."],
+  ["invalid-input", "The recording could not be transcribed. Try a shorter recording."],
+  [
+    "provider-auth",
     "The transcription provider rejected its API key. Replace it in Settings, Voice.",
-  "provider-quota":
+  ],
+  [
+    "provider-quota",
     "The transcription provider reported a quota, billing, or rate limit. Check that account.",
-  network: "Could not reach the transcription provider. Check the network and try again.",
-};
+  ],
+  ["network", "Could not reach the transcription provider. Check the network and try again."],
+]);
 
 type TranscribeResult =
   | { readonly _tag: "Success"; readonly value: { readonly text: string } }
@@ -100,16 +101,18 @@ type TranscribeResult =
 function failureReason(cause: unknown): string | null {
   const error = Cause.isCause(cause) ? Cause.squash(cause) : cause;
 
-  if (typeof error !== "object" || error === null) return null;
-  const record = error as { readonly _tag?: unknown; readonly reason?: unknown };
+  if (!Predicate.isObjectOrArray(error)) return null;
+  const record = error;
 
-  return record._tag === "VoiceCallError" && typeof record.reason === "string"
+  return Predicate.isTagged(record, "VoiceCallError") &&
+    "reason" in record &&
+    Predicate.isString(record.reason)
     ? record.reason
     : null;
 }
 
 /** Binds dictation to the environment's `voice.transcribe` RPC, cancelling it server-side on abort. */
-export function createVoiceDictationTranscriber(options: {
+export function createVoiceDictationTranscriber<CancelResult>(options: {
   readonly transcribe: (target: {
     readonly environmentId: EnvironmentId;
     readonly input: VoiceTranscribeInput;
@@ -117,7 +120,7 @@ export function createVoiceDictationTranscriber(options: {
   readonly cancel: (target: {
     readonly environmentId: EnvironmentId;
     readonly input: { readonly operationId: string };
-  }) => Promise<unknown>;
+  }) => Promise<CancelResult>;
   readonly nextOperationId: () => string;
 }): DictationDependencies["transcribe"] {
   return async ({
@@ -134,7 +137,7 @@ export function createVoiceDictationTranscriber(options: {
 
     if (!mimeType) throw new Error("This recording format can't be transcribed.");
     // Dictation identities carry the id of the environment the composer was bound to.
-    const environmentId = identity.environmentId as EnvironmentId;
+    const environmentId = EnvironmentId.make(identity.environmentId);
     const operationId = options.nextOperationId();
 
     const abort = () => {
@@ -151,9 +154,11 @@ export function createVoiceDictationTranscriber(options: {
 
       signal.throwIfAborted();
 
-      if (result._tag === "Success") return result.value.text;
+      if (Predicate.isTagged(result, "Success")) return result.value.text;
       const reason = failureReason(result.cause);
-      throw new Error((reason && FAILURE_MESSAGES[reason]) ?? "Transcription failed. Try again.");
+      throw new Error(
+        (reason && FAILURE_MESSAGES.get(reason)) ?? "Transcription failed. Try again.",
+      );
     } finally {
       signal.removeEventListener("abort", abort);
     }

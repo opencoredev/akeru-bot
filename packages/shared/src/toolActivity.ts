@@ -1,22 +1,32 @@
+import { flow } from "effect/Function";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import { TrimmedNonEmptyString } from "@akeru/contracts";
+import * as Predicate from "effect/Predicate";
 import type { ToolLifecycleItemType } from "@akeru/contracts";
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
+const RuntimeRecord = Schema.declare(
+  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Tool data is an opaque provider object; each presentation field is decoded separately.
+  (value: unknown): value is Record<string, unknown> => Predicate.isObject(value),
+);
 
-function asTrimmedString(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
+type RuntimeRecord = typeof RuntimeRecord.Type;
 
-  const trimmed = value.trim();
+const decodeRuntimeRecord = Schema.decodeUnknownOption(RuntimeRecord);
 
-  return trimmed.length > 0 ? trimmed : undefined;
-}
+const decodeTrimmedString = Schema.decodeUnknownOption(TrimmedNonEmptyString);
 
-function normalizeCommandValue(value: unknown): string | undefined {
+const asRecord = flow(decodeRuntimeRecord, Option.getOrUndefined);
+
+const asTrimmedString = flow(decodeTrimmedString, Option.getOrUndefined);
+
+const CommandValue = Schema.Union([Schema.String, Schema.Array(Schema.Unknown)]);
+
+type CommandValue = typeof CommandValue.Type;
+
+const decodeCommandValue = Schema.decodeUnknownOption(CommandValue);
+
+function formatDecodedCommandValue(value: CommandValue): string | undefined {
   const direct = asTrimmedString(value);
 
   if (direct) {
@@ -39,6 +49,12 @@ function normalizeCommandValue(value: unknown): string | undefined {
 
   return parts.length > 0 ? parts.join(" ") : undefined;
 }
+
+const normalizeCommandValue = flow(
+  decodeCommandValue,
+  Option.map(formatDecodedCommandValue),
+  Option.getOrUndefined,
+);
 
 function stripTrailingExitCode(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -63,7 +79,7 @@ function extractCommandFromTitle(title: string | undefined): string | undefined 
   return backtickMatch?.[1]?.trim() || undefined;
 }
 
-function extractToolCommand(data: Record<string, unknown> | undefined, title: string | undefined) {
+function extractToolCommand(data: RuntimeRecord | undefined, title: string | undefined) {
   const item = asRecord(data?.item);
   const itemInput = asRecord(item?.input);
   const itemResult = asRecord(item?.result);
@@ -114,7 +130,12 @@ function maybePathLike(value: string | undefined): string | undefined {
   return undefined;
 }
 
-function collectPaths(value: unknown, paths: string[], seen: Set<string>, depth: number): void {
+function collectPaths(
+  value: Parameters<typeof asRecord>[0],
+  paths: string[],
+  seen: Set<string>,
+  depth: number,
+): void {
   if (depth > 4 || paths.length >= 8) {
     return;
   }
@@ -165,7 +186,7 @@ function collectPaths(value: unknown, paths: string[], seen: Set<string>, depth:
   }
 }
 
-function extractPrimaryPath(data: Record<string, unknown> | undefined): string | undefined {
+function extractPrimaryPath(data: RuntimeRecord | undefined): string | undefined {
   const paths: string[] = [];
   collectPaths(data, paths, new Set<string>(), 0);
 
@@ -195,7 +216,7 @@ function isEquivalent(left: string | undefined, right: string | undefined): bool
 function classifyToolAction(input: {
   readonly itemType?: ToolLifecycleItemType | null | undefined;
   readonly title?: string | undefined;
-  readonly data?: Record<string, unknown> | undefined;
+  readonly data?: RuntimeRecord | undefined;
 }): "command" | "read" | "file_change" | "search" | "other" {
   const itemType = input.itemType ?? undefined;
   const kind = asTrimmedString(input.data?.kind)?.toLowerCase();

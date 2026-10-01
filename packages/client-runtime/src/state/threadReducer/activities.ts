@@ -1,3 +1,5 @@
+import { asRecord } from "../../work-log-command.ts";
+import * as Predicate from "effect/Predicate";
 import { pipe } from "effect/Function";
 import * as Arr from "effect/Array";
 
@@ -36,14 +38,11 @@ export function isResolvableContextWindowActivity(activity: OrchestrationThreadA
     return false;
   }
 
-  const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = asRecord(activity.payload);
 
   const usedTokens = payload?.usedTokens;
 
-  return typeof usedTokens === "number" && Number.isFinite(usedTokens) && usedTokens >= 0;
+  return Predicate.isNumber(usedTokens) && Number.isFinite(usedTokens) && usedTokens >= 0;
 }
 
 export function applyActivityAppendedEvent(

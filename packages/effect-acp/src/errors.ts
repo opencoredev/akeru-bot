@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type * as SchemaIssue from "effect/SchemaIssue";
 
@@ -50,19 +52,26 @@ const schemaIssueDiagnostics = (root: SchemaIssue.Issue): AcpSchemaIssueDiagnost
     issueKinds.add(issue._tag);
     maximumPathDepth = Math.max(maximumPathDepth, pathDepth);
 
-    switch (issue._tag) {
-      case "Filter":
-      case "Encoding":
-        visit(issue.issue, pathDepth);
-        break;
-      case "Pointer":
-        visit(issue.issue, pathDepth + issue.path.length);
-        break;
-      case "Composite":
-      case "AnyOf":
-        for (const child of issue.issues) visit(child, pathDepth);
-        break;
-    }
+    Match.value(issue).pipe(
+      Match.tags({
+        Filter: (issue) => {
+          visit(issue.issue, pathDepth);
+        },
+        Encoding: (issue) => {
+          visit(issue.issue, pathDepth);
+        },
+        Pointer: (issue) => {
+          visit(issue.issue, pathDepth + issue.path.length);
+        },
+        Composite: (issue) => {
+          for (const child of issue.issues) visit(child, pathDepth);
+        },
+        AnyOf: (issue) => {
+          for (const child of issue.issues) visit(child, pathDepth);
+        },
+      }),
+      Match.orElse(() => {}),
+    );
   };
 
   visit(root, 0);
@@ -263,7 +272,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
   }
 
   static fromCoreHandlerError(error: AcpError, method: string) {
-    if (error._tag === "AcpRequestError") {
+    if (Predicate.isTagged(error, "AcpRequestError")) {
       return error;
     }
 
@@ -279,7 +288,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
   }
 
   static fromExtensionHandlerError(error: AcpError, method: string) {
-    if (error._tag === "AcpRequestError") {
+    if (Predicate.isTagged(error, "AcpRequestError")) {
       return error;
     }
 
@@ -294,7 +303,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
     );
   }
 
-  static parseError(message = "Parse error", data?: unknown) {
+  static parseError(message = "Parse error", data?: AcpSchema.Error["data"]) {
     return new AcpRequestError({
       code: -32700,
       errorMessage: message,
@@ -302,7 +311,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
     });
   }
 
-  static invalidRequest(message = "Invalid request", data?: unknown) {
+  static invalidRequest(message = "Invalid request", data?: AcpSchema.Error["data"]) {
     return new AcpRequestError({
       code: -32600,
       errorMessage: message,
@@ -317,7 +326,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
     });
   }
 
-  static invalidParams(message = "Invalid params", data?: unknown) {
+  static invalidParams(message = "Invalid params", data?: AcpSchema.Error["data"]) {
     return new AcpRequestError({
       code: -32602,
       errorMessage: message,
@@ -341,7 +350,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
 
   static internalError(
     message = "Internal error",
-    data?: unknown,
+    data?: AcpSchema.Error["data"],
     diagnostics: AcpRequestDiagnostics = {},
   ) {
     return new AcpRequestError({
@@ -352,7 +361,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
     });
   }
 
-  static authRequired(message = "Authentication required", data?: unknown) {
+  static authRequired(message = "Authentication required", data?: AcpSchema.Error["data"]) {
     return new AcpRequestError({
       code: -32000,
       errorMessage: message,
@@ -360,7 +369,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
     });
   }
 
-  static resourceNotFound(message = "Resource not found", data?: unknown) {
+  static resourceNotFound(message = "Resource not found", data?: AcpSchema.Error["data"]) {
     return new AcpRequestError({
       code: -32002,
       errorMessage: message,

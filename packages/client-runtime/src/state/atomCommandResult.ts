@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -43,18 +44,16 @@ export function mapAtomCommandResult<A, E, B>(
   result: AtomCommandResult<A, E>,
   map: (value: A) => B,
 ): AtomCommandResult<B, E> {
-  return result._tag === "Success"
+  return Predicate.isTagged(result, "Success")
     ? AsyncResult.success(map(result.value))
     : AsyncResult.failure(result.cause);
 }
 
 export function isAtomCommandInterrupted(result: AtomCommandResult<unknown, unknown>): boolean {
-  return result._tag === "Failure" && Cause.hasInterruptsOnly(result.cause);
+  return Predicate.isTagged(result, "Failure") && Cause.hasInterruptsOnly(result.cause);
 }
 
-export function squashAtomCommandFailure(result: {
-  readonly cause: Cause.Cause<unknown>;
-}): unknown {
+export function squashAtomCommandFailure(result: { readonly cause: Cause.Cause<unknown> }) {
   return Cause.squash(result.cause);
 }
 

@@ -1,3 +1,4 @@
+import { testEnvironmentRegistry, testRpcSession } from "../test-support/services.ts";
 import { EnvironmentId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -16,7 +17,6 @@ import {
 } from "../connection/model.ts";
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
-import type * as RpcSession from "../rpc/session.ts";
 import { createEnvironmentQueryAtomFamily } from "./runtime.ts";
 
 export const QUERY_ENVIRONMENT = new PrimaryConnectionTarget({
@@ -26,7 +26,7 @@ export const QUERY_ENVIRONMENT = new PrimaryConnectionTarget({
   wsBaseUrl: "wss://query.example.test",
 });
 
-export const QUERY_RPC_SESSION = {} as RpcSession.RpcSession;
+export const QUERY_RPC_SESSION = testRpcSession();
 
 export class TestQueryError extends Schema.TaggedErrorClass<TestQueryError>()("TestQueryError", {
   message: Schema.String,
@@ -82,11 +82,11 @@ export const makeEnvironmentQueryHarness = Effect.fn("TestEnvironmentQuery.makeH
     stream,
   ) => Stream.provideService(stream, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
 
-  const environmentRegistry = EnvironmentRegistry.EnvironmentRegistry.of({
+  const environmentRegistry = testEnvironmentRegistry({
     run,
     followStream,
     stateChanges: () => SubscriptionRef.changes(supervisorState),
-  } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+  });
 
   const runtime = Atom.runtime(
     Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, environmentRegistry),

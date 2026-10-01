@@ -1,3 +1,4 @@
+import { flow } from "effect/Function";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -252,6 +253,7 @@ const decodeUsage3hEventUnknown = Schema.decodeUnknownSync(Usage3hEvent, {
   onExcessProperty: "error",
 });
 
-export function decodeUsage3hEvent(input: unknown): Usage3hEvent {
-  return decodeUsage3hEventUnknown(input) as Usage3hEvent;
-}
+export const decodeUsage3hEvent = flow(decodeUsage3hEventUnknown, (event): Usage3hEvent => {
+  // SAFETY: The properties codec validates UsageCounters.fields; its spread erases the key-to-counter relationship from the inferred type.
+  return event as Usage3hEvent;
+});

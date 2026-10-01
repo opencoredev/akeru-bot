@@ -1,7 +1,9 @@
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Tracer from "effect/Tracer";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Tracer composition owns its sink and lifecycle.
 import { makeTraceSink } from "./observability/traceSink.ts";
 import {
   type EffectTraceRecord,
@@ -14,7 +16,10 @@ import {
   truncateTraceAttributes,
 } from "./observability/attributes.ts";
 
+const SpanStatus = Data.taggedEnum<Tracer.SpanStatus>();
+
 export function spanToTraceRecord(span: SerializableSpan): EffectTraceRecord {
+  // SAFETY: Trace records are emitted by end() after the span transitions to Ended.
   const status = span.status as Extract<Tracer.SpanStatus, { _tag: "Ended" }>;
   const parentSpanId = Option.getOrUndefined(span.parent)?.spanId;
 
@@ -59,7 +64,9 @@ class LocalFileSpan implements Tracer.Span {
 
   status: Tracer.SpanStatus;
   attributes: Map<string, unknown>;
-  events: Array<[name: string, startTime: bigint, attributes: Record<string, unknown>]>;
+  events: Array<
+    [name: string, startTime: bigint, attributes: NonNullable<Parameters<Tracer.Span["event"]>[2]>]
+  >;
   private readonly delegate: Tracer.Span;
   private readonly push: (record: EffectTraceRecord) => void;
 
@@ -78,21 +85,13 @@ class LocalFileSpan implements Tracer.Span {
     this.links = [...options.links];
     this.sampled = delegate.sampled;
     this.kind = delegate.kind;
-    this.status = {
-      _tag: "Started",
-      startTime: options.startTime,
-    };
+    this.status = SpanStatus.Started({ startTime: options.startTime });
     this.attributes = new Map();
     this.events = [];
   }
 
   end(endTime: bigint, exit: Exit.Exit<unknown, unknown>): void {
-    this.status = {
-      _tag: "Ended",
-      startTime: this.status.startTime,
-      endTime,
-      exit,
-    };
+    this.status = SpanStatus.Ended({ startTime: this.status.startTime, endTime, exit });
     this.delegate.end(endTime, exit);
 
     if (this.sampled) {
@@ -100,12 +99,12 @@ class LocalFileSpan implements Tracer.Span {
     }
   }
 
-  attribute(key: string, value: unknown): void {
+  attribute(key: string, value: Parameters<Tracer.Span["attribute"]>[1]): void {
     this.attributes.set(key, value);
     this.delegate.attribute(key, value);
   }
 
-  event(name: string, startTime: bigint, attributes?: Record<string, unknown>): void {
+  event(name: string, startTime: bigint, attributes?: Parameters<Tracer.Span["event"]>[2]): void {
     const nextAttributes = attributes ?? {};
     this.events.push([name, startTime, nextAttributes]);
     this.delegate.event(name, startTime, nextAttributes);

@@ -16,6 +16,7 @@ import {
   encodeOptionalPayload,
   runHandler,
 } from "./_internal/shared.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The client composition root owns the child-process transport.
 import { makeChildStdio, makeTerminationError } from "./_internal/stdio.ts";
 
 export interface CodexAppServerClientOptions extends Pick<
@@ -76,24 +77,24 @@ export class CodexAppServerClient extends Context.Service<
     readonly handleUnknownServerRequest: (
       handler: (
         method: string,
-        params: unknown,
+        params: CodexProtocol.CodexAppServerIncomingRequest["params"],
       ) => Effect.Effect<unknown, CodexError.CodexAppServerError>,
     ) => Effect.Effect<void>;
     readonly handleUnknownServerNotification: (
       handler: (
         method: string,
-        params: unknown,
+        params: CodexProtocol.CodexAppServerIncomingRequest["params"],
       ) => Effect.Effect<void, CodexError.CodexAppServerError>,
     ) => Effect.Effect<void>;
   }
 >()("effect-codex-app-server/client/CodexAppServerClient") {}
 
 type ServerRequestHandler = (
-  payload: unknown,
+  payload: CodexProtocol.CodexAppServerIncomingRequest["params"],
 ) => Effect.Effect<unknown, CodexError.CodexAppServerError>;
 
 type ServerNotificationHandler = (
-  payload: unknown,
+  payload: CodexProtocol.CodexAppServerIncomingRequest["params"],
 ) => Effect.Effect<void, CodexError.CodexAppServerError>;
 
 export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make")(function* (
@@ -105,19 +106,27 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
   const notificationHandlers = new Map<string, Array<ServerNotificationHandler>>();
 
   let unknownRequestHandler:
-    | ((method: string, params: unknown) => Effect.Effect<unknown, CodexError.CodexAppServerError>)
+    | ((
+        method: string,
+        params: CodexProtocol.CodexAppServerIncomingRequest["params"],
+      ) => Effect.Effect<unknown, CodexError.CodexAppServerError>)
     | undefined;
 
   let unknownNotificationHandler:
-    | ((method: string, params: unknown) => Effect.Effect<void, CodexError.CodexAppServerError>)
+    | ((
+        method: string,
+        params: CodexProtocol.CodexAppServerIncomingRequest["params"],
+      ) => Effect.Effect<void, CodexError.CodexAppServerError>)
     | undefined;
 
+  // SAFETY: The generated method-to-schema table and its indexed payload types share the same method key.
   const getServerRequestParamSchema = <M extends CodexRpc.ServerRequestMethod>(
     method: M,
   ):
     | Schema.Codec<CodexRpc.ServerRequestParamsByMethod[M], CodexRpc.ServerRequestParamsByMethod[M]>
     | undefined => CodexRpc.SERVER_REQUEST_PARAMS[method] as never;
 
+  // SAFETY: The generated method-to-schema table and its indexed payload types share the same method key.
   const getServerRequestResponseSchema = <M extends CodexRpc.ServerRequestMethod>(
     method: M,
   ):
@@ -127,12 +136,14 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
       >
     | undefined => CodexRpc.SERVER_REQUEST_RESPONSES[method] as never;
 
+  // SAFETY: The generated method-to-schema table and its indexed payload types share the same method key.
   const getClientRequestParamSchema = <M extends CodexRpc.ClientRequestMethod>(
     method: M,
   ):
     | Schema.Codec<CodexRpc.ClientRequestParamsByMethod[M], CodexRpc.ClientRequestParamsByMethod[M]>
     | undefined => CodexRpc.CLIENT_REQUEST_PARAMS[method] as never;
 
+  // SAFETY: The generated method-to-schema table and its indexed payload types share the same method key.
   const getClientRequestResponseSchema = <M extends CodexRpc.ClientRequestMethod>(
     method: M,
   ):
@@ -142,6 +153,7 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
       >
     | undefined => CodexRpc.CLIENT_REQUEST_RESPONSES[method] as never;
 
+  // SAFETY: The generated method-to-schema table and its indexed payload types share the same method key.
   const getClientNotificationParamSchema = <M extends CodexRpc.ClientNotificationMethod>(
     method: M,
   ):
@@ -157,6 +169,7 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
     const schema =
       notification.method in CodexRpc.SERVER_NOTIFICATION_PARAMS
         ? CodexRpc.SERVER_NOTIFICATION_PARAMS[
+            // SAFETY: The preceding membership check restricts the method to the generated notification table.
             notification.method as CodexRpc.ServerNotificationMethod
           ]
         : undefined;
@@ -183,6 +196,7 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
     request: CodexProtocol.CodexAppServerIncomingRequest,
   ): Effect.Effect<unknown, CodexError.CodexAppServerError> => {
     if (request.method in CodexRpc.SERVER_REQUEST_PARAMS) {
+      // SAFETY: Membership in SERVER_REQUEST_PARAMS establishes this generated method key.
       const method = request.method as CodexRpc.ServerRequestMethod;
       const payloadSchema = getServerRequestParamSchema(method);
       const responseSchema = getServerRequestResponseSchema(method);
@@ -248,11 +262,13 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
     notify,
     handleServerRequest: (method, handler) =>
       Effect.sync(() => {
+        // SAFETY: Dispatch decodes this method's params before invoking its registered handler.
         requestHandlers.set(method, handler as ServerRequestHandler);
       }),
     handleServerNotification: (method, handler) =>
       Effect.sync(() => {
         const current = notificationHandlers.get(method) ?? [];
+        // SAFETY: Dispatch decodes this method's params before invoking its registered handlers.
         current.push(handler as ServerNotificationHandler);
         notificationHandlers.set(method, current);
       }),

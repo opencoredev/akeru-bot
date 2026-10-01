@@ -1,3 +1,4 @@
+import { testEnvironmentRegistry, testRpcClient } from "../test-support/services.ts";
 import { BotId, EnvironmentId, ThreadId, WS_METHODS } from "@akeru/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -70,11 +71,11 @@ const runtimeFor = Effect.fn("memoryAndBotUsage.runtimeFor")(function* (
   const stateChanges: EnvironmentRegistry.EnvironmentRegistry["Service"]["stateChanges"] = () =>
     SubscriptionRef.changes(supervisor.state);
 
-  const service = EnvironmentRegistry.EnvironmentRegistry.of({
+  const service = testEnvironmentRegistry({
     run,
     followStream,
     stateChanges,
-  } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+  });
 
   return Atom.runtime(Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, service));
 });
@@ -90,7 +91,7 @@ describe("memory and bot usage environment atoms", () => {
           resolveInspect = resolve;
         });
 
-        const client = {
+        const client = testRpcClient({
           [WS_METHODS.memoryDocumentsInspect]: () =>
             Effect.sync(() => {
               resolveInspect();
@@ -105,7 +106,7 @@ describe("memory and bot usage environment atoms", () => {
               } as never;
             }),
           [WS_METHODS.memoryDocumentReplace]: () => Effect.succeed({} as never),
-        } as unknown as WsRpcProtocolClient;
+        });
 
         const atoms = createMemoryEnvironmentAtoms(yield* runtimeFor(client));
 
@@ -150,7 +151,7 @@ describe("memory and bot usage environment atoms", () => {
           resolveUsage = resolve;
         });
 
-        const client = {
+        const client = testRpcClient({
           [WS_METHODS.botUsage]: (input: { readonly botId: BotId }) =>
             Effect.sync(() => {
               requestedBotId = input.botId;
@@ -158,7 +159,7 @@ describe("memory and bot usage environment atoms", () => {
 
               return {} as never;
             }),
-        } as unknown as WsRpcProtocolClient;
+        });
 
         const atoms = createBotUsageEnvironmentAtoms(yield* runtimeFor(client));
         const atom = atoms.summary({ environmentId, input: { botId } });

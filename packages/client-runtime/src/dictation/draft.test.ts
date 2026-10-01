@@ -73,7 +73,7 @@ describe("dictation draft insertion", () => {
     expect(result.text).toBe(`${text} spoken words`);
     expect(result.selection).toEqual(current.selection);
     expect(result).toMatchObject({ attachments });
-    expect(Reflect.get(result, "attachments")).toBe(attachments);
+    expect("attachments" in result && result.attachments).toBe(attachments);
   });
 
   it("does not split emoji at a malformed caret", () => {

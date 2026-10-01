@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Stdio from "effect/Stdio";
@@ -21,6 +22,7 @@ import {
   decodeExtRequestRegistration,
   runHandler,
 } from "./_internal/shared.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The client composition root owns the child-process transport.
 import { makeChildStdio, makeTerminationError } from "./_internal/stdio.ts";
 
 export interface AcpClientOptions extends Pick<
@@ -38,8 +40,14 @@ type AcpClientRaw = {
    * Disabled streams end immediately; enabled streams drain on input termination and are interrupted on scope close.
    */
   readonly notifications: Stream.Stream<AcpProtocol.AcpIncomingNotification>;
-  readonly request: (method: string, payload: unknown) => Effect.Effect<unknown, AcpError.AcpError>;
-  readonly notify: (method: string, payload: unknown) => Effect.Effect<void, AcpError.AcpError>;
+  readonly request: (
+    method: string,
+    payload: AcpSchema.ExtRequest,
+  ) => Effect.Effect<AcpSchema.ExtResponse, AcpError.AcpError>;
+  readonly notify: (
+    method: string,
+    payload: AcpSchema.ExtNotification,
+  ) => Effect.Effect<void, AcpError.AcpError>;
 };
 
 export class AcpClient extends Context.Service<
@@ -243,14 +251,20 @@ export class AcpClient extends Context.Service<
      * @see https://agentclientprotocol.com/protocol/extensibility
      */
     readonly handleUnknownExtRequest: (
-      handler: (method: string, params: unknown) => Effect.Effect<unknown, AcpError.AcpError>,
+      handler: (
+        method: string,
+        params: AcpSchema.ExtRequest,
+      ) => Effect.Effect<AcpSchema.ExtResponse, AcpError.AcpError>,
     ) => Effect.Effect<void>;
     /**
      * Registers a fallback extension notification handler.
      * @see https://agentclientprotocol.com/protocol/extensibility
      */
     readonly handleUnknownExtNotification: (
-      handler: (method: string, params: unknown) => Effect.Effect<void, AcpError.AcpError>,
+      handler: (
+        method: string,
+        params: AcpSchema.ExtNotification,
+      ) => Effect.Effect<void, AcpError.AcpError>,
     ) => Effect.Effect<void>;
     /**
      * Registers a typed extension request handler.
@@ -259,7 +273,7 @@ export class AcpClient extends Context.Service<
     readonly handleExtRequest: <A, I>(
       method: string,
       payload: Schema.Codec<A, I>,
-      handler: (payload: A) => Effect.Effect<unknown, AcpError.AcpError>,
+      handler: (payload: A) => Effect.Effect<AcpSchema.ExtResponse, AcpError.AcpError>,
     ) => Effect.Effect<void>;
     /**
      * Registers a typed extension notification handler.
@@ -327,20 +341,26 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
 
   const extRequestHandlers = new Map<
     string,
-    (params: unknown) => Effect.Effect<unknown, AcpError.AcpError>
+    (params: AcpSchema.ExtRequest) => Effect.Effect<AcpSchema.ExtResponse, AcpError.AcpError>
   >();
 
   const extNotificationHandlers = new Map<
     string,
-    (params: unknown) => Effect.Effect<void, AcpError.AcpError>
+    (params: AcpSchema.ExtNotification) => Effect.Effect<void, AcpError.AcpError>
   >();
 
   let unknownExtRequestHandler:
-    | ((method: string, params: unknown) => Effect.Effect<unknown, AcpError.AcpError>)
+    | ((
+        method: string,
+        params: AcpSchema.ExtRequest,
+      ) => Effect.Effect<AcpSchema.ExtResponse, AcpError.AcpError>)
     | undefined;
 
   let unknownExtNotificationHandler:
-    | ((method: string, params: unknown) => Effect.Effect<void, AcpError.AcpError>)
+    | ((
+        method: string,
+        params: AcpSchema.ExtNotification,
+      ) => Effect.Effect<void, AcpError.AcpError>)
     | undefined;
 
   const runNotificationHandlers = <A>(
@@ -371,45 +391,45 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
     });
 
   const dispatchNotification = (notification: AcpProtocol.AcpIncomingNotification) => {
-    switch (notification._tag) {
-      case "SessionUpdate": {
-        if (notificationHandlers.sessionUpdate.handlers.length === 0) {
-          notificationHandlers.sessionUpdate.pending.push(notification.params);
+    return Match.value(notification).pipe(
+      Match.tagsExhaustive({
+        SessionUpdate: (notification) => {
+          if (notificationHandlers.sessionUpdate.handlers.length === 0) {
+            notificationHandlers.sessionUpdate.pending.push(notification.params);
 
-          return Effect.void;
-        }
+            return Effect.void;
+          }
 
-        return runNotificationHandlers(notificationHandlers.sessionUpdate, notification.params);
-      }
+          return runNotificationHandlers(notificationHandlers.sessionUpdate, notification.params);
+        },
+        ElicitationComplete: (notification) => {
+          if (notificationHandlers.elicitationComplete.handlers.length === 0) {
+            notificationHandlers.elicitationComplete.pending.push(notification.params);
 
-      case "ElicitationComplete": {
-        if (notificationHandlers.elicitationComplete.handlers.length === 0) {
-          notificationHandlers.elicitationComplete.pending.push(notification.params);
+            return Effect.void;
+          }
 
-          return Effect.void;
-        }
+          return runNotificationHandlers(
+            notificationHandlers.elicitationComplete,
+            notification.params,
+          );
+        },
+        ExtNotification: (notification) => {
+          const handler = extNotificationHandlers.get(notification.method);
 
-        return runNotificationHandlers(
-          notificationHandlers.elicitationComplete,
-          notification.params,
-        );
-      }
+          if (handler) {
+            return handler(notification.params);
+          }
 
-      case "ExtNotification": {
-        const handler = extNotificationHandlers.get(notification.method);
-
-        if (handler) {
-          return handler(notification.params);
-        }
-
-        return unknownExtNotificationHandler
-          ? unknownExtNotificationHandler(notification.method, notification.params)
-          : Effect.void;
-      }
-    }
+          return unknownExtNotificationHandler
+            ? unknownExtNotificationHandler(notification.method, notification.params)
+            : Effect.void;
+        },
+      }),
+    );
   };
 
-  const dispatchExtRequest = (method: string, params: unknown) => {
+  const dispatchExtRequest = (method: string, params: AcpSchema.ExtRequest) => {
     const handler = extRequestHandlers.get(method);
 
     if (handler) {

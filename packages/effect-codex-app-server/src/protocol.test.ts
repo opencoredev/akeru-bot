@@ -233,7 +233,11 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
         "Codex App Server protocol operation 'encode-wire-message' failed for method 'x/test'.",
       );
 
-      const circular: Record<string, unknown> = {};
+      interface CircularPayload {
+        self?: CircularPayload;
+      }
+
+      const circular: CircularPayload = {};
       circular.self = circular;
       const circularError = yield* transport.notify("x/test", circular).pipe(Effect.flip);
       assert.instanceOf(circularError, CodexError.CodexAppServerProtocolParseError);

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { EnvironmentId } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -144,7 +145,8 @@ export const make = Effect.gen(function* () {
       persistedTargets,
       Effect.fn("EnvironmentRegistry.loadCatalogEntry")(function* (target) {
         const profile =
-          target._tag === "BearerConnectionTarget" || target._tag === "SshConnectionTarget"
+          Predicate.isTagged(target, "BearerConnectionTarget") ||
+          Predicate.isTagged(target, "SshConnectionTarget")
             ? yield* profiles.get(target.connectionId)
             : Option.none();
 
@@ -460,7 +462,7 @@ export const make = Effect.gen(function* () {
           // on their own loopback origin, so they authenticate with a bearer
           // token instead of the primary's same-origin cookie. Stash it where
           // the resolver's bearer broker looks it up.
-          if (registration._tag === "BearerConnectionRegistration") {
+          if (Predicate.isTagged(registration, "BearerConnectionRegistration")) {
             yield* credentials.put(registration.target.connectionId, registration.credential).pipe(
               Effect.catch((error) =>
                 Effect.logWarning("Could not store the platform bearer credential.", {
@@ -527,7 +529,7 @@ export const make = Effect.gen(function* () {
             return next;
           });
 
-          if (entry !== undefined && entry.target._tag === "BearerConnectionTarget") {
+          if (entry !== undefined && Predicate.isTagged(entry.target, "BearerConnectionTarget")) {
             yield* credentials.remove(entry.target.connectionId).pipe(
               Effect.catch((error) =>
                 Effect.logWarning("Could not clear the platform bearer credential.", {
@@ -596,7 +598,8 @@ export const make = Effect.gen(function* () {
         const target = (yield* getEntry(environmentId)).target;
 
         const profile =
-          target._tag === "BearerConnectionTarget" || target._tag === "SshConnectionTarget"
+          Predicate.isTagged(target, "BearerConnectionTarget") ||
+          Predicate.isTagged(target, "SshConnectionTarget")
             ? yield* profiles.get(target.connectionId)
             : Option.none();
 
@@ -630,7 +633,7 @@ export const make = Effect.gen(function* () {
         );
 
         if (
-          target._tag === "SshConnectionTarget" &&
+          Predicate.isTagged(target, "SshConnectionTarget") &&
           Option.isSome(profile) &&
           isSshConnectionProfile(profile.value)
         ) {

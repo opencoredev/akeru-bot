@@ -46,9 +46,9 @@ export const runHandler = Effect.fnUntraced(function* <A, B>(
 export function decodeExtRequestRegistration<A, I>(
   method: string,
   payload: Schema.Codec<A, I>,
-  handler: (payload: A) => Effect.Effect<unknown, AcpError.AcpError>,
+  handler: (payload: A) => Effect.Effect<AcpSchema.ExtResponse, AcpError.AcpError>,
 ) {
-  return (params: unknown): Effect.Effect<unknown, AcpError.AcpError> =>
+  return (params: AcpSchema.ExtRequest): Effect.Effect<AcpSchema.ExtResponse, AcpError.AcpError> =>
     Schema.decodeUnknownEffect(payload)(params).pipe(
       Effect.mapError((error) => AcpError.AcpRequestError.invalidExtensionPayload(method, error)),
       Effect.flatMap((decoded) => handler(decoded)),
@@ -60,7 +60,7 @@ export function decodeExtNotificationRegistration<A, I>(
   payload: Schema.Codec<A, I>,
   handler: (payload: A) => Effect.Effect<void, AcpError.AcpError>,
 ) {
-  return (params: unknown): Effect.Effect<void, AcpError.AcpError> =>
+  return (params: AcpSchema.ExtRequest): Effect.Effect<void, AcpError.AcpError> =>
     Schema.decodeUnknownEffect(payload)(params).pipe(
       Effect.mapError((error) =>
         AcpError.AcpProtocolParseError.fromSchemaError(

@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import {
   type EnvironmentId,
   type ServerLifecycleStreamReadyEvent,
@@ -171,23 +172,31 @@ export function serverUpdateStateForServerVersion(
     : IDLE_SERVER_UPDATE_STATE;
 }
 
-export function serverUpdateFailureMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Server update failed.";
+export function serverUpdateFailureMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : "Server update failed.";
 }
 
-function isRpcSocketError(error: unknown): boolean {
-  if (!isRpcClientError(error)) {
+function isRpcSocketError(cause: unknown): boolean {
+  if (!isRpcClientError(cause)) {
     return false;
   }
 
-  switch (error.reason._tag) {
-    case "SocketReadError":
-    case "SocketWriteError":
-    case "SocketCloseError":
-      return true;
-    default:
+  return Match.value(cause.reason).pipe(
+    Match.tags({
+      SocketReadError: () => {
+        return true;
+      },
+      SocketWriteError: () => {
+        return true;
+      },
+      SocketCloseError: () => {
+        return true;
+      },
+    }),
+    Match.orElse(() => {
       return false;
-  }
+    }),
+  );
 }
 
 export function isLegacyUpdateHandoffLoss(cause: Cause.Cause<unknown>): boolean {

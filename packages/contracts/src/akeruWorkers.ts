@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
 import { IsoDateTime, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -80,4 +81,5 @@ export const AkeruWorkerStatus = Schema.Struct({
 
 export type AkeruWorkerStatus = typeof AkeruWorkerStatus.Type;
 
-export const isAkeruWorkerTerminal = (phase: AkeruWorkerPhase): boolean => phase._tag !== "Running";
+export const isAkeruWorkerTerminal = (phase: AkeruWorkerPhase): boolean =>
+  !Predicate.isTagged(phase, "Running");

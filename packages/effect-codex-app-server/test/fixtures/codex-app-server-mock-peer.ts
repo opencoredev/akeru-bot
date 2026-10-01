@@ -1,4 +1,17 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import * as NodeOS from "node:os";
+
+const MockMessage = Schema.Struct({
+  id: Schema.optional(Schema.Union([Schema.String, Schema.Number])),
+  method: Schema.optional(Schema.String),
+  params: Schema.optional(Schema.Json),
+  result: Schema.optional(Schema.Json),
+});
+
+type MockMessage = typeof MockMessage.Type;
+
+const decodeMessage = Schema.decodeUnknownSync(Schema.fromJsonString(MockMessage));
 
 let nextServerRequestId = 10_000;
 
@@ -6,11 +19,11 @@ let pendingSkillsListRequestId: number | string | null = null;
 
 let pendingUserInputRequestId: number | null = null;
 
-const writeMessage = (message: unknown) => {
+const writeMessage = (message: Schema.Json) => {
   process.stdout.write(`${JSON.stringify(message)}\n`);
 };
 
-const respond = (id: number | string, result: unknown) => {
+const respond = (id: number | string, result: Schema.Json) => {
   writeMessage({ id, result });
 };
 
@@ -24,17 +37,17 @@ const respondError = (id: number | string, code: number, message: string) => {
   });
 };
 
-const sendRequest = (method: string, params: unknown) => {
+const sendRequest = (method: string, params: Schema.Json) => {
   const id = nextServerRequestId++;
   writeMessage({ id, method, params });
 
   return id;
 };
 
-const handleMethod = (message: Record<string, unknown>) => {
+const handleMethod = (message: MockMessage) => {
   const method = message.method;
 
-  if (typeof method !== "string") {
+  if (!Predicate.isString(method)) {
     return;
   }
 
@@ -126,7 +139,7 @@ const handleMethod = (message: Record<string, unknown>) => {
   }
 };
 
-const handleResponse = (message: Record<string, unknown>) => {
+const handleResponse = (message: MockMessage) => {
   if (message.id !== pendingUserInputRequestId) {
     return;
   }
@@ -161,7 +174,7 @@ process.stdin.on("data", (chunk) => {
       continue;
     }
 
-    const message = JSON.parse(trimmed) as Record<string, unknown>;
+    const message = decodeMessage(trimmed);
 
     if ("method" in message) {
       handleMethod(message);

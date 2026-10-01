@@ -1,3 +1,4 @@
+import { TEST_SERVER_CONFIG, testRpcClient } from "../test-support/services.ts";
 import {
   EnvironmentId,
   EventId,
@@ -29,6 +30,7 @@ import * as Persistence from "../platform/persistence.ts";
 import * as RpcSession from "../rpc/session.ts";
 import {
   EMPTY_ENVIRONMENT_THREAD_STATE,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition builds isolated runtime fixtures.
   makeEnvironmentThreadState,
   ThreadSnapshotLoader,
   type EnvironmentThreadState,
@@ -123,11 +125,10 @@ function testSession(
 ): RpcSession.RpcSession {
   return {
     client,
-    initialConfig: Effect.succeed(
-      options?.completionMarker === true
-        ? ({ threadResumeCompletionMarker: true } as never)
-        : ({} as never),
-    ),
+    initialConfig: Effect.succeed({
+      ...TEST_SERVER_CONFIG,
+      ...(options?.completionMarker === true ? { threadResumeCompletionMarker: true } : {}),
+    }),
     ready: Effect.void,
     probe: Effect.void,
     closed: Effect.never,
@@ -174,7 +175,7 @@ export const makeHarness = Effect.fn("TestEnvironmentThreads.makeHarness")(funct
       Stream.flattenArray,
     );
 
-  const client = {
+  const client = testRpcClient({
     [ORCHESTRATION_WS_METHODS.subscribeThread]: (input: {
       readonly afterSequence?: number;
       readonly requestCompletionMarker?: boolean;
@@ -186,7 +187,7 @@ export const makeHarness = Effect.fn("TestEnvironmentThreads.makeHarness")(funct
           Effect.as(streamFrom(inputs)),
         ),
       ),
-  } as unknown as WsRpcProtocolClient;
+  });
 
   const supervisorSession = yield* SubscriptionRef.make<Option.Option<RpcSession.RpcSession>>(
     Option.some(

@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import type {
   BotSandbox,
   ComputerAction,
@@ -6,6 +7,8 @@ import type {
   ComputerSession,
   ComputerState,
 } from "@akeru/contracts";
+
+const Action = Data.taggedEnum<ComputerAction>();
 
 /**
  * Client lifecycle for watching and controlling a bot's workspace computer.
@@ -362,22 +365,22 @@ export function computerFramePoint(input: {
   };
 }
 
-const COMPUTER_KEY_NAMES: Readonly<Record<string, string>> = {
-  Enter: "Return",
-  Backspace: "BackSpace",
-  Tab: "Tab",
-  Escape: "Escape",
-  Delete: "Delete",
-  Home: "Home",
-  End: "End",
-  PageUp: "Page_Up",
-  PageDown: "Page_Down",
-  ArrowUp: "Up",
-  ArrowDown: "Down",
-  ArrowLeft: "Left",
-  ArrowRight: "Right",
-  " ": "space",
-};
+const COMPUTER_KEY_NAMES = new Map<string, string>([
+  ["Enter", "Return"],
+  ["Backspace", "BackSpace"],
+  ["Tab", "Tab"],
+  ["Escape", "Escape"],
+  ["Delete", "Delete"],
+  ["Home", "Home"],
+  ["End", "End"],
+  ["PageUp", "Page_Up"],
+  ["PageDown", "Page_Down"],
+  ["ArrowUp", "Up"],
+  ["ArrowDown", "Down"],
+  ["ArrowLeft", "Left"],
+  ["ArrowRight", "Right"],
+  [" ", "space"],
+]);
 
 /**
  * Translates a keyboard event into a computer action. Plain printable keys
@@ -393,10 +396,10 @@ export function computerKeyAction(event: {
 }): ComputerAction | null {
   const chord = event.ctrlKey || event.altKey || event.metaKey;
 
-  if (!chord && event.key.length === 1) return { _tag: "type", text: event.key };
+  if (!chord && event.key.length === 1) return Action.type({ text: event.key });
 
   const named =
-    COMPUTER_KEY_NAMES[event.key] ?? (event.key.length === 1 ? event.key.toLowerCase() : null);
+    COMPUTER_KEY_NAMES.get(event.key) ?? (event.key.length === 1 ? event.key.toLowerCase() : null);
 
   if (named === null) return null;
 
@@ -407,5 +410,5 @@ export function computerKeyAction(event: {
     event.metaKey ? "super" : null,
   ].filter((modifier) => modifier !== null);
 
-  return { _tag: "key", key: [...modifiers, named].join("+") };
+  return Action.key({ key: [...modifiers, named].join("+") });
 }

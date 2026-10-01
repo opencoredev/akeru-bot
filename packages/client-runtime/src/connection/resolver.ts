@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import type { AuthClientPresentationMetadata } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -226,14 +227,13 @@ export const make = Effect.gen(function* () {
       "connection.target.kind": target._tag,
     });
 
-    switch (target._tag) {
-      case "PrimaryConnectionTarget":
-        return yield* primary(target);
-      case "BearerConnectionTarget":
-        return yield* bearer({ ...entry, target });
-      case "SshConnectionTarget":
-        return yield* ssh({ ...entry, target });
-    }
+    return yield* Match.value(target).pipe(
+      Match.tagsExhaustive({
+        PrimaryConnectionTarget: primary,
+        BearerConnectionTarget: (target) => bearer({ ...entry, target }),
+        SshConnectionTarget: (target) => ssh({ ...entry, target }),
+      }),
+    );
   });
 
   return ConnectionResolver.of({ prepare });

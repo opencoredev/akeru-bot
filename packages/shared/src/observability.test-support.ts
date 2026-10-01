@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import type { EffectTraceRecord } from "./observability/types.ts";
 import { it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -7,6 +9,7 @@ import * as Logger from "effect/Logger";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Tracer from "effect/Tracer";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Test composition builds isolated runtime fixtures.
 import { makeLocalFileTracer, type TraceRecord } from "./observability.ts";
 
 const TraceRecordLine = Schema.Struct({
@@ -29,6 +32,8 @@ const TraceRecordLine = Schema.Struct({
 
 const decodeTraceRecordLine = Schema.decodeUnknownSync(Schema.fromJsonString(TraceRecordLine));
 
+const TraceExit = Data.taggedEnum<EffectTraceRecord["exit"]>();
+
 export const makeRecord = (name: string, suffix = ""): TraceRecord => ({
   type: "effect-span",
   name,
@@ -44,9 +49,7 @@ export const makeRecord = (name: string, suffix = ""): TraceRecord => ({
   },
   events: [],
   links: [],
-  exit: {
-    _tag: "Success",
-  },
+  exit: TraceExit.Success(),
 });
 
 export const readTraceRecords = Effect.fn("readTraceRecords")(function* (tracePath: string) {

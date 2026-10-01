@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -77,6 +78,7 @@ export function createAtomCommandScheduler(): AtomCommandScheduler {
       const state = stateFor(registry);
 
       if (concurrency.mode === "singleFlight") {
+        // SAFETY: A concurrency key identifies one command result type; shared executions use that same command key.
         const existing = state.singleFlight.get(key) as
           | Promise<AtomCommandResult<A, E>>
           | undefined;
@@ -135,15 +137,17 @@ export function createAtomCommandScheduler(): AtomCommandScheduler {
       const result = new Promise<AtomCommandResult<A, E>>((resolve) => {
         if (activeLane.pending === undefined) {
           activeLane.pending = {
-            execute: execute as () => Promise<AtomCommandResult<unknown, unknown>>,
+            execute: execute,
+            // SAFETY: A latest lane is keyed by one command; its coalesced executions and resolvers share A and E.
             resolve: [resolve as (result: AtomCommandResult<unknown, unknown>) => void],
           };
 
           return;
         }
 
-        activeLane.pending.execute = execute as () => Promise<AtomCommandResult<unknown, unknown>>;
+        activeLane.pending.execute = execute;
         activeLane.pending.resolve.push(
+          // SAFETY: This resolver joins the same command lane, whose execution returns its A and E.
           resolve as (result: AtomCommandResult<unknown, unknown>) => void,
         );
       });
@@ -201,6 +205,8 @@ export function scheduleAtomCommandEffect<W, A, E, R>(
       }),
     );
 
-    return result._tag === "Success" ? result.value : yield* Effect.failCause(result.cause);
+    return Predicate.isTagged(result, "Success")
+      ? result.value
+      : yield* Effect.failCause(result.cause);
   });
 }

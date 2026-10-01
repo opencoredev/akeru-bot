@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -82,7 +83,7 @@ const expectFetchCall = (
   if ("body" in expected) {
     const body = init.body;
 
-    if (typeof body === "string") {
+    if (Predicate.isString(body)) {
       expect(body).toBe(expected.body);
     } else if (body instanceof Uint8Array) {
       expect(new TextDecoder().decode(body)).toBe(expected.body);

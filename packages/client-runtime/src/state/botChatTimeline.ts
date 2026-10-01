@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 import type { AkeruDelegationRecord, MessageId, TurnId } from "@akeru/contracts";
 
 /** The message fields the timeline needs to place rows. */
@@ -59,14 +61,16 @@ export function botChatTimeline<
 ): Array<BotChatTimelineEntry<TMessage, TReceipt>> {
   type Entry = BotChatTimelineEntry<TMessage, TReceipt>;
 
+  const Entry = Data.taggedEnum<Entry>();
+
   const base: Array<{ readonly createdAt: string; readonly entry: Entry }> = [
     ...input.messages.map((message, index) => ({
       createdAt: message.createdAt,
-      entry: { _tag: "Message", key: `message:${message.id}`, message, index } as const,
+      entry: Entry.Message({ key: `message:${message.id}`, message, index }),
     })),
     ...(input.receipts ?? []).map((receipt) => ({
       createdAt: receipt.createdAt,
-      entry: { _tag: "Receipt", key: `receipt:${receipt.id}`, receipt } as const,
+      entry: Entry.Receipt({ key: `receipt:${receipt.id}`, receipt }),
     })),
   ];
 
@@ -85,7 +89,7 @@ export function botChatTimeline<
   const positionByMessageId = new Map<string, number>();
   const lastPositionByTurnId = new Map<string, number>();
   rows.forEach((row, position) => {
-    if (row._tag !== "Message") return;
+    if (!Predicate.isTagged(row, "Message")) return;
     positionByMessageId.set(row.message.id, position);
 
     if (row.message.turnId !== null) lastPositionByTurnId.set(row.message.turnId, position);
@@ -116,11 +120,10 @@ export function botChatTimeline<
             ? lastPositionAt(delegation.createdAt)
             : rows.length - 1));
 
-    const card: Entry = {
-      _tag: "Delegation",
+    const card = Entry.Delegation({
       key: `delegation:${delegation.delegationId}`,
       delegation,
-    };
+    });
 
     cardsAfter.set(position, [...(cardsAfter.get(position) ?? []), card]);
   }

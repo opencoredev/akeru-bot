@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Schema from "effect/Schema";
 import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
@@ -141,18 +142,18 @@ export class VcsProcessExitError extends Schema.TaggedErrorClass<VcsProcessExitE
     error: VcsProcessExitFailure,
     failureKind: VcsProcessExitFailureKind,
   ) {
-    const detail =
-      failureKind === "authentication"
-        ? "Authentication failed."
-        : failureKind === "rate-limited"
-          ? "API rate limit exceeded."
-          : failureKind === "not-found"
-            ? context.command === "glab"
-              ? "Merge request not found."
-              : context.command === "gh" || context.command === "az"
-                ? "Pull request not found."
-                : "VCS resource not found."
-            : "Process exited with a non-zero status.";
+    const detail = Match.value(failureKind).pipe(
+      Match.when("authentication", () => "Authentication failed."),
+      Match.when("rate-limited", () => "API rate limit exceeded."),
+      Match.when("not-found", () =>
+        context.command === "glab"
+          ? "Merge request not found."
+          : context.command === "gh" || context.command === "az"
+            ? "Pull request not found."
+            : "VCS resource not found.",
+      ),
+      Match.orElse(() => "Process exited with a non-zero status."),
+    );
 
     return new VcsProcessExitError({
       ...context,

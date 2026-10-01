@@ -67,15 +67,17 @@ export function botInboxKindLabel(kind: BotInboxItem["kind"]): MessageKey {
  * and names the fact once. The server's English prose in lastFailure and nextAction stays
  * for older clients. `sensitive` is null unless the fact always needs approval.
  */
-export function botInboxItemCopy(
-  item: BotInboxItem,
-  t: (message: MessageKey, params?: TranslationParams) => string,
-): {
+type BotInboxItemCopyResult = {
   readonly kind: string;
   readonly detail: string;
   readonly nextAction: string;
   readonly sensitive: string | null;
-} {
+};
+
+export function botInboxItemCopy(
+  item: BotInboxItem,
+  t: (message: MessageKey, params?: TranslationParams) => string,
+): BotInboxItemCopyResult {
   const approval = item.memoryApproval;
 
   if (approval) {

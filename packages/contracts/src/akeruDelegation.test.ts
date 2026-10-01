@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -360,7 +361,7 @@ describe("Akeru delegation contracts", () => {
     expect(
       isThreadWaitingOnChildren(
         [running],
-        running.phase._tag === "Running" ? running.phase.childThreadId : parent,
+        Predicate.isTagged(running.phase, "Running") ? running.phase.childThreadId : parent,
       ),
     ).toBe(false);
   });

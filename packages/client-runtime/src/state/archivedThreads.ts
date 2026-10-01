@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { EnvironmentId, type OrchestrationShellSnapshot } from "@akeru/contracts";
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
@@ -18,7 +19,7 @@ export interface ArchivedThreadSnapshotsState {
 
 const ARCHIVED_THREADS_ENVIRONMENT_KEY_SEPARATOR = "\u001f";
 
-const environmentIdOrder = Order.String as Order.Order<EnvironmentId>;
+const environmentIdOrder: Order.Order<EnvironmentId> = Order.String;
 
 export function makeArchivedThreadsEnvironmentKey(
   environmentIds: ReadonlyArray<EnvironmentId>,
@@ -61,7 +62,7 @@ export function createArchivedThreadSnapshotsAtomFamily<E>(options: {
           snapshots.push({ environmentId, snapshot });
         }
 
-        if (error === null && result._tag === "Failure") {
+        if (error === null && Predicate.isTagged(result, "Failure")) {
           error = "Failed to load archived chats.";
         }
       }

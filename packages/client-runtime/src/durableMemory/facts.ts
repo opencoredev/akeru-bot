@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type AkeruMemoryApprovalState,
   type AkeruMemoryArchiveV2,
@@ -262,12 +263,14 @@ export const DURABLE_FACT_CONFLICT_MESSAGE: MessageKey =
  * `conflict` tells the caller its copy is stale; the command already refreshes the lists,
  * so the latest version arrives on its own.
  */
-export function describeDurableFactFailure(cause: unknown): {
+type DescribeDurableFactFailureResult = {
   readonly conflict: boolean;
   readonly message: MessageKey;
   readonly detail: string | null;
-} {
-  const tag = typeof cause === "object" && cause !== null && "_tag" in cause ? cause._tag : null;
+};
+
+export function describeDurableFactFailure(cause: unknown): DescribeDurableFactFailureResult {
+  const tag = Predicate.isObjectOrArray(cause) && "_tag" in cause ? cause._tag : null;
 
   if (tag === "EnvironmentAuthorizationError") {
     return {
@@ -278,7 +281,7 @@ export function describeDurableFactFailure(cause: unknown): {
   }
 
   const detail =
-    typeof cause === "object" && cause !== null && "detail" in cause
+    Predicate.isObjectOrArray(cause) && "detail" in cause
       ? String(cause.detail)
       : cause instanceof Error
         ? cause.message

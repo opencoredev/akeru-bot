@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { DesktopSshEnvironmentTargetSchema, EnvironmentId } from "@akeru/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -108,17 +109,26 @@ export function connectionRegistrationTarget(
 export function connectionRegistrationCatalogEntry(
   registration: ConnectionRegistration | PrimaryConnectionRegistration,
 ): ConnectionCatalogEntry {
-  switch (registration._tag) {
-    case "PrimaryConnectionRegistration":
-      return {
-        target: registration.target,
-        profile: Option.none(),
-      };
-    case "BearerConnectionRegistration":
-    case "SshConnectionRegistration":
-      return {
-        target: registration.target,
-        profile: Option.some(registration.profile),
-      };
-  }
+  return Match.value(registration).pipe(
+    Match.tagsExhaustive({
+      PrimaryConnectionRegistration: (registration) => {
+        return {
+          target: registration.target,
+          profile: Option.none(),
+        };
+      },
+      BearerConnectionRegistration: (registration) => {
+        return {
+          target: registration.target,
+          profile: Option.some(registration.profile),
+        };
+      },
+      SshConnectionRegistration: (registration) => {
+        return {
+          target: registration.target,
+          profile: Option.some(registration.profile),
+        };
+      },
+    }),
+  );
 }

@@ -392,13 +392,10 @@ export type ServerSettingsRpcPatch = typeof ServerSettingsRpcPatch.Type;
  * through `DEFAULT_SERVER_SETTINGS`, so the schema's decoding default stays
  * the single source of truth. Unknown (fork) drivers default to enabled.
  */
-export const defaultEnabledForDriver = (driver: ProviderDriverKind): boolean => {
-  const legacyDefaults = DEFAULT_SERVER_SETTINGS.providers as Record<
-    string,
-    { readonly enabled?: boolean } | undefined
-  >;
+const legacyDefaults = new Map(Object.entries(DEFAULT_SERVER_SETTINGS.providers));
 
-  return legacyDefaults[driver]?.enabled ?? true;
+export const defaultEnabledForDriver = (driver: ProviderDriverKind): boolean => {
+  return legacyDefaults.get(driver)?.enabled ?? true;
 };
 
 /**

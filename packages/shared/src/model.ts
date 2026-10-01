@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
@@ -47,7 +48,7 @@ export function getProviderOptionStringSelectionValue(
 ): string | undefined {
   const value = getProviderOptionSelectionValue(selections, id);
 
-  return typeof value === "string" ? value : undefined;
+  return Predicate.isString(value) ? value : undefined;
 }
 
 export function getProviderOptionBooleanSelectionValue(
@@ -56,7 +57,7 @@ export function getProviderOptionBooleanSelectionValue(
 ): boolean | undefined {
   const value = getProviderOptionSelectionValue(selections, id);
 
-  return typeof value === "boolean" ? value : undefined;
+  return Predicate.isBoolean(value) ? value : undefined;
 }
 
 export function getModelSelectionOptionValue(
@@ -129,7 +130,7 @@ function withDescriptorCurrentValue(
   rawCurrentValue: string | boolean | undefined,
 ): ProviderOptionDescriptor {
   if (descriptor.type === "boolean") {
-    if (typeof rawCurrentValue === "boolean") {
+    if (Predicate.isBoolean(rawCurrentValue)) {
       return {
         ...descriptor,
         currentValue: rawCurrentValue,
@@ -139,10 +140,9 @@ function withDescriptorCurrentValue(
     return descriptor;
   }
 
-  const currentValue =
-    typeof rawCurrentValue === "string"
-      ? resolveDescriptorChoiceValue(descriptor, rawCurrentValue)
-      : resolveDescriptorChoiceValue(descriptor, descriptor.currentValue);
+  const currentValue = Predicate.isString(rawCurrentValue)
+    ? resolveDescriptorChoiceValue(descriptor, rawCurrentValue)
+    : resolveDescriptorChoiceValue(descriptor, descriptor.currentValue);
 
   if (!currentValue) {
     const { currentValue: _unusedCurrentValue, ...rest } = descriptor;
@@ -197,7 +197,7 @@ export function getProviderOptionCurrentLabel(
   }
 
   if (descriptor.type === "boolean") {
-    return typeof descriptor.currentValue === "boolean"
+    return Predicate.isBoolean(descriptor.currentValue)
       ? descriptor.currentValue
         ? "On"
         : "Off"
@@ -206,7 +206,7 @@ export function getProviderOptionCurrentLabel(
 
   const currentValue = getProviderOptionCurrentValue(descriptor);
 
-  if (typeof currentValue !== "string") {
+  if (!Predicate.isString(currentValue)) {
     return undefined;
   }
 
@@ -225,7 +225,7 @@ export function buildProviderOptionSelectionsFromDescriptors(
   for (const descriptor of descriptors) {
     const value = getProviderOptionCurrentValue(descriptor);
 
-    if (typeof value === "string" || typeof value === "boolean") {
+    if (Predicate.isString(value) || Predicate.isBoolean(value)) {
       nextSelections.push({ id: descriptor.id, value });
     }
   }
@@ -252,7 +252,7 @@ export function getModelSelectionOptionDescriptors(
 }
 
 export function isClaudeUltrathinkPrompt(text: string | null | undefined): boolean {
-  return typeof text === "string" && /\bultrathink\b/i.test(text);
+  return Predicate.isString(text) && /\bultrathink\b/i.test(text);
 }
 
 export function normalizeModelSlug(
@@ -271,12 +271,12 @@ export function normalizeModelSlug(
     ? aliases[trimmed]
     : undefined;
 
-  return typeof aliased === "string" ? aliased : trimmed;
+  return Predicate.isString(aliased) ? aliased : trimmed;
 }
 
 /** Custom model identifiers are provider-owned, so only trim them; never expand aliases. */
 export function normalizeCustomModelSlug(model: string | null | undefined): string | null {
-  if (typeof model !== "string") {
+  if (!Predicate.isString(model)) {
     return null;
   }
 
@@ -288,7 +288,7 @@ export function resolveSelectableModel(
   value: string | null | undefined,
   options: ReadonlyArray<SelectableModelOption>,
 ): string | null {
-  if (typeof value !== "string") {
+  if (!Predicate.isString(value)) {
     return null;
   }
 
@@ -339,9 +339,9 @@ export function resolveModelSlugForProvider(
 }
 
 /** Trim a string, returning null for empty/missing values. */
-export function trimOrNull<T extends string>(value: T | null | undefined): T | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim() as T;
+export function trimOrNull(value: string | null | undefined) {
+  if (!Predicate.isString(value)) return null;
+  const trimmed = value.trim();
 
   return trimmed || null;
 }

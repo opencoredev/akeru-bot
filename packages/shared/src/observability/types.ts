@@ -1,20 +1,21 @@
+import type * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import * as Tracer from "effect/Tracer";
 import { OtlpTracer } from "effect/unstable/observability";
 import { type TraceSinkOptions, type TraceSink } from "./traceSink.ts";
 
-export type TraceAttributes = Readonly<Record<string, unknown>>;
+export type TraceAttributes = Readonly<Record<string, Schema.Json>>;
 
 export interface TraceRecordEvent {
   readonly name: string;
   readonly timeUnixNano: string;
-  readonly attributes: Readonly<Record<string, unknown>>;
+  readonly attributes: TraceAttributes;
 }
 
 export interface TraceRecordLink {
   readonly traceId: string;
   readonly spanId: string;
-  readonly attributes: Readonly<Record<string, unknown>>;
+  readonly attributes: TraceAttributes;
 }
 
 interface BaseTraceRecord {
@@ -27,7 +28,7 @@ interface BaseTraceRecord {
   readonly startTimeUnixNano: string;
   readonly endTimeUnixNano: string;
   readonly durationMs: number;
-  readonly attributes: Readonly<Record<string, unknown>>;
+  readonly attributes: TraceAttributes;
   readonly events: ReadonlyArray<TraceRecordEvent>;
   readonly links: ReadonlyArray<TraceRecordLink>;
 }
@@ -50,11 +51,11 @@ export interface EffectTraceRecord extends BaseTraceRecord {
 
 export interface OtlpTraceRecord extends BaseTraceRecord {
   readonly type: "otlp-span";
-  readonly resourceAttributes: Readonly<Record<string, unknown>>;
+  readonly resourceAttributes: TraceAttributes;
   readonly scope: Readonly<{
     readonly name?: string;
     readonly version?: string;
-    readonly attributes: Readonly<Record<string, unknown>>;
+    readonly attributes: TraceAttributes;
   }>;
   readonly status?:
     | {
@@ -90,6 +91,10 @@ export interface SerializableSpan {
   readonly attributes: ReadonlyMap<string, unknown>;
   readonly links: ReadonlyArray<Tracer.SpanLink>;
   readonly events: ReadonlyArray<
-    readonly [name: string, startTime: bigint, attributes: Record<string, unknown>]
+    readonly [
+      name: string,
+      startTime: bigint,
+      attributes: NonNullable<Parameters<Tracer.Span["event"]>[2]>,
+    ]
   >;
 }

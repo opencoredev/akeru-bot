@@ -69,19 +69,19 @@ export function resolveResponseTypeName(
   paramsType: string | undefined,
   generatedSchemaNames: ReadonlySet<string>,
 ): string {
-  const overrides: Record<string, string> = {
-    "account/logout": "LogoutAccountResponse",
-    "account/rateLimits/read": "GetAccountRateLimitsResponse",
-    "account/usage/read": "GetAccountTokenUsageResponse",
-    "account/workspaceMessages/read": "GetWorkspaceMessagesResponse",
-    "config/batchWrite": "ConfigWriteResponse",
-    "config/mcpServer/reload": "McpServerRefreshResponse",
-    "config/value/write": "ConfigWriteResponse",
-    "configRequirements/read": "ConfigRequirementsReadResponse",
-    "externalAgentConfig/import/readHistories": "ExternalAgentConfigImportHistoriesReadResponse",
-  };
+  const overrides = new Map<string, string>([
+    ["account/logout", "LogoutAccountResponse"],
+    ["account/rateLimits/read", "GetAccountRateLimitsResponse"],
+    ["account/usage/read", "GetAccountTokenUsageResponse"],
+    ["account/workspaceMessages/read", "GetWorkspaceMessagesResponse"],
+    ["config/batchWrite", "ConfigWriteResponse"],
+    ["config/mcpServer/reload", "McpServerRefreshResponse"],
+    ["config/value/write", "ConfigWriteResponse"],
+    ["configRequirements/read", "ConfigRequirementsReadResponse"],
+    ["externalAgentConfig/import/readHistories", "ExternalAgentConfigImportHistoriesReadResponse"],
+  ]);
 
-  const override = overrides[method];
+  const override = overrides.get(method);
 
   if (override) {
     return resolveSchemaTypeName(override, generatedSchemaNames);

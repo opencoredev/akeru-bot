@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { type ServerConfig, WS_METHODS } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -9,6 +10,7 @@ import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as Socket from "effect/unstable/socket/Socket";
 
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This client boundary creates an HTTP or RPC transport for its environment.
 import { makeWsRpcProtocolClient, type WsRpcProtocolClient } from "./protocol.ts";
 import type {
   ConnectionAttemptError,
@@ -46,24 +48,34 @@ type InitialConfigError = Effect.Error<
 type ProbeError = Effect.Error<ReturnType<WsRpcProtocolClient[typeof WS_METHODS.serverProbe]>>;
 
 function mapSessionRpcError(error: InitialConfigError | ProbeError): ConnectionAttemptError {
-  switch (error._tag) {
-    case "EnvironmentAuthorizationError":
-      return new ConnectionBlockedError({
-        reason: "permission",
-        detail: error.message,
-      });
-    case "KeybindingsConfigParseError":
-    case "ServerSettingsError":
-      return new ConnectionTransientErrorClass({
-        reason: "remote-unavailable",
-        detail: error.message,
-      });
-    case "RpcClientError":
-      return new ConnectionTransientErrorClass({
-        reason: "transport",
-        detail: error.message,
-      });
-  }
+  return Match.value(error).pipe(
+    Match.tagsExhaustive({
+      EnvironmentAuthorizationError: (error) => {
+        return new ConnectionBlockedError({
+          reason: "permission",
+          detail: error.message,
+        });
+      },
+      KeybindingsConfigParseError: (error) => {
+        return new ConnectionTransientErrorClass({
+          reason: "remote-unavailable",
+          detail: error.message,
+        });
+      },
+      ServerSettingsError: (error) => {
+        return new ConnectionTransientErrorClass({
+          reason: "remote-unavailable",
+          detail: error.message,
+        });
+      },
+      RpcClientError: (error) => {
+        return new ConnectionTransientErrorClass({
+          reason: "transport",
+          detail: error.message,
+        });
+      },
+    }),
+  );
 }
 
 export const make = Effect.gen(function* () {

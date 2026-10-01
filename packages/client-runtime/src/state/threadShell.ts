@@ -1,5 +1,5 @@
+import { EnvironmentId } from "@akeru/contracts";
 import type {
-  EnvironmentId,
   OrchestrationShellSnapshot,
   OrchestrationThreadShell,
   ProjectId,
@@ -237,11 +237,8 @@ export function createEnvironmentThreadShellAtoms(input: {
   });
 
   const latestOwnerThreadIdAtomFamily = Atom.family((key: string) => {
-    const [kind, environmentId, ownerId] = key.split(OWNER_KEY_SEPARATOR) as [
-      "bot" | "group",
-      EnvironmentId,
-      string,
-    ];
+    const [kind, environmentKey = "", ownerId = ""] = key.split(OWNER_KEY_SEPARATOR);
+    const environmentId = EnvironmentId.make(environmentKey);
 
     return Atom.make((get): ThreadId | null => {
       const latest = get(environmentLatestOwnerThreadIdsAtom(environmentId));
@@ -251,7 +248,8 @@ export function createEnvironmentThreadShellAtoms(input: {
   });
 
   const botChatCompletionsAtomFamily = Atom.family((key: string) => {
-    const [environmentId, botId] = key.split(OWNER_KEY_SEPARATOR) as [EnvironmentId, string];
+    const [environmentKey = "", botId] = key.split(OWNER_KEY_SEPARATOR);
+    const environmentId = EnvironmentId.make(environmentKey);
     let previous = EMPTY_BOT_CHAT_COMPLETIONS;
 
     return Atom.make((get) => {

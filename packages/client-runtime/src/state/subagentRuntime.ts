@@ -1,3 +1,7 @@
-export function isBackgroundTaskActivity(payload: Record<string, unknown>): boolean {
+interface TaskActivityPayload {
+  readonly agentKind?: unknown;
+}
+
+export function isBackgroundTaskActivity(payload: TaskActivityPayload): boolean {
   return payload.agentKind !== "agent";
 }

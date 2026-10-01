@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
 import { waitForHttpReady as waitForHttpReadyShared } from "@akeru/shared/httpReadiness";
 import * as Effect from "effect/Effect";
 import { HttpClient } from "effect/unstable/http";
@@ -47,15 +49,21 @@ function isLoopbackHostname(hostname: string): boolean {
   return normalized === "127.0.0.1" || normalized === "::1" || normalized === "localhost";
 }
 
+const decodeHttpBaseUrl = Schema.decodeUnknownOption(Schema.String);
+
 export const resolveLoopbackSshHttpBaseUrl = Effect.fn("ssh/tunnel.resolveLoopbackSshHttpBaseUrl")(
-  function* (rawHttpBaseUrl: unknown): Effect.fn.Return<string, SshHttpBridgeError> {
+  function* (
+    rawHttpBaseUrl: Parameters<typeof decodeHttpBaseUrl>[0],
+  ): Effect.fn.Return<string, SshHttpBridgeError> {
     return yield* Effect.try({
       try: () => {
-        if (typeof rawHttpBaseUrl !== "string" || rawHttpBaseUrl.trim().length === 0) {
+        const decoded = decodeHttpBaseUrl(rawHttpBaseUrl);
+
+        if (Option.isNone(decoded) || decoded.value.trim().length === 0) {
           throw new Error("Invalid SSH forwarded http base URL.");
         }
 
-        const baseUrl = new URL(rawHttpBaseUrl);
+        const baseUrl = new URL(decoded.value);
 
         if (!isLoopbackHostname(baseUrl.hostname)) {
           throw new Error("SSH desktop bridge only supports loopback forwarded URLs.");

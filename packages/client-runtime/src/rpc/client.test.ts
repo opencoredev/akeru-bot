@@ -1,3 +1,4 @@
+import { testRpcClient } from "../test-support/services.ts";
 import {
   BackgroundPolicySnapshot,
   EnvironmentId,
@@ -201,9 +202,9 @@ describe("environment RPC", () => {
     Effect.gen(function* () {
       const observations: string[] = [];
 
-      const client = {
+      const client = testRpcClient({
         [WS_METHODS.serverProbe]: () => Effect.succeed({}),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const { activeSession, supervisor } = yield* makeHarness();
       yield* SubscriptionRef.set(activeSession, Option.some(session(client)));
@@ -238,13 +239,13 @@ describe("environment RPC", () => {
       const firstEvents = yield* Queue.unbounded<ServerSelfUpdateProgressEvent>();
       const secondEvents = yield* Queue.unbounded<ServerSelfUpdateProgressEvent>();
 
-      const firstClient = {
+      const firstClient = testRpcClient({
         [WS_METHODS.serverUpdateServerWithProgress]: () => Stream.fromQueue(firstEvents),
-      } as unknown as WsRpcProtocolClient;
+      });
 
-      const secondClient = {
+      const secondClient = testRpcClient({
         [WS_METHODS.serverUpdateServerWithProgress]: () => Stream.fromQueue(secondEvents),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const { activeSession, supervisor } = yield* makeHarness();
 
@@ -274,21 +275,21 @@ describe("environment RPC", () => {
     Effect.gen(function* () {
       const subscriptions: string[] = [];
 
-      const firstClient = {
+      const firstClient = testRpcClient({
         [WS_METHODS.subscribeServerLifecycle]: () => {
           subscriptions.push("first");
 
           return Stream.never;
         },
-      } as unknown as WsRpcProtocolClient;
+      });
 
-      const secondClient = {
+      const secondClient = testRpcClient({
         [WS_METHODS.subscribeServerLifecycle]: () => {
           subscriptions.push("second");
 
           return Stream.never;
         },
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const { activeSession, retryCount, supervisor } = yield* makeHarness();
 
@@ -327,7 +328,7 @@ describe("environment RPC", () => {
     Effect.gen(function* () {
       const subscriptions: string[] = [];
 
-      const firstClient = {
+      const firstClient = testRpcClient({
         [WS_METHODS.subscribeServerLifecycle]: () => {
           subscriptions.push("first");
 
@@ -340,15 +341,15 @@ describe("environment RPC", () => {
             }),
           );
         },
-      } as unknown as WsRpcProtocolClient;
+      });
 
-      const secondClient = {
+      const secondClient = testRpcClient({
         [WS_METHODS.subscribeServerLifecycle]: () => {
           subscriptions.push("second");
 
           return Stream.never;
         },
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const { activeSession, retryCount, supervisor } = yield* makeHarness();
 
@@ -382,9 +383,9 @@ describe("environment RPC", () => {
     Effect.gen(function* () {
       const domainError = new Error("terminal subscription rejected");
 
-      const client = {
+      const client = testRpcClient({
         [WS_METHODS.subscribeServerLifecycle]: () => Stream.fail(domainError),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const { activeSession, retryCount, supervisor } = yield* makeHarness();
 
@@ -407,21 +408,21 @@ describe("environment RPC", () => {
       const subscriptions: string[] = [];
       const observedFailures: Error[] = [];
 
-      const firstClient = {
+      const firstClient = testRpcClient({
         [WS_METHODS.subscribeServerLifecycle]: () => {
           subscriptions.push("first");
 
           return Stream.fail(domainError);
         },
-      } as unknown as WsRpcProtocolClient;
+      });
 
-      const secondClient = {
+      const secondClient = testRpcClient({
         [WS_METHODS.subscribeServerLifecycle]: () => {
           subscriptions.push("second");
 
           return Stream.never;
         },
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const { activeSession, retryCount, supervisor } = yield* makeHarness();
 
@@ -468,14 +469,14 @@ describe("environment RPC", () => {
       const subscriptionCount = yield* Ref.make(0);
       const expectedFailureCount = yield* Ref.make(0);
 
-      const client = {
+      const client = testRpcClient({
         [WS_METHODS.subscribeServerLifecycle]: () =>
           Stream.unwrap(
             Ref.getAndUpdate(subscriptionCount, (count) => count + 1).pipe(
               Effect.map((count) => (count === 0 ? Stream.fail(domainError) : Stream.never)),
             ),
           ),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const { activeSession, supervisor } = yield* makeHarness();
 
@@ -527,9 +528,9 @@ describe("environment RPC", () => {
       const defect = new Error("subscription invariant failed");
       let expectedFailureCount = 0;
 
-      const client = {
+      const client = testRpcClient({
         [WS_METHODS.subscribeServerLifecycle]: () => Stream.die(defect),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const { activeSession, supervisor } = yield* makeHarness();
 

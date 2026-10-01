@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 
 import { environmentEndpointUrl } from "./endpoint.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This client boundary creates an HTTP or RPC transport for its environment.
 import { executeEnvironmentHttpRequest, makeEnvironmentHttpApiClient } from "../rpc/http.ts";
 
 const DEFAULT_REMOTE_REQUEST_TIMEOUT_MS = 10_000;

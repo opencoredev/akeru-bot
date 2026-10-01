@@ -1,3 +1,7 @@
+import { asRecord } from "./work-log-command.ts";
+import type { PendingApproval } from "./pendingRequests.ts";
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off -- Routine labels format wall-clock run times with Intl for display.
 import type {
   BotId,
@@ -244,12 +248,11 @@ export function routineScheduleLabel(
   schedule: RoutineAdapterSchedule,
   i18n: RoutineTranslator = englishTranslator,
 ) {
-  const frequency =
-    schedule.frequency === "daily"
-      ? i18n.t("Daily")
-      : schedule.frequency === "weekdays"
-        ? i18n.t("Weekdays")
-        : i18n.t(WEEKDAY_LABELS[schedule.weekday ?? 1] ?? "Monday");
+  const frequency = Match.value(schedule.frequency).pipe(
+    Match.when("daily", () => i18n.t("Daily")),
+    Match.when("weekdays", () => i18n.t("Weekdays")),
+    Match.orElse(() => i18n.t(WEEKDAY_LABELS[schedule.weekday ?? 1] ?? "Monday")),
+  );
 
   return i18n.t("{frequency} at {time} ({timezone})", {
     frequency,
@@ -267,10 +270,12 @@ export function boundedRunHistory(history: readonly RoutineAdapterRun[]) {
  * A routine that was never approved is a Draft; one that was turned off is Off, and
  * the two take different routes back on.
  */
-export function routineStatus(routine: RoutineAdapterItem): {
+type RoutineStatusResult = {
   readonly label: MessageKey & ("Active" | "Paused" | "Off" | "Draft");
   readonly variant: "success" | "warning" | "secondary";
-} {
+};
+
+export function routineStatus(routine: RoutineAdapterItem): RoutineStatusResult {
   if (routine.paused) return { label: "Paused", variant: "warning" };
 
   if (routine.enabled) return { label: "Active", variant: "success" };
@@ -405,46 +410,43 @@ export interface RoutineApprovalSummary {
  * tool arguments so a malformed request still renders as a reviewable approval.
  */
 export function routineApprovalSummary(
-  args: unknown,
+  args: PendingApproval["args"],
   t: RoutineTranslator["t"] = englishTranslator.t,
 ): RoutineApprovalSummary {
-  const record = args && typeof args === "object" ? (args as Record<string, unknown>) : null;
+  const record = asRecord(args);
+  const schedule = asRecord(record?.schedule);
 
-  const schedule =
-    record?.schedule && typeof record.schedule === "object"
-      ? (record.schedule as Record<string, unknown>)
-      : null;
-
-  const time = typeof schedule?.time === "string" ? schedule.time : null;
+  const time = Predicate.isString(schedule?.time) ? schedule.time : null;
 
   const weekdays = Array.isArray(schedule?.weekdays)
-    ? schedule.weekdays.filter((day): day is string => typeof day === "string")
+    ? schedule.weekdays.filter((day): day is string => Predicate.isString(day))
     : [];
 
-  const kind =
-    schedule?.kind === "weekdays"
-      ? t("Weekdays")
-      : schedule?.kind === "weekly"
-        ? weekdays.length > 0
-          ? weekdays
-              .map((day) => {
-                const index = WEEKDAY_IDS.indexOf(day as (typeof WEEKDAY_IDS)[number]);
+  const kind = Match.value(schedule?.kind).pipe(
+    Match.when("weekdays", () => t("Weekdays")),
+    Match.when("weekly", () =>
+      weekdays.length > 0
+        ? weekdays
+            .map((day) => {
+              const index = WEEKDAY_IDS.findIndex((weekday) => weekday === day);
 
-                return index === -1 ? day : t(WEEKDAY_LABELS[index]!);
-              })
-              .join(", ")
-          : t("Weekly")
-        : t("Daily");
+              return index === -1 ? day : t(WEEKDAY_LABELS[index]!);
+            })
+            .join(", ")
+        : t("Weekly"),
+    ),
+    Match.orElse(() => t("Daily")),
+  );
 
   const base = time ? t("{schedule} at {time}", { schedule: kind, time }) : null;
 
   const timezone =
-    typeof record?.timezone === "string" && record.timezone.trim() ? record.timezone.trim() : null;
+    Predicate.isString(record?.timezone) && record.timezone.trim() ? record.timezone.trim() : null;
 
   return {
-    name: typeof record?.name === "string" && record.name.trim() ? record.name : t("New routine"),
+    name: Predicate.isString(record?.name) && record.name.trim() ? record.name : t("New routine"),
     instructions:
-      typeof record?.instructions === "string" && record.instructions.trim()
+      Predicate.isString(record?.instructions) && record.instructions.trim()
         ? record.instructions
         : null,
     schedule: base && timezone ? `${base} (${timezone})` : base,

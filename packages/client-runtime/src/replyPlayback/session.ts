@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { createAutomaticReadoutTracker, type CompletedReply } from "./automaticReadout.ts";
 import {
   storedReplySynthesisCapability,
@@ -45,7 +46,7 @@ export function createReplyPlaybackSession(options: {
     | ((environmentId: string) => StoredReplySynthesisCapability);
 }) {
   const resolveSynthesis = (environmentId: string | null) =>
-    typeof options.synthesis === "function"
+    Predicate.isFunction(options.synthesis)
       ? environmentId
         ? options.synthesis(environmentId)
         : storedReplySynthesisCapability()

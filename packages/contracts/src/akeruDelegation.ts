@@ -1,3 +1,6 @@
+import * as Match from "effect/Match";
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
@@ -16,6 +19,8 @@ import {
 import { McpServerId } from "./mcpServer.ts";
 import { BotSandbox } from "./orchestration/roster.ts";
 import { RuntimeMode } from "./orchestration/modelSelection.ts";
+
+const DelegationPhase = Data.taggedEnum<AkeruDelegationPhase>();
 
 export const AKERU_DELEGATION_MAX_DEPTH = 2;
 
@@ -193,51 +198,46 @@ const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
 
   switch (legacy.state) {
     case "queued":
-      return { _tag: "Queued" };
+      return DelegationPhase.Queued();
     case "running":
     case "blocked":
-      if (childThreadId === null) return { _tag: "Queued" };
+      if (childThreadId === null) return DelegationPhase.Queued();
 
       return legacy.state === "running"
-        ? {
-            _tag: "Running",
+        ? DelegationPhase.Running({
             childThreadId,
             childTurnId: legacy.childTurnId,
             startedAt,
             progress: legacy.progress ?? null,
-          }
-        : {
-            _tag: "Blocked",
+          })
+        : DelegationPhase.Blocked({
             childThreadId,
             childTurnId: legacy.childTurnId,
             startedAt,
             reason: legacy.blockedReason ?? legacy.failure?.message ?? "The bot is blocked.",
-          };
+          });
     case "completed":
       if (childThreadId !== null && legacy.result !== null) {
-        return {
-          _tag: "Completed",
+        return DelegationPhase.Completed({
           childThreadId,
           childTurnId: legacy.childTurnId,
           startedAt,
           completedAt,
           result: legacy.result,
           acknowledgedAt: legacy.acknowledgedAt ?? null,
-        };
+        });
       }
 
-      return {
-        _tag: "Failed",
+      return DelegationPhase.Failed({
         childThreadId,
         childTurnId: legacy.childTurnId,
         startedAt: legacy.startedAt,
         completedAt,
         failure: { failureCode: "child_failed", message: "The bot did not return a result." },
         acknowledgedAt: null,
-      };
+      });
     case "failed":
-      return {
-        _tag: "Failed",
+      return DelegationPhase.Failed({
         childThreadId,
         childTurnId: legacy.childTurnId,
         startedAt: legacy.startedAt,
@@ -247,16 +247,15 @@ const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
           message: "The bot did not return a result.",
         },
         acknowledgedAt: null,
-      };
+      });
     case "canceled":
-      return {
-        _tag: "Canceled",
+      return DelegationPhase.Canceled({
         childThreadId,
         childTurnId: legacy.childTurnId,
         startedAt: legacy.startedAt,
         completedAt,
         canceledBy: legacy.canceledBy ?? "user",
-      };
+      });
   }
 };
 
@@ -284,17 +283,17 @@ const LegacyToTagged = LegacyDelegationRecord.pipe(
       },
       encode: ({ phase, ...base }) => ({
         ...base,
-        childThreadId: phase._tag === "Queued" ? null : phase.childThreadId,
-        childTurnId: phase._tag === "Queued" ? null : phase.childTurnId,
+        childThreadId: isQueuedPhase(phase) ? null : phase.childThreadId,
+        childTurnId: isQueuedPhase(phase) ? null : phase.childTurnId,
         state: akeruDelegationStateOf(phase),
-        result: phase._tag === "Completed" ? phase.result : null,
-        failure: phase._tag === "Failed" ? phase.failure : null,
-        startedAt: phase._tag === "Queued" ? null : phase.startedAt,
+        result: Predicate.isTagged(phase, "Completed") ? phase.result : null,
+        failure: Predicate.isTagged(phase, "Failed") ? phase.failure : null,
+        startedAt: isQueuedPhase(phase) ? null : phase.startedAt,
         completedAt: "completedAt" in phase ? phase.completedAt : null,
-        ...(phase._tag === "Running" ? { progress: phase.progress } : {}),
-        ...(phase._tag === "Blocked" ? { blockedReason: phase.reason } : {}),
-        ...(phase._tag === "Completed" ? { acknowledgedAt: phase.acknowledgedAt } : {}),
-        ...(phase._tag === "Canceled" ? { canceledBy: phase.canceledBy } : {}),
+        ...(Predicate.isTagged(phase, "Running") ? { progress: phase.progress } : {}),
+        ...(Predicate.isTagged(phase, "Blocked") ? { blockedReason: phase.reason } : {}),
+        ...(Predicate.isTagged(phase, "Completed") ? { acknowledgedAt: phase.acknowledgedAt } : {}),
+        ...(Predicate.isTagged(phase, "Canceled") ? { canceledBy: phase.canceledBy } : {}),
       }),
     }),
   ),
@@ -302,20 +301,28 @@ const LegacyToTagged = LegacyDelegationRecord.pipe(
 
 /** Lowercase state name for a phase, as used by activity kinds and tool payloads. */
 export const akeruDelegationStateOf = (phase: AkeruDelegationPhase): AkeruDelegationState => {
-  switch (phase._tag) {
-    case "Queued":
-      return "queued";
-    case "Running":
-      return "running";
-    case "Blocked":
-      return "blocked";
-    case "Completed":
-      return "completed";
-    case "Failed":
-      return "failed";
-    case "Canceled":
-      return "canceled";
-  }
+  return Match.value(phase).pipe(
+    Match.tagsExhaustive({
+      Queued: () => {
+        return "queued" as const;
+      },
+      Running: () => {
+        return "running" as const;
+      },
+      Blocked: () => {
+        return "blocked" as const;
+      },
+      Completed: () => {
+        return "completed" as const;
+      },
+      Failed: () => {
+        return "failed" as const;
+      },
+      Canceled: () => {
+        return "canceled" as const;
+      },
+    }),
+  );
 };
 
 export const AkeruDelegationRecord = Schema.Union([LegacyToTagged, TaggedDelegationRecord]);
@@ -347,7 +354,7 @@ export const isAkeruDelegationResultPending = (
 ): record is AkeruDelegationRecord & {
   readonly phase: Extract<AkeruDelegationPhase, { _tag: "Completed" | "Failed" }>;
 } =>
-  (record.phase._tag === "Completed" || record.phase._tag === "Failed") &&
+  (Predicate.isTagged(record.phase, "Completed") || Predicate.isTagged(record.phase, "Failed")) &&
   record.phase.acknowledgedAt === null;
 
 /** Stamps a pending result as delivered to the parent bot. */
@@ -373,7 +380,7 @@ export const acknowledgeAkeruDelegation = (
 export const releaseAkeruDelegationAcknowledgement = (
   record: AkeruDelegationRecord,
 ): AkeruDelegationRecord =>
-  (record.phase._tag === "Completed" || record.phase._tag === "Failed") &&
+  (Predicate.isTagged(record.phase, "Completed") || Predicate.isTagged(record.phase, "Failed")) &&
   record.phase.acknowledgedAt !== null
     ? { ...record, phase: { ...record.phase, acknowledgedAt: null } }
     : record;
@@ -415,4 +422,10 @@ export class AkeruDelegationProviderUnsupportedError extends Schema.TaggedErrorC
   override get message(): string {
     return `${this.botName} runs on the ${this.driverKind} provider, which cannot receive handed-off work. Do the work yourself or pick a bot on another provider.`;
   }
+}
+
+function isQueuedPhase(
+  value: AkeruDelegationPhase,
+): value is Extract<AkeruDelegationPhase, { readonly _tag: "Queued" }> {
+  return Predicate.isTagged(value, "Queued");
 }

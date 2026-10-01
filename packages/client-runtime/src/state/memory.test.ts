@@ -1,3 +1,4 @@
+import { testRpcClient, testEnvironmentRegistry } from "../test-support/services.ts";
 import { EnvironmentId, ThreadId, WS_METHODS } from "@akeru/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -15,7 +16,7 @@ import {
 } from "../connection/model.ts";
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
-import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
+
 import type { RpcSession } from "../rpc/session.ts";
 import { createMemoryEnvironmentAtoms } from "./memory.ts";
 
@@ -26,7 +27,7 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
     Effect.gen(function* () {
       const calls: string[] = [];
 
-      const client = {
+      const client = testRpcClient({
         [WS_METHODS.memoryExport]: () =>
           Effect.sync(() => calls.push(WS_METHODS.memoryExport)).pipe(
             Effect.as({ schemaVersion: 2 } as never),
@@ -40,7 +41,7 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
           Effect.sync(() => calls.push(WS_METHODS.memoryObservationsClear)).pipe(
             Effect.as(undefined as never),
           ),
-      } as unknown as WsRpcProtocolClient;
+      });
 
       const session: RpcSession = {
         client,
@@ -80,9 +81,9 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
         Atom.runtime(
           Layer.succeed(
             EnvironmentRegistry.EnvironmentRegistry,
-            EnvironmentRegistry.EnvironmentRegistry.of({
+            testEnvironmentRegistry({
               run,
-            } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]),
+            }),
           ),
         ),
       );

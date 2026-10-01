@@ -10,6 +10,18 @@ import {
   RoutineSchedule,
 } from "./routines.ts";
 
+const decodeSyncRoutine = Schema.decodeUnknownSync(Routine);
+
+const decodeSyncRoutineRun = Schema.decodeUnknownSync(RoutineRun);
+
+const decodeSyncRoutineSchedule = Schema.decodeUnknownSync(RoutineSchedule);
+
+const decodeSyncRoutineDraftedPayload = Schema.decodeUnknownSync(RoutineDraftedPayload);
+
+const decodeSyncClientRoutineCommand = Schema.decodeUnknownSync(ClientRoutineCommand);
+
+const decodeSyncInternalRoutineCommand = Schema.decodeUnknownSync(InternalRoutineCommand);
+
 const now = "2026-08-31T09:00:00.000Z";
 
 const definition = {
@@ -44,14 +56,14 @@ const routine = {
 
 describe("routine contracts", () => {
   it("decodes a provider-neutral routine and durable run", () => {
-    expect(Schema.decodeUnknownSync(Routine)(routine)).toMatchObject({
+    expect(decodeSyncRoutine(routine)).toMatchObject({
       id: "routine-inbox",
       schedule: { kind: "weekdays", time: "09:00" },
       approvalVersion: 2,
     });
 
     expect(
-      Schema.decodeUnknownSync(RoutineRun)({
+      decodeSyncRoutineRun({
         id: "run-inbox-1",
         routineId: routine.id,
         procedureVersion: 2,
@@ -71,16 +83,14 @@ describe("routine contracts", () => {
   });
 
   it("rejects invalid local times, timezones, and empty weekly schedules", () => {
-    const decode = Schema.decodeUnknownSync(RoutineSchedule);
+    const decode = decodeSyncRoutineSchedule;
     expect(() => decode({ kind: "daily", time: "24:00" })).toThrow();
     expect(() => decode({ kind: "weekly", weekdays: [], time: "09:00" })).toThrow();
-    expect(() =>
-      Schema.decodeUnknownSync(Routine)({ ...routine, timezone: "Mars/Olympus" }),
-    ).toThrow();
+    expect(() => decodeSyncRoutine({ ...routine, timezone: "Mars/Olympus" })).toThrow();
   });
 
   it("requires a material draft to clear approval and disable the schedule", () => {
-    const decode = Schema.decodeUnknownSync(RoutineDraftedPayload);
+    const decode = decodeSyncRoutineDraftedPayload;
     expect(
       decode({
         routine: { ...routine, approvalVersion: null, enabled: false, lifecycle: "draft" },
@@ -90,7 +100,7 @@ describe("routine contracts", () => {
   });
 
   it("keeps scheduled and recovery triggers out of client run commands", () => {
-    const decode = Schema.decodeUnknownSync(ClientRoutineCommand);
+    const decode = decodeSyncClientRoutineCommand;
 
     const command = {
       type: "routine.run",
@@ -105,13 +115,12 @@ describe("routine contracts", () => {
   });
 
   it("defaults delegateToBotId to null and decodes a delegation target", () => {
-    expect(Schema.decodeUnknownSync(Routine)(routine).delegateToBotId).toBeNull();
+    expect(decodeSyncRoutine(routine).delegateToBotId).toBeNull();
+    expect(decodeSyncRoutine({ ...routine, delegateToBotId: "bot-research" }).delegateToBotId).toBe(
+      "bot-research",
+    );
     expect(
-      Schema.decodeUnknownSync(Routine)({ ...routine, delegateToBotId: "bot-research" })
-        .delegateToBotId,
-    ).toBe("bot-research");
-    expect(
-      Schema.decodeUnknownSync(ClientRoutineCommand)({
+      decodeSyncClientRoutineCommand({
         type: "routine.draft",
         commandId: "command-draft-1",
         routineId: routine.id,
@@ -131,10 +140,10 @@ describe("routine contracts", () => {
       createdAt: now,
     };
 
-    expect(Schema.decodeUnknownSync(InternalRoutineCommand)(command)).toMatchObject({
+    expect(decodeSyncInternalRoutineCommand(command)).toMatchObject({
       type: "routine.create-approved",
       routineId: routine.id,
     });
-    expect(() => Schema.decodeUnknownSync(ClientRoutineCommand)(command)).toThrow();
+    expect(() => decodeSyncClientRoutineCommand(command)).toThrow();
   });
 });

@@ -54,7 +54,7 @@ export function exportNameForPath(filePath: string): string {
     return relative;
   }
 
-  const [namespace, name] = relative.split("/", 2) as [string, string];
+  const [namespace = "", name = ""] = relative.split("/", 2);
 
   const namespacePrefix = namespace
     .split(/[^A-Za-z0-9]+/)

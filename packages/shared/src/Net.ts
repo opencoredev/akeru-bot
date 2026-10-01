@@ -174,7 +174,9 @@ export const make = () => {
 
       probe.listen(0, host, () => {
         const address = probe.address();
-        const port = typeof address === "object" && address !== null ? address.port : 0;
+
+        const port = address !== null && !Predicate.isString(address) ? address.port : 0;
+
         probe.close(() => {
           if (port > 0) {
             settle(Effect.succeed(port));
