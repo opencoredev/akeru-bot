@@ -1,4 +1,4 @@
-import { isUsageJsonObject, decodeUsageJsonLine } from "./usageJson.ts";
+import { isJsonObject, decodeJsonString } from "../json.ts";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type { UsageProviderKind, UsageTokenTotals } from "@akeru/contracts";
@@ -92,12 +92,12 @@ export function parseClaudeLine(line: string): UsageRecord | null {
   let parsed: Schema.Json;
 
   try {
-    parsed = decodeUsageJsonLine(line);
+    parsed = decodeJsonString(line);
   } catch {
     return null;
   }
 
-  if (!isUsageJsonObject(parsed)) return null;
+  if (!isJsonObject(parsed)) return null;
 
   const record = parsed;
 
@@ -105,12 +105,12 @@ export function parseClaudeLine(line: string): UsageRecord | null {
 
   const message = record["message"];
 
-  if (!isUsageJsonObject(message)) return null;
+  if (!isJsonObject(message)) return null;
   const messageRecord = message;
 
   const usage = messageRecord["usage"];
 
-  if (!isUsageJsonObject(usage)) return null;
+  if (!isJsonObject(usage)) return null;
   const usageRecord = usage;
 
   const timestampMs = parseTimestampMs(record["timestamp"]);
@@ -195,13 +195,13 @@ function isForkedSessionMeta(payload: Schema.JsonObject): boolean {
   if (Predicate.isString(payload["forked_from_id"])) return true;
   const source = payload["source"];
 
-  if (!isUsageJsonObject(source)) return false;
+  if (!isJsonObject(source)) return false;
   const subagent = source["subagent"];
 
-  if (!isUsageJsonObject(subagent)) return false;
+  if (!isJsonObject(subagent)) return false;
   const spawn = subagent["thread_spawn"];
 
-  if (!isUsageJsonObject(spawn)) return false;
+  if (!isJsonObject(spawn)) return false;
 
   return Predicate.isString(spawn["parent_thread_id"]);
 }
@@ -218,17 +218,17 @@ export function parseCodexLine(line: string, state: CodexScanState): UsageRecord
   let parsed: Schema.Json;
 
   try {
-    parsed = decodeUsageJsonLine(line);
+    parsed = decodeJsonString(line);
   } catch {
     return null;
   }
 
-  if (!isUsageJsonObject(parsed)) return null;
+  if (!isJsonObject(parsed)) return null;
 
   const record = parsed;
   const payload = record["payload"];
 
-  if (!isUsageJsonObject(payload)) return null;
+  if (!isJsonObject(payload)) return null;
   const payloadRecord = payload;
   const payloadType = payloadRecord["type"];
 
@@ -261,10 +261,10 @@ export function parseCodexLine(line: string, state: CodexScanState): UsageRecord
 
   const info = payloadRecord["info"];
 
-  if (!isUsageJsonObject(info)) return null;
+  if (!isJsonObject(info)) return null;
   const last = info["last_token_usage"];
 
-  if (!isUsageJsonObject(last)) return null;
+  if (!isJsonObject(last)) return null;
   const lastRecord = last;
 
   // Only an event that is otherwise eligible may consume the duplicate

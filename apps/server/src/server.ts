@@ -50,59 +50,57 @@ import {
 // those finalizers get a chance to run.
 const HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS = 0;
 
-const HttpServerLive = Layer.unwrap(
-  Effect.gen(function* () {
-    const config = yield* ServerConfig.ServerConfig;
+export const selectHttpServerLayer = Effect.gen(function* () {
+  const config = yield* ServerConfig.ServerConfig;
 
-    if (!Predicate.isUndefined(Bun)) {
-      const BunHttpServer = yield* Effect.promise(
-        () => import("@effect/platform-bun/BunHttpServer"),
-      );
+  if (!Predicate.isUndefined(globalThis.Bun)) {
+    const BunHttpServer = yield* Effect.promise(() => import("@effect/platform-bun/BunHttpServer"));
 
-      return BunHttpServer.layer({
-        port: config.port,
-        hostname: config.host ?? "127.0.0.1",
-        gracefulShutdownTimeout: HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS,
-        websocket: {
-          // Negotiate permessage-deflate with clients that offer it; clients
-          // that don't still get uncompressed frames on their connection. A
-          // dedicated compressor keeps a per-connection sliding window
-          // (context takeover) so the compression dictionary is shared across
-          // server-to-client frames. Decompression uses the shared
-          // decompressor: uWebSockets' dedicated decompressor path can abort
-          // connections (close 1006) on valid DEFLATE input — see
-          // https://github.com/uNetworking/uWebSockets.js/issues/633.
-          perMessageDeflate: {
-            compress: "dedicated",
-            decompress: "shared",
-          },
-        },
-      });
-    } else {
-      const [NodeHttpServer, NodeHttp] = yield* Effect.all([
-        Effect.promise(() => import("@effect/platform-node/NodeHttpServer")),
-        Effect.promise(() => import("node:http")),
-      ]);
-
-      return NodeHttpServer.layer(() => guardHttpResponseWriteErrors(NodeHttp.createServer()), {
-        host: config.host ?? "127.0.0.1",
-        port: config.port,
-        gracefulShutdownTimeout: HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS,
+    return BunHttpServer.layer({
+      port: config.port,
+      hostname: config.host ?? "127.0.0.1",
+      gracefulShutdownTimeout: HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS,
+      websocket: {
         // Negotiate permessage-deflate with clients that offer it; clients
-        // that don't still get uncompressed frames on their connection.
-        // Context takeover stays enabled (ws default) so the compression
-        // window is shared across frames — that also makes small frames cheap
-        // to compress, so no size threshold is set (ws only honors
-        // `threshold` when context takeover is disabled).
-        websocket: { perMessageDeflate: true },
-      });
-    }
-  }),
-);
+        // that don't still get uncompressed frames on their connection. A
+        // dedicated compressor keeps a per-connection sliding window
+        // (context takeover) so the compression dictionary is shared across
+        // server-to-client frames. Decompression uses the shared
+        // decompressor: uWebSockets' dedicated decompressor path can abort
+        // connections (close 1006) on valid DEFLATE input — see
+        // https://github.com/uNetworking/uWebSockets.js/issues/633.
+        perMessageDeflate: {
+          compress: "dedicated",
+          decompress: "shared",
+        },
+      },
+    });
+  } else {
+    const [NodeHttpServer, NodeHttp] = yield* Effect.all([
+      Effect.promise(() => import("@effect/platform-node/NodeHttpServer")),
+      Effect.promise(() => import("node:http")),
+    ]);
 
-const PlatformServicesLive = Layer.unwrap(
+    return NodeHttpServer.layer(() => guardHttpResponseWriteErrors(NodeHttp.createServer()), {
+      host: config.host ?? "127.0.0.1",
+      port: config.port,
+      gracefulShutdownTimeout: HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS,
+      // Negotiate permessage-deflate with clients that offer it; clients
+      // that don't still get uncompressed frames on their connection.
+      // Context takeover stays enabled (ws default) so the compression
+      // window is shared across frames — that also makes small frames cheap
+      // to compress, so no size threshold is set (ws only honors
+      // `threshold` when context takeover is disabled).
+      websocket: { perMessageDeflate: true },
+    });
+  }
+});
+
+const HttpServerLive = Layer.unwrap(selectHttpServerLayer);
+
+export const PlatformServicesLive = Layer.unwrap(
   Effect.gen(function* () {
-    if (!Predicate.isUndefined(Bun)) {
+    if (!Predicate.isUndefined(globalThis.Bun)) {
       const { layer } = yield* Effect.promise(() => import("@effect/platform-bun/BunServices"));
 
       return layer;

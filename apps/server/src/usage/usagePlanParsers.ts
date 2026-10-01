@@ -1,4 +1,4 @@
-import { isUsageJsonObject, decodeUsageJson } from "./usageJson.ts";
+import { isJsonObject, decodeJson } from "../json.ts";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type { UsagePlanWindow } from "@akeru/contracts";
@@ -16,7 +16,7 @@ interface ParsedPlanUsage {
 // @effect-diagnostics nodeBuiltinImport:off
 
 export function asRecord(value: Schema.Json | undefined): Schema.JsonObject | null {
-  return isUsageJsonObject(value) ? value : null;
+  return isJsonObject(value) ? value : null;
 }
 
 export function asNumber(value: Schema.Json | undefined): number | null {
@@ -378,7 +378,7 @@ export async function fetchJson(
   let body: Schema.Json = null;
 
   try {
-    body = decodeUsageJson(await Effect.runPromise(response.json));
+    body = decodeJson(await Effect.runPromise(response.json));
   } catch {
     body = null;
   }

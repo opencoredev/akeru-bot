@@ -1,4 +1,4 @@
-import { isUsageJsonObject } from "./usageJson.ts";
+import { isJsonObject } from "../json.ts";
 import * as Predicate from "effect/Predicate";
 import type * as Schema from "effect/Schema";
 /**
@@ -118,7 +118,7 @@ export function encodeScanCache(cache: ScanCache): SerializedCache {
 export function decodeScanCache(document: Schema.Json): ScanCache {
   const cache: ScanCache = new Map();
 
-  if (!isUsageJsonObject(document)) return cache;
+  if (!isJsonObject(document)) return cache;
 
   const root = document;
 
@@ -126,7 +126,7 @@ export function decodeScanCache(document: Schema.Json): ScanCache {
 
   if (!Array.isArray(root.models) || !Array.isArray(root.sessions)) return cache;
 
-  if (!isUsageJsonObject(root.files)) return cache;
+  if (!isJsonObject(root.files)) return cache;
 
   // The intern tables must be all strings: a numeric entry would pass the
   // undefined guard below, land in a record's model, and crash the aggregate
@@ -138,7 +138,7 @@ export function decodeScanCache(document: Schema.Json): ScanCache {
   const sessions = root.sessions;
 
   for (const [path, raw] of Object.entries(root.files)) {
-    if (!isUsageJsonObject(raw)) continue;
+    if (!isJsonObject(raw)) continue;
     const entry = raw;
 
     if (!Predicate.isNumber(entry.s) || !Predicate.isNumber(entry.m)) continue;

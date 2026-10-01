@@ -1,4 +1,4 @@
-import { isUsageJsonObject } from "./usageJson.ts";
+import { isJsonObject } from "../json.ts";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 /**
@@ -46,10 +46,10 @@ function finiteNumber(value: Schema.Json | undefined): number | null {
 export function parseRateTable(document: Schema.Json): RateTable {
   const table = new Map<string, ModelRate>();
 
-  if (!isUsageJsonObject(document)) return table;
+  if (!isJsonObject(document)) return table;
 
   for (const [name, raw] of Object.entries(document)) {
-    if (!isUsageJsonObject(raw)) continue;
+    if (!isJsonObject(raw)) continue;
     const entry = raw;
     const input = finiteNumber(entry.input_cost_per_token);
     const output = finiteNumber(entry.output_cost_per_token);
