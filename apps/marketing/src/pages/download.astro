@@ -69,14 +69,8 @@ import { RELEASES_URL } from "../lib/releases";
 </Layout>
 
 <script>
-  import {
-    fetchLatestRelease,
-    requiresUnsignedInstall,
-    resolveAssetDownload,
-  } from "../lib/releases";
-
-  const UNSIGNED_PROMPT =
-    "This build is unsigned. Your system may ask you to confirm the install. Continue?";
+  import { resolveDownloadLink } from "../lib/downloadLinks";
+  import { fetchLatestRelease } from "../lib/releases";
 
   async function init() {
     const versionLabel = document.getElementById("version-label");
@@ -86,8 +80,7 @@ import { RELEASES_URL } from "../lib/releases";
     const cardDownloads = Array.from(cards, async (card) => {
       const suffix = card.dataset.asset;
       if (!suffix) return;
-      const asset = await resolveAssetDownload(card, suffix, releasePromise);
-      card.dataset.unsigned = asset && requiresUnsignedInstall(suffix) ? "true" : "";
+      await resolveDownloadLink(card, suffix, releasePromise);
     });
 
     try {
@@ -110,11 +103,6 @@ import { RELEASES_URL } from "../lib/releases";
     }
     await Promise.all(cardDownloads);
 
-    document.querySelectorAll<HTMLAnchorElement>("a[data-unsigned='true']").forEach((link) => {
-      link.addEventListener("click", (event) => {
-        if (!window.confirm(UNSIGNED_PROMPT)) event.preventDefault();
-      });
-    });
   }
 
   init();
