@@ -1,3 +1,5 @@
+import type { DesktopLogAnnotations } from "./DesktopObservability.ts";
+import * as Predicate from "effect/Predicate";
 import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@akeru/contracts";
 
 import * as Context from "effect/Context";
@@ -153,7 +155,7 @@ export const currentDesktopRunId = Effect.gen(function* () {
   const annotations = yield* References.CurrentLogAnnotations;
   const runId = annotations.runId;
 
-  return typeof runId === "string" && runId.length > 0 ? runId : "unknown";
+  return Predicate.isString(runId) && runId.length > 0 ? runId : "unknown";
 });
 
 export const writeDevelopmentConsoleOutput = (
@@ -172,7 +174,7 @@ export const writeBackendChildLogRecord = Effect.fn(
   input: {
     readonly message: string;
     readonly level: "INFO" | "ERROR";
-    readonly annotations: Record<string, unknown>;
+    readonly annotations: DesktopLogAnnotations;
   },
 ): Effect.fn.Return<void> {
   return yield* Effect.gen(function* () {
@@ -371,13 +373,7 @@ export const backendOutputLogFactoryLayer = Layer.effect(
           }),
           Effect.flatMap(({ sink, next }) =>
             makeBackendOutputLogShape(environment, id, sink).pipe(
-              Effect.map(
-                (outputLog) =>
-                  [
-                    outputLog,
-                    next as ReadonlyMap<string, Option.Option<RotatingLogFileWriter>>,
-                  ] as const,
-              ),
+              Effect.map((outputLog) => [outputLog, next] as const),
             ),
           ),
         );

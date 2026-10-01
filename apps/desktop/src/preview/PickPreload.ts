@@ -1,3 +1,9 @@
+import { installGuestInputListeners } from "./GuestInput.ts";
+import {
+  createAnnotationOverlay,
+  applyAnnotationTheme,
+  PRIMARY_FILL,
+} from "./AnnotationOverlay.ts";
 import { createAnnotationStyleControls } from "./AnnotationStyleControls.ts";
 
 // @effect-diagnostics globalDate:off - This isolated Electron preload does not run inside an Effect runtime.
@@ -16,8 +22,6 @@ import type {
 
 import { resolveAnnotationSubmission } from "./AnnotationKeyboard.ts";
 
-import { previewAnnotationStyles } from "./AnnotationStyles.generated.ts";
-
 import { selectMarqueeElements } from "./MarqueeSelection.ts";
 
 import {
@@ -25,8 +29,6 @@ import {
   ANNOTATION_THEME_CHANNEL,
   CANCEL_PICK_CHANNEL,
   ELEMENT_PICKED_CHANNEL,
-  HUMAN_INPUT_CHANNEL,
-  MOUSE_NAVIGATE_CHANNEL,
   START_PICK_CHANNEL,
 } from "./GuestProtocol.ts";
 
@@ -34,7 +36,6 @@ import { PRIMARY, createButton } from "./AnnotationStyleControls.ts";
 
 import {
   OVERLAY_ATTRIBUTE,
-  CONTENT_LAYER_Z_INDEX,
   type SelectedElement,
   rectFromDomRect,
   normalizeRect,
@@ -52,13 +53,7 @@ import {
 
 import { captureElement } from "./AnnotationElementCapture.ts";
 
-const Z_INDEX_OVERLAY = 2147483646;
-
-const PRIMARY_FILL = "color-mix(in srgb, var(--t3-primary) 10%, transparent)";
-
 const MAX_MARQUEE_ELEMENTS = 20;
-
-const CHROME_LAYER_Z_INDEX = 10;
 
 type AnnotationTool = "select" | "marquee" | "draw" | "erase";
 
@@ -73,99 +68,7 @@ let idSequence = 0;
 
 let annotationTheme: DesktopPreviewAnnotationTheme | null = null;
 
-const applyAnnotationTheme = (
-  host: HTMLElement,
-  theme: DesktopPreviewAnnotationTheme | null,
-): void => {
-  if (!theme) return;
-  host.style.colorScheme = theme.colorScheme;
-
-  const variables = {
-    "--t3-radius": theme.radius,
-    "--t3-background": theme.background,
-    "--t3-foreground": theme.foreground,
-    "--t3-popover": theme.popover,
-    "--t3-popover-foreground": theme.popoverForeground,
-    "--t3-primary": theme.primary,
-    "--t3-primary-foreground": theme.primaryForeground,
-    "--t3-muted": theme.muted,
-    "--t3-muted-foreground": theme.mutedForeground,
-    "--t3-accent": theme.accent,
-    "--t3-accent-foreground": theme.accentForeground,
-    "--t3-border": theme.border,
-    "--t3-input": theme.input,
-    "--t3-ring": theme.ring,
-    "--t3-font-sans": theme.fontSans,
-    "--t3-font-mono": theme.fontMono,
-  };
-
-  for (const [name, value] of Object.entries(variables)) {
-    host.style.setProperty(name, value);
-  }
-};
-
-const reportHumanPointerInput = (event: PointerEvent): void => {
-  if (!event.isTrusted) return;
-  ipcRenderer.send(HUMAN_INPUT_CHANNEL, {
-    kind: "pointer",
-    x: event.clientX,
-    y: event.clientY,
-    button: event.button,
-  });
-};
-
-const reportHumanKeyInput = (event: KeyboardEvent): void => {
-  if (!event.isTrusted) return;
-  ipcRenderer.send(HUMAN_INPUT_CHANNEL, {
-    kind: "key",
-    key: event.key,
-    code: event.code,
-  });
-};
-
-window.addEventListener("pointerdown", reportHumanPointerInput, true);
-
-window.addEventListener("keydown", reportHumanKeyInput, true);
-
-// Mouse thumb buttons: `button === 3` is Back, `button === 4` is Forward.
-const MOUSE_BUTTON_BACK = 3;
-
-const MOUSE_BUTTON_FORWARD = 4;
-
-const navigationDirectionForButton = (button: number): "back" | "forward" | null => {
-  if (button === MOUSE_BUTTON_BACK) return "back";
-
-  if (button === MOUSE_BUTTON_FORWARD) return "forward";
-
-  return null;
-};
-
-// Chromium routes thumb-button history navigation to the *focused* WebContents,
-// so hovering this guest without focusing it sends the host app's router back
-// instead of the preview. Suppress Chromium's default here and drive this tab's
-// history explicitly so the buttons always navigate the browser the pointer is
-// over — never the host app.
-const suppressNavigationButton = (event: MouseEvent): void => {
-  if (!event.isTrusted || navigationDirectionForButton(event.button) === null) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-};
-
-const requestNavigationForButton = (event: MouseEvent): void => {
-  if (!event.isTrusted) return;
-  const direction = navigationDirectionForButton(event.button);
-
-  if (direction === null) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  ipcRenderer.send(MOUSE_NAVIGATE_CHANNEL, { direction });
-};
-
-window.addEventListener("mousedown", suppressNavigationButton, true);
-
-window.addEventListener("mouseup", requestNavigationForButton, true);
-
-window.addEventListener("auxclick", suppressNavigationButton, true);
+installGuestInputListeners();
 
 const nextId = (prefix: string): string => {
   idSequence += 1;
@@ -176,89 +79,22 @@ const nextId = (prefix: string): string => {
 function startAnnotation(): void {
   activeSession?.teardown(false);
   let finished = false;
-  const host = document.createElement("div");
-  host.setAttribute(OVERLAY_ATTRIBUTE, "");
-  host.style.cssText = `position:fixed;inset:0;z-index:${Z_INDEX_OVERLAY};pointer-events:none`;
-  applyAnnotationTheme(host, annotationTheme);
-  const shadowRoot = host.attachShadow({ mode: "closed" });
-  const themeStyle = document.createElement("style");
-  themeStyle.textContent = previewAnnotationStyles;
-  shadowRoot.appendChild(themeStyle);
 
-  const root = document.createElement("div");
-  root.setAttribute(OVERLAY_ATTRIBUTE, "");
-  root.className = "fixed inset-0 font-sans text-foreground";
-  root.style.cssText = "pointer-events:none";
-  const cursorStyle = document.createElement("style");
-  cursorStyle.setAttribute(OVERLAY_ATTRIBUTE, "");
-  cursorStyle.textContent = `html[data-t3code-annotation-tool] body, html[data-t3code-annotation-tool] body * { cursor: crosshair !important; } [${OVERLAY_ATTRIBUTE}], [${OVERLAY_ATTRIBUTE}] * { cursor: default !important; } [${OVERLAY_ATTRIBUTE}] input[type=number]::-webkit-inner-spin-button, [${OVERLAY_ATTRIBUTE}] input[type=number]::-webkit-outer-spin-button { appearance:none; margin:0; }`;
-  document.documentElement.appendChild(cursorStyle);
-  shadowRoot.appendChild(root);
-
-  const hoverOutline = createBox(PRIMARY, PRIMARY_FILL);
-  const marqueeBox = createBox(PRIMARY, PRIMARY_FILL);
-  root.append(hoverOutline, marqueeBox);
-
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute(OVERLAY_ATTRIBUTE, "");
-  svg.setAttribute("width", "100%");
-  svg.setAttribute("height", "100%");
-  svg.setAttribute("viewBox", `0 0 ${window.innerWidth} ${window.innerHeight}`);
-  svg.style.cssText = "position:fixed;inset:0;overflow:visible;pointer-events:none";
-  svg.style.zIndex = String(CONTENT_LAYER_Z_INDEX);
-  root.appendChild(svg);
-
-  const toolbar = document.createElement("div");
-  toolbar.setAttribute(OVERLAY_ATTRIBUTE, "");
-  toolbar.className =
-    "pointer-events-auto fixed top-2.5 left-1/2 flex -translate-x-1/2 gap-0.5 rounded-lg border border-border bg-popover/95 p-1 text-popover-foreground shadow-lg backdrop-blur-xl";
-  toolbar.style.zIndex = String(CHROME_LAYER_Z_INDEX);
-  root.appendChild(toolbar);
-
-  const editor = document.createElement("div");
-  editor.setAttribute(OVERLAY_ATTRIBUTE, "");
-  editor.className =
-    "pointer-events-auto fixed hidden max-h-[calc(100vh-16px)] w-[min(360px,calc(100vw-16px))] flex-col overflow-hidden rounded-xl border border-border bg-popover/96 text-popover-foreground shadow-2xl backdrop-blur-xl";
-  editor.style.zIndex = String(CHROME_LAYER_Z_INDEX);
-  root.appendChild(editor);
-
-  const composerRow = document.createElement("div");
-  composerRow.className = "flex items-start gap-2 p-2";
-
-  const adjust = createButton("", "Expand annotation editor");
-  adjust.setAttribute("aria-label", "Expand annotation editor");
-  adjust.setAttribute("aria-expanded", "false");
-  adjust.className +=
-    " h-8 w-8 shrink-0 bg-muted p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground";
-  adjust.innerHTML =
-    '<svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M4 5h12M4 10h12M4 15h12M7 3v4M13 8v4M9 13v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
-  composerRow.appendChild(adjust);
-
-  const comment = document.createElement("textarea");
-  comment.placeholder = "Describe the change…";
-  comment.rows = 1;
-  comment.className =
-    "min-h-8 max-h-24 min-w-0 flex-1 resize-none overflow-y-hidden border-0 border-b border-b-transparent bg-transparent px-0 py-1.5 font-sans text-sm leading-5 text-foreground outline-none ring-0 placeholder:text-muted-foreground focus:border-b-primary focus:outline-none focus:ring-0";
-  composerRow.appendChild(comment);
-
-  const dragHandle = document.createElement("button");
-  dragHandle.type = "button";
-  dragHandle.textContent = "⠿";
-  dragHandle.title = "Drag annotation editor";
-  dragHandle.className =
-    "hidden h-8 w-6 shrink-0 cursor-grab select-none border-0 bg-transparent p-0 font-sans text-lg font-bold leading-5 text-muted-foreground";
-  composerRow.appendChild(dragHandle);
-
-  const submit = createButton("Attach", "Attach annotation and screenshot (Enter)");
-  submit.className +=
-    " h-8 shrink-0 border-primary bg-primary px-3 text-primary-foreground shadow-sm hover:bg-primary/90";
-  composerRow.appendChild(submit);
-  editor.appendChild(composerRow);
-
-  const stylePanel = document.createElement("div");
-  stylePanel.className =
-    "hidden max-h-[min(176px,calc(100vh-180px))] overflow-auto border-t border-border bg-muted/40 px-3";
-  editor.appendChild(stylePanel);
+  const {
+    host,
+    root,
+    cursorStyle,
+    hoverOutline,
+    marqueeBox,
+    svg,
+    toolbar,
+    editor,
+    adjust,
+    comment,
+    dragHandle,
+    submit,
+    stylePanel,
+  } = createAnnotationOverlay(annotationTheme);
 
   const selected = new Map<Element, SelectedElement>();
   const regions: PreviewAnnotationRegionTarget[] = [];
@@ -423,7 +259,7 @@ function startAnnotation(): void {
     toolbar.appendChild(button);
   }
 
-  const clampEditorPosition = (left: number, top: number): { left: number; top: number } => {
+  const clampEditorPosition = (left: number, top: number) => {
     const margin = 8;
     const rect = editor.getBoundingClientRect();
 
@@ -648,7 +484,7 @@ function startAnnotation(): void {
   };
 
   const onPointerMove = (event: PointerEvent): void => {
-    if (isAnnotationNode(event.target as Element)) {
+    if (isAnnotationNode(event.target)) {
       clearHoverOutline();
 
       return;
@@ -688,7 +524,7 @@ function startAnnotation(): void {
   };
 
   const onPointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0 || isAnnotationNode(event.target as Element)) return;
+    if (event.button !== 0 || isAnnotationNode(event.target)) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -767,7 +603,7 @@ function startAnnotation(): void {
   };
 
   const onClick = (event: MouseEvent): void => {
-    if (isAnnotationNode(event.target as Element)) return;
+    if (isAnnotationNode(event.target)) return;
     event.preventDefault();
     event.stopPropagation();
   };
@@ -825,7 +661,7 @@ function startAnnotation(): void {
   const onCaptured = (): void => teardown(false);
 
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (isAnnotationNode(event.target as Element) && event.key !== "Escape") return;
+    if (isAnnotationNode(event.target) && event.key !== "Escape") return;
 
     if (event.key === "Escape") {
       event.preventDefault();

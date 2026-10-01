@@ -1,3 +1,5 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { it as effectIt } from "@effect/vitest";
 
 import * as Cause from "effect/Cause";
@@ -30,9 +32,9 @@ const {
 } = vi.hoisted(() => ({
   browserWindowConstructor: vi.fn(),
   createFromBuffer: vi.fn(),
-  createFromPath: vi.fn((): { readonly isEmpty: () => boolean } => ({ isEmpty: () => false })),
-  fromId: vi.fn((_id?: number) => null),
-  getFocusedWebContents: vi.fn(() => null),
+  createFromPath: vi.fn((): Pick<Electron.NativeImage, "isEmpty"> => ({ isEmpty: () => false })),
+  fromId: vi.fn((_id?: number): Electron.WebContents | null => null),
+  getFocusedWebContents: vi.fn((): Electron.WebContents | null => null),
   mkdir: vi.fn((_path: string) => undefined),
   showItemInFolder: vi.fn(),
   webviewSend: vi.fn(),
@@ -93,33 +95,41 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         let failKeyDown = false;
-        let humanInput: ((_event: unknown, signal: unknown) => void) | undefined;
 
-        const sendCommand = vi.fn(async (method: string, params?: Record<string, unknown>) => {
-          if (
-            failKeyDown &&
-            method === "Input.dispatchKeyEvent" &&
-            (params?.["type"] === "keyDown" || params?.["type"] === "rawKeyDown")
-          ) {
-            throw new Error("key dispatch failed");
-          }
+        let humanInput:
+          | ((
+              _event: Record<string, never>,
+              signal: Record<string, Schema.Json | undefined>,
+            ) => void)
+          | undefined;
 
-          if (
-            method === "Input.dispatchKeyEvent" &&
-            (params?.["type"] === "keyDown" || params?.["type"] === "rawKeyDown")
-          ) {
-            humanInput?.(
-              {},
-              {
-                kind: "key",
-                key: params["key"],
-                code: params["code"] ?? "Digit1",
-              },
-            );
-          }
+        const sendCommand = vi.fn(
+          async (method: string, params?: Record<string, Schema.Json | undefined>) => {
+            if (
+              failKeyDown &&
+              method === "Input.dispatchKeyEvent" &&
+              (params?.["type"] === "keyDown" || params?.["type"] === "rawKeyDown")
+            ) {
+              throw new Error("key dispatch failed");
+            }
 
-          return method === "Runtime.evaluate" ? { result: { value: { ok: true } } } : undefined;
-        });
+            if (
+              method === "Input.dispatchKeyEvent" &&
+              (params?.["type"] === "keyDown" || params?.["type"] === "rawKeyDown")
+            ) {
+              humanInput?.(
+                {},
+                {
+                  kind: "key",
+                  key: params["key"],
+                  code: params["code"] ?? "Digit1",
+                },
+              );
+            }
+
+            return method === "Runtime.evaluate" ? { result: { value: { ok: true } } } : undefined;
+          },
+        );
 
         const restoreFocus = vi.fn();
         const focus = vi.fn();
@@ -194,10 +204,10 @@ describe("PreviewManager", () => {
         const typeEvaluation = sendCommand.mock.calls.find(
           ([method, params]) =>
             method === "Runtime.evaluate" &&
-            typeof params === "object" &&
+            Predicate.isObjectOrArray(params) &&
             params !== null &&
             "expression" in params &&
-            typeof params.expression === "string" &&
+            Predicate.isString(params.expression) &&
             params.expression.includes('document.execCommand("insertText"'),
         );
 
@@ -206,10 +216,10 @@ describe("PreviewManager", () => {
         const clearOnlyEvaluation = sendCommand.mock.calls.find(
           ([method, params]) =>
             method === "Runtime.evaluate" &&
-            typeof params === "object" &&
+            Predicate.isObjectOrArray(params) &&
             params !== null &&
             "expression" in params &&
-            typeof params.expression === "string" &&
+            Predicate.isString(params.expression) &&
             params.expression.includes('const text = ""') &&
             params.expression.includes("Object.getOwnPropertyDescriptor"),
         );
@@ -279,7 +289,12 @@ describe("PreviewManager", () => {
   effectIt.effect("still interrupts agent control for a different human pointer event", () =>
     withManager((manager) =>
       Effect.gen(function* () {
-        let humanInput: ((_event: unknown, signal: unknown) => void) | undefined;
+        let humanInput:
+          | ((
+              _event: Record<string, never>,
+              signal: Record<string, Schema.Json | undefined>,
+            ) => void)
+          | undefined;
 
         const sendCommand = vi.fn(async (method: string) => {
           if (method === "Runtime.evaluate") {

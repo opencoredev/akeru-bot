@@ -11,7 +11,7 @@ import * as Effect from "effect/Effect";
 
 import * as Ref from "effect/Ref";
 
-import { makePreviewAutomationKeySequence } from "./PreviewKeyboard.ts";
+import { previewAutomationKeySequence } from "./PreviewKeyboard.ts";
 
 import {
   PreviewAutomationTargetNotFoundError,
@@ -359,7 +359,7 @@ export const createPreviewAutomationInput = ({
   ) {
     yield* prepareAutomationInput(send, false);
 
-    const keySequence = makePreviewAutomationKeySequence(input, {
+    const keySequence = previewAutomationKeySequence(input, {
       isMac: hostPlatform === "darwin",
     });
 

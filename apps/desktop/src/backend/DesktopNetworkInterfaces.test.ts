@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Cause from "effect/Cause";
@@ -55,7 +56,7 @@ describe("DesktopNetworkInterfaces", () => {
 
       assert.equal(exit._tag, "Failure");
 
-      if (exit._tag === "Failure") {
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, DesktopNetworkInterfaces.DesktopNetworkInterfacesReadError);
         assert.equal(error.platform, "linux");

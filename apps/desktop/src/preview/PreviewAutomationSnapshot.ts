@@ -1,3 +1,11 @@
+import type * as Schema from "effect/Schema";
+
+interface PreviewSelectorDiagnostics {
+  readonly selectorKind: PreviewAutomationSelectorKind;
+  readonly selectorLength?: number;
+}
+
+import * as Predicate from "effect/Predicate";
 import type { PreviewAutomationSnapshot } from "@akeru/contracts";
 
 import { type BrowserWindow, desktopCapturer, nativeImage } from "electron";
@@ -73,10 +81,7 @@ export const createPreviewAutomationSnapshot = ({
   const automationSelectorDiagnostics = (input: {
     readonly selector?: string | undefined;
     readonly locator?: string | undefined;
-  }): {
-    readonly selectorKind: PreviewAutomationSelectorKind;
-    readonly selectorLength?: number;
-  } => {
+  }): PreviewSelectorDiagnostics => {
     if (input.locator !== undefined) {
       return { selectorKind: "locator", selectorLength: input.locator.length };
     }
@@ -329,7 +334,7 @@ export const createPreviewAutomationSnapshot = ({
             Effect.orElseSucceed(() => null),
           );
 
-          if (typeof tabCapture === "string" && tabCapture.length > 0) {
+          if (Predicate.isString(tabCapture) && tabCapture.length > 0) {
             const tabData = Buffer.from(tabCapture, "base64");
             const tabImage = nativeImage.createFromBuffer(tabData);
 
@@ -385,20 +390,20 @@ export const createPreviewAutomationSnapshot = ({
       });
 
       const refreshedScreenshotData =
-        typeof refreshedScreenshotResult === "object" &&
+        Predicate.isObjectOrArray(refreshedScreenshotResult) &&
         refreshedScreenshotResult !== null &&
         "data" in refreshedScreenshotResult &&
-        typeof refreshedScreenshotResult.data === "string"
+        Predicate.isString(refreshedScreenshotResult.data)
           ? Buffer.from(refreshedScreenshotResult.data, "base64")
           : null;
 
       const hostScreenshotData = hostScreenshot?.toPNG() ?? null;
 
       const initialScreenshotData =
-        typeof initialScreenshotResult === "object" &&
+        Predicate.isObjectOrArray(initialScreenshotResult) &&
         initialScreenshotResult !== null &&
         "data" in initialScreenshotResult &&
-        typeof initialScreenshotResult.data === "string"
+        Predicate.isString(initialScreenshotResult.data)
           ? Buffer.from(initialScreenshotResult.data, "base64")
           : null;
 
@@ -419,9 +424,9 @@ export const createPreviewAutomationSnapshot = ({
             const onScreencastMessage = (
               _event: Electron.Event,
               method: string,
-              params: Record<string, unknown>,
+              params: Record<string, Schema.Json | undefined>,
             ) => {
-              if (method !== "Page.screencastFrame" || typeof params["data"] !== "string") return;
+              if (method !== "Page.screencastFrame" || !Predicate.isString(params["data"])) return;
               const data = Buffer.from(params["data"], "base64");
 
               if (!containsVisiblePngPixel(data)) return;
@@ -471,10 +476,10 @@ export const createPreviewAutomationSnapshot = ({
       const screenshot = yield* Effect.try({
         try: () => {
           if (
-            typeof screenshotResult !== "object" ||
+            !Predicate.isObjectOrArray(screenshotResult) ||
             screenshotResult === null ||
             !("data" in screenshotResult) ||
-            typeof screenshotResult.data !== "string" ||
+            !Predicate.isString(screenshotResult.data) ||
             screenshotResult.data.length === 0
           ) {
             throw new TypeError("Page.captureScreenshot returned no PNG data");

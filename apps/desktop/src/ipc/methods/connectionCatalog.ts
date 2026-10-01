@@ -6,7 +6,7 @@ import * as DesktopConnectionCatalogStore from "../../app/DesktopConnectionCatal
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 
-export const getConnectionCatalog = DesktopIpc.makeIpcMethod({
+export const getConnectionCatalog = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.GET_CONNECTION_CATALOG_CHANNEL,
   payload: Schema.Void,
   result: Schema.NullOr(Schema.String),
@@ -17,7 +17,7 @@ export const getConnectionCatalog = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const setConnectionCatalog = DesktopIpc.makeIpcMethod({
+export const setConnectionCatalog = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.SET_CONNECTION_CATALOG_CHANNEL,
   payload: Schema.String,
   result: Schema.Boolean,
@@ -28,7 +28,7 @@ export const setConnectionCatalog = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const clearConnectionCatalog = DesktopIpc.makeIpcMethod({
+export const clearConnectionCatalog = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.CLEAR_CONNECTION_CATALOG_CHANNEL,
   payload: Schema.Void,
   result: Schema.Void,

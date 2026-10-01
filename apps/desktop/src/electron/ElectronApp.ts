@@ -1,3 +1,5 @@
+import * as Predicate from "effect/Predicate";
+import type * as NodeEvents from "node:events";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -91,11 +93,13 @@ const addScopedAppListener = <Args extends ReadonlyArray<unknown>>(
 ): Effect.Effect<void, never, Scope.Scope> =>
   Effect.acquireRelease(
     Effect.sync(() => {
-      Electron.app.on(eventName as any, listener as any);
+      const appEvents: NodeEvents.EventEmitter = Electron.app;
+      appEvents.on(eventName, listener);
     }),
     () =>
       Effect.sync(() => {
-        Electron.app.removeListener(eventName as any, listener as any);
+        const appEvents: NodeEvents.EventEmitter = Electron.app;
+        appEvents.removeListener(eventName, listener);
       }),
   ).pipe(Effect.asVoid);
 
@@ -180,11 +184,9 @@ export const make = ElectronApp.of({
     }),
   setDesktopName: (desktopName) =>
     Effect.sync(() => {
-      const linuxApp = Electron.app as Electron.App & {
-        setDesktopName?: (desktopName: string) => void;
-      };
-
-      linuxApp.setDesktopName?.(desktopName);
+      if ("setDesktopName" in Electron.app && Predicate.isFunction(Electron.app.setDesktopName)) {
+        Electron.app.setDesktopName(desktopName);
+      }
     }),
   setDockIcon: (iconPath) =>
     Effect.sync(() => {

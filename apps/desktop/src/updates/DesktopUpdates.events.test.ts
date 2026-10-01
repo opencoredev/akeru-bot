@@ -1,3 +1,4 @@
+import type { DesktopLogAnnotations } from "../app/DesktopObservability.ts";
 import { assert, describe, it } from "@effect/vitest";
 
 import * as Cause from "effect/Cause";
@@ -155,7 +156,7 @@ describe("DesktopUpdates", () => {
     });
 
     const harness = makeHarness({ checkForUpdates: Effect.fail(updaterError) });
-    const loggedAnnotations: Array<Record<string, unknown>> = [];
+    const loggedAnnotations: Array<DesktopLogAnnotations> = [];
 
     const logger = Logger.make(({ fiber }) => {
       const annotations = fiber.getRef(References.CurrentLogAnnotations);

@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 import { assert, describe, it } from "@effect/vitest";
 import { SshHttpBridgeError } from "@akeru/ssh/errors";
 import * as Cause from "effect/Cause";
@@ -12,7 +13,11 @@ import {
   fetchSshEnvironmentDescriptor,
 } from "./sshEnvironment.ts";
 
-function jsonResponse(request: HttpClientRequest.HttpClientRequest, body: unknown, status = 200) {
+function jsonResponse(
+  request: HttpClientRequest.HttpClientRequest,
+  body: Schema.Json,
+  status = 200,
+) {
   return HttpClientResponse.fromWeb(
     request,
     new Response(JSON.stringify(body), {

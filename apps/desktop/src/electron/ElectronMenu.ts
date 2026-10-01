@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ContextMenuItem } from "@akeru/contracts";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Context from "effect/Context";
@@ -65,7 +66,7 @@ function normalizeContextMenuItems(source: readonly ContextMenuItem[]): ContextM
   const normalizedItems: ContextMenuItem[] = [];
 
   for (const sourceItem of source) {
-    if (typeof sourceItem.id !== "string" || typeof sourceItem.label !== "string") {
+    if (!Predicate.isString(sourceItem.id) || !Predicate.isString(sourceItem.label)) {
       continue;
     }
 

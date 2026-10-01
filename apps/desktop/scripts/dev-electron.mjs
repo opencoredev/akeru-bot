@@ -227,7 +227,8 @@ function startWatchers() {
       NodePath.join(desktopDir, directory),
       { persistent: true },
       (_eventType, filename) => {
-        if (typeof filename !== "string" || !files.has(filename)) {
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Node fs.watch supplies string or Buffer filenames; this launcher accepts strings before matching tracked build outputs.
+        if (!(typeof filename === "string") || !files.has(filename)) {
           return;
         }
 

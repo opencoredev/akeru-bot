@@ -1,3 +1,6 @@
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+
 export interface WslDistro {
   readonly name: string;
   readonly isDefault: boolean;
@@ -39,7 +42,7 @@ export function parseWslDistroList(stdout: Buffer): readonly WslDistro[] {
     const versionNum = parseInt(fields[2]!, 10);
 
     if (!name || (versionNum !== 1 && versionNum !== 2)) continue;
-    distros.push({ name, isDefault, version: versionNum as 1 | 2 });
+    distros.push({ name, isDefault, version: versionNum === 1 ? 1 : 2 });
   }
 
   return distros;
@@ -82,8 +85,12 @@ export function resolveWslHomeUncPath(
   return distroName ? `\\\\wsl.localhost\\${distroName}\\home` : null;
 }
 
+const decodeFolderOptions = Schema.decodeUnknownOption(
+  Schema.Struct({ initialPath: Schema.String }),
+);
+
 export function resolveWslPickFolderDefaultPath(
-  rawOptions: unknown,
+  rawOptions: Parameters<typeof decodeFolderOptions>[0],
   config: WslConfig,
   distros: readonly WslDistro[],
   // Absolute Linux path of the user's home dir inside the chosen distro
@@ -94,15 +101,10 @@ export function resolveWslPickFolderDefaultPath(
 ): string | null {
   const homePath = resolveWslHomeUncPath(config, distros);
 
-  if (typeof rawOptions !== "object" || rawOptions === null) {
-    return homePath;
-  }
+  const parsed = decodeFolderOptions(rawOptions);
 
-  const { initialPath } = rawOptions as { initialPath?: unknown };
-
-  if (typeof initialPath !== "string") {
-    return homePath;
-  }
+  if (Option.isNone(parsed)) return homePath;
+  const { initialPath } = parsed.value;
 
   const trimmedPath = initialPath.trim();
 

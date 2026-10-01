@@ -1,54 +1,89 @@
-import type {
-  DesktopBridge,
-  DesktopPreviewPointerEvent,
-  DesktopPreviewRecordingFrame,
-  DesktopPreviewTabState,
+import {
+  DesktopSshPasswordPromptRequestSchema,
+  DesktopUpdateStateSchema,
+  DesktopPreviewRecordingFrameSchema,
+  DesktopPreviewPointerEventSchema,
+  DesktopAppBrandingSchema,
+  DesktopEnvironmentBootstrapSchema,
+  DesktopSshEnvironmentEnsureResultSchema,
+  DesktopPreviewTabStateSchema,
 } from "@akeru/contracts";
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import type { DesktopBridge } from "@akeru/contracts";
 import { contextBridge, ipcRenderer } from "electron";
 
 import * as IpcChannels from "./ipc/channels.ts";
 
-function unwrapEnsureSshEnvironmentResult(result: unknown) {
-  if (
-    typeof result === "object" &&
-    result !== null &&
-    "type" in result &&
-    result.type === IpcChannels.SSH_PASSWORD_PROMPT_CANCELLED_RESULT
-  ) {
-    const message =
-      "message" in result && typeof result.message === "string"
-        ? result.message
-        : "SSH authentication cancelled.";
+const QuitShortcutHint = Schema.Union([
+  Schema.Struct({ state: Schema.Literal("up") }),
+  Schema.Struct({ state: Schema.Literal("down"), mode: Schema.Literals(["hold", "double-click"]) }),
+]);
 
-    throw new Error(message);
-  }
+const decodeSshPasswordPrompt = Schema.decodeUnknownOption(DesktopSshPasswordPromptRequestSchema);
 
-  return result as Awaited<ReturnType<DesktopBridge["ensureSshEnvironment"]>>;
+const decodeMenuAction = Schema.decodeUnknownOption(Schema.String);
+
+const decodeQuitShortcut = Schema.decodeUnknownOption(QuitShortcutHint);
+
+const decodeWindowFullscreenStateChange = Schema.decodeUnknownOption(Schema.Boolean);
+
+const decodeUpdateState = Schema.decodeUnknownOption(DesktopUpdateStateSchema);
+
+const decodeFrame = Schema.decodeUnknownOption(DesktopPreviewRecordingFrameSchema);
+
+const decodePointerEvent = Schema.decodeUnknownOption(DesktopPreviewPointerEventSchema);
+
+const decodeBranding = Schema.decodeUnknownOption(DesktopAppBrandingSchema);
+
+const decodeBootstraps = Schema.decodeUnknownOption(
+  Schema.Array(DesktopEnvironmentBootstrapSchema),
+);
+
+const decodePreviewState = Schema.decodeUnknownOption(DesktopPreviewTabStateSchema);
+
+const decodeEnsureSsh = Schema.decodeUnknownSync(DesktopSshEnvironmentEnsureResultSchema);
+
+function subscribeDecoded<A>(
+  channel: string,
+  decode: ReturnType<typeof Schema.decodeUnknownOption<Schema.Codec<A>>>,
+  listener: (value: A) => void,
+) {
+  const wrappedListener: Parameters<typeof ipcRenderer.on>[1] = (_event, raw) => {
+    const parsed = decode(raw);
+
+    if (Option.isSome(parsed)) listener(parsed.value);
+  };
+
+  ipcRenderer.on(channel, wrappedListener);
+
+  return () => ipcRenderer.removeListener(channel, wrappedListener);
+}
+
+function unwrapEnsureSshEnvironmentResult(result: ReturnType<typeof decodeEnsureSsh>) {
+  if ("type" in result && result.type === IpcChannels.SSH_PASSWORD_PROMPT_CANCELLED_RESULT)
+    throw new Error(result.message);
+
+  if ("target" in result) return result;
+  throw new Error("SSH authentication cancelled.");
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
 
-    if (typeof result !== "object" || result === null) {
-      return null;
-    }
-
-    return result as ReturnType<DesktopBridge["getAppBranding"]>;
+    return Option.getOrNull(decodeBranding(result));
   },
   getSystemLocale: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_SYSTEM_LOCALE_CHANNEL);
 
-    return typeof result === "string" ? result : null;
+    return Predicate.isString(result) ? result : null;
   },
   getLocalEnvironmentBootstraps: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL);
 
-    if (!Array.isArray(result)) {
-      return [];
-    }
-
-    return result as ReturnType<DesktopBridge["getLocalEnvironmentBootstraps"]>;
+    return Option.getOrElse(decodeBootstraps(result), () => []);
   },
   getLocalEnvironmentBearerToken: () =>
     ipcRenderer.invoke(IpcChannels.GET_LOCAL_ENVIRONMENT_BEARER_TOKEN_CHANNEL),
@@ -62,10 +97,12 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   discoverSshHosts: () => ipcRenderer.invoke(IpcChannels.DISCOVER_SSH_HOSTS_CHANNEL),
   ensureSshEnvironment: async (target, options) =>
     unwrapEnsureSshEnvironmentResult(
-      await ipcRenderer.invoke(IpcChannels.ENSURE_SSH_ENVIRONMENT_CHANNEL, {
-        target,
-        ...(options === undefined ? {} : { options }),
-      }),
+      decodeEnsureSsh(
+        await ipcRenderer.invoke(IpcChannels.ENSURE_SSH_ENVIRONMENT_CHANNEL, {
+          target,
+          ...(options === undefined ? {} : { options }),
+        }),
+      ),
     ),
   disconnectSshEnvironment: (target) =>
     ipcRenderer.invoke(IpcChannels.DISCONNECT_SSH_ENVIRONMENT_CHANNEL, target),
@@ -80,18 +117,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(IpcChannels.FETCH_SSH_SESSION_STATE_CHANNEL, { httpBaseUrl, bearerToken }),
   issueSshWebSocketTicket: (httpBaseUrl, bearerToken) =>
     ipcRenderer.invoke(IpcChannels.ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL, { httpBaseUrl, bearerToken }),
-  onSshPasswordPrompt: (listener) => {
-    const wrappedListener = (_event: Electron.IpcRendererEvent, request: unknown) => {
-      if (typeof request !== "object" || request === null) return;
-      listener(request as Parameters<typeof listener>[0]);
-    };
-
-    ipcRenderer.on(IpcChannels.SSH_PASSWORD_PROMPT_CHANNEL, wrappedListener);
-
-    return () => {
-      ipcRenderer.removeListener(IpcChannels.SSH_PASSWORD_PROMPT_CHANNEL, wrappedListener);
-    };
-  },
+  onSshPasswordPrompt: (listener) =>
+    subscribeDecoded(IpcChannels.SSH_PASSWORD_PROMPT_CHANNEL, decodeSshPasswordPrompt, listener),
   resolveSshPasswordPrompt: (requestId, password) =>
     ipcRenderer.invoke(IpcChannels.RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL, { requestId, password }),
   getServerExposureState: () => ipcRenderer.invoke(IpcChannels.GET_SERVER_EXPOSURE_STATE_CHANNEL),
@@ -114,75 +141,26 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ...(position === undefined ? {} : { position }),
     }),
   openExternal: (url: string) => ipcRenderer.invoke(IpcChannels.OPEN_EXTERNAL_CHANNEL, url),
-  onMenuAction: (listener) => {
-    const wrappedListener = (_event: Electron.IpcRendererEvent, action: unknown) => {
-      if (typeof action !== "string") return;
-      listener(action);
-    };
-
-    ipcRenderer.on(IpcChannels.MENU_ACTION_CHANNEL, wrappedListener);
-
-    return () => {
-      ipcRenderer.removeListener(IpcChannels.MENU_ACTION_CHANNEL, wrappedListener);
-    };
-  },
-  onQuitShortcut: (listener) => {
-    const wrappedListener = (_event: Electron.IpcRendererEvent, hint: unknown) => {
-      if (typeof hint !== "object" || hint === null || !("state" in hint)) return;
-
-      if (hint.state === "up") {
-        listener({ state: "up" });
-
-        return;
-      }
-
-      if (
-        hint.state === "down" &&
-        "mode" in hint &&
-        (hint.mode === "hold" || hint.mode === "double-click")
-      ) {
-        listener({ state: "down", mode: hint.mode });
-      }
-    };
-
-    ipcRenderer.on(IpcChannels.QUIT_SHORTCUT_CHANNEL, wrappedListener);
-
-    return () => {
-      ipcRenderer.removeListener(IpcChannels.QUIT_SHORTCUT_CHANNEL, wrappedListener);
-    };
-  },
+  onMenuAction: (listener) =>
+    subscribeDecoded(IpcChannels.MENU_ACTION_CHANNEL, decodeMenuAction, listener),
+  onQuitShortcut: (listener) =>
+    subscribeDecoded(IpcChannels.QUIT_SHORTCUT_CHANNEL, decodeQuitShortcut, listener),
   getWindowFullscreenState: () =>
     ipcRenderer.sendSync(IpcChannels.GET_WINDOW_FULLSCREEN_STATE_CHANNEL) === true,
-  onWindowFullscreenStateChange: (listener) => {
-    const wrappedListener = (_event: Electron.IpcRendererEvent, fullscreen: unknown) => {
-      if (typeof fullscreen !== "boolean") return;
-      listener(fullscreen);
-    };
-
-    ipcRenderer.on(IpcChannels.WINDOW_FULLSCREEN_STATE_CHANNEL, wrappedListener);
-
-    return () => {
-      ipcRenderer.removeListener(IpcChannels.WINDOW_FULLSCREEN_STATE_CHANNEL, wrappedListener);
-    };
-  },
+  onWindowFullscreenStateChange: (listener) =>
+    subscribeDecoded(
+      IpcChannels.WINDOW_FULLSCREEN_STATE_CHANNEL,
+      decodeWindowFullscreenStateChange,
+      listener,
+    ),
   getUpdateState: () => ipcRenderer.invoke(IpcChannels.UPDATE_GET_STATE_CHANNEL),
   setUpdateChannel: (channel) =>
     ipcRenderer.invoke(IpcChannels.UPDATE_SET_CHANNEL_CHANNEL, channel),
   checkForUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_CHECK_CHANNEL),
   downloadUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_DOWNLOAD_CHANNEL),
   installUpdate: () => ipcRenderer.invoke(IpcChannels.UPDATE_INSTALL_CHANNEL),
-  onUpdateState: (listener) => {
-    const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
-      if (typeof state !== "object" || state === null) return;
-      listener(state as Parameters<typeof listener>[0]);
-    };
-
-    ipcRenderer.on(IpcChannels.UPDATE_STATE_CHANNEL, wrappedListener);
-
-    return () => {
-      ipcRenderer.removeListener(IpcChannels.UPDATE_STATE_CHANNEL, wrappedListener);
-    };
-  },
+  onUpdateState: (listener) =>
+    subscribeDecoded(IpcChannels.UPDATE_STATE_CHANNEL, decodeUpdateState, listener),
   preview: {
     createTab: (tabId, defaults) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_CREATE_TAB_CHANNEL, {
@@ -240,17 +218,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
           mimeType,
           data,
         }),
-      onFrame: (listener) => {
-        const wrappedListener = (_event: Electron.IpcRendererEvent, frame: unknown) => {
-          if (typeof frame !== "object" || frame === null) return;
-          listener(frame as DesktopPreviewRecordingFrame);
-        };
-
-        ipcRenderer.on(IpcChannels.PREVIEW_RECORDING_FRAME_CHANNEL, wrappedListener);
-
-        return () =>
-          ipcRenderer.removeListener(IpcChannels.PREVIEW_RECORDING_FRAME_CHANNEL, wrappedListener);
-      },
+      onFrame: (listener) =>
+        subscribeDecoded(IpcChannels.PREVIEW_RECORDING_FRAME_CHANNEL, decodeFrame, listener),
     },
     automation: {
       status: (tabId) =>
@@ -271,13 +240,11 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_WAIT_FOR_CHANNEL, { tabId, input }),
     },
     onStateChange: (listener) => {
-      const wrappedListener = (
-        _event: Electron.IpcRendererEvent,
-        tabId: unknown,
-        state: unknown,
-      ) => {
-        if (typeof tabId !== "string" || typeof state !== "object" || state === null) return;
-        listener(tabId, state as DesktopPreviewTabState);
+      const wrappedListener: Parameters<typeof ipcRenderer.on>[1] = (_event, tabId, state) => {
+        if (!Predicate.isString(tabId)) return;
+        const parsed = decodePreviewState(state);
+
+        if (Option.isSome(parsed)) listener(tabId, parsed.value);
       };
 
       ipcRenderer.on(IpcChannels.PREVIEW_STATE_CHANGE_CHANNEL, wrappedListener);
@@ -285,16 +252,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       return () =>
         ipcRenderer.removeListener(IpcChannels.PREVIEW_STATE_CHANGE_CHANNEL, wrappedListener);
     },
-    onPointerEvent: (listener) => {
-      const wrappedListener = (_event: Electron.IpcRendererEvent, pointerEvent: unknown) => {
-        if (typeof pointerEvent !== "object" || pointerEvent === null) return;
-        listener(pointerEvent as DesktopPreviewPointerEvent);
-      };
-
-      ipcRenderer.on(IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, wrappedListener);
-
-      return () =>
-        ipcRenderer.removeListener(IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, wrappedListener);
-    },
+    onPointerEvent: (listener) =>
+      subscribeDecoded(IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, decodePointerEvent, listener),
   },
 } satisfies DesktopBridge);

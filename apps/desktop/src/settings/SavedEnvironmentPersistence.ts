@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Encoding from "effect/Encoding";
 import * as FileSystem from "effect/FileSystem";
@@ -24,7 +25,7 @@ export function readRegistryDocument(
 ): Effect.Effect<SavedEnvironmentRegistryDocument, DesktopSavedEnvironmentsReadRegistryError> {
   return fileSystem.readFileString(registryPath).pipe(
     Effect.catch((error) =>
-      error.reason._tag === "NotFound"
+      Predicate.isTagged(error.reason, "NotFound")
         ? Effect.succeed<string | null>(null)
         : Effect.fail(
             new DesktopSavedEnvironmentsReadError({

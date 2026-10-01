@@ -60,23 +60,17 @@ import {
   DesktopUpdateChannelPersistenceError,
 } from "./UpdateErrors.ts";
 
-export { DesktopUpdateActionInProgressError } from "./UpdateErrors.ts";
-
-export { DesktopUpdateChannelPersistenceError } from "./UpdateErrors.ts";
-
-export { DesktopUpdatePollerError } from "./UpdateErrors.ts";
-
-export { DesktopUpdateEventHandlingError } from "./UpdateErrors.ts";
-
-export { DesktopUpdaterReportedError } from "./UpdateErrors.ts";
-
-export { DesktopUpdateUnexpectedActionError } from "./UpdateErrors.ts";
-
-export type { DesktopUpdateConfigureError } from "./UpdateErrors.ts";
-
-export { DesktopUpdateSetChannelError } from "./UpdateErrors.ts";
-
-export { isDesktopUpdateSetChannelError } from "./UpdateErrors.ts";
+export {
+  DesktopUpdateActionInProgressError,
+  DesktopUpdateChannelPersistenceError,
+  DesktopUpdatePollerError,
+  DesktopUpdateEventHandlingError,
+  DesktopUpdaterReportedError,
+  DesktopUpdateUnexpectedActionError,
+  type DesktopUpdateConfigureError,
+  DesktopUpdateSetChannelError,
+  isDesktopUpdateSetChannelError,
+} from "./UpdateErrors.ts";
 
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
 
@@ -106,7 +100,7 @@ const {
   logInfo: logUpdaterInfo,
   logWarning: logUpdaterWarning,
   logError: logUpdaterError,
-} = DesktopObservability.makeComponentLogger("desktop-updater");
+} = DesktopObservability.componentLogger("desktop-updater");
 
 function parseAppUpdateYml(raw: string): Effect.Effect<Option.Option<AppUpdateYmlConfig>> {
   const entries: Record<string, string> = {};
@@ -477,7 +471,7 @@ export const make = Effect.gen(function* () {
   }).pipe(Effect.withSpan("desktop.updates.startPollers"));
 
   const handleUpdateAvailable = Effect.fn("desktop.updates.handleUpdateAvailable")(function* (
-    raw: unknown,
+    raw: Parameters<typeof decodeUpdateInfo>[0],
   ) {
     yield* decodeUpdateInfo(raw).pipe(
       Effect.flatMap(
@@ -580,7 +574,7 @@ export const make = Effect.gen(function* () {
   });
 
   const handleDownloadProgress = Effect.fn("desktop.updates.handleDownloadProgress")(function* (
-    raw: unknown,
+    raw: Parameters<typeof decodeUpdateInfo>[0],
   ) {
     yield* decodeDownloadProgressInfo(raw).pipe(
       Effect.flatMap(
@@ -617,7 +611,7 @@ export const make = Effect.gen(function* () {
   });
 
   const handleUpdateDownloaded = Effect.fn("desktop.updates.handleUpdateDownloaded")(function* (
-    raw: unknown,
+    raw: Parameters<typeof decodeUpdateInfo>[0],
   ) {
     yield* decodeUpdateInfo(raw).pipe(
       Effect.flatMap(
@@ -660,7 +654,7 @@ export const make = Effect.gen(function* () {
         yield* electronUpdater.setFeedURL({
           provider: "generic",
           url: `http://localhost:${config.mockUpdateServerPort}`,
-        } as ElectronUpdater.ElectronUpdaterFeedUrl);
+        } satisfies ElectronUpdater.ElectronUpdaterFeedUrl);
       }
 
       const settings = yield* desktopSettings.get;
@@ -693,19 +687,19 @@ export const make = Effect.gen(function* () {
           ),
         );
       });
-      yield* electronUpdater.on("update-available", (info: unknown) => {
+      yield* electronUpdater.on("update-available", (info) => {
         runEffect(handleUpdateAvailable(info));
       });
       yield* electronUpdater.on("update-not-available", () => {
         runEffect(handleUpdateNotAvailable);
       });
-      yield* electronUpdater.on("error", (error: unknown) => {
-        runEffect(handleUpdaterError(error));
+      yield* electronUpdater.on("error", (cause: unknown) => {
+        runEffect(handleUpdaterError(cause));
       });
-      yield* electronUpdater.on("download-progress", (progress: unknown) => {
+      yield* electronUpdater.on("download-progress", (progress) => {
         runEffect(handleDownloadProgress(progress));
       });
-      yield* electronUpdater.on("update-downloaded", (info: unknown) => {
+      yield* electronUpdater.on("update-downloaded", (info) => {
         runEffect(handleUpdateDownloaded(info));
       });
 

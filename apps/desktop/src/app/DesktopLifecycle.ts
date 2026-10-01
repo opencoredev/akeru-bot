@@ -1,3 +1,4 @@
+import type * as NodeEvents from "node:events";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -8,7 +9,7 @@ import * as Scope from "effect/Scope";
 import type * as Electron from "electron";
 
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
-import { makeComponentLogger } from "./DesktopObservability.ts";
+import { componentLogger } from "./DesktopObservability.ts";
 import * as DesktopShutdown from "./DesktopShutdown.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
@@ -58,27 +59,20 @@ export class DesktopLifecycle extends Context.Service<
 >()("@akeru/desktop/app/DesktopLifecycle") {}
 
 const { logInfo: logLifecycleInfo, logError: logLifecycleError } =
-  makeComponentLogger("desktop-lifecycle");
+  componentLogger("desktop-lifecycle");
 
-function addScopedListener<Args extends ReadonlyArray<unknown>>(
-  target: unknown,
+function addScopedListener(
+  target: NodeEvents.EventEmitter,
   eventName: string,
-  listener: (...args: Args) => void,
+  listener: () => void,
 ): Effect.Effect<void, never, Scope.Scope> {
-  const eventTarget = target as {
-    on: (eventName: string, listener: (...args: Array<unknown>) => void) => unknown;
-    removeListener: (eventName: string, listener: (...args: Array<unknown>) => void) => unknown;
-  };
-
-  const untypedListener = listener as unknown as (...args: Array<unknown>) => void;
-
   return Effect.acquireRelease(
     Effect.sync(() => {
-      eventTarget.on(eventName, untypedListener);
+      target.on(eventName, listener);
     }),
     () =>
       Effect.sync(() => {
-        eventTarget.removeListener(eventName, untypedListener);
+        target.removeListener(eventName, listener);
       }),
   ).pipe(Effect.asVoid);
 }

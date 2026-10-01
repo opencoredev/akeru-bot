@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { parsePersistedServerObservabilitySettings } from "@akeru/shared/serverSettings";
 
 import * as Effect from "effect/Effect";
@@ -109,7 +110,7 @@ export const readPersistedBackendObservabilitySettings = Effect.gen(function* ()
     Effect.map(Option.some),
     Effect.catchTags({
       PlatformError: (cause) =>
-        cause.reason._tag === "NotFound"
+        Predicate.isTagged(cause.reason, "NotFound")
           ? Effect.succeed(Option.none())
           : logBackendObservabilitySettingsReadFailure(environment.serverSettingsPath, cause).pipe(
               Effect.as(Option.none()),

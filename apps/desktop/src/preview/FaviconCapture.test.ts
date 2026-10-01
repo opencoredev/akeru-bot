@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -219,7 +220,7 @@ describe("captureFavicon", () => {
         milliseconds === 5_000 ? captureTimeoutController.signal : rasterTimeoutController.signal,
       );
 
-    let resolveRasterization!: (value: unknown) => void;
+    let resolveRasterization!: (value: Schema.Json | undefined) => void;
 
     const { webContents, executeJavaScriptInIsolatedWorld } = makeWebContents({
       rasterize: () =>

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { ConnectionCatalogDocument as RuntimeConnectionCatalogDocument } from "@akeru/client-runtime/platform";
 
 import { fromLenientJson } from "@akeru/shared/schemaJson";
@@ -147,7 +148,7 @@ export const readDocument = (
 > =>
   fileSystem.readFileString(catalogPath).pipe(
     Effect.catch((error) =>
-      error.reason._tag === "NotFound"
+      Predicate.isTagged(error.reason, "NotFound")
         ? Effect.succeed<string | null>(null)
         : Effect.fail(
             new DesktopConnectionCatalogStoreReadError({

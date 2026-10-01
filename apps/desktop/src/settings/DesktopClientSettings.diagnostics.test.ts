@@ -1,3 +1,5 @@
+import * as Predicate from "effect/Predicate";
+import type { DesktopLogAnnotations } from "../app/DesktopObservability.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -14,7 +16,7 @@ import * as DesktopClientSettings from "./DesktopClientSettings.ts";
 
 interface LogRecord {
   readonly message: unknown;
-  readonly annotations: Readonly<Record<string, unknown>>;
+  readonly annotations: Readonly<DesktopLogAnnotations>;
 }
 
 const baseDir = "/virtual-home";
@@ -124,7 +126,7 @@ describe("DesktopClientSettings diagnostics", () => {
       assert.equal(message[0], "Could not decode desktop client settings.");
       const schemaError = message[1];
 
-      if (schemaError === null || typeof schemaError !== "object") {
+      if (schemaError === null || !Predicate.isObjectOrArray(schemaError)) {
         return assert.fail("expected the schema error in the warning");
       }
 

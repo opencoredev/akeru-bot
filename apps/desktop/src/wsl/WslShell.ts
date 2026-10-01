@@ -1,3 +1,4 @@
+import * as Result from "effect/Result";
 import * as Duration from "effect/Duration";
 
 import * as Effect from "effect/Effect";
@@ -107,23 +108,18 @@ export const runWslShell = (
     Effect.gen(function* () {
       const spawnerService = yield* spawner;
 
-      const spawnResult = yield* spawnerService.spawn(command).pipe(
-        Effect.match({
-          onFailure: (error) => ({ _tag: "Failure", error }) as const,
-          onSuccess: (handle) => ({ _tag: "Success", handle }) as const,
-        }),
-      );
+      const spawnResult = yield* spawnerService.spawn(command).pipe(Effect.result);
 
-      if (spawnResult._tag === "Failure") {
+      if (Result.isFailure(spawnResult)) {
         return {
           exitCode: 127,
           stdout: "",
-          stderr: `\n${spawnResult.error.message}`,
+          stderr: `\n${spawnResult.failure.message}`,
           transportFailure: "spawn",
         } satisfies ShellResult;
       }
 
-      const handle = spawnResult.handle;
+      const handle = spawnResult.success;
 
       // Drain stdout and stderr concurrently so neither pipe buffer can fill
       // and stall the child (node-gyp rebuild emits large output on both).

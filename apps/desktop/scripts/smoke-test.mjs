@@ -12,11 +12,23 @@ const fatalPattern =
 
 const readinessMarkers = ["backend ready", "main window created"];
 
-export function resolveSmokeElectronPath() {
-  const require = NodeModule.createRequire(import.meta.url);
-  const packageDir = NodePath.dirname(require.resolve("electron/package.json"));
+const smokeRuntime = {
+  spawn: NodeChildProcess.spawn,
+  spawnSync: NodeChildProcess.spawnSync,
+  mkdtempSync: NodeFS.mkdtempSync,
+  mkdirSync: NodeFS.mkdirSync,
+  rmSync: NodeFS.rmSync,
+  readFileSync: NodeFS.readFileSync,
+  accessSync: NodeFS.accessSync,
+  platform: NodeOS.platform,
+  tmpdir: NodeOS.tmpdir,
+  resolve: NodeModule.createRequire(import.meta.url).resolve,
+};
+
+export function resolveSmokeElectronPath(runtime = smokeRuntime) {
+  const packageDir = NodePath.dirname(runtime.resolve("electron/package.json"));
   // Read the installed runtime directly; the branded launcher registers OS URL schemes.
-  const relativePath = NodeFS.readFileSync(NodePath.join(packageDir, "path.txt"), "utf8").trim();
+  const relativePath = runtime.readFileSync(NodePath.join(packageDir, "path.txt"), "utf8").trim();
   const distDir = NodePath.join(packageDir, "dist");
   const executable = NodePath.resolve(distDir, relativePath);
 
@@ -24,7 +36,7 @@ export function resolveSmokeElectronPath() {
     throw new Error("Invalid installed Electron executable path.");
   }
 
-  NodeFS.accessSync(executable, NodeFS.constants.X_OK);
+  runtime.accessSync(executable, NodeFS.constants.X_OK);
 
   return executable;
 }
@@ -63,9 +75,13 @@ export function createSmokeEnvironment(root, inherited = process.env) {
   };
 }
 
-export async function runSmokeTest({ timeoutMs = 30_000, shutdownMs = 1_500 } = {}) {
-  const electronPath = resolveSmokeElectronPath();
-  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-desktop-smoke-"));
+export async function runSmokeTest({
+  timeoutMs = 30_000,
+  shutdownMs = 1_500,
+  runtime = smokeRuntime,
+} = {}) {
+  const electronPath = resolveSmokeElectronPath(runtime);
+  const root = runtime.mkdtempSync(NodePath.join(runtime.tmpdir(), "akeru-desktop-smoke-"));
   let child;
   let pid;
   let closed = false;
@@ -75,7 +91,7 @@ export async function runSmokeTest({ timeoutMs = 30_000, shutdownMs = 1_500 } = 
   let closePromise;
   const signals = new Map();
   // oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone smoke script has no Effect runtime.
-  const grouped = NodeOS.platform() !== "win32";
+  const grouped = runtime.platform() !== "win32";
 
   const signalChild = (signal) => {
     if (!pid) return;
@@ -84,7 +100,7 @@ export async function runSmokeTest({ timeoutMs = 30_000, shutdownMs = 1_500 } = 
       if (grouped) process.kill(-pid, signal);
       else {
         // Kill the captured tree so a spawned backend cannot outlive cleanup.
-        NodeChildProcess.spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"]);
+        runtime.spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"]);
 
         if (!closed) child.kill(signal);
       }
@@ -121,7 +137,7 @@ export async function runSmokeTest({ timeoutMs = 30_000, shutdownMs = 1_500 } = 
       if (!closed) throw new Error(`Desktop did not close; retained smoke directory at ${root}.`);
     }
 
-    NodeFS.rmSync(root, { recursive: true, force: true });
+    runtime.rmSync(root, { recursive: true, force: true });
   };
 
   try {
@@ -138,10 +154,10 @@ export async function runSmokeTest({ timeoutMs = 30_000, shutdownMs = 1_500 } = 
       env.XDG_STATE_HOME,
       env.T3CODE_HOME,
     ]) {
-      NodeFS.mkdirSync(directory, { recursive: true });
+      runtime.mkdirSync(directory, { recursive: true });
     }
 
-    child = NodeChildProcess.spawn(
+    child = runtime.spawn(
       electronPath,
       [
         "--no-default-browser-check",

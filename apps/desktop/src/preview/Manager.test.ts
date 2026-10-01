@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { it as effectIt } from "@effect/vitest";
 
 import * as Cause from "effect/Cause";
@@ -36,9 +37,9 @@ const {
 } = vi.hoisted(() => ({
   browserWindowConstructor: vi.fn(),
   createFromBuffer: vi.fn(),
-  createFromPath: vi.fn((): { readonly isEmpty: () => boolean } => ({ isEmpty: () => false })),
-  fromId: vi.fn((_id?: number) => null),
-  getFocusedWebContents: vi.fn(() => null),
+  createFromPath: vi.fn((): Pick<Electron.NativeImage, "isEmpty"> => ({ isEmpty: () => false })),
+  fromId: vi.fn((_id?: number): Electron.WebContents | null => null),
+  getFocusedWebContents: vi.fn((): Electron.WebContents | null => null),
   mkdir: vi.fn((_path: string) => undefined),
   showItemInFolder: vi.fn(),
   webviewSend: vi.fn(),
@@ -160,7 +161,7 @@ describe("PreviewManager", () => {
 
     const logger = Logger.make(({ message }) => {
       for (const value of Array.isArray(message) ? message : [message]) {
-        if (typeof value === "object" && value !== null && "cause" in value) {
+        if (Predicate.isObjectOrArray(value) && value !== null && "cause" in value) {
           loggedErrors.push(Cause.squash(value.cause as Cause.Cause<never>));
         }
       }
@@ -322,10 +323,10 @@ describe("PreviewManager", () => {
         const firstWebContents = makeTestPreviewWebContents(capturePage, 42);
         const replacementWebContents = makeTestPreviewWebContents(capturePage, 43);
 
-        const replacementListenerSpies = replacementWebContents as unknown as {
-          readonly on: ReturnType<typeof vi.fn>;
-          readonly off: ReturnType<typeof vi.fn>;
-          readonly ipc: { readonly off: ReturnType<typeof vi.fn> };
+        const replacementListenerSpies = {
+          on: vi.mocked(replacementWebContents.on),
+          off: vi.mocked(replacementWebContents.off),
+          ipc: { off: vi.mocked(replacementWebContents.ipc.off) },
         };
 
         fromId.mockImplementation((id) => {

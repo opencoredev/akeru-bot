@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 import { it as effectIt } from "@effect/vitest";
 
 import type { DesktopPreviewRecordingFrame } from "@akeru/contracts";
@@ -31,9 +32,9 @@ const {
 } = vi.hoisted(() => ({
   browserWindowConstructor: vi.fn(),
   createFromBuffer: vi.fn(),
-  createFromPath: vi.fn((): { readonly isEmpty: () => boolean } => ({ isEmpty: () => false })),
-  fromId: vi.fn((_id?: number) => null),
-  getFocusedWebContents: vi.fn(() => null),
+  createFromPath: vi.fn((): Pick<Electron.NativeImage, "isEmpty"> => ({ isEmpty: () => false })),
+  fromId: vi.fn((_id?: number): Electron.WebContents | null => null),
+  getFocusedWebContents: vi.fn((): Electron.WebContents | null => null),
   mkdir: vi.fn((_path: string) => undefined),
   showItemInFolder: vi.fn(),
   webviewSend: vi.fn(),
@@ -339,7 +340,11 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         let debuggerMessage:
-          | ((event: unknown, method: string, params: Record<string, unknown>) => void)
+          | ((
+              event: Electron.Event,
+              method: string,
+              params: Record<string, Schema.Json | undefined>,
+            ) => void)
           | undefined;
 
         const capturePage = vi.fn(async () => ({
@@ -377,7 +382,11 @@ describe("PreviewManager", () => {
             on: vi.fn(
               (
                 event: string,
-                listener: (event: unknown, method: string, params: Record<string, unknown>) => void,
+                listener: (
+                  event: Electron.Event,
+                  method: string,
+                  params: Record<string, Schema.Json | undefined>,
+                ) => void,
               ) => {
                 if (event === "message") debuggerMessage = listener;
               },
@@ -397,21 +406,29 @@ describe("PreviewManager", () => {
         yield* manager.registerWebview("tab_screencast_guard", 42);
         yield* manager.automationEvaluate("tab_screencast_guard", { expression: "null" });
 
-        debuggerMessage?.({}, "Page.screencastFrame", {
-          sessionId: 1,
-          data: "inactive-frame",
-          metadata: { deviceWidth: 1280, deviceHeight: 720 },
-        });
+        debuggerMessage?.(
+          { preventDefault: () => {}, defaultPrevented: false },
+          "Page.screencastFrame",
+          {
+            sessionId: 1,
+            data: "inactive-frame",
+            metadata: { deviceWidth: 1280, deviceHeight: 720 },
+          },
+        );
         yield* Effect.yieldNow;
         expect(recordingFrames).toHaveLength(0);
 
         yield* manager.startRecording("tab_screencast_guard");
         recordingFrames.length = 0;
-        debuggerMessage?.({}, "Page.screencastFrame", {
-          sessionId: 2,
-          data: "active-frame",
-          metadata: { deviceWidth: 1280, deviceHeight: 720 },
-        });
+        debuggerMessage?.(
+          { preventDefault: () => {}, defaultPrevented: false },
+          "Page.screencastFrame",
+          {
+            sessionId: 2,
+            data: "active-frame",
+            metadata: { deviceWidth: 1280, deviceHeight: 720 },
+          },
+        );
         yield* Effect.yieldNow;
 
         expect(recordingFrames).toEqual([

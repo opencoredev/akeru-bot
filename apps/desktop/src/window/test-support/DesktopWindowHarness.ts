@@ -1,3 +1,4 @@
+import { testWindow } from "../../electron/testWindow.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
 import * as Effect from "effect/Effect";
@@ -115,7 +116,7 @@ export function makeFakeBrowserWindow() {
   };
 
   return {
-    window: window as unknown as Electron.BrowserWindow,
+    window: testWindow(window),
     getBounds: window.getBounds,
     getNormalBounds: window.getNormalBounds,
     isDestroyed: window.isDestroyed,

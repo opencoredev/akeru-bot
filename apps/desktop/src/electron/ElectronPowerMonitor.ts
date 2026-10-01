@@ -1,3 +1,4 @@
+import type * as NodeEvents from "node:events";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -32,11 +33,13 @@ export class ElectronPowerMonitor extends Context.Service<
 const onSimpleEvent: ElectronPowerMonitor["Service"]["onSimpleEvent"] = (eventName, listener) =>
   Effect.acquireRelease(
     Effect.sync(() => {
-      Electron.powerMonitor.on(eventName as any, listener as any);
+      const powerEvents: NodeEvents.EventEmitter = Electron.powerMonitor;
+      powerEvents.on(eventName, listener);
     }),
     () =>
       Effect.sync(() => {
-        Electron.powerMonitor.removeListener(eventName as any, listener as any);
+        const powerEvents: NodeEvents.EventEmitter = Electron.powerMonitor;
+        powerEvents.removeListener(eventName, listener);
       }),
   ).pipe(Effect.asVoid);
 

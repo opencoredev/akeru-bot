@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -368,9 +369,9 @@ describe("DesktopObservability", () => {
       const lines = (yield* fileSystem.readFileString(logPath)).trimEnd().split("\n");
       const record = yield* decodeDesktopBackendChildLogRecord(lines[1] ?? "");
       const text = record.annotations.text;
-      assert.equal(typeof text, "string");
+      assert.equal(Predicate.isString(text), true);
 
-      if (typeof text !== "string") {
+      if (!Predicate.isString(text)) {
         return;
       }
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -70,9 +71,9 @@ describe("DesktopIpc", () => {
 
       const exit = yield* Effect.exit(Effect.scoped(ipc.handleSync(syncMethod)));
 
-      assert.isTrue(exit._tag === "Failure");
+      assert.isTrue(Predicate.isTagged(exit, "Failure"));
 
-      if (exit._tag === "Success") return;
+      if (Predicate.isTagged(exit, "Success")) return;
       const error = Cause.squash(exit.cause);
       assert.instanceOf(error, DesktopIpc.DesktopIpcUnregistrationError);
       assert.isTrue(DesktopIpc.isDesktopIpcError(error));

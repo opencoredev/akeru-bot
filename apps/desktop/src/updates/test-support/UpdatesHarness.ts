@@ -1,3 +1,5 @@
+import * as NodeEvents from "node:events";
+import type * as Schema from "effect/Schema";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { DesktopUpdateState } from "@akeru/contracts";
 
@@ -36,28 +38,8 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   let allowDowngrade = false;
   let fullChangelog = false;
   const feedUrls: ElectronUpdater.ElectronUpdaterFeedUrl[] = [];
-  const listeners = new Map<string, Set<(...args: readonly unknown[]) => void>>();
+  const listeners = new NodeEvents.EventEmitter();
   const sentStates: DesktopUpdateState[] = [];
-
-  const addListener = (eventName: string, listener: (...args: readonly unknown[]) => void) => {
-    const eventListeners = listeners.get(eventName) ?? new Set();
-    eventListeners.add(listener);
-    listeners.set(eventName, eventListeners);
-  };
-
-  const removeListener = (eventName: string, listener: (...args: readonly unknown[]) => void) => {
-    const eventListeners = listeners.get(eventName);
-
-    if (!eventListeners) {
-      return;
-    }
-
-    eventListeners.delete(listener);
-
-    if (eventListeners.size === 0) {
-      listeners.delete(eventName);
-    }
-  };
 
   const updaterLayer = Layer.succeed(ElectronUpdater.ElectronUpdater, {
     setFeedURL: (options) =>
@@ -86,11 +68,11 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     on: (eventName, listener) =>
       Effect.acquireRelease(
         Effect.sync(() => {
-          addListener(eventName, listener as unknown as (...args: readonly unknown[]) => void);
+          listeners.on(eventName, listener);
         }),
         () =>
           Effect.sync(() => {
-            removeListener(eventName, listener as unknown as (...args: readonly unknown[]) => void);
+            listeners.removeListener(eventName, listener);
           }),
       ).pipe(Effect.asVoid),
   } satisfies ElectronUpdater.ElectronUpdater["Service"]);
@@ -216,15 +198,10 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     feedUrls: () => feedUrls,
     fullChangelog: () => fullChangelog,
     listenerCount: () =>
-      Array.from(listeners.values()).reduce(
-        (total, eventListeners) => total + eventListeners.size,
-        0,
-      ),
+      listeners.eventNames().reduce((total, name) => total + listeners.listenerCount(name), 0),
     sentStates,
-    emit: (eventName: string, payload?: unknown) => {
-      for (const listener of listeners.get(eventName) ?? []) {
-        listener(payload);
-      }
+    emit: (eventName: string, payload?: Schema.Json | Error) => {
+      listeners.emit(eventName, payload);
     },
   };
 }

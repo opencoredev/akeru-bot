@@ -21,6 +21,7 @@ async function reservePort() {
     server.close((error) => (error ? reject(error) : resolve())),
   );
 
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Node server.address can return a Unix socket string; the packaged smoke runner requires a TCP address object.
   if (!address || typeof address === "string")
     throw new Error("Could not reserve a loopback port.");
 

@@ -1,3 +1,4 @@
+import type { DesktopLogAnnotations } from "../app/DesktopObservability.ts";
 import { assert, describe, it } from "@effect/vitest";
 
 import * as Deferred from "effect/Deferred";
@@ -462,7 +463,7 @@ describe("DesktopWindow", () => {
 
       const logRecords: Array<{
         readonly message: unknown;
-        readonly annotations: Readonly<Record<string, unknown>>;
+        readonly annotations: Readonly<DesktopLogAnnotations>;
       }> = [];
 
       const logger = Logger.make(({ fiber, message }) => {

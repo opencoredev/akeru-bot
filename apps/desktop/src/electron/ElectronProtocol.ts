@@ -163,14 +163,14 @@ async function proxyRequest(
     headers.delete(name);
   }
 
-  const init: RequestInit = {
+  const init: RequestInit & { duplex?: "half" } = {
     method: request.method,
     headers,
   };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     init.body = request.body;
-    (init as RequestInit & { duplex: "half" }).duplex = "half";
+    init.duplex = "half";
   }
 
   const response =

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { webContents } from "electron";
 
 import * as Effect from "effect/Effect";
@@ -21,6 +22,7 @@ import type { createPreviewBrowserControl } from "./PreviewBrowserControl.ts";
 import {
   type PreviewNavStatus,
   type PreviewTabState,
+  type PreviewInputSignal,
   type ManagedListeners,
   isPreviewRefreshShortcut,
   isPreviewEditingShortcut,
@@ -239,7 +241,7 @@ export const createPreviewTabListeners = ({
       if (Option.isSome(next)) yield* emitIfCurrent(tabId, next.value);
     });
 
-    const faviconUpdated = (_event: Event, rawCandidates: ReadonlyArray<string>): void => {
+    const faviconUpdated = (_event: Electron.Event, rawCandidates: ReadonlyArray<string>): void => {
       const pageUrl = wc.getURL();
 
       if (!safeHttpOrigin(pageUrl)) return;
@@ -291,7 +293,7 @@ export const createPreviewTabListeners = ({
     };
 
     const failed = (
-      _event: Event,
+      _event: Electron.Event,
       code: number,
       description: string,
       validatedUrl: string,
@@ -312,7 +314,7 @@ export const createPreviewTabListeners = ({
     };
 
     const handleHumanInput = Effect.fn("PreviewManager.handleHumanInput")(function* (
-      rawSignal?: unknown,
+      rawSignal?: PreviewInputSignal,
     ) {
       if (isPreviewInputSignal(rawSignal) && (yield* consumeExpectedAgentInput(tabId, rawSignal))) {
         return;
@@ -332,14 +334,14 @@ export const createPreviewTabListeners = ({
       }
     });
 
-    const humanInput = (_event: unknown, rawSignal?: unknown): void => {
-      runFork(handleHumanInput(rawSignal));
+    const humanInput: Parameters<Electron.IpcMain["on"]>[1] = (_event, rawSignal) => {
+      runFork(handleHumanInput(isPreviewInputSignal(rawSignal) ? rawSignal : undefined));
     };
 
-    const mouseNavigate = (_event: unknown, payload?: unknown): void => {
+    const mouseNavigate: Parameters<Electron.IpcMain["on"]>[1] = (_event, payload) => {
       const direction =
-        typeof payload === "object" && payload !== null && "direction" in payload
-          ? (payload as { direction?: unknown }).direction
+        Predicate.isObjectOrArray(payload) && "direction" in payload
+          ? payload.direction
           : undefined;
 
       if (direction !== "back" && direction !== "forward") return;
@@ -395,10 +397,10 @@ export const createPreviewTabListeners = ({
         wc.off("did-navigate", syncNavigation);
         wc.off("did-navigate-in-page", syncInPageNavigation);
         wc.off("page-title-updated", sync);
-        wc.off("page-favicon-updated", faviconUpdated as never);
+        wc.off("page-favicon-updated", faviconUpdated);
         wc.off("did-start-loading", sync);
         wc.off("did-stop-loading", sync);
-        wc.off("did-fail-load", failed as never);
+        wc.off("did-fail-load", failed);
         wc.off("audio-state-changed", audioStateChanged);
         wc.off("did-create-window", windowCreated);
         wc.off("before-input-event", beforeInput);
@@ -416,10 +418,10 @@ export const createPreviewTabListeners = ({
         wc.on("did-navigate", syncNavigation);
         wc.on("did-navigate-in-page", syncInPageNavigation);
         wc.on("page-title-updated", sync);
-        wc.on("page-favicon-updated", faviconUpdated as never);
+        wc.on("page-favicon-updated", faviconUpdated);
         wc.on("did-start-loading", sync);
         wc.on("did-stop-loading", sync);
-        wc.on("did-fail-load", failed as never);
+        wc.on("did-fail-load", failed);
         wc.on("audio-state-changed", audioStateChanged);
         wc.ipc.on(HUMAN_INPUT_CHANNEL, humanInput);
         wc.ipc.on(MOUSE_NAVIGATE_CHANNEL, mouseNavigate);

@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { captureFavicon } from "./FaviconCapture.ts";
@@ -24,7 +25,7 @@ describe("captureFavicon", () => {
     vi.useFakeTimers();
 
     try {
-      let resolveOld!: (value: unknown) => void;
+      let resolveOld!: (value: Schema.Json | undefined) => void;
       let executions = 0;
 
       const { webContents } = makeWebContents({
@@ -65,7 +66,7 @@ describe("captureFavicon", () => {
     vi.useFakeTimers();
 
     try {
-      let resolveRasterization!: (value: unknown) => void;
+      let resolveRasterization!: (value: Schema.Json | undefined) => void;
 
       const { webContents, fetch, executeJavaScriptInIsolatedWorld } = makeWebContents({
         rasterize: () =>
@@ -93,7 +94,7 @@ describe("captureFavicon", () => {
   });
 
   it("coalesces queued rasterizations so only the latest pending capture launches", async () => {
-    let resolveFirst!: (value: unknown) => void;
+    let resolveFirst!: (value: Schema.Json | undefined) => void;
     let executions = 0;
 
     const { webContents } = makeWebContents({

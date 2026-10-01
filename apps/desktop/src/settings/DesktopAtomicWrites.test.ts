@@ -13,6 +13,12 @@ import * as ElectronSafeStorage from "../electron/ElectronSafeStorage.ts";
 import * as DesktopAppSettings from "./DesktopAppSettings.ts";
 import * as DesktopSavedEnvironments from "./DesktopSavedEnvironments.ts";
 
+const isSettingsWriteError = Schema.is(DesktopAppSettings.DesktopSettingsWriteError);
+
+const isSavedEnvironmentsWriteError = Schema.is(
+  DesktopSavedEnvironments.DesktopSavedEnvironmentsWriteError,
+);
+
 describe("desktop atomic writes", () => {
   for (const target of ["settings", "registry"] as const) {
     for (const failure of ["write", "rename", "none"] as const) {
@@ -107,10 +113,7 @@ describe("desktop atomic writes", () => {
             } else {
               const error = yield* save.pipe(Effect.flip);
 
-              if (
-                !Schema.is(DesktopAppSettings.DesktopSettingsWriteError)(error) &&
-                !Schema.is(DesktopSavedEnvironments.DesktopSavedEnvironmentsWriteError)(error)
-              ) {
+              if (!isSettingsWriteError(error) && !isSavedEnvironmentsWriteError(error)) {
                 assert.fail(`Unexpected save error: ${error._tag}`);
 
                 return;

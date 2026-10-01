@@ -2,7 +2,7 @@ import * as NodeEvents from "node:events";
 import * as NodePath from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
+const mocks = {
   spawn: vi.fn(),
   spawnSync: vi.fn(() => ({ status: 0 })),
   mkdtempSync: vi.fn(),
@@ -12,15 +12,8 @@ const mocks = vi.hoisted(() => ({
   accessSync: vi.fn(),
   platform: vi.fn(),
   resolve: vi.fn(),
-}));
-
-vi.mock("node:child_process", () => ({ spawn: mocks.spawn, spawnSync: mocks.spawnSync }));
-
-vi.mock("node:fs", () => ({ ...mocks, constants: { X_OK: 1 } }));
-
-vi.mock("node:os", () => ({ platform: mocks.platform, tmpdir: () => "/tmp" }));
-
-vi.mock("node:module", () => ({ createRequire: () => ({ resolve: mocks.resolve }) }));
+  tmpdir: () => "/tmp",
+};
 
 import { createSmokeEnvironment, resolveSmokeElectronPath, runSmokeTest } from "./smoke-test.mjs";
 
@@ -36,7 +29,7 @@ let signals;
 
 function launch() {
   // Attach rejection handling before advancing fake time.
-  return runSmokeTest({ timeoutMs: 100, shutdownMs: 10 }).then(
+  return runSmokeTest({ timeoutMs: 100, shutdownMs: 10, runtime: mocks }).then(
     (message) => ({ message }),
     (error) => ({ error }),
   );
@@ -170,7 +163,7 @@ describe("desktop smoke isolation", () => {
     "rejects invalid runtime path %j before creating state",
     (path) => {
       mocks.readFileSync.mockReturnValue(path);
-      expect(() => resolveSmokeElectronPath()).toThrow("Invalid installed");
+      expect(() => resolveSmokeElectronPath(mocks)).toThrow("Invalid installed");
       expect(mocks.mkdtempSync).not.toHaveBeenCalled();
       expect(mocks.spawn).not.toHaveBeenCalled();
     },

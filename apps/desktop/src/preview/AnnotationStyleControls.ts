@@ -116,11 +116,7 @@ export function createAnnotationStyleControls(input: {
   });
   textSection.appendChild(createField("Line height", lineHeight));
 
-  const createColorRow = (
-    labelText: string,
-    property: string,
-    section: HTMLElement,
-  ): { row: HTMLLabelElement; color: HTMLInputElement; text: HTMLInputElement } => {
+  const createColorRow = (labelText: string, property: string, section: HTMLElement) => {
     const row = document.createElement("label");
     row.className =
       "grid min-h-7 grid-cols-[82px_minmax(0,1fr)] items-center gap-2 font-sans text-xs font-medium text-muted-foreground";

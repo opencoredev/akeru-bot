@@ -8,7 +8,7 @@ import * as DesktopAppSettings from "../../settings/DesktopAppSettings.ts";
 import * as DesktopWslBackend from "../../wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "../../wsl/DesktopWslEnvironment.ts";
 import * as IpcChannels from "../channels.ts";
-import { makeIpcMethod } from "../DesktopIpc.ts";
+import { defineIpcMethod } from "../DesktopIpc.ts";
 
 const readWslState: Effect.Effect<
   DesktopWslState,
@@ -39,7 +39,7 @@ const readWslState: Effect.Effect<
   };
 });
 
-export const getWslState = makeIpcMethod({
+export const getWslState = defineIpcMethod({
   channel: IpcChannels.GET_WSL_STATE_CHANNEL,
   payload: Schema.Void,
   result: DesktopWslStateSchema,
@@ -48,7 +48,7 @@ export const getWslState = makeIpcMethod({
   }),
 });
 
-export const setWslBackendEnabled = makeIpcMethod({
+export const setWslBackendEnabled = defineIpcMethod({
   channel: IpcChannels.SET_WSL_BACKEND_ENABLED_CHANNEL,
   payload: Schema.Boolean,
   result: DesktopWslStateSchema,
@@ -86,7 +86,7 @@ export const setWslBackendEnabled = makeIpcMethod({
   }),
 });
 
-export const setWslDistro = makeIpcMethod({
+export const setWslDistro = defineIpcMethod({
   channel: IpcChannels.SET_WSL_DISTRO_CHANNEL,
   payload: Schema.NullOr(Schema.String),
   result: DesktopWslStateSchema,
@@ -113,7 +113,7 @@ export const setWslDistro = makeIpcMethod({
   }),
 });
 
-export const setWslOnly = makeIpcMethod({
+export const setWslOnly = defineIpcMethod({
   channel: IpcChannels.SET_WSL_ONLY_CHANNEL,
   payload: Schema.Boolean,
   result: DesktopWslStateSchema,

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 
 import * as Cause from "effect/Cause";
@@ -126,7 +127,7 @@ describe("DesktopUpdates", () => {
           const exit = yield* Effect.exit(updates.setChannel("latest"));
           assert.equal(exit._tag, "Failure");
 
-          if (exit._tag === "Failure") {
+          if (Predicate.isTagged(exit, "Failure")) {
             const error = Cause.squash(exit.cause);
             assert.instanceOf(error, DesktopUpdates.DesktopUpdateActionInProgressError);
             assert.equal(error.action, "check");

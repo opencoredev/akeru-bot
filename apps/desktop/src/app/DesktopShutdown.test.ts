@@ -18,7 +18,8 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 
   return {
     ...original,
-    appendFile: (_path: unknown, data: Uint8Array) => writer.append(Buffer.from(data).toString()),
+    appendFile: (_path: Parameters<typeof original.appendFile>[0], data: Uint8Array) =>
+      writer.append(Buffer.from(data).toString()),
   };
 });
 

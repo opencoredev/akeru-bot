@@ -10,7 +10,7 @@ interface KeyDefinition {
 }
 
 export interface PreviewAutomationKeyEvent {
-  readonly [key: string]: unknown;
+  readonly [key: string]: string | number | boolean | ReadonlyArray<string> | undefined;
   readonly type: "keyDown" | "rawKeyDown" | "keyUp";
   readonly key: string;
   readonly code: string;
@@ -33,28 +33,30 @@ export interface PreviewAutomationKeySequence {
   };
 }
 
-const NAMED_KEYS: Readonly<Record<string, KeyDefinition>> = {
-  Escape: { code: "Escape", key: "Escape", keyCode: 27 },
-  Backspace: { code: "Backspace", key: "Backspace", keyCode: 8 },
-  Tab: { code: "Tab", key: "Tab", keyCode: 9 },
-  Enter: { code: "Enter", key: "Enter", keyCode: 13, text: "\r" },
-  Shift: { code: "ShiftLeft", key: "Shift", keyCode: 16, location: 1 },
-  Control: { code: "ControlLeft", key: "Control", keyCode: 17, location: 1 },
-  Alt: { code: "AltLeft", key: "Alt", keyCode: 18, location: 1 },
-  Meta: { code: "MetaLeft", key: "Meta", keyCode: 91, location: 1 },
-  CapsLock: { code: "CapsLock", key: "CapsLock", keyCode: 20 },
-  Space: { code: "Space", key: " ", keyCode: 32, text: " " },
-  PageUp: { code: "PageUp", key: "PageUp", keyCode: 33 },
-  PageDown: { code: "PageDown", key: "PageDown", keyCode: 34 },
-  End: { code: "End", key: "End", keyCode: 35 },
-  Home: { code: "Home", key: "Home", keyCode: 36 },
-  ArrowLeft: { code: "ArrowLeft", key: "ArrowLeft", keyCode: 37 },
-  ArrowUp: { code: "ArrowUp", key: "ArrowUp", keyCode: 38 },
-  ArrowRight: { code: "ArrowRight", key: "ArrowRight", keyCode: 39 },
-  ArrowDown: { code: "ArrowDown", key: "ArrowDown", keyCode: 40 },
-  Insert: { code: "Insert", key: "Insert", keyCode: 45 },
-  Delete: { code: "Delete", key: "Delete", keyCode: 46 },
-};
+const NAMED_KEYS = new Map<string, KeyDefinition>(
+  Object.entries({
+    Escape: { code: "Escape", key: "Escape", keyCode: 27 },
+    Backspace: { code: "Backspace", key: "Backspace", keyCode: 8 },
+    Tab: { code: "Tab", key: "Tab", keyCode: 9 },
+    Enter: { code: "Enter", key: "Enter", keyCode: 13, text: "\r" },
+    Shift: { code: "ShiftLeft", key: "Shift", keyCode: 16, location: 1 },
+    Control: { code: "ControlLeft", key: "Control", keyCode: 17, location: 1 },
+    Alt: { code: "AltLeft", key: "Alt", keyCode: 18, location: 1 },
+    Meta: { code: "MetaLeft", key: "Meta", keyCode: 91, location: 1 },
+    CapsLock: { code: "CapsLock", key: "CapsLock", keyCode: 20 },
+    Space: { code: "Space", key: " ", keyCode: 32, text: " " },
+    PageUp: { code: "PageUp", key: "PageUp", keyCode: 33 },
+    PageDown: { code: "PageDown", key: "PageDown", keyCode: 34 },
+    End: { code: "End", key: "End", keyCode: 35 },
+    Home: { code: "Home", key: "Home", keyCode: 36 },
+    ArrowLeft: { code: "ArrowLeft", key: "ArrowLeft", keyCode: 37 },
+    ArrowUp: { code: "ArrowUp", key: "ArrowUp", keyCode: 38 },
+    ArrowRight: { code: "ArrowRight", key: "ArrowRight", keyCode: 39 },
+    ArrowDown: { code: "ArrowDown", key: "ArrowDown", keyCode: 40 },
+    Insert: { code: "Insert", key: "Insert", keyCode: 45 },
+    Delete: { code: "Delete", key: "Delete", keyCode: 46 },
+  }),
+);
 
 const PRINTABLE_KEYS: ReadonlyArray<KeyDefinition> = [
   { code: "Backquote", key: "`", shiftedKey: "~", keyCode: 192 },
@@ -85,23 +87,25 @@ const PRINTABLE_KEYS: ReadonlyArray<KeyDefinition> = [
  * Keep the common browser editing/navigation shortcuts explicit so dispatched
  * key events behave like their physical-key equivalents.
  */
-const MAC_EDITING_COMMANDS: Readonly<Record<string, string>> = {
-  "Meta+Backspace": "deleteToBeginningOfLine",
-  "Meta+ArrowUp": "moveToBeginningOfDocument",
-  "Meta+ArrowDown": "moveToEndOfDocument",
-  "Meta+ArrowLeft": "moveToLeftEndOfLine",
-  "Meta+ArrowRight": "moveToRightEndOfLine",
-  "Shift+Meta+ArrowUp": "moveToBeginningOfDocumentAndModifySelection",
-  "Shift+Meta+ArrowDown": "moveToEndOfDocumentAndModifySelection",
-  "Shift+Meta+ArrowLeft": "moveToLeftEndOfLineAndModifySelection",
-  "Shift+Meta+ArrowRight": "moveToRightEndOfLineAndModifySelection",
-  "Meta+KeyA": "selectAll",
-  "Meta+KeyC": "copy",
-  "Meta+KeyX": "cut",
-  "Meta+KeyV": "paste",
-  "Meta+KeyZ": "undo",
-  "Shift+Meta+KeyZ": "redo",
-};
+const MAC_EDITING_COMMANDS = new Map<string, string>(
+  Object.entries({
+    "Meta+Backspace": "deleteToBeginningOfLine",
+    "Meta+ArrowUp": "moveToBeginningOfDocument",
+    "Meta+ArrowDown": "moveToEndOfDocument",
+    "Meta+ArrowLeft": "moveToLeftEndOfLine",
+    "Meta+ArrowRight": "moveToRightEndOfLine",
+    "Shift+Meta+ArrowUp": "moveToBeginningOfDocumentAndModifySelection",
+    "Shift+Meta+ArrowDown": "moveToEndOfDocumentAndModifySelection",
+    "Shift+Meta+ArrowLeft": "moveToLeftEndOfLineAndModifySelection",
+    "Shift+Meta+ArrowRight": "moveToRightEndOfLineAndModifySelection",
+    "Meta+KeyA": "selectAll",
+    "Meta+KeyC": "copy",
+    "Meta+KeyX": "cut",
+    "Meta+KeyV": "paste",
+    "Meta+KeyZ": "undo",
+    "Shift+Meta+KeyZ": "redo",
+  }),
+);
 
 const SHORTCUT_MODIFIER_ORDER = ["Shift", "Control", "Alt", "Meta"] as const;
 
@@ -114,7 +118,7 @@ const macEditingCommands = (
     code,
   ].join("+");
 
-  const command = MAC_EDITING_COMMANDS[shortcut];
+  const command = MAC_EDITING_COMMANDS.get(shortcut);
 
   return command ? [command] : [];
 };
@@ -134,7 +138,7 @@ const modifierMask = (modifiers: PreviewAutomationPressInput["modifiers"]): numb
   }, 0);
 
 function resolveKeyDefinition(input: PreviewAutomationPressInput): KeyDefinition {
-  const named = NAMED_KEYS[input.key];
+  const named = NAMED_KEYS.get(input.key);
 
   if (named) return named;
 
@@ -181,7 +185,7 @@ function resolveKeyDefinition(input: PreviewAutomationPressInput): KeyDefinition
  * Build Chromium CDP key packets using the same required fields and down-event
  * choice as Playwright's pinned Chromium keyboard implementation.
  */
-export function makePreviewAutomationKeySequence(
+export function previewAutomationKeySequence(
   input: PreviewAutomationPressInput,
   options?: { readonly isMac?: boolean },
 ): PreviewAutomationKeySequence {

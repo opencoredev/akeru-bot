@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -186,7 +187,7 @@ describe("ElectronProtocol", () => {
 
       assert.equal(exit._tag, "Failure");
 
-      if (exit._tag === "Failure") {
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronProtocol.ElectronProtocolUnregistrationError);
         assert.equal(error.scheme, "akeru");

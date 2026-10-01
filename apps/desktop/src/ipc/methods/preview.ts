@@ -48,7 +48,7 @@ export const installPreviewEventForwarding = Effect.fn(
   );
 });
 
-export const createTab = DesktopIpc.makeIpcMethod({
+export const createTab = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_CREATE_TAB_CHANNEL,
   payload: DesktopPreviewCreateTabInputSchema,
   result: Schema.Void,
@@ -62,7 +62,7 @@ export const createTab = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const closeTab = DesktopIpc.makeIpcMethod({
+export const closeTab = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_CLOSE_TAB_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
   result: Schema.Void,
@@ -72,7 +72,7 @@ export const closeTab = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const registerWebview = DesktopIpc.makeIpcMethod({
+export const registerWebview = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_REGISTER_WEBVIEW_CHANNEL,
   payload: DesktopPreviewRegisterWebviewInputSchema,
   result: Schema.Void,
@@ -82,7 +82,7 @@ export const registerWebview = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const navigate = DesktopIpc.makeIpcMethod({
+export const navigate = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_NAVIGATE_CHANNEL,
   payload: DesktopPreviewNavigateInputSchema,
   result: Schema.Void,
@@ -100,7 +100,7 @@ const tabMethod = (
     tabId: string,
   ) => Effect.Effect<void, PreviewManager.PreviewManagerError>,
 ) =>
-  DesktopIpc.makeIpcMethod({
+  DesktopIpc.defineIpcMethod({
     channel,
     payload: DesktopPreviewTabInputSchema,
     result: Schema.Void,
@@ -152,7 +152,7 @@ export const hardReload = tabMethod(
   (manager, tabId) => manager.hardReload(tabId),
 );
 
-export const setColorScheme = DesktopIpc.makeIpcMethod({
+export const setColorScheme = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_SET_COLOR_SCHEME_CHANNEL,
   payload: DesktopPreviewSetColorSchemeInputSchema,
   result: Schema.Void,
@@ -162,7 +162,7 @@ export const setColorScheme = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const setAudioMuted = DesktopIpc.makeIpcMethod({
+export const setAudioMuted = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_SET_AUDIO_MUTED_CHANNEL,
   payload: DesktopPreviewSetAudioMutedInputSchema,
   result: Schema.Void,
@@ -208,7 +208,7 @@ export const closePictureInPicture = tabMethod(
   (manager, tabId) => manager.closePictureInPicture(tabId),
 );
 
-export const clearCookies = DesktopIpc.makeIpcMethod({
+export const clearCookies = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_CLEAR_COOKIES_CHANNEL,
   payload: Schema.Void,
   result: Schema.Void,
@@ -218,7 +218,7 @@ export const clearCookies = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const clearCache = DesktopIpc.makeIpcMethod({
+export const clearCache = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_CLEAR_CACHE_CHANNEL,
   payload: Schema.Void,
   result: Schema.Void,
@@ -228,7 +228,7 @@ export const clearCache = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const getPreviewConfig = DesktopIpc.makeIpcMethod({
+export const getPreviewConfig = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_GET_CONFIG_CHANNEL,
   payload: DesktopPreviewConfigInputSchema,
   result: DesktopPreviewWebviewConfigSchema,
@@ -244,7 +244,7 @@ export const getPreviewConfig = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const setAnnotationTheme = DesktopIpc.makeIpcMethod({
+export const setAnnotationTheme = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_SET_ANNOTATION_THEME_CHANNEL,
   payload: DesktopPreviewAnnotationThemeInputSchema,
   result: Schema.Void,
@@ -254,7 +254,7 @@ export const setAnnotationTheme = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const pickElement = DesktopIpc.makeIpcMethod({
+export const pickElement = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_PICK_ELEMENT_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
   result: Schema.NullOr(PreviewAnnotationSubmissionResultSchema),
@@ -265,7 +265,7 @@ export const pickElement = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const captureScreenshot = DesktopIpc.makeIpcMethod({
+export const captureScreenshot = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_CAPTURE_SCREENSHOT_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
   result: DesktopPreviewScreenshotArtifactSchema,
@@ -276,7 +276,7 @@ export const captureScreenshot = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const revealArtifact = DesktopIpc.makeIpcMethod({
+export const revealArtifact = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_REVEAL_ARTIFACT_CHANNEL,
   payload: DesktopPreviewArtifactInputSchema,
   result: Schema.Void,
@@ -286,7 +286,7 @@ export const revealArtifact = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const copyArtifactToClipboard = DesktopIpc.makeIpcMethod({
+export const copyArtifactToClipboard = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_COPY_ARTIFACT_CHANNEL,
   payload: DesktopPreviewArtifactInputSchema,
   result: Schema.Void,
@@ -296,7 +296,7 @@ export const copyArtifactToClipboard = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const automationStatus = DesktopIpc.makeIpcMethod({
+export const automationStatus = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_STATUS_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
   result: PreviewAutomationStatus,
@@ -307,7 +307,7 @@ export const automationStatus = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const automationSnapshot = DesktopIpc.makeIpcMethod({
+export const automationSnapshot = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_SNAPSHOT_CHANNEL,
   payload: DesktopPreviewTabInputSchema,
   result: PreviewAutomationSnapshot,
@@ -318,7 +318,7 @@ export const automationSnapshot = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const automationClick = DesktopIpc.makeIpcMethod({
+export const automationClick = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_CLICK_CHANNEL,
   payload: DesktopPreviewAutomationClickInputSchema,
   result: Schema.Void,
@@ -328,7 +328,7 @@ export const automationClick = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const automationType = DesktopIpc.makeIpcMethod({
+export const automationType = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_TYPE_CHANNEL,
   payload: DesktopPreviewAutomationTypeInputSchema,
   result: Schema.Void,
@@ -338,7 +338,7 @@ export const automationType = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const automationPress = DesktopIpc.makeIpcMethod({
+export const automationPress = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_PRESS_CHANNEL,
   payload: DesktopPreviewAutomationPressInputSchema,
   result: Schema.Void,
@@ -348,7 +348,7 @@ export const automationPress = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const automationScroll = DesktopIpc.makeIpcMethod({
+export const automationScroll = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_SCROLL_CHANNEL,
   payload: DesktopPreviewAutomationScrollInputSchema,
   result: Schema.Void,
@@ -358,7 +358,7 @@ export const automationScroll = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const automationEvaluate = DesktopIpc.makeIpcMethod({
+export const automationEvaluate = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_EVALUATE_CHANNEL,
   payload: DesktopPreviewAutomationEvaluateInputSchema,
   result: Schema.Unknown,
@@ -369,7 +369,7 @@ export const automationEvaluate = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const automationWaitFor = DesktopIpc.makeIpcMethod({
+export const automationWaitFor = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_WAIT_FOR_CHANNEL,
   payload: DesktopPreviewAutomationWaitForInputSchema,
   result: Schema.Void,
@@ -379,7 +379,7 @@ export const automationWaitFor = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const saveRecording = DesktopIpc.makeIpcMethod({
+export const saveRecording = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PREVIEW_RECORDING_SAVE_CHANNEL,
   payload: DesktopPreviewRecordingSaveInputSchema,
   result: DesktopPreviewRecordingArtifactSchema,

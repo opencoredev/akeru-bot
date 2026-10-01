@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -63,10 +64,10 @@ export class DesktopDevelopmentBackendPortRequiredError extends Schema.TaggedErr
 }
 
 const { logInfo: logBootstrapInfo, logWarning: logBootstrapWarning } =
-  DesktopObservability.makeComponentLogger("desktop-bootstrap");
+  DesktopObservability.componentLogger("desktop-bootstrap");
 
 const { logInfo: logStartupInfo, logError: logStartupError } =
-  DesktopObservability.makeComponentLogger("desktop-startup");
+  DesktopObservability.componentLogger("desktop-startup");
 
 const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(function* (
   configuredPort: Option.Option<number>,
@@ -107,7 +108,7 @@ const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(functio
 
 const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupError")(function* (
   stage: string,
-  error: unknown,
+  cause: unknown,
 ): Effect.fn.Return<
   void,
   never,
@@ -120,10 +121,10 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
   const state = yield* DesktopState.DesktopState;
   const electronApp = yield* ElectronApp.ElectronApp;
   const electronDialog = yield* ElectronDialog.ElectronDialog;
-  const message = error instanceof Error ? error.message : String(error);
+  const message = cause instanceof Error ? cause.message : String(cause);
 
   const detail =
-    error instanceof Error && typeof error.stack === "string" ? `\n${error.stack}` : "";
+    cause instanceof Error && Predicate.isString(cause.stack) ? `\n${cause.stack}` : "";
 
   yield* logStartupError("fatal startup error", {
     stage,

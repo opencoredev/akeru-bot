@@ -1,27 +1,5 @@
-// Per-instance backend factory. Replaces the legacy singleton
-// `DesktopBackendManager` Context.Service: each call to
-// `makeBackendInstance(spec)` constructs an isolated backend lifecycle —
-// its own state Ref, mutex, restart loop, and active child process. The
-// returned `DesktopBackendInstance` exposes start/stop/snapshot/wait
-// methods that operate on that single backend.
-//
-// The pool layer (`DesktopBackendPool.ts`) calls this factory once per
-// backend it wants to run. Today that's the Windows primary; follow-up
-// commits add a second call for the WSL instance.
-//
-// Singleton couplings that the legacy service held inline are now
-// parameterized via the spec:
-//   - configResolve replaces the legacy `DesktopBackendConfiguration.resolve`
-//     so each instance can resolve its own start config — the primary wires
-//     `configuration.resolvePrimary`, the WSL orchestrator wires a
-//     `configuration.resolveWsl({ port, distro })` closure.
-//   - onReady / onShutdown drive UI side effects (window auto-open,
-//     readiness latch) only for instances that want them — the primary's
-//     spec passes the window's handleBackendReady/handleBackendNotReady,
-//     other pool instances pass nothing.
-//   - log writes go through a per-instance writer that the factory
-//     pulls from `DesktopBackendOutputLogFactory.forInstance(spec.id)`,
-//     so each instance lands in its own rotating file.
+// Creates an independent backend lifecycle for each pool instance. The spec
+// supplies configuration, readiness callbacks, and the instance log writer.
 import * as Brand from "effect/Brand";
 
 import * as Cause from "effect/Cause";
@@ -254,7 +232,7 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
   const mutex = yield* Semaphore.make(1);
 
   const { logWarning: logInstanceWarning, logError: logInstanceError } =
-    DesktopObservability.makeComponentLogger(`desktop-backend-instance:${spec.id}`);
+    DesktopObservability.componentLogger(`desktop-backend-instance:${spec.id}`);
 
   const updateActiveRun = (runId: number, f: (run: ActiveBackendRun) => ActiveBackendRun) =>
     Ref.update(state, withActiveRun(runId, f));

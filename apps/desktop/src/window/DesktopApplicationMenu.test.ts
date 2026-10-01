@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
@@ -143,7 +144,7 @@ describe("DesktopApplicationMenu", () => {
       assert.isDefined(settingsItem);
       const settingsClick = settingsItem.click;
 
-      if (typeof settingsClick !== "function") {
+      if (!Predicate.isFunction(settingsClick)) {
         throw new Error("Expected Settings menu item to have a click handler.");
       }
 
@@ -172,7 +173,7 @@ describe("DesktopApplicationMenu", () => {
       const feedbackItem = helpMenu.submenu.find((item) => item.label === "Send Feedback...");
       assert.isDefined(feedbackItem);
 
-      if (typeof feedbackItem.click !== "function") {
+      if (!Predicate.isFunction(feedbackItem.click)) {
         throw new Error("Expected feedback menu item to have a click handler.");
       }
 
@@ -213,7 +214,7 @@ describe("DesktopApplicationMenu", () => {
       assert.isDefined(zoomIn);
       assert.equal(zoomIn.accelerator, "CmdOrCtrl+=");
 
-      if (typeof zoomIn.click !== "function") {
+      if (!Predicate.isFunction(zoomIn.click)) {
         throw new Error("Expected Zoom In menu item to have a click handler.");
       }
 

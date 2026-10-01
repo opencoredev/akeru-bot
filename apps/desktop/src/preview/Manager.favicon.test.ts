@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { it as effectIt } from "@effect/vitest";
 
 import * as Effect from "effect/Effect";
@@ -22,9 +23,9 @@ const {
 } = vi.hoisted(() => ({
   browserWindowConstructor: vi.fn(),
   createFromBuffer: vi.fn(),
-  createFromPath: vi.fn((): { readonly isEmpty: () => boolean } => ({ isEmpty: () => false })),
-  fromId: vi.fn((_id?: number) => null),
-  getFocusedWebContents: vi.fn(() => null),
+  createFromPath: vi.fn((): Pick<Electron.NativeImage, "isEmpty"> => ({ isEmpty: () => false })),
+  fromId: vi.fn((_id?: number): Electron.WebContents | null => null),
+  getFocusedWebContents: vi.fn((): Electron.WebContents | null => null),
   mkdir: vi.fn((_path: string) => undefined),
   showItemInFolder: vi.fn(),
   webviewSend: vi.fn(),
@@ -413,7 +414,11 @@ describe("PreviewManager", () => {
 
         const replacement = makeFaviconWebContents({ id: 43 });
         fromId.mockImplementation((id?: number) =>
-          id === 42 ? initial.webContents : id === 43 ? replacement.webContents : null,
+          Match.value(id).pipe(
+            Match.when(42, () => initial.webContents),
+            Match.when(43, () => replacement.webContents),
+            Match.orElse(() => null),
+          ),
         );
         const states: PreviewManager.PreviewTabState[] = [];
         yield* manager.subscribeStateChanges((_tabId, state) =>

@@ -1,3 +1,6 @@
+import { flow } from "effect/Function";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import type {
   DesktopPreviewAnnotationTheme,
   DesktopPreviewColorScheme,
@@ -232,36 +235,31 @@ export interface CdpEvaluationResult {
   };
 }
 
-export const normalizeCaptureRect = (value: unknown): PreviewAnnotationRect | null => {
-  if (typeof value !== "object" || value === null) return null;
-  const rect = value as Record<string, unknown>;
-  const x = rect["x"];
-  const y = rect["y"];
-  const width = rect["width"];
-  const height = rect["height"];
+const decodeCaptureRect = Schema.decodeUnknownOption(
+  Schema.Struct({
+    x: Schema.Number,
+    y: Schema.Number,
+    width: Schema.Number,
+    height: Schema.Number,
+  }),
+);
 
-  if (
-    typeof x !== "number" ||
-    !Number.isFinite(x) ||
-    typeof y !== "number" ||
-    !Number.isFinite(y) ||
-    typeof width !== "number" ||
-    !Number.isFinite(width) ||
-    typeof height !== "number" ||
-    !Number.isFinite(height) ||
-    width <= 0 ||
-    height <= 0
-  ) {
-    return null;
-  }
-
-  return {
+export const normalizeCaptureRect = flow(
+  decodeCaptureRect,
+  Option.filter(
+    (rect) =>
+      [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) &&
+      rect.width > 0 &&
+      rect.height > 0,
+  ),
+  Option.map(({ x, y, width, height }) => ({
     x: Math.max(0, Math.floor(x)),
     y: Math.max(0, Math.floor(y)),
     width: Math.max(1, Math.ceil(width)),
     height: Math.max(1, Math.ceil(height)),
-  };
-};
+  })),
+  Option.getOrNull,
+);
 
 export const captureAnnotationScreenshot = (
   tabId: string,
@@ -384,7 +382,7 @@ export interface BrowserControlSession {
   readonly onMessage: (
     event: Electron.Event,
     method: string,
-    params: Record<string, unknown>,
+    params: Record<string, Schema.Json | undefined>,
   ) => void;
 }
 
@@ -439,25 +437,25 @@ export const isPreviewEditingShortcut = (
 };
 
 export const isPreviewInputSignal = (value: unknown): value is PreviewInputSignal => {
-  if (typeof value !== "object" || value === null || !("kind" in value)) return false;
+  if (!Predicate.isObjectOrArray(value) || !("kind" in value)) return false;
 
   if (value.kind === "pointer") {
     return (
       "x" in value &&
-      typeof value.x === "number" &&
+      Predicate.isNumber(value.x) &&
       "y" in value &&
-      typeof value.y === "number" &&
+      Predicate.isNumber(value.y) &&
       "button" in value &&
-      typeof value.button === "number"
+      Predicate.isNumber(value.button)
     );
   }
 
   return (
     value.kind === "key" &&
     "key" in value &&
-    typeof value.key === "string" &&
+    Predicate.isString(value.key) &&
     "code" in value &&
-    typeof value.code === "string"
+    Predicate.isString(value.code)
   );
 };
 
@@ -482,5 +480,5 @@ export const inputSignalsMatch = (left: PreviewInputSignal, right: PreviewInputS
 
 export type SendCommand = (
   method: string,
-  commandParams?: Record<string, unknown>,
+  commandParams?: Record<string, Schema.Json | undefined>,
 ) => Effect.Effect<unknown, PreviewManagerError>;
