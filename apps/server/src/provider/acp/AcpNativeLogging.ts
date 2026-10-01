@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ProviderDriverKind, ThreadId } from "@akeru/contracts";
 import { causeErrorTag, errorTag } from "@akeru/shared/observability";
 import * as Cause from "effect/Cause";
@@ -15,10 +16,10 @@ function structuralMethod(value: string): string {
   return value.length <= 128 && /^[A-Za-z][A-Za-z0-9._:/-]*$/.test(value) ? value : "unknown";
 }
 
-function summarizePayload(payload: unknown): Readonly<Record<string, unknown>> {
+function summarizePayload<Payload>(payload: Payload) {
   if (payload === null) return { valueType: "null" };
 
-  if (typeof payload === "string") {
+  if (Predicate.isString(payload)) {
     return { valueType: "string", byteLength: new TextEncoder().encode(payload).byteLength };
   }
 
@@ -30,18 +31,19 @@ function summarizePayload(payload: unknown): Readonly<Record<string, unknown>> {
     return { valueType: "array", itemCount: payload.length };
   }
 
-  if (typeof payload !== "object") {
+  if (!Predicate.isObject(payload)) {
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Native logs record the JavaScript primitive category without reading the payload.
     return { valueType: typeof payload };
   }
 
   try {
-    const record = payload as Record<string, unknown>;
+    const record = payload;
 
     return {
       valueType: "object",
       fieldCount: Object.keys(record).length,
-      ...(typeof record._tag === "string" ? { messageTag: errorTag(record) } : {}),
-      ...(typeof record.tag === "string" ? { method: structuralMethod(record.tag) } : {}),
+      ...(Predicate.isString(record._tag) ? { messageTag: errorTag(record) } : {}),
+      ...(Predicate.isString(record.tag) ? { method: structuralMethod(record.tag) } : {}),
     };
   } catch {
     return { valueType: "object" };
@@ -71,21 +73,26 @@ function formatProtocolLogPayload(event: EffectAcpProtocol.AcpProtocolLogEvent) 
   };
 }
 
-function isTransientProtocolMessage(message: unknown): boolean {
-  if (typeof message !== "object" || message === null) return false;
-  const method = Reflect.get(message, "tag") ?? Reflect.get(message, "method");
+function isTransientProtocolMessage<Message>(message: Message): boolean {
+  if (!Predicate.isObjectOrArray(message) || message === null) return false;
+
+  const method =
+    ("tag" in message ? message.tag : undefined) ??
+    ("method" in message ? message.method : undefined);
 
   if (method !== "session/update") return false;
 
-  const payload = Reflect.get(message, "payload") ?? Reflect.get(message, "params");
+  const payload =
+    ("payload" in message ? message.payload : undefined) ??
+    ("params" in message ? message.params : undefined);
 
-  if (typeof payload !== "object" || payload === null) return false;
-  const update = Reflect.get(payload, "update");
+  if (!Predicate.isObjectOrArray(payload) || payload === null) return false;
+  const update = "update" in payload ? payload.update : undefined;
 
-  if (typeof update !== "object" || update === null) return false;
-  const updateType = Reflect.get(update, "sessionUpdate");
+  if (!Predicate.isObjectOrArray(update) || update === null) return false;
+  const updateType = "sessionUpdate" in update ? update.sessionUpdate : undefined;
 
-  return typeof updateType === "string" && transientProtocolUpdates.has(updateType);
+  return Predicate.isString(updateType) && transientProtocolUpdates.has(updateType);
 }
 
 function rawChunkContainsOnlyTransientMessages(payload: string): boolean {
@@ -114,7 +121,7 @@ function filterTransientProtocolLog(
 ): EffectAcpProtocol.AcpProtocolLogEvent | undefined {
   if (event.direction !== "incoming") return event;
 
-  if (event.stage === "raw" && typeof event.payload === "string") {
+  if (event.stage === "raw" && Predicate.isString(event.payload)) {
     return rawChunkContainsOnlyTransientMessages(event.payload) ? undefined : event;
   }
 
@@ -138,9 +145,9 @@ export const makeAcpNativeLoggerFactory = Effect.fn("makeAcpNativeLoggerFactory"
     readonly threadId: ThreadId;
     readonly verboseProtocolLogging?: boolean;
   }): Pick<AcpSessionRuntime.AcpSessionRuntimeOptions, "requestLogger" | "protocolLogging"> => {
-    const writeNativeAcpLog = (logInput: {
+    const writeNativeAcpLog = <Payload>(logInput: {
       readonly kind: "request" | "protocol";
-      readonly payload: unknown;
+      readonly payload: Payload;
     }) =>
       Effect.gen(function* () {
         if (!input.nativeEventLogger) return;

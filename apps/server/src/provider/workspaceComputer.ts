@@ -1,3 +1,4 @@
+import type { BrowserRpcParams } from "./browser/BotBrowserTypes.ts";
 import { Clock, Effect } from "effect";
 import { ComputerError, type ComputerAction, type ComputerFrame } from "@akeru/contracts";
 import type { BotBrowserRpc } from "./botBrowser.ts";
@@ -93,7 +94,7 @@ export class WorkspaceComputer implements BotBrowserRpc {
     await this.initialize();
   }
 
-  async call(name: string, input: Readonly<Record<string, unknown>>): Promise<string> {
+  async call(name: string, input: BrowserRpcParams): Promise<string> {
     return this.gate.bot(async () => (await this.connect()).call(name, input));
   }
 

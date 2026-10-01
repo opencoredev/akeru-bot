@@ -9,6 +9,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { normalizeModelSlug } from "@akeru/shared/model";
 
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- ACP support assembles a session-scoped xAI completion runtime for the Grok adapter.
 import { makeXAiPromptCompletionRuntime } from "./XAiAcpExtension.ts";
 
 const GROK_API_KEY_ENV = "XAI_API_KEY";

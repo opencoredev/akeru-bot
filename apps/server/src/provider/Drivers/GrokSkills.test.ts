@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -120,7 +121,9 @@ describe("discoverGrokSkills", () => {
     let exitCode = 0;
 
     const spawner = ChildProcessSpawner.make((command) => {
-      spawnCwds.push(command._tag === "StandardCommand" ? command.options.cwd : undefined);
+      spawnCwds.push(
+        Predicate.isTagged(command, "StandardCommand") ? command.options.cwd : undefined,
+      );
 
       return Effect.succeed(
         ChildProcessSpawner.makeHandle({

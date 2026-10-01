@@ -172,8 +172,6 @@ export const makePendingWaiters = <Meta, A, E = never>(
         return entry && !entry.claimed ? entry.meta : undefined;
       },
       entries: () =>
-        [...waiters]
-          .filter(([, entry]) => !entry.claimed)
-          .map(([key, entry]) => [key, entry.meta] as const),
+        [...waiters].flatMap(([key, entry]) => (entry.claimed ? [] : [[key, entry.meta] as const])),
     };
   });

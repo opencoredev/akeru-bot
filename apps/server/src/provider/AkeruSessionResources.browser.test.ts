@@ -48,7 +48,7 @@ describe("AkeruSessionResources", () => {
   it("attributes shared browser failures and recovery to every active bot", async () => {
     const browserFailure = vi.fn();
     const browserReady = vi.fn();
-    let onFailure!: (error: unknown) => void;
+    let onFailure!: (cause: unknown) => void;
     let onReady!: () => void;
     const sharedBrowser = browser();
 
@@ -98,7 +98,7 @@ describe("AkeruSessionResources", () => {
   it("reports an active shared-browser failure to a bot that joins later", async () => {
     const browserFailure = vi.fn();
     const browserReady = vi.fn();
-    let onFailure!: (error: unknown) => void;
+    let onFailure!: (cause: unknown) => void;
     let onReady!: () => void;
 
     const resources = new AkeruSessionResources({
@@ -143,9 +143,9 @@ describe("AkeruSessionResources", () => {
 
   it("does not pass a discarded browser failure to a replacement browser's bot", async () => {
     const browserFailure = vi.fn();
-    const callbacks: Array<(error: unknown) => void> = [];
+    const callbacks: Array<(cause: unknown) => void> = [];
 
-    const makeBotBrowser = vi.fn((input: { onFailure?: (error: unknown) => void }) => {
+    const makeBotBrowser = vi.fn((input: { onFailure?: (cause: unknown) => void }) => {
       callbacks.push(input.onFailure!);
 
       return browser();

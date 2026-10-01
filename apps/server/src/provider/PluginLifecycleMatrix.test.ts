@@ -1,3 +1,4 @@
+import { probeTool } from "./test-support/toolProbe.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -82,11 +83,9 @@ async function runLifecycle(config: McpServerConfig) {
     expect(status?.toolNames).toContain("matrix-target_echo");
 
     // health: a real tool call, not a socket check
-    const echo = manager.getTools()["matrix-target_echo"] as
-      | { execute?: (args: unknown, options: unknown) => Promise<unknown> }
-      | undefined;
+    const echo = probeTool(manager.getTools()["matrix-target_echo"]);
 
-    await expect(echo?.execute?.({ text: "health" }, {})).resolves.toMatchObject({
+    await expect(echo.execute({ text: "health" }, {})).resolves.toMatchObject({
       content: [{ type: "text", text: "echo:health" }],
     });
 

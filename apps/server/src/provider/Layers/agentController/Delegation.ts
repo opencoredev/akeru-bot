@@ -105,6 +105,9 @@ export function createDelegation(deps: {
   }) =>
     createAkeruDelegationRuntime({
       ...input,
+      dispatch: async (command) => {
+        await input.dispatch(command);
+      },
       awaitChild: (threadId, deadline) =>
         deps.runPromise(
           Effect.gen(function* () {

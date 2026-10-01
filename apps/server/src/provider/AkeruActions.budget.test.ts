@@ -1,3 +1,7 @@
+interface NestedInput {
+  nested?: NestedInput;
+}
+
 import { describe, expect, it } from "vite-plus/test";
 
 import { akeruActionNeedsApproval, criticalAkeruAction } from "./AkeruMastraHarness.ts";
@@ -25,7 +29,7 @@ describe("Akeru action inspection budget", () => {
   });
 
   it("fails closed on cycles", () => {
-    const args: { nested?: object } = {};
+    const args: NestedInput = {};
     args.nested = args;
 
     expect(akeruActionNeedsApproval("custom_tool", args)).toBe(true);

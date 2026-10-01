@@ -23,19 +23,23 @@ import * as Schema from "effect/Schema";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeClaudeTextGeneration } from "../../textGeneration/ClaudeTextGeneration.ts";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { instanceUsesSavedCredential } from "../../subscription-auth/runtime.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderDriverError } from "../Errors.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeClaudeAdapter } from "../Layers/ClaudeAdapter.ts";
 import {
   checkClaudeProviderStatus,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
   makePendingClaudeProvider,
   probeClaudeCapabilities,
 } from "../Layers/ClaudeProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import * as ModelManifest from "../ModelManifest.ts";
 import {
@@ -48,15 +52,16 @@ import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironm
 import { mergeSubscriptionInstanceEnvironment } from "../../subscription-auth/runtime.ts";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
-  makePackageManagedProviderMaintenanceResolver,
+  packageManagedProviderMaintenanceResolver,
   normalizeCommandPath,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "../providerMaintenance.ts";
 import {
   haveProviderSnapshotSettingsChanged,
-  makeProviderSnapshotSettingsSource,
+  providerSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Both imports are pure identity-key functions, not Effect service constructors.
 import { makeClaudeCapabilitiesCacheKey, makeClaudeContinuationGroupKey } from "./ClaudeHome.ts";
 
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
@@ -75,7 +80,7 @@ function isClaudeNativeCommandPath(commandPath: string): boolean {
   );
 }
 
-const UPDATE = makePackageManagedProviderMaintenanceResolver({
+const UPDATE = packageManagedProviderMaintenanceResolver({
   provider: DRIVER_KIND,
   npmPackageName: "@anthropic-ai/claude-code",
   homebrewFormula: "claude-code",
@@ -207,7 +212,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         Effect.provideService(Path.Path, path),
       );
 
-      const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
+      const snapshotSettings = providerSnapshotSettingsSource(effectiveConfig, serverSettings);
 
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<ClaudeSettings>>({
         maintenanceCapabilities,

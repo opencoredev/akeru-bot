@@ -6,13 +6,13 @@ export {
   type ProviderMaintenanceCapabilityResolutionOptions,
   type ProviderMaintenanceCapabilitiesResolver,
   type PackageManagedProviderMaintenanceDefinition,
-  makeProviderMaintenanceCapabilities,
-  makeManualOnlyProviderMaintenanceCapabilities,
+  providerMaintenanceCapabilities,
+  manualOnlyProviderMaintenanceCapabilities,
   hasPathSeparator,
   normalizeCommandPath,
   resolvePackageManagedProviderMaintenance,
-  makePackageManagedProviderMaintenanceResolver,
-  makeStaticProviderMaintenanceResolver,
+  packageManagedProviderMaintenanceResolver,
+  staticProviderMaintenanceResolver,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "./maintenance/ProviderMaintenanceCapabilities.ts";
 

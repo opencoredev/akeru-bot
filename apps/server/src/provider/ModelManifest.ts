@@ -66,17 +66,9 @@ const ManifestCacheFile = Schema.Struct({
   manifest: ModelManifestSchema,
 });
 
-const decodeManifestCache = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(
-    ManifestCacheFile as unknown as Schema.Codec<typeof ManifestCacheFile.Type>,
-  ),
-);
+const decodeManifestCache = Schema.decodeUnknownEffect(Schema.fromJsonString(ManifestCacheFile));
 
-const encodeManifestCache = Schema.encodeEffect(
-  Schema.fromJsonString(
-    ManifestCacheFile as unknown as Schema.Codec<typeof ManifestCacheFile.Type>,
-  ),
-);
+const encodeManifestCache = Schema.encodeEffect(Schema.fromJsonString(ManifestCacheFile));
 
 /** True when the manifest classifies `slug` as legacy for `driverKind`. */
 export function isLegacyModel(

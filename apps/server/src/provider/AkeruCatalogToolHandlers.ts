@@ -1,6 +1,7 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import type { McpManager } from "@mastra/code-sdk/mcp/index";
-import { type AkeruToolId, type AkeruToolInputSchemas } from "@akeru/contracts";
+import { type AkeruToolId, decodeAkeruToolInput } from "@akeru/contracts";
 import { parseAkeruPublicUrl } from "./AkeruWebFetch.ts";
 import { createAkeruPluginRuntime } from "./tools/AkeruPluginCatalog.ts";
 import {
@@ -25,7 +26,16 @@ export function createAkeruCatalogToolHandlers(
 
   return {
     ...(backends.webSearch
-      ? { WebSearch: async ({ input }) => backends.webSearch!(input as never) }
+      ? {
+          WebSearch: async ({ input }) => {
+            const request = decodeAkeruToolInput("WebSearch", input);
+
+            return backends.webSearch!({
+              query: request.query,
+              ...(request.domains ? { domains: request.domains } : {}),
+            });
+          },
+        }
       : {}),
     ...(backends.webFetch
       ? {
@@ -37,10 +47,16 @@ export function createAkeruCatalogToolHandlers(
         }
       : {}),
     ...(backends.generateImage
-      ? { GenerateImage: async ({ input }) => backends.generateImage!(input) }
+      ? {
+          GenerateImage: async ({ input }) =>
+            backends.generateImage!(decodeAkeruToolInput("GenerateImage", input)),
+        }
       : {}),
     ...(backends.addMcpServer
-      ? { AddMcpServer: async ({ input }) => backends.addMcpServer!(input) }
+      ? {
+          AddMcpServer: async ({ input }) =>
+            backends.addMcpServer!(decodeAkeruToolInput("AddMcpServer", input)),
+        }
       : {}),
     ...(backends.uninstallMcpServer
       ? {
@@ -55,18 +71,21 @@ export function createAkeruCatalogToolHandlers(
         }
       : {}),
     ...(backends.renameMcpAccount
-      ? { RenameMcpAccount: async ({ input }) => backends.renameMcpAccount!(input) }
+      ? {
+          RenameMcpAccount: async ({ input }) =>
+            backends.renameMcpAccount!(decodeAkeruToolInput("RenameMcpAccount", input)),
+        }
       : {}),
     ...(backends.setMcpInstructions
-      ? { SetMcpInstructions: async ({ input }) => backends.setMcpInstructions!(input as never) }
+      ? {
+          SetMcpInstructions: async ({ input }) =>
+            backends.setMcpInstructions!(decodeAkeruToolInput("SetMcpInstructions", input)),
+        }
       : {}),
     ...(pluginRuntime
       ? {
           SearchPlugins: async ({ input }) =>
-            pluginRuntime.search(
-              input as (typeof AkeruToolInputSchemas.SearchPlugins)["Type"],
-              statuses(),
-            ),
+            pluginRuntime.search(decodeAkeruToolInput("SearchPlugins", input), statuses()),
           GetPlugin: async ({ input }) =>
             pluginRuntime.getPlugin(requiredString(input, "pluginId"), statuses()),
           InstallPlugin: async ({ input, emitProgress }) => {
@@ -130,7 +149,7 @@ export function createAkeruCatalogToolHandlers(
             const requested = field(input, "serverIds");
 
             const serverIds = Array.isArray(requested)
-              ? requested.filter((value): value is string => typeof value === "string")
+              ? requested.filter((value): value is string => Predicate.isString(value))
               : [];
 
             if (serverIds.length === 0) {

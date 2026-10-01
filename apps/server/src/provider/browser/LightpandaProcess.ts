@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeNet from "node:net";
 import * as NodeTimersPromises from "node:timers/promises";
@@ -17,7 +18,7 @@ export function availableLocalPort(): Promise<number> {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
 
-      if (!address || typeof address === "string") {
+      if (!address || Predicate.isString(address)) {
         server.close();
         reject(new Error("Could not reserve a local sandbox browser port."));
 
@@ -60,7 +61,7 @@ export function browserRequestTransport(
 }
 
 export type BrowserProcess = Pick<ProcessHandle, "kill"> & {
-  readonly wait?: () => Promise<unknown>;
+  readonly wait?: () => Promise<{ exitCode: number } | void>;
 };
 
 export function browserMonitorRetryDelayMs(failures: number): number {

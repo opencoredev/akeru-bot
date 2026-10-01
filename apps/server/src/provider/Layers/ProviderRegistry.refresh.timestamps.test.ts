@@ -18,7 +18,7 @@ import { readProviderStatusCache, resolveProviderStatusCachePath } from "../prov
 import type { ProviderInstance } from "../ProviderDriver.ts";
 import * as ProviderInstanceRegistry from "../Services/ProviderInstanceRegistry.ts";
 import * as ProviderRegistry from "../Services/ProviderRegistry.ts";
-import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import { manualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 import {
   TestHttpClientLive,
   BackgroundPolicyAlwaysRunLayer,
@@ -66,7 +66,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             displayName: undefined,
             enabled: true,
             snapshot: {
-              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+              maintenanceCapabilities: manualOnlyProviderMaintenanceCapabilities({
                 provider: claudeDriver,
                 packageName: null,
               }),
@@ -209,7 +209,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               displayName: undefined,
               enabled: true,
               snapshot: {
-                maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+                maintenanceCapabilities: manualOnlyProviderMaintenanceCapabilities({
                   provider: openCodeDriver,
                   packageName: null,
                 }),
@@ -337,7 +337,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             displayName: undefined,
             enabled: true,
             snapshot: {
-              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+              maintenanceCapabilities: manualOnlyProviderMaintenanceCapabilities({
                 provider: codexDriver,
                 packageName: null,
               }),
@@ -455,7 +455,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             displayName: undefined,
             enabled: true,
             snapshot: {
-              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+              maintenanceCapabilities: manualOnlyProviderMaintenanceCapabilities({
                 provider: codexDriver,
                 packageName: null,
               }),

@@ -1,3 +1,6 @@
+import * as Schema from "effect/Schema";
+import { toolRuntimeFixture } from "./toolRuntimeFixture.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
@@ -10,11 +13,26 @@ import * as FiberSet from "effect/FiberSet";
 import * as Scope from "effect/Scope";
 import { vi } from "vite-plus/test";
 import {
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The test composition root creates each harness in its own child scope.
   makeAkeruMastraHarness,
   type AkeruMastraHarness,
   type AkeruMastraHarnessOptions,
 } from "../AkeruMastraHarness.ts";
-import type { AkeruToolRuntime } from "../AkeruToolRuntime.ts";
+
+const decodeQueuedObservations = Schema.decodeUnknownSync(
+  Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      threadId: Schema.String,
+      resourceId: Schema.String,
+      modelId: Schema.String,
+      turnId: Schema.NullOr(Schema.String),
+      attempts: Schema.Number,
+      claimedAt: Schema.NullOr(Schema.String),
+      nextAttemptAt: Schema.String,
+    }),
+  ),
+);
 
 export type OpenHarness = (
   options: AkeruMastraHarnessOptions,
@@ -51,7 +69,7 @@ export function makeAkeruMastraHarnessTestSupport() {
       authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
       memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
       getThreadTools: () => ({}),
-      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
       ...options,
     });
 
@@ -61,23 +79,16 @@ export function makeAkeruMastraHarnessTestSupport() {
     );
 
     try {
-      return db
-        .prepare(
-          `SELECT id, thread_id AS threadId, resource_id AS resourceId, model_id AS modelId,
-                  turn_id AS turnId, attempts, claimed_at AS claimedAt,
-                  next_attempt_at AS nextAttemptAt
-             FROM akeru_observation_queue ORDER BY created_at, id`,
-        )
-        .all() as unknown as ReadonlyArray<{
-        id: string;
-        threadId: string;
-        resourceId: string;
-        modelId: string;
-        turnId: string | null;
-        attempts: number;
-        claimedAt: string | null;
-        nextAttemptAt: string;
-      }>;
+      return decodeQueuedObservations(
+        db
+          .prepare(
+            `SELECT id, thread_id AS threadId, resource_id AS resourceId, model_id AS modelId,
+                turn_id AS turnId, attempts, claimed_at AS claimedAt,
+                next_attempt_at AS nextAttemptAt
+           FROM akeru_observation_queue ORDER BY created_at, id`,
+          )
+          .all(),
+      );
     } finally {
       db.close();
     }
@@ -120,9 +131,10 @@ export function makeAkeruMastraHarnessTestSupport() {
               };
             }
 
+            // oxlint-disable-next-line anti-slop/no-reflect-get -- Forward SDK getters through the proxy while retaining their receiver and private state.
             const value = Reflect.get(target, property, receiver);
 
-            return typeof value === "function" ? value.bind(target) : value;
+            return Predicate.isFunction(value) ? value.bind(target) : value;
           },
         });
       });

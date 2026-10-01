@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   defaultInstanceIdForDriver,
   ProviderDriverKind,
@@ -22,6 +23,7 @@ import { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import { ProviderRegistry } from "./Services/ProviderRegistry.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The maintenance runner owns the coordinator lifetime and wires its command execution dependencies.
 import { makeProviderMaintenanceCommandCoordinator } from "./providerMaintenanceCommandCoordinator.ts";
 import { enrichProviderSnapshotWithVersionAdvisory } from "./providerMaintenance.ts";
 import type { ProviderMaintenanceCapabilities } from "./providerMaintenance.ts";
@@ -302,12 +304,11 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
   const updateProvider: ProviderMaintenanceRunnerShape["updateProvider"] = Effect.fn(
     "ProviderMaintenanceRunner.updateProvider",
   )(function* (target) {
-    const provider = typeof target === "string" ? target : target.provider;
+    const provider = Predicate.isString(target) ? target : target.provider;
 
-    const instanceId =
-      typeof target === "string"
-        ? defaultInstanceIdForDriver(provider)
-        : (target.instanceId ?? defaultInstanceIdForDriver(provider));
+    const instanceId = Predicate.isString(target)
+      ? defaultInstanceIdForDriver(provider)
+      : (target.instanceId ?? defaultInstanceIdForDriver(provider));
 
     const targetKey = `instance:${instanceId}`;
 

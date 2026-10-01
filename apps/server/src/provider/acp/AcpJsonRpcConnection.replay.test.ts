@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
@@ -54,7 +55,7 @@ describe("AcpSessionRuntime", () => {
         "ContentDelta",
         "AssistantItemCompleted",
       ]);
-      expect(notes.some((note) => note._tag === "ToolCallUpdated")).toBe(false);
+      expect(notes.some((note) => Predicate.isTagged(note, "ToolCallUpdated"))).toBe(false);
     }).pipe(
       Effect.provide(
         AcpSessionRuntime.layer({

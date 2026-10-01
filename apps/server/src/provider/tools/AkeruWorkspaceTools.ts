@@ -1,3 +1,5 @@
+import type { Tool } from "@mastra/core/tools";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import { type AkeruToolId } from "@akeru/contracts";
@@ -68,13 +70,8 @@ export async function toolsForWorkspace(workspace: Workspace | undefined) {
   });
 }
 
-export function executable(value: unknown): value is {
-  readonly execute: (input: unknown, context: Record<string, unknown>) => Promise<unknown>;
-} {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "execute" in value &&
-    typeof value.execute === "function"
-  );
+export function executable(
+  value: unknown,
+): value is Pick<Tool, "execute"> & { execute: NonNullable<Tool["execute"]> } {
+  return Predicate.isObject(value) && Predicate.isFunction(value.execute);
 }

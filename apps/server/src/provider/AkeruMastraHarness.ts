@@ -1,3 +1,7 @@
+import type { AkeruRunOptions } from "./mastra/AkeruModels.ts";
+
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { createAkeruConversation } from "./mastra/AkeruConversation.ts";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
@@ -59,7 +63,34 @@ const OBSERVATION_DROP_ATTEMPTS = 3;
 // attempts it is removed even if the notice keeps failing.
 const OBSERVATION_NOTICE_ATTEMPTS = 6;
 
+interface ControllerRunOptionsHook {
+  buildSharedRunOptions: (session: AkeruMastraSession) => AkeruRunOptions;
+}
+
 const OBSERVATION_CLOSE_GRACE: Duration.Input = "5 seconds";
+
+const decodeControllerRunOptionsHook = Schema.decodeUnknownSync(
+  Schema.declare<ControllerRunOptionsHook>(
+    (value): value is ControllerRunOptionsHook =>
+      Predicate.isObject(value) && Predicate.isFunction(value.buildSharedRunOptions),
+  ),
+);
+
+const decodeNextObservation = Schema.decodeUnknownSync(
+  Schema.Struct({ nextAttemptAt: Schema.NullOr(Schema.String) }),
+);
+
+const decodeClaimedObservation = Schema.decodeUnknownSync(
+  Schema.Struct({
+    id: Schema.String,
+    threadId: Schema.String,
+    resourceId: Schema.String,
+    modelId: Schema.String,
+    turnId: Schema.NullOr(Schema.String),
+    attempts: Schema.Number,
+    providerInstanceId: Schema.NullOr(Schema.String),
+  }),
+);
 
 /**
  * Builds the Mastra harness inside the caller's scope. Closing the scope stops
@@ -235,12 +266,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     intervalHandlers: [],
   });
 
-  const controllerWithRunOptions = controller as unknown as {
-    buildSharedRunOptions: (session: AkeruMastraSession) => {
-      readonly requireToolApproval?: boolean | ((input: { readonly toolName: string }) => boolean);
-      readonly [key: string]: unknown;
-    };
-  };
+  const controllerWithRunOptions = decodeControllerRunOptionsHook(controller);
 
   const buildSharedRunOptions = controllerWithRunOptions.buildSharedRunOptions.bind(controller);
   controllerWithRunOptions.buildSharedRunOptions = (session) => {
@@ -327,9 +353,9 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   const scheduleObservationRetry = () => {
     if (closed) return;
 
-    const { nextAttemptAt } = nextQueuedObservationAt.get(
-      `+${OBSERVATION_CLAIM_LEASE_MS / 1000} seconds`,
-    ) as { nextAttemptAt: string | null };
+    const { nextAttemptAt } = decodeNextObservation(
+      nextQueuedObservationAt.get(`+${OBSERVATION_CLAIM_LEASE_MS / 1000} seconds`),
+    );
 
     if (nextAttemptAt === null) return;
 
@@ -419,17 +445,8 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           DateTime.subtractDuration(nowUtc, `${OBSERVATION_CLAIM_LEASE_MS} millis`),
         );
 
-        const item = claimQueuedObservation.get(now, now, leaseExpiry) as
-          | {
-              id: string;
-              threadId: string;
-              resourceId: string;
-              modelId: string;
-              turnId: string | null;
-              attempts: number;
-              providerInstanceId: string | null;
-            }
-          | undefined;
+        const row = claimQueuedObservation.get(now, now, leaseExpiry);
+        const item = row === undefined ? undefined : decodeClaimedObservation(row);
 
         if (!item) {
           scheduleObservationRetry();

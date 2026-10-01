@@ -14,7 +14,7 @@ import {
 import * as Duration from "effect/Duration";
 import type { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import { type AkeruKimiAccess } from "../AkeruKimiProvider.ts";
-import type { AkeruToolRuntime } from "../tools/AkeruToolTypes.ts";
+import type { AkeruToolRuntime, AkeruToolResult } from "../tools/AkeruToolTypes.ts";
 import {
   type AkeruRoutineListResult,
   type AkeruRoutineDeleteResult,
@@ -83,7 +83,7 @@ export interface AkeruMastraHarnessOptions {
   readonly createRoutine?: (
     threadId: string,
     input: AkeruCreateRoutineInputValue,
-  ) => Promise<unknown>;
+  ) => Promise<AkeruToolResult>;
   readonly listRoutines?: (threadId: string) => Promise<AkeruRoutineListResult>;
   readonly deleteRoutines?: (
     threadId: string,

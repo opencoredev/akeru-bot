@@ -19,21 +19,21 @@ export interface AkeruRuntimeSeam {
    * Forks background work. A failure left in the error channel is logged as a
    * warning with `message` and `annotations`; interruption is not a failure.
    */
-  readonly fork: <A, E>(
+  readonly fork: <A, E, Annotations extends object>(
     message: string,
     effect: Effect.Effect<A, E>,
-    annotations?: Readonly<Record<string, unknown>>,
+    annotations?: Annotations,
   ) => void;
   /**
    * Adopts a Promise started by a library as background work. `onFailure`
    * receives the rejection value before the failure is logged.
    */
-  readonly forkPromise: (
+  readonly forkPromise: <Result, FailureResult, Annotations extends object>(
     message: string,
-    run: () => Promise<unknown>,
+    run: () => Promise<Result>,
     options?: {
-      readonly annotations?: Readonly<Record<string, unknown>>;
-      readonly onFailure?: (cause: unknown) => unknown;
+      readonly annotations?: Annotations;
+      readonly onFailure?: (cause: unknown) => FailureResult;
     },
   ) => void;
 }

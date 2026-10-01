@@ -6,13 +6,13 @@ import type { AkeruRuntimeToolId } from "./AkeruToolTypes.ts";
 
 const decodeMemoryInput = Schema.decodeUnknownSync(AkeruMemoryToolInputSchema);
 
-export function normalizeAkeruToolInput(input: unknown): unknown {
+export function normalizeAkeruToolInput<Input>(input: Input) {
   if (!Predicate.isObject(input) || Array.isArray(input)) return input;
 
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null));
 }
 
-export function decodeAkeruRuntimeToolInput(toolId: AkeruRuntimeToolId, input: unknown) {
+export function decodeAkeruRuntimeToolInput<Input>(toolId: AkeruRuntimeToolId, input: Input) {
   if (toolId === "memory")
     return { toolId, input: decodeMemoryInput(input, { onExcessProperty: "error" }) };
   const normalized = normalizeAkeruToolInput(input);

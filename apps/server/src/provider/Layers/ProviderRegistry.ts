@@ -52,8 +52,7 @@ import {
   writeProviderStatusCache,
 } from "../providerStatusCache.ts";
 import type { ProviderInstance } from "../ProviderDriver.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Pure maintenance capability value builder; no Effect service is constructed.
-import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import { manualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 import type { ProviderSnapshotSource } from "../builtInProviderCatalog.ts";
 
 import {
@@ -76,8 +75,8 @@ const loadProviders = (
     },
   );
 
-const makeManualProviderMaintenanceCapabilities = (provider: ProviderDriverKind) =>
-  makeManualOnlyProviderMaintenanceCapabilities({
+const manualProviderMaintenanceCapabilities = (provider: ProviderDriverKind) =>
+  manualOnlyProviderMaintenanceCapabilities({
     provider,
     packageName: null,
   });
@@ -492,7 +491,7 @@ export const ProviderRegistryLive = Layer.effect(
 
       return (
         instance?.snapshot.maintenanceCapabilities ??
-        makeManualProviderMaintenanceCapabilities(provider)
+        manualProviderMaintenanceCapabilities(provider)
       );
     });
 

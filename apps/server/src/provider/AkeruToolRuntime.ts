@@ -1,3 +1,6 @@
+import type { AkeruToolResult } from "./tools/AkeruToolTypes.ts";
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import { decodeAkeruRuntimeToolInput } from "./tools/AkeruToolInputs.ts";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { RequestContext } from "@mastra/core/request-context";
@@ -218,13 +221,13 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       : workspaceTools;
   };
 
-  const decodedGrantInput = (toolId: AkeruRuntimeToolId, input: unknown) =>
+  const decodedGrantInput = (toolId: AkeruRuntimeToolId, input: AkeruToolExecution["input"]) =>
     decodeAkeruRuntimeToolInput(toolId, input).input;
 
   const requiresApproval = async (
     session: AkeruToolSession,
     tool: AkeruRuntimeToolDefinition,
-    input: unknown,
+    input: AkeruToolExecution["input"],
   ) => {
     if (tool.id === "memory") return false;
     const akeruTool = AKERU_TOOL_CATALOG.find((candidate) => candidate.id === tool.id);
@@ -320,7 +323,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
         }
 
         failureCode = "not_found";
-        let result: unknown;
+        let result: AkeruToolResult;
 
         const catalogHandler =
           execution.toolId === "memory" ? undefined : session.catalogHandlers?.[execution.toolId];
@@ -405,14 +408,14 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           failureCode = "internal";
 
           try {
-            result =
-              execution.toolId === "Task"
-                ? await session.workers.spawn(execution.input)
-                : execution.toolId === "CheckSubagent"
-                  ? await session.workers.check(execution.input)
-                  : execution.toolId === "MessageSubagent"
-                    ? await session.workers.message(execution.input)
-                    : await session.workers.stop(execution.input);
+            result = await Match.value(execution).pipe(
+              Match.when({ toolId: "Task" }, ({ input }) => session.workers!.spawn(input)),
+              Match.when({ toolId: "CheckSubagent" }, ({ input }) => session.workers!.check(input)),
+              Match.when({ toolId: "MessageSubagent" }, ({ input }) =>
+                session.workers!.message(input),
+              ),
+              Match.orElse(({ input }) => session.workers!.stop(input)),
+            );
           } catch (cause) {
             return nonfatalToolFailureReceipt(input, session, cause, failureCode);
           }
@@ -579,7 +582,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
 
           failureCode = "internal";
           result = await backend.execute(backendInput, {
-            workspace,
+            ...(workspace ? { workspace } : {}),
             requestContext: new RequestContext(),
             observe: {
               span: async <A>(_name: string, run: () => A | Promise<A>) => run(),
@@ -592,7 +595,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           const mediaType = field(result, "mediaType");
           const data = field(result, "data");
 
-          if (mediaType !== "image/png" || typeof data !== "string") {
+          if (mediaType !== "image/png" || !Predicate.isString(data)) {
             throw new Error("Screenshot result is invalid.");
           }
 
@@ -602,8 +605,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           });
 
           result = {
-            // SAFETY: Screenshot mediaType and data were checked on the result object above.
-            ...(result as Record<string, unknown>),
+            ...(Predicate.isObject(result) ? result : {}),
             data: Buffer.from(redacted.data).toString("base64"),
           };
         }
@@ -612,7 +614,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           const summary = field(result, "summary");
           emitReceipt(input, "failure", {
             failureCode,
-            summary: typeof summary === "string" ? summary : "Tool execution failed.",
+            summary: Predicate.isString(summary) ? summary : "Tool execution failed.",
           });
 
           return result;

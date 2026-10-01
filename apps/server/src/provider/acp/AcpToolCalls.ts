@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type * as EffectAcpSchema from "effect-acp/schema";
 import { deriveToolActivityPresentation } from "@akeru/shared/toolActivity";
 import type { ToolLifecycleItemType } from "@akeru/contracts";
@@ -5,13 +6,14 @@ import type { ToolLifecycleItemType } from "@akeru/contracts";
 import { isRecord } from "./AcpProtocolValues.ts";
 import {
   type AcpToolCallState,
+  type AcpToolCallData,
   type AcpToolCallUpdate,
   type AcpToolCallEmitDecisionInput,
   type AcpToolCallEmitDecision,
 } from "./AcpRuntimeTypes.ts";
 
 export function normalizeToolCallStatus(
-  raw: unknown,
+  raw: EffectAcpSchema.ToolCallStatus | "inProgress" | null | undefined,
   fallback?: "pending" | "inProgress" | "completed" | "failed",
 ): "pending" | "inProgress" | "completed" | "failed" | undefined {
   switch (raw) {
@@ -29,8 +31,8 @@ export function normalizeToolCallStatus(
   }
 }
 
-export function normalizeCommandValue(value: unknown): string | undefined {
-  if (typeof value === "string" && value.trim().length > 0) {
+export function normalizeCommandValue<Value>(value: Value): string | undefined {
+  if (Predicate.isString(value) && value.trim().length > 0) {
     return value.trim();
   }
 
@@ -41,7 +43,7 @@ export function normalizeCommandValue(value: unknown): string | undefined {
   const parts: Array<string> = [];
 
   for (const entry of value) {
-    if (typeof entry === "string") {
+    if (Predicate.isString(entry)) {
       const part = entry.trim();
 
       if (part.length > 0) {
@@ -64,7 +66,7 @@ export function extractCommandFromTitle(title: string | undefined): string | und
 }
 
 export function extractToolCallCommand(
-  rawInput: unknown,
+  rawInput: EffectAcpSchema.ToolCall["rawInput"],
   title: string | undefined,
 ): string | undefined {
   if (isRecord(rawInput)) {
@@ -74,7 +76,7 @@ export function extractToolCallCommand(
       return directCommand;
     }
 
-    const executable = typeof rawInput.executable === "string" ? rawInput.executable.trim() : "";
+    const executable = Predicate.isString(rawInput.executable) ? rawInput.executable.trim() : "";
     const args = normalizeCommandValue(rawInput.args);
 
     if (executable && args) {
@@ -116,18 +118,18 @@ export const RAW_OUTPUT_TEXT_FIELDS = ["content", "stdout", "stderr", "output"] 
 // cumulative text-growth problem as `content` (see the comment above). Bound its known
 // text-bearing fields the same way so a chatty provider cannot smuggle unbounded output
 // through this field instead.
-export function boundToolCallRawOutput(rawOutput: unknown): unknown {
+export function boundToolCallRawOutput(rawOutput: EffectAcpSchema.ToolCall["rawOutput"]) {
   if (!isRecord(rawOutput)) {
     return rawOutput;
   }
 
   let changed = false;
-  const bounded: Record<string, unknown> = { ...rawOutput };
+  const bounded = { ...rawOutput };
 
   for (const field of RAW_OUTPUT_TEXT_FIELDS) {
     const value = rawOutput[field];
 
-    if (typeof value === "string" && value.length > TOOL_CALL_CONTENT_MAX_CHARS) {
+    if (Predicate.isString(value) && value.length > TOOL_CALL_CONTENT_MAX_CHARS) {
       bounded[field] = boundToolCallOutputText(value);
       changed = true;
     }
@@ -202,8 +204,10 @@ export function extractTextContentFromToolCallContent(
   return { text: bounded, content: boundedContent };
 }
 
-export function normalizeToolKind(kind: unknown): string | undefined {
-  return typeof kind === "string" && kind.trim().length > 0 ? kind.trim() : undefined;
+export function normalizeToolKind(
+  kind: EffectAcpSchema.ToolKind | null | undefined,
+): string | undefined {
+  return Predicate.isString(kind) && kind.trim().length > 0 ? kind.trim() : undefined;
 }
 
 export function canonicalItemTypeFromAcpToolKind(kind: string | undefined): ToolLifecycleItemType {
@@ -222,7 +226,7 @@ export function canonicalItemTypeFromAcpToolKind(kind: string | undefined): Tool
   }
 }
 
-export function makeToolCallState(
+export function toolCallState(
   input: {
     readonly toolCallId: string;
     readonly title?: string | null | undefined;
@@ -253,7 +257,7 @@ export function makeToolCallState(
       ? title
       : undefined;
 
-  const data: Record<string, unknown> = { toolCallId };
+  const data: AcpToolCallData = { toolCallId };
   const kind = normalizeToolKind(input.kind);
 
   if (kind) {
@@ -318,7 +322,7 @@ export function parseTypedToolCallState(
     readonly fallbackStatus?: "pending" | "inProgress" | "completed" | "failed";
   },
 ): AcpToolCallState | undefined {
-  return makeToolCallState(
+  return toolCallState(
     {
       toolCallId: event.toolCallId,
       title: event.title,
@@ -337,7 +341,7 @@ export function mergeToolCallState(
   previous: AcpToolCallState | undefined,
   next: AcpToolCallState,
 ): AcpToolCallState {
-  const nextKind = typeof next.data.kind === "string" ? next.data.kind : undefined;
+  const nextKind = Predicate.isString(next.data.kind) ? next.data.kind : undefined;
   const kind = nextKind ?? previous?.kind;
   const title = next.title ?? previous?.title;
   const status = next.status ?? previous?.status;
@@ -401,7 +405,7 @@ export function decideToolCallUpdateEmission(
   return { emit: false, skippedSinceEmit: skippedSinceEmit + 1 };
 }
 
-// The parsed AcpToolCallState already carries bounded content (see makeToolCallState /
+// The parsed AcpToolCallState already carries bounded content (see toolCallState /
 // extractTextContentFromToolCallContent above), but the raw JSON-RPC notification is also
 // threaded through as `rawPayload` for logging/debugging and ends up persisted on the
 // runtime event. Substitute the same bounded `content`/`rawOutput` there so an oversized
@@ -410,7 +414,7 @@ export function boundToolCallRawPayload(
   params: EffectAcpSchema.SessionNotification,
   update: AcpToolCallUpdate,
   toolCall: AcpToolCallState,
-): unknown {
+) {
   const boundedContent = toolCall.data.content;
   const boundedRawOutput = toolCall.data.rawOutput;
   const contentBounded = update.content !== undefined && boundedContent !== update.content;

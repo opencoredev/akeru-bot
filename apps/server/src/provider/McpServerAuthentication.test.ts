@@ -1,4 +1,5 @@
-import type { McpManager, McpServerStatus } from "@mastra/code-sdk/mcp/index";
+import { mcpManagerFixture } from "./test-support/mcpManagerFixture.ts";
+import type { McpServerStatus } from "@mastra/code-sdk/mcp/index";
 import { McpServerId, type McpServer } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -30,20 +31,20 @@ describe("MCP server authentication", () => {
   it("opens OAuth, waits for connection, and reconnects other live managers", async () => {
     const authorizationUrl = "https://hoplite.ai/oauth/authorize";
 
-    const first = {
+    const first = mcpManagerFixture({
       reconnectServer: vi.fn(async () => status()),
       authenticateServer: vi.fn(async (_name, options) => {
         options?.onAuthorizationUrl?.(authorizationUrl);
 
         return status({ connected: true, needsAuth: false, toolCount: 4 });
       }),
-    } as unknown as McpManager;
+    });
 
-    const second = {
+    const second = mcpManagerFixture({
       reconnectServer: vi.fn(async () =>
         status({ connected: true, needsAuth: false, toolCount: 4 }),
       ),
-    } as unknown as McpManager;
+    });
 
     const onAuthorizationUrl = vi.fn();
     const recordSuccess = vi.fn();
@@ -64,10 +65,10 @@ describe("MCP server authentication", () => {
   });
 
   it("records the real authentication failure", async () => {
-    const manager = {
+    const manager = mcpManagerFixture({
       reconnectServer: vi.fn(async () => status()),
       authenticateServer: vi.fn(async () => status({ error: "Authentication cancelled." })),
-    } as unknown as McpManager;
+    });
 
     const recordFailure = vi.fn();
     await expect(
@@ -84,13 +85,13 @@ describe("MCP server authentication", () => {
   });
 
   it("initializes and closes a temporary manager when no thread is active", async () => {
-    const manager = {
+    const manager = mcpManagerFixture({
       init: vi.fn(async () => undefined),
       reconnectServer: vi.fn(async () =>
         status({ connected: true, needsAuth: false, toolCount: 2 }),
       ),
       disconnect: vi.fn(async () => undefined),
-    } as unknown as McpManager;
+    });
 
     const createManager = vi.fn(() => manager);
 
@@ -112,7 +113,7 @@ describe("MCP server authentication", () => {
     const controller = new AbortController();
     let finishAuthentication!: (value: McpServerStatus) => void;
 
-    const manager = {
+    const manager = mcpManagerFixture({
       reconnectServer: vi.fn(async () => status()),
       authenticateServer: vi.fn(
         async () =>
@@ -122,8 +123,10 @@ describe("MCP server authentication", () => {
       ),
       cancelServerAuthentication: vi.fn(async () => {
         finishAuthentication(status({ cancelled: true, error: "Authentication cancelled." }));
+
+        return true;
       }),
-    } as unknown as McpManager;
+    });
 
     const authentication = authenticateMcpServer({
       server,
@@ -143,16 +146,16 @@ describe("MCP server authentication", () => {
   });
 
   it("keeps OAuth successful when a secondary manager cannot reconnect", async () => {
-    const primary = {
+    const primary = mcpManagerFixture({
       reconnectServer: vi.fn(async () => status()),
       authenticateServer: vi.fn(async () =>
         status({ connected: true, needsAuth: false, toolCount: 4 }),
       ),
-    } as unknown as McpManager;
+    });
 
-    const secondary = {
+    const secondary = mcpManagerFixture({
       reconnectServer: vi.fn(async () => status({ error: "Secondary session failed." })),
-    } as unknown as McpManager;
+    });
 
     const recordSuccess = vi.fn();
     const recordFailure = vi.fn();

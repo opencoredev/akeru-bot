@@ -1,3 +1,4 @@
+import { mcpManagerFixture } from "./test-support/mcpManagerFixture.ts";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import type { McpManager } from "@mastra/code-sdk/mcp/index";
@@ -25,9 +26,11 @@ describe("Akeru catalog MCP tool handlers", () => {
       },
     );
 
-    const handlers = createAkeruCatalogToolHandlers({
-      authenticateServer,
-    } as unknown as McpManager);
+    const handlers = createAkeruCatalogToolHandlers(
+      mcpManagerFixture({
+        authenticateServer,
+      }),
+    );
 
     const emitProgress = vi.fn();
 
@@ -63,11 +66,11 @@ describe("Akeru catalog MCP tool handlers", () => {
     const reload = vi.fn(async () => undefined);
     const reconnectServer = vi.fn<McpManager["reconnectServer"]>(async () => status);
 
-    const manager = {
+    const manager = mcpManagerFixture({
       reload,
       reconnectServer,
       getServerStatuses: () => [status],
-    } as unknown as McpManager;
+    });
 
     const handler = createAkeruCatalogToolHandlers(manager).RestartMcpServers!;
     const emitProgress = vi.fn();
@@ -91,7 +94,7 @@ describe("Akeru catalog MCP tool handlers", () => {
   });
 
   it("reports real request evidence instead of treating a connection as healthy", async () => {
-    const manager = { getServerStatuses: () => [connectedStatus] } as unknown as McpManager;
+    const manager = mcpManagerFixture({ getServerStatuses: () => [connectedStatus] });
 
     const handler = createAkeruCatalogToolHandlers(
       manager,
@@ -124,10 +127,10 @@ describe("Akeru catalog MCP tool handlers", () => {
     async (toolId) => {
       const reconnectServer = vi.fn(async () => connectedStatus);
 
-      const manager = {
+      const manager = mcpManagerFixture({
         getServerStatuses: () => [connectedStatus],
         reconnectServer,
-      } as unknown as McpManager;
+      });
 
       const recordSuccess = vi.fn();
       const onRecovery = vi.fn();
@@ -150,10 +153,10 @@ describe("Akeru catalog MCP tool handlers", () => {
   it("records and escalates a failed health test", async () => {
     const failed = { ...connectedStatus, connected: false, error: "OAuth expired." };
 
-    const manager = {
+    const manager = mcpManagerFixture({
       getServerStatuses: () => [connectedStatus],
       reconnectServer: async () => failed,
-    } as unknown as McpManager;
+    });
 
     const recordFailure = vi.fn();
     const onFailure = vi.fn();

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { ProviderDriverKind } from "@akeru/contracts";
 import { resolveCommandPath } from "@akeru/shared/shell";
@@ -6,8 +7,8 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 
-export function nonEmptyString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+export function nonEmptyString(value: string | null | undefined): string | null {
+  return Predicate.isString(value) && value.trim().length > 0 ? value.trim() : null;
 }
 
 export const compactEnv = (input: Record<string, Option.Option<string>>): NodeJS.ProcessEnv =>
@@ -67,7 +68,7 @@ export interface PackageManagedProviderMaintenanceDefinition {
   } | null;
 }
 
-export function makeProviderMaintenanceCapabilities(input: {
+export function providerMaintenanceCapabilities(input: {
   readonly provider: ProviderDriverKind;
   readonly packageName: string | null;
   readonly updateExecutable: string | null;
@@ -91,11 +92,11 @@ export function makeProviderMaintenanceCapabilities(input: {
   };
 }
 
-export function makeManualOnlyProviderMaintenanceCapabilities(input: {
+export function manualOnlyProviderMaintenanceCapabilities(input: {
   readonly provider: ProviderDriverKind;
   readonly packageName: string | null;
 }): ProviderMaintenanceCapabilities {
-  return makeProviderMaintenanceCapabilities({
+  return providerMaintenanceCapabilities({
     provider: input.provider,
     packageName: input.packageName,
     updateExecutable: null,
@@ -107,7 +108,7 @@ export function makeManualOnlyProviderMaintenanceCapabilities(input: {
 export function makeNpmGlobalProviderMaintenanceCapabilities(
   definition: PackageManagedProviderMaintenanceDefinition,
 ): ProviderMaintenanceCapabilities {
-  return makeProviderMaintenanceCapabilities({
+  return providerMaintenanceCapabilities({
     provider: definition.provider,
     packageName: definition.npmPackageName,
     updateExecutable: "npm",
@@ -129,7 +130,7 @@ export function makeNpmGlobalProviderMaintenanceCapabilities(
 export function makeBunGlobalProviderMaintenanceCapabilities(
   definition: PackageManagedProviderMaintenanceDefinition,
 ): ProviderMaintenanceCapabilities {
-  return makeProviderMaintenanceCapabilities({
+  return providerMaintenanceCapabilities({
     provider: definition.provider,
     packageName: definition.npmPackageName,
     updateExecutable: "bun",
@@ -141,7 +142,7 @@ export function makeBunGlobalProviderMaintenanceCapabilities(
 export function makePnpmGlobalProviderMaintenanceCapabilities(
   definition: PackageManagedProviderMaintenanceDefinition,
 ): ProviderMaintenanceCapabilities {
-  return makeProviderMaintenanceCapabilities({
+  return providerMaintenanceCapabilities({
     provider: definition.provider,
     packageName: definition.npmPackageName,
     updateExecutable: "pnpm",
@@ -153,7 +154,7 @@ export function makePnpmGlobalProviderMaintenanceCapabilities(
 export function makeVitePlusGlobalProviderMaintenanceCapabilities(
   definition: PackageManagedProviderMaintenanceDefinition,
 ): ProviderMaintenanceCapabilities {
-  return makeProviderMaintenanceCapabilities({
+  return providerMaintenanceCapabilities({
     provider: definition.provider,
     packageName: definition.npmPackageName,
     updateExecutable: "vp",
@@ -166,13 +167,13 @@ export function makeHomebrewProviderMaintenanceCapabilities(
   definition: PackageManagedProviderMaintenanceDefinition,
 ): ProviderMaintenanceCapabilities {
   if (!definition.homebrewFormula) {
-    return makeManualOnlyProviderMaintenanceCapabilities({
+    return manualOnlyProviderMaintenanceCapabilities({
       provider: definition.provider,
       packageName: definition.npmPackageName,
     });
   }
 
-  return makeProviderMaintenanceCapabilities({
+  return providerMaintenanceCapabilities({
     provider: definition.provider,
     packageName: definition.npmPackageName,
     updateExecutable: "brew",
@@ -188,7 +189,7 @@ export function makeNativeProviderMaintenanceCapabilities(
     return null;
   }
 
-  return makeProviderMaintenanceCapabilities({
+  return providerMaintenanceCapabilities({
     provider: definition.provider,
     packageName: definition.npmPackageName,
     updateExecutable: definition.nativeUpdate.executable,
@@ -306,13 +307,13 @@ export function resolvePackageManagedProviderMaintenance(
     return makeNpmGlobalProviderMaintenanceCapabilities(definition);
   }
 
-  return makeManualOnlyProviderMaintenanceCapabilities({
+  return manualOnlyProviderMaintenanceCapabilities({
     provider: definition.provider,
     packageName: definition.npmPackageName,
   });
 }
 
-export function makePackageManagedProviderMaintenanceResolver(
+export function packageManagedProviderMaintenanceResolver(
   definition: PackageManagedProviderMaintenanceDefinition,
 ): ProviderMaintenanceCapabilitiesResolver {
   return {
@@ -320,7 +321,7 @@ export function makePackageManagedProviderMaintenanceResolver(
   };
 }
 
-export function makeStaticProviderMaintenanceResolver(
+export function staticProviderMaintenanceResolver(
   capabilities: ProviderMaintenanceCapabilities,
 ): ProviderMaintenanceCapabilitiesResolver {
   return {
@@ -328,10 +329,10 @@ export function makeStaticProviderMaintenanceResolver(
   };
 }
 
-export function makeManualProviderMaintenanceCapabilities(
+export function manualProviderMaintenanceCapabilities(
   provider: ProviderDriverKind,
 ): ProviderMaintenanceCapabilities {
-  return makeManualOnlyProviderMaintenanceCapabilities({
+  return manualOnlyProviderMaintenanceCapabilities({
     provider,
     packageName: null,
   });

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import type { McpManager, McpServerStatus } from "@mastra/code-sdk/mcp/index";
 import * as DateTime from "effect/DateTime";
@@ -6,16 +7,16 @@ import {
   type AkeruCatalogToolHandlerInput,
 } from "./AkeruCatalogTypes.ts";
 
-export function field(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
+export function field<Value>(value: Value, key: string) {
+  if (!Predicate.isObjectOrArray(value) || value === null) return undefined;
 
   return Object.getOwnPropertyDescriptor(value, key)?.value;
 }
 
-export function requiredString(value: unknown, key: string): string {
+export function requiredString<Value>(value: Value, key: string): string {
   const candidate = field(value, key);
 
-  if (typeof candidate !== "string" || candidate.length === 0) {
+  if (!Predicate.isString(candidate) || candidate.length === 0) {
     throw new Error(`Tool input field '${key}' is required.`);
   }
 

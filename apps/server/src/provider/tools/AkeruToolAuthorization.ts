@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import {
   type AkeruDelegationAccessGrant,
@@ -6,26 +7,26 @@ import {
   type AkeruToolId,
 } from "@akeru/contracts";
 
-export function field(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
+export function field<Value>(value: Value, key: string) {
+  if (!Predicate.isObjectOrArray(value) || value === null) return undefined;
 
   return Object.getOwnPropertyDescriptor(value, key)?.value;
 }
 
-export function requiredString(value: unknown, key: string): string {
+export function requiredString<Value>(value: Value, key: string): string {
   const candidate = field(value, key);
 
-  if (typeof candidate !== "string" || candidate.length === 0) {
+  if (!Predicate.isString(candidate) || candidate.length === 0) {
     throw new Error(`Tool input field '${key}' is required.`);
   }
 
   return candidate;
 }
 
-export function canonicalInput(value: unknown): string {
+export function canonicalInput<Value>(value: Value): string {
   if (Array.isArray(value)) return `[${value.map(canonicalInput).join(",")}]`;
 
-  if (typeof value === "object" && value !== null) {
+  if (Predicate.isObjectOrArray(value) && value !== null) {
     return `{${Object.keys(value)
       .filter((key) => field(value, key) !== undefined)
       .sort()
@@ -36,13 +37,13 @@ export function canonicalInput(value: unknown): string {
   return JSON.stringify(value) ?? "undefined";
 }
 
-export function ensureWorkspaceCwd(toolId: AkeruToolId, input: unknown): void {
+export function ensureWorkspaceCwd<Input>(toolId: AkeruToolId, input: Input): void {
   if (toolId !== "Shell" && toolId !== "ExternalShell") return;
   const cwd = field(input, "cwd");
 
   if (cwd === undefined) return;
 
-  if (typeof cwd !== "string") throw new Error(`Tool '${toolId}' cwd must be a relative path.`);
+  if (!Predicate.isString(cwd)) throw new Error(`Tool '${toolId}' cwd must be a relative path.`);
 
   if (
     cwd.startsWith("/") ||

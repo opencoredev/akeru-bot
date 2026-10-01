@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import {
   isBadRequestError,
@@ -6,13 +7,13 @@ import {
   StreamErrorRetryProcessor,
 } from "@mastra/core/processors";
 
-export function isConnectionReset(error: unknown): boolean {
-  if (!error) return false;
-  const code = typeof error === "object" && "code" in error ? error.code : undefined;
+export function isConnectionReset(cause: unknown): boolean {
+  if (!cause) return false;
+  const code = Predicate.isObjectOrArray(cause) && "code" in cause ? cause.code : undefined;
 
-  if (typeof code === "string" && code.toUpperCase() === "ECONNRESET") return true;
+  if (Predicate.isString(code) && code.toUpperCase() === "ECONNRESET") return true;
 
-  return error instanceof Error && /econnreset|socket hang up/i.test(error.message);
+  return cause instanceof Error && /econnreset|socket hang up/i.test(cause.message);
 }
 
 /**

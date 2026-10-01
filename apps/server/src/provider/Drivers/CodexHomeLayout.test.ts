@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -296,7 +297,7 @@ it.layer(NodeServices.layer)("CodexHomeLayout", (it) => {
 
         expect(error._tag).toBe("CodexShadowHomeFileSystemError");
 
-        if (error._tag !== "CodexShadowHomeFileSystemError") {
+        if (!Predicate.isTagged(error, "CodexShadowHomeFileSystemError")) {
           return expect.fail("Expected CodexShadowHomeFileSystemError");
         }
 

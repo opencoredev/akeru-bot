@@ -11,8 +11,10 @@ import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { instanceUsesSavedCredential } from "../../subscription-auth/runtime.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeGrokTextGeneration } from "../../textGeneration/GrokTextGeneration.ts";
 import { ProviderDriverError } from "../Errors.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeGrokAdapter } from "../Layers/GrokAdapter.ts";
 import {
   buildInitialGrokProviderSnapshot,
@@ -21,6 +23,7 @@ import {
 } from "../Layers/GrokProvider.ts";
 import { discoverGrokSkills } from "./GrokSkills.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- The provider driver is the composition root for independently configured, scoped provider instances.
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import {
   defaultProviderContinuationIdentity,
@@ -31,13 +34,13 @@ import type { ServerProviderDraft } from "../providerSnapshot.ts";
 import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { mergeSubscriptionInstanceEnvironment } from "../../subscription-auth/runtime.ts";
 import {
-  makeManualOnlyProviderMaintenanceCapabilities,
-  makeStaticProviderMaintenanceResolver,
+  manualOnlyProviderMaintenanceCapabilities,
+  staticProviderMaintenanceResolver,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "../providerMaintenance.ts";
 import {
   haveProviderSnapshotSettingsChanged,
-  makeProviderSnapshotSettingsSource,
+  providerSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
 
@@ -45,8 +48,8 @@ const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("grok");
 
-const UPDATE = makeStaticProviderMaintenanceResolver(
-  makeManualOnlyProviderMaintenanceCapabilities({
+const UPDATE = staticProviderMaintenanceResolver(
+  manualOnlyProviderMaintenanceCapabilities({
     provider: DRIVER_KIND,
     packageName: null,
   }),
@@ -135,7 +138,7 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
       );
 
-      const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
+      const snapshotSettings = providerSnapshotSettingsSource(effectiveConfig, serverSettings);
 
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<GrokSettings>>({
         maintenanceCapabilities,

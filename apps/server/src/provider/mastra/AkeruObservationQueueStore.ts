@@ -1,5 +1,8 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeSqlite from "node:sqlite";
+
+const decodeQueueVersion = Schema.decodeUnknownSync(Schema.Struct({ user_version: Schema.Number }));
 
 export const OBSERVATION_QUEUE_SCHEMA_VERSION = 2;
 
@@ -13,8 +16,7 @@ export function openObservationQueueDb(memoryDbPath: string): NodeSqlite.Databas
   try {
     db.exec("PRAGMA busy_timeout = 5000");
 
-    const version = (db.prepare("PRAGMA user_version").get() as { user_version: number })
-      .user_version;
+    const version = decodeQueueVersion(db.prepare("PRAGMA user_version").get()).user_version;
 
     if (version > OBSERVATION_QUEUE_SCHEMA_VERSION) {
       throw new Error(

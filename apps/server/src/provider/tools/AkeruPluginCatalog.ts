@@ -1,3 +1,9 @@
+interface ComposioSearchResult {
+  readonly status: "available" | "setup-required" | "unavailable";
+  readonly toolkits: readonly ComposioToolkit[];
+}
+
+import * as Predicate from "effect/Predicate";
 import * as DateTime from "effect/DateTime";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
@@ -69,13 +75,12 @@ export function loadNodeCatalogModules(): CatalogManifestModules {
   );
 }
 
-export const catalogManifestModules =
-  typeof import.meta.glob === "function"
-    ? import.meta.glob<unknown>("../../../../../plugins/entries/*/plugin.json", {
-        eager: true,
-        import: "default",
-      })
-    : loadNodeCatalogModules();
+export const catalogManifestModules = Predicate.isFunction(import.meta.glob)
+  ? import.meta.glob<unknown>("../../../../../plugins/entries/*/plugin.json", {
+      eager: true,
+      import: "default",
+    })
+  : loadNodeCatalogModules();
 
 export function pluginServerId(pluginId: string) {
   return McpServerId.make(`builtin-${pluginId}`);
@@ -251,10 +256,7 @@ export function createAkeruPluginRuntime(
     const limit = input.limit ?? 20;
     const snapshot = await options.readSnapshot();
 
-    let composioSearch: {
-      readonly status: "available" | "setup-required" | "unavailable";
-      readonly toolkits: readonly ComposioToolkit[];
-    } = { status: "unavailable", toolkits: [] };
+    let composioSearch: ComposioSearchResult = { status: "unavailable", toolkits: [] };
 
     if (options.searchComposioToolkits) {
       try {

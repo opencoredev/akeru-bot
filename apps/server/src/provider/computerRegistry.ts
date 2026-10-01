@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import * as Predicate from "effect/Predicate";
 import {
   ComputerError,
@@ -8,10 +9,12 @@ import {
   type ComputerInput,
   type ComputerSessionInput,
   type ComputerState,
-  type ThreadId,
+  ThreadId,
 } from "@akeru/contracts";
 import type { WorkspaceComputer } from "./workspaceComputer.ts";
 import { Effect, Queue, Schedule, Schema, Stream } from "effect";
+
+const computerEvents = Data.taggedEnum<ComputerEvent>();
 
 const decodeFrame = Schema.decodeUnknownSync(ComputerFrame);
 
@@ -87,7 +90,7 @@ export class ComputerRegistry {
 
   private publish(threadId: string) {
     for (const listener of this.listeners.get(threadId) ?? [])
-      listener({ _tag: "state", state: this.state(threadId as ThreadId) });
+      listener(computerEvents.state({ state: this.state(ThreadId.make(threadId)) }));
   }
 
   private publishWorkspace(computer: WorkspaceComputer) {
@@ -156,7 +159,7 @@ export class ComputerRegistry {
         if (entry.computer !== computer) continue;
 
         for (const listener of this.listeners.get(threadId) ?? [])
-          listener({ _tag: "action", receipt });
+          listener(computerEvents.action({ receipt }));
       }
     });
   }
@@ -195,12 +198,10 @@ export class ComputerRegistry {
   }
 
   events(threadId: ThreadId, clientId: string): Stream.Stream<ComputerEvent, ComputerError> {
-    const registry = this;
-
     return Stream.callback<ComputerEvent, ComputerError>(
       (queue) =>
-        Effect.gen(function* () {
-          const entry = registry.threads.get(threadId);
+        Effect.gen({ self: this }, function* () {
+          const entry = this.threads.get(threadId);
 
           if (!entry) {
             return yield* new ComputerError({
@@ -228,32 +229,32 @@ export class ComputerRegistry {
               close();
           };
 
-          let connections = registry.connections.get(clientId);
+          let connections = this.connections.get(clientId);
 
-          if (!connections) registry.connections.set(clientId, (connections = new Set()));
+          if (!connections) this.connections.set(clientId, (connections = new Set()));
           connections.add(close);
-          let listeners = registry.listeners.get(threadId);
+          let listeners = this.listeners.get(threadId);
 
-          if (!listeners) registry.listeners.set(threadId, (listeners = new Set()));
+          if (!listeners) this.listeners.set(threadId, (listeners = new Set()));
           listeners.add(listener);
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => {
               active = false;
               connections.delete(close);
 
-              if (connections.size === 0) registry.connections.delete(clientId);
+              if (connections.size === 0) this.connections.delete(clientId);
               listeners.delete(listener);
 
-              if (listeners.size === 0) registry.listeners.delete(threadId);
+              if (listeners.size === 0) this.listeners.delete(threadId);
             }),
           );
-          listener({ _tag: "state", state: registry.state(threadId) });
+          listener(computerEvents.state({ state: this.state(threadId) }));
 
           const capture = Effect.tryPromise({
             try: async () => {
-              if (!active || registry.threads.get(threadId) !== entry) return;
-              const state = registry.state(threadId);
-              listener({ _tag: "state", state });
+              if (!active || this.threads.get(threadId) !== entry) return;
+              const state = this.state(threadId);
+              listener(computerEvents.state({ state }));
 
               if (state.status !== "ready" && state.status !== "human") return;
               const generation = computer.gate.generation;
@@ -268,10 +269,10 @@ export class ComputerRegistry {
 
               if (
                 active &&
-                registry.threads.get(threadId) === entry &&
+                this.threads.get(threadId) === entry &&
                 computer.gate.generation === generation
               ) {
-                listener({ _tag: "frame", frame });
+                listener(computerEvents.frame({ frame }));
               }
             },
             catch: (cause) =>
@@ -285,9 +286,9 @@ export class ComputerRegistry {
                 // that stale frame is dropped, not a reason to stop the computer.
                 if (error.code === "revoked") return;
 
-                if (registry.threads.get(threadId) === entry) {
+                if (this.threads.get(threadId) === entry) {
                   computer.gate.stop();
-                  registry.publishWorkspace(computer);
+                  this.publishWorkspace(computer);
                 }
               }),
             ),

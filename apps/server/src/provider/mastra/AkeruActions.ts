@@ -168,7 +168,7 @@ export type AkeruActionInspection = {
   readonly hasUnclassifiedIntent: boolean;
 };
 
-export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActionInspection {
+export function inspectAkeruAction<Input>(toolName: string, args?: Input): AkeruActionInspection {
   const namedAction = criticalActionFromText(toolName);
 
   if (namedAction) return { action: namedAction, hasUnclassifiedIntent: false };
@@ -196,7 +196,7 @@ export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActio
         if (inspected >= 100) return { action: null, hasUnclassifiedIntent: true };
         inspected += 1;
 
-        if (typeof entry === "object" && entry !== null) pending.push(entry);
+        if (Predicate.isObjectOrArray(entry) && entry !== null) pending.push(entry);
       }
 
       continue;
@@ -213,7 +213,7 @@ export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActio
 
       if (keyedAction) return { action: keyedAction, hasUnclassifiedIntent: false };
 
-      if (ACTION_TEXT_KEYS.has(normalizedKey) && typeof entry === "string") {
+      if (ACTION_TEXT_KEYS.has(normalizedKey) && Predicate.isString(entry)) {
         const action =
           normalizedKey === "command"
             ? criticalActionFromShellCommand(entry)
@@ -231,25 +231,28 @@ export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActio
       }
 
       if (
-        typeof entry === "string" &&
+        Predicate.isString(entry) &&
         (normalizedKey === "path" || normalizedKey.endsWith("path")) &&
         classifyAkeruSensitivePath(entry)
       ) {
         return { action: "secrets", hasUnclassifiedIntent: false };
       }
 
-      if (typeof entry === "object" && entry !== null) pending.push(entry);
+      if (Predicate.isObjectOrArray(entry) && entry !== null) pending.push(entry);
     }
   }
 
   return { action: null, hasUnclassifiedIntent: hasUnclassifiedIntent || pending.length > 0 };
 }
 
-export function criticalAkeruAction(toolName: string, args?: unknown): AkeruCriticalAction | null {
+export function criticalAkeruAction<Input>(
+  toolName: string,
+  args?: Input,
+): AkeruCriticalAction | null {
   return inspectAkeruAction(toolName, args).action;
 }
 
-export function akeruActionNeedsApproval(toolName: string, args?: unknown): boolean {
+export function akeruActionNeedsApproval<Input>(toolName: string, args?: Input): boolean {
   const inspection = inspectAkeruAction(toolName, args);
 
   return inspection.action !== null || inspection.hasUnclassifiedIntent;

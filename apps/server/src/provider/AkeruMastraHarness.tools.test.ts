@@ -1,10 +1,11 @@
+import { probeTool, harnessAgent } from "./test-support/toolProbe.ts";
+import { toolRuntimeFixture } from "./test-support/toolRuntimeFixture.ts";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
-import { type Agent } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
@@ -22,7 +23,6 @@ import {
   routineToolNeedsGlobalApproval,
 } from "./AkeruMastraHarness.ts";
 import { productFeedbackToolInputSchema } from "./AkeruMastraHarness.ts";
-import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { makeAkeruMastraHarnessTestSupport } from "./test-support/AkeruMastraHarness.ts";
 
 const { harnessTest } = makeAkeruMastraHarnessTestSupport();
@@ -38,12 +38,12 @@ describe("AkeruMastraHarness", () => {
           authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
           memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
           getThreadTools: () => ({}),
-          toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+          toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
         });
 
         try {
           // The controller keeps its agent private; the tool list is what the model sees.
-          const { agent } = (harness.controller as unknown as { config: { agent: Agent } }).config;
+          const agent = harnessAgent(harness);
           const requestContext = new RequestContext();
           requestContext.setRaw("controller", { resourceId: "thread-tools" });
           const toolIds = Object.keys(await agent.listTools({ requestContext }));
@@ -67,15 +67,15 @@ describe("AkeruMastraHarness", () => {
     });
     const approvalInputs: unknown[] = [];
 
-    const runtime = {
+    const runtime = toolRuntimeFixture({
       toolsForThread: () => AKERU_TOOL_CATALOG.filter((tool) => tool.id === "Shell"),
-      requiresApproval: async (_threadId: string, _toolId: string, input: unknown) => {
+      requiresApproval: async (_threadId, _toolId, input) => {
         approvalInputs.push(input);
 
         return true;
       },
       execute: async () => undefined,
-    } as unknown as AkeruToolRuntime;
+    });
 
     const pluginTool = { id: "plugin", execute: async () => undefined, requireApproval: false };
     const approvalPolicies: boolean[] = [];
@@ -102,17 +102,11 @@ describe("AkeruMastraHarness", () => {
     assert.notProperty(tools, "Read");
     assert.notProperty(tools, "execute_command");
 
-    const shell = tools.Shell as unknown as {
-      readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
-    };
+    const shell = probeTool(tools.Shell);
 
-    const restart = tools.RestartMcpServers as unknown as {
-      readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
-    };
+    const restart = probeTool(tools.RestartMcpServers);
 
-    const search = tools.exa_search as unknown as {
-      readonly needsApprovalFn: (input: unknown) => Promise<boolean>;
-    };
+    const search = probeTool(tools.exa_search);
 
     assert.isTrue(await restart.needsApprovalFn({}));
     assert.isTrue(await search.needsApprovalFn({ operation: "send" }));
@@ -146,13 +140,10 @@ describe("AkeruMastraHarness", () => {
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
-      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
     });
 
-    const tool = tools[AKERU_PRODUCT_FEEDBACK_TOOL_NAME] as {
-      requireApproval?: boolean;
-      execute?: (input: unknown, context: unknown) => Promise<unknown>;
-    };
+    const tool = probeTool(tools[AKERU_PRODUCT_FEEDBACK_TOOL_NAME]);
 
     assert.isTrue(tool.requireApproval);
     assert.deepEqual(await tool.execute?.({ feedback: "The button is unresponsive." }, {}), {
@@ -193,7 +184,7 @@ describe("AkeruMastraHarness", () => {
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
-      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
       createRoutine: async (threadId, input) => {
         calls.push({ threadId, input });
 
@@ -201,10 +192,7 @@ describe("AkeruMastraHarness", () => {
       },
     });
 
-    const tool = tools[AKERU_CREATE_ROUTINE_TOOL_NAME] as {
-      requireApproval?: boolean;
-      execute?: (input: unknown, context: unknown) => Promise<unknown>;
-    };
+    const tool = probeTool(tools[AKERU_CREATE_ROUTINE_TOOL_NAME]);
 
     assert.isFalse(tool.requireApproval);
     assert.deepEqual(calls, []);
@@ -259,7 +247,7 @@ describe("AkeruMastraHarness", () => {
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
-      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
       listRoutines: async (threadId) => {
         calls.push(threadId);
 
@@ -267,10 +255,7 @@ describe("AkeruMastraHarness", () => {
       },
     });
 
-    const tool = tools[AKERU_LIST_ROUTINES_TOOL_NAME] as {
-      requireApproval?: boolean;
-      execute?: (input: unknown, context: unknown) => Promise<unknown>;
-    };
+    const tool = probeTool(tools[AKERU_LIST_ROUTINES_TOOL_NAME]);
 
     assert.deepEqual(calls, []);
     assert.isFalse(tool.requireApproval);
@@ -287,7 +272,7 @@ describe("AkeruMastraHarness", () => {
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
-      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
       listRoutines: async () => ({
         routines: [
           { id: "routine-1", name: "Morning brief", enabled: true, lifecycle: "enabled" },
@@ -301,17 +286,14 @@ describe("AkeruMastraHarness", () => {
       },
     });
 
-    const tool = tools[AKERU_DELETE_ROUTINES_TOOL_NAME] as {
-      requireApproval?: boolean;
-      execute?: (input: unknown, context: unknown) => Promise<unknown>;
-    };
+    const tool = probeTool(tools[AKERU_DELETE_ROUTINES_TOOL_NAME]);
 
     const input = { routineIds: ["routine-1", "routine-2"] };
 
     assert.isFalse(tool.requireApproval);
     assert.deepEqual(deleted, []);
     await tool.execute?.(input, {
-      agent: { suspend: async (payload: unknown) => void suspended.push(payload) },
+      agent: { suspend: async (payload) => void suspended.push(payload) },
     });
     assert.deepEqual(deleted, []);
     assert.deepEqual(suspended, [
@@ -350,7 +332,7 @@ describe("AkeruMastraHarness", () => {
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
-      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
       listRoutines: async () => ({ routines: [] }),
       deleteRoutines: async () => {
         deleted = true;
@@ -359,9 +341,7 @@ describe("AkeruMastraHarness", () => {
       },
     });
 
-    const tool = tools[AKERU_DELETE_ROUTINES_TOOL_NAME] as {
-      execute?: (input: unknown, context: unknown) => Promise<unknown>;
-    };
+    const tool = probeTool(tools[AKERU_DELETE_ROUTINES_TOOL_NAME]);
 
     assert.deepEqual(
       await tool.execute?.(

@@ -35,6 +35,7 @@ export function akeruOpenAIProvider(
   return createOpenAI({
     apiKey: "akeru-api-key",
     baseURL: OPENAI_BASE_URL,
+    // SAFETY: The SDK accepts this Fetch API implementation; Bun ambient types add preconnect, which the SDK never calls.
     fetch: buildAkeruOpenAIFetch(getCredential) as NonNullable<
       NonNullable<Parameters<typeof createOpenAI>[0]>["fetch"]
     >,

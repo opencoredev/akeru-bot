@@ -1,3 +1,5 @@
+import type { AkeruToolResult } from "./AkeruToolTypes.ts";
+import { type AkeruToolInputSchemas } from "@akeru/contracts";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import type { McpManager } from "@mastra/code-sdk/mcp/index";
 import {
@@ -16,7 +18,9 @@ export interface AkeruCatalogToolHandlerInput {
   ) => void | Promise<void>;
 }
 
-export type AkeruCatalogToolHandler = (input: AkeruCatalogToolHandlerInput) => Promise<unknown>;
+export type AkeruCatalogToolHandler = (
+  input: AkeruCatalogToolHandlerInput,
+) => Promise<AkeruToolResult>;
 
 export interface AkeruMcpDependencies {
   readonly dependentBots: ReadonlyArray<{ readonly id: BotId; readonly name: string }>;
@@ -45,7 +49,9 @@ export type McpRuntimeStatus = ReturnType<McpManager["getServerStatuses"]>[numbe
 
 export interface AkeruPluginRuntimeOptions {
   readonly readSnapshot: () => Promise<OrchestrationReadModel>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+  readonly dispatch: (
+    command: OrchestrationCommand,
+  ) => Promise<{ readonly sequence: number } | void>;
   readonly searchComposioToolkits?: (input: {
     readonly query?: string;
     readonly limit?: number;
@@ -61,15 +67,21 @@ export interface AkeruCatalogBackendOptions {
   readonly webSearch?: (input: {
     readonly query: string;
     readonly domains?: readonly string[];
-  }) => Promise<unknown>;
-  readonly webFetch?: (input: { readonly url: string }) => Promise<unknown>;
-  readonly generateImage?: (input: unknown) => Promise<unknown>;
-  readonly addMcpServer?: (input: unknown) => Promise<unknown>;
-  readonly uninstallMcpServer?: (serverId: string) => Promise<unknown>;
-  readonly removeMcpAccount?: (serverId: string) => Promise<unknown>;
-  readonly renameMcpAccount?: (input: unknown) => Promise<unknown>;
+  }) => Promise<AkeruToolResult>;
+  readonly webFetch?: (input: { readonly url: string }) => Promise<AkeruToolResult>;
+  readonly generateImage?: (
+    input: (typeof AkeruToolInputSchemas.GenerateImage)["Type"],
+  ) => Promise<AkeruToolResult>;
+  readonly addMcpServer?: (
+    input: (typeof AkeruToolInputSchemas.AddMcpServer)["Type"],
+  ) => Promise<AkeruToolResult>;
+  readonly uninstallMcpServer?: (serverId: string) => Promise<AkeruToolResult>;
+  readonly removeMcpAccount?: (serverId: string) => Promise<AkeruToolResult>;
+  readonly renameMcpAccount?: (
+    input: (typeof AkeruToolInputSchemas.RenameMcpAccount)["Type"],
+  ) => Promise<AkeruToolResult>;
   readonly setMcpInstructions?: (input: {
     readonly serverId: string;
     readonly instructions: string;
-  }) => Promise<unknown>;
+  }) => Promise<AkeruToolResult>;
 }

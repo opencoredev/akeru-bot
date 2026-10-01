@@ -6,7 +6,7 @@ import * as NodePath from "node:path";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Effect from "effect/Effect";
 import {
-  makePackageManagedProviderMaintenanceResolver,
+  packageManagedProviderMaintenanceResolver,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "./providerMaintenance.ts";
 import { makeproviderMaintenanceTestSupport } from "./test-support/providerMaintenance.ts";
@@ -375,7 +375,7 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
   );
 
   it("allows the package's own install scripts in npm global updates", () => {
-    const claudeUpdate = makePackageManagedProviderMaintenanceResolver({
+    const claudeUpdate = packageManagedProviderMaintenanceResolver({
       provider: driver("claudeAgent"),
       npmPackageName: "@anthropic-ai/claude-code",
       homebrewFormula: "claude-code",

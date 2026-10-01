@@ -53,6 +53,7 @@ export function akeruKimiProvider(
   return createAnthropic({
     apiKey: "oauth-placeholder",
     baseURL: KIMI_CODING_BASE_URL,
+    // SAFETY: The SDK accepts this Fetch API implementation; Bun ambient types add preconnect, which the SDK never calls.
     fetch: buildAkeruKimiFetch(getAccess) as NonNullable<
       NonNullable<Parameters<typeof createAnthropic>[0]>["fetch"]
     >,

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   defaultInstanceIdForDriver,
@@ -71,13 +72,17 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       assert.strictEqual(result, undefined);
 
       const failure = messages.find(
-        (message): message is Record<string, unknown> =>
-          typeof message === "object" && message !== null && "path" in message,
+        (message): message is { path: string; errorTag: string } =>
+          Predicate.isObject(message) &&
+          "path" in message &&
+          Predicate.isString(message.path) &&
+          "errorTag" in message &&
+          Predicate.isString(message.errorTag),
       );
 
       assert.exists(failure);
       assert.strictEqual(failure.path, cachePath);
-      assert.strictEqual(typeof failure.errorTag, "string");
+      assert.typeOf(failure.errorTag, "string");
       assert.ok(!("cause" in failure));
       assert.ok(!("issues" in failure));
       assert.ok(!Object.values(failure).map(String).join("\n").includes(secretCacheValue));
@@ -258,13 +263,20 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       ],
     });
 
+    const {
+      instanceId: _legacyInstanceId,
+      driver: _legacyDriver,
+      ...legacySnapshot
+    } = fallbackCodex;
+
     const legacyCachedCodex = {
+      ...legacySnapshot,
       provider: ProviderDriverKind.make("codex"),
       enabled: true,
       installed: true,
       version: "1.0.0",
-      status: "ready",
-      auth: { status: "authenticated" },
+      status: "ready" as const,
+      auth: { status: "authenticated" as const },
       checkedAt: "2026-04-10T12:00:00.000Z",
       models: [
         {
@@ -276,7 +288,7 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       ],
       slashCommands: [],
       skills: [],
-    } as unknown as ServerProvider;
+    };
 
     const mismatchedCachedCodex = makeProvider(CODEX_DRIVER, {
       instanceId: ProviderInstanceId.make("codex_personal"),

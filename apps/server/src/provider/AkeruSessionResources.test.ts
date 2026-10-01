@@ -73,7 +73,7 @@ describe("AkeruSessionResources", () => {
 
   it("retains attribution while another chat for the same bot is active", async () => {
     const browserFailure = vi.fn();
-    let onFailure!: (error: unknown) => void;
+    let onFailure!: (cause: unknown) => void;
 
     const resources = new AkeruSessionResources({
       stateDir: stateDir(),
@@ -150,8 +150,15 @@ describe("AkeruSessionResources", () => {
     };
 
     const makeMcpManager = vi.fn(
-      (_projectDir: string, _configDirName?: string, _servers?: Record<string, unknown>) =>
-        manager as never,
+      (
+        _projectDir: string,
+        _configDirName?: string,
+        _servers?: Parameters<
+          NonNullable<
+            import("./AkeruSessionResources.ts").AkeruSessionResourcesOptions["makeMcpManager"]
+          >
+        >[2],
+      ) => manager as never,
     );
 
     const getPreviewMcpServerConfig = vi.fn(() => ({

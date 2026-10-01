@@ -292,7 +292,7 @@ describe("XAiAcpExtension", () => {
 
       const promptId = promptResult._meta?.promptId;
 
-      expect(typeof promptId).toBe("string");
+      expect(promptId).toBeTypeOf("string");
       expect(promptResult).toMatchObject({
         stopReason: "end_turn",
         _meta: {
@@ -326,7 +326,7 @@ describe("XAiAcpExtension", () => {
       });
 
       const secondPromptId = secondPromptResult._meta?.promptId;
-      expect(typeof secondPromptId).toBe("string");
+      expect(secondPromptId).toBeTypeOf("string");
       expect(secondPromptId).not.toBe("mock-stale-xai-prompt-1");
       expect(secondPromptResult).toMatchObject({
         stopReason: "end_turn",

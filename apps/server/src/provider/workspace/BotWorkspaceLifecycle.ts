@@ -1,3 +1,7 @@
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -17,34 +21,33 @@ export function wrap(
     provider,
     workspace,
     inspect: async () =>
-      workspace.status === "destroyed"
-        ? "missing"
-        : workspace.status === "paused"
-          ? "sleeping"
-          : "running",
+      Match.value(workspace.status).pipe(
+        Match.when("destroyed", () => "missing" as const),
+        Match.when("paused", () => "sleeping" as const),
+        Match.orElse(() => "running" as const),
+      ),
     wake: () => workspace.init(),
     sleep: () => workspace.stop(),
     destroy: () => workspace.destroy(),
   };
 }
 
+const decodeIdentity = Schema.decodeUnknownOption(
+  Schema.Struct({ provider: Schema.Literals(REMOTE_BOT_SANDBOXES), providerId: Schema.String }),
+);
+
 export async function readIdentity(path: string) {
   try {
-    const value = JSON.parse(await NodeFS.promises.readFile(path, "utf8")) as {
-      provider?: unknown;
-      providerId?: unknown;
-    };
+    const value = Option.getOrUndefined(
+      decodeIdentity(JSON.parse(await NodeFS.promises.readFile(path, "utf8"))),
+    );
 
-    if (
-      !REMOTE_BOT_SANDBOXES.includes(value.provider as RemoteBotSandbox) ||
-      typeof value.providerId !== "string" ||
-      !value.providerId
-    )
+    if (!value || !value.providerId)
       throw new Error(`Workspace identity file '${path}' is invalid.`);
 
-    return { provider: value.provider as RemoteBotSandbox, providerId: value.providerId };
+    return value;
   } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    if (Predicate.isObject(cause) && "code" in cause && cause.code === "ENOENT") return undefined;
     throw cause;
   }
 }

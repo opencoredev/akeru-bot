@@ -63,7 +63,7 @@ import * as AgentController from "./provider/Services/AgentController.ts";
 
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 
-import { makeManualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
+import { manualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
 
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 
@@ -379,7 +379,7 @@ export const buildAppUnderTest = (options?: {
             refreshInstance: () => Effect.succeed([]),
             getProviderMaintenanceCapabilitiesForInstance: (_instanceId, provider) =>
               Effect.succeed(
-                makeManualOnlyProviderMaintenanceCapabilities({ provider, packageName: null }),
+                manualOnlyProviderMaintenanceCapabilities({ provider, packageName: null }),
               ),
             setProviderMaintenanceActionState: () => Effect.succeed([]),
             streamChanges: Stream.empty,

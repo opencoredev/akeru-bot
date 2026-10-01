@@ -20,7 +20,10 @@ const childOptions = (timeout: Duration.Input) => ({
   timeoutMessage: "The delegation deadline expired.",
 });
 
-const waitForOpen = (waiters: { readonly get: (key: string) => unknown }, key: string) =>
+const waitForOpen = <Meta>(
+  waiters: { readonly get: (key: string) => Meta | undefined },
+  key: string,
+) =>
   Effect.gen(function* () {
     // The waiter registers synchronously once the forked fiber starts running.
     yield* Effect.yieldNow;

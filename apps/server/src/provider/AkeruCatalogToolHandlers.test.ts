@@ -1,3 +1,4 @@
+import { McpServerId, type AkeruToolInputSchemas } from "@akeru/contracts";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import { expect, it, vi } from "vite-plus/test";
@@ -33,12 +34,12 @@ describe("Akeru catalog MCP tool handlers", () => {
         return { text: "page" };
       },
       generateImage: async (input) => {
-        calls.push(`image:${(input as { prompt: string }).prompt}`);
+        calls.push(`image:${input.prompt}`);
 
         return { url: "https://img" };
       },
       addMcpServer: async (input) => {
-        calls.push(`add:${String((input as { serverId: string }).serverId)}`);
+        calls.push(`add:${input.serverId}`);
 
         return { added: true };
       },
@@ -70,7 +71,15 @@ describe("Akeru catalog MCP tool handlers", () => {
       input: { operation: "generate", prompt: "a cat" },
       emitProgress: vi.fn(),
     });
-    await handlers.AddMcpServer!({ input: { serverId: "one" }, emitProgress: vi.fn() });
+
+    const addMcpInput = {
+      serverId: McpServerId.make("one"),
+      name: "One",
+      transport: "stdio",
+      command: "example-mcp",
+    } satisfies (typeof AkeruToolInputSchemas.AddMcpServer)["Type"];
+
+    await handlers.AddMcpServer!({ input: addMcpInput, emitProgress: vi.fn() });
     await handlers.UninstallMcpServer!({ input: { serverId: "one" }, emitProgress: vi.fn() });
     await handlers.RemoveMcpAccount!({ input: { serverId: "one" }, emitProgress: vi.fn() });
     await handlers.RenameMcpAccount!({

@@ -18,7 +18,9 @@ import * as DateTime from "effect/DateTime";
 export interface AkeruChannelRuntimeOptions {
   readonly readSnapshot: () => Promise<OrchestrationReadModel>;
   readonly readThread?: (threadId: ThreadId) => Promise<OrchestrationThread | undefined>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+  readonly dispatch: (
+    command: OrchestrationCommand,
+  ) => Promise<{ readonly sequence: number } | void>;
   readonly now?: () => string;
   readonly id?: () => string;
   readonly supportsReactions?: (thread: OrchestrationThread) => boolean;

@@ -1,3 +1,5 @@
+import type { AkeruToolResult } from "./tools/AkeruToolTypes.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -11,14 +13,16 @@ const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 const MCP_CALL_TOOL_CONTENT = Symbol.for("mastra.mcp.callToolContent");
 
-function record(value: unknown): Readonly<Record<string, unknown>> | null {
-  return typeof value === "object" && value !== null
-    ? (value as Readonly<Record<string, unknown>>)
+function record(value: AkeruToolResult) {
+  return Predicate.isObjectOrArray(value) && value !== null
+    ? Array.isArray(value)
+      ? {}
+      : value
     : null;
 }
 
-function imageBytes(value: unknown): Buffer | null {
-  if (typeof value === "string") {
+function imageBytes(value: AkeruToolResult): Buffer | null {
+  if (Predicate.isString(value)) {
     const encoded = value.startsWith("data:image/png;base64,")
       ? value.slice("data:image/png;base64,".length)
       : value;
@@ -29,12 +33,12 @@ function imageBytes(value: unknown): Buffer | null {
   return value instanceof Uint8Array ? Buffer.from(value) : null;
 }
 
-function findPngImage(result: unknown): Buffer | null {
+function findPngImage(result: AkeruToolResult): Buffer | null {
   const root = record(result);
 
   if (!root) return null;
 
-  const hiddenContent = Reflect.get(root, MCP_CALL_TOOL_CONTENT) as unknown;
+  const hiddenContent = root[MCP_CALL_TOOL_CONTENT];
 
   const content = Array.isArray(root.content)
     ? root.content
@@ -81,7 +85,7 @@ export function persistAkeruPreviewSnapshot(input: {
 
   const structuredResult =
     record(root?.structuredContent) ??
-    (root && Array.isArray(Reflect.get(root, MCP_CALL_TOOL_CONTENT)) ? root : {});
+    (root && Array.isArray(root[MCP_CALL_TOOL_CONTENT]) ? root : {});
 
   if (!bytes || !validPng(bytes)) {
     return {

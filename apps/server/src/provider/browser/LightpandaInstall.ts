@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import type { WorkspaceSandbox } from "@mastra/core/workspace";
@@ -33,7 +34,12 @@ export type LightpandaPlatform = keyof typeof LIGHTPANDA_RELEASES;
 export function platformFromUname(system: string, machine: string): LightpandaPlatform {
   const os = system.trim().toLowerCase();
   const arch = machine.trim().toLowerCase();
-  const normalizedOs = os === "darwin" ? "darwin" : os === "linux" ? "linux" : null;
+
+  const normalizedOs = Match.value(os).pipe(
+    Match.when("darwin", () => "darwin" as const),
+    Match.when("linux", () => "linux" as const),
+    Match.orElse(() => null),
+  );
 
   const normalizedArch =
     arch === "arm64" || arch === "aarch64"
@@ -48,6 +54,7 @@ export function platformFromUname(system: string, machine: string): LightpandaPl
     throw new Error(`The sandbox browser does not support ${system.trim()} ${machine.trim()}.`);
   }
 
+  // SAFETY: Membership in LIGHTPANDA_RELEASES above narrows the computed key to a supported platform.
   return key as LightpandaPlatform;
 }
 

@@ -21,7 +21,7 @@ import {
 import type { ProviderDriver } from "../ProviderDriver.ts";
 import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { defaultProviderContinuationIdentity } from "../ProviderDriver.ts";
-import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import { manualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("opencodeGo");
 
@@ -67,15 +67,15 @@ export const OPEN_CODE_GO_MODELS = [
 function models(customModels: readonly string[]): ServerProviderModel[] {
   const modelIds = [...OPEN_CODE_GO_MODELS, ...customModels.map((model) => model.trim())];
 
-  return [...new Set(modelIds)]
-    .filter((model) => model.length > 0)
-    .map((model, index) => ({
-      slug: model,
-      name: model,
-      isCustom: !OPEN_CODE_GO_MODELS.includes(model as (typeof OPEN_CODE_GO_MODELS)[number]),
-      ...(index === 0 ? { isDefault: true } : {}),
-      capabilities: null,
-    }));
+  const uniqueModels = [...new Set(modelIds)].filter((model) => model.length > 0);
+
+  return uniqueModels.map((model, index) => ({
+    slug: model,
+    name: model,
+    isCustom: !OPEN_CODE_GO_MODELS.some((builtIn) => builtIn === model),
+    ...(index === 0 ? { isDefault: true } : {}),
+    capabilities: null,
+  }));
 }
 
 export type OpenCodeGoDriverEnv = ServerConfig | FileSystem.FileSystem | Path.Path;
@@ -152,7 +152,7 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
         adapter: undefined,
         textGeneration: undefined,
         snapshot: {
-          maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+          maintenanceCapabilities: manualOnlyProviderMaintenanceCapabilities({
             provider: DRIVER_KIND,
             packageName: null,
           }),

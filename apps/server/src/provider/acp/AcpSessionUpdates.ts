@@ -1,3 +1,5 @@
+import * as Predicate from "effect/Predicate";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
@@ -11,6 +13,8 @@ import {
 } from "./AcpRuntimeTypes.ts";
 
 import { type AcpSessionRuntimeEvent } from "./AcpSessionEventTypes.ts";
+
+const sessionEvents = Data.taggedEnum<AcpSessionRuntimeEvent>();
 
 export interface AcpToolCallTrackedState {
   readonly state: AcpToolCallState;
@@ -53,7 +57,7 @@ export const handleSessionUpdate = ({
     }
 
     for (const event of parsed.events) {
-      if (event._tag === "ToolCallUpdated") {
+      if (Predicate.isTagged(event, "ToolCallUpdated")) {
         yield* closeActiveAssistantSegment({
           queue,
           assistantSegmentRef,
@@ -92,15 +96,14 @@ export const handleSessionUpdate = ({
           continue;
         }
 
-        yield* Queue.offer(queue, {
-          _tag: "ToolCallUpdated",
-          toolCall: merged,
-          rawPayload: event.rawPayload,
-        });
+        yield* Queue.offer(
+          queue,
+          sessionEvents.ToolCallUpdated({ toolCall: merged, rawPayload: event.rawPayload }),
+        );
         continue;
       }
 
-      if (event._tag === "ContentDelta") {
+      if (Predicate.isTagged(event, "ContentDelta")) {
         if (event.text.trim().length === 0) {
           const assistantSegmentState = yield* Ref.get(assistantSegmentRef);
 
@@ -171,10 +174,10 @@ export const ensureActiveAssistantSegment = ({
       return [
         {
           itemId,
-          startedEvent: {
-            _tag: "AssistantItemStarted",
-            itemId,
-          } satisfies Extract<AcpParsedSessionEvent, { readonly _tag: "AssistantItemStarted" }>,
+          startedEvent: sessionEvents.AssistantItemStarted({ itemId }) satisfies Extract<
+            AcpParsedSessionEvent,
+            { readonly _tag: "AssistantItemStarted" }
+          >,
         },
         {
           nextSegmentIndex: current.nextSegmentIndex + 1,
@@ -203,10 +206,9 @@ export const closeActiveAssistantSegment = ({
     }
 
     return [
-      {
-        _tag: "AssistantItemCompleted",
+      sessionEvents.AssistantItemCompleted({
         itemId: current.activeItemId,
-      } satisfies AcpParsedSessionEvent,
+      }) satisfies AcpParsedSessionEvent,
       {
         nextSegmentIndex: current.nextSegmentIndex,
       } satisfies AcpAssistantSegmentState,

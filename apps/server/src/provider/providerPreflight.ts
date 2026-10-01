@@ -50,13 +50,15 @@ export interface ProviderPreflightVerdict {
   readonly repairAction?: "providers" | "usage";
 }
 
-const SUBSCRIPTION_PROVIDER_BY_DRIVER: Record<string, SubscriptionProviderId> = {
-  codex: "openai-codex",
-  claudeAgent: "anthropic",
-  grok: "xai",
-  kimi: "kimi-for-coding",
-  opencodeGo: "opencode-go",
-};
+const SUBSCRIPTION_PROVIDER_BY_DRIVER = new Map<string, SubscriptionProviderId>(
+  Object.entries({
+    codex: "openai-codex",
+    claudeAgent: "anthropic",
+    grok: "xai",
+    kimi: "kimi-for-coding",
+    opencodeGo: "opencode-go",
+  } satisfies Record<string, SubscriptionProviderId>),
+);
 
 /**
  * Decides whether a turn can start on a provider instance before any work is
@@ -108,7 +110,7 @@ export const preflightProvider = (input: {
     };
   }
 
-  const subscriptionId = SUBSCRIPTION_PROVIDER_BY_DRIVER[provider.driver];
+  const subscriptionId = SUBSCRIPTION_PROVIDER_BY_DRIVER.get(provider.driver);
 
   const subscription = subscriptionId
     ? (input.subscriptionStatusForInstance?.(subscriptionId, provider.instanceId) ??

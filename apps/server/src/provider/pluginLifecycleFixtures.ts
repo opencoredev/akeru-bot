@@ -1,25 +1,32 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
-import * as NodeNet from "node:net";
 
-type JsonRpcMessage = {
-  readonly id?: unknown;
-  readonly method?: string;
-  readonly params?: unknown;
-};
+const FixtureParams = Schema.Struct({
+  protocolVersion: Schema.optional(Schema.String),
+  arguments: Schema.optional(Schema.Struct({ text: Schema.optional(Schema.String) })),
+});
 
-type FixtureHandler = (params: unknown) => unknown;
+const FixtureMessage = Schema.Struct({
+  id: Schema.optional(Schema.Json),
+  method: Schema.optional(Schema.String),
+  params: Schema.optional(FixtureParams),
+});
 
-const initialize: FixtureHandler = (params) => ({
-  protocolVersion:
-    typeof params === "object" && params !== null && "protocolVersion" in params
-      ? (params as { protocolVersion: string }).protocolVersion
-      : "2025-03-26",
+const decodeFixtureMessage = Schema.decodeUnknownSync(FixtureMessage);
+
+type JsonRpcMessage = typeof FixtureMessage.Type;
+
+type FixtureParams = typeof FixtureParams.Type;
+
+const initialize = (params: FixtureParams | undefined) => ({
+  protocolVersion: params?.protocolVersion ?? "2025-03-26",
   capabilities: { tools: { listChanged: false } },
   serverInfo: { name: "lifecycle-fixture", version: "1.0.0" },
 });
 
-const toolsList: FixtureHandler = () => ({
+const toolsList = () => ({
   tools: [
     {
       name: "echo",
@@ -30,24 +37,28 @@ const toolsList: FixtureHandler = () => ({
   ],
 });
 
-const toolsCall: FixtureHandler = (params) => ({
+const toolsCall = (params: FixtureParams | undefined) => ({
   content: [
     {
       type: "text",
-      text: `echo:${(params as { arguments?: { text?: string } })?.arguments?.text ?? ""}`,
+      text: `echo:${params?.arguments?.text ?? ""}`,
     },
   ],
 });
 
-const METHODS: Record<string, FixtureHandler> = {
-  initialize,
-  "tools/list": toolsList,
-  "tools/call": toolsCall,
-};
+type FixtureHandler = (
+  params: FixtureParams | undefined,
+) => ReturnType<typeof initialize> | ReturnType<typeof toolsList> | ReturnType<typeof toolsCall>;
+
+const METHODS = new Map<string, FixtureHandler>([
+  ["initialize", initialize],
+  ["tools/list", toolsList],
+  ["tools/call", toolsCall],
+]);
 
 function respond(message: JsonRpcMessage) {
   if (message.id === undefined) return undefined;
-  const handler = METHODS[message.method ?? ""];
+  const handler = METHODS.get(message.method ?? "");
 
   if (!handler) {
     return {
@@ -92,7 +103,7 @@ export async function startHttpMcpFixture(
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", () => {
-      const reply = respond(JSON.parse(body));
+      const reply = respond(decodeFixtureMessage(JSON.parse(body)));
 
       if (reply === undefined) {
         response.writeHead(202).end();
@@ -106,7 +117,10 @@ export async function startHttpMcpFixture(
   });
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const port = (server.address() as NodeNet.AddressInfo).port;
+  const address = server.address();
+
+  if (!address || Predicate.isString(address)) throw new Error("Fixture server has no port.");
+  const port = address.port;
 
   return {
     url: `http://127.0.0.1:${port}/mcp`,

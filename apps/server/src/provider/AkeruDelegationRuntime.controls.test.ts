@@ -59,7 +59,7 @@ describe("AkeruDelegationRuntime", () => {
                         delegation: {
                           ...test.state.delegations.find(
                             (entry) =>
-                              entry.phase._tag !== "Queued" &&
+                              "childThreadId" in entry.phase &&
                               entry.phase.childThreadId === childThread,
                           )!,
                           phase: {

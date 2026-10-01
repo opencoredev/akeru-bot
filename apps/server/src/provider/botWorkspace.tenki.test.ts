@@ -1,3 +1,4 @@
+import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -11,7 +12,9 @@ const sdk = vi.hoisted(() => ({ create: vi.fn(), get: vi.fn(), constructor: vi.f
 
 vi.mock("@tenkicloud/sandbox", () => ({
   TenkiSandbox: class {
-    constructor(options: unknown) {
+    constructor(
+      options: ConstructorParameters<typeof import("@tenkicloud/sandbox").TenkiSandbox>[0],
+    ) {
       sdk.constructor(options);
     }
     create = sdk.create;
@@ -46,7 +49,7 @@ function mockSession(state: SessionState = "RUNNING") {
     })),
   };
 
-  return { session, adapter: tenki(session as unknown as Session) };
+  return { session, adapter: tenki(partialSdkFixture<Session>(session)) };
 }
 
 describe("Tenki workspace", () => {

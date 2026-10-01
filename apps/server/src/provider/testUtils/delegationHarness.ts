@@ -180,7 +180,7 @@ export const parent = (overrides: Partial<AkeruDelegationParent> = {}): AkeruDel
   ...overrides,
 });
 
-export const request = (overrides: Record<string, unknown> = {}) => ({
+export const request = <Overrides extends object>(overrides?: Overrides) => ({
   botId: CHILD_BOT_ID,
   task: "Research the answer.",
   expectedResult: "A concise answer.",
@@ -204,7 +204,7 @@ export function harness(
 
   const commands: OrchestrationCommand[] = [];
   const interrupts: Array<{ threadId: ThreadId; turnId: TurnId | null }> = [];
-  const usage: Array<Record<string, unknown>> = [];
+  const usage: Array<Parameters<NonNullable<AkeruDelegationRuntimeOptions["recordUsage"]>>[0]> = [];
   let nextId = 0;
 
   // Runs every command through the real decider and projects its events back
@@ -241,9 +241,11 @@ export function harness(
     );
   });
 
-  const recordUsage = vi.fn(async (entry: Record<string, unknown>) => {
-    usage.push(entry);
-  });
+  const recordUsage = vi.fn(
+    async (entry: Parameters<NonNullable<AkeruDelegationRuntimeOptions["recordUsage"]>>[0]) => {
+      usage.push(entry);
+    },
+  );
 
   const runtime = createAkeruDelegationRuntime({
     readSnapshot: async () => state as OrchestrationReadModel,

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
 import type { CheckpointServiceError } from "../checkpointing/Errors.ts";
@@ -278,13 +279,13 @@ const hasReadableDetail = Schema.is(
  * class name, operation prefix, and stack so chats and bot work cards never
  * show server paths. Log the full cause separately.
  */
-export function readableErrorDetail(error: unknown): string {
-  if (hasReadableIssue(error)) return error.issue;
+export function readableErrorDetail(cause: unknown): string {
+  if (hasReadableIssue(cause)) return cause.issue;
 
-  if (hasReadableDetail(error)) return error.detail;
+  if (hasReadableDetail(cause)) return cause.detail;
 
   const message =
-    error instanceof Error ? error.message : typeof error === "string" ? error : undefined;
+    cause instanceof Error ? cause.message : Predicate.isString(cause) ? cause : undefined;
 
   const firstLine = message
     ?.split("\n")

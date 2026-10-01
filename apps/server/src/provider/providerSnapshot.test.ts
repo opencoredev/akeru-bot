@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "@effect/vitest";
 import { type ModelCapabilities, ProviderDriverKind } from "@akeru/contracts";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
@@ -229,7 +230,7 @@ describe("ProviderCommandNotFoundError", () => {
         Effect.flip,
       );
 
-      if (error._tag !== "ProviderCommandNotFoundError") {
+      if (!Predicate.isTagged(error, "ProviderCommandNotFoundError")) {
         throw new Error(`Unexpected error: ${error._tag}`);
       }
 
