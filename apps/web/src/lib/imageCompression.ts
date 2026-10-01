@@ -227,8 +227,8 @@ function fileNameForMimeType(name: string, mimeType: string): string {
 
 function canRecompress(): boolean {
   return (
-    Predicate.isFunction(createImageBitmap) &&
-    (Predicate.isFunction(OffscreenCanvas) || typeof document !== "undefined")
+    Predicate.isFunction(globalThis.createImageBitmap) &&
+    (Predicate.isFunction(globalThis.OffscreenCanvas) || typeof document !== "undefined")
   );
 }
 
@@ -238,7 +238,7 @@ interface Canvas2D {
 }
 
 function createCanvas(width: number, height: number): Canvas2D | null {
-  if (Predicate.isFunction(OffscreenCanvas)) {
+  if (Predicate.isFunction(globalThis.OffscreenCanvas)) {
     const canvas = new OffscreenCanvas(width, height);
     const context = canvas.getContext("2d");
 

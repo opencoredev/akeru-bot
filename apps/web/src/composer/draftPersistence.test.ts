@@ -40,6 +40,7 @@ describe("persisted composer provider selection recovery", () => {
 
   it("ignores invalid provider keys without discarding valid selections", () => {
     const selections = { codex: codexSelection, "invalid key": codexSelection };
+
     const normalized = normalizeCurrentPersistedComposerDraftStoreState({
       draftsByThreadKey: {
         thread: { modelSelectionByProvider: selections, activeProvider: "codex" },

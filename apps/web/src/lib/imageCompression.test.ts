@@ -459,7 +459,6 @@ describe("HEIC attachment preparation", () => {
   });
 });
 
-
 describe("compression with missing browser API bindings", () => {
   it("returns too-large when createImageBitmap is absent", async () => {
     vi.stubGlobal("createImageBitmap", undefined);
@@ -486,17 +485,22 @@ describe("compression with missing browser API bindings", () => {
     const { close } = stubCanvasPipeline(() => 4);
     Reflect.deleteProperty(globalThis, "OffscreenCanvas");
     const drawImage = vi.fn();
+
     const createElement = vi.fn(() => ({
       width: 0,
       height: 0,
       getContext: () => ({ drawImage }),
       toDataURL: (type: string) => `data:${type};base64,AQIDBA==`,
     }));
+
     vi.stubGlobal("document", { createElement });
 
-    const result = await compressImageToByteLimit(makeFile(100), 10);
+    const result = await compressImageToByteLimit(makeFile(100), 30);
 
     expect(result.ok).toBe(true);
+    expect(result.ok && result.recompressed).toBe(true);
+    expect(result.ok && result.file.size).toBe(4);
+    expect(result.ok && result.file.type).toBe("image/webp");
     expect(createElement).toHaveBeenCalledWith("canvas");
     expect(drawImage).toHaveBeenCalled();
     expect(close).toHaveBeenCalled();

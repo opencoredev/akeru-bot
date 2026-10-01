@@ -6,6 +6,7 @@ import {
   ThreadId,
 } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 import { storedField } from "../lib/persistedSchema";
 import { PersistedComposerImageAttachment } from "./draftPersistenceSchemas";
 
@@ -46,10 +47,27 @@ const StoredTerminalContext = Schema.Struct({
   lineEnd: Schema.Number.check(Schema.isFinite()),
 });
 
-const storedModelSelections = storedField(
-  Schema.NullOr(Schema.Record(ProviderInstanceId, ModelSelection)),
-  null,
+const isProviderInstanceId = Schema.is(ProviderInstanceId);
+
+const recoveredModelSelections = Schema.Record(
+  Schema.String,
+  storedField(Schema.NullOr(ModelSelection), null),
+).pipe(
+  Schema.decodeTo(
+    Schema.toType(Schema.Record(ProviderInstanceId, ModelSelection)),
+    SchemaTransformation.transform({
+      decode: (selections) =>
+        Object.fromEntries(
+          Object.entries(selections).flatMap(([key, selection]) =>
+            isProviderInstanceId(key) && selection !== null ? [[key, selection] as const] : [],
+          ),
+        ),
+      encode: (selections) => selections,
+    }),
+  ),
 );
+
+const storedModelSelections = storedField(Schema.NullOr(recoveredModelSelections), null);
 
 export const StoredDraftThread = Schema.Struct({
   threadId: storedField(Schema.NullOr(ThreadId), null),
