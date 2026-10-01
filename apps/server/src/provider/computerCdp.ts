@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { Schema } from "effect";
 import type { AkeruBrowserEndpoint } from "./botWorkspace.ts";
 
@@ -192,7 +193,7 @@ export class ComputerCdp {
       throw new Error("Unsupported graphical browser operation.");
     let target: { nodeId: number } | { backendNodeId: number };
 
-    if (typeof input.selector === "string") {
+    if (Predicate.isString(input.selector)) {
       const document = decodeDocument(await this.request("DOM.getDocument"));
       target = decodeNode(
         await this.request("DOM.querySelector", {
@@ -202,7 +203,7 @@ export class ComputerCdp {
       );
 
       if (target.nodeId === 0) throw new Error("Graphical browser selector did not match.");
-    } else if (typeof input.backendNodeId === "number")
+    } else if (Predicate.isNumber(input.backendNodeId))
       target = { backendNodeId: input.backendNodeId };
     else throw new Error("Graphical browser target is required.");
     await this.request("DOM.scrollIntoViewIfNeeded", target);

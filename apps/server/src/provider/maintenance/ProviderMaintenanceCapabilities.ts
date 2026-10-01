@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { ProviderDriverKind } from "@akeru/contracts";
 import { resolveCommandPath } from "@akeru/shared/shell";
@@ -7,7 +8,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 
 export function nonEmptyString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+  return Predicate.isString(value) && value.trim().length > 0 ? value.trim() : null;
 }
 
 export const compactEnv = (input: Record<string, Option.Option<string>>): NodeJS.ProcessEnv =>

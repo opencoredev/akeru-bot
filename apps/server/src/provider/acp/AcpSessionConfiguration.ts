@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type * as EffectAcpSchema from "effect-acp/schema";
 
 export function formatConfigOptionValue(value: string | boolean): string {
@@ -24,7 +25,7 @@ export function configOptionCurrentValueMatches(
     return currentValue === value;
   }
 
-  if (typeof currentValue !== "string") {
+  if (!Predicate.isString(currentValue)) {
     return false;
   }
 

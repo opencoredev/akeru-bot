@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -37,7 +38,7 @@ export async function readIdentity(path: string) {
 
     if (
       !REMOTE_BOT_SANDBOXES.includes(value.provider as RemoteBotSandbox) ||
-      typeof value.providerId !== "string" ||
+      !Predicate.isString(value.providerId) ||
       !value.providerId
     )
       throw new Error(`Workspace identity file '${path}' is invalid.`);

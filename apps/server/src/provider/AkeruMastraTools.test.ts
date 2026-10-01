@@ -1,16 +1,17 @@
+import { toolRuntimeFixture } from "./test-support/toolRuntimeFixture.ts";
 import { AKERU_TOOL_CATALOG } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { createAkeruToolRuntime, type AkeruToolRuntime } from "./AkeruToolRuntime.ts";
+import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 
 describe("createAkeruMastraTools", () => {
   it("builds every registered Akeru tool schema", () => {
-    const runtime = {
+    const runtime = toolRuntimeFixture({
       toolsForThread: () => AKERU_TOOL_CATALOG,
       requiresApproval: vi.fn(async () => false),
       execute: vi.fn(async () => ({ ok: true })),
-    } as unknown as AkeruToolRuntime;
+    });
 
     const tools = createAkeruMastraTools("thread-all-tools", runtime);
 
@@ -20,11 +21,11 @@ describe("createAkeruMastraTools", () => {
   it("passes an exact call identity and approval mode to the runtime", async () => {
     const execute = vi.fn(async () => ({ ok: true }));
 
-    const runtime = {
+    const runtime = toolRuntimeFixture({
       toolsForThread: () => [AKERU_TOOL_CATALOG[0]!],
       requiresApproval: vi.fn(async () => true),
       execute,
-    } as unknown as AkeruToolRuntime;
+    });
 
     const shell = createAkeruMastraTools("thread-1", runtime).Shell as {
       readonly execute?: (input: unknown, context: unknown) => Promise<unknown>;

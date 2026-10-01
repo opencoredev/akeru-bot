@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
 import * as NodeOS from "node:os";
@@ -45,7 +46,7 @@ describe.runIf(process.env.T3_BOT_BROWSER_INTEGRATION === "1")(
       });
       const address = server.address();
 
-      if (!address || typeof address === "string") throw new Error("test server has no port");
+      if (!address || Predicate.isString(address)) throw new Error("test server has no port");
 
       const workspace = new Workspace({
         filesystem: new LocalFilesystem({ basePath: process.cwd() }),

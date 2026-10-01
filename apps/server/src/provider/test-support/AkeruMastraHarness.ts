@@ -1,3 +1,5 @@
+import { toolRuntimeFixture } from "./toolRuntimeFixture.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
@@ -14,7 +16,6 @@ import {
   type AkeruMastraHarness,
   type AkeruMastraHarnessOptions,
 } from "../AkeruMastraHarness.ts";
-import type { AkeruToolRuntime } from "../AkeruToolRuntime.ts";
 
 export type OpenHarness = (
   options: AkeruMastraHarnessOptions,
@@ -51,7 +52,7 @@ export function makeAkeruMastraHarnessTestSupport() {
       authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
       memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
       getThreadTools: () => ({}),
-      toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
       ...options,
     });
 
@@ -122,7 +123,7 @@ export function makeAkeruMastraHarnessTestSupport() {
 
             const value = Reflect.get(target, property, receiver);
 
-            return typeof value === "function" ? value.bind(target) : value;
+            return Predicate.isFunction(value) ? value.bind(target) : value;
           },
         });
       });

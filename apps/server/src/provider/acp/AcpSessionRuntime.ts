@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -291,7 +293,7 @@ export const make = (
 
     const assistantSegmentRef = yield* Ref.make<AcpAssistantSegmentState>({ nextSegmentIndex: 0 });
     const configOptionsRef = yield* Ref.make(sessionConfigOptionsFromSetup(undefined));
-    const startStateRef = yield* Ref.make<AcpStartState>({ _tag: "NotStarted" });
+    const startStateRef = yield* Ref.make<AcpStartState>(startStates.NotStarted());
     const promptSerializationSemaphore = yield* Semaphore.make(1);
 
     const activePromptFiberRef = yield* Ref.make<
@@ -396,7 +398,7 @@ export const make = (
         // One runtime projects one root ACP session. Child-session updates need
         // explicit lineage routing and must never be flattened into this stream.
         if (
-          startState._tag !== "Started" ||
+          !Predicate.isTagged(startState, "Started") ||
           notification.sessionId !== startState.result.sessionId
         ) {
           return;
@@ -430,7 +432,7 @@ export const make = (
     const getStartedState = Effect.gen(function* () {
       const state = yield* Ref.get(startStateRef);
 
-      if (state._tag === "Started") {
+      if (Predicate.isTagged(state, "Started")) {
         return state.result;
       }
 
@@ -452,7 +454,7 @@ export const make = (
         }
 
         if (configOption.type === "boolean") {
-          if (typeof value === "boolean") {
+          if (Predicate.isBoolean(value)) {
             return;
           }
 
@@ -467,7 +469,7 @@ export const make = (
           });
         }
 
-        if (typeof value !== "string") {
+        if (!Predicate.isString(value)) {
           return yield* new EffectAcpErrors.AcpRequestError({
             code: -32602,
             errorMessage: `Invalid value ${formatConfigOptionValue(value)} for session config option "${configOption.id}": expected string`,
@@ -526,19 +528,18 @@ export const make = (
                 } satisfies EffectAcpSchema.SetSessionConfigOptionResponse);
               }
 
-              const requestPayload =
-                typeof value === "boolean"
-                  ? ({
-                      sessionId: started.sessionId,
-                      configId,
-                      type: "boolean",
-                      value,
-                    } satisfies EffectAcpSchema.SetSessionConfigOptionRequest)
-                  : ({
-                      sessionId: started.sessionId,
-                      configId,
-                      value: String(value),
-                    } satisfies EffectAcpSchema.SetSessionConfigOptionRequest);
+              const requestPayload = Predicate.isBoolean(value)
+                ? ({
+                    sessionId: started.sessionId,
+                    configId,
+                    type: "boolean",
+                    value,
+                  } satisfies EffectAcpSchema.SetSessionConfigOptionRequest)
+                : ({
+                    sessionId: started.sessionId,
+                    configId,
+                    value: String(value),
+                  } satisfies EffectAcpSchema.SetSessionConfigOptionRequest);
 
               return runLoggedRequest(
                 "session/set_config_option",
@@ -704,17 +705,17 @@ export const make = (
             return [
               startOnce.pipe(
                 Effect.tap((result) =>
-                  Ref.set(startStateRef, { _tag: "Started", result }).pipe(
+                  Ref.set(startStateRef, startStates.Started({ result })).pipe(
                     Effect.andThen(Deferred.succeed(deferred, result)),
                   ),
                 ),
                 Effect.onError((cause) =>
                   Deferred.failCause(deferred, cause).pipe(
-                    Effect.andThen(Ref.set(startStateRef, { _tag: "NotStarted" })),
+                    Effect.andThen(Ref.set(startStateRef, startStates.NotStarted())),
                   ),
                 ),
               ),
-              { _tag: "Starting", deferred } satisfies AcpStartState,
+              startStates.Starting({ deferred }) satisfies AcpStartState,
             ] as const;
         }
       });
@@ -743,10 +744,7 @@ export const make = (
       getEvents: () => Stream.fromQueue(eventQueue),
       drainEvents: Effect.gen(function* () {
         const acknowledge = yield* Deferred.make<void>();
-        yield* Queue.offer(eventQueue, {
-          _tag: "EventStreamBarrier",
-          acknowledge,
-        });
+        yield* Queue.offer(eventQueue, sessionEvents.EventStreamBarrier({ acknowledge }));
         yield* Deferred.await(acknowledge);
       }),
       getModeState: Ref.get(modeStateRef),
@@ -869,3 +867,7 @@ export {
   type AcpSessionEventStreamBarrier,
   type AcpSessionRuntimeEvent,
 } from "./AcpSessionEventTypes.ts";
+
+const startStates = Data.taggedEnum<AcpStartState>();
+
+const sessionEvents = Data.taggedEnum<AcpSessionRuntimeEvent>();

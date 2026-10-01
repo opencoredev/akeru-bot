@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   defaultInstanceIdForDriver,
@@ -72,12 +73,12 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
 
       const failure = messages.find(
         (message): message is Record<string, unknown> =>
-          typeof message === "object" && message !== null && "path" in message,
+          Predicate.isObjectOrArray(message) && message !== null && "path" in message,
       );
 
       assert.exists(failure);
       assert.strictEqual(failure.path, cachePath);
-      assert.strictEqual(typeof failure.errorTag, "string");
+      assert.typeOf(failure.errorTag, "string");
       assert.ok(!("cause" in failure));
       assert.ok(!("issues" in failure));
       assert.ok(!Object.values(failure).map(String).join("\n").includes(secretCacheValue));

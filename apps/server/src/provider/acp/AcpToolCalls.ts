@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type * as EffectAcpSchema from "effect-acp/schema";
 import { deriveToolActivityPresentation } from "@akeru/shared/toolActivity";
 import type { ToolLifecycleItemType } from "@akeru/contracts";
@@ -30,7 +31,7 @@ export function normalizeToolCallStatus(
 }
 
 export function normalizeCommandValue(value: unknown): string | undefined {
-  if (typeof value === "string" && value.trim().length > 0) {
+  if (Predicate.isString(value) && value.trim().length > 0) {
     return value.trim();
   }
 
@@ -41,7 +42,7 @@ export function normalizeCommandValue(value: unknown): string | undefined {
   const parts: Array<string> = [];
 
   for (const entry of value) {
-    if (typeof entry === "string") {
+    if (Predicate.isString(entry)) {
       const part = entry.trim();
 
       if (part.length > 0) {
@@ -74,7 +75,7 @@ export function extractToolCallCommand(
       return directCommand;
     }
 
-    const executable = typeof rawInput.executable === "string" ? rawInput.executable.trim() : "";
+    const executable = Predicate.isString(rawInput.executable) ? rawInput.executable.trim() : "";
     const args = normalizeCommandValue(rawInput.args);
 
     if (executable && args) {
@@ -127,7 +128,7 @@ export function boundToolCallRawOutput(rawOutput: unknown): unknown {
   for (const field of RAW_OUTPUT_TEXT_FIELDS) {
     const value = rawOutput[field];
 
-    if (typeof value === "string" && value.length > TOOL_CALL_CONTENT_MAX_CHARS) {
+    if (Predicate.isString(value) && value.length > TOOL_CALL_CONTENT_MAX_CHARS) {
       bounded[field] = boundToolCallOutputText(value);
       changed = true;
     }
@@ -203,7 +204,7 @@ export function extractTextContentFromToolCallContent(
 }
 
 export function normalizeToolKind(kind: unknown): string | undefined {
-  return typeof kind === "string" && kind.trim().length > 0 ? kind.trim() : undefined;
+  return Predicate.isString(kind) && kind.trim().length > 0 ? kind.trim() : undefined;
 }
 
 export function canonicalItemTypeFromAcpToolKind(kind: string | undefined): ToolLifecycleItemType {
@@ -337,7 +338,7 @@ export function mergeToolCallState(
   previous: AcpToolCallState | undefined,
   next: AcpToolCallState,
 ): AcpToolCallState {
-  const nextKind = typeof next.data.kind === "string" ? next.data.kind : undefined;
+  const nextKind = Predicate.isString(next.data.kind) ? next.data.kind : undefined;
   const kind = nextKind ?? previous?.kind;
   const title = next.title ?? previous?.title;
   const status = next.status ?? previous?.status;

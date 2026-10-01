@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { SharedBotBrowsers } from "./resources/SharedBotBrowsers.ts";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -297,7 +298,7 @@ export class AkeruSessionResources {
           configs[CODEX_COMPUTER_USE_SERVER_ID] = config;
           const temporaryDirectory = config.env?.TMPDIR;
 
-          if (typeof temporaryDirectory === "string") {
+          if (Predicate.isString(temporaryDirectory)) {
             this.computerUseTemporaryDirectories.set(key, temporaryDirectory);
           }
         }
@@ -385,7 +386,7 @@ export class AkeruSessionResources {
 
           const execute = Reflect.get(tool, "execute") as unknown;
 
-          if (!isCodexComputerUseTool(name) || typeof execute !== "function") {
+          if (!isCodexComputerUseTool(name) || !Predicate.isFunction(execute)) {
             return [exposedName, tool];
           }
 
@@ -418,9 +419,9 @@ export class AkeruSessionResources {
   getMcpManagerSessionsForServer(
     serverId: string,
   ): readonly { readonly threadId: string; readonly manager: McpManager }[] {
-    return [...this.mcpManagers.entries()]
-      .filter(([, manager]) => Object.hasOwn(manager.getConfig().mcpServers ?? {}, serverId))
-      .map(([threadId, manager]) => ({ threadId, manager }));
+    return [...this.mcpManagers.entries()].flatMap(([threadId, manager]) =>
+      Object.hasOwn(manager.getConfig().mcpServers ?? {}, serverId) ? [{ threadId, manager }] : [],
+    );
   }
 
   getWorkspace(threadId: string): Workspace | undefined {

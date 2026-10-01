@@ -5,6 +5,7 @@ import { createAkeruDelegationDelivery } from "./delegation/AkeruDelegationDeliv
 import * as NodeCrypto from "node:crypto";
 import * as DateTime from "effect/DateTime";
 import {
+  AkeruDelegationPhase,
   AKERU_DELEGATION_CONTEXT_MAX_CHARS,
   AKERU_DELEGATION_MAX_CONCURRENCY,
   AKERU_DELEGATION_MAX_DEPTH,
@@ -100,15 +101,14 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
 
     const failed: AkeruDelegationRecord = {
       ...delegation,
-      phase: {
-        _tag: "Failed",
+      phase: AkeruDelegationPhase.cases.Failed.make({
         childThreadId: phaseChildThreadId(delegation),
         childTurnId: phaseChildTurnId(delegation),
         startedAt: phaseStartedAt(delegation),
         completedAt,
         failure: { failureCode, message },
         acknowledgedAt: null,
-      },
+      }),
       updatedAt: completedAt,
     };
 
@@ -237,7 +237,7 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       trigger: origin?.trigger ?? "bot",
       createdAt,
       updatedAt: createdAt,
-      phase: { _tag: "Queued" },
+      phase: AkeruDelegationPhase.cases.Queued.make({}),
     };
 
     try {
@@ -258,7 +258,12 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
     const startedAt = now();
     delegation = {
       ...delegation,
-      phase: { _tag: "Running", childThreadId, childTurnId: null, startedAt, progress: null },
+      phase: AkeruDelegationPhase.cases.Running.make({
+        childThreadId,
+        childTurnId: null,
+        startedAt,
+        progress: null,
+      }),
       updatedAt: startedAt,
     };
     const byParent = activeByParent.get(parent.threadId) ?? new Map();
@@ -349,13 +354,12 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           if (outcome.state === "blocked") {
             const blocked: AkeruDelegationRecord = {
               ...record,
-              phase: {
-                _tag: "Blocked",
+              phase: AkeruDelegationPhase.cases.Blocked.make({
                 childThreadId,
                 childTurnId: outcome.turnId,
                 startedAt,
                 reason: outcome.error ?? "The bot is blocked.",
-              },
+              }),
               updatedAt: now(),
             };
 
@@ -368,13 +372,12 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
           await fail(
             {
               ...record,
-              phase: {
-                _tag: "Running",
+              phase: AkeruDelegationPhase.cases.Running.make({
                 childThreadId,
                 childTurnId: outcome.turnId,
                 startedAt,
                 progress: null,
-              },
+              }),
             },
             "child_failed",
             outcome.error ?? "The bot did not return a result.",
@@ -393,15 +396,14 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
 
         const completed: AkeruDelegationRecord = {
           ...record,
-          phase: {
-            _tag: "Completed",
+          phase: AkeruDelegationPhase.cases.Completed.make({
             childThreadId,
             childTurnId: outcome.turnId,
             startedAt,
             completedAt,
             result,
             acknowledgedAt: null,
-          },
+          }),
           updatedAt: completedAt,
         };
 

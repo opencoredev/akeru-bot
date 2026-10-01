@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
 import * as NodeNet from "node:net";
@@ -12,7 +13,7 @@ type FixtureHandler = (params: unknown) => unknown;
 
 const initialize: FixtureHandler = (params) => ({
   protocolVersion:
-    typeof params === "object" && params !== null && "protocolVersion" in params
+    Predicate.isObjectOrArray(params) && params !== null && "protocolVersion" in params
       ? (params as { protocolVersion: string }).protocolVersion
       : "2025-03-26",
   capabilities: { tools: { listChanged: false } },

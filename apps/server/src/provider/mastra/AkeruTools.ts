@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { type ToolsInput } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
@@ -215,7 +216,7 @@ export function approvalAwareTools(
 
         return (
           protectedAction ||
-          (typeof existing === "function" ? await existing(input, context) : existing === true)
+          (Predicate.isFunction(existing) ? await existing(input, context) : existing === true)
         );
       };
 

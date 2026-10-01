@@ -1,3 +1,4 @@
+import { toolRuntimeFixture } from "./test-support/toolRuntimeFixture.ts";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -9,7 +10,6 @@ import * as DateTime from "effect/DateTime";
 import { it } from "@effect/vitest";
 import { assert, expect, vi } from "vite-plus/test";
 import { AkeruObservationRestoreError } from "./AkeruMastraHarness.ts";
-import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { invalidateEntityMemoryObservations } from "../memory/EntityMemoryInvalidation.ts";
 import { makeAkeruMastraHarnessTestSupport } from "./test-support/AkeruMastraHarness.ts";
 
@@ -25,7 +25,7 @@ describe("AkeruMastraHarness", () => {
         authStorage: new AuthStorage(NodePath.join(directory, "auth.json")),
         memoryDbPath: NodePath.join(directory, "observational-memory.sqlite"),
         getThreadTools: () => ({}),
-        toolRuntime: { toolsForThread: () => [] } as unknown as AkeruToolRuntime,
+        toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
       });
 
       const threadId = "rebuild-history";

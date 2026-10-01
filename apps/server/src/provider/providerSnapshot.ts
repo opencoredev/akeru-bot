@@ -248,7 +248,7 @@ export function buildBooleanOptionDescriptor(input: {
     label: input.label,
     type: "boolean" as const,
     ...(input.description ? { description: input.description } : {}),
-    ...(typeof input.currentValue === "boolean" ? { currentValue: input.currentValue } : {}),
+    ...(Predicate.isBoolean(input.currentValue) ? { currentValue: input.currentValue } : {}),
   };
 }
 
@@ -289,10 +289,10 @@ export function buildServerProvider(input: {
   return {
     displayName: input.presentation.displayName,
     ...(input.presentation.badgeLabel ? { badgeLabel: input.presentation.badgeLabel } : {}),
-    ...(typeof input.presentation.showInteractionModeToggle === "boolean"
+    ...(Predicate.isBoolean(input.presentation.showInteractionModeToggle)
       ? { showInteractionModeToggle: input.presentation.showInteractionModeToggle }
       : {}),
-    ...(typeof input.presentation.requiresNewThreadForModelChange === "boolean"
+    ...(Predicate.isBoolean(input.presentation.requiresNewThreadForModelChange)
       ? { requiresNewThreadForModelChange: input.presentation.requiresNewThreadForModelChange }
       : {}),
     enabled: input.enabled,

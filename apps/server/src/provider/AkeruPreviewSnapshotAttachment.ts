@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -12,13 +13,13 @@ const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const MCP_CALL_TOOL_CONTENT = Symbol.for("mastra.mcp.callToolContent");
 
 function record(value: unknown): Readonly<Record<string, unknown>> | null {
-  return typeof value === "object" && value !== null
+  return Predicate.isObjectOrArray(value) && value !== null
     ? (value as Readonly<Record<string, unknown>>)
     : null;
 }
 
 function imageBytes(value: unknown): Buffer | null {
-  if (typeof value === "string") {
+  if (Predicate.isString(value)) {
     const encoded = value.startsWith("data:image/png;base64,")
       ? value.slice("data:image/png;base64,".length)
       : value;

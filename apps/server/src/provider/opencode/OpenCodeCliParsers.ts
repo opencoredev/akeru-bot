@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { type Agent, type Model } from "@opencode-ai/sdk/v2";
 import * as Exit from "effect/Exit";
@@ -160,7 +161,7 @@ export function parseSkillsCliOutput(stdout: string): ReadonlyArray<OpenCodeSkil
 export function parseOpenCodeModelSlug(
   slug: string | null | undefined,
 ): ParsedOpenCodeModelSlug | null {
-  if (typeof slug !== "string") {
+  if (!Predicate.isString(slug)) {
     return null;
   }
 

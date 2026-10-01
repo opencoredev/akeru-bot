@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * ClaudeSkills — filesystem discovery of Claude Code skills for the `$` picker.
  *
@@ -50,14 +51,14 @@ function parseSkillFrontmatter(contents: string): SkillFrontmatter {
     return { kind: "malformed" };
   }
 
-  if (typeof parsed !== "object" || parsed === null) {
+  if (!Predicate.isObjectOrArray(parsed) || parsed === null) {
     return { kind: "malformed" };
   }
 
-  const record = parsed as Record<string, unknown>;
-  const name = typeof record.name === "string" ? record.name.trim() : "";
-  const description = typeof record.description === "string" ? record.description.trim() : "";
-  const icon = typeof record.icon === "string" ? record.icon.trim() : "";
+  const record = Array.isArray(parsed) ? {} : parsed;
+  const name = Predicate.isString(record.name) ? record.name.trim() : "";
+  const description = Predicate.isString(record.description) ? record.description.trim() : "";
+  const icon = Predicate.isString(record.icon) ? record.icon.trim() : "";
 
   return {
     kind: "parsed",

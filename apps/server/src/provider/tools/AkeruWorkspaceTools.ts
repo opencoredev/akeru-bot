@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import { type AkeruToolId } from "@akeru/contracts";
@@ -72,9 +73,9 @@ export function executable(value: unknown): value is {
   readonly execute: (input: unknown, context: Record<string, unknown>) => Promise<unknown>;
 } {
   return (
-    typeof value === "object" &&
+    Predicate.isObjectOrArray(value) &&
     value !== null &&
     "execute" in value &&
-    typeof value.execute === "function"
+    Predicate.isFunction(value.execute)
   );
 }

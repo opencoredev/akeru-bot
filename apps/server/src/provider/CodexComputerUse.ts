@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
@@ -27,7 +28,7 @@ export interface CodexComputerUseServerConfig {
 }
 
 function object(value: unknown, label: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!Predicate.isObjectOrArray(value) || value === null || Array.isArray(value)) {
     throw new Error(`${label} is invalid.`);
   }
 
@@ -41,7 +42,7 @@ function entries(value: unknown): readonly Record<string, unknown>[] {
 }
 
 function string(value: unknown, label: string): string {
-  if (typeof value !== "string" || value.length === 0) throw new Error(`${label} is invalid.`);
+  if (!Predicate.isString(value) || value.length === 0) throw new Error(`${label} is invalid.`);
 
   return value;
 }
@@ -141,7 +142,7 @@ export function sanitizeCodexComputerUseResult(
 
     if (Array.isArray(entry)) return entry.map((item) => visit(item));
 
-    if (typeof entry !== "object" || entry === null) {
+    if (!Predicate.isObjectOrArray(entry) || entry === null) {
       if (field === "screenshot" && entry !== null) {
         throw new Error("Computer Use returned an invalid screenshot.");
       }
@@ -154,7 +155,7 @@ export function sanitizeCodexComputerUseResult(
     if (object.type === "image") {
       const mediaType = object.mimeType ?? object.mediaType;
 
-      if (mediaType !== "image/png" || typeof object.data !== "string") {
+      if (mediaType !== "image/png" || !Predicate.isString(object.data)) {
         throw new Error("Computer Use returned an unsupported screenshot format.");
       }
 
@@ -171,7 +172,7 @@ export function sanitizeCodexComputerUseResult(
     }
 
     if (field === "screenshot") {
-      if (typeof object.url !== "string") {
+      if (!Predicate.isString(object.url)) {
         throw new Error("Computer Use returned an invalid screenshot.");
       }
 

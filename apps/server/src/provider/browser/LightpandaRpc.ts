@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeTimersPromises from "node:timers/promises";
 import type { ToolsInput } from "@mastra/core/agent";
@@ -29,7 +30,7 @@ export function browserRpcErrorMessage(error: NonNullable<JsonRpcResponse["error
 }
 
 export function rpcResultText(value: unknown): string {
-  if (typeof value !== "object" || value === null || !("content" in value)) {
+  if (!Predicate.isObjectOrArray(value) || value === null || !("content" in value)) {
     return JSON.stringify(value);
   }
 
@@ -39,9 +40,9 @@ export function rpcResultText(value: unknown): string {
 
   return content
     .flatMap((item) => {
-      if (typeof item !== "object" || item === null || !("text" in item)) return [];
+      if (!Predicate.isObjectOrArray(item) || item === null || !("text" in item)) return [];
 
-      return typeof item.text === "string" ? [item.text] : [];
+      return Predicate.isString(item.text) ? [item.text] : [];
     })
     .join("\n");
 }
@@ -222,9 +223,9 @@ export class LightpandaRpc implements BotBrowserRpc {
     const result = await this.send("tools/call", { name: "session_list", arguments: {} });
     const text = rpcResultText(result.result);
     const sessions = JSON.parse(text) as ReadonlyArray<{ readonly url?: unknown }>;
-    const current = sessions.find((session) => typeof session.url === "string");
+    const current = sessions.find((session) => Predicate.isString(session.url));
 
-    if (typeof current?.url === "string" && current.url.length > 0) this.resumeUrl = current.url;
+    if (Predicate.isString(current?.url) && current.url.length > 0) this.resumeUrl = current.url;
   }
 
   private async restoreCurrentUrl(): Promise<void> {

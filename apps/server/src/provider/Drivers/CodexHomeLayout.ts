@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import * as Predicate from "effect/Predicate";
 import * as NodeOS from "node:os";
 
@@ -9,6 +10,8 @@ import * as Schema from "effect/Schema";
 import * as PlatformError from "effect/PlatformError";
 
 import { expandHomePath } from "../../pathExpansion.ts";
+
+const linkStates = Data.taggedEnum<LinkState>();
 
 export interface CodexHomeLayout {
   readonly mode: "direct" | "authOverlay";
@@ -156,7 +159,7 @@ function isNotSymlinkError(error: PlatformError.PlatformError): boolean {
 
   return (
     Predicate.isTagged(error.reason, "Unknown") &&
-    typeof cause === "object" &&
+    Predicate.isObjectOrArray(cause) &&
     cause !== null &&
     "code" in cause &&
     cause.code === "EINVAL"
@@ -171,15 +174,15 @@ const readLinkState = Effect.fn("CodexHomeLayout.readLinkState")(function* (inpu
   readonly linkPath: string;
 }): Effect.fn.Return<LinkState, CodexShadowHomeError> {
   return yield* input.fileSystem.readLink(input.linkPath).pipe(
-    Effect.map((target): LinkState => ({ _tag: "Symlink", target })),
+    Effect.map((target): LinkState => linkStates.Symlink({ target })),
     Effect.catchTags({
       PlatformError: (cause) => {
         if (Predicate.isTagged(cause.reason, "NotFound")) {
-          return Effect.succeed<LinkState>({ _tag: "Missing" });
+          return Effect.succeed<LinkState>(linkStates.Missing());
         }
 
         if (isNotSymlinkError(cause)) {
-          return Effect.succeed<LinkState>({ _tag: "NotSymlink" });
+          return Effect.succeed<LinkState>(linkStates.NotSymlink());
         }
 
         return new CodexShadowHomeFileSystemError({

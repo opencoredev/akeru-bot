@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type * as EffectAcpSchema from "effect-acp/schema";
 
 import { isRecord } from "./AcpProtocolValues.ts";
@@ -8,7 +9,7 @@ import {
 } from "./AcpRuntimeTypes.ts";
 
 export function isSessionModelState(value: unknown): value is EffectAcpSchema.SessionModelState {
-  if (!isRecord(value) || typeof value.currentModelId !== "string") {
+  if (!isRecord(value) || !Predicate.isString(value.currentModelId)) {
     return false;
   }
 
@@ -19,16 +20,16 @@ export function isSessionModelState(value: unknown): value is EffectAcpSchema.Se
   return value.availableModels.every(
     (model) =>
       isRecord(model) &&
-      typeof model.modelId === "string" &&
-      typeof model.name === "string" &&
+      Predicate.isString(model.modelId) &&
+      Predicate.isString(model.name) &&
       (model.description === undefined ||
         model.description === null ||
-        typeof model.description === "string"),
+        Predicate.isString(model.description)),
   );
 }
 
 export function isSessionModeState(value: unknown): value is EffectAcpSchema.SessionModeState {
-  if (!isRecord(value) || typeof value.currentModeId !== "string") {
+  if (!isRecord(value) || !Predicate.isString(value.currentModeId)) {
     return false;
   }
 
@@ -39,9 +40,9 @@ export function isSessionModeState(value: unknown): value is EffectAcpSchema.Ses
   return value.availableModes.every(
     (mode) =>
       isRecord(mode) &&
-      typeof mode.id === "string" &&
-      typeof mode.name === "string" &&
-      (mode.description === undefined || typeof mode.description === "string"),
+      Predicate.isString(mode.id) &&
+      Predicate.isString(mode.name) &&
+      (mode.description === undefined || Predicate.isString(mode.description)),
   );
 }
 

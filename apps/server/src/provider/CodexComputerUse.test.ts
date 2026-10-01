@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -78,7 +79,7 @@ describe("Codex Computer Use resolver", () => {
       },
     });
 
-    if (typeof result.env?.TMPDIR === "string") directories.add(result.env.TMPDIR);
+    if (Predicate.isString(result.env?.TMPDIR)) directories.add(result.env.TMPDIR);
   });
 
   it("fails closed for unsupported, missing, disabled, and malformed plugins", async () => {

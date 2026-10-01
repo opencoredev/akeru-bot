@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ProviderDriverKind, ThreadId } from "@akeru/contracts";
 import { causeErrorTag, errorTag } from "@akeru/shared/observability";
 import * as Cause from "effect/Cause";
@@ -18,7 +19,7 @@ function structuralMethod(value: string): string {
 function summarizePayload(payload: unknown): Readonly<Record<string, unknown>> {
   if (payload === null) return { valueType: "null" };
 
-  if (typeof payload === "string") {
+  if (Predicate.isString(payload)) {
     return { valueType: "string", byteLength: new TextEncoder().encode(payload).byteLength };
   }
 
@@ -30,7 +31,8 @@ function summarizePayload(payload: unknown): Readonly<Record<string, unknown>> {
     return { valueType: "array", itemCount: payload.length };
   }
 
-  if (typeof payload !== "object") {
+  if (!Predicate.isObjectOrArray(payload)) {
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Native logs record the JavaScript primitive category without reading the payload.
     return { valueType: typeof payload };
   }
 
@@ -40,8 +42,8 @@ function summarizePayload(payload: unknown): Readonly<Record<string, unknown>> {
     return {
       valueType: "object",
       fieldCount: Object.keys(record).length,
-      ...(typeof record._tag === "string" ? { messageTag: errorTag(record) } : {}),
-      ...(typeof record.tag === "string" ? { method: structuralMethod(record.tag) } : {}),
+      ...(Predicate.isString(record._tag) ? { messageTag: errorTag(record) } : {}),
+      ...(Predicate.isString(record.tag) ? { method: structuralMethod(record.tag) } : {}),
     };
   } catch {
     return { valueType: "object" };
@@ -72,20 +74,20 @@ function formatProtocolLogPayload(event: EffectAcpProtocol.AcpProtocolLogEvent) 
 }
 
 function isTransientProtocolMessage(message: unknown): boolean {
-  if (typeof message !== "object" || message === null) return false;
+  if (!Predicate.isObjectOrArray(message) || message === null) return false;
   const method = Reflect.get(message, "tag") ?? Reflect.get(message, "method");
 
   if (method !== "session/update") return false;
 
   const payload = Reflect.get(message, "payload") ?? Reflect.get(message, "params");
 
-  if (typeof payload !== "object" || payload === null) return false;
+  if (!Predicate.isObjectOrArray(payload) || payload === null) return false;
   const update = Reflect.get(payload, "update");
 
-  if (typeof update !== "object" || update === null) return false;
+  if (!Predicate.isObjectOrArray(update) || update === null) return false;
   const updateType = Reflect.get(update, "sessionUpdate");
 
-  return typeof updateType === "string" && transientProtocolUpdates.has(updateType);
+  return Predicate.isString(updateType) && transientProtocolUpdates.has(updateType);
 }
 
 function rawChunkContainsOnlyTransientMessages(payload: string): boolean {
@@ -114,7 +116,7 @@ function filterTransientProtocolLog(
 ): EffectAcpProtocol.AcpProtocolLogEvent | undefined {
   if (event.direction !== "incoming") return event;
 
-  if (event.stage === "raw" && typeof event.payload === "string") {
+  if (event.stage === "raw" && Predicate.isString(event.payload)) {
     return rawChunkContainsOnlyTransientMessages(event.payload) ? undefined : event;
   }
 

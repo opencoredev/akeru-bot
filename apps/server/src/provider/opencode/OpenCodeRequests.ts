@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeURL from "node:url";
 import type { ChatAttachment, ProviderApprovalDecision, RuntimeMode } from "@akeru/contracts";
@@ -94,10 +95,10 @@ export function toOpenCodeQuestionAnswers(
       answers[question.question];
 
     if (Array.isArray(raw)) {
-      return raw.filter((value): value is string => typeof value === "string");
+      return raw.filter((value): value is string => Predicate.isString(value));
     }
 
-    if (typeof raw === "string") {
+    if (Predicate.isString(raw)) {
       return raw.trim().length > 0 ? [raw] : [];
     }
 

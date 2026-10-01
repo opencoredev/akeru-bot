@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { RequestContext } from "@mastra/core/request-context";
 import * as DateTime from "effect/DateTime";
@@ -14,18 +15,18 @@ export function resolveAkeruInstructions(
   const state = controllerContext(requestContext)?.state;
 
   const isBotConversation =
-    typeof state === "object" &&
+    Predicate.isObjectOrArray(state) &&
     state !== null &&
     "botConversation" in state &&
     state.botConversation === true;
 
   const name =
-    isBotConversation && "botName" in state && typeof state.botName === "string"
+    isBotConversation && "botName" in state && Predicate.isString(state.botName)
       ? state.botName
       : "Akeru";
 
   const personalityTone =
-    isBotConversation && "personalityTone" in state && typeof state.personalityTone === "number"
+    isBotConversation && "personalityTone" in state && Predicate.isNumber(state.personalityTone)
       ? state.personalityTone
       : undefined;
 
@@ -42,18 +43,18 @@ export function resolveAkeruInstructions(
       });
 
   const persistentMemoryContext =
-    typeof state === "object" &&
+    Predicate.isObjectOrArray(state) &&
     state !== null &&
     "persistentMemoryContext" in state &&
-    typeof state.persistentMemoryContext === "string"
+    Predicate.isString(state.persistentMemoryContext)
       ? state.persistentMemoryContext
       : "";
 
   const mcpInstructions =
-    typeof state === "object" &&
+    Predicate.isObjectOrArray(state) &&
     state !== null &&
     "mcpInstructions" in state &&
-    typeof state.mcpInstructions === "string"
+    Predicate.isString(state.mcpInstructions)
       ? state.mcpInstructions
       : "";
 

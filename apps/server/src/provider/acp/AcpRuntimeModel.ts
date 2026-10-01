@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 import type * as EffectAcpSchema from "effect-acp/schema";
 
 import { type AcpPermissionRequest, type AcpParsedSessionEvent } from "./AcpRuntimeTypes.ts";
@@ -43,7 +45,7 @@ export function parsePermissionRequest(
     toolCall?.command ??
     toolCall?.title ??
     toolCall?.detail ??
-    (typeof params.sessionId === "string" ? `Session ${params.sessionId}` : undefined);
+    (Predicate.isString(params.sessionId) ? `Session ${params.sessionId}` : undefined);
 
   return {
     kind,
@@ -65,10 +67,7 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
       modeId = upd.currentModeId.trim();
 
       if (modeId) {
-        events.push({
-          _tag: "ModeChanged",
-          modeId,
-        });
+        events.push(parsedEvents.ModeChanged({ modeId }));
       }
 
       break;
@@ -81,13 +80,14 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
       }));
 
       if (plan.length > 0) {
-        events.push({
-          _tag: "PlanUpdated",
-          payload: {
-            plan,
-          },
-          rawPayload: params,
-        });
+        events.push(
+          parsedEvents.PlanUpdated({
+            payload: {
+              plan,
+            },
+            rawPayload: params,
+          }),
+        );
       }
 
       break;
@@ -99,11 +99,12 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
       });
 
       if (toolCall) {
-        events.push({
-          _tag: "ToolCallUpdated",
-          toolCall,
-          rawPayload: boundToolCallRawPayload(params, upd, toolCall),
-        });
+        events.push(
+          parsedEvents.ToolCallUpdated({
+            toolCall,
+            rawPayload: boundToolCallRawPayload(params, upd, toolCall),
+          }),
+        );
       }
 
       break;
@@ -113,11 +114,12 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
       const toolCall = parseTypedToolCallState(upd);
 
       if (toolCall) {
-        events.push({
-          _tag: "ToolCallUpdated",
-          toolCall,
-          rawPayload: boundToolCallRawPayload(params, upd, toolCall),
-        });
+        events.push(
+          parsedEvents.ToolCallUpdated({
+            toolCall,
+            rawPayload: boundToolCallRawPayload(params, upd, toolCall),
+          }),
+        );
       }
 
       break;
@@ -125,11 +127,7 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
 
     case "agent_message_chunk": {
       if (upd.content.type === "text" && upd.content.text.length > 0) {
-        events.push({
-          _tag: "ContentDelta",
-          text: upd.content.text,
-          rawPayload: params,
-        });
+        events.push(parsedEvents.ContentDelta({ text: upd.content.text, rawPayload: params }));
       }
 
       break;
@@ -166,3 +164,5 @@ export {
 export { mergeToolCallState, decideToolCallUpdateEmission } from "./AcpToolCalls.ts";
 
 export { sessionUpdateIsReplay, waitForSessionLoadReplayIdle } from "./AcpSessionReplay.ts";
+
+const parsedEvents = Data.taggedEnum<AcpParsedSessionEvent>();

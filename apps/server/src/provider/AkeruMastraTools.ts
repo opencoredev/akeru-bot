@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ToolsInput } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import { AkeruToolInputSchemas } from "@akeru/contracts";
@@ -16,7 +17,7 @@ function inputSchema(toolId: AkeruRuntimeToolId) {
 }
 
 function omitNullValues(input: unknown): unknown {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  if (!input || !Predicate.isObjectOrArray(input) || Array.isArray(input)) return input;
 
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null));
 }

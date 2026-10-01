@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ProviderUserInputAnswers, UserInputQuestion } from "@akeru/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -119,13 +120,13 @@ interface NormalizedXAiAnswer {
 function answerValues(answer: unknown): ReadonlyArray<string> {
   if (Array.isArray(answer)) {
     return answer.flatMap((entry) => {
-      const text = typeof entry === "string" ? trimmed(entry) : undefined;
+      const text = Predicate.isString(entry) ? trimmed(entry) : undefined;
 
       return text ? [text] : [];
     });
   }
 
-  const text = typeof answer === "string" ? trimmed(answer) : undefined;
+  const text = Predicate.isString(answer) ? trimmed(answer) : undefined;
 
   return text ? [text] : [];
 }
@@ -410,13 +411,13 @@ const rememberCompletedXAiPromptId = (
 function promptIdFromResponse(response: EffectAcpSchema.PromptResponse): string | undefined {
   const meta = response._meta;
 
-  if (meta === null || typeof meta !== "object") {
+  if (meta === null || !Predicate.isObjectOrArray(meta)) {
     return undefined;
   }
 
   const promptId = meta.promptId ?? meta.requestId;
 
-  return typeof promptId === "string" && promptId.length > 0 ? promptId : undefined;
+  return Predicate.isString(promptId) && promptId.length > 0 ? promptId : undefined;
 }
 
 export function promptResponseHasMissingXAiStopReason(
@@ -424,7 +425,9 @@ export function promptResponseHasMissingXAiStopReason(
 ): boolean {
   const meta = response._meta;
 
-  return meta !== null && typeof meta === "object" && meta[xAiStopReasonMissingMetaKey] === true;
+  return (
+    meta !== null && Predicate.isObjectOrArray(meta) && meta[xAiStopReasonMissingMetaKey] === true
+  );
 }
 
 function promptResponseFromXAi(

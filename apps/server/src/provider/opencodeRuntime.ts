@@ -91,7 +91,7 @@ export function openCodeRuntimeErrorDetail(cause: unknown): string {
 
   if (cause instanceof Error && cause.message.trim().length > 0) return cause.message.trim();
 
-  if (cause && typeof cause === "object") {
+  if (cause && Predicate.isObjectOrArray(cause)) {
     // SDK v2 throws { response, request, error? } shapes — extract what's useful
     const anyCause = cause as Record<string, unknown>;
     const status = (anyCause.response as { status?: number } | undefined)?.status;

@@ -8,7 +8,7 @@ import {
   AkeruWorkerId,
   type AkeruDelegationAccessGrant,
   type AkeruToolInputSchemas,
-  type AkeruWorkerPhase,
+  AkeruWorkerPhase,
   type AkeruWorkerStatus,
   type ThreadId,
   type TurnId,
@@ -85,13 +85,14 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
   const cancel = (entry: WorkerEntry, canceledBy: "stop" | "parent-turn-ended") =>
     Effect.gen(function* () {
       const canceled = yield* locked(
-        settleUnlocked(entry, (running, completedAt) => ({
-          _tag: "Canceled",
-          childThreadId: running.childThreadId,
-          startedAt: running.startedAt,
-          completedAt,
-          canceledBy,
-        })),
+        settleUnlocked(entry, (running, completedAt) =>
+          AkeruWorkerPhase.cases.Canceled.make({
+            childThreadId: running.childThreadId,
+            startedAt: running.startedAt,
+            completedAt,
+            canceledBy,
+          }),
+        ),
       );
 
       // Interrupting outside the lock lets the fiber finish its own cleanup. A
@@ -116,14 +117,15 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
     message: string,
   ) =>
     locked(
-      settleUnlocked(entry, (running, completedAt) => ({
-        _tag: "Failed",
-        childThreadId: running.childThreadId,
-        startedAt: running.startedAt,
-        completedAt,
-        failureCode,
-        message,
-      })),
+      settleUnlocked(entry, (running, completedAt) =>
+        AkeruWorkerPhase.cases.Failed.make({
+          childThreadId: running.childThreadId,
+          startedAt: running.startedAt,
+          completedAt,
+          failureCode,
+          message,
+        }),
+      ),
     );
 
   /** Waits for child turns until none remain open, then records the last result. */
@@ -142,26 +144,26 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
             if (open > 0) return false;
 
             if (outcome.state === "failed") {
-              return yield* settleUnlocked(entry, (running, completedAt) => ({
-                _tag: "Failed",
-                childThreadId: running.childThreadId,
-                startedAt: running.startedAt,
-                completedAt,
-                failureCode: "worker_failed",
-                message: outcome.error?.trim() || "The worker turn failed.",
-              }));
+              return yield* settleUnlocked(entry, (running, completedAt) =>
+                AkeruWorkerPhase.cases.Failed.make({
+                  childThreadId: running.childThreadId,
+                  startedAt: running.startedAt,
+                  completedAt,
+                  failureCode: "worker_failed",
+                  message: outcome.error?.trim() || "The worker turn failed.",
+                }),
+              );
             }
 
             return yield* settleUnlocked(entry, (running, completedAt) =>
               running.childThreadId === null
                 ? undefined
-                : {
-                    _tag: "Completed",
+                : AkeruWorkerPhase.cases.Completed.make({
                     childThreadId: running.childThreadId,
                     startedAt: running.startedAt,
                     completedAt,
                     result: outcome.summary?.trim() || "The worker finished without a text result.",
-                  },
+                  }),
             );
           }),
         );
@@ -300,11 +302,9 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
           parentThreadId: parent.threadId,
           parentTurnId: parent.turnId,
           task: input.task,
-          phase: yield* Ref.make<AkeruWorkerPhase>({
-            _tag: "Running",
-            childThreadId: null,
-            startedAt: yield* nowIso,
-          }),
+          phase: yield* Ref.make<AkeruWorkerPhase>(
+            AkeruWorkerPhase.cases.Running.make({ childThreadId: null, startedAt: yield* nowIso }),
+          ),
           done: yield* Deferred.make<AkeruWorkerStatus>(),
           outcomes: yield* Queue.unbounded<AkeruWorkerChildOutcome>(),
           openTurns: yield* Ref.make(1),

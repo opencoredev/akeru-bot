@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
@@ -106,7 +107,7 @@ describe("AcpSessionRuntime", () => {
       const error = yield* runtime.setModel("composer-2[fast=false]").pipe(Effect.flip);
       expect(error._tag).toBe("AcpRequestError");
 
-      if (error._tag === "AcpRequestError") {
+      if (Predicate.isTagged(error, "AcpRequestError")) {
         expect(error.code).toBe(-32602);
         expect(error.message).toContain(
           'Invalid value "composer-2[fast=false]" for session config option "model"',

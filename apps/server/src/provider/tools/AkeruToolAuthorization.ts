@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import {
   type AkeruDelegationAccessGrant,
@@ -7,7 +8,7 @@ import {
 } from "@akeru/contracts";
 
 export function field(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
+  if (!Predicate.isObjectOrArray(value) || value === null) return undefined;
 
   return Object.getOwnPropertyDescriptor(value, key)?.value;
 }
@@ -15,7 +16,7 @@ export function field(value: unknown, key: string): unknown {
 export function requiredString(value: unknown, key: string): string {
   const candidate = field(value, key);
 
-  if (typeof candidate !== "string" || candidate.length === 0) {
+  if (!Predicate.isString(candidate) || candidate.length === 0) {
     throw new Error(`Tool input field '${key}' is required.`);
   }
 
@@ -25,7 +26,7 @@ export function requiredString(value: unknown, key: string): string {
 export function canonicalInput(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalInput).join(",")}]`;
 
-  if (typeof value === "object" && value !== null) {
+  if (Predicate.isObjectOrArray(value) && value !== null) {
     return `{${Object.keys(value)
       .filter((key) => field(value, key) !== undefined)
       .sort()
@@ -42,7 +43,7 @@ export function ensureWorkspaceCwd(toolId: AkeruToolId, input: unknown): void {
 
   if (cwd === undefined) return;
 
-  if (typeof cwd !== "string") throw new Error(`Tool '${toolId}' cwd must be a relative path.`);
+  if (!Predicate.isString(cwd)) throw new Error(`Tool '${toolId}' cwd must be a relative path.`);
 
   if (
     cwd.startsWith("/") ||

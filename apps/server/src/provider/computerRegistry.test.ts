@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { ThreadId } from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
@@ -198,7 +199,7 @@ describe("ComputerRegistry", () => {
       yield* TestClock.adjust("1 millis");
       registry.disconnect("viewer");
       const values = yield* Fiber.join(collected).pipe(Effect.timeout("1 second"), Effect.orDie);
-      expect(values.some((event) => event._tag === "frame")).toBe(true);
+      expect(values.some((event) => Predicate.isTagged(event, "frame"))).toBe(true);
       expect(calls.slice(0, 3)).toEqual(["desktop.open", "launch", "capture"]);
     }).pipe(Effect.provide(TestClock.layer())),
   );
@@ -284,7 +285,7 @@ describe("ComputerRegistry", () => {
       const last = values.at(-1);
       expect(last?._tag).toBe("state");
 
-      if (last?._tag === "state") expect(last.state.status).toBe("stopped");
+      if (Predicate.isTagged(last, "state")) expect(last.state.status).toBe("stopped");
     }).pipe(Effect.provide(TestClock.layer())),
   );
 
@@ -348,7 +349,7 @@ describe("ComputerRegistry", () => {
       yield* TestClock.adjust("2 seconds");
       registry.stop(thread);
       const values = yield* Fiber.join(collected).pipe(Effect.timeout("1 second"), Effect.orDie);
-      const frames = values.filter((event) => event._tag === "frame");
+      const frames = values.filter((event) => Predicate.isTagged(event, "frame"));
       expect(frames).toHaveLength(1);
     }).pipe(Effect.provide(TestClock.layer())),
   );

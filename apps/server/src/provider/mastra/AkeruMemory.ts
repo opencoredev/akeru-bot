@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeURL from "node:url";
 import { RequestContext } from "@mastra/core/request-context";
@@ -60,7 +61,7 @@ export function controllerContext(
 ): Record<string, unknown> | undefined {
   const value = requestContext.getRaw("controller");
 
-  return typeof value === "object" && value !== null
+  return Predicate.isObjectOrArray(value) && value !== null
     ? (value as Record<string, unknown>)
     : undefined;
 }
@@ -71,11 +72,11 @@ export function controllerModelId(requestContext: RequestContext): string {
   if (!value || !("session" in value)) return DEFAULT_MODEL_ID;
   const session = value.session;
 
-  if (typeof session !== "object" || session === null || !("modelId" in session)) {
+  if (!Predicate.isObjectOrArray(session) || session === null || !("modelId" in session)) {
     return DEFAULT_MODEL_ID;
   }
 
-  return typeof session.modelId === "string" ? session.modelId : DEFAULT_MODEL_ID;
+  return Predicate.isString(session.modelId) ? session.modelId : DEFAULT_MODEL_ID;
 }
 
 export function controllerModelOptions(
@@ -83,13 +84,13 @@ export function controllerModelOptions(
 ): AkeruMastraState["modelOptions"] {
   const state = controllerContext(requestContext)?.state;
 
-  if (typeof state !== "object" || state === null || !("modelOptions" in state)) {
+  if (!Predicate.isObjectOrArray(state) || state === null || !("modelOptions" in state)) {
     return undefined;
   }
 
   const modelOptions = state.modelOptions;
 
-  return typeof modelOptions === "object" && modelOptions !== null
+  return Predicate.isObjectOrArray(modelOptions) && modelOptions !== null
     ? (modelOptions as AkeruMastraState["modelOptions"])
     : undefined;
 }
@@ -100,11 +101,11 @@ export function controllerModelConnection(
 ) {
   const state = controllerContext(requestContext)?.state;
 
-  if (typeof state !== "object" || state === null || !("providerInstanceId" in state)) {
+  if (!Predicate.isObjectOrArray(state) || state === null || !("providerInstanceId" in state)) {
     return undefined;
   }
 
-  return typeof state.providerInstanceId === "string"
+  return Predicate.isString(state.providerInstanceId)
     ? getModelConnection?.(state.providerInstanceId)
     : undefined;
 }
@@ -112,7 +113,7 @@ export function controllerModelConnection(
 export function controllerResourceId(requestContext: RequestContext): string | undefined {
   const value = controllerContext(requestContext)?.resourceId;
 
-  return typeof value === "string" ? value : undefined;
+  return Predicate.isString(value) ? value : undefined;
 }
 
 export class AkeruPassiveObservationalMemoryProcessor implements Processor<"observational-memory"> {

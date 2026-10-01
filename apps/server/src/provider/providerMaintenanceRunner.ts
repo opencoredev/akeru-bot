@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   defaultInstanceIdForDriver,
   ProviderDriverKind,
@@ -302,12 +303,11 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
   const updateProvider: ProviderMaintenanceRunnerShape["updateProvider"] = Effect.fn(
     "ProviderMaintenanceRunner.updateProvider",
   )(function* (target) {
-    const provider = typeof target === "string" ? target : target.provider;
+    const provider = Predicate.isString(target) ? target : target.provider;
 
-    const instanceId =
-      typeof target === "string"
-        ? defaultInstanceIdForDriver(provider)
-        : (target.instanceId ?? defaultInstanceIdForDriver(provider));
+    const instanceId = Predicate.isString(target)
+      ? defaultInstanceIdForDriver(provider)
+      : (target.instanceId ?? defaultInstanceIdForDriver(provider));
 
     const targetKey = `instance:${instanceId}`;
 

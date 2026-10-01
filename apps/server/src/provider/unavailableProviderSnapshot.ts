@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * Helpers for synthesizing "unavailable" `ServerProvider` snapshots.
  *
@@ -64,10 +65,9 @@ export function buildUnavailableProviderSnapshot(
       ...base,
       instanceId: input.instanceId,
       ...(input.accentColor ? { accentColor: input.accentColor } : {}),
-      driver:
-        typeof input.driverKind === "string"
-          ? ProviderDriverKind.make(input.driverKind)
-          : input.driverKind,
+      driver: Predicate.isString(input.driverKind)
+        ? ProviderDriverKind.make(input.driverKind)
+        : input.driverKind,
       availability: "unavailable",
       unavailableReason: input.reason,
     };

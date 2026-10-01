@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import type { McpManager } from "@mastra/code-sdk/mcp/index";
 import { type AkeruToolId, type AkeruToolInputSchemas } from "@akeru/contracts";
@@ -130,7 +131,7 @@ export function createAkeruCatalogToolHandlers(
             const requested = field(input, "serverIds");
 
             const serverIds = Array.isArray(requested)
-              ? requested.filter((value): value is string => typeof value === "string")
+              ? requested.filter((value): value is string => Predicate.isString(value))
               : [];
 
             if (serverIds.length === 0) {

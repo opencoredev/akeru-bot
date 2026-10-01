@@ -196,7 +196,7 @@ export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActio
         if (inspected >= 100) return { action: null, hasUnclassifiedIntent: true };
         inspected += 1;
 
-        if (typeof entry === "object" && entry !== null) pending.push(entry);
+        if (Predicate.isObjectOrArray(entry) && entry !== null) pending.push(entry);
       }
 
       continue;
@@ -213,7 +213,7 @@ export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActio
 
       if (keyedAction) return { action: keyedAction, hasUnclassifiedIntent: false };
 
-      if (ACTION_TEXT_KEYS.has(normalizedKey) && typeof entry === "string") {
+      if (ACTION_TEXT_KEYS.has(normalizedKey) && Predicate.isString(entry)) {
         const action =
           normalizedKey === "command"
             ? criticalActionFromShellCommand(entry)
@@ -231,14 +231,14 @@ export function inspectAkeruAction(toolName: string, args?: unknown): AkeruActio
       }
 
       if (
-        typeof entry === "string" &&
+        Predicate.isString(entry) &&
         (normalizedKey === "path" || normalizedKey.endsWith("path")) &&
         classifyAkeruSensitivePath(entry)
       ) {
         return { action: "secrets", hasUnclassifiedIntent: false };
       }
 
-      if (typeof entry === "object" && entry !== null) pending.push(entry);
+      if (Predicate.isObjectOrArray(entry) && entry !== null) pending.push(entry);
     }
   }
 

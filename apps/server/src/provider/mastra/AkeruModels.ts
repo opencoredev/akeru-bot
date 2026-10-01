@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { opencodeClaudeMaxProvider } from "@mastra/code-sdk/providers/claude-max";
@@ -29,13 +30,13 @@ export function withAkeruModelRunOptions(
   if (!serviceTier) return runOptions;
 
   const providerOptions =
-    typeof runOptions.providerOptions === "object" && runOptions.providerOptions !== null
+    Predicate.isObjectOrArray(runOptions.providerOptions) && runOptions.providerOptions !== null
       ? runOptions.providerOptions
       : {};
 
   const openai =
     "openai" in providerOptions &&
-    typeof providerOptions.openai === "object" &&
+    Predicate.isObjectOrArray(providerOptions.openai) &&
     providerOptions.openai !== null
       ? providerOptions.openai
       : {};
@@ -85,8 +86,8 @@ export function openCodeGoInlineConnection(environment: NodeJS.ProcessEnv | unde
     };
 
     const options = parsed.provider?.["opencode-go"]?.options;
-    const apiKey = typeof options?.apiKey === "string" ? options.apiKey.trim() : "";
-    const baseUrl = typeof options?.baseURL === "string" ? options.baseURL.trim() : "";
+    const apiKey = Predicate.isString(options?.apiKey) ? options.apiKey.trim() : "";
+    const baseUrl = Predicate.isString(options?.baseURL) ? options.baseURL.trim() : "";
 
     return {
       ...(apiKey ? { apiKey } : {}),

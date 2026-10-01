@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { Sandbox } from "@daytona/sdk";
 import { Schema } from "effect";
 import { ComputerFrame, type ComputerAction, COMPUTER_FRAME_MAX_BYTES } from "@akeru/contracts";
@@ -54,7 +55,7 @@ export class DaytonaComputer {
     const display = await this.sandbox.computerUse.display.getInfo();
     const encoded = screenshot.screenshot;
 
-    if (typeof encoded !== "string" || encoded.length > Math.ceil(MAX_SCREENSHOT_BYTES / 3) * 4) {
+    if (!Predicate.isString(encoded) || encoded.length > Math.ceil(MAX_SCREENSHOT_BYTES / 3) * 4) {
       throw new Error("Computer screenshot is too large.");
     }
 

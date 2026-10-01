@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -489,7 +490,7 @@ describe("AkeruMastraHarness", () => {
         assert.isTrue(
           warnings.some((args) =>
             args.some(
-              (part) => typeof part === "string" && part.includes("dropped a failed observation"),
+              (part) => Predicate.isString(part) && part.includes("dropped a failed observation"),
             ),
           ),
         );

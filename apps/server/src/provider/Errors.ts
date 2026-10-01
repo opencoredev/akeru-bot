@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
 import type { CheckpointServiceError } from "../checkpointing/Errors.ts";
@@ -284,7 +285,7 @@ export function readableErrorDetail(error: unknown): string {
   if (hasReadableDetail(error)) return error.detail;
 
   const message =
-    error instanceof Error ? error.message : typeof error === "string" ? error : undefined;
+    error instanceof Error ? error.message : Predicate.isString(error) ? error : undefined;
 
   const firstLine = message
     ?.split("\n")

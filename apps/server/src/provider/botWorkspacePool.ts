@@ -114,15 +114,14 @@ export class BotWorkspacePool {
 
   constructor(options: BotWorkspacePoolOptions = {}) {
     this.clock = options.clock;
-    const pool = this;
     this.state = this.run(
-      Effect.gen(function* () {
+      Effect.gen({ self: this }, function* () {
         const scope = yield* Scope.make();
 
         const map = yield* RcMap.make({
           idleTimeToLive: options.idleTimeToLive ?? Duration.zero,
           lookup: (key: string) =>
-            Effect.acquireRelease(pool.open(key), ({ workspace }) => pool.close(key, workspace)),
+            Effect.acquireRelease(this.open(key), ({ workspace }) => this.close(key, workspace)),
         }).pipe(Scope.provide(scope));
 
         return { map, scope };

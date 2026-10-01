@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe } from "vite-plus/test";
 // @effect-diagnostics nodeBuiltinImport:off
 import {
@@ -492,7 +493,7 @@ describe("AkeruDelegationRuntime", () => {
     await runtime.drain();
     expect(
       test.state.delegations.map((entry) =>
-        entry.phase._tag === "Completed" ? entry.phase.result.summary : null,
+        Predicate.isTagged(entry.phase, "Completed") ? entry.phase.result.summary : null,
       ),
     ).toEqual(["First.", "Second."]);
   });

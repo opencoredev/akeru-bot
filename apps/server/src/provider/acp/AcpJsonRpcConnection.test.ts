@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
@@ -33,10 +34,10 @@ describe("AcpSessionRuntime", () => {
         "ContentDelta",
         "AssistantItemCompleted",
       ]);
-      const planUpdate = notes.find((note) => note._tag === "PlanUpdated");
+      const planUpdate = notes.find((note) => Predicate.isTagged(note, "PlanUpdated"));
       expect(planUpdate?._tag).toBe("PlanUpdated");
 
-      if (planUpdate?._tag === "PlanUpdated") {
+      if (Predicate.isTagged(planUpdate, "PlanUpdated")) {
         expect(planUpdate.payload.plan).toHaveLength(2);
       }
 
@@ -44,8 +45,8 @@ describe("AcpSessionRuntime", () => {
       const assistantDelta = notes[2];
 
       if (
-        assistantStart?._tag === "AssistantItemStarted" &&
-        assistantDelta?._tag === "ContentDelta"
+        Predicate.isTagged(assistantStart, "AssistantItemStarted") &&
+        Predicate.isTagged(assistantDelta, "ContentDelta")
       ) {
         expect(assistantDelta.itemId).toBe(assistantStart.itemId);
       }
@@ -79,10 +80,16 @@ describe("AcpSessionRuntime", () => {
       });
 
       const events = Array.from(yield* Stream.runCollect(Stream.take(runtime.getEvents(), 4)));
-      const assistantStart = events.find((event) => event._tag === "AssistantItemStarted");
+
+      const assistantStart = events.find((event) =>
+        Predicate.isTagged(event, "AssistantItemStarted"),
+      );
+
       expect(assistantStart?._tag).toBe("AssistantItemStarted");
 
-      return assistantStart?._tag === "AssistantItemStarted" ? assistantStart.itemId : "";
+      return Predicate.isTagged(assistantStart, "AssistantItemStarted")
+        ? assistantStart.itemId
+        : "";
     }).pipe(
       Effect.provide(
         AcpSessionRuntime.layer({
@@ -128,11 +135,11 @@ describe("AcpSessionRuntime", () => {
       ]);
       expect(
         notes
-          .filter((note) => note._tag === "ContentDelta")
+          .filter((note) => Predicate.isTagged(note, "ContentDelta"))
           .map((note) => note.text)
           .join(""),
       ).toBe("root before child root after child");
-      expect(notes.some((note) => note._tag === "ToolCallUpdated")).toBe(false);
+      expect(notes.some((note) => Predicate.isTagged(note, "ToolCallUpdated"))).toBe(false);
     }).pipe(
       Effect.provide(
         AcpSessionRuntime.layer({
@@ -265,11 +272,11 @@ describe("AcpSessionRuntime", () => {
       expect(secondStarted?._tag).toBe("AssistantItemStarted");
 
       if (
-        firstStarted?._tag === "AssistantItemStarted" &&
-        firstDelta?._tag === "ContentDelta" &&
-        firstCompleted?._tag === "AssistantItemCompleted" &&
-        secondStarted?._tag === "AssistantItemStarted" &&
-        secondDelta?._tag === "ContentDelta"
+        Predicate.isTagged(firstStarted, "AssistantItemStarted") &&
+        Predicate.isTagged(firstDelta, "ContentDelta") &&
+        Predicate.isTagged(firstCompleted, "AssistantItemCompleted") &&
+        Predicate.isTagged(secondStarted, "AssistantItemStarted") &&
+        Predicate.isTagged(secondDelta, "ContentDelta")
       ) {
         expect(firstDelta.itemId).toBe(firstStarted.itemId);
         expect(firstCompleted.itemId).toBe(firstStarted.itemId);
@@ -314,7 +321,7 @@ describe("AcpSessionRuntime", () => {
       const toolCall = notes[0];
       expect(toolCall?._tag).toBe("ToolCallUpdated");
 
-      if (toolCall?._tag === "ToolCallUpdated") {
+      if (Predicate.isTagged(toolCall, "ToolCallUpdated")) {
         expect(toolCall.toolCall.status).toBe("completed");
         expect(toolCall.toolCall.title).toBe("Read file");
       }

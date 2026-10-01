@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { decodeAkeruRuntimeToolInput } from "./tools/AkeruToolInputs.ts";
 // @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { RequestContext } from "@mastra/core/request-context";
@@ -592,7 +593,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           const mediaType = field(result, "mediaType");
           const data = field(result, "data");
 
-          if (mediaType !== "image/png" || typeof data !== "string") {
+          if (mediaType !== "image/png" || !Predicate.isString(data)) {
             throw new Error("Screenshot result is invalid.");
           }
 
@@ -612,7 +613,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           const summary = field(result, "summary");
           emitReceipt(input, "failure", {
             failureCode,
-            summary: typeof summary === "string" ? summary : "Tool execution failed.",
+            summary: Predicate.isString(summary) ? summary : "Tool execution failed.",
           });
 
           return result;

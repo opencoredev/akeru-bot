@@ -30,15 +30,17 @@ const decodeSettings = Schema.decodeSync(KimiSettings);
 const BUILT_IN_MODELS = ["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"] as const;
 
 function models(customModels: readonly string[]): ServerProviderModel[] {
-  return [...new Set([...BUILT_IN_MODELS, ...customModels.map((model) => model.trim())])]
-    .filter((model) => model.length > 0)
-    .map((model, index) => ({
-      slug: model,
-      name: model,
-      isCustom: !BUILT_IN_MODELS.includes(model as (typeof BUILT_IN_MODELS)[number]),
-      ...(index === 0 ? { isDefault: true } : {}),
-      capabilities: null,
-    }));
+  const uniqueModels = [
+    ...new Set([...BUILT_IN_MODELS, ...customModels.map((model) => model.trim())]),
+  ].filter((model) => model.length > 0);
+
+  return uniqueModels.map((model, index) => ({
+    slug: model,
+    name: model,
+    isCustom: !BUILT_IN_MODELS.some((builtIn) => builtIn === model),
+    ...(index === 0 ? { isDefault: true } : {}),
+    capabilities: null,
+  }));
 }
 
 export type KimiDriverEnv = ServerConfig | FileSystem.FileSystem | Path.Path;
