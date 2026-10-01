@@ -6,6 +6,7 @@ import noLintSuppressions from "./rules/no-lint-suppressions.ts";
 import noInlineSchemaCompile from "./rules/no-inline-schema-compile.ts";
 import noManualEffectRuntimeInTests from "./rules/no-manual-effect-runtime-in-tests.ts";
 import noNativeTitleTooltip from "./rules/no-native-title-tooltip.ts";
+import noRawPaletteStrings from "./rules/no-raw-palette-strings.ts";
 
 export default definePlugin({
   meta: {
@@ -18,5 +19,6 @@ export default definePlugin({
     "no-lint-suppressions": noLintSuppressions,
     "no-manual-effect-runtime-in-tests": noManualEffectRuntimeInTests,
     "no-native-title-tooltip": noNativeTitleTooltip,
+    "no-raw-palette-strings": noRawPaletteStrings,
   },
 });

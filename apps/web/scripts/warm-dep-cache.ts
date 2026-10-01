@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - setup-script bootstrap, runs before any Effect runtime exists.
 /**
  * Pre-warms Vite's dependency-optimizer cache (`node_modules/.vite/deps`) so
  * the first `vp run dev` in a fresh worktree doesn't stall the initial page

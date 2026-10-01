@@ -204,7 +204,9 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       const command = ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         env: {
           ...resolvedEnvironment,
-          ...(codexConfig.homePath ? { CODEX_HOME: expandHomePath(codexConfig.homePath) } : {}),
+          ...(codexConfig.homePath
+            ? { CODEX_HOME: expandHomePath(codexConfig.homePath, path) }
+            : {}),
         },
         cwd,
         shell: spawnCommand.shell,

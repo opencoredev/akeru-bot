@@ -1,6 +1,5 @@
 import { decodeJsonString, jsonObject } from "../json.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeChildProcess from "node:child_process";
@@ -13,6 +12,8 @@ import {
   type RemoteDoctorReport as RemoteDoctorReportValue,
 } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 import { BOOT_SERVICE_LAUNCHD_LABEL, BOOT_SERVICE_UNIT_FILE } from "../cloud/bootService.ts";
 
@@ -249,7 +250,11 @@ export async function runRemoteDoctor(input: {
           !secure,
         ),
       );
-      const ageMs = (input.now ?? new Date()).getTime() - NodeFS.statSync(bindingPath).mtimeMs;
+
+      const ageMs =
+        (input.now?.getTime() ?? (await Effect.runPromise(Clock.currentTimeMillis))) -
+        NodeFS.statSync(bindingPath).mtimeMs;
+
       checks.push(
         check(
           "directory-heartbeat",
@@ -413,7 +418,10 @@ export async function runRemoteDoctor(input: {
 
   if (!container && NodeFS.existsSync(updateDeferredPath)) {
     const deferredAt = Date.parse(NodeFS.readFileSync(updateDeferredPath, "utf8").trim());
-    const ageMs = (input.now ?? new Date()).getTime() - deferredAt;
+
+    const ageMs =
+      (input.now?.getTime() ?? (await Effect.runPromise(Clock.currentTimeMillis))) - deferredAt;
+
     checks.push(
       check(
         "update-deferral",
@@ -494,7 +502,9 @@ export async function runRemoteDoctor(input: {
 
   return decodeReport({
     version: 1,
-    generatedAt: (input.now ?? new Date()).toISOString(),
+    generatedAt: input.now
+      ? input.now.toISOString()
+      : DateTime.formatIso(await Effect.runPromise(DateTime.now)),
     overall,
     checks,
     repairsApplied,

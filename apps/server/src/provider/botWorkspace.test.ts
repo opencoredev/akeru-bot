@@ -1,5 +1,5 @@
+import { workspaceIO } from "./test-support/workspaceIO.ts";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -156,6 +156,30 @@ describe("Ascii Box", () => {
     await expect(session.sleep()).rejects.toThrow("snapshot archival failed");
     expect(stop).toHaveBeenCalledWith({ boxId: "ascii-id" });
     expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("stops archival polling when a later response reports an error", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
+
+    try {
+      const { client, get, session } = await setup();
+      const current = await client.get({ boxId: "ascii-id" });
+      get
+        .mockResolvedValueOnce({ ...current, box: { ...current.box, state: "archiving" } })
+        .mockResolvedValue({ ...current, box: { ...current.box, state: "error" } });
+      vi.spyOn(client, "stop").mockResolvedValue({
+        ok: true,
+        type: "box.stopped",
+        id: "ascii-id",
+        status: "archiving",
+      });
+      const failure = expect(session.sleep()).rejects.toThrow("snapshot archival failed");
+      await vi.advanceTimersByTimeAsync(2_000);
+      await failure;
+      expect(get).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("bounds snapshot waits without deleting the VM", async () => {
@@ -351,6 +375,7 @@ describe("Ascii Box", () => {
 
     try {
       const input = {
+        io: workspaceIO,
         threadId: "thread",
         sandbox: "ascii" as const,
         workspaceId: "workspace",
@@ -425,6 +450,7 @@ describe("Ascii Box", () => {
         await NodeFS.promises.writeFile(identityFile, JSON.stringify(previous));
 
         const input = {
+          io: workspaceIO,
           threadId: "thread",
           sandbox: "ascii" as const,
           workspaceId: "workspace",
@@ -470,6 +496,7 @@ describe("Ascii Box", () => {
     try {
       await expect(
         createRemoteBotWorkspace({
+          io: workspaceIO,
           threadId: "thread",
           sandbox: "ascii",
           workspaceId: "workspace",
@@ -501,6 +528,7 @@ describe("createBotWorkspace", () => {
     NodeFS.mkdirSync(projectDir, { recursive: true });
 
     const workspace = await createBotWorkspace({
+      io: workspaceIO,
       threadId: "bot-one",
       cwd: projectDir,
       localRoot: botRoot,
@@ -526,6 +554,7 @@ describe("createBotWorkspace", () => {
 
     const makeRemoteWorkspace = vi.fn(async () => remote);
     await createBotWorkspace({
+      io: workspaceIO,
       threadId: "thread-vercel",
       sandbox: "vercel",
       workspaceId: "akeru-vercel",
@@ -537,6 +566,7 @@ describe("createBotWorkspace", () => {
       makeRemoteWorkspace,
     });
     expect(makeRemoteWorkspace).toHaveBeenCalledWith({
+      io: workspaceIO,
       threadId: "thread-vercel",
       sandbox: "vercel",
       workspaceId: "akeru-vercel",
@@ -551,7 +581,7 @@ describe("createBotWorkspace", () => {
 
   it("requires stable identity for remote workspaces", async () => {
     await expect(
-      createRemoteBotWorkspace({ threadId: "thread-remote", sandbox: "e2b" }),
+      createRemoteBotWorkspace({ io: workspaceIO, threadId: "thread-remote", sandbox: "e2b" }),
     ).rejects.toThrow("needs a stable workspace identity");
   });
 
@@ -564,6 +594,7 @@ describe("createBotWorkspace", () => {
     );
 
     const input = {
+      io: workspaceIO,
       threadId: "thread-remote",
       sandbox: "e2b" as const,
       workspaceId: "akeru-stable-id",
@@ -598,6 +629,7 @@ describe("createBotWorkspace", () => {
 
     await expect(
       createRemoteBotWorkspace({
+        io: workspaceIO,
         threadId: "thread-remote",
         sandbox: "vercel",
         workspaceId: "akeru-stable-id",

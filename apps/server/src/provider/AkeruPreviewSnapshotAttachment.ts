@@ -1,6 +1,5 @@
 import type { AkeruToolResult } from "./tools/AkeruToolTypes.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 

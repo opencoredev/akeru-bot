@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeStream from "@effect/platform-node/NodeStream";
 import {
   type DesktopHostTelemetryMessage as DesktopHostTelemetryMessageValue,

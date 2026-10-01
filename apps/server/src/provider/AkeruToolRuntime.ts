@@ -2,7 +2,6 @@ import type { AkeruToolResult } from "./tools/AkeruToolTypes.ts";
 import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
 import { decodeAkeruRuntimeToolInput } from "./tools/AkeruToolInputs.ts";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { RequestContext } from "@mastra/core/request-context";
 import {
   AKERU_TOOL_CATALOG,

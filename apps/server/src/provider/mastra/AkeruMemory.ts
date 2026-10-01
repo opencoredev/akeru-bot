@@ -1,7 +1,6 @@
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeURL from "node:url";
 import { RequestContext } from "@mastra/core/request-context";
 import {

@@ -1,6 +1,5 @@
 import { McpServerId, type AkeruToolInputSchemas } from "@akeru/contracts";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import { expect, it, vi } from "vite-plus/test";
 import { createAkeruCatalogToolHandlers } from "./AkeruCatalogToolHandlers.ts";
 

@@ -1,6 +1,6 @@
+import { workspaceIO } from "./test-support/workspaceIO.ts";
 import { probeTool } from "./test-support/toolProbe.ts";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import { ThreadId } from "@akeru/contracts";
@@ -37,6 +37,7 @@ describe("AkeruSessionResources", () => {
     NodeFS.mkdirSync(project, { recursive: true });
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: directory,
       makeBotBrowser: () => browser(),
       toMcpServerConfigs: () => ({}),
@@ -68,6 +69,7 @@ describe("AkeruSessionResources", () => {
     const botBrowser = browser();
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       hostPlatform: "darwin",
       makeRemoteWorkspace: async () => workspace(),
@@ -101,6 +103,7 @@ describe("AkeruSessionResources", () => {
     const manager = mcpManager({ connected: true, toolCount: 1 }, { [toolName]: { execute } });
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       hostPlatform: "darwin",
       makeRemoteWorkspace: async () => workspace(),
@@ -139,6 +142,7 @@ describe("AkeruSessionResources", () => {
       .mockReturnValueOnce(healthy as never);
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       hostPlatform: "darwin",
       makeRemoteWorkspace: async () => workspace(),
@@ -177,6 +181,7 @@ describe("AkeruSessionResources", () => {
     );
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => ({
         ...localBotWorkspace(workspace()),

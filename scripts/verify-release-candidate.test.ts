@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests use isolated temporary release directories.
 import * as NodeAssert from "node:assert/strict";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";

@@ -1,5 +1,5 @@
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
-import * as NodePath from "node:path";
+import * as Effect from "effect/Effect";
+import * as Path from "effect/Path";
 
 import type {
   CopyOptions,
@@ -13,6 +13,8 @@ import type {
   WorkspaceFilesystem,
   WriteOptions,
 } from "@mastra/core/workspace";
+
+const posixPath = Effect.runSync(Path.Path.pipe(Effect.provide(Path.layer)));
 
 interface RemoteCommandSession {
   readonly run: (
@@ -46,7 +48,7 @@ export class BotWorkspaceFilesystem implements WorkspaceFilesystem {
 
   async writeFile(path: string, content: FileContent, options?: WriteOptions): Promise<void> {
     const checks = [
-      options?.recursive ? `mkdir -p -- ${quote(NodePath.posix.dirname(path))}` : "",
+      options?.recursive ? `mkdir -p -- ${quote(posixPath.dirname(path))}` : "",
       options?.overwrite === false ? `test ! -e ${quote(path)}` : "",
       options?.expectedMtime
         ? `test "$(stat -c %Y -- ${quote(path)})" = ${quote(String(Math.floor(options.expectedMtime.getTime() / 1_000)))}`
@@ -148,7 +150,7 @@ export class BotWorkspaceFilesystem implements WorkspaceFilesystem {
       .split("\u001f");
 
     return {
-      name: NodePath.posix.basename(path),
+      name: posixPath.basename(path),
       path,
       type: kind.includes("directory") ? "directory" : "file",
       size: kind.includes("directory") ? 0 : Number(size),

@@ -1,5 +1,4 @@
 import * as Schema from "effect/Schema";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
 
 import {
   createdAt,
@@ -23,6 +22,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Scope from "effect/Scope";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
@@ -115,6 +115,71 @@ describe("ImageGenerationRuntime", () => {
       assert.deepEqual(saved, []);
     }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
   });
+
+  for (const blockedWrite of [1, 2]) {
+    it.effect(
+      `removes unposted files when interrupted during image ${blockedWrite} persistence`,
+      () => {
+        const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
+        return Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const config = yield* ServerConfig;
+          const writing = yield* Deferred.make<Fiber.Fiber<unknown, unknown>>();
+          const resume = yield* Deferred.make<void>();
+          const botId = BotId.make("bot-persist-cancel");
+          const threadId = ThreadId.make("thread-persist-cancel");
+          yield* createProject;
+          yield* createBot(botId, "claudeAgent", null);
+          yield* createBotThread(threadId, botId);
+
+          let writes = 0;
+
+          const runtime = yield* makeImageGenerationRuntime({
+            adapters,
+            subscriptionAuth: fakeSubscriptions(),
+          }).pipe(
+            Effect.provideService(FileSystem.FileSystem, {
+              ...fs,
+              writeFile: (filePath, bytes, options) =>
+                Effect.gen(function* () {
+                  yield* fs.writeFile(filePath, bytes, options);
+                  writes += 1;
+
+                  if (writes === blockedWrite) {
+                    yield* Effect.withFiber((fiber) => Deferred.succeed(writing, fiber));
+                    yield* Deferred.await(resume);
+                  }
+                }),
+            }),
+          );
+
+          const request = yield* runtime
+            .generate(threadId, {
+              operation: "generate",
+              prompt: PROMPT,
+              count: 2,
+            })
+            .pipe(Effect.forkChild);
+
+          const writer = yield* Deferred.await(writing);
+
+          const staged = yield* fs.readDirectory(config.attachmentsDir);
+
+          assert.equal(staged.length, blockedWrite);
+          assert.equal(staged.filter((filePath) => filePath.endsWith(".part")).length, 1);
+          yield* Effect.sync(() => writer.interruptUnsafe());
+          yield* Deferred.succeed(resume, undefined);
+
+          const result = yield* Fiber.join(request);
+
+          assert.equal(result.status === "failed" && result.kind, "cancelled");
+          assert.deepEqual(yield* fs.readDirectory(config.attachmentsDir), []);
+          assert.equal((yield* generatedMessages(threadId)).length, 0);
+        }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
+      },
+    );
+  }
 
   it.effect("keeps saved images once the message references them", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };

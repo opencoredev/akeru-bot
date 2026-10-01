@@ -1,5 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
-
 import * as Effect from "effect/Effect";
 
 import {

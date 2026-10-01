@@ -1,6 +1,5 @@
 import * as Match from "effect/Match";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeOS from "node:os";
 import * as NodeChildProcess from "node:child_process";
 

@@ -1,17 +1,14 @@
-// @effect-diagnostics globalDate:off
 /**
  * Folds parsed transcript records into `(day, hourStart?, provider, model)`
  * buckets.
- *
- * `Intl.DateTimeFormat` is the only reliable way to resolve a wall-clock day in
- * an arbitrary IANA zone, and it takes a `Date`. That is why the raw `Date`
- * construction is allowed here; nothing in this module reads the clock.
  *
  * Pure, so the bucketing and de-duplication rules are testable without touching
  * the filesystem or the network.
  *
  * @module usageAggregation
  */
+import * as DateTime from "effect/DateTime";
+
 import type { UsageBucket, UsageDay, UsageResolution, UsageTokenTotals } from "@akeru/contracts";
 
 import { addTotals, EMPTY_TOTALS, type UsageRecord } from "./usageTranscripts.ts";
@@ -43,7 +40,7 @@ export function makeDayFormatter(timeZone: string): (timestampMs: number) => str
     });
   }
 
-  return (timestampMs) => format.format(new Date(timestampMs));
+  return (timestampMs) => format.format(timestampMs);
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -150,10 +147,13 @@ export class UsageAggregator {
     const hourStart =
       this.#hourlyWindow === null
         ? ""
-        : new Date(
-            this.#hourlyWindow.sinceTimeMs +
-              Math.floor((record.timestampMs - this.#hourlyWindow.sinceTimeMs) / HOUR_MS) * HOUR_MS,
-          ).toISOString();
+        : DateTime.formatIso(
+            DateTime.makeUnsafe(
+              this.#hourlyWindow.sinceTimeMs +
+                Math.floor((record.timestampMs - this.#hourlyWindow.sinceTimeMs) / HOUR_MS) *
+                  HOUR_MS,
+            ),
+          );
 
     const key = `${day}\u0000${hourStart}\u0000${record.provider}\u0000${record.model}`;
     let bucket = this.#buckets.get(key);

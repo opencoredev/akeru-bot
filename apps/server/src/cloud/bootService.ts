@@ -1,3 +1,4 @@
+import { fromJsonStringPretty } from "@akeru/shared/schemaJson";
 import * as Predicate from "effect/Predicate";
 import {
   HostProcessExecutablePath,
@@ -37,6 +38,8 @@ import {
 } from "./bootServiceTypes.ts";
 import { isOwnedLegacyBootServiceUnit, systemdManager } from "./bootServiceSystemd.ts";
 import { launchdManager } from "./bootServiceLaunchd.ts";
+
+const encodeServiceState = Schema.encodeEffect(fromJsonStringPretty(Schema.Unknown));
 
 /** Undefined means this host cannot run the background service. */
 export function selectBootServiceManager(input: {
@@ -402,15 +405,10 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
       yield* writeDurably(launcherPath, launcherSource);
       yield* writeDurably(
         statePath,
-        // @effect-diagnostics-next-line preferSchemaOverJson:off - fixed launcher-owned document.
-        `${JSON.stringify(
-          {
-            protocol: SERVICE_LAUNCHER_PROTOCOL,
-            activeVersion: input.cliVersion,
-          } satisfies ServiceState,
-          null,
-          2,
-        )}\n`,
+        `${yield* encodeServiceState({
+          protocol: SERVICE_LAUNCHER_PROTOCOL,
+          activeVersion: input.cliVersion,
+        } satisfies ServiceState).pipe(Effect.orDie)}\n`,
       );
       yield* writeDurably(unitPath, manager.render(plan));
 

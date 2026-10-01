@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import type { SubscriptionProviderId } from "@akeru/contracts";
 
 export const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";

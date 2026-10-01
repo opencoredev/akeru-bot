@@ -1,6 +1,5 @@
 import { claudeMessage } from "./test-support/claudeMessages.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 
 import { ProviderDriverKind, ProviderRuntimeEvent } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";

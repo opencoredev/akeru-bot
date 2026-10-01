@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
  * ProviderServiceLive - Cross-provider orchestration layer.
  *

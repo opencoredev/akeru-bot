@@ -1,5 +1,4 @@
 import * as Schema from "effect/Schema";
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";

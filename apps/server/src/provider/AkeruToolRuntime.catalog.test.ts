@@ -1,6 +1,5 @@
 import { decodeAkeruToolInput } from "@akeru/contracts";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { BotId, ThreadId } from "@akeru/contracts";

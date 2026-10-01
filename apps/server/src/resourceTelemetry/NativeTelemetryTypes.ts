@@ -1,5 +1,3 @@
-// @effect-diagnostics deterministicKeys:off
-// Preserve the existing service key when moving the declaration.
 import type {
   HostPowerSnapshot,
   ResourceMonitorCapabilities,
@@ -47,4 +45,4 @@ export class NativeTelemetryClient extends Context.Service<
       Scope.Scope
     >;
   }
->()("akeru-bot/resourceTelemetry/NativeTelemetryClient") {}
+>()("akeru-bot/resourceTelemetry/NativeTelemetryTypes/NativeTelemetryClient") {}

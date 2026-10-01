@@ -1,7 +1,6 @@
 import type * as Schema from "effect/Schema";
 import { decodeJsonString, jsonObject, isJsonObject } from "../json.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalFetch:off
 /**
  * Image provider adapters.
  *

@@ -1,5 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - the Windows reveal smoke test drives a real PowerShell through Node process and filesystem APIs.
-
 import { testLayer } from "./testUtils/externalLauncher.ts";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
@@ -113,7 +111,7 @@ it.effect("reveals a file in File Explorer through PowerShell on Windows", () =>
 // single `/select,"<path>"` switch. Mock argv assertions cannot prove this —
 // only Windows' own PowerShell -> CreateProcess quoting chain can, so the
 // test runs only where that chain exists.
-async function runWindowsRevealSmoke() {
+const runWindowsRevealSmoke = Effect.fn("runWindowsRevealSmoke")(function* () {
   const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-reveal-smoke-"));
 
   try {
@@ -138,30 +136,24 @@ async function runWindowsRevealSmoke() {
     );
 
     // Start-Process returns before the recorder runs; wait for its output.
-    // The waits run outside the Effect runtime on purpose: the test
-    // exercises the real Windows process chain in real time.
-    // @effect-diagnostics-next-line globalTimers:off
-    const sleep = (millis: number) => new Promise((resolve) => setTimeout(resolve, millis));
-    // @effect-diagnostics-next-line globalDate:off
     const deadline = Date.now() + 20_000;
 
-    // @effect-diagnostics-next-line globalDate:off
     while (!NodeFS.existsSync(outputPath) && Date.now() < deadline) {
-      await sleep(100);
+      yield* Effect.sleep(100);
     }
 
-    await sleep(200);
+    yield* Effect.sleep(200);
     const recorded = NodeFS.readFileSync(outputPath, "utf8").trim();
     assert.equal(recorded, `/select,"${target}"`);
   } finally {
     NodeFS.rmSync(tempDir, { recursive: true, force: true });
   }
-}
+});
 
-it.skipIf(HostProcessPlatform.defaultValue() !== "win32")(
+it.live.skipIf(HostProcessPlatform.defaultValue() !== "win32")(
   "delivers the raw /select switch for spaced paths through real PowerShell",
-  { timeout: 60_000 },
   runWindowsRevealSmoke,
+  { timeout: 60_000 },
 );
 
 it.effect("does not advertise reveal on Windows when PowerShell is missing", () =>

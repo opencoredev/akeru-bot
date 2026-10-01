@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 import { SubscriptionBaseUrl, type BotId, type ProviderInstanceId } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import {

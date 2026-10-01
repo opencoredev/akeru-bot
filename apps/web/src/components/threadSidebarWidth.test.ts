@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Regression coverage compares the sidebar component with its width contract.
 import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";

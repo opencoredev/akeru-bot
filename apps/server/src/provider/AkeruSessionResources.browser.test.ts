@@ -1,5 +1,5 @@
+import { workspaceIO } from "./test-support/workspaceIO.ts";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import { BotId } from "@akeru/contracts";
 import { afterEach, expect, it, vi } from "vite-plus/test";
@@ -25,6 +25,7 @@ describe("AkeruSessionResources", () => {
     const makeBotBrowser = vi.fn(() => sharedBrowser);
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace,
       makeBotBrowser,
@@ -53,6 +54,7 @@ describe("AkeruSessionResources", () => {
     const sharedBrowser = browser();
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeBotBrowser: (input) => {
         onFailure = input.onFailure!;
@@ -102,6 +104,7 @@ describe("AkeruSessionResources", () => {
     let onReady!: () => void;
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeBotBrowser: (input) => {
         onFailure = input.onFailure!;
@@ -152,6 +155,7 @@ describe("AkeruSessionResources", () => {
     });
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeBotBrowser,
       onBrowserFailure: browserFailure,
@@ -196,6 +200,7 @@ describe("AkeruSessionResources", () => {
       .mockReturnValueOnce(replacementBrowser);
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => localBotWorkspace(workspace()),
       makeBotBrowser,
@@ -235,6 +240,7 @@ describe("AkeruSessionResources", () => {
       .mockReturnValueOnce(replacementBrowser);
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace,
       makeBotBrowser,
@@ -265,6 +271,7 @@ describe("AkeruSessionResources", () => {
       .mockReturnValueOnce(replacementBrowser);
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => localBotWorkspace(workspace()),
       makeBotBrowser,
@@ -295,6 +302,7 @@ describe("AkeruSessionResources", () => {
     const sharedBrowser = browser();
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => localBotWorkspace(remote),
       makeBotBrowser: () => sharedBrowser,
@@ -320,6 +328,7 @@ describe("AkeruSessionResources", () => {
     const sharedBrowser = browser();
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => localBotWorkspace(remote),
       makeBotBrowser: () => sharedBrowser,

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - The focus contract reads its source.
 import * as NodeFS from "node:fs";
 
 import { EnvironmentId, ThreadId } from "@akeru/contracts";

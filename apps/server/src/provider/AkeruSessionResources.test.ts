@@ -1,5 +1,5 @@
+import { workspaceIO } from "./test-support/workspaceIO.ts";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import { BotId } from "@akeru/contracts";
@@ -33,6 +33,7 @@ describe("AkeruSessionResources", () => {
     };
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => botWorkspace,
       makeBotBrowser: () => browser(),
@@ -58,6 +59,7 @@ describe("AkeruSessionResources", () => {
     };
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => botWorkspace,
       makeBotBrowser: () => browser(),
@@ -76,6 +78,7 @@ describe("AkeruSessionResources", () => {
     let onFailure!: (cause: unknown) => void;
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeBotBrowser: (input) => {
         onFailure = input.onFailure!;
@@ -111,6 +114,7 @@ describe("AkeruSessionResources", () => {
     });
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace,
       makeBotBrowser: () => browser(),
@@ -169,6 +173,7 @@ describe("AkeruSessionResources", () => {
     const botBrowser = browser();
 
     const resources = new AkeruSessionResources({
+      io: workspaceIO,
       stateDir: stateDir(),
       makeRemoteWorkspace: async () => workspace(),
       makeBotBrowser: () => botBrowser,
@@ -214,6 +219,7 @@ describe("AkeruSessionResources", () => {
     );
 
     const options = {
+      io: workspaceIO,
       stateDir: directory,
       makeRemoteWorkspace: (input: Parameters<typeof createRemoteBotWorkspace>[0]) =>
         createRemoteBotWorkspace({ ...input, openSession }),

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - resolves the mock ACP agent script path relative to this test file.
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 

@@ -4,9 +4,8 @@ import { ProviderInstanceId } from "@akeru/contracts";
 import type { AkeruToolRuntime } from "../../AkeruToolRuntime.ts";
 import type { ProviderServiceError } from "../../Errors.ts";
 import type { AgentControllerLiveOptions } from "./Options.ts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 import * as NodeCrypto from "node:crypto";
-import * as NodeFS from "node:fs";
+import * as FileSystem from "effect/FileSystem";
 
 import {
   TurnId,
@@ -45,6 +44,7 @@ import {
 } from "./State.ts";
 
 export function createTurnRequests(deps: {
+  readonly fileSystem: FileSystem.FileSystem;
   readonly resolvedByThread: Map<string, ResolvedEngine>;
   readonly sessions: Map<string, ActiveSession>;
   readonly usesMastraCode: (provider: ProviderDriverKind) => boolean;
@@ -356,30 +356,31 @@ export function createTurnRequests(deps: {
                 );
               }
 
-              return Effect.tryPromise({
-                try: async () => {
-                  const bytes = await (deps.options?.readAttachment ?? NodeFS.promises.readFile)(
-                    path,
-                  );
+              const readError = (cause: unknown) =>
+                new AgentControllerRuntimeError({
+                  operation: "sendTurn.attachments",
+                  detail: `Could not read attachment '${attachment.id}'.`,
+                  cause,
+                });
 
-                  return {
-                    file: {
-                      data: Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString(
-                        "base64",
-                      ),
-                      mediaType: attachment.mimeType,
-                      filename: attachment.name,
-                    },
-                    pathLine: `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`,
-                  };
-                },
-                catch: (cause) =>
-                  new AgentControllerRuntimeError({
-                    operation: "sendTurn.attachments",
-                    detail: `Could not read attachment '${attachment.id}'.`,
-                    cause,
-                  }),
-              });
+              const read = deps.options?.readAttachment;
+
+              const bytes = read
+                ? Effect.tryPromise({ try: () => read(path), catch: readError })
+                : deps.fileSystem.readFile(path).pipe(Effect.mapError(readError));
+
+              return bytes.pipe(
+                Effect.map((bytes) => ({
+                  file: {
+                    data: Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString(
+                      "base64",
+                    ),
+                    mediaType: attachment.mimeType,
+                    filename: attachment.name,
+                  },
+                  pathLine: `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`,
+                })),
+              );
             },
             { concurrency: 1 },
           );

@@ -1,5 +1,5 @@
+import { workspaceIO } from "./test-support/workspaceIO.ts";
 import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -61,6 +61,7 @@ describe("Tenki workspace", () => {
     sdk.get.mockClear().mockResolvedValue(session);
 
     const input = {
+      io: workspaceIO,
       sandbox: "tenki" as const,
       threadId: "thread-tenki",
       workspaceId: "bot-tenki",
@@ -103,6 +104,7 @@ describe("Tenki workspace", () => {
 
     const create = () =>
       createRemoteBotWorkspace({
+        io: workspaceIO,
         sandbox: "tenki",
         threadId: "thread",
         workspaceId: "bot",
@@ -134,6 +136,7 @@ describe("Tenki workspace", () => {
     const identityFile = NodePath.join(root, "identity.json");
 
     const input = {
+      io: workspaceIO,
       sandbox: "tenki" as const,
       threadId: "thread",
       workspaceId: "bot",
@@ -149,7 +152,10 @@ describe("Tenki workspace", () => {
       sdk.create.mockClear();
       sdk.get.mockRejectedValueOnce(new Error("not found"));
       await expect(
-        createRemoteBotWorkspace({ ...input, environment: { TENKI_API_KEY: "key" } }),
+        createRemoteBotWorkspace({
+          ...input,
+          environment: { TENKI_API_KEY: "key" },
+        }),
       ).rejects.toThrow("missing");
       expect(sdk.create).not.toHaveBeenCalled();
       expect(NodeFS.existsSync(identityFile)).toBe(true);

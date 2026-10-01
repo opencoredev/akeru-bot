@@ -1,5 +1,4 @@
 import type * as Schema from "effect/Schema";
-// @effect-diagnostics nodeBuiltinImport:off - This test inspects installed package artifacts on disk.
 import * as NodeFS from "node:fs";
 import * as NodeModule from "node:module";
 import * as NodePath from "node:path";

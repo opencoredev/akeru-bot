@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
@@ -210,12 +209,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* fileSystem.makeDirectory(config.secretsDir, { recursive: true });
       yield* fileSystem.writeFileString(
         authPath,
-        // @effect-diagnostics-next-line preferSchemaOverJson:off
         JSON.stringify({ xai: { type: "oauth", access: "a", refresh: "r", expires: 4e12 } }),
       );
       yield* fileSystem.writeFileString(
         `${authPath}.health`,
-        // @effect-diagnostics-next-line preferSchemaOverJson:off
         JSON.stringify({
           xai: {
             lastFailedRequest: {
@@ -243,7 +240,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
             yield* fileSystem.writeFileString(
               `${authPath}.health`,
-              // @effect-diagnostics-next-line preferSchemaOverJson:off
               JSON.stringify({
                 xai: {
                   lastSuccessfulRequestAt: "2026-08-30T20:01:00.000Z",
@@ -260,7 +256,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
             yield* fileSystem.writeFileString(
               `${authPath}.health`,
-              // @effect-diagnostics-next-line preferSchemaOverJson:off
               JSON.stringify({
                 xai: {
                   lastFailedRequest: {

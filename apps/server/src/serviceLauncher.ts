@@ -1,6 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
-// @effect-diagnostics globalDate:off
-// @effect-diagnostics globalTimers:off
 // This file is intentionally excluded from the Effect migration. It is shipped as a
 // standalone bundle and copied to a stable path by `akeru service update`;
 // `apps/server/package.json` packs it separately with `build:bundle`. Keep runtime

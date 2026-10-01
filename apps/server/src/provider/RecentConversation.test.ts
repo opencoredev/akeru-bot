@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off
 import type { MastraDBMessage } from "@mastra/core/agent-controller";
 import { describe, expect, it } from "vite-plus/test";
 

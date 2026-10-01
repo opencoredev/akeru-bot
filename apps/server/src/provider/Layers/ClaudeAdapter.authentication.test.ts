@@ -1,6 +1,5 @@
 import { claudeMessage } from "./test-support/claudeMessages.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 
 import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";

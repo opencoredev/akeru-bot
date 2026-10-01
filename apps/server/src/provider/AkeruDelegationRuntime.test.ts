@@ -1,6 +1,5 @@
 import * as Predicate from "effect/Predicate";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import {
   DelegationId,
   McpServerId,

@@ -5,7 +5,6 @@ import {
 } from "./test-support/projectionFixtures.ts";
 import type { AkeruMastraState } from "../AkeruMastraHarness.ts";
 
-// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import type { MastraDBMessage, Session } from "@mastra/core/agent-controller";

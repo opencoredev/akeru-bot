@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import {
   AkeruMemoryEntityId,
   AkeruMemoryId,
@@ -117,7 +116,7 @@ export function makeMemoryOnlyCredentialOptions() {
     issueMcpCredential: (request: (typeof requests)[number]) => {
       requests.push(request);
 
-      if (!request.capabilities?.has("memory")) return Effect.succeed(undefined);
+      if (!request.capabilities?.has("memory")) return Effect.as(Effect.void, undefined);
 
       return Effect.succeed({
         config: {

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - CLI integration exercises Node HTTP and filesystem boundaries.
 import * as Predicate from "effect/Predicate";
 import * as NodeHttp from "node:http";
 import * as NodeFS from "node:fs";
@@ -218,7 +217,6 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
         runCli(["auth", "pairing", "create", "--base-dir", baseDir, "--json"]),
       );
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       const created = JSON.parse(createdOutput.output) as {
         readonly id: string;
         readonly credential: string;
@@ -228,7 +226,6 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
         runCli(["auth", "pairing", "list", "--base-dir", baseDir, "--json"]),
       );
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       const listed = JSON.parse(listedOutput.output) as ReadonlyArray<{
         readonly id: string;
         readonly credential?: string;
@@ -253,7 +250,6 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
         runCli(["auth", "session", "issue", "--base-dir", baseDir, "--json"]),
       );
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       const issued = JSON.parse(issuedOutput.output) as {
         readonly sessionId: string;
         readonly token: string;
@@ -264,7 +260,6 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
         runCli(["auth", "session", "list", "--base-dir", baseDir, "--json"]),
       );
 
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
       const listed = JSON.parse(listedOutput.output) as ReadonlyArray<{
         readonly sessionId: string;
         readonly token?: string;

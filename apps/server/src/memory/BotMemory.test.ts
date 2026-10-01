@@ -1,5 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
-
 import { NodeFS, fixture, privateAccess, groupAccess } from "./testUtils/botMemory.ts";
 import * as NodePath from "node:path";
 import { assert, describe, expect, it } from "@effect/vitest";

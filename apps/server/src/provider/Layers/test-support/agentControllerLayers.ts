@@ -3,7 +3,6 @@ import { sessionFixture } from "./partialFixtures.ts";
 import type { AkeruMastraState } from "../../AkeruMastraHarness.ts";
 
 import * as Match from "effect/Match";
-// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { AgentControllerEvent, Session } from "@mastra/core/agent-controller";
 import {

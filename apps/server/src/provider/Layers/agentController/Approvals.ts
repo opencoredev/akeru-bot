@@ -3,7 +3,6 @@ import type { ProviderApprovalDecision } from "@akeru/contracts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
 import type { AkeruToolRuntime } from "../../AkeruToolRuntime.ts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 
 import {
   EventId,

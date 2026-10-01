@@ -167,7 +167,6 @@ describe("channel runtime", () => {
           managementUrl: "https://app.photon.codes/dashboard/project%2Flaunch",
         },
       ]);
-      // @effect-diagnostics-next-line preferSchemaOverJson:off - scans the persisted settings text.
       expect(JSON.stringify(harness.readSettings().channelConnections)).not.toContain(
         "never-in-settings",
       );

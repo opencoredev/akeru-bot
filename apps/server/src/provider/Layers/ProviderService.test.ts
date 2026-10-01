@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import type { ProviderSendTurnInput, ProviderSession } from "@akeru/contracts";
 import {
   ProviderDriverKind,

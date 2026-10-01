@@ -1,5 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
-
 import {
   PROMPT,
   fakeAdapter,

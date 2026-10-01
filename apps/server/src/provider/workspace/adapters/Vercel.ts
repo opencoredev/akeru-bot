@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { type AkeruWorkspaceState, type AkeruRemoteSession } from "../BotWorkspaceTypes.ts";
 import { credential } from "../BotWorkspaceLifecycle.ts";
 

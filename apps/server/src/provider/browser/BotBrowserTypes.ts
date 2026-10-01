@@ -1,5 +1,4 @@
 import * as Schema from "effect/Schema";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import type { ToolsInput } from "@mastra/core/agent";
 import type { Workspace } from "@mastra/core/workspace";
 import type { AkeruBrowserEndpoint } from "../workspace/BotWorkspaceTypes.ts";
@@ -53,7 +52,7 @@ export const JsonRpcResponseSchema = Schema.Struct({
 export type JsonRpcResponse = typeof JsonRpcResponseSchema.Type;
 
 export type BrowserRpcValue =
-  | typeof Schema.Json.Type
+  | Schema.Json
   | undefined
   | readonly BrowserRpcValue[]
   | { readonly [key: string]: BrowserRpcValue };

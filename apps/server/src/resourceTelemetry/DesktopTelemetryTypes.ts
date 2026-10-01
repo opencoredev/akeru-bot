@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import { type ResourceTelemetrySourceStatus } from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";

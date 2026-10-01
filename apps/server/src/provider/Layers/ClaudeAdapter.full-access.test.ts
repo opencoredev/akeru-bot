@@ -1,5 +1,4 @@
 import { claudeMessage } from "./test-support/claudeMessages.ts";
-// @effect-diagnostics nodeBuiltinImport:off
 import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import { ProviderDriverKind, type RuntimeMode } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";

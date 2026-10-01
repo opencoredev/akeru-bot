@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests package into isolated temporary directories.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";

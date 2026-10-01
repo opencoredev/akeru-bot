@@ -1,6 +1,5 @@
 import { emptyProviderSnapshot, providerBotFixture } from "./test-support/projectionFixtures.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeFS from "node:fs";
 import * as NodeHttp from "node:http";
 import type * as NodeNet from "node:net";

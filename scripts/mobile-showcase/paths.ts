@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off - Host-side simulator and emulator automation uses Node subprocess and timing APIs directly.
 import * as NodePath from "node:path";
 
 import * as NodeProcess from "node:process";

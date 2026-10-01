@@ -1,6 +1,5 @@
 import { standardCommand } from "./test-support/standard-command.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off - builds real worktree layouts on disk.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
 import * as NodeFS from "node:fs";

@@ -1,5 +1,4 @@
 import * as Match from "effect/Match";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { DaytonaComputer } from "../../daytonaComputer.ts";
 import { WorkspaceComputer } from "../../workspaceComputer.ts";
 import { type AkeruRemoteSession, type AkeruWorkspaceState } from "../BotWorkspaceTypes.ts";

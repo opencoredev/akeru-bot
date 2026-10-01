@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
 import type { AgentControllerEvent } from "@mastra/core/agent-controller";
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,

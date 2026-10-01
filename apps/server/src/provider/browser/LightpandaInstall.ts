@@ -1,7 +1,10 @@
 import * as Match from "effect/Match";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
-import * as NodePath from "node:path";
+import * as Effect from "effect/Effect";
+import * as Path from "effect/Path";
+
 import type { WorkspaceSandbox } from "@mastra/core/workspace";
+
+const posixPath = Effect.runSync(Path.Path.pipe(Effect.provide(Path.layer)));
 
 export const LIGHTPANDA_VERSION = "0.3.7";
 
@@ -96,7 +99,7 @@ export async function installLightpanda(
   const platform = platformFromUname(system, machine);
   const release = LIGHTPANDA_RELEASES[platform];
   const root = sandbox.provider === "local" ? cacheDir : `/tmp/akeru-browser-${LIGHTPANDA_VERSION}`;
-  const binaryPath = NodePath.posix.join(root, "lightpanda");
+  const binaryPath = posixPath.join(root, "lightpanda");
   const installKey = sandbox.provider === "local" ? binaryPath : `${sandbox.id}:${binaryPath}`;
   const activeInstall = lightpandaInstalls.get(installKey);
 

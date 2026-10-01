@@ -1,5 +1,4 @@
 import { decodeJsonString } from "../json.ts";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeBuffer from "node:buffer";
 import {
   CHATGPT_REALTIME_VOICES,

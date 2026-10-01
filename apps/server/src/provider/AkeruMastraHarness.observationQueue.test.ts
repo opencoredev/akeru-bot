@@ -1,12 +1,13 @@
 import * as Predicate from "effect/Predicate";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
 import { ObservationalMemory } from "@mastra/memory/processors";
 import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Logger from "effect/Logger";
 import { it } from "@effect/vitest";
 import { assert, expect, vi } from "vite-plus/test";
 import { AkeruObservationQueueClosedError } from "./AkeruMastraHarness.ts";
@@ -427,20 +428,19 @@ describe("AkeruMastraHarness", () => {
     }),
   );
 
-  it.effect("drops a queued observation after three attempts and notifies the drop", () =>
-    harnessTest(async (open) => {
+  it.effect("drops a queued observation after three attempts and notifies the drop", () => {
+    const warnings: ReadonlyArray<unknown>[] = [];
+
+    const capture = Logger.make(({ message }) => {
+      warnings.push(Array.isArray(message) ? message : [message]);
+    });
+
+    return harnessTest(async (open) => {
       const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-om-retries-"));
 
       const observe = vi
         .spyOn(ObservationalMemory.prototype, "observe")
         .mockRejectedValue(new Error("observer down"));
-
-      // Effect's default logger writes warnings through console.log.
-      const warnings: ReadonlyArray<unknown>[] = [];
-
-      const warn = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
-        warnings.push(args);
-      });
 
       const dropped: Array<{
         readonly threadId: string;
@@ -490,13 +490,12 @@ describe("AkeruMastraHarness", () => {
           ),
         );
       } finally {
-        warn.mockRestore();
         observe.mockRestore();
         await harness.close();
         NodeFS.rmSync(directory, { recursive: true, force: true });
       }
-    }),
-  );
+    }).pipe(Effect.provide(Logger.layer([capture], { mergeWithExisting: false })));
+  });
 
   it.effect("keeps a dropped observation queued until its drop notice lands", () =>
     harnessTest(async (open) => {

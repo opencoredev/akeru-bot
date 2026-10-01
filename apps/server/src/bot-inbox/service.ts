@@ -1,5 +1,5 @@
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -81,7 +81,10 @@ export class BotInboxService {
   private readonly filePath: string;
   private readonly now: () => string;
 
-  constructor(filePath: string, now: () => string = () => new Date().toISOString()) {
+  constructor(
+    filePath: string,
+    now: () => string = () => DateTime.formatIso(DateTime.nowUnsafe()),
+  ) {
     this.filePath = filePath;
     this.now = now;
     this.reload();

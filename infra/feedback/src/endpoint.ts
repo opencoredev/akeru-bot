@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalDate:off cryptoRandomUUID:off
 import {
   PRODUCT_FEEDBACK_BODY_MAX_BYTES,
   ProductFeedbackSubmission,

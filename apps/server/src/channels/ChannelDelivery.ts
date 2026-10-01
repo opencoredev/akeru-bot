@@ -361,12 +361,15 @@ export const sendChannelMessage = (
           }
 
           const marked = yield* Effect.exit(
-            Effect.gen(function* () {
-              yield* deps.deliveryStore.markSent({
-                messageId: input.messageId,
-                sentAt: yield* deps.nowIso,
-              });
-            }),
+            deps.nowIso.pipe(
+              Effect.flatMap((sentAt) =>
+                deps.deliveryStore.markSent({
+                  messageId: input.messageId,
+                  sentAt,
+                }),
+              ),
+              Effect.asVoid,
+            ),
           );
 
           if (Exit.isFailure(marked)) {

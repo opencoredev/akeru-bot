@@ -1,12 +1,11 @@
 #!/usr/bin/env node
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeURL from "node:url";
 
 // A file-wide `oxlint-disable` also silences akeru/no-lint-suppressions, so CI scans the
 // tracked sources directly. Vendored and generated code is fixed at its source instead.
 const SUPPRESSION_PATTERN =
-  "(//|/\\*+|\\{/\\*+)\\s*((eslint|oxlint)-(disable|enable)|@ts-(ignore|nocheck|expect-error))";
+  "(//|/\\*+|\\{/\\*+)\\s*((eslint|oxlint)-(disable|enable)|@ts-(ignore|nocheck|expect-error)|@effect-diagnostics)";
 
 const EXCLUDED_PATHSPECS = [
   ":!.repos/**",
@@ -51,7 +50,7 @@ if (import.meta.url === NodeURL.pathToFileURL(process.argv[1] ?? "").href) {
 
   if (matches.length > 0) {
     console.error(
-      `Found ${matches.length} lint or type suppression comments. Fix the code instead; see docs/internals/lint.md.\n${matches.join("\n")}`,
+      `Found ${matches.length} lint, type, or Effect diagnostic suppression comments. Fix the code instead; see docs/internals/lint.md.\n${matches.join("\n")}`,
     );
     process.exit(1);
   }

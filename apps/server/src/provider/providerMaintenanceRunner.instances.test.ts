@@ -1,6 +1,5 @@
 import * as Predicate from "effect/Predicate";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import { it, assert } from "@effect/vitest";
 import { ProviderInstanceId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";

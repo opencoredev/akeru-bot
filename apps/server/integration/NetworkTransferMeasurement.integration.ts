@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Measures the real Node HTTP and WebSocket transports.
 import * as NodeHttp from "node:http";
 import * as NodeZlib from "node:zlib";
 

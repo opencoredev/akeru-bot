@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Types from "effect/Types";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
@@ -148,7 +149,8 @@ export const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvide
     // so `CODEX_HOME=~/.codex_work` would reach codex verbatim and trip
     // "CODEX_HOME points to '~/.codex_work', but that path does not exist".
     // Expand here for parity with `CodexTextGeneration`/`CodexSessionRuntime`.
-    const resolvedHomePath = input.homePath ? expandHomePath(input.homePath) : undefined;
+    const path = yield* Path.Path;
+    const resolvedHomePath = input.homePath ? expandHomePath(input.homePath, path) : undefined;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
     const environment = {

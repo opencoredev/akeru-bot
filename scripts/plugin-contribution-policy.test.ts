@@ -1,6 +1,5 @@
 import type * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off - Tests inspect repository policy files.
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";

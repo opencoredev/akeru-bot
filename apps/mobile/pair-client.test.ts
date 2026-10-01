@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - These tests invoke host helpers with device and pairing commands stubbed.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";

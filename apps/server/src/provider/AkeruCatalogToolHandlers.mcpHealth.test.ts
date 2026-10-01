@@ -1,6 +1,5 @@
 import { mcpManagerFixture } from "./test-support/mcpManagerFixture.ts";
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import type { McpManager } from "@mastra/code-sdk/mcp/index";
 import { expect, it, vi } from "vite-plus/test";
 import { createAkeruCatalogToolHandlers } from "./AkeruCatalogToolHandlers.ts";

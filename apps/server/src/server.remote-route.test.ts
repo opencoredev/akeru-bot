@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests inspect the packaged remote route files.
 import * as NodeFS from "node:fs";
 import { expect, it } from "vite-plus/test";
 

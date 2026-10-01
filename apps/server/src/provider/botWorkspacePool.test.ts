@@ -1,5 +1,4 @@
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import { it as effectIt } from "@effect/vitest";
 import { BotId } from "@akeru/contracts";
 import * as Clock from "effect/Clock";

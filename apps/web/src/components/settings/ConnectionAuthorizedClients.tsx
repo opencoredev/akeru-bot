@@ -465,7 +465,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
             </Button>
           </div>
           {canRenderQrForSelection ? (
-            <div className="w-fit shrink-0 self-center rounded-xl bg-white p-3 sm:self-start">
+            <div className="w-fit shrink-0 self-center rounded-xl bg-qr-surface p-3 sm:self-start">
               <QRCodeSvg
                 value={qrPairingUrl}
                 size={168}

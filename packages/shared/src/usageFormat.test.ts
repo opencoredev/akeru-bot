@@ -1,7 +1,7 @@
-// @effect-diagnostics globalDate:off -- A fixed instant keeps calendar-window assertions deterministic.
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  enumerateDays,
   enumerateHourStarts,
   formatDateTimeShort,
   formatHourShort,
@@ -95,5 +95,34 @@ describe("hourly usage formatting", () => {
     } finally {
       resolvedOptions.mockRestore();
     }
+  });
+});
+
+describe("usage date compatibility", () => {
+  it("keeps invalid dates and reversed windows harmless", () => {
+    expect(enumerateDays("invalid", "2026-08-11")).toEqual([]);
+    expect(enumerateDays("2026-08-11", "2026-08-10")).toEqual([]);
+    expect(enumerateHourStarts("invalid", "2026-08-11")).toEqual([]);
+    expect(formatHourShort("invalid", "UTC")).toBe("invalid");
+    expect(formatDateTimeShort("invalid", "UTC")).toBe("invalid");
+    expect(formatRelativeHourShort("invalid", "2026-08-11", "UTC")).toBe("invalid");
+  });
+
+  it("keeps unzoned timestamps in the viewer's local zone", () => {
+    const value = "2026-08-11T12:37:00";
+    const zoned = new Date(value).toISOString();
+    expect(formatHourShort(value, "UTC")).toBe(formatHourShort(zoned, "UTC"));
+    expect(formatDateTimeShort(value, "UTC")).toBe(formatDateTimeShort(zoned, "UTC"));
+    expect(formatRelativeHourShort(value, value, "UTC")).toBe(
+      formatRelativeHourShort(zoned, zoned, "UTC"),
+    );
+  });
+
+  it("enumerates inclusive UTC dates across a year boundary", () => {
+    expect(enumerateDays("2025-12-31", "2026-01-02")).toEqual([
+      "2025-12-31",
+      "2026-01-01",
+      "2026-01-02",
+    ]);
   });
 });

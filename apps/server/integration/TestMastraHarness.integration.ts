@@ -1,6 +1,5 @@
 import type { AkeruMastraState } from "../src/provider/AkeruMastraHarness.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off
 /**
  * Mastra-side twin of `TestProviderAdapter.integration.ts`.
  *

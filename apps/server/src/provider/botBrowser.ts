@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { type CreateBotBrowserInput, type BotBrowser } from "./browser/BotBrowserTypes.ts";
 import { LightpandaRpc, createBotBrowserTools } from "./browser/LightpandaRpc.ts";
 

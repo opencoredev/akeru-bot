@@ -1,6 +1,5 @@
 import { decodePendingLogins } from "./persistedSchemas.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 import * as NodeFS from "node:fs";
 import * as NodeCrypto from "node:crypto";
 import {
@@ -9,6 +8,7 @@ import {
   type SubscriptionAuthStartInput,
 } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
+import * as Clock from "effect/Clock";
 import type * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import {
@@ -29,11 +29,8 @@ import {
   type StartedLogin,
   type LoginPollStatus,
   type ProviderStatus,
-  HEALTH_CHECK_STALE_MS,
   type RequestHealthStatus,
   type ImageRequestHealthStatus,
-  lastGoodWarning,
-  storeErrorStatus,
   type BoundLogin,
   defaultInstanceByProvider,
   credentialKey,
@@ -42,8 +39,10 @@ import {
 } from "./serviceTypes.ts";
 import { SubscriptionHealthService } from "./healthService.ts";
 import { SubscriptionCredentialAccess } from "./credentialAccess.ts";
+import { providerStatuses } from "./providerStatuses.ts";
 
 export class SubscriptionAuthService {
+  private readonly clock: Clock.Clock;
   private readonly credentialAccess: SubscriptionCredentialAccess;
   private readonly healthService: SubscriptionHealthService;
   private get health() {
@@ -66,17 +65,22 @@ export class SubscriptionAuthService {
    */
   private constructor(
     store: SubscriptionCredentialStore,
+    clock: Clock.Clock,
+    path: Path.Path,
     options: { readonly checkHealthOnConnect?: boolean },
   ) {
+    this.clock = clock;
     this.store = store;
     this.authPath = store.path;
     this.healthService = new SubscriptionHealthService(
       store,
+      clock,
+      path,
       options.checkHealthOnConnect ?? false,
     );
     this.pendingPath = `${this.authPath}.pending`;
 
-    this.credentialAccess = new SubscriptionCredentialAccess(store, this.healthService);
+    this.credentialAccess = new SubscriptionCredentialAccess(store, this.healthService, clock);
     this.reloadLocal();
   }
 
@@ -89,7 +93,10 @@ export class SubscriptionAuthService {
       const store = yield* subscriptionCredentialStore(authPath);
       yield* store.reload;
 
-      return new SubscriptionAuthService(store, options);
+      const clock = yield* Clock.Clock;
+      const path = yield* Path.Path;
+
+      return new SubscriptionAuthService(store, clock, path, options);
     });
   }
 
@@ -164,102 +171,10 @@ export class SubscriptionAuthService {
       readonly name: string;
       readonly provider: SubscriptionProviderId;
     }> = [],
-    now = Date.now(),
+    now = this.clock.currentTimeMillisUnsafe(),
     instanceId?: ProviderInstanceId,
   ): ProviderStatus[] {
-    const { data, loadError, loadErrorAt, servingLastGood } = this.store.current();
-    const damagedAt = loadErrorAt ?? new Date(now).toISOString();
-
-    const credentialWarning =
-      loadError && servingLastGood
-        ? { at: damagedAt, message: lastGoodWarning(loadError) }
-        : undefined;
-
-    return SUBSCRIPTION_PROVIDER_IDS.map((provider) => {
-      if (loadError && !servingLastGood) {
-        return storeErrorStatus(
-          provider,
-          { at: damagedAt, message: loadError.message },
-          dependentBots,
-        );
-      }
-
-      const key = credentialKey(provider, instanceId);
-      const credential = credentialAt(data, key);
-      const health = this.health[key];
-      const expired = credential?.type === "oauth" && credential.expires <= now;
-
-      const failedAfterSuccess =
-        health?.lastFailedRequest !== undefined &&
-        (health.lastSuccessfulRequestAt === undefined ||
-          health.lastFailedRequest.at >= health.lastSuccessfulRequestAt);
-
-      const recovered =
-        health?.lastSuccessfulRequestAt !== undefined &&
-        health.lastFailedRequest !== undefined &&
-        health.lastSuccessfulRequestAt > health.lastFailedRequest.at;
-
-      const checking =
-        health?.healthCheckStartedAt !== undefined &&
-        now - Date.parse(health.healthCheckStartedAt) < HEALTH_CHECK_STALE_MS;
-
-      const state = !credential
-        ? "missing"
-        : failedAfterSuccess
-          ? health?.failureKind === "revoked"
-            ? "revoked"
-            : health?.lastSuccessfulRequestAt
-              ? "failed"
-              : "failed-first-request"
-          : expired
-            ? "expired"
-            : recovered
-              ? "recovered"
-              : health?.lastSuccessfulRequestAt
-                ? "healthy"
-                : "detected";
-
-      const accountLabel =
-        credential?.type === "oauth"
-          ? [credential.email, credential.accountId].find(
-              (value): value is string => Predicate.isString(value) && value.trim().length > 0,
-            )
-          : undefined;
-
-      return {
-        provider,
-        ...(instanceId ? { instanceId } : {}),
-        connected: credential !== undefined,
-        ...(accountLabel ? { accountLabel } : {}),
-        ...(credential ? { authMode: credential.type } : {}),
-        ...(credential?.type === "api-key" && credential.baseUrl
-          ? { baseUrl: credential.baseUrl }
-          : {}),
-        ...(credential?.type === "oauth" ? { expiresAt: credential.expires } : {}),
-        health: state,
-        ...(credential && checking ? { healthChecking: true } : {}),
-        ...(health?.lastSuccessfulRequestAt
-          ? { lastSuccessfulRequestAt: health.lastSuccessfulRequestAt }
-          : {}),
-        ...(health?.lastFailedRequest ? { lastFailedRequest: health.lastFailedRequest } : {}),
-        ...(health?.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
-        ...(credentialWarning ? { credentialWarning } : {}),
-        reconnectAction:
-          credential?.type === "api-key" || provider === "opencode-go"
-            ? credential
-              ? "Replace API key"
-              : "Connect API key"
-            : credential
-              ? "Reconnect account"
-              : "Connect account",
-        healthTest: health?.healthTest ?? { status: "not-run" },
-        ...(health?.oauthCheck ? { oauthCheck: health.oauthCheck } : {}),
-        dependentBots: dependentBots.flatMap((bot) =>
-          bot.provider === provider ? [{ id: bot.id, name: bot.name }] : [],
-        ),
-        dependentRoutines: [],
-      };
-    });
+    return providerStatuses(this.store.current(), this.health, dependentBots, now, instanceId);
   }
 
   accountStatus(
@@ -271,12 +186,12 @@ export class SubscriptionAuthService {
       readonly provider: SubscriptionProviderId;
     }> = [],
   ): ProviderStatus {
-    return this.statuses(dependentBots, Date.now(), instanceId).find(
+    return this.statuses(dependentBots, this.clock.currentTimeMillisUnsafe(), instanceId).find(
       (status) => status.provider === provider,
     )!;
   }
 
-  recordRequestSuccess(provider: SubscriptionProviderId, at = new Date().toISOString()): void {
+  recordRequestSuccess(provider: SubscriptionProviderId, at?: string): void {
     return this.healthService.recordRequestSuccess(provider, at);
   }
 
@@ -288,18 +203,14 @@ export class SubscriptionAuthService {
     return this.healthService.recordAccountRequestSuccess(provider, instanceId, at);
   }
 
-  recordProviderInstanceSuccess(instanceId: string, at = new Date().toISOString()): void {
+  recordProviderInstanceSuccess(instanceId: string, at?: string): void {
     return this.healthService.recordProviderInstanceSuccess(instanceId, at);
-  }
-
-  private recordHealthSuccess(key: string, at: string): void {
-    return this.healthService.recordHealthSuccess(key, at);
   }
 
   recordRequestFailure(
     provider: SubscriptionProviderId,
     message: string,
-    at = new Date().toISOString(),
+    at?: string,
     failureKind: "request" | "revoked" = "request",
   ): void {
     return this.healthService.recordRequestFailure(provider, message, at, failureKind);
@@ -317,35 +228,32 @@ export class SubscriptionAuthService {
   recordProviderInstanceFailure(
     instanceId: string,
     message: string,
-    at = new Date().toISOString(),
+    at?: string,
     model?: string,
   ): void {
     return this.healthService.recordProviderInstanceFailure(instanceId, message, at, model);
   }
 
-  recordMcpRequestSuccess(serverId: string, at = new Date().toISOString()): void {
+  recordMcpRequestSuccess(serverId: string, at?: string): void {
     return this.healthService.recordMcpRequestSuccess(serverId, at);
   }
 
-  recordMcpRequestFailure(serverId: string, message: string, at = new Date().toISOString()): void {
+  recordMcpRequestFailure(serverId: string, message: string, at?: string): void {
     return this.healthService.recordMcpRequestFailure(serverId, message, at);
   }
 
-  recordImageRequestSuccess(provider: "chatgpt" | "grok", at = new Date().toISOString()): void {
+  recordImageRequestSuccess(provider: "chatgpt" | "grok", at?: string): void {
     return this.healthService.recordImageRequestSuccess(provider, at);
   }
 
-  recordImageCredentialProbeSuccess(
-    provider: "chatgpt" | "grok",
-    at = new Date().toISOString(),
-  ): void {
+  recordImageCredentialProbeSuccess(provider: "chatgpt" | "grok", at?: string): void {
     return this.healthService.recordImageCredentialProbeSuccess(provider, at);
   }
 
   recordImageCredentialProbeFailure(
     provider: "chatgpt" | "grok",
     message: string,
-    at = new Date().toISOString(),
+    at?: string,
     failureKind: "request" | "revoked" = "request",
   ): void {
     return this.healthService.recordImageCredentialProbeFailure(provider, message, at, failureKind);
@@ -354,14 +262,14 @@ export class SubscriptionAuthService {
   recordImageRequestFailure(
     provider: "chatgpt" | "grok",
     message: string,
-    at = new Date().toISOString(),
+    at?: string,
     failureKind: "request" | "revoked" = "request",
   ): void {
     return this.healthService.recordImageRequestFailure(provider, message, at, failureKind);
   }
 
   /** A completed image generation, which also proves the provider healthy. */
-  recordImageGenerationSuccess(provider: "chatgpt" | "grok", at = new Date().toISOString()): void {
+  recordImageGenerationSuccess(provider: "chatgpt" | "grok", at?: string): void {
     return this.healthService.recordImageGenerationSuccess(provider, at);
   }
 
@@ -372,16 +280,6 @@ export class SubscriptionAuthService {
   /** Image-provider request health, keyed separately from the chat driver. */
   imageRequestHealth(provider: "chatgpt" | "grok"): ImageRequestHealthStatus | undefined {
     return this.healthService.imageRequestHealth(provider);
-  }
-
-  private recordHealthFailure(
-    key: string,
-    message: string,
-    at: string,
-    failureKind: "request" | "revoked",
-    model?: string,
-  ): void {
-    return this.healthService.recordHealthFailure(key, message, at, failureKind, model);
   }
 
   providerInstanceHealth(
@@ -396,10 +294,6 @@ export class SubscriptionAuthService {
 
   mcpRequestHealth(serverId: string): RequestHealthStatus | undefined {
     return this.healthService.mcpRequestHealth(serverId);
-  }
-
-  private requestHealth(key: string): RequestHealthStatus | undefined {
-    return this.healthService.requestHealth(key);
   }
 
   async testHealth(provider: SubscriptionProviderId, instanceId?: string): Promise<void> {
@@ -417,15 +311,6 @@ export class SubscriptionAuthService {
   /** Resolves when the post-login health check for `provider` has recorded its result. */
   awaitHealthCheck(provider: SubscriptionProviderId, instanceId?: string): Promise<void> {
     return this.healthService.awaitHealthCheck(provider, instanceId);
-  }
-
-  private recordOAuthFailure(
-    provider: SubscriptionProviderId,
-    message: string,
-    failureKind: "request" | "revoked" = "request",
-    instanceId?: string,
-  ): void {
-    return this.healthService.recordOAuthFailure(provider, message, failureKind, instanceId);
   }
 
   isConnected(provider: SubscriptionProviderId, instanceId?: string): boolean {

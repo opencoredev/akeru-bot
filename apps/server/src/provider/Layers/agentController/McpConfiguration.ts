@@ -1,5 +1,3 @@
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
-
 import { type McpServerConfig } from "@mastra/code-sdk/mcp/index";
 import { type McpServer, type OrchestrationReadModel } from "@akeru/contracts";
 import { getMcpRuntimeHeaders, mcpServerNeedsBrowserAttachment } from "../../McpServerConfig.ts";

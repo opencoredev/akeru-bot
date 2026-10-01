@@ -83,7 +83,7 @@ const resolveClaudeConfigDirPath = Effect.fn("resolveClaudeConfigDirPath")(funct
   const homePath = config.homePath.trim();
 
   if (homePath.length > 0) {
-    return path.resolve(expandHomePath(homePath));
+    return path.resolve(expandHomePath(homePath, path));
   }
 
   // No tilde expansion here: the spawned CLI receives this env var verbatim

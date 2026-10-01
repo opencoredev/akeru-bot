@@ -1,5 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
-
 import { deriveExplicitServerPaths } from "./testUtils/config.ts";
 import * as NodeOS from "node:os";
 import { assert, expect, it } from "@effect/vitest";
@@ -284,7 +282,6 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
       yield* fs.makeDirectory(path.dirname(derivedPaths.settingsPath), { recursive: true });
       yield* fs.writeFileString(
         derivedPaths.settingsPath,
-        // @effect-diagnostics-next-line preferSchemaOverJson:off
         `${JSON.stringify({
           observability: {
             otlpTracesUrl: "http://localhost:4318/v1/traces",

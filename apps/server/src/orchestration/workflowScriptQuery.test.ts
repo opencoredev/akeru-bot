@@ -1,11 +1,11 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { afterAll, assert, describe } from "vite-plus/test";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { afterAll, assert } from "vite-plus/test";
 import { readWorkflowScript } from "./workflowScriptQuery.ts";
 
 const root = NodePath.join(NodeOS.homedir(), ".claude", "projects", "__wf_script_test__");
@@ -42,7 +42,7 @@ afterAll(() => {
   NodeFS.rmSync(outside, { force: true });
 });
 
-describe("readWorkflowScript containment", () => {
+effectIt.layer(NodeServices.layer)("readWorkflowScript containment", (effectIt) => {
   effectIt.effect("serves a real script under the projects root", () =>
     Effect.gen(function* () {
       const result = yield* readWorkflowScript({ scriptPath });

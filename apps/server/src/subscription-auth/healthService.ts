@@ -1,9 +1,12 @@
 import { decodeProviderHealth } from "./persistedSchemas.ts";
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off globalFetch:off
 import * as NodeFS from "node:fs";
-import * as NodePath from "node:path";
+import type * as Path from "effect/Path";
 import * as NodeCrypto from "node:crypto";
 import * as Effect from "effect/Effect";
+import type * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
+import { FetchHttpClient, HttpClient, HttpClientError } from "effect/unstable/http";
+import { runOAuthPromise } from "./oauthHttp.ts";
 import { type SubscriptionAuthData, type SubscriptionCredentialStore } from "./credentialStore.ts";
 import type { ApiKeyCredential, OAuthCredential } from "./types.ts";
 import {
@@ -25,8 +28,17 @@ import {
 } from "./serviceTypes.ts";
 
 export class SubscriptionHealthService {
+  private readonly clock: Clock.Clock;
+  private readonly path: Path.Path;
   private readonly store: SubscriptionCredentialStore;
-  constructor(store: SubscriptionCredentialStore, checkHealthOnConnect: boolean) {
+  constructor(
+    store: SubscriptionCredentialStore,
+    clock: Clock.Clock,
+    path: Path.Path,
+    checkHealthOnConnect: boolean,
+  ) {
+    this.clock = clock;
+    this.path = path;
     this.store = store;
     this.healthPath = store.path + ".health";
     this.checkHealthOnConnect = checkHealthOnConnect;
@@ -66,7 +78,7 @@ export class SubscriptionHealthService {
   }
 
   public writeSecureJson<Value>(filePath: string, value: Value): void {
-    const dir = NodePath.dirname(filePath);
+    const dir = this.path.dirname(filePath);
 
     if (!NodeFS.existsSync(dir)) {
       NodeFS.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -85,7 +97,10 @@ export class SubscriptionHealthService {
     this.writeSecureJson(this.healthPath, this.health);
   }
 
-  recordRequestSuccess(provider: SubscriptionProviderId, at = new Date().toISOString()): void {
+  recordRequestSuccess(
+    provider: SubscriptionProviderId,
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
+  ): void {
     this.recordHealthSuccess(provider, at);
   }
 
@@ -97,7 +112,10 @@ export class SubscriptionHealthService {
     this.recordHealthSuccess(credentialKey(provider, instanceId), at);
   }
 
-  recordProviderInstanceSuccess(instanceId: string, at = new Date().toISOString()): void {
+  recordProviderInstanceSuccess(
+    instanceId: string,
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
+  ): void {
     this.recordHealthSuccess(`provider:${instanceId}`, at);
   }
 
@@ -122,7 +140,7 @@ export class SubscriptionHealthService {
   recordRequestFailure(
     provider: SubscriptionProviderId,
     message: string,
-    at = new Date().toISOString(),
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
     failureKind: "request" | "revoked" = "request",
   ): void {
     this.recordHealthFailure(provider, message, at, failureKind);
@@ -140,27 +158,37 @@ export class SubscriptionHealthService {
   recordProviderInstanceFailure(
     instanceId: string,
     message: string,
-    at = new Date().toISOString(),
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
     model?: string,
   ): void {
     this.recordHealthFailure(`provider:${instanceId}`, message, at, "request", model);
   }
 
-  recordMcpRequestSuccess(serverId: string, at = new Date().toISOString()): void {
+  recordMcpRequestSuccess(
+    serverId: string,
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
+  ): void {
     this.recordHealthSuccess(`mcp:${serverId}`, at);
   }
 
-  recordMcpRequestFailure(serverId: string, message: string, at = new Date().toISOString()): void {
+  recordMcpRequestFailure(
+    serverId: string,
+    message: string,
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
+  ): void {
     this.recordHealthFailure(`mcp:${serverId}`, message, at, "request");
   }
 
-  recordImageRequestSuccess(provider: "chatgpt" | "grok", at = new Date().toISOString()): void {
+  recordImageRequestSuccess(
+    provider: "chatgpt" | "grok",
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
+  ): void {
     this.recordHealthSuccess(`image:${provider}`, at);
   }
 
   recordImageCredentialProbeSuccess(
     provider: "chatgpt" | "grok",
-    at = new Date().toISOString(),
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
   ): void {
     this.reloadHealth();
     const key = `image:${provider}`;
@@ -176,7 +204,7 @@ export class SubscriptionHealthService {
   recordImageCredentialProbeFailure(
     provider: "chatgpt" | "grok",
     message: string,
-    at = new Date().toISOString(),
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
     failureKind: "request" | "revoked" = "request",
   ): void {
     message = this.redactHealthMessage(message);
@@ -196,14 +224,17 @@ export class SubscriptionHealthService {
   recordImageRequestFailure(
     provider: "chatgpt" | "grok",
     message: string,
-    at = new Date().toISOString(),
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
     failureKind: "request" | "revoked" = "request",
   ): void {
     this.recordHealthFailure(`image:${provider}`, message, at, failureKind);
   }
 
   /** A completed image generation, which also proves the provider healthy. */
-  recordImageGenerationSuccess(provider: "chatgpt" | "grok", at = new Date().toISOString()): void {
+  recordImageGenerationSuccess(
+    provider: "chatgpt" | "grok",
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
+  ): void {
     this.recordHealthSuccess(`image:${provider}`, at);
     this.health[`image:${provider}`] = {
       ...this.health[`image:${provider}`],
@@ -387,16 +418,12 @@ export class SubscriptionHealthService {
             : `${credential.baseUrl ?? defaultBaseUrls[provider]}/models`;
 
       try {
-        const response = await fetch(url, {
-          redirect: "error",
-          signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
-          headers: {
-            ...(provider === "anthropic"
-              ? { "x-api-key": credential.access, "anthropic-version": "2023-06-01" }
-              : { Authorization: `Bearer ${credential.access}` }),
-            "User-Agent": OPENCODE_GO_USER_AGENT,
-            ...(provider === "opencode-go" ? { "x-opencode-client": "akeru-bot" } : {}),
-          },
+        const response = await probeHealth(url, {
+          ...(provider === "anthropic"
+            ? { "x-api-key": credential.access, "anthropic-version": "2023-06-01" }
+            : { Authorization: `Bearer ${credential.access}` }),
+          "User-Agent": OPENCODE_GO_USER_AGENT,
+          ...(provider === "opencode-go" ? { "x-opencode-client": "akeru-bot" } : {}),
         });
 
         if (!(await this.isCurrentHealthCredential(key, credential, version))) return;
@@ -405,18 +432,21 @@ export class SubscriptionHealthService {
           this.recordHealthFailure(
             key,
             `The provider rejected the API-key check (${response.status}).`,
-            new Date().toISOString(),
+            DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
             response.status === 401 || response.status === 403 ? "revoked" : "request",
           );
         } else {
-          this.recordHealthSuccess(key, new Date().toISOString());
+          this.recordHealthSuccess(
+            key,
+            DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
+          );
         }
       } catch {
         if (!(await this.isCurrentHealthCredential(key, credential, version))) return;
         this.recordHealthFailure(
           key,
           "The API-key check failed. Check the base URL and connection.",
-          new Date().toISOString(),
+          DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
           "request",
         );
       }
@@ -428,7 +458,9 @@ export class SubscriptionHealthService {
 
     try {
       const refreshed =
-        credential.expires > Date.now() ? credential : await runRefresh(provider, credential);
+        credential.expires > this.clock.currentTimeMillisUnsafe()
+          ? credential
+          : await runRefresh(provider, credential);
 
       if (!(await this.isCurrentHealthCredential(key, credential, version))) return;
 
@@ -455,11 +487,7 @@ export class SubscriptionHealthService {
 
       if (!request) throw new Error("This subscription does not expose a health endpoint.");
 
-      const response = await fetch(request.url, {
-        redirect: "error",
-        headers: request.headers,
-        signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
-      });
+      const response = await probeHealth(request.url, request.headers);
 
       if (!(await this.isCurrentHealthCredential(key, testedCredential, version))) return;
 
@@ -467,8 +495,15 @@ export class SubscriptionHealthService {
         throw new Error(`The provider rejected the health request (${response.status}).`);
       }
 
-      this.recordHealthSuccess(key, new Date().toISOString());
-      const checkedAt = new Date().toISOString();
+      this.recordHealthSuccess(
+        key,
+        DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
+      );
+
+      const checkedAt = DateTime.formatIso(
+        DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe()),
+      );
+
       this.reloadHealth();
       this.health[key] = {
         ...this.health[key],
@@ -480,7 +515,7 @@ export class SubscriptionHealthService {
       this.recordHealthFailure(
         key,
         cause instanceof Error ? cause.message : "The provider rejected the health request.",
-        new Date().toISOString(),
+        DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
         oauthFailureKind(cause),
       );
     }
@@ -496,7 +531,9 @@ export class SubscriptionHealthService {
     this.reloadHealth();
     this.health[key] = {
       ...this.health[key],
-      healthCheckStartedAt: new Date().toISOString(),
+      healthCheckStartedAt: DateTime.formatIso(
+        DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe()),
+      ),
     };
     this.saveHealth();
 
@@ -533,7 +570,7 @@ export class SubscriptionHealthService {
     instanceId?: string,
   ): void {
     const key = credentialKey(provider, instanceId);
-    const checkedAt = new Date().toISOString();
+    const checkedAt = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe()));
     this.reloadHealth();
     const { nextRetryAt: _nextRetryAt, ...previous } = this.health[key] ?? {};
     this.health[key] = {
@@ -551,5 +588,34 @@ export class SubscriptionHealthService {
     if (provider === "openai-codex") delete this.health["image:chatgpt"];
 
     if (provider === "xai") delete this.health["image:grok"];
+  }
+}
+
+async function probeHealth(url: string, headers: Record<string, string>) {
+  const signal = AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS);
+
+  try {
+    return await runOAuthPromise(
+      HttpClient.HttpClient.use((client) =>
+        HttpClient.withScope(client).get(url, { headers }),
+      ).pipe(
+        Effect.map((response) => ({
+          status: response.status,
+          ok: response.status >= 200 && response.status < 300,
+        })),
+        Effect.scoped,
+        Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
+        Effect.provideService(HttpClient.TracerPropagationEnabled, false),
+      ),
+      signal,
+    );
+  } catch (cause) {
+    if (signal.aborted) throw signal.reason;
+
+    if (HttpClientError.isHttpClientError(cause) && "cause" in cause.reason) {
+      throw cause.reason.cause;
+    }
+
+    throw cause;
   }
 }

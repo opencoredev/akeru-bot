@@ -1,7 +1,6 @@
 type NestedAction = { action: string } | { nested: NestedAction };
 
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import { it } from "@effect/vitest";
 import { expect } from "vite-plus/test";
 import { akeruActionNeedsApproval, criticalAkeruAction } from "./AkeruMastraHarness.ts";

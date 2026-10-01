@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeAssert from "node:assert/strict";
 import { ProviderDriverKind, type ProviderEvent } from "@akeru/contracts";
 

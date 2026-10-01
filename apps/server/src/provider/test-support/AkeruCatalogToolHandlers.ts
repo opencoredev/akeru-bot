@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import type { McpServerStatus } from "@mastra/code-sdk/mcp/index";
 import { BotId } from "@akeru/contracts";
 import { vi } from "vite-plus/test";

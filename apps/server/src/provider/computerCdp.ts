@@ -1,6 +1,9 @@
 import type { BrowserRpcParams } from "./browser/BotBrowserTypes.ts";
 import * as Predicate from "effect/Predicate";
-import { Schema } from "effect";
+import * as Schema from "effect/Schema";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
 import type { AkeruBrowserEndpoint } from "./botWorkspace.ts";
 
 const Targets = Schema.Array(
@@ -30,8 +33,6 @@ const AXTree = Schema.Struct({
   ),
 });
 
-const decodeTargets = Schema.decodeUnknownSync(Targets);
-
 const decodeMessage = Schema.decodeUnknownSync(Message);
 
 const decodeDocument = Schema.decodeUnknownSync(Document);
@@ -41,6 +42,23 @@ const decodeNode = Schema.decodeUnknownSync(Node);
 const decodeBox = Schema.decodeUnknownSync(Box);
 
 const decodeAXTree = Schema.decodeUnknownSync(AXTree);
+
+class ComputerDiscoveryError extends Data.TaggedError("ComputerDiscoveryError") {
+  override readonly message = "Graphical browser discovery failed.";
+}
+
+export const discoverComputerTargets = Effect.fn("discoverComputerTargets")(
+  function* (url: string, headers: Readonly<Record<string, string>>) {
+    const client = HttpClient.withScope(yield* HttpClient.HttpClient);
+    const response = yield* client.get(url, { headers });
+
+    if (response.status < 200 || response.status >= 300) return yield* new ComputerDiscoveryError();
+
+    return yield* HttpClientResponse.schemaBodyJson(Targets)(response);
+  },
+  Effect.scoped,
+  Effect.timeout(30_000),
+);
 
 /** Direct CDP connection to the workspace's existing graphical Chromium, never a second browser. */
 export class ComputerCdp {
@@ -77,14 +95,12 @@ export class ComputerCdp {
       endpoint.url.endsWith("/") ? endpoint.url : `${endpoint.url}/`,
     );
 
-    // @effect-diagnostics-next-line globalFetch:off
-    const response = await fetch(url, {
-      headers: endpoint.requestHeaders,
-      signal: AbortSignal.timeout(30_000),
-    });
+    const targets = await Effect.runPromise(
+      discoverComputerTargets(url.toString(), endpoint.requestHeaders).pipe(
+        Effect.provide(FetchHttpClient.layer),
+      ),
+    );
 
-    if (!response.ok) throw new Error("Graphical browser discovery failed.");
-    const targets = decodeTargets(await response.json());
     const target = targets.find((target) => target.type === "page" && target.webSocketDebuggerUrl);
 
     if (!target?.webSocketDebuggerUrl) throw new Error("Graphical browser page is unavailable.");

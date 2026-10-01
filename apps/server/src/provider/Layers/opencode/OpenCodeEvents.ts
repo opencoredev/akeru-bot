@@ -2,7 +2,6 @@ import * as Match from "effect/Match";
 import type { OpenCodeNativeLogRecord } from "./OpenCodeAdapterState.ts";
 
 import type { ProviderDriverKind } from "@akeru/contracts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 import {
   EventId,
   type ProviderRuntimeEvent,

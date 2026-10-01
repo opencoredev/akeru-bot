@@ -3,7 +3,6 @@ import type { AkeruRunOptions } from "./mastra/AkeruModels.ts";
 import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import { createAkeruConversation } from "./mastra/AkeruConversation.ts";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 import { Agent } from "@mastra/core/agent";
 import {
@@ -102,6 +101,9 @@ const decodeClaimedObservation = Schema.decodeUnknownSync(
 export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   options: AkeruMastraHarnessOptions,
 ) {
+  const context = yield* Effect.context<never>();
+  const runPromise = Effect.runPromiseWith(context);
+
   const observationalMemory = yield* Effect.acquireRelease(
     Effect.tryPromise({
       try: () => createAkeruMastraMemory(options),
@@ -415,7 +417,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
       droppedCauses.delete(item.id);
       removeQueuedObservation.run(item.id, claim);
     } catch (callbackCause) {
-      await Effect.runPromise(
+      await runPromise(
         Effect.logWarning("Akeru observation-drop notification failed.", {
           threadId: item.threadId,
           attempts,
@@ -474,7 +476,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           const fiber = leaseRenewal;
           leaseRenewal = undefined;
 
-          if (fiber) await Effect.runPromise(Fiber.interrupt(fiber));
+          if (fiber) await runPromise(Fiber.interrupt(fiber));
         };
 
         try {
@@ -536,7 +538,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           if (attempts >= OBSERVATION_DROP_ATTEMPTS) {
             // A clear or restore discarded the row, so there is nothing to report.
             if (!isQueuedObservationClaimed.get(item.id, claim)) continue;
-            await Effect.runPromise(
+            await runPromise(
               Effect.logWarning("Akeru observational memory dropped a failed observation.", {
                 threadId: item.threadId,
                 turnId: item.turnId,
@@ -602,7 +604,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     } catch (cause) {
       // SQLITE_BUSY is already padded by busy_timeout; a queue write failure
       // must never take down the completed turn, so report and continue.
-      Effect.runFork(
+      Effect.runForkWith(context)(
         Effect.logWarning("Akeru observation queue write failed; observation was not queued.", {
           threadId: input.threadId,
           turnId: input.turnId,

@@ -1,6 +1,5 @@
 import { claudeMessage } from "./test-support/claudeMessages.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { ProviderDriverKind, ProviderItemId } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";

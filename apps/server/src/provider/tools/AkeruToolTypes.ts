@@ -1,5 +1,4 @@
 import type { Tool } from "@mastra/core/tools";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { type Workspace } from "@mastra/core/workspace";
 import {
   type AkeruDelegationAccessGrant,

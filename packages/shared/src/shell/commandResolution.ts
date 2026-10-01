@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import * as NodeFS from "node:fs";
 import * as Clock from "effect/Clock";

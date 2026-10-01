@@ -28,31 +28,30 @@ export const executeChannelCommand = (
   runtime: ChannelRuntimeShape,
   command: ChannelCommand,
 ): Effect.Effect<{ readonly sequence: number }, ChannelOperationError> =>
-  Match.value(command)
-    .pipe(
-      Match.when({ type: "channel.connect" }, (command) => runtime.connect(command)),
-      Match.when({ type: "channel.connection.save" }, (command) => runtime.saveConnection(command)),
-      Match.when({ type: "channel.connection.delete" }, (command) =>
-        runtime.deleteConnection(command.connectionId),
-      ),
-      Match.when({ type: "channel.attach" }, (command) =>
-        runtime.attach(command.botId, command.connectionId, command.projectId, command.provider),
-      ),
-      Match.when({ type: "channel.change-project" }, (command) =>
-        runtime.changeProject(command.botId, command.provider, command.projectId),
-      ),
-      Match.when({ type: "channel.disconnect" }, (command) =>
-        runtime.disconnect(command.botId, command.provider),
-      ),
-      Match.when({ type: "channel.detach" }, (command) =>
-        runtime.detach(command.botId, command.provider),
-      ),
-      Match.when({ type: "channel.reconnect" }, (command) =>
-        runtime.reconnect(command.botId, command.provider),
-      ),
-      Match.orElse((command) => runtime.sendChannelMessage(command)),
-    )
-    .pipe(Effect.map((sequence) => ({ sequence })));
+  Match.value(command).pipe(
+    Match.when({ type: "channel.connect" }, (command) => runtime.connect(command)),
+    Match.when({ type: "channel.connection.save" }, (command) => runtime.saveConnection(command)),
+    Match.when({ type: "channel.connection.delete" }, (command) =>
+      runtime.deleteConnection(command.connectionId),
+    ),
+    Match.when({ type: "channel.attach" }, (command) =>
+      runtime.attach(command.botId, command.connectionId, command.projectId, command.provider),
+    ),
+    Match.when({ type: "channel.change-project" }, (command) =>
+      runtime.changeProject(command.botId, command.provider, command.projectId),
+    ),
+    Match.when({ type: "channel.disconnect" }, (command) =>
+      runtime.disconnect(command.botId, command.provider),
+    ),
+    Match.when({ type: "channel.detach" }, (command) =>
+      runtime.detach(command.botId, command.provider),
+    ),
+    Match.when({ type: "channel.reconnect" }, (command) =>
+      runtime.reconnect(command.botId, command.provider),
+    ),
+    Match.orElse((command) => runtime.sendChannelMessage(command)),
+    Effect.map((sequence) => ({ sequence })),
+  );
 
 /**
  * The only way a channel command failure leaves the server. Returns fixed, client-safe text

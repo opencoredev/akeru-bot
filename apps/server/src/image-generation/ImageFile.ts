@@ -1,16 +1,17 @@
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
-
-import * as NodeFSP from "node:fs/promises";
 import { PROVIDER_SEND_TURN_MAX_IMAGE_BYTES } from "@akeru/contracts";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 
-export async function readImageFile(path: string): Promise<Uint8Array | null> {
-  try {
-    const handle = await NodeFSP.open(path, "r");
+export const readImageFile = Effect.fn("readImageFile")(function* (path: string) {
+  const fs = yield* FileSystem.FileSystem;
 
-    try {
-      const metadata = await handle.stat();
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const handle = yield* fs.open(path, { flag: "r" });
+      const metadata = yield* handle.stat;
 
-      if (metadata.size === 0 || metadata.size > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) return null;
+      if (metadata.size === 0n || metadata.size > BigInt(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES))
+        return null;
       const chunks: Uint8Array[] = [];
       let total = 0;
 
@@ -19,7 +20,7 @@ export async function readImageFile(path: string): Promise<Uint8Array | null> {
           Math.min(64 * 1024, PROVIDER_SEND_TURN_MAX_IMAGE_BYTES + 1 - total),
         );
 
-        const { bytesRead } = await handle.read(chunk);
+        const bytesRead = Number(yield* handle.read(chunk));
 
         if (bytesRead === 0) break;
         total += bytesRead;
@@ -29,10 +30,9 @@ export async function readImageFile(path: string): Promise<Uint8Array | null> {
       return total > 0 && total <= PROVIDER_SEND_TURN_MAX_IMAGE_BYTES
         ? new Uint8Array(Buffer.concat(chunks, total))
         : null;
-    } finally {
-      await handle.close();
-    }
-  } catch {
-    return null;
-  }
-}
+    }),
+  ).pipe(
+    Effect.orElseSucceed(() => null),
+    Effect.catchDefect(() => Effect.succeed(null)),
+  );
+});

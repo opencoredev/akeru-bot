@@ -1,6 +1,5 @@
 import type { AkeruToolResult } from "./AkeruToolTypes.ts";
 import { type AkeruToolInputSchemas } from "@akeru/contracts";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import type { McpManager } from "@mastra/code-sdk/mcp/index";
 import {
   type BotId,

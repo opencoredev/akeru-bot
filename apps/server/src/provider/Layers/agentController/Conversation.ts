@@ -1,8 +1,7 @@
 import { ProviderDriverKind } from "@akeru/contracts";
 import type { AkeruToolRuntime } from "../../AkeruToolRuntime.ts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 
-import * as NodeFS from "node:fs";
+import * as FileSystem from "effect/FileSystem";
 
 import type { MastraDBMessage } from "@mastra/core/agent-controller";
 
@@ -42,6 +41,7 @@ import {
 } from "./State.ts";
 
 export function createConversation(deps: {
+  readonly fileSystem: FileSystem.FileSystem;
   readonly sessions: Map<string, ActiveSession>;
   readonly legacyProviderBridge: LegacyProviderBridge["Service"];
   readonly legacyPending: (key: string) => LegacyTurnMemoryState[];
@@ -238,60 +238,68 @@ export function createConversation(deps: {
 
     const key = String(input.threadId);
 
+    const attachmentReadError = (cause: unknown) =>
+      new AgentControllerRuntimeError({
+        operation: "rollbackConversation",
+        detail: "Could not rebuild retained conversation attachments.",
+        cause,
+      });
+
     const transcript: MastraDBMessage[] = yield* Effect.forEach(retained, (message) =>
-      Effect.try({
-        try: () => ({
-          id: String(message.messageId),
-          role: message.role,
-          content: {
-            format: 2 as const,
-            parts: [
-              {
-                type: "text" as const,
-                text: [
-                  message.text,
-                  ...(message.attachments ?? []).map((attachment) => {
-                    const path = resolveAttachmentPath({
-                      attachmentsDir: deps.config.attachmentsDir,
-                      attachment,
-                    });
+      Effect.gen(function* () {
+        const attachments = yield* Effect.forEach(message.attachments ?? [], (attachment) => {
+          const path = resolveAttachmentPath({
+            attachmentsDir: deps.config.attachmentsDir,
+            attachment,
+          });
 
-                    return `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`;
-                  }),
-                ]
-                  .filter(Boolean)
-                  .join("\n\n"),
-              },
-            ],
-            ...(message.attachments?.length
-              ? {
-                  experimental_attachments: message.attachments.map((attachment) => {
-                    const path = resolveAttachmentPath({
-                      attachmentsDir: deps.config.attachmentsDir,
-                      attachment,
-                    });
+          if (path === null)
+            return Effect.fail(
+              attachmentReadError(new Error(`Invalid attachment '${attachment.id}'.`)),
+            );
 
-                    if (path === null) throw new Error(`Invalid attachment '${attachment.id}'.`);
+          return deps.fileSystem.readFile(path).pipe(
+            Effect.map((bytes) => ({
+              name: attachment.name,
+              contentType: attachment.mimeType,
+              url: `data:${attachment.mimeType};base64,${Buffer.from(bytes).toString("base64")}`,
+            })),
+            Effect.mapError(attachmentReadError),
+          );
+        });
 
-                    return {
-                      name: attachment.name,
-                      contentType: attachment.mimeType,
-                      url: `data:${attachment.mimeType};base64,${NodeFS.readFileSync(path).toString("base64")}`,
-                    };
-                  }),
-                }
-              : {}),
-          },
-          createdAt: DateTime.toDate(DateTime.makeUnsafe(message.createdAt)),
-          threadId: key,
-          resourceId: key,
-        }),
-        catch: (cause) =>
-          new AgentControllerRuntimeError({
-            operation: "rollbackConversation",
-            detail: "Could not rebuild retained conversation attachments.",
-            cause,
+        return yield* Effect.try({
+          try: () => ({
+            id: String(message.messageId),
+            role: message.role,
+            content: {
+              format: 2 as const,
+              parts: [
+                {
+                  type: "text" as const,
+                  text: [
+                    message.text,
+                    ...(message.attachments ?? []).map((attachment) => {
+                      const path = resolveAttachmentPath({
+                        attachmentsDir: deps.config.attachmentsDir,
+                        attachment,
+                      });
+
+                      return `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`;
+                    }),
+                  ]
+                    .filter(Boolean)
+                    .join("\n\n"),
+                },
+              ],
+              ...(attachments.length ? { experimental_attachments: attachments } : {}),
+            },
+            createdAt: DateTime.toDate(DateTime.makeUnsafe(message.createdAt)),
+            threadId: key,
+            resourceId: key,
           }),
+          catch: attachmentReadError,
+        });
       }),
     );
 

@@ -1,5 +1,4 @@
 import * as Match from "effect/Match";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 
 import { Workspace } from "@mastra/core/workspace";

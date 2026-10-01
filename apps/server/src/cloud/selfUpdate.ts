@@ -226,85 +226,81 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (
           : {}),
         // A Windows archive bundles the Node it was built for, which the launcher runs it on too.
         validate: (runtime) =>
-          fs
-            .exists(path.join(runtime.versionDir, "node", "node.exe"))
-            .pipe(
-              Effect.orElseSucceed(() => false),
-              Effect.flatMap((bundled) =>
-                runner.run({
-                  command: bundled ? path.join(runtime.versionDir, "node", "node.exe") : execPath,
-                  args: [
-                    runtime.entryPath,
-                    "__service-preflight",
-                    "--database-path",
-                    serverConfig.dbPath,
-                    "--launcher-protocol",
-                    String(SERVICE_LAUNCHER_PROTOCOL),
-                  ],
-                  timeout: PREFLIGHT_TIMEOUT,
-                }),
-              ),
-            )
-            .pipe(
-              Effect.mapError(
-                (cause) =>
-                  new PinnedRuntimeInstallError({
-                    step: "running the staged service preflight",
-                    cause,
-                  }),
-              ),
-              Effect.flatMap(
-                (
-                  result,
-                ): Effect.Effect<
-                  void,
-                  PinnedRuntimeInstallError | PinnedRuntimePreflightBlockedError
-                > => {
-                  if (result.code !== 0) {
-                    return Effect.fail(
-                      new PinnedRuntimeInstallError({
-                        step: "running the staged service preflight",
-                        exitCode: Number(result.code),
-                        stdoutLength: result.stdout.length,
-                        stderrLength: result.stderr.length,
-                      }),
-                    );
-                  }
-
-                  let parsed: unknown;
-
-                  try {
-                    parsed = JSON.parse(result.stdout.trim());
-                  } catch (cause) {
-                    return Effect.fail(
-                      new PinnedRuntimeInstallError({
-                        step: "decoding the staged service preflight",
-                        cause,
-                      }),
-                    );
-                  }
-
-                  const preflight = decodeServicePreflightResult(parsed);
-
-                  if (preflight === undefined || preflight.version !== targetVersion) {
-                    return Effect.fail(
-                      new PinnedRuntimeInstallError({
-                        step: "verifying the staged service preflight",
-                      }),
-                    );
-                  }
-
-                  return preflight.status === "ready"
-                    ? Effect.void
-                    : Effect.fail(
-                        new PinnedRuntimePreflightBlockedError({
-                          version: targetVersion,
-                          reason: preflight.reason,
-                        }),
-                      );
-                },
-              ),
+          fs.exists(path.join(runtime.versionDir, "node", "node.exe")).pipe(
+            Effect.orElseSucceed(() => false),
+            Effect.flatMap((bundled) =>
+              runner.run({
+                command: bundled ? path.join(runtime.versionDir, "node", "node.exe") : execPath,
+                args: [
+                  runtime.entryPath,
+                  "__service-preflight",
+                  "--database-path",
+                  serverConfig.dbPath,
+                  "--launcher-protocol",
+                  String(SERVICE_LAUNCHER_PROTOCOL),
+                ],
+                timeout: PREFLIGHT_TIMEOUT,
+              }),
             ),
+            Effect.mapError(
+              (cause) =>
+                new PinnedRuntimeInstallError({
+                  step: "running the staged service preflight",
+                  cause,
+                }),
+            ),
+            Effect.flatMap(
+              (
+                result,
+              ): Effect.Effect<
+                void,
+                PinnedRuntimeInstallError | PinnedRuntimePreflightBlockedError
+              > => {
+                if (result.code !== 0) {
+                  return Effect.fail(
+                    new PinnedRuntimeInstallError({
+                      step: "running the staged service preflight",
+                      exitCode: Number(result.code),
+                      stdoutLength: result.stdout.length,
+                      stderrLength: result.stderr.length,
+                    }),
+                  );
+                }
+
+                let parsed: unknown;
+
+                try {
+                  parsed = JSON.parse(result.stdout.trim());
+                } catch (cause) {
+                  return Effect.fail(
+                    new PinnedRuntimeInstallError({
+                      step: "decoding the staged service preflight",
+                      cause,
+                    }),
+                  );
+                }
+
+                const preflight = decodeServicePreflightResult(parsed);
+
+                if (preflight === undefined || preflight.version !== targetVersion) {
+                  return Effect.fail(
+                    new PinnedRuntimeInstallError({
+                      step: "verifying the staged service preflight",
+                    }),
+                  );
+                }
+
+                return preflight.status === "ready"
+                  ? Effect.void
+                  : Effect.fail(
+                      new PinnedRuntimePreflightBlockedError({
+                        version: targetVersion,
+                        reason: preflight.reason,
+                      }),
+                    );
+              },
+            ),
+          ),
       }).pipe(
         Effect.mapError((error) =>
           Predicate.isTagged(error, "PinnedRuntimePreflightBlockedError")

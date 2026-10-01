@@ -1,4 +1,4 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
+import * as Effect from "effect/Effect";
 import { type AkeruRemoteSession } from "../BotWorkspaceTypes.ts";
 import { quote, commandLine } from "../BotWorkspaceLifecycle.ts";
 
@@ -17,9 +17,7 @@ export function ascii(
       if (box.state === "error") throw new Error("Ascii Box snapshot archival failed.");
 
       if (performance.now() >= deadline) throw new Error("Ascii Box snapshot archival timed out.");
-      // The SDK lifecycle is promise-based; polling does not own an Effect runtime.
-      // @effect-diagnostics-next-line globalTimers:off
-      await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
+      await Effect.runPromise(Effect.sleep(2_000));
     }
   };
 
@@ -63,9 +61,7 @@ export function ascii(
           throw new Error("Ascii Box deletion is blocked.");
 
         if (performance.now() >= deadline) throw new Error("Ascii Box deletion timed out.");
-        // The SDK lifecycle is promise-based, like the archival wait above.
-        // @effect-diagnostics-next-line globalTimers:off
-        await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
+        await Effect.runPromise(Effect.sleep(2_000));
         result = await client.getDeletionOperation({ operationId: result.operation.id });
       }
     },

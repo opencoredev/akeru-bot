@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalConsole:off - Release selection runs before an Effect runtime exists.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeURL from "node:url";

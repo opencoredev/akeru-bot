@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalTimers:off
 /**
  * Public-web backends for the WebFetch and WebSearch catalog tools.
  *

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 /**
  * Read-only access to persisted workflow scripts for the Agents surface's
  * "{} script" affordance.
@@ -15,30 +14,28 @@
  */
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
-import * as NodePath from "node:path";
+import * as Path from "effect/Path";
 
 import { OrchestrationGetWorkflowScriptError } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 
 const SCRIPT_BYTE_CAP = 256 * 1024;
 
-function scriptsRoot(): string {
-  return NodePath.join(NodeOS.homedir(), ".claude", "projects");
-}
-
 export const readWorkflowScript = Effect.fn("orchestration.readWorkflowScript")(function* (input: {
   readonly scriptPath: string;
 }) {
+  const path = yield* Path.Path;
   const requested = input.scriptPath;
 
-  if (!NodePath.isAbsolute(requested) || NodePath.extname(requested) !== ".js") {
-    return yield* Effect.fail(
-      new OrchestrationGetWorkflowScriptError({ reason: "invalid-path", scriptPath: requested }),
-    );
+  if (!path.isAbsolute(requested) || path.extname(requested) !== ".js") {
+    return yield* new OrchestrationGetWorkflowScriptError({
+      reason: "invalid-path",
+      scriptPath: requested,
+    });
   }
 
   const root = yield* Effect.tryPromise({
-    try: () => NodeFSP.realpath(scriptsRoot()),
+    try: () => NodeFSP.realpath(path.join(NodeOS.homedir(), ".claude", "projects")),
     catch: (cause) =>
       new OrchestrationGetWorkflowScriptError({
         reason: "root-unavailable",
@@ -59,16 +56,18 @@ export const readWorkflowScript = Effect.fn("orchestration.readWorkflowScript")(
       }),
   });
 
-  if (resolved !== root && !resolved.startsWith(`${root}${NodePath.sep}`)) {
-    return yield* Effect.fail(
-      new OrchestrationGetWorkflowScriptError({ reason: "outside-root", scriptPath: resolved }),
-    );
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+    return yield* new OrchestrationGetWorkflowScriptError({
+      reason: "outside-root",
+      scriptPath: resolved,
+    });
   }
 
-  if (NodePath.extname(resolved) !== ".js") {
-    return yield* Effect.fail(
-      new OrchestrationGetWorkflowScriptError({ reason: "not-js", scriptPath: resolved }),
-    );
+  if (path.extname(resolved) !== ".js") {
+    return yield* new OrchestrationGetWorkflowScriptError({
+      reason: "not-js",
+      scriptPath: resolved,
+    });
   }
 
   // TOCTOU-safe read (review finding): open FIRST, then verify what was

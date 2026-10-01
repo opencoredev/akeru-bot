@@ -1,6 +1,5 @@
 import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { opencodeClaudeMaxProvider } from "@mastra/code-sdk/providers/claude-max";
 import { openaiCodexProvider } from "@mastra/code-sdk/providers/openai-codex";

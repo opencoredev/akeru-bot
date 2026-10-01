@@ -1,5 +1,6 @@
+import * as Schema from "effect/Schema";
+import { cast } from "effect/Function";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as Duration from "effect/Duration";
 
 import * as Effect from "effect/Effect";
@@ -11,6 +12,8 @@ import * as ManagedRuntime from "effect/ManagedRuntime";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 
 import { OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
+
+const decodeJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 export const browserOtlpTracingLayer = Layer.mergeAll(
   FetchHttpClient.layer,
@@ -120,6 +123,5 @@ export const makeBrowserOtlpPayload = (spanName: string) =>
     );
 
     // SAFETY: The test collector receives JSON from the OTLP exporter and reads its TraceData wire fields.
-    // @effect-diagnostics-next-line preferSchemaOverJson:off
-    return JSON.parse(request.body) as OtlpTracer.TraceData;
+    return cast<unknown, OtlpTracer.TraceData>(yield* decodeJson(request.body));
   });

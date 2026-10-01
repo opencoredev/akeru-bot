@@ -1,6 +1,5 @@
 import type { Tool } from "@mastra/core/tools";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import { type AkeruToolId } from "@akeru/contracts";
 import { type AkeruToolSession } from "./AkeruToolTypes.ts";

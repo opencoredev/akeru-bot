@@ -1,7 +1,6 @@
 import * as Predicate from "effect/Predicate";
 import { createAkeruDelegationControls } from "./delegation/AkeruDelegationControls.ts";
 import { createAkeruDelegationDelivery } from "./delegation/AkeruDelegationDelivery.ts";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 import * as DateTime from "effect/DateTime";
 import {

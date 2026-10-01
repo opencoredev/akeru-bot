@@ -84,7 +84,7 @@ function Input({
             size === "compact" &&
             "rounded-md before:rounded-[calc(var(--radius-md)-1px)]",
           variant === "color-value" &&
-            "rounded-md border-0 bg-black/10 font-mono text-xs text-foreground shadow-none focus-within:bg-black/15 focus-within:ring-0 dark:bg-black/20 dark:focus-within:bg-black/25 [&_[data-slot=input]]:text-right",
+            "rounded-md border-0 bg-shade/10 font-mono text-xs text-foreground shadow-none focus-within:bg-shade/15 focus-within:ring-0 dark:bg-shade/20 dark:focus-within:bg-shade/25 [&_[data-slot=input]]:text-right",
           variant === "keybinding-capture" && "border-ring/60 font-mono ring-3 ring-ring/15",
           variant === "keybinding-expression" &&
             "rounded-md font-mono text-xs leading-7 sm:leading-7",

@@ -1,4 +1,4 @@
-// @effect-diagnostics globalDate:off -- UI snooze presets use local calendar boundaries and Intl labels.
+import * as DateTime from "effect/DateTime";
 import type { OrchestrationThreadShell } from "@akeru/contracts";
 
 export function threadLastActivityAt(
@@ -303,7 +303,7 @@ function snoozeTimeOfDayLabel(date: Date): string {
 }
 
 function snoozeAtHour(base: Date, hour: number): Date {
-  const next = new Date(base);
+  const next = DateTime.toDateUtc(DateTime.makeUnsafe(base));
   next.setHours(hour, 0, 0, 0);
 
   return next;
@@ -313,7 +313,7 @@ function snoozeAtHour(base: Date, hour: number): Date {
 // land on the wrong local day across DST transitions (a spring-forward day
 // is 23 hours, so 23:30 + 24h skips the whole next day).
 function addSnoozeDays(base: Date, days: number): Date {
-  const next = new Date(base);
+  const next = DateTime.toDateUtc(DateTime.makeUnsafe(base));
   next.setDate(next.getDate() + days);
 
   return next;
@@ -325,8 +325,11 @@ function addSnoozeDays(base: Date, days: number): Date {
  * choices start at "Tomorrow".
  */
 export function resolveSnoozePresets(now: Date): ReadonlyArray<SnoozePreset> {
-  const inAnHour = new Date(now.getTime() + HOUR_MS);
-  const inThreeHours = new Date(now.getTime() + 3 * HOUR_MS);
+  const inAnHour = DateTime.toDateUtc(DateTime.addDuration(DateTime.makeUnsafe(now), HOUR_MS));
+
+  const inThreeHours = DateTime.toDateUtc(
+    DateTime.addDuration(DateTime.makeUnsafe(now), 3 * HOUR_MS),
+  );
 
   const presets: SnoozePreset[] = [
     {

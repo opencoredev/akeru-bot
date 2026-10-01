@@ -1,5 +1,4 @@
 import { describe } from "vite-plus/test";
-// @effect-diagnostics nodeBuiltinImport:off
 import { DelegationId, ThreadId, type OrchestrationReadModel } from "@akeru/contracts";
 import { expect, it } from "vite-plus/test";
 import {

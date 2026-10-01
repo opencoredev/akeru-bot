@@ -1,7 +1,5 @@
 import { sessionFixture } from "./test-support/partialFixtures.ts";
 
-// @effect-diagnostics globalDate:off globalFetch:off globalFetchInEffect:off nodeBuiltinImport:off preferSchemaOverJson:off
-
 import { ProviderDriverKind, ThreadId } from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";

@@ -1,5 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
-
 export {
   type ProviderMaintenanceCapabilities,
   type ProviderMaintenanceCommandAction,

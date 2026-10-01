@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import type { UsageProviderPlanLimits } from "@akeru/contracts";
 import {
   CLAUDE_USAGE_URL,

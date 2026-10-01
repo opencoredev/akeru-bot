@@ -1,5 +1,4 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { ProviderDriverKind } from "@akeru/contracts";
 import { resolveCommandPath } from "@akeru/shared/shell";
 import * as Config from "effect/Config";

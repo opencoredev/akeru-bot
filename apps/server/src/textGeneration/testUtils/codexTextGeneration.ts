@@ -136,7 +136,6 @@ function makeFakeCodexBinary(
           : []),
         ...(input.stdinMustContain !== undefined
           ? [
-              // @effect-diagnostics-next-line preferSchemaOverJson:off
               `if ! printf "%s" "$stdin_content" | grep -F -- ${JSON.stringify(input.stdinMustContain)} >/dev/null; then`,
               '  printf "%s\\n" "stdin missing expected content" >&2',
               `  exit 3`,
@@ -145,7 +144,6 @@ function makeFakeCodexBinary(
           : []),
         ...(input.stdinMustNotContain !== undefined
           ? [
-              // @effect-diagnostics-next-line preferSchemaOverJson:off
               `if printf "%s" "$stdin_content" | grep -F -- ${JSON.stringify(input.stdinMustNotContain)} >/dev/null; then`,
               '  printf "%s\\n" "stdin contained forbidden content" >&2',
               `  exit 4`,
@@ -153,10 +151,7 @@ function makeFakeCodexBinary(
             ]
           : []),
         ...(input.stderr !== undefined
-          ? [
-              // @effect-diagnostics-next-line preferSchemaOverJson:off
-              `printf "%s\\n" ${JSON.stringify(input.stderr)} >&2`,
-            ]
+          ? [`printf "%s\\n" ${JSON.stringify(input.stderr)} >&2`]
           : []),
         'if [ -n "$output_path" ]; then',
         "  cat > \"$output_path\" <<'__T3CODE_FAKE_CODEX_OUTPUT__'",

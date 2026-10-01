@@ -1,6 +1,5 @@
 import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
 
 const FixtureParams = Schema.Struct({

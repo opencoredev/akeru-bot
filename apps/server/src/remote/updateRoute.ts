@@ -1,7 +1,6 @@
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
-import * as NodeFS from "node:fs";
+import * as FileSystem from "effect/FileSystem";
 import * as NodeSqlite from "node:sqlite";
 
 import * as Clock from "effect/Clock";
@@ -74,9 +73,12 @@ export const remoteMachineUpdateRouteLayer = Layer.unwrap(
         const config = yield* ServerConfig.ServerConfig;
         const tokenPath = `${config.stateDir}/remote-control-token`;
 
-        const expected = yield* Effect.try(() =>
-          NodeFS.readFileSync(tokenPath, "utf8").trim(),
-        ).pipe(Effect.orElseSucceed(() => ""));
+        const fs = yield* FileSystem.FileSystem;
+
+        const expected = yield* fs.readFileString(tokenPath).pipe(
+          Effect.map((token) => token.trim()),
+          Effect.orElseSucceed(() => ""),
+        );
 
         const presented = request.headers["x-akeru-machine-token"] ?? "";
 

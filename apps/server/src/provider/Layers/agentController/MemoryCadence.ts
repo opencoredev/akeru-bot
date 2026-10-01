@@ -1,5 +1,4 @@
 import type { AkeruRuntimeSeam } from "../../AkeruRuntimeSeam.ts";
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 
 import { type ProviderRuntimeEvent, ThreadId } from "@akeru/contracts";
 

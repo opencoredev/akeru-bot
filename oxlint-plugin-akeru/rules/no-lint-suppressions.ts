@@ -1,15 +1,17 @@
 import { defineRule } from "@oxlint/plugins";
 
 // Lint and type-check suppressions hide problems instead of fixing them. Fix the code, or
-// change the rule's configuration in vite.config.ts with a reason in docs/internals/lint.md.
+// change the rule's configuration (vite.config.ts for lint, tsconfig.base.json overrides for
+// Effect diagnostics) with a reason in docs/internals/lint.md.
 const SUPPRESSION_PATTERN =
-  /^\s*(?:(?:eslint|oxlint)-(?:disable|enable)\b|@ts-(?:ignore|nocheck|expect-error)\b)/u;
+  /^\s*(?:(?:eslint|oxlint)-(?:disable|enable)\b|@ts-(?:ignore|nocheck|expect-error)\b|@effect-diagnostics\b)/u;
 
 export default defineRule({
   meta: {
     type: "problem",
     docs: {
-      description: "Disallow lint-disable comments and TypeScript suppression directives.",
+      description:
+        "Disallow lint-disable comments and TypeScript and Effect diagnostic suppression directives.",
     },
   },
   create(context) {
@@ -23,7 +25,7 @@ export default defineRule({
           context.report({
             loc: comment.loc,
             message:
-              "Do not suppress lint or type errors. Fix the code, or change the rule's configuration in vite.config.ts.",
+              "Do not suppress lint or type errors. Fix the code, or change the rule's configuration in vite.config.ts or tsconfig.base.json.",
           });
         }
       },

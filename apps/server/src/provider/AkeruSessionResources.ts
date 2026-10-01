@@ -1,8 +1,5 @@
 import * as Predicate from "effect/Predicate";
 import { SharedBotBrowsers } from "./resources/SharedBotBrowsers.ts";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
-import * as NodeFS from "node:fs";
-import * as NodePath from "node:path";
 import type { ToolsInput } from "@mastra/core/agent";
 import { createMcpManager, type McpManager } from "@mastra/code-sdk/mcp/index";
 import type { Workspace } from "@mastra/core/workspace";
@@ -115,9 +112,10 @@ export class AkeruSessionResources {
         input.workspaceResourceKey,
         async () => {
           const workspace = await createBotWorkspace({
+            io: this.options.io,
             threadId: input.resourceScope,
             workspaceId: input.workspaceId,
-            identityFile: NodePath.join(
+            identityFile: this.options.io.path.join(
               this.options.stateDir,
               "bot-workspaces",
               input.workspaceId,
@@ -130,7 +128,7 @@ export class AkeruSessionResources {
                 }
               : {
                   sandbox: "local" as const,
-                  localRoot: NodePath.join(
+                  localRoot: this.options.io.path.join(
                     this.options.stateDir,
                     "bot-workspaces",
                     input.workspaceId,
@@ -155,6 +153,7 @@ export class AkeruSessionResources {
       const userComputerWorkspaceLease = userComputerCwd
         ? await this.workspacePool.acquire(`user-computer:${key}:${userComputerCwd}`, async () => {
             const workspace = await createBotWorkspace({
+              io: this.options.io,
               threadId: `user-computer-${key}`,
               cwd: userComputerCwd,
             });
@@ -212,7 +211,7 @@ export class AkeruSessionResources {
         browser = (this.options.makeBotBrowser ?? createBotBrowser)({
           threadId: input.resourceScope,
           workspace: workspaceLease.workspace.workspace,
-          cacheDir: NodePath.join(this.options.stateDir, "bot-browser-runtime"),
+          cacheDir: this.options.io.path.join(this.options.stateDir, "bot-browser-runtime"),
           ...(workspaceLease.workspace.computer
             ? { makeRpc: () => workspaceLease.workspace.computer! }
             : {}),
@@ -304,7 +303,7 @@ export class AkeruSessionResources {
         }
 
         const manager = (this.options.makeMcpManager ?? createMcpManager)(
-          NodePath.join(this.options.stateDir, "bot-mcp-runtime"),
+          this.options.io.path.join(this.options.stateDir, "bot-mcp-runtime"),
           ".akeru-runtime",
           configs,
         );
@@ -457,7 +456,7 @@ export class AkeruSessionResources {
 
     if (computerUseTemporaryDirectory) {
       try {
-        NodeFS.rmSync(computerUseTemporaryDirectory, { recursive: true, force: true });
+        await this.options.io.remove(computerUseTemporaryDirectory, true);
       } catch (cause) {
         failures.push(cause);
       }

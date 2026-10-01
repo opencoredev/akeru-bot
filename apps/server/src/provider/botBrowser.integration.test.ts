@@ -2,7 +2,6 @@ import type { ToolsInput } from "@mastra/core/agent";
 import type { BrowserRpcParams } from "./browser/BotBrowserTypes.ts";
 import { probeTool } from "./test-support/toolProbe.ts";
 import * as Predicate from "effect/Predicate";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

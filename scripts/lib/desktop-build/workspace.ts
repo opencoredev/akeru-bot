@@ -1,7 +1,5 @@
 import * as Match from "effect/Match";
 import type { DesktopBuildConfiguration } from "./config.ts";
-// @effect-diagnostics nodeBuiltinImport:off - Node's typed junction API avoids Windows symlink privileges while keeping the probe isolated.
-// @effect-diagnostics nodeBuiltinImport:off - Node's typed junction API avoids Windows symlink privileges while keeping the probe isolated.
 import * as NodeFSP from "node:fs/promises";
 
 import { fromYaml } from "@akeru/shared/schemaYaml";

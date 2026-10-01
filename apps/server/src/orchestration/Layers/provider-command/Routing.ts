@@ -225,30 +225,27 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
   });
 
   const processDomainEventSafely = (event: ProviderIntentEvent) =>
-    Match.value(event)
-      .pipe(
-        Match.when({ type: "delegation.updated" }, (event) =>
-          !("childThreadId" in event.payload.delegation.phase) ||
-          event.payload.delegation.phase.childThreadId === null
-            ? Effect.succeed(false)
-            : reconcileRestrictiveSessionCleanup(event.payload.delegation.phase.childThreadId),
-        ),
-        Match.when({ type: "delegation.retry-requested" }, () => Effect.succeed(false)),
-        Match.orElse((event) => reconcileRestrictiveSessionCleanup(event.payload.threadId)),
-      )
-      .pipe(
-        Effect.flatMap((cleanupConfirmed) => processDomainEvent(event, cleanupConfirmed)),
-        Effect.catchCause((cause) => {
-          if (Cause.hasInterruptsOnly(cause)) {
-            return Effect.interrupt;
-          }
+    Match.value(event).pipe(
+      Match.when({ type: "delegation.updated" }, (event) =>
+        !("childThreadId" in event.payload.delegation.phase) ||
+        event.payload.delegation.phase.childThreadId === null
+          ? Effect.succeed(false)
+          : reconcileRestrictiveSessionCleanup(event.payload.delegation.phase.childThreadId),
+      ),
+      Match.when({ type: "delegation.retry-requested" }, () => Effect.succeed(false)),
+      Match.orElse((event) => reconcileRestrictiveSessionCleanup(event.payload.threadId)),
+      Effect.flatMap((cleanupConfirmed) => processDomainEvent(event, cleanupConfirmed)),
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) {
+          return Effect.interrupt;
+        }
 
-          return Effect.logWarning("provider command reactor failed to process event", {
-            eventType: event.type,
-            cause: Cause.pretty(cause),
-          });
-        }),
-      );
+        return Effect.logWarning("provider command reactor failed to process event", {
+          eventType: event.type,
+          cause: Cause.pretty(cause),
+        });
+      }),
+    );
 
   const providerCommandLaneKey = (event: ProviderIntentEvent): string =>
     Match.value(event).pipe(

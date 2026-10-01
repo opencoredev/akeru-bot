@@ -1,4 +1,3 @@
-// @effect-diagnostics preferSchemaOverJson:off
 import { expect, vi } from "vite-plus/test";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";

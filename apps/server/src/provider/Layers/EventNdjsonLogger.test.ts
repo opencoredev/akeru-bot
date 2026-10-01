@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -6,7 +5,10 @@ import { ThreadId } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Logger from "effect/Logger";
-import { makeEventNdjsonLogger, makeEventNdjsonLogStore } from "./EventNdjsonLogger.ts";
+import {
+  makeEventNdjsonLogger,
+  makeEventNdjsonLogStore,
+} from "./test-support/eventLogFactories.ts";
 import { encodeUnknownJson, ownedLogPath, parseLogLine } from "./test-support/eventLogs.ts";
 
 describe("EventNdjsonLogger", () => {

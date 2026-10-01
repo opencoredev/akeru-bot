@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - These contracts read their source.
 import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests build isolated catalog directories on disk.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

@@ -28,7 +28,7 @@ export const COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME =
 // font size differs. In the composer, 0.9em text in a 1.6em pill is about
 // 1.44em of the prompt font, still inside the leading-relaxed line box.
 const INLINE_SKILL_CHIP_CLASS_NAME =
-  "inline-flex h-[1.6em] max-w-full items-center gap-[0.35em] rounded-[0.45em] px-[0.5em] font-medium leading-none align-middle bg-fuchsia-500/14 text-fuchsia-700 dark:text-fuchsia-300";
+  "inline-flex h-[1.6em] max-w-full items-center gap-[0.35em] rounded-[0.45em] px-[0.5em] font-medium leading-none align-middle bg-skill/14 text-skill-foreground";
 
 export const COMPOSER_INLINE_SKILL_CHIP_CLASS_NAME = `${INLINE_SKILL_CHIP_CLASS_NAME} text-[0.9em] select-none`;
 

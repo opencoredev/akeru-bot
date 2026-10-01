@@ -1,5 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalDate:off preferSchemaOverJson:off
-
 import { fixture, requestSignal } from "./testUtils/subscriptionAuthStorage.ts";
 import * as NodeFS from "node:fs";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -614,7 +612,7 @@ describe("subscription auth storage", () => {
     try {
       await service.testHealth("anthropic");
       expect(request).toHaveBeenCalledWith(
-        "https://proxy.example/v1/models",
+        new URL("https://proxy.example/v1/models"),
         expect.objectContaining({
           redirect: "error",
           headers: expect.objectContaining({ "x-api-key": "private-key" }),
@@ -663,7 +661,10 @@ describe("subscription auth storage", () => {
     const service = await makeTestSubscriptionAuthService(authPath);
     await service.testHealth("opencode-go");
 
-    expect(request).toHaveBeenCalledWith("https://opencode.ai/zen/go/v1/usage", expect.any(Object));
+    expect(request).toHaveBeenCalledWith(
+      new URL("https://opencode.ai/zen/go/v1/usage"),
+      expect.any(Object),
+    );
     expect(service.statuses().find((status) => status.provider === "opencode-go")).toMatchObject({
       health: "healthy",
       healthTest: { status: "passed" },

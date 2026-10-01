@@ -1,5 +1,4 @@
 import * as Schema from "effect/Schema";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeSqlite from "node:sqlite";
 
 const decodeQueueVersion = Schema.decodeUnknownSync(Schema.Struct({ user_version: Schema.Number }));

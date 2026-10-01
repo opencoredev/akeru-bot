@@ -6,7 +6,6 @@ import {
 } from "./AnnotationOverlay.ts";
 import { createAnnotationStyleControls } from "./AnnotationStyleControls.ts";
 
-// @effect-diagnostics globalDate:off - This isolated Electron preload does not run inside an Effect runtime.
 import { ipcRenderer } from "electron";
 
 import type {

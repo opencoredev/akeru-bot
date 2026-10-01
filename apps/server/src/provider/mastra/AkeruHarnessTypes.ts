@@ -1,4 +1,3 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { type ToolsInput } from "@mastra/core/agent";
 import {

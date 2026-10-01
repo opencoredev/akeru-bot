@@ -415,8 +415,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           );
 
           // Return the cleanup effect so the caller runs it after the outer transaction commits.
-          // @effect-diagnostics-next-line returnEffectInGen:off
-          return applyAttachmentSideEffects(event, attachmentSideEffects);
+          return yield* Effect.succeed(applyAttachmentSideEffects(event, attachmentSideEffects));
         },
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provideService(Path.Path, path),

@@ -1,5 +1,4 @@
 import * as Match from "effect/Match";
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as Predicate from "effect/Predicate";
 import * as NodeCrypto from "node:crypto";
 import {

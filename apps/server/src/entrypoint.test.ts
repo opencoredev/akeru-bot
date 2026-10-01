@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - entrypoint detection is a Node filesystem boundary.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

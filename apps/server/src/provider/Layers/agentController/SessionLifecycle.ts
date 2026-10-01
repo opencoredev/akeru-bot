@@ -2,7 +2,6 @@ import { createSessionContext } from "./SessionContext.ts";
 import type { SessionLifecycleDependencies } from "./SessionLifecycleDependencies.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 
-// @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 import * as NodeCrypto from "node:crypto";
 
 import {

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { ProviderInstanceId } from "@akeru/contracts";
