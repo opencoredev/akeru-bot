@@ -29,6 +29,10 @@ const buttonVariants = cva(
         "icon-xs":
           "size-7 sm:size-6 not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-4 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-10 px-[calc(--spacing(3.5)-1px)] sm:h-9",
+        /** Full-width sheet row whose label lines up with the sheet's other row labels. */
+        row: "h-8 gap-1.5 px-2 sm:h-7",
+        /** `row` with roomier gaps and regular weight, for list entries with trailing meta. */
+        "row-relaxed": "h-8 gap-3 px-2 font-normal sm:h-7",
         micro:
           "h-5 gap-1 rounded-sm px-[calc(--spacing(1.5)-1px)] text-[11px] before:rounded-[calc(var(--radius-sm)-1px)] sm:text-[11px] [&_svg:not([class*='size-'])]:size-3 sm:[&_svg:not([class*='size-'])]:size-3",
         sm: "h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] sm:h-7",
@@ -46,11 +50,20 @@ const buttonVariants = cva(
           "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent text-foreground data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent",
         "ghost-muted":
           "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent text-muted-foreground data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent [:hover,[data-pressed]]:text-foreground",
+        /** Quiet sheet row; the hover fill marks it without changing its color. */
+        "ghost-quiet":
+          "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent text-muted-foreground data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent",
+        /** The selected `ghost-quiet` row. */
+        "ghost-current":
+          "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent bg-muted text-foreground data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent",
         glass:
           "surface-glass [--control-icon-color:var(--contrast-muted-foreground)] border-transparent text-foreground [:hover,[data-pressed]]:bg-accent/60",
         link: "border-transparent underline-offset-4 [:hover,[data-pressed]]:underline",
         outline:
           "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent bg-secondary text-foreground [:active,[data-pressed]]:bg-accent [:hover,[data-pressed]]:bg-accent/80",
+        /** Rounded icon control on sidebar chrome, muted until hovered. */
+        "sidebar-ghost":
+          "[--control-icon-color:var(--contrast-muted-foreground)] rounded-lg border-transparent text-sidebar-muted-foreground hover:text-sidebar-foreground data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground [:active,[data-pressed]]:bg-secondary/80 [:hover,[data-pressed]]:bg-secondary/90",
         // Segmented choice: an unselected option, dimmed while aria-disabled.

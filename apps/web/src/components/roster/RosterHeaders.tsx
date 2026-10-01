@@ -31,7 +31,7 @@ export const RosterSidebarHeader = memo(function RosterSidebarHeader({
   return (
     <SidebarHeader
       className={cn(
-        "h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2",
+        "h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2",
         isElectron && "drag-region",
       )}
     >
@@ -41,7 +41,7 @@ export const RosterSidebarHeader = memo(function RosterSidebarHeader({
         </div>
         <Link
           to="/"
-          className="flex items-center justify-center rounded-md text-sidebar-foreground outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]"
+          className="flex items-center justify-center rounded-md text-sidebar-foreground outline-none ring-ring focus-visible:ring-2"
         >
           <AkeruWordmark />
         </Link>
@@ -52,7 +52,7 @@ export const RosterSidebarHeader = memo(function RosterSidebarHeader({
                 <Button
                   aria-label={t("Create")}
                   data-testid="roster-new-bot"
-                  className="size-[var(--workspace-titlebar-control-size)]! [-webkit-app-region:no-drag]"
+                  className="size-(--workspace-titlebar-control-size)!"
                   size="icon"
                   variant="ghost"
                 >
@@ -91,18 +91,16 @@ export function RosterPanelHeader({
   onSearch: () => void;
 }) {
   const { t } = useI18n();
-  const iconButton =
-    "size-8! rounded-lg text-sidebar-muted-foreground hover:text-sidebar-foreground [-webkit-app-region:no-drag]";
   return (
     <SidebarHeader
       className={cn(
-        "h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-1 py-0 pl-4 pr-2.5",
+        "h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 py-0 pl-4 pr-2.5",
         isElectron && "drag-region",
       )}
     >
       <Link
         to="/"
-        className="min-w-0 flex-1 rounded-md text-sidebar-foreground outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]"
+        className="min-w-0 flex-1 rounded-md text-sidebar-foreground outline-none ring-ring focus-visible:ring-2"
       >
         <AkeruWordmark className="text-[26px]" />
       </Link>
@@ -111,12 +109,12 @@ export function RosterPanelHeader({
           render={
             <Button
               aria-label={t("Search")}
-              className={iconButton}
+              className="size-8!"
               size="icon"
-              variant="ghost"
+              variant="sidebar-ghost"
               onClick={onSearch}
             >
-              <AppIcon icon={Search01Icon} className="size-[18px]" />
+              <AppIcon icon={Search01Icon} className="size-4.5" />
             </Button>
           }
         />
@@ -128,11 +126,11 @@ export function RosterPanelHeader({
             <Button
               aria-label={t("Create")}
               data-testid="roster-new-bot"
-              className={iconButton}
+              className="size-8!"
               size="icon"
-              variant="ghost"
+              variant="sidebar-ghost"
             >
-              <AppIcon icon={PencilEdit02Icon} className="size-[18px]" />
+              <AppIcon icon={PencilEdit02Icon} className="size-4.5" />
             </Button>
           }
         />

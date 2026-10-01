@@ -29,6 +29,7 @@ function PopoverPopup({
   children,
   className,
   viewportClassName,
+  viewportPadding = "default",
   side = "bottom",
   align = "center",
   sideOffset = 4,
@@ -39,6 +40,8 @@ function PopoverPopup({
   ...props
 }: PopoverPrimitive.Popup.Props & {
   viewportClassName?: string;
+  /** `none` lets edge-to-edge content, such as a color picker, fill the popup. */
+  viewportPadding?: "default" | "none";
   side?: PopoverPrimitive.Positioner.Props["side"];
   align?: PopoverPrimitive.Positioner.Props["align"];
   sideOffset?: PopoverPrimitive.Positioner.Props["sideOffset"];
@@ -77,6 +80,7 @@ function PopoverPopup({
               tooltipStyle
                 ? "py-1 [--viewport-inline-padding:--spacing(2)]"
                 : "not-data-transitioning:overflow-y-auto",
+              viewportPadding === "none" && "p-0 [--viewport-inline-padding:0px]",
               viewportClassName,
             )}
             data-slot="popover-viewport"

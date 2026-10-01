@@ -215,9 +215,9 @@ export function RoutinePanel({
             // A quiet row, not a call to action: its label lines up with the
             // sheet's row labels and only the hover fill reaches past them.
             <Button
-              variant="ghost"
-              size="sm"
-              className="-mx-2 mt-1 w-[calc(100%+1rem)] justify-start px-2 text-muted-foreground"
+              variant="ghost-quiet"
+              size="row"
+              className="-mx-2 mt-1 w-[calc(100%+1rem)] justify-start"
               onClick={() => setCreating(true)}
             >
               <PlusIcon aria-hidden />
