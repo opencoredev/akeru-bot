@@ -2,9 +2,10 @@
 
 > For maintainers and operators. Using Akeru Bot? See [docs/user](../user/).
 
-Akeru Bot routes each bot's saved model to its provider at turn time. This runbook verifies that
-routing with real credentials: one live turn per provider, checked at the wire and in the trace
-file. The automated suite covers the same assertions with mocked transports in
+Akeru Bot routes each bot's saved model to its provider at turn time. This runbook explains
+the evidence available for a live turn and its limits. Trace attributes expose the selection
+on standard OpenCode's legacy bridge, but do not prove the effective wire model for Mastra drivers.
+Mocked transport regressions verify wire-format routing in
 `apps/server/src/provider/Layers/AgentController.test.ts`
 ("per-driver wire-format model routing") and
 `apps/server/src/orchestration/Layers/ProviderCommandReactor.test.ts`.
@@ -14,8 +15,8 @@ file. The automated suite covers the same assertions with mocked transports in
 The saved model travels one of two paths:
 
 - **Mastra drivers** (Codex, Claude, Grok, Kimi For Coding, OpenCode Go): `AgentController` maps the
-  saved slug to a wire model id — `openai/<model>`, `anthropic/<model>`, `xai/<model>`,
-  `kimi-for-coding/<model>`, `opencode-go/<model>` — and calls `session.model.switch` on the
+  saved slug to a wire model id (`openai/<model>`, `anthropic/<model>`, `xai/<model>`,
+  `kimi-for-coding/<model>`, `opencode-go/<model>`) and calls `session.model.switch` on the
   in-process Mastra session before `sendMessage`. Saved options such as Codex `reasoningEffort` and
   `serviceTier` ride in the session state's `modelOptions`; Claude `effort` is normalized inside the
   Claude transport.
@@ -44,33 +45,26 @@ Each check below sends one ordinary chat turn and then inspects the spans for th
 
 ## Per-provider checks
 
-For every provider: pick the bot's model in the chat model picker, send a short turn, then confirm
-the span attributes name the routed provider and the exact saved model.
+For standard OpenCode, pick the bot's model in the chat model picker and send a short turn.
+The legacy `ProviderService.sendTurn` span annotates the provider and, when explicitly supplied,
+the saved model selection. Compare these attributes with your selection:
 
 ```bash
-# Span for a single turn: provider.kind and provider.model must match the saved selection.
-jq -c 'select(.name | test("sendTurn|send-turn")) | {
+# Standard OpenCode legacy bridge only; this is not a wire-payload assertion.
+jq -c 'select(.name == "sendTurn" and .attributes["provider.kind"] == "opencode") | {
   name, provider: .attributes["provider.kind"], model: .attributes["provider.model"]
 }' "$TRACE_FILE" | tail -5
 ```
 
-| Provider        | Saved model example             | Wire assertion                                                         |
-| --------------- | ------------------------------- | ---------------------------------------------------------------------- |
-| Codex           | `gpt-5.6-sol`, effort `high`    | `provider.kind: codex`, `provider.model: gpt-5.6-sol`                  |
-| Claude          | `claude-opus-4-6`, effort `max` | `provider.kind: claudeAgent`, `provider.model: claude-opus-4-6`        |
-| Grok            | `grok-4`                        | `provider.kind: grok`, `provider.model: grok-4`                        |
-| Kimi For Coding | `k2-thinking`                   | `provider.kind: kimi`, `provider.model: k2-thinking`                   |
-| OpenCode        | `anthropic/claude-sonnet-4-5`   | `provider.kind: opencode`, model slug must keep its `provider/` prefix |
-| OpenCode Go     | `gpt-5.6-luna`                  | `provider.kind: opencodeGo`, `provider.model: gpt-5.6-luna`            |
+For Codex, Claude, Grok, Kimi For Coding, and OpenCode Go, `AgentController.sendTurn` does not
+currently annotate `provider.kind` or `provider.model`. Its `runMastra("model.switch", ...)`
+call is not a traced event or child span. Missing attributes do not establish that a turn lacked
+a model selection. A saved bot engine is configuration, not proof of the model sent on the wire.
 
-For the two OpenCode adapters, also confirm the request itself: standard OpenCode turns log the
-`session.promptAsync` call with `model: { providerID, modelID }`; OpenCode Go turns go through the
-Mastra transport, so the trace shows the `model.switch` to `opencode-go/<model>` inside the
-`AgentController.sendTurn` span's events.
-
-Note that `provider.model` is only annotated when the turn carried an explicit `modelSelection`.
-Every bot-driven chat turn does, so the attribute should always be present in this check — a
-missing `provider.model` on a `sendTurn` span means the turn went out with no selection at all.
+Until that instrumentation exists, use the "per-driver wire-format model routing" tests in
+`apps/server/src/provider/Layers/AgentController.test.ts` and the independent-bot routing tests in
+`apps/server/src/orchestration/Layers/ProviderCommandReactor.test.ts`. These are mocked regression
+checks, not evidence that a live provider accepted a particular model.
 
 Runtime events such as `turn.started` (with `payload.model`, the model the session is actually
 using) and Codex's `model.rerouted` (`fromModel`/`toModel`) do not land in
@@ -87,7 +81,7 @@ jq -c 'select(.type == "turn.started" or .type == "model.rerouted") |
   ~/.akeru/userdata/logs/provider/events.*.log | tail -10
 ```
 
-If the wire model differs from the saved selection, that is a routing bug — Akeru never silently
+If the wire model differs from the saved selection, that is a routing bug. Akeru never silently
 substitutes a model. A Codex-side reroute emits a `model.rerouted` runtime event instead of hiding
 the change; check `fromModel`/`toModel` in the provider `events.*.log` files.
 
@@ -111,15 +105,16 @@ Routing must fail, not fall back, when the saved selection cannot run:
 
 ## Multi-bot check
 
-Configure two bots on the same provider instance with different saved models (for example two
-Codex bots on `gpt-5.6-sol` and `gpt-5.6-codex-mini`), send a turn to each, and confirm each
-`sendTurn` span's `provider.model` matches its own bot. The sessions are independent — one bot's
-model switch must never appear on the other's session.
+Configure two standard OpenCode bots on the same provider instance with different saved models,
+send a turn to each, and compare each legacy span's `provider.model` with its own bot's selection.
+For Mastra drivers, use the mocked reactor test "routes two bots on the same provider instance
+to their own saved models". The current trace cannot establish live per-bot wire routing.
 
 ## If a check fails
 
-Capture the failing span (`jq` the trace file by `traceId`), note the saved `modelSelection` from
-the `thread.turn.start` command's `orchestration.command_type` span, and compare it to
-`provider.model` on the `sendTurn` span. File the mismatch against the owning driver in
+Capture the failing span (`jq` the trace file by `traceId`) and record the bot's saved selection.
+For standard OpenCode, compare it to `provider.model` on the legacy `sendTurn` span. For Mastra
+drivers, record available runtime events and reproduce the mismatch in the mocked wire-format
+tests rather than treating absent trace attributes as a routing failure. File the mismatch against the owning driver in
 `apps/server/src/provider/Drivers/`; the fix belongs at the adapter boundary, not in the
 orchestration layer.

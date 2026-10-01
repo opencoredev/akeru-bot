@@ -12,6 +12,7 @@ const EXPECTED_IDS =
   "ahrefs apify apollo asana atlassian attio canva cloudflare coda computer-use context customer-io datadog docusign dropbox exa executor figma firecrawl framer github gmail help-scout hoplite hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
     " ",
   );
+
 const INSTALLABLE_IDS: readonly string[] = [];
 
 describe("milestone 13 plugin lifecycle matrix", () => {
@@ -38,6 +39,7 @@ describe("milestone 13 plugin lifecycle matrix", () => {
         plugin.catalogStatus === "approval-pending" ||
         plugin.catalogStatus === "verification-pending",
     );
+
     expect(pending).toHaveLength(54);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,
@@ -45,6 +47,7 @@ describe("milestone 13 plugin lifecycle matrix", () => {
     expect(
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
     ).toHaveLength(38);
+
     for (const plugin of pending) {
       if (plugin.connection.type === "brokered") {
         // Brokered entries keep their transport shape so the Connect surface can
@@ -57,6 +60,7 @@ describe("milestone 13 plugin lifecycle matrix", () => {
           blocker: expect.stringMatching(/\S/),
         });
       }
+
       expect(isInstallablePlugin(plugin)).toBe(false);
     }
 
@@ -95,6 +99,7 @@ describe("milestone 13 plugin lifecycle matrix", () => {
         pendingBlocker: expect.stringContaining("Composio"),
       },
     });
+
     for (const id of ["context", "exa", "firecrawl", "parallel-search"]) {
       expect(byId.get(id)).toMatchObject({
         connection: {
@@ -103,6 +108,7 @@ describe("milestone 13 plugin lifecycle matrix", () => {
         },
       });
     }
+
     expect(byId.get("computer-use")).toMatchObject({
       platforms: ["macos"],
       connection: {
@@ -126,12 +132,14 @@ describe("milestone 13 plugin lifecycle matrix", () => {
           url: expect.stringMatching(/^https:\/\//),
         });
       }
+
       for (const permission of plugin.permissions) {
         if (permission.approval !== "read") {
           expect(plugin.approvals).toContain(permission.approval);
         }
       }
     }
+
     expect(
       [
         ...new Set(

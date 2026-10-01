@@ -101,6 +101,7 @@ describe("plugin catalog schema", () => {
       requiredCredentials: ["example-api-key"],
       catalogStatus: "verification-pending",
     } as const;
+
     expect(parsePluginManifest(pendingApiKey).connection).toEqual(pendingApiKey.connection);
     expect(() => parsePluginManifest({ ...pendingApiKey, requiredCredentials: [] })).toThrow(
       "must name its required API key credentials",
@@ -125,6 +126,7 @@ describe("plugin catalog schema", () => {
       authentication: "none",
       catalogStatus: "verification-pending",
     } as const;
+
     expect(parsePluginManifest(pendingLoopback).connection).toEqual(pendingLoopback.connection);
     expect(() =>
       parsePluginManifest({
@@ -150,6 +152,7 @@ describe("plugin catalog schema", () => {
       },
       catalogStatus: "approval-pending",
     } as const;
+
     expect(parsePluginManifest(pending).catalogStatus).toBe("approval-pending");
     expect(() => parsePluginManifest({ ...pending, catalogStatus: "available" })).toThrow(
       "must use approval-pending catalog status",
@@ -157,6 +160,7 @@ describe("plugin catalog schema", () => {
     expect(() =>
       parsePluginManifest({ ...VALID_MANIFEST, catalogStatus: "approval-pending" }),
     ).toThrow("must label its connection as approval-pending");
+
     const verificationPending = {
       ...pending,
       connection: {
@@ -165,6 +169,7 @@ describe("plugin catalog schema", () => {
       },
       catalogStatus: "verification-pending",
     } as const;
+
     expect(parsePluginManifest(verificationPending).catalogStatus).toBe("verification-pending");
     expect(() =>
       parsePluginManifest({ ...verificationPending, catalogStatus: "available" }),
@@ -181,6 +186,7 @@ describe("plugin catalog schema", () => {
       connection: { type: "local" },
       authentication: "none",
     };
+
     expect(() =>
       parsePluginManifest({
         ...local,
@@ -213,6 +219,7 @@ describe("plugin catalog schema", () => {
       },
       catalogStatus: "approval-pending",
     };
+
     expect(parsePluginManifest(pending).connection).toEqual(pending.connection);
     expect(() => parsePluginManifest({ ...pending, catalogStatus: "available" })).toThrow(
       "cannot be available without a transport recipe",

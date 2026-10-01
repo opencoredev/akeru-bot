@@ -79,6 +79,7 @@ function manifest(id: string) {
 describe("plugin catalog loader", () => {
   it("loads unavailable entries for the directory without installing them", () => {
     const context = manifest("context");
+
     const pending = {
       ...context,
       id: "pending-vendor",
@@ -90,6 +91,7 @@ describe("plugin catalog loader", () => {
       },
       catalogStatus: "approval-pending",
     };
+
     expect(
       loadDirectoryCatalog(
         { "./entries/pending-vendor/plugin.json": pending },
@@ -103,6 +105,7 @@ describe("plugin catalog loader", () => {
 
   it("shows pending URL entries without making them installable", () => {
     const context = manifest("context");
+
     const pending = {
       ...context,
       id: "pending-vendor",
@@ -114,10 +117,12 @@ describe("plugin catalog loader", () => {
       },
       catalogStatus: "approval-pending",
     };
+
     const modules = {
       "./entries/context/plugin.json": context,
       "./entries/pending-vendor/plugin.json": pending,
     };
+
     const assets = {
       "./entries/context/logo.svg": "/context.svg",
       "./entries/context/logo-dark.svg": "/context-dark.svg",
@@ -133,9 +138,11 @@ describe("plugin catalog loader", () => {
     const pendingPlugin = directory[1];
     expect(isInstallablePlugin(directory[0]!)).toBe(false);
     expect(isInstallablePlugin(pendingPlugin!)).toBe(false);
+
     if (pendingPlugin?.catalogStatus !== "approval-pending") {
       throw new Error("Expected the pending vendor in the directory catalog.");
     }
+
     expectTypeOf(pendingPlugin).not.toMatchTypeOf<PluginDefinition>();
 
     const installable = loadCatalog(modules, assets);
@@ -254,6 +261,7 @@ describe("plugin catalog loader", () => {
         plugin.catalogStatus === "approval-pending" ||
         plugin.catalogStatus === "verification-pending",
     );
+
     expect(pending).toHaveLength(54);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,
@@ -261,8 +269,10 @@ describe("plugin catalog loader", () => {
     expect(
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
     ).toHaveLength(38);
+
     for (const plugin of pending) {
       expect(["approval-pending", "verification-pending"]).toContain(plugin.catalogStatus);
+
       if (plugin.connection.type === "brokered") {
         expect(plugin.connection.pendingBlocker).toEqual(expect.stringMatching(/\S/));
       } else {
@@ -271,6 +281,7 @@ describe("plugin catalog loader", () => {
           blocker: expect.stringMatching(/\S/),
         });
       }
+
       expect(isInstallablePlugin(plugin)).toBe(false);
       expect(new Set(plugin.approvals)).toEqual(
         new Set(
@@ -284,6 +295,7 @@ describe("plugin catalog loader", () => {
 
   it("keeps official vendor endpoints visible while their connection blockers remain", () => {
     const byId = new Map(loadDirectoryCatalog().map((plugin) => [plugin.id, plugin]));
+
     for (const [id, url, status] of [
       ["github", "https://api.githubcopilot.com/mcp/", "verification-pending"],
       ["hubspot", "https://mcp.hubspot.com", "approval-pending"],
@@ -333,12 +345,14 @@ describe("plugin catalog loader", () => {
 
   it("rejects duplicate ids and mismatched isolated directories", () => {
     const context = manifest("context");
+
     const assets = {
       "./entries/context/logo.svg": "/context.svg",
       "./entries/context/logo-dark.svg": "/context-dark.svg",
       "./entries/context-copy/logo.svg": "/context-copy.svg",
       "./entries/context-copy/logo-dark.svg": "/context-copy-dark.svg",
     };
+
     expect(() =>
       loadCatalog(
         {
@@ -356,6 +370,7 @@ describe("plugin catalog loader", () => {
   it("keeps removed builtins visible and Custom MCP independent", () => {
     const catalog = loadDirectoryCatalog();
     const exa = catalog.find((plugin) => plugin.id === "exa");
+
     if (!exa) throw new TypeError("Exa is missing from the catalog.");
     expect(
       resolveCatalogInstallations(
@@ -379,10 +394,12 @@ describe("plugin catalog loader", () => {
 
   it("states blockers and setup as vendor or lifecycle facts, not as host work", () => {
     const hostActor = /\bAkeru\b/;
+
     for (const plugin of loadDirectoryCatalog()) {
       if (plugin.connection.type === "approval-pending") {
         expect(plugin.connection.blocker).not.toMatch(hostActor);
       }
+
       for (const step of plugin.setup) {
         expect(step).not.toMatch(/\bAkeru (?:has|must|needs|completes|to)\b/);
       }

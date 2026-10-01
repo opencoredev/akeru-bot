@@ -80,7 +80,7 @@ The most common defect in this repo is a change that works on the path you teste
 
 - **Entry points.** A behavior reachable from the chat view is usually also reachable from Settings, the command palette, and a keybinding. Fixing one is not fixing the feature.
 - **Clients.** Web, desktop (wraps web, adds Electron shell/IPC), and mobile (React Native, separate navigation). Shared logic lives in `packages/client-runtime`
-- **Providers.** Codex, Claude, Grok, Kimi For Coding, and OpenCode each need an explicit decision. Codex and Kimi use Akeru's Mastra controller. Claude, Grok, and OpenCode use the legacy adapter bridge.
+- **Providers.** Codex, Claude, Grok, Kimi For Coding, and OpenCode each need an explicit decision. Codex, Claude, Grok, Kimi For Coding, and OpenCode Go use Akeru's Mastra controller; standard OpenCode uses the legacy adapter bridge. See [provider routing](docs/internals/providers.md).
 - **Contracts.** Anything crossing the wire is typed in `packages/contracts`. Change the schema and the server, web, mobile, and desktop all follow.
 - **Reverse states.** If you added a way in, add the way out and the way to see it. Snooze needs unsnooze. Close needs reopen. A one-way door is a bug.
 - **Connection modes.** Local, remote/relay, and tunnel behave differently. Multi-device and multi-environment cases are real.
