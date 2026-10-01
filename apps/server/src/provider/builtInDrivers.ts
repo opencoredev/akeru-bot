@@ -26,6 +26,7 @@ import { GrokDriver, type GrokDriverEnv } from "./Drivers/GrokDriver.ts";
 import { KimiDriver, type KimiDriverEnv } from "./Drivers/KimiDriver.ts";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "./Drivers/OpenCodeDriver.ts";
 import { OpenCodeGoDriver, type OpenCodeGoDriverEnv } from "./Drivers/OpenCodeGoDriver.ts";
+import { registeredProviderDriver } from "./registeredProviderDriver.ts";
 import type { AnyProviderDriver } from "./ProviderDriver.ts";
 
 /**
@@ -47,10 +48,10 @@ export type BuiltInDriversEnv =
  * iteration order has no functional effect on instance lookup.
  */
 export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv>> = [
-  CodexDriver,
-  ClaudeDriver,
-  GrokDriver,
-  KimiDriver,
-  OpenCodeDriver,
-  OpenCodeGoDriver,
+  registeredProviderDriver(CodexDriver),
+  registeredProviderDriver(ClaudeDriver),
+  registeredProviderDriver(GrokDriver),
+  registeredProviderDriver(KimiDriver),
+  registeredProviderDriver(OpenCodeDriver),
+  registeredProviderDriver(OpenCodeGoDriver),
 ];
