@@ -25,7 +25,7 @@ import type { GitRepositoryPathsServices } from "./GitRepositoryPaths.ts";
 import type { GitRemoteStatusServices } from "./GitRemoteStatus.ts";
 import type { GitWorktreesServices } from "./GitWorktrees.ts";
 
-export const makeGitRefs = (dependencies: {
+export const gitRefs = (dependencies: {
   fileSystem: GitExecutionServices["fileSystem"];
   path: GitExecutionServices["path"];
   executeGit: GitExecutionServices["executeGit"];

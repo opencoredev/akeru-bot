@@ -4,7 +4,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as TestClock from "effect/testing/TestClock";
-import { makePlanLimitsReader } from "./usagePlanLimits.ts";
+import { planLimitsReader } from "./usagePlanLimits.ts";
 
 const fetchMock =
   vi.fn<(input: Parameters<typeof fetch>[0], init?: RequestInit) => Promise<Response>>();
@@ -36,7 +36,7 @@ it.effect("drops the previous account's windows when credentials change", () =>
     let token = "token-a";
     let accountId = "account-a";
 
-    const read = yield* makePlanLimitsReader(async (provider) =>
+    const read = yield* planLimitsReader(async (provider) =>
       provider === "anthropic" ? { accessToken: token, accountId } : undefined,
     );
 
@@ -81,7 +81,7 @@ it.effect("keeps meters across token rotation, usage failures and unavailable to
     let connected = true;
     let accountId = "same-account";
 
-    const read = yield* makePlanLimitsReader(async (provider) => {
+    const read = yield* planLimitsReader(async (provider) => {
       if (provider !== "anthropic" || !connected) return undefined;
 
       return { accessToken: lookupFails ? null : accessToken, accountId };

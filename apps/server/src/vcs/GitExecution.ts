@@ -16,7 +16,7 @@ import {
   createTrace2Monitor,
 } from "./GitCoreHelpers.ts";
 
-export const makeGitExecution = () =>
+export const gitExecution = () =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
 
@@ -257,4 +257,4 @@ export const makeGitExecution = () =>
     };
   });
 
-export type GitExecutionServices = Effect.Success<ReturnType<typeof makeGitExecution>>;
+export type GitExecutionServices = Effect.Success<ReturnType<typeof gitExecution>>;

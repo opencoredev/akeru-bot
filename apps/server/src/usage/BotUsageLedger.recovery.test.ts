@@ -5,7 +5,7 @@ import { assert, it } from "@effect/vitest";
 import { BotId, ThreadId, TurnId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { makeSqlitePersistenceLive } from "../persistence/Layers/Sqlite.ts";
+import { sqlitePersistenceLayer } from "../persistence/Layers/Sqlite.ts";
 import { BotUsageLedger, BotUsageLedgerLive } from "./BotUsageLedger.ts";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -19,9 +19,7 @@ it.effect("reconciles persisted reservations when the ledger restarts", () =>
 
     const restartedLayer = () =>
       BotUsageLedgerLive.pipe(
-        Layer.provideMerge(
-          makeSqlitePersistenceLive(dbPath).pipe(Layer.provide(NodeServices.layer)),
-        ),
+        Layer.provideMerge(sqlitePersistenceLayer(dbPath).pipe(Layer.provide(NodeServices.layer))),
       );
 
     const botId = BotId.make("bot-restart-usage");
@@ -138,7 +136,7 @@ it.effect("keeps pricing complete when a restart interrupts a tool call", () =>
     const restartedLayer = () =>
       BotUsageLedgerLive.pipe(
         Layer.provideMerge(
-          makeSqlitePersistenceLive(NodePath.join(directory, "state.sqlite")).pipe(
+          sqlitePersistenceLayer(NodePath.join(directory, "state.sqlite")).pipe(
             Layer.provide(NodeServices.layer),
           ),
         ),

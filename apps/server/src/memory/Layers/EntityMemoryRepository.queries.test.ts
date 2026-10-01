@@ -22,7 +22,7 @@ import {
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { makeSqlitePersistenceLive } from "../../persistence/Layers/Sqlite.ts";
+import { sqlitePersistenceLayer } from "../../persistence/Layers/Sqlite.ts";
 import {
   EntityMemoryConflictError,
   EntityMemoryRepository,
@@ -38,7 +38,7 @@ it("preserves revision history and FTS recall after repository restart", () =>
 
     const restartedLayer = EntityMemoryRepositoryLive.pipe(
       Layer.provide(MemoryRevisionWriteLockLive),
-      Layer.provideMerge(makeSqlitePersistenceLive(dbPath).pipe(Layer.provide(NodeServices.layer))),
+      Layer.provideMerge(sqlitePersistenceLayer(dbPath).pipe(Layer.provide(NodeServices.layer))),
     );
 
     const rootId = AkeruMemoryRootId.make("restart-memory-root");

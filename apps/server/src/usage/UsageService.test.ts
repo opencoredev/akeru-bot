@@ -41,7 +41,7 @@ vi.mock("./usagePlanLimits.ts", async () => {
   const Effect = await import("effect/Effect");
 
   return {
-    makePlanLimitsReader: () =>
+    planLimitsReader: () =>
       Effect.sync(() => {
         planLimits.readerCreations += 1;
 

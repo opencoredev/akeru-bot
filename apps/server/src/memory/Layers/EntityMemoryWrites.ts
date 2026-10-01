@@ -23,7 +23,7 @@ import { EntityMemoryDbRow, selectColumns, decodeRow } from "./EntityMemoryRows.
 import type { EntityMemoryStorageServices } from "./EntityMemoryStorage.ts";
 import type { EntityMemoryQueriesServices } from "./EntityMemoryQueries.ts";
 
-export const makeEntityMemoryWrites = (dependencies: {
+export const entityMemoryWrites = (dependencies: {
   sql: EntityMemoryStorageServices["sql"];
   writeLock: EntityMemoryStorageServices["writeLock"];
   insertRow: EntityMemoryStorageServices["insertRow"];

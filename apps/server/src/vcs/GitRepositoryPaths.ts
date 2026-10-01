@@ -14,7 +14,7 @@ import {
 } from "./GitCoreHelpers.ts";
 import type { GitExecutionServices } from "./GitExecution.ts";
 
-export const makeGitRepositoryPaths = (dependencies: {
+export const gitRepositoryPaths = (dependencies: {
   fileSystem: GitExecutionServices["fileSystem"];
   path: GitExecutionServices["path"];
   executeGit: GitExecutionServices["executeGit"];
@@ -160,4 +160,4 @@ export const makeGitRepositoryPaths = (dependencies: {
     };
   });
 
-export type GitRepositoryPathsServices = Effect.Success<ReturnType<typeof makeGitRepositoryPaths>>;
+export type GitRepositoryPathsServices = Effect.Success<ReturnType<typeof gitRepositoryPaths>>;

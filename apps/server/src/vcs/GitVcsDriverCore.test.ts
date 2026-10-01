@@ -19,7 +19,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
 import * as TestClock from "effect/testing/TestClock";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { makeGitVcsDriverCore } from "./GitVcsDriverCore.ts";
+import { gitVcsDriverCore } from "./GitVcsDriverCore.ts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
 
 it.effect("uses stable diagnostics for every parsed non-repository command", () => {
@@ -112,7 +112,7 @@ it.effect("coalesces concurrent ref pages into one repository snapshot", () =>
         }),
       );
 
-      const driver = yield* makeGitVcsDriverCore().pipe(
+      const driver = yield* gitVcsDriverCore().pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, countingSpawner),
       );
 

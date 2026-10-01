@@ -5,7 +5,7 @@ import { gitCommandContext } from "./GitCoreHelpers.ts";
 import type { GitExecutionServices } from "./GitExecution.ts";
 import type { GitLocalStatusServices } from "./GitLocalStatus.ts";
 
-export const makeGitPull = (dependencies: {
+export const gitPull = (dependencies: {
   executeGit: GitExecutionServices["executeGit"];
   runGitStdout: GitExecutionServices["runGitStdout"];
   statusDetails: GitLocalStatusServices["statusDetails"];

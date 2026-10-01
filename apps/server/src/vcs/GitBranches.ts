@@ -11,7 +11,7 @@ import {
 } from "./GitCoreHelpers.ts";
 import type { GitExecutionServices } from "./GitExecution.ts";
 
-export const makeGitBranches = (dependencies: {
+export const gitBranches = (dependencies: {
   path: GitExecutionServices["path"];
   executeGit: GitExecutionServices["executeGit"];
   runGitStdout: GitExecutionServices["runGitStdout"];
@@ -109,4 +109,4 @@ export const makeGitBranches = (dependencies: {
     };
   });
 
-export type GitBranchesServices = Effect.Success<ReturnType<typeof makeGitBranches>>;
+export type GitBranchesServices = Effect.Success<ReturnType<typeof gitBranches>>;
