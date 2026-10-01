@@ -16,6 +16,7 @@ export const scaleTheme = {
     "17px",
     "26px",
     "0.6875rem",
+    "code-label",
     "1em",
   ],
   tracking: [
@@ -79,8 +80,13 @@ export const scaleTheme = {
     "titlebar-controls-end",
     "topbar-spacer",
     "composer-overlap-1.5",
+    "composer-overlap-1",
+    "composer-seam",
+    "composer-drawer",
+    "banner-indent",
+    "banner-actions-wrapped",
   ],
-  radius: ["1px", "5px", "10px", "0.45em", "1.65rem", "2rem"],
+  radius: ["1px", "5px", "10px", "0.45em", "1.65rem", "2rem", "0.5rem", "1rem", "16px"],
   shadow: [
     "hairline",
     "hairline-lifted",
@@ -88,6 +94,9 @@ export const scaleTheme = {
     "card-hover",
     "peek",
     "composer-float",
+    "progress-glow",
+    "composer-banner",
+    "composer-banner-dark",
     "preview-frame",
     "inset-highlight",
   ],
@@ -101,6 +110,8 @@ export const scaleClassGroups = {
     {
       "grid-cols": [
         "1fr-auto",
+        "banner-row",
+        "banner-row-plain",
         "1fr-2fr",
         "1fr-7rem",
         "1fr-10rem",
