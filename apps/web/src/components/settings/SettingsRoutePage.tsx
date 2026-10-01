@@ -32,7 +32,7 @@ export function SettingsRoutePage() {
           <WorkspacePageHeader electron={isElectron}>
             <h1 className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
               {navItem ? (
-                <AppIcon icon={navItem.icon} className="size-4 shrink-0 text-muted-foreground" />
+                <AppIcon icon={navItem.icon} className="size-4 shrink-0" tone="muted" />
               ) : null}
               <span className="truncate">{label}</span>
             </h1>

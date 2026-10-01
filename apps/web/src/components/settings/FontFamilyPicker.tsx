@@ -168,6 +168,7 @@ export function FontFamilyPicker({
     return (
       <ComboboxItem hideIndicator index={index} key={item} value={item}>
         <div className="flex w-full min-w-0 items-center justify-between gap-2">
+          {/* oxlint-disable-next-line shadcn/no-inline-styles -- Preview uses the selected installed font family. */}
           <span className="min-w-0 truncate" style={{ fontFamily: family }}>
             {family}
           </span>
@@ -203,10 +204,7 @@ export function FontFamilyPicker({
         void listRef.current?.scrollIndexIntoView?.({ index: eventDetails.index, animated: false });
       }}
     >
-      <ComboboxTrigger
-        aria-label={ariaLabel}
-        className="relative inline-flex min-h-9 w-full min-w-36 cursor-pointer select-none items-center justify-between gap-2 rounded-lg border border-transparent bg-secondary px-[calc(--spacing(3)-1px)] text-left text-base text-foreground outline-none transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring/70 sm:min-h-8 sm:text-sm"
-      >
+      <ComboboxTrigger aria-label={ariaLabel} presentation="font-family">
         <span className="min-w-0 truncate">
           {selectedFamily.length === 0 ? defaultFamily : selectedFamily}
         </span>
@@ -220,8 +218,7 @@ export function FontFamilyPicker({
               className="pointer-events-none absolute top-1.5 left-0 size-4 shrink-0 text-muted-foreground/55"
             />
             <ComboboxInput
-              className="[&_input]:h-6.5 [&_input]:ps-5 [&_input]:font-sans [&_input]:leading-6.5"
-              inputClassName="rounded-none bg-transparent text-sm"
+              presentation="font-search"
               placeholder="Search fonts…"
               showTrigger={false}
               size="sm"
@@ -234,7 +231,7 @@ export function FontFamilyPicker({
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <ComboboxEmpty>No fonts found.</ComboboxEmpty>
           <div className="relative min-h-0 max-h-72 w-full flex-1 overflow-hidden">
-            <ComboboxListVirtualized className="size-full min-w-0 p-0">
+            <ComboboxListVirtualized presentation="font-family">
               <LegendList<string>
                 ref={listRef}
                 data={items}
@@ -242,6 +239,7 @@ export function FontFamilyPicker({
                 renderItem={({ item, index }) => renderItem(item, index)}
                 estimatedItemSize={30}
                 drawDistance={360}
+                // oxlint-disable-next-line shadcn/no-inline-styles -- Virtualized height depends on the filtered font count.
                 style={{ height: Math.min(items.length * 30, 288) }}
               />
             </ComboboxListVirtualized>

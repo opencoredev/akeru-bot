@@ -61,10 +61,8 @@ export function SettingsPanelNav() {
                     )}
                   >
                     <AppIcon
-                      className={cn(
-                        "size-[18px] shrink-0",
-                        active ? "text-sidebar-foreground" : "text-sidebar-muted-foreground",
-                      )}
+                      className="size-4.5 shrink-0"
+                      tone={active ? "sidebar" : "sidebar-muted"}
                       icon={item.icon}
                       strokeWidth={active ? 2 : 1.7}
                     />
@@ -90,7 +88,7 @@ export function SettingsSidebarNav() {
       <SidebarChromeHeader isElectron={isElectron} />
       <SidebarContent className="overflow-x-hidden">
         {SETTINGS_NAV_GROUPS.map((group) => (
-          <SidebarGroup key={group.label} className="p-[var(--sidebar-content-inset)]">
+          <SidebarGroup key={group.label} className="p-(--sidebar-content-inset)">
             <SidebarGroupLabel>{t(group.label)}</SidebarGroupLabel>
             <SidebarMenu>
               {group.items.map((item) => {
@@ -105,7 +103,8 @@ export function SettingsSidebarNav() {
                       tooltip={t(item.label)}
                     >
                       <AppIcon
-                        className={cn("size-4", !active && "text-sidebar-muted-foreground")}
+                        className="size-4"
+                        tone={active ? undefined : "sidebar-muted"}
                         icon={item.icon}
                       />
                       <span className="truncate group-data-[collapsible=icon]:hidden">
@@ -119,7 +118,7 @@ export function SettingsSidebarNav() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="p-[var(--sidebar-content-inset)]">
+      <SidebarFooter className="p-(--sidebar-content-inset)">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={() => go("/")} tooltip={t("Back to chats")}>

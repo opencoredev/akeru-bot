@@ -162,12 +162,12 @@ describe("bot settings entry points", () => {
 
 describe("global settings stay global", () => {
   it("leaves the shared sandbox and browser sharing policy in Settings", () => {
-    const panels = read("../settings/SettingsPanels.tsx");
+    const workspace = read("../settings/BotWorkspaceSettings.tsx");
     const botSettings = readBotSettingsSource();
 
     // This is one environment-wide policy for every bot, not per-bot data.
-    expect(panels).toContain("<BotSandboxBrowserSharingSettings");
-    expect(panels).toContain("settings.botSandboxBrowserSharing");
+    expect(workspace).toContain("<BotSandboxBrowserSharingSettings");
+    expect(workspace).toContain("settings.botSandboxBrowserSharing");
     expect(botSettings).not.toContain("botSandboxBrowserSharing");
   });
 
