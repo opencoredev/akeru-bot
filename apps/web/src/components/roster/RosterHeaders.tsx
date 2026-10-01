@@ -104,7 +104,7 @@ export function RosterPanelHeader({
         to="/"
         className="min-w-0 flex-1 rounded-md text-sidebar-foreground outline-none ring-ring focus-visible:ring-2"
       >
-        <AkeruWordmark className="text-[26px]" />
+        <AkeruWordmark className="text-26px" />
       </Link>
       <Tooltip>
         <TooltipTrigger

@@ -651,7 +651,7 @@ export function PluginsPage() {
           <>
             <PluginsPageHeader />
             <div className={PLUGIN_PAGE_COLUMN_CLASS_NAME}>
-              <p className="px-2.5 text-[15px] leading-6 text-muted-foreground">
+              <p className="px-2.5 text-15px leading-6 text-muted-foreground">
                 {t("Connect an environment to manage plugins.")}
               </p>
             </div>

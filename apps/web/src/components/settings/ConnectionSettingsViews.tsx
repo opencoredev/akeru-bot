@@ -150,7 +150,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
         </label>
       </div>
       <div>
-        <span className="mt-1 block text-[11px] text-muted-foreground">
+        <span className="mt-1 block text-11px text-muted-foreground">
           Paste a full pairing URL here to fill both fields automatically.
         </span>
       </div>
@@ -230,7 +230,7 @@ export function connectionSettingsViews(settings: ReturnType<typeof useDesktopBa
         <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-muted/30 px-3 py-2">
           <div className="min-w-0">
             <p className="text-xs font-medium text-foreground">Suggested hosts</p>
-            <p className="text-[11px] text-muted-foreground">From SSH config and known hosts</p>
+            <p className="text-11px text-muted-foreground">From SSH config and known hosts</p>
           </div>
           <Button
             size="xs"

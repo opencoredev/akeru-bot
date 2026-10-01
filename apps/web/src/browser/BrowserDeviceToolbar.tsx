@@ -196,7 +196,7 @@ export function BrowserDeviceToolbar({
       }}
     >
       {width >= 560 ? (
-        <span className="mr-0.5 shrink-0 text-[11px] font-medium text-muted-foreground">
+        <span className="mr-0.5 shrink-0 text-11px font-medium text-muted-foreground">
           Dimensions
         </span>
       ) : null}

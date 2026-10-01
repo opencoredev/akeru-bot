@@ -80,7 +80,7 @@ export function RowText({
           <span className="shrink-0 truncate text-xs text-muted-foreground/80">{metaText}</span>
         ) : null}
       </div>
-      <p className="line-clamp-2 text-[13px] leading-5 text-muted-foreground sm:line-clamp-1">
+      <p className="line-clamp-2 text-13px leading-5 text-muted-foreground sm:line-clamp-1">
         {description}
       </p>
     </div>
@@ -114,7 +114,7 @@ export function DirectorySection({
     <section {...(labelId ? { "aria-labelledby": labelId } : { "aria-label": label })}>
       <div className="mb-3 flex h-7 items-center justify-between gap-3 px-1">
         <h2
-          className="flex items-baseline gap-2 text-[15px] font-semibold text-foreground"
+          className="flex items-baseline gap-2 text-15px font-semibold text-foreground"
           id={labelId}
         >
           {label}
@@ -171,7 +171,7 @@ export function DirectoryCard({
         {logo}
         <div className="min-w-0 flex-1 pt-0.5">
           <h3 className="truncate text-sm font-semibold leading-5 text-foreground">{title}</h3>
-          <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-muted-foreground">
+          <p className="mt-1 line-clamp-2 text-13px leading-5 text-muted-foreground">
             {description}
           </p>
         </div>

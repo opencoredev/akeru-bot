@@ -48,7 +48,7 @@ export function Legend({
             onFocus={() => chart.setFocusDataKey(name)}
             onBlur={() => chart.setFocusDataKey(null)}
             className={cn(
-              "flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground transition-opacity",
+              "flex items-center gap-1.5 font-mono text-11px text-muted-foreground transition-opacity",
               isClickable && "pointer-events-auto cursor-pointer hover:text-foreground",
               dimmed && "opacity-40",
             )}

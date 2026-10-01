@@ -240,7 +240,7 @@ export function ResourceTelemetryDiagnostics() {
         <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-[0_1px_1px_rgb(0_0_0/0.03),0_8px_30px_rgb(0_0_0/0.035)]">
           <div className="flex flex-col gap-3 border-b border-border/60 bg-linear-to-r from-muted/45 via-muted/20 to-transparent px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+              <div className="text-10px font-semibold uppercase tracking-caps-widest text-muted-foreground/70">
                 Akeru Bot system footprint
               </div>
               <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
@@ -248,7 +248,7 @@ export function ResourceTelemetryDiagnostics() {
                 the monitor itself.
               </p>
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground/65">
+            <div className="flex items-center gap-2 text-10px text-muted-foreground/65">
               <span className="size-1.5 rounded-full bg-success" />
               Sampling every {snapshot ? formatSampleInterval(snapshot.sampleIntervalMs) : "..."}
             </div>
@@ -347,7 +347,7 @@ export function ResourceTelemetryDiagnostics() {
       >
         <div className="grid overflow-hidden rounded-2xl border border-border/70 bg-card shadow-[0_1px_1px_rgb(0_0_0/0.03)] md:grid-cols-2 md:divide-x md:divide-border/60">
           <div className="px-4 py-4 sm:px-5">
-            <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+            <div className="mb-3 flex items-center gap-2 text-10px font-semibold uppercase tracking-caps-wider text-muted-foreground/70">
               <span className="flex size-6 items-center justify-center rounded-md bg-muted/60">
                 <BatteryIcon className="size-3.5" />
               </span>
@@ -404,10 +404,10 @@ export function ResourceTelemetryDiagnostics() {
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-5">
-                <div className="text-[13px] font-medium text-foreground">
+                <div className="text-13px font-medium text-foreground">
                   Desktop host signals not connected
                 </div>
-                <p className="mt-1.5 max-w-sm text-[11px] leading-relaxed text-muted-foreground/70">
+                <p className="mt-1.5 max-w-sm text-11px leading-relaxed text-muted-foreground/70">
                   Power, idle, lock, and thermal state are supplied by the desktop host. Process
                   telemetry remains fully active in this browser session.
                 </p>
@@ -415,7 +415,7 @@ export function ResourceTelemetryDiagnostics() {
             )}
           </div>
           <div className="border-t border-border/60 px-4 py-4 md:border-t-0 sm:px-5">
-            <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+            <div className="mb-3 flex items-center gap-2 text-10px font-semibold uppercase tracking-caps-wider text-muted-foreground/70">
               <span className="flex size-6 items-center justify-center rounded-md bg-muted/60">
                 <GaugeIcon className="size-3.5" />
               </span>
@@ -499,7 +499,7 @@ export function ResourceTelemetryDiagnostics() {
         icon={<CpuIcon className="size-4 text-muted-foreground" />}
         headerAction={
           snapshot ? (
-            <span className="text-[10px] text-muted-foreground/55">
+            <span className="text-10px text-muted-foreground/55">
               Identity: <span className="font-mono">PID + start time</span>
             </span>
           ) : null
@@ -518,11 +518,11 @@ export function ResourceTelemetryDiagnostics() {
         title="Instrumented application I/O"
         icon={<DatabaseIcon className="size-4 text-muted-foreground" />}
         headerAction={
-          <span className="text-[10px] text-muted-foreground/55">Logical bytes by operation</span>
+          <span className="text-10px text-muted-foreground/55">Logical bytes by operation</span>
         }
       >
         <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-[0_1px_1px_rgb(0_0_0/0.03)]">
-          <div className="bg-muted/15 px-4 py-3 text-[11px] leading-relaxed text-muted-foreground sm:px-5">
+          <div className="bg-muted/15 px-4 py-3 text-11px leading-relaxed text-muted-foreground sm:px-5">
             Native counters identify which process is reading or writing. These application-level
             counters identify known Akeru Bot operations so process spikes can be correlated with
             specific persistence and logging paths.

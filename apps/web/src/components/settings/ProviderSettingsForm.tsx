@@ -206,7 +206,7 @@ function ProviderSettingsFieldRow({
   const descriptionClassName =
     variant === "card"
       ? "mt-1 block text-xs text-muted-foreground"
-      : "text-[11px] text-muted-foreground";
+      : "text-11px text-muted-foreground";
 
   const label = <span className="text-xs font-medium text-foreground">{field.label}</span>;
 

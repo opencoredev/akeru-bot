@@ -212,7 +212,7 @@ function ConnectedProvidersList({ environmentId }: { readonly environmentId: Env
         })}
       </SettingsSection>
       {error ? (
-        <p role="alert" className="-mt-5 px-3 text-[13px] text-destructive sm:px-4">
+        <p role="alert" className="-mt-5 px-3 text-13px text-destructive sm:px-4">
           {t("Could not load account status.")} {error}
         </p>
       ) : null}

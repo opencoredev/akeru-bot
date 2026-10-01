@@ -499,7 +499,7 @@ export function WhenExpressionBuilder({
           ) : null}
         </div>
         {parseError ? (
-          <div className="flex items-center gap-1.5 text-[11px] text-destructive">
+          <div className="flex items-center gap-1.5 text-11px text-destructive">
             <CircleXIcon className="size-3.5" />
             {parseError}
           </div>

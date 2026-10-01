@@ -213,6 +213,34 @@
   }
 }
 
+/* Fixed steps the interface uses beside Tailwind's default scale. Values stay
+   literal (px, em) so they render exactly as before and ignore the root font
+   size. Font sizes carry no line-height companion: they set font-size only and
+   leave line-height to leading-* or inheritance. */
+
+@theme inline {
+  --text-7px: 7px;
+  --text-8px: 8px;
+  --text-9px: 9px;
+  --text-10px: 10px;
+  --text-11px: 11px;
+  --text-12px: 12px;
+  --text-13px: 13px;
+  --text-15px: 15px;
+  --text-17px: 17px;
+  --text-26px: 26px;
+  --tracking-caps: 0.08em;
+  --tracking-caps-wide: 0.11em;
+  --tracking-caps-wider: 0.12em;
+  --tracking-caps-widest: 0.14em;
+  --tracking-title-xs: -0.005em;
+  --tracking-title-sm: -0.01em;
+  --tracking-title: -0.015em;
+  --tracking-title-lg: -0.02em;
+  --leading-copy: 1.45;
+  --leading-copy-tight: 1.4;
+}
+
 @import "./styles/chrome-utilities.css";
 
 @import "./styles/stage-art.css";

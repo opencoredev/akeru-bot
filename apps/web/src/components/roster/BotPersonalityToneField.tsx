@@ -60,7 +60,7 @@ export function BotPersonalityToneField({
             );
           })}
         </div>
-        <p className="text-[13px] leading-[1.45] text-muted-foreground/80">{band.summary}</p>
+        <p className="text-13px leading-copy text-muted-foreground/80">{band.summary}</p>
       </div>
 
       <BotPersonalityTonePreview bot={bot} tone={selected.value} />
@@ -92,7 +92,7 @@ export function BotPersonalityTonePreview({
       </figcaption>
 
       <div className="flex justify-end">
-        <p className="max-w-17/20 rounded-2xl rounded-br-sm bg-primary/10 px-3 py-2 text-[13px] leading-[1.45] text-foreground">
+        <p className="max-w-17/20 rounded-2xl rounded-br-sm bg-primary/10 px-3 py-2 text-13px leading-copy text-foreground">
           {botPersonalityToneSamplePrompt(t)}
         </p>
       </div>
@@ -101,13 +101,13 @@ export function BotPersonalityTonePreview({
         <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-6 shrink-0" />
         <p
           key={band.id}
-          className="max-w-17/20 rounded-2xl rounded-bl-sm bg-background px-3 py-2 text-[13px] leading-[1.45] text-foreground shadow-sm/5"
+          className="max-w-17/20 rounded-2xl rounded-bl-sm bg-background px-3 py-2 text-13px leading-copy text-foreground shadow-sm/5"
         >
           {band.sample}
         </p>
       </div>
 
-      <p className="text-[11px] leading-[1.4] text-muted-foreground/70">
+      <p className="text-11px leading-copy-tight text-muted-foreground/70">
         {t("An illustration of the band, not a live reply.")}
       </p>
     </figure>

@@ -45,7 +45,7 @@ export function BlockLegend({
         return (
           <li
             key={name}
-            className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
+            className="flex items-center gap-1.5 font-mono text-11px text-muted-foreground"
           >
             <span className="size-2 rounded-[1px]" style={{ backgroundColor: rgb(seed.fill) }} />
             <span>{entry.label ?? name}</span>

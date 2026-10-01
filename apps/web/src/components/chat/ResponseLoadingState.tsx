@@ -121,7 +121,7 @@ export function ResponseLoadingState({
       <LoaderMeter key={label} />
       <span
         className={cn(
-          "min-w-0 truncate text-[13px] font-medium",
+          "min-w-0 truncate text-13px font-medium",
           stalled ? "text-foreground" : "bot-status-shimmer",
         )}
       >

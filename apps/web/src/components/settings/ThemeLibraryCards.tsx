@@ -122,13 +122,13 @@ function ThemeVariantRadial({ variantNavigation }: { variantNavigation: ThemeVar
             </ThemeVariantTooltip>
             <span
               className={cn(
-                "pointer-events-none absolute bottom-0 left-1/2 inline-flex max-w-24 -translate-x-1/2 items-center gap-1 text-[11px] font-medium text-foreground",
+                "pointer-events-none absolute bottom-0 left-1/2 inline-flex max-w-24 -translate-x-1/2 items-center gap-1 text-11px font-medium text-foreground",
                 rootOffsetClassName,
               )}
             >
               <span className="truncate">{selected.option.label}</span>
               {options.length > 1 ? (
-                <span className="shrink-0 rounded-full bg-settings-control px-1 text-[9px] text-muted-foreground">
+                <span className="shrink-0 rounded-full bg-settings-control px-1 text-9px text-muted-foreground">
                   +{options.length - 1}
                 </span>
               ) : null}

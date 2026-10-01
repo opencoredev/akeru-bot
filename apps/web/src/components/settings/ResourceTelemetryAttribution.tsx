@@ -17,7 +17,7 @@ export function AttributionTable({
           <col className="w-1/10" />
           <col className="w-3/25" />
         </colgroup>
-        <thead className="border-b border-border/60 text-[10px] uppercase tracking-[0.08em] text-muted-foreground/65">
+        <thead className="border-b border-border/60 text-10px uppercase tracking-caps text-muted-foreground/65">
           <tr>
             <th className="px-4 py-2 font-semibold sm:pl-5">Component</th>
             <th className="px-3 py-2 font-semibold">Operation</th>

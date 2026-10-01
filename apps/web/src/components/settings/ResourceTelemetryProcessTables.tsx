@@ -90,7 +90,7 @@ export function ProcessActions({
   onSignal: (process: ResourceTelemetryProcess, signal: ServerProcessSignal) => void;
 }) {
   if (!canSignalProcess(process)) {
-    return <span className="text-[10px] text-muted-foreground/35">—</span>;
+    return <span className="text-10px text-muted-foreground/35">—</span>;
   }
 
   const isSignaling = signalingKeys.has(processIdentityKey(process));
@@ -100,7 +100,7 @@ export function ProcessActions({
       <button
         type="button"
         disabled={isSignaling}
-        className="cursor-pointer text-[10px] font-semibold text-muted-foreground hover:text-foreground disabled:opacity-50"
+        className="cursor-pointer text-10px font-semibold text-muted-foreground hover:text-foreground disabled:opacity-50"
         onClick={() => onSignal(process, "SIGINT")}
       >
         INT
@@ -108,7 +108,7 @@ export function ProcessActions({
       <button
         type="button"
         disabled={isSignaling}
-        className="cursor-pointer text-[10px] font-semibold text-destructive hover:underline disabled:opacity-50"
+        className="cursor-pointer text-10px font-semibold text-destructive hover:underline disabled:opacity-50"
         onClick={() => onSignal(process, "SIGKILL")}
       >
         KILL
@@ -170,7 +170,7 @@ export function ProcessTable({
           <col className="w-3/50" />
           <col className="w-1/25" />
         </colgroup>
-        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-[10px] uppercase tracking-[0.08em] text-muted-foreground/65">
+        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-10px uppercase tracking-caps text-muted-foreground/65">
           <tr>
             <th className="px-4 py-2 font-semibold sm:pl-5">Process</th>
             <th className="px-3 py-2 font-semibold">Category</th>
@@ -202,7 +202,7 @@ export function ProcessTable({
                   onToggle={toggle}
                 />
               </td>
-              <td className="truncate px-3 py-2 text-[11px] text-muted-foreground">
+              <td className="truncate px-3 py-2 text-11px text-muted-foreground">
                 {categoryLabel(process.category)}
               </td>
               <td className="px-3 py-2 text-right font-mono tabular-nums">
@@ -272,7 +272,7 @@ export function HistoryProcessTable({
           <col className="w-7/100" />
           <col className="w-1/20" />
         </colgroup>
-        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-[10px] uppercase tracking-[0.08em] text-muted-foreground/65">
+        <thead className="sticky top-0 z-10 border-b border-border/60 bg-card text-10px uppercase tracking-caps text-muted-foreground/65">
           <tr>
             <th className="px-4 py-2 font-semibold sm:pl-5">Process</th>
             <th className="px-3 py-2 font-semibold">Category</th>
@@ -313,7 +313,7 @@ export function HistoryProcessTable({
                   </TooltipPopup>
                 </Tooltip>
               </td>
-              <td className="truncate px-3 py-2 text-[11px] text-muted-foreground">
+              <td className="truncate px-3 py-2 text-11px text-muted-foreground">
                 {categoryLabel(process.category)}
               </td>
               <td className="px-3 py-2 text-right font-mono tabular-nums">

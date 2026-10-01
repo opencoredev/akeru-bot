@@ -411,7 +411,7 @@ export function OnboardingSurface({
     >
       <aside className="relative z-10 flex min-h-0 w-full min-w-0 flex-1 flex-col border-b border-border/70 bg-card/45 px-6 pb-6 pt-6 backdrop-blur-xl lg:w-19/50 lg:min-w-95 lg:max-w-135 lg:flex-none lg:border-b-0 lg:border-r lg:px-10 lg:pb-10 lg:pt-8">
         <div className="space-y-5">
-          <span className="text-sm font-semibold tracking-[-0.015em]">Akeru Bot</span>
+          <span className="text-sm font-semibold tracking-title">Akeru Bot</span>
           <ol className="flex items-start gap-2" aria-label={t("Setup steps")}>
             {DESKTOP_ONBOARDING_STEPS.map((definition, index) => {
               const position = index + 1;
@@ -430,7 +430,7 @@ export function OnboardingSurface({
                     }`}
                   />
                   <span
-                    className={`truncate text-[11px] leading-4 transition-colors duration-300 motion-reduce:transition-none ${
+                    className={`truncate text-11px leading-4 transition-colors duration-300 motion-reduce:transition-none ${
                       current ? "font-medium text-foreground" : "text-muted-foreground"
                     }`}
                   >

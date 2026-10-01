@@ -395,7 +395,7 @@ export function ChannelSetupDialog({
               <ol className="flex list-none flex-col gap-2.5">
                 {meta.steps.map((instruction, index) => (
                   <li key={instruction} className="flex gap-2.5 text-sm">
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-11px font-medium text-muted-foreground">
                       {index + 1}
                     </span>
                     <span className="min-w-0">{instruction}</span>

@@ -72,7 +72,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
           </div>
           {props.showNewBadge ? (
             <span
-              className="shrink-0 rounded border border-update/35 bg-update/15 px-0.5 py-px text-[10px] font-bold uppercase leading-none tracking-wide text-update-foreground"
+              className="shrink-0 rounded border border-update/35 bg-update/15 px-0.5 py-px text-10px font-bold uppercase leading-none tracking-wide text-update-foreground"
               aria-label={t("New model")}
             >
               {t("New")}
@@ -91,7 +91,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
 
       <div className="flex shrink-0 items-center gap-1.5">
         {props.jumpLabel ? (
-          <Kbd className="h-4 min-w-0 rounded-sm px-1.5 text-[10px]">{props.jumpLabel}</Kbd>
+          <Kbd className="h-4 min-w-0 rounded-sm px-1.5 text-10px">{props.jumpLabel}</Kbd>
         ) : null}
         <Tooltip>
           <TooltipTrigger

@@ -94,7 +94,7 @@ export function CustomMcpServers({
       }
     >
       {servers.length === 0 ? (
-        <p className="px-2.5 py-3 text-[13px] text-muted-foreground">
+        <p className="px-2.5 py-3 text-13px text-muted-foreground">
           {t("Add a local command or remote URL to use your own MCP server.")}
         </p>
       ) : null}

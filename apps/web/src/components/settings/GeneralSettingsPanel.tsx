@@ -52,7 +52,7 @@ function AboutVersionTitle() {
   return (
     <span className="inline-flex items-baseline gap-2">
       <span>{t("Version")}</span>
-      <code className="text-[11px] font-medium text-muted-foreground">{APP_VERSION}</code>
+      <code className="text-11px font-medium text-muted-foreground">{APP_VERSION}</code>
     </span>
   );
 }

@@ -206,7 +206,7 @@ export function OnboardingPreview({
               </motion.div>
               <motion.h2
                 layout
-                className="mt-5 text-xl font-medium tracking-[-0.02em]"
+                className="mt-5 text-xl font-medium tracking-title-lg"
                 data-preview-named={named ? "true" : "false"}
               >
                 {displayName}

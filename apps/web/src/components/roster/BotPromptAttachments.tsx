@@ -102,13 +102,13 @@ export function BotPromptAttachments({
               />
               <span
                 hidden
-                className="flex size-full items-center justify-center break-all px-1 text-center text-[10px] leading-tight text-muted-foreground"
+                className="flex size-full items-center justify-center break-all px-1 text-center text-10px leading-tight text-muted-foreground"
               >
                 {attachment.file.name}
               </span>
             </button>
           ) : (
-            <span className="flex size-full items-center justify-center break-all px-1 text-center text-[10px] leading-tight text-muted-foreground">
+            <span className="flex size-full items-center justify-center break-all px-1 text-center text-10px leading-tight text-muted-foreground">
               {attachment.file.name}
             </span>
           )}

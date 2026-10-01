@@ -241,7 +241,7 @@ export function ProviderApiKeyForm({
           />
         </label>
       ) : null}
-      <p className="text-[13px] text-muted-foreground">
+      <p className="text-13px text-muted-foreground">
         {supportsBaseUrl
           ? t("The environment sends this key to the selected endpoint.")
           : t("Grok uses its default endpoint.")}{" "}
@@ -285,7 +285,7 @@ export function ActiveLoginPanel({
 
   return (
     <div data-settings-row="" className="space-y-3 rounded-xl px-3 py-3 sm:px-4">
-      <p className="text-[13px] leading-[1.45] text-muted-foreground">
+      <p className="text-13px leading-copy text-muted-foreground">
         {flow.userCode
           ? t("Copy this code, then open the sign-in page and enter it.")
           : (flow.instructions ??
@@ -327,14 +327,14 @@ export function ActiveLoginPanel({
           </Button>
         </div>
       ) : !login.error ? (
-        <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+        <div className="flex items-center gap-2 text-13px text-muted-foreground">
           <LoaderIcon className="size-3.5 animate-spin" />
           {t("Waiting for approval…")}
         </div>
       ) : null}
 
       {login.error ? (
-        <p role="alert" className="text-[13px] text-destructive">
+        <p role="alert" className="text-13px text-destructive">
           {login.error}
         </p>
       ) : null}

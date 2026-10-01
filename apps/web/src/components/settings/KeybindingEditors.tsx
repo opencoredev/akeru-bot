@@ -173,7 +173,7 @@ export function ShortcutRecorder({
       {value ? (
         <KeyCaps value={value} />
       ) : (
-        <span className="px-1 text-[12px] text-muted-foreground">{t("Record shortcut")}</span>
+        <span className="px-1 text-12px text-muted-foreground">{t("Record shortcut")}</span>
       )}
     </button>
   );
@@ -219,7 +219,7 @@ export function ConditionPopover({
         }
       >
         {description ? (
-          <span className={cn("truncate", isRawExpression && "font-mono text-[11px]")}>
+          <span className={cn("truncate", isRawExpression && "font-mono text-11px")}>
             {description}
           </span>
         ) : (

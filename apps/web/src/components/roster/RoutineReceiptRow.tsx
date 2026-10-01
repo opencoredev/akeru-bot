@@ -50,7 +50,7 @@ export function RoutineReceiptRow({
       <span className="min-w-0 flex-1 whitespace-normal break-words text-left leading-5">
         {receipt.text}
       </span>
-      <time className="shrink-0 text-[11px] text-muted-foreground/60" dateTime={receipt.createdAt}>
+      <time className="shrink-0 text-11px text-muted-foreground/60" dateTime={receipt.createdAt}>
         {formatDate(new Date(receipt.createdAt), { hour: "numeric", minute: "2-digit" })}
       </time>
       {opensRoutines ? (

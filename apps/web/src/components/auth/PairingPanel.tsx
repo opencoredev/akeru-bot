@@ -209,7 +209,7 @@ export function PairingPanel({
             {environment.address ? (
               <>
                 <dt className="text-muted-foreground">{t("Address")}</dt>
-                <dd className="truncate text-right font-mono text-[13px] text-foreground/80">
+                <dd className="truncate text-right font-mono text-13px text-foreground/80">
                   {environment.address}
                 </dd>
               </>
@@ -240,7 +240,7 @@ export function PairingPanel({
           <ol className="mt-3 space-y-2.5 text-sm">
             <li>
               {runBefore}
-              <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[13px]">
+              <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-13px">
                 {NEW_LINK_COMMAND}
               </code>
               {runAfter}

@@ -162,7 +162,7 @@ export function SettingsSection({
       className={cn("space-y-2", className)}
     >
       <div className="flex min-h-7 items-center justify-between gap-4 px-3 sm:px-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-[-0.01em] text-foreground">
+        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-title-sm text-foreground">
           {icon}
           {title}
         </h2>
@@ -207,14 +207,14 @@ export function SettingsRow({
       <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)] sm:items-center sm:gap-8">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 items-center gap-1.5">
-            <h3 className="text-sm font-medium tracking-[-0.005em] text-foreground">{title}</h3>
+            <h3 className="text-sm font-medium tracking-title-xs text-foreground">{title}</h3>
             <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
               {resetAction}
             </span>
           </div>
           {/* A div, not a p: some descriptions carry paragraphs and disclosures. */}
           {description ? (
-            <div className="max-w-xl text-[13px] leading-[1.45] text-muted-foreground/80">
+            <div className="max-w-xl text-13px leading-copy text-muted-foreground/80">
               {description}
             </div>
           ) : null}

@@ -44,7 +44,7 @@ const badgeVariants = cva(
         warning: "bg-warning/8 text-warning-foreground dark:bg-warning/16",
       },
       presentation: {
-        "connection-kind": "h-4 px-1.5 text-[10px]",
+        "connection-kind": "h-4 px-1.5 text-10px",
       },
     },
   },

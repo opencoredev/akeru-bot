@@ -154,7 +154,7 @@ export function PluginFilterBar({
           <button
             aria-pressed={filter === item}
             className={cn(
-              "relative h-7 cursor-pointer rounded-lg px-3 text-[13px] outline-hidden transition-colors duration-(--duration-fast) ease-(--ease-smooth-out) focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+              "relative h-7 cursor-pointer rounded-lg px-3 text-13px outline-hidden transition-colors duration-(--duration-fast) ease-(--ease-smooth-out) focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
               filter === item
                 ? "font-medium text-foreground"
                 : "text-muted-foreground hover:text-foreground",

@@ -300,7 +300,7 @@ export function BotPromptMentionChips({
   return (
     <ul
       aria-label={t("Mentions")}
-      className="flex flex-wrap gap-1.5 px-3 pt-3 text-[15px]"
+      className="flex flex-wrap gap-1.5 px-3 pt-3 text-15px"
       data-testid="bot-prompt-mention-chips"
     >
       {chips.map((chip) => {

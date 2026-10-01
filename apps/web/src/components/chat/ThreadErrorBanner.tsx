@@ -132,7 +132,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
               <summary className="w-fit cursor-pointer rounded-sm py-0.5 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
                 {t("Technical details")}
               </summary>
-              <pre className="mt-1.5 max-h-24 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/60 px-2 py-1.5 font-mono text-[11px] leading-4 text-foreground/75">
+              <pre className="mt-1.5 max-h-24 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/60 px-2 py-1.5 font-mono text-11px leading-4 text-foreground/75">
                 {presentation.technicalDetails}
               </pre>
             </details>
