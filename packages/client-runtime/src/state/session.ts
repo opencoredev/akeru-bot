@@ -125,9 +125,7 @@ export function createEnvironmentSessionAtoms<R, E>(
           return Effect.never;
         }
 
-        return Effect.gen(function* () {
-          return yield* fetchEnvironmentSessionState({ prepared });
-        });
+        return fetchEnvironmentSessionState({ prepared });
       })
       .pipe(
         Atom.swr({ staleTime: 30_000, revalidateOnMount: true }),

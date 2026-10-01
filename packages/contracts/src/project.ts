@@ -136,15 +136,15 @@ export class ProjectSearchEntriesError extends Schema.TaggedErrorClass<ProjectSe
   },
 ) {
   // The structured fields are optional on the wire so newer peers can decode legacy message-only
-  // failures. New application code must provide them through this constructor.
-  constructor(
+  // failures. New application code must provide them through this factory.
+  static fromContext(
     props: ProjectEntriesFailureContext & {
       readonly cwd: string;
       readonly queryLength: number;
       readonly limit: number;
     },
   ) {
-    super({
+    return new ProjectSearchEntriesError({
       ...props,
       message:
         decodedProjectErrorMessage(props) ??
@@ -167,14 +167,14 @@ export class ProjectSearchContentsError extends Schema.TaggedErrorClass<ProjectS
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
-  constructor(
+  static fromContext(
     props: ProjectEntriesFailureContext & {
       readonly cwd: string;
       readonly queryLength: number;
       readonly limit: number;
     },
   ) {
-    super({
+    return new ProjectSearchContentsError({
       ...props,
       message:
         decodedProjectErrorMessage(props) ??
@@ -195,8 +195,8 @@ export class ProjectListEntriesError extends Schema.TaggedErrorClass<ProjectList
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
-  constructor(props: ProjectEntriesFailureContext & { readonly cwd: string }) {
-    super({
+  static fromContext(props: ProjectEntriesFailureContext & { readonly cwd: string }) {
+    return new ProjectListEntriesError({
       ...props,
       message:
         decodedProjectErrorMessage(props) ?? `Failed to list workspace entries in '${props.cwd}'.`,
@@ -268,8 +268,8 @@ export class ProjectReadFileError extends Schema.TaggedErrorClass<ProjectReadFil
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
-  constructor(props: ProjectFileFailureContext) {
-    super({
+  static fromContext(props: ProjectFileFailureContext) {
+    return new ProjectReadFileError({
       ...props,
       message:
         decodedProjectErrorMessage(props) ??
@@ -306,8 +306,8 @@ export class ProjectWriteFileError extends Schema.TaggedErrorClass<ProjectWriteF
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
-  constructor(props: ProjectFileFailureContext) {
-    super({
+  static fromContext(props: ProjectFileFailureContext) {
+    return new ProjectWriteFileError({
       ...props,
       message:
         decodedProjectErrorMessage(props) ??

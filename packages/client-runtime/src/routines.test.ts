@@ -14,6 +14,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { createTranslator } from "./i18n/index.ts";
 import { zhCNCatalog } from "./i18n/zh-CN.ts";
 import {
+  absoluteRunTime,
+  relativeRunTime,
   botRoutinesView,
   routineApprovalSummary,
   routineLifecycleAction,
@@ -255,5 +257,27 @@ describe("routineApprovalSummary", () => {
       routineApprovalSummary({ name: "Brief", schedule: { kind: "daily", time: "08:00" } }, t)
         .schedule,
     ).toBe(t("{schedule} at {time}", { schedule: t("Daily"), time: "08:00" }));
+  });
+});
+
+describe("routine run timestamps", () => {
+  it("preserves malformed values and relative time boundaries", () => {
+    const now = Date.parse("2026-08-11T12:00:00Z");
+
+    expect(absoluteRunTime("invalid")).toBe("");
+    expect(relativeRunTime("invalid", now)).toBe("");
+    expect(relativeRunTime("2026-08-11T12:00:59Z", now)).toBe("now");
+    expect(relativeRunTime("2026-08-11T12:01:00Z", now)).toBe("in 1m");
+    expect(relativeRunTime("2026-08-11T11:00:00Z", now)).toBe("1h ago");
+    expect(relativeRunTime("2026-08-13T12:00:00Z", now)).toBe("in 2d");
+  });
+
+  it("keeps unzoned timestamps in the viewer's local zone", () => {
+    const value = "2026-08-11T12:37:00";
+    const zoned = new Date(value).toISOString();
+    const now = Date.parse("2026-08-11T12:00:00Z");
+
+    expect(absoluteRunTime(value)).toBe(absoluteRunTime(zoned));
+    expect(relativeRunTime(value, now)).toBe(relativeRunTime(zoned, now));
   });
 });
