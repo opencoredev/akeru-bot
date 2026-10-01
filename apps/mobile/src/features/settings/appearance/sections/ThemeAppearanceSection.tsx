@@ -30,14 +30,17 @@ const PreviewOrb = memo(function PreviewOrb(props: {
   const actionGradientId = `${idPrefix}-action-glow`;
   const colors = getMobileThemePreviewColors(props.themeId, props.appearance);
   const spec = THEME_PREVIEW_RENDER_SPECS[props.appearance];
+
   const accentRadius = Math.hypot(
     Math.max(spec.accent.center[0], 1 - spec.accent.center[0]),
     Math.max(spec.accent.center[1], 1 - spec.accent.center[1]),
   );
+
   const actionRadius = Math.hypot(
     Math.max(spec.action.center[0], 1 - spec.action.center[0]),
     Math.max(spec.action.center[1], 1 - spec.action.center[1]),
   );
+
   const position = (value: number) => `${value * 100}%`;
   const radius = (value: number) => `${value * 100}%`;
 
@@ -230,18 +233,21 @@ function ModePreview(props: { readonly mode: MobileThemeMode; readonly themeIds:
   const currentBorder = useThemeColor("--color-border");
   const currentFrame = useThemeColor("--color-drawer");
   const currentIndicator = useThemeColor("--color-foreground-muted");
+
   const frameColor =
     props.mode === "light"
       ? light["--color-border"]
       : props.mode === "dark"
         ? dark["--color-border"]
         : currentBorder;
+
   const frameBackground =
     props.mode === "light"
       ? light["--color-drawer"]
       : props.mode === "dark"
         ? dark["--color-drawer"]
         : currentFrame;
+
   const indicatorColor =
     props.mode === "light"
       ? light["--color-foreground-muted"]
@@ -281,6 +287,7 @@ function ModeCard(props: {
   readonly themeIds: MobileThemeIds;
 }) {
   const { t } = useMobileI18n();
+
   return (
     <Pressable
       accessibilityLabel={t("{mode} appearance", { mode: props.label })}
@@ -314,11 +321,13 @@ function SectionLabel({ children }: { readonly children: string }) {
 
 export function ThemeAppearanceSection() {
   const { t } = useMobileI18n();
+
   const appearanceModes: ReadonlyArray<{ readonly id: MobileThemeMode; readonly label: string }> = [
     { id: "system", label: t("System") },
     { id: "light", label: t("Light") },
     { id: "dark", label: t("Dark") },
   ];
+
   const {
     isReady,
     setThemeIdForAppearance,

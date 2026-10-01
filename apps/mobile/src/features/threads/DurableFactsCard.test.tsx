@@ -13,6 +13,7 @@ vi.mock("react-native", () => ({
 vi.mock("../../lib/i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
 
@@ -66,6 +67,7 @@ function render(overrides: Partial<CardProps> = {}) {
 describe("mobile durable facts", () => {
   it("renders each fact with scope, provenance, approval, times, and the replaced value", () => {
     const tree = render();
+
     for (const text of [
       "Durable facts",
       "This chat",
@@ -88,6 +90,7 @@ describe("mobile durable facts", () => {
     ]) {
       expect(tree).toContain(text);
     }
+
     expect(tree).not.toContain("All memory");
     expect(tree).not.toContain("bot-2");
     expect(tree).not.toContain("revision");
@@ -101,6 +104,7 @@ describe("mobile durable facts", () => {
         { ...fact, rootId: "m3", sourceThreadId: null, affectedBotIds: [] },
       ] as unknown as DurableMemoryFact[],
     });
+
     expect(tree).toContain("From Launch plan · Bots: another bot");
     expect(tree).toContain("From another chat · Bots: none");
     expect(tree).not.toContain("unknown chat");
@@ -119,11 +123,13 @@ describe("mobile durable facts", () => {
   it("reports the scope a user picks", () => {
     const onScopeChange = vi.fn();
     const tree = DurableFactsCard(cardProps({ onScopeChange, facts: [], currentBotId: null }));
+
     const tabs = (
       tree.props.children as ReadonlyArray<{
         props?: { children?: ReadonlyArray<{ props: { onPress: () => void } }> };
       }>
     )[2]!.props!.children!;
+
     tabs[2]!.props.onPress();
     expect(onScopeChange).toHaveBeenCalledWith("project");
   });
@@ -134,8 +140,11 @@ type ActionElement = { props: { label: string; disabled: boolean; onPress: () =>
 // The card holds no state, so its element tree exposes every action handler directly.
 function actions(node: ReactNode): ActionElement[] {
   if (Array.isArray(node)) return node.flatMap(actions);
+
   if (!isValidElement<{ children?: ReactNode; label?: string }>(node)) return [];
+
   if (typeof node.props.label === "string") return [node as unknown as ActionElement];
+
   return actions(node.props.children);
 }
 
@@ -174,6 +183,7 @@ describe("mobile durable fact actions", () => {
     const tree = render({
       facts: [{ ...fact, approvalState: "approved", deletionState: "tombstoned", pinned: false }],
     });
+
     expect(tree).toContain("Approved, Forgotten");
     expect(tree).toContain("Delete");
     expect(tree).not.toContain("Edit");
@@ -185,6 +195,7 @@ describe("mobile durable fact actions", () => {
       editing: { rootId: "m1", draft: "Prefers bullet points." },
       failure: "This fact changed somewhere else. The latest version is shown now.",
     });
+
     expect(tree).toContain('value="Prefers bullet points."');
     expect(tree).toContain("Save");
     expect(tree).toContain("Cancel");
@@ -195,10 +206,12 @@ describe("mobile durable fact actions", () => {
   it("hides every mutation control for a read-only connection and says why", () => {
     const readOnly = cardProps({ policy: { ...OPEN, canOperate: false } });
     expect(actions(DurableFactsCard(readOnly))).toEqual([]);
+
     const forgotten = cardProps({
       policy: { ...OPEN, canOperate: false },
       facts: [{ ...fact, deletionState: "tombstoned" }],
     });
+
     expect(actions(DurableFactsCard(forgotten))).toEqual([]);
     const tree = render({ policy: { ...OPEN, canOperate: false } });
     expect(tree).toContain("This connection can read memory but not change it.");
@@ -227,6 +240,7 @@ describe("mobile durable fact actions", () => {
         policy: { ...OPEN, privateBotMemory: false },
       }),
     );
+
     expect(actions(tree).map((item) => item.props.label)).toEqual([
       "Edit",
       "Unpin",

@@ -23,6 +23,7 @@ import {
  * blips (the common reconnect case) resolve without any UI at all.
  */
 const STATUS_SHOW_DELAY_MS = 800;
+
 const FADE_IN_MS = 250;
 
 /**
@@ -41,9 +42,12 @@ function useDelayedConnectionStatus(
   useEffect(() => {
     if (!hasStatus) {
       setVisible(false);
+
       return;
     }
+
     const timer = setTimeout(() => setVisible(true), STATUS_SHOW_DELAY_MS);
+
     return () => clearTimeout(timer);
   }, [hasStatus]);
 
@@ -65,7 +69,9 @@ function StatusFadeIn(props: { readonly children: ReactNode; readonly grow?: boo
       toValue: 1,
       useNativeDriver: false,
     });
+
     animation.start();
+
     return () => animation.stop();
   }, [opacity]);
 

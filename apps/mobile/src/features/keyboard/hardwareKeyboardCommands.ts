@@ -6,7 +6,9 @@ export type HardwareKeyboardCommand = "newTask" | "focusSearch" | "back" | "togg
 type CommandHandler = () => boolean | void;
 
 const handlers = new Map<HardwareKeyboardCommand, Set<CommandHandler>>();
+
 const registrationListeners = new Set<() => void>();
+
 let registrationVersion = 0;
 
 /**
@@ -23,8 +25,10 @@ export function useHardwareKeyboardCommand(
     handlers.set(command, commandHandlers);
     registrationVersion += 1;
     registrationListeners.forEach((listener) => listener());
+
     return () => {
       commandHandlers.delete(handler);
+
       if (commandHandlers.size === 0) handlers.delete(command);
       registrationVersion += 1;
       registrationListeners.forEach((listener) => listener());
@@ -42,16 +46,21 @@ export function getHardwareKeyboardCommandRegistrationVersion(): number {
 
 export function subscribeToHardwareKeyboardCommandRegistrations(listener: () => void): () => void {
   registrationListeners.add(listener);
+
   return () => registrationListeners.delete(listener);
 }
 
 export function dispatchHardwareKeyboardCommand(command: HardwareKeyboardCommand): boolean {
   const commandHandlers = handlers.get(command);
+
   if (!commandHandlers) return false;
+
   // .reverse() on a copy, not .toReversed(): Hermes lacks ES2023 change-by-copy.
+  // oxlint-disable-next-line unicorn/no-array-reverse
   for (const handler of [...commandHandlers].reverse()) {
     if (handler() !== false) return true;
   }
+
   return false;
 }
 
@@ -60,7 +69,9 @@ export function parseActiveThreadPath(pathname: string): {
   readonly threadId: ThreadId;
 } | null {
   const match = /^\/threads\/([^/]+)\/([^/]+)(?:\/|$)/.exec(pathname);
+
   if (!match?.[1] || !match[2]) return null;
+
   try {
     return {
       environmentId: EnvironmentId.make(decodeURIComponent(match[1])),

@@ -74,6 +74,7 @@ export function SettingsLegalDocumentRouteScreen({
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [externalUrl, setExternalUrl] = useState(documentUrl);
+
   const renderExternalHeaderButton = useCallback(
     () => <SettingsLegalDocumentExternalHeaderButton externalUrl={externalUrl} />,
     [externalUrl],
@@ -88,6 +89,7 @@ export function SettingsLegalDocumentRouteScreen({
   const openExternalUrl = useCallback((url: string) => {
     void Linking.openURL(url).catch(() => undefined);
   }, []);
+
   if (loadError) {
     return (
       <View className="flex-1 items-center justify-center gap-4 bg-sheet px-8">
@@ -150,6 +152,7 @@ export function SettingsLegalDocumentRouteScreen({
           if (isLegalDocumentUrl(request.url)) return true;
 
           openExternalUrl(request.url);
+
           return false;
         }}
         onLoadProgress={(event) => {
@@ -163,6 +166,7 @@ export function SettingsLegalDocumentRouteScreen({
           if (isLegalDocumentUrl(event.nativeEvent.url)) {
             setExternalUrl(event.nativeEvent.url);
           }
+
           setLoadProgress(0);
         }}
         onError={(event) => {

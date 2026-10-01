@@ -85,15 +85,19 @@ function settingsCommandId(message: QueuedThreadMessage, setting: string): Comma
 
 export function useThreadOutboxDrain(): void {
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+
   const setThreadRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
     reportFailure: false,
   });
+
   const setThreadInteractionMode = useAtomCommand(threadEnvironment.setInteractionMode, {
     reportFailure: false,
   });
+
   const dispatchingQueuedMessageId = useAtomValue(dispatchingQueuedMessageIdAtom);
   const editingQueuedMessageIds = useAtomValue(editingQueuedMessageIdsAtom);
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
@@ -105,6 +109,7 @@ export function useThreadOutboxDrain(): void {
   const retryAttemptRef = useRef(new Map<MessageId, number>());
   const retryNotBeforeRef = useRef(new Map<MessageId, number>());
   const retryTimersRef = useRef(new Map<MessageId, ReturnType<typeof setTimeout>>());
+
   const connectedEnvironmentKey = connectedEnvironments
     .filter((environment) => environment.connectionState === "connected")
     .map((environment) => environment.environmentId)
@@ -116,6 +121,7 @@ export function useThreadOutboxDrain(): void {
       for (const timer of retryTimersRef.current.values()) {
         clearTimeout(timer);
       }
+
       retryTimersRef.current.clear();
     };
   }, []);
@@ -130,6 +136,7 @@ export function useThreadOutboxDrain(): void {
         if (complete || !active || connectedEnvironmentKey.length === 0) return;
         const delayMs = threadOutboxHydrationRetryDelayMs(retryAttempt);
         retryAttempt += 1;
+
         if (delayMs === null) return;
         retryTimer = setTimeout(hydrate, delayMs);
       });
@@ -138,8 +145,10 @@ export function useThreadOutboxDrain(): void {
     // Retry a mixed valid/corrupt read for a short bounded window while the
     // environment stays connected. Connection-set changes restart the window.
     hydrate();
+
     return () => {
       active = false;
+
       if (retryTimer !== null) clearTimeout(retryTimer);
     };
   }, [connectedEnvironmentKey]);
@@ -152,11 +161,13 @@ export function useThreadOutboxDrain(): void {
       if (!AsyncResult.isFailure(commandResult)) {
         return false;
       }
+
       const action = resolveThreadOutboxFailureAction({
         stage,
         error: Cause.squash(commandResult.cause),
         interrupted: Cause.hasInterruptsOnly(commandResult.cause),
       });
+
       const retry = action === "retry";
       console.warn("[thread-outbox] queued message delivery failed", {
         environmentId: queuedMessage.environmentId,
@@ -166,8 +177,10 @@ export function useThreadOutboxDrain(): void {
         cause: commandResult.cause,
         retry,
       });
+
       return retry;
     };
+
     const completeDelivery = async (
       deliveryResult: AtomCommandResult<unknown, unknown>,
     ): Promise<boolean> => {
@@ -177,6 +190,7 @@ export function useThreadOutboxDrain(): void {
 
       try {
         await removeThreadOutboxMessage(queuedMessage);
+
         return true;
       } catch (error) {
         console.warn("[thread-outbox] failed to remove delivered queued message", {
@@ -185,9 +199,11 @@ export function useThreadOutboxDrain(): void {
           messageId: queuedMessage.messageId,
           error,
         });
+
         return false;
       }
     };
+
     return { reportFailure, completeDelivery };
   }, []);
 
@@ -205,8 +221,10 @@ export function useThreadOutboxDrain(): void {
             modelSelection: settings.modelSelection,
           },
         });
+
         if (AsyncResult.isFailure(updateResult)) {
           reportFailure(updateResult, "settings-sync");
+
           return false;
         }
       }
@@ -221,8 +239,10 @@ export function useThreadOutboxDrain(): void {
             createdAt: queuedMessage.createdAt,
           },
         });
+
         if (AsyncResult.isFailure(runtimeResult)) {
           reportFailure(runtimeResult, "settings-sync");
+
           return false;
         }
       }
@@ -237,8 +257,10 @@ export function useThreadOutboxDrain(): void {
             createdAt: queuedMessage.createdAt,
           },
         });
+
         if (AsyncResult.isFailure(interactionResult)) {
           reportFailure(interactionResult, "settings-sync");
+
           return false;
         }
       }
@@ -260,6 +282,7 @@ export function useThreadOutboxDrain(): void {
           createdAt: queuedMessage.createdAt,
         },
       });
+
       return completeDelivery(deliveryResult);
     },
     [
@@ -278,10 +301,13 @@ export function useThreadOutboxDrain(): void {
       projectCwd: string,
     ) => {
       const modelSelection = queuedMessage.modelSelection;
+
       if (modelSelection === undefined) {
         return false;
       }
+
       const { completeDelivery } = makeDeliveryHelpers(queuedMessage);
+
       const deliveryResult = await startTurn({
         environmentId: queuedMessage.environmentId,
         input: buildProjectThreadStartTurnInput({
@@ -303,6 +329,7 @@ export function useThreadOutboxDrain(): void {
           worktreeBranchName: buildTemporaryWorktreeBranchName(randomHex),
         }),
       });
+
       return completeDelivery(deliveryResult);
     },
     [makeDeliveryHelpers, startTurn],
@@ -315,26 +342,33 @@ export function useThreadOutboxDrain(): void {
 
     for (const [threadKey, queuedMessages] of Object.entries(queuedMessagesByThreadKey)) {
       const nextQueuedMessage = queuedMessages[0];
+
       if (!nextQueuedMessage) {
         continue;
       }
+
       if (editingQueuedMessageIds[nextQueuedMessage.messageId]) {
         continue;
       }
+
       if ((retryNotBeforeRef.current.get(nextQueuedMessage.messageId) ?? 0) > Date.now()) {
         continue;
       }
 
       const thread = findThread(threads, nextQueuedMessage);
+
       if (thread && scopedThreadKey(thread.environmentId, thread.id) !== threadKey) {
         continue;
       }
 
       const creation = nextQueuedMessage.creation;
+
       const environment = connectedEnvironments.find(
         (candidate) => candidate.environmentId === nextQueuedMessage.environmentId,
       );
+
       const shellStatus = shellStatuses.get(nextQueuedMessage.environmentId) ?? "empty";
+
       const deliveryAction = resolveThreadOutboxDeliveryAction({
         isCreation: creation !== undefined,
         threadExists: thread !== undefined,
@@ -342,9 +376,11 @@ export function useThreadOutboxDrain(): void {
         environmentConnected: environment?.connectionState === "connected",
         threadBusy: thread?.session?.status === "running" || thread?.session?.status === "starting",
       });
+
       if (deliveryAction === "wait") {
         continue;
       }
+
       // The live project shell is preferred for the workspace path, with the
       // snapshot taken at enqueue time as the fallback so a task never dies
       // just because its project shell is not loaded.
@@ -354,18 +390,21 @@ export function useThreadOutboxDrain(): void {
             creation.projectCwd ??
             null)
           : null;
+
       // An incomplete pending task (e.g. worktree mode without a branch) stays
       // queued until the user finishes it in the editor.
       if (deliveryAction === "send" && creation !== undefined) {
         if (!isQueuedThreadCreationSendable(nextQueuedMessage)) {
           continue;
         }
+
         if (creationProjectCwd === null && shellStatus !== "live") {
           continue;
         }
       }
 
       beginDispatchingQueuedMessage(nextQueuedMessage.messageId);
+
       const removeQueuedMessage = (warning: string) =>
         removeThreadOutboxMessage(nextQueuedMessage).then(
           () => true,
@@ -376,9 +415,11 @@ export function useThreadOutboxDrain(): void {
               messageId: nextQueuedMessage.messageId,
               error,
             });
+
             return false;
           },
         );
+
       // Enqueues publish optimistically before their durable write settles.
       // Confirm the write landed (and the message wasn't rolled back) before
       // sending, so a failed write can never chase an already-delivered turn.
@@ -387,6 +428,7 @@ export function useThreadOutboxDrain(): void {
           // Rolled back by a failed write; nothing to deliver or retry.
           return true;
         }
+
         // The guards evaluated before the confirmation await are stale by now:
         // the user may have opened this message in the editor. Re-read that
         // guard and defer to the next drain pass (returning true skips the
@@ -394,6 +436,7 @@ export function useThreadOutboxDrain(): void {
         if (appAtomRegistry.get(editingQueuedMessageIdsAtom)[nextQueuedMessage.messageId]) {
           return true;
         }
+
         return deliveryAction === "remove"
           ? removeQueuedMessage("[thread-outbox] failed to remove message for a missing thread")
           : creation !== undefined
@@ -404,16 +447,19 @@ export function useThreadOutboxDrain(): void {
               ? sendQueuedMessage(nextQueuedMessage, thread)
               : Promise.resolve(false);
       });
+
       void delivery
         .then((sent) => {
           if (sent) {
             retryAttemptRef.current.delete(nextQueuedMessage.messageId);
             retryNotBeforeRef.current.delete(nextQueuedMessage.messageId);
             const pendingTimer = retryTimersRef.current.get(nextQueuedMessage.messageId);
+
             if (pendingTimer !== undefined) {
               clearTimeout(pendingTimer);
               retryTimersRef.current.delete(nextQueuedMessage.messageId);
             }
+
             return;
           }
 
@@ -422,18 +468,22 @@ export function useThreadOutboxDrain(): void {
           const retryDelayMs = threadOutboxRetryDelayMs(retryAttempt);
           retryNotBeforeRef.current.set(nextQueuedMessage.messageId, Date.now() + retryDelayMs);
           const pendingTimer = retryTimersRef.current.get(nextQueuedMessage.messageId);
+
           if (pendingTimer !== undefined) {
             clearTimeout(pendingTimer);
           }
+
           const retryTimer = setTimeout(() => {
             retryTimersRef.current.delete(nextQueuedMessage.messageId);
             setRetryTick((current) => current + 1);
           }, retryDelayMs);
+
           retryTimersRef.current.set(nextQueuedMessage.messageId, retryTimer);
         })
         .finally(() => {
           finishDispatchingQueuedMessage(nextQueuedMessage.messageId);
         });
+
       return;
     }
   }, [

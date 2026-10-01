@@ -64,6 +64,7 @@ function normalizeScreenOptions(
 
 function optionsSignature(value: unknown, seen = new WeakSet<object>()): string {
   if (value === null) return "null";
+
   switch (typeof value) {
     case "boolean":
     case "number":
@@ -82,14 +83,18 @@ function optionsSignature(value: unknown, seen = new WeakSet<object>()): string 
       return `bigint:${String(value)}`;
     case "object": {
       const object = value as object;
+
       if (seen.has(object)) return "[circular]";
       seen.add(object);
+
       if (Array.isArray(value)) {
         return `[${value.map((entry) => optionsSignature(entry, seen)).join(",")}]`;
       }
+
       // React refs carry mutable native instances that must not make static
       // screen options appear different after every render.
       if ("current" in object) return "[ref]";
+
       return `{${Object.keys(value as Record<string, unknown>)
         .sort()
         .map(
@@ -99,6 +104,7 @@ function optionsSignature(value: unknown, seen = new WeakSet<object>()): string 
         .join(",")}}`;
     }
   }
+
   return String(value);
 }
 
@@ -112,24 +118,31 @@ function stabilizeOptionFunctions(
   if (typeof value === "function") {
     latestFunctions.set(path, value as (...args: unknown[]) => unknown);
     let wrapper = wrappers.get(path);
+
     if (!wrapper) {
       wrapper = (...args: unknown[]) => {
         return latestFunctions.get(path)?.(...args);
       };
+
       wrappers.set(path, wrapper);
     }
+
     return wrapper;
   }
+
   if (Array.isArray(value)) {
     if (seen.has(value)) return value;
     seen.add(value);
+
     return value.map((entry, index) =>
       stabilizeOptionFunctions(entry, `${path}[${index}]`, latestFunctions, wrappers, seen),
     );
   }
+
   if (value !== null && typeof value === "object") {
     if (seen.has(value) || "current" in value) return value;
     seen.add(value);
+
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
         key,
@@ -137,6 +150,7 @@ function stabilizeOptionFunctions(
       ]),
     );
   }
+
   return value;
 }
 
@@ -157,6 +171,7 @@ export function NativeStackScreenOptions(props: {
   const latestOptionFunctionsRef = useRef(new Map<string, (...args: unknown[]) => unknown>());
   const optionFunctionWrappersRef = useRef(new Map<string, (...args: unknown[]) => unknown>());
   const normalizedOptions = useMemo(() => normalizeScreenOptions(props.options), [props.options]);
+
   // Keyed on the options identity: callers that memoize their options skip the
   // deep copy and the signature walk below on unrelated re-renders.
   const stableOptions = useMemo(
@@ -176,12 +191,15 @@ export function NativeStackScreenOptions(props: {
     if (!navigation || !stableOptions) {
       return;
     }
+
     const signature = optionsSignature([stableOptions, props.optionsVersion]);
+
     // Avoid re-entering navigation state when semantically equal options are
     // reapplied every layout (common when callers pass unstable object literals).
     if (lastAppliedOptionsSignatureRef.current === signature) {
       return;
     }
+
     lastAppliedOptionsSignatureRef.current = signature;
     navigation.setOptions(stableOptions);
   }, [navigation, props.optionsVersion, stableOptions]);
@@ -190,9 +208,11 @@ export function NativeStackScreenOptions(props: {
     if (!navigation || !props.listeners) {
       return;
     }
+
     const subscriptions = Object.entries(props.listeners).map(([eventName, listener]) =>
       navigation.addListener(eventName as never, listener as never),
     );
+
     return () => {
       for (const unsubscribe of subscriptions) {
         unsubscribe();
@@ -212,12 +232,14 @@ function labelFromChildren(children: ReactNode): string {
       parts.push(labelFromChildren(child.props.children));
     }
   });
+
   return parts.join("");
 }
 
 type NativeStackHeaderIcon = NonNullable<
   Extract<NativeStackHeaderItem, { type: "button" }>["icon"]
 >;
+
 type NativeStackOptionsWithToolbar = NativeStackNavigationOptions & {
   unstable_headerToolbarItems?: () => NativeStackHeaderItem[];
 };
@@ -226,6 +248,7 @@ function iconFromProp(icon: unknown): NativeStackHeaderIcon | undefined {
   if (typeof icon !== "string") {
     return undefined;
   }
+
   return { type: "sfSymbol", name: icon as never };
 }
 
@@ -233,9 +256,11 @@ type ToolbarElementProps = Record<string, unknown> & { readonly children?: React
 
 function elementTypeName(element: ReactElement): string | undefined {
   const type = element.type;
+
   if (typeof type === "function") {
     return (type as { displayName?: string; name?: string }).displayName ?? type.name;
   }
+
   return undefined;
 }
 
@@ -243,8 +268,10 @@ function convertMenuAction(
   element: ReactElement<ToolbarElementProps>,
 ): NativeStackHeaderItemMenu["menu"]["items"][number] | null {
   const typeName = elementTypeName(element);
+
   if (typeName === "NativeHeaderToolbarMenuAction") {
     const label = labelFromChildren(element.props.children);
+
     return {
       type: "action",
       label,
@@ -286,13 +313,18 @@ function collectMenuItems(children: ReactNode): NativeStackHeaderItemMenu["menu"
     if (!isValidElement<ToolbarElementProps>(child)) {
       return;
     }
+
     const item = convertMenuAction(child);
+
     if (item) {
       items.push(item);
+
       return;
     }
+
     items.push(...collectMenuItems(child.props.children));
   });
+
   return items;
 }
 
@@ -302,6 +334,7 @@ function convertToolbarChild(child: ReactNode): NativeStackHeaderItem | null {
   }
 
   const typeName = elementTypeName(child);
+
   if (typeName === "NativeHeaderToolbarButton") {
     return {
       type: "button",
@@ -357,15 +390,18 @@ function collectToolbarItems(children: ReactNode): NativeStackHeaderItem[] {
   const items: NativeStackHeaderItem[] = [];
   Children.forEach(children, (child) => {
     const item = convertToolbarChild(child);
+
     if (item) {
       if (item.type === "spacing") {
         // Native inserts spacing items at `index`, treating a missing index
         // as 0 — which would move the spacer in front of earlier siblings.
         (item as { index?: number }).index = items.length;
       }
+
       items.push(item);
     }
   });
+
   return items;
 }
 
@@ -381,23 +417,29 @@ function NativeHeaderToolbarRoot(props: {
     if (!navigation) {
       return;
     }
+
     if (props.placement === "bottom") {
       navigation.setOptions({
         unstable_headerToolbarItems: () => items,
       } as NativeStackOptionsWithToolbar);
+
       return () => {
         navigation.setOptions({
           unstable_headerToolbarItems: () => [],
         } as NativeStackOptionsWithToolbar);
       };
     }
+
     if (props.placement === "left") {
       navigation.setOptions({ unstable_headerLeftItems: () => items });
+
       return () => {
         navigation.setOptions({ unstable_headerLeftItems: () => [] });
       };
     }
+
     navigation.setOptions({ unstable_headerRightItems: () => items });
+
     return () => {
       navigation.setOptions({ unstable_headerRightItems: () => [] });
     };
@@ -417,6 +459,7 @@ function NativeHeaderToolbarButton(_props: {
 }) {
   return null;
 }
+
 NativeHeaderToolbarButton.displayName = "NativeHeaderToolbarButton";
 
 function NativeHeaderToolbarMenu(_props: {
@@ -431,6 +474,7 @@ function NativeHeaderToolbarMenu(_props: {
 }) {
   return null;
 }
+
 NativeHeaderToolbarMenu.displayName = "NativeHeaderToolbarMenu";
 
 function NativeHeaderToolbarMenuAction(_props: {
@@ -445,11 +489,13 @@ function NativeHeaderToolbarMenuAction(_props: {
 }) {
   return null;
 }
+
 NativeHeaderToolbarMenuAction.displayName = "NativeHeaderToolbarMenuAction";
 
 function NativeHeaderToolbarLabel(_props: { readonly children?: ReactNode }) {
   return null;
 }
+
 NativeHeaderToolbarLabel.displayName = "NativeHeaderToolbarLabel";
 
 function NativeHeaderToolbarSpacer(_props: {
@@ -459,11 +505,13 @@ function NativeHeaderToolbarSpacer(_props: {
 }) {
   return null;
 }
+
 NativeHeaderToolbarSpacer.displayName = "NativeHeaderToolbarSpacer";
 
 function NativeHeaderToolbarSearchBarSlot() {
   return null;
 }
+
 NativeHeaderToolbarSearchBarSlot.displayName = "NativeHeaderToolbarSearchBarSlot";
 
 export const NativeHeaderToolbar = Object.assign(NativeHeaderToolbarRoot, {

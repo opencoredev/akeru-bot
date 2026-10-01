@@ -47,6 +47,7 @@ describe("buildHomeProjectScopes", () => {
   it("builds one v2 scope for the same repository across environments", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
+
     const repositoryIdentity = {
       canonicalKey: "github.com/pingdotgg/t3code",
       locator: {
@@ -55,6 +56,7 @@ describe("buildHomeProjectScopes", () => {
         remoteUrl: "git@github.com:pingdotgg/t3code.git",
       },
     };
+
     const projects = [
       makeProject({
         environmentId: localEnvironmentId,
@@ -90,6 +92,7 @@ describe("buildHomeProjectScopes", () => {
   it("routes stale duplicate project refs through the canonical repository group", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
+
     const repositoryIdentity = {
       canonicalKey: "github.com/pingdotgg/t3code",
       locator: {
@@ -98,6 +101,7 @@ describe("buildHomeProjectScopes", () => {
         remoteUrl: "git@github.com:pingdotgg/t3code.git",
       },
     };
+
     const local = makeProject({
       id: ProjectId.make("project-local"),
       environmentId: localEnvironmentId,
@@ -105,6 +109,7 @@ describe("buildHomeProjectScopes", () => {
       workspaceRoot: "/workspaces/t3code",
       repositoryIdentity,
     });
+
     const stale = makeProject({
       environmentId: remoteEnvironmentId,
       id: ProjectId.make("project-stale"),
@@ -112,6 +117,7 @@ describe("buildHomeProjectScopes", () => {
       workspaceRoot: "/remote/t3code",
       updatedAt: "2026-06-01T00:00:00.000Z",
     });
+
     const canonicalRemote = makeProject({
       environmentId: remoteEnvironmentId,
       id: ProjectId.make("project-canonical-remote"),
@@ -120,6 +126,7 @@ describe("buildHomeProjectScopes", () => {
       repositoryIdentity,
       updatedAt: "2026-06-02T00:00:00.000Z",
     });
+
     const projects = [local, stale, canonicalRemote];
 
     const scopes = buildHomeProjectScopes({
@@ -143,6 +150,7 @@ describe("buildHomeProjectScopes", () => {
   it("keeps repository identity from an older duplicate when the freshness winner lacks it", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
+
     const repositoryIdentity = {
       canonicalKey: "github.com/pingdotgg/t3code",
       locator: {
@@ -151,6 +159,7 @@ describe("buildHomeProjectScopes", () => {
         remoteUrl: "git@github.com:pingdotgg/t3code.git",
       },
     };
+
     const projects = [
       makeProject({
         environmentId: localEnvironmentId,
@@ -191,16 +200,19 @@ describe("buildHomeProjectScopes", () => {
 
   it("sorts v2 project scopes by their grouped thread activity", () => {
     const environmentId = EnvironmentId.make("environment-1");
+
     const olderProject = makeProject({
       environmentId,
       id: ProjectId.make("project-older"),
       title: "Older project",
     });
+
     const newerProject = makeProject({
       environmentId,
       id: ProjectId.make("project-newer"),
       title: "Newer project",
     });
+
     const scopes = buildHomeProjectScopes({
       projects: [newerProject, olderProject],
       environmentId: null,
@@ -234,18 +246,21 @@ describe("buildHomeProjectScopes", () => {
 
   it("sorts invalid project creation timestamps after valid ones", () => {
     const environmentId = EnvironmentId.make("environment-1");
+
     const invalidProject = makeProject({
       environmentId,
       id: ProjectId.make("project-invalid"),
       title: "A invalid timestamp",
       createdAt: "invalid",
     });
+
     const validProject = makeProject({
       environmentId,
       id: ProjectId.make("project-valid"),
       title: "Z valid timestamp",
       createdAt: "2026-06-02T00:00:00.000Z",
     });
+
     const scopes = buildHomeProjectScopes({
       projects: [invalidProject, validProject],
       environmentId: null,
@@ -265,6 +280,7 @@ describe("buildHomeProjectScopes", () => {
   it("uses the freshest member when a grouped scope has no activity", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
+
     const repositoryIdentity = {
       canonicalKey: "github.com/pingdotgg/t3code",
       locator: {
@@ -273,6 +289,7 @@ describe("buildHomeProjectScopes", () => {
         remoteUrl: "git@github.com:pingdotgg/t3code.git",
       },
     };
+
     const olderMember = makeProject({
       environmentId: localEnvironmentId,
       id: ProjectId.make("project-older-member"),
@@ -280,6 +297,7 @@ describe("buildHomeProjectScopes", () => {
       updatedAt: "2026-06-01T00:00:00.000Z",
       repositoryIdentity,
     });
+
     const newerMember = makeProject({
       environmentId: remoteEnvironmentId,
       id: ProjectId.make("project-newer-member"),
@@ -287,12 +305,14 @@ describe("buildHomeProjectScopes", () => {
       updatedAt: "2026-06-03T00:00:00.000Z",
       repositoryIdentity,
     });
+
     const otherProject = makeProject({
       environmentId: localEnvironmentId,
       id: ProjectId.make("project-other"),
       title: "other",
       updatedAt: "2026-06-02T00:00:00.000Z",
     });
+
     const scopes = buildHomeProjectScopes({
       projects: [olderMember, newerMember, otherProject],
       environmentId: null,
@@ -311,6 +331,7 @@ describe("buildHomeProjectScopes", () => {
 
   it("does not merge unrelated repositories that share a title", () => {
     const environmentId = EnvironmentId.make("environment-1");
+
     const projects = ["one", "two"].map((name) =>
       makeProject({
         environmentId,
@@ -363,6 +384,7 @@ describe("buildHomeProjectScopes", () => {
   it("filters both projects and threads to one environment", () => {
     const localEnvironmentId = EnvironmentId.make("environment-local");
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
+
     const projects = [
       makeProject({
         environmentId: localEnvironmentId,
@@ -388,6 +410,7 @@ describe("buildHomeProjectScopes", () => {
 
   it("matches web repository, repository-path, and separate grouping modes", () => {
     const environmentId = EnvironmentId.make("environment-1");
+
     const repositoryIdentity = {
       canonicalKey: "github.com/t3tools/t3code",
       locator: {
@@ -401,6 +424,7 @@ describe("buildHomeProjectScopes", () => {
       displayName: "T3 Code",
       rootPath: "/workspaces/t3code",
     };
+
     const projects = [
       makeProject({
         environmentId,
@@ -420,6 +444,7 @@ describe("buildHomeProjectScopes", () => {
 
     const scopeCount = (projectGroupingMode: "repository" | "repository_path" | "separate") =>
       buildHomeProjectScopes({ projects, environmentId, projectGroupingMode }).length;
+
     expect(scopeCount("repository")).toBe(1);
     expect(scopeCount("repository_path")).toBe(2);
     expect(scopeCount("separate")).toBe(2);

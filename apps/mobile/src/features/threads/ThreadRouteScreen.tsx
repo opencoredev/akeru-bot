@@ -63,6 +63,7 @@ function firstRouteParam(value: string | string[] | undefined): string | null {
 
 function OpeningThreadLoadingScreen() {
   const { t } = useMobileI18n();
+
   return <LoadingScreen message={t("Opening chat…")} messagePlacement="above-spinner" />;
 }
 
@@ -73,6 +74,7 @@ type ThreadRouteScreenProps = StaticScreenProps<{
 
 function ThreadUnavailableScreen() {
   const { t } = useMobileI18n();
+
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
@@ -101,16 +103,20 @@ export function ThreadRouteScreen(props: ThreadRouteScreenProps) {
   const threadIdRaw = firstRouteParam(params.threadId);
   const environmentId = environmentIdRaw ? EnvironmentId.make(environmentIdRaw) : null;
   const routeEnvironmentRuntime = useRemoteEnvironmentRuntime(environmentId);
+
   const routeConnectionState =
     routeEnvironmentRuntime?.connectionState ?? (environmentId ? "available" : connectionState);
+
   const routeThreadKey =
     environmentId !== null && threadIdRaw !== null
       ? scopedThreadKey(environmentId, ThreadId.make(threadIdRaw))
       : null;
+
   const selectedThreadKey =
     selectedThread === null
       ? null
       : scopedThreadKey(selectedThread.environmentId, selectedThread.id);
+
   const selectedThreadDetailState = useSelectedThreadDetailState();
 
   if (environmentId === null || threadIdRaw === null) {
@@ -146,10 +152,13 @@ function ThreadRouteContent(
   const { layout, panes, togglePrimarySidebar } = useAdaptiveWorkspaceLayout();
   const { connectionState } = useRemoteConnectionStatus();
   const { onReconnectEnvironment } = useRemoteConnections();
+
   const { selectedThread, selectedThreadProject, selectedEnvironmentConnection } =
     useThreadSelection();
+
   const selectedThreadDetailState = props.selectedThreadDetailState;
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
+
   // The session keeps only the raw error text, so the failure category comes
   // from the turn or the start-failed activity when the session lacks it.
   const resumeFailureUnavailability = useMemo(
@@ -163,6 +172,7 @@ function ThreadRouteContent(
       null,
     [selectedThread, selectedThreadDetail],
   );
+
   const silentRun = useMemo(
     () =>
       selectedThread?.latestTurn?.completedAt
@@ -173,11 +183,13 @@ function ThreadRouteContent(
           ),
     [selectedThread?.latestTurn, selectedThreadDetail?.activities],
   );
+
   // "Load earlier turns" header state for windowed (paginated) thread loads.
   const loadEarlierTurns = useMemo(() => {
     if (selectedThread === null || !threadHasOlderTurns(selectedThreadDetailState)) {
       return null;
     }
+
     return {
       loading:
         selectedThreadDetailState.page._tag === "Some" &&
@@ -187,6 +199,7 @@ function ThreadRouteContent(
       },
     };
   }, [selectedThread, selectedThreadDetailState]);
+
   const { selectedThreadCwd } = useSelectedThreadWorktree();
   const composer = useThreadComposerState();
   const requests = useSelectedThreadRequests();
@@ -197,26 +210,35 @@ function ThreadRouteContent(
   const params = props.route.params;
   const environmentIdRaw = firstRouteParam(params.environmentId);
   const environmentId = environmentIdRaw ? EnvironmentId.make(environmentIdRaw) : null;
+
   const environmentBots = useAtomValue(
     environmentId
       ? environmentBotsAtom(environmentId)
       : environmentBotsAtom(EnvironmentId.make("")),
   );
+
   const environmentGroups = useAtomValue(
     environmentId
       ? environmentGroupsAtom(environmentId)
       : environmentGroupsAtom(EnvironmentId.make("")),
   );
+
   const botsById = useMemo(() => {
     const map = new Map<string, (typeof environmentBots)[number]>();
+
     for (const bot of environmentBots) map.set(bot.id, bot);
+
     return map;
   }, [environmentBots]);
+
   const threadId = firstRouteParam(params.threadId);
   const routeEnvironmentRuntime = useRemoteEnvironmentRuntime(environmentId);
+
   const routeConnectionState =
     routeEnvironmentRuntime?.connectionState ?? (environmentId ? "available" : connectionState);
+
   const routeConnectionError = routeEnvironmentRuntime?.connectionError ?? null;
+
   const selectedThreadWithDraftSettings = useMemo(
     () =>
       selectedThread
@@ -231,6 +253,7 @@ function ThreadRouteContent(
 
   /* ─── Native header theming ──────────────────────────────────────── */
   const usesNativeHeaderGlass = NATIVE_LIQUID_GLASS_SUPPORTED;
+
   // Group chats take the group's name and member stack; direct bot chats the
   // bot, plain chats the provider identity — the same rule as the roster row.
   const headerProviderDriver =
@@ -239,6 +262,7 @@ function ThreadRouteContent(
         candidate.instanceId ===
         (selectedThread?.session?.providerInstanceId ?? selectedThread?.modelSelection.instanceId),
     )?.driver ?? null;
+
   const headerIdentity = selectedThread
     ? resolveThreadIdentity({
         thread: selectedThread,
@@ -248,7 +272,9 @@ function ThreadRouteContent(
         providerName: providerBotName,
       })
     : null;
+
   const headerBotName = headerIdentity?.title ?? "Bot";
+
   // A group keeps its name in the title; its chat title stays in the subtitle.
   const headerTitle =
     !usesNativeHeaderGlass &&
@@ -257,7 +283,9 @@ function ThreadRouteContent(
     selectedThread.title !== PLACEHOLDER_THREAD_TITLE
       ? selectedThread.title
       : headerBotName;
+
   const headerAvatarSeed = headerIdentity?.avatarSeed ?? headerProviderDriver ?? headerBotName;
+
   const headerSubtitle = [
     selectedThread !== null && selectedThread.title !== PLACEHOLDER_THREAD_TITLE
       ? selectedThread.title
@@ -267,16 +295,19 @@ function ThreadRouteContent(
   ]
     .filter(Boolean)
     .join(" · ");
+
   const handleReconnectEnvironment = useCallback(() => {
     if (!environmentId) {
       return;
     }
+
     onReconnectEnvironment(environmentId);
   }, [environmentId, onReconnectEnvironment]);
 
   const handleOpenConnectionEditor = useCallback(() => {
     void navigation.navigate("Connections");
   }, [navigation]);
+
   const handleStopThread = useCallback(() => {
     if (
       !selectedThread ||
@@ -285,6 +316,7 @@ function ThreadRouteContent(
     ) {
       return;
     }
+
     return interruptThreadTurn({
       environmentId: selectedThread.environmentId,
       input: {
@@ -295,6 +327,7 @@ function ThreadRouteContent(
       },
     });
   }, [interruptThreadTurn, selectedThread]);
+
   const handleResumeThread = useCallback(() => {
     if (!selectedThread || resumingThread) return;
     setResumingThread(true);
@@ -339,6 +372,7 @@ function ThreadRouteContent(
   // native back button does not render. Provide an explicit Home escape for
   // that case; when history exists the native back button is used instead.
   const canGoBack = navigation.canGoBack();
+
   const compactHomeHeaderItems = useMemo<NativeHeaderItems>(
     () => [
       withNativeGlassHeaderItem({
@@ -406,6 +440,7 @@ function ThreadRouteContent(
     detailDeleted: selectedThreadDetailState.status === "deleted",
     connectionState: routeConnectionState,
   });
+
   const serverConfig = routeEnvironmentRuntime?.serverConfig ?? null;
 
   return (
@@ -502,6 +537,7 @@ function ThreadBotHeader(props: {
 }) {
   const insets = useSafeAreaInsets();
   const foregroundColor = useThemeColor("--color-foreground");
+
   return (
     <View className="bg-screen px-4 pb-2" style={{ paddingTop: Math.max(insets.top, 12) + 4 }}>
       <View className="flex-row items-center gap-3">

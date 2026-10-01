@@ -14,10 +14,12 @@ vi.mock("../../state/preferences", () => ({
   mobilePreferencesAtom: "preferences",
   updateMobilePreferencesAtom: "update",
 }));
+
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => (atom === "preferences" ? mocks.preferences : mocks.result),
   useAtomSet: () => mocks.save,
 }));
+
 vi.mock("react-native", () => ({
   AppState: { addEventListener: () => ({ remove: vi.fn() }) },
   View: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -31,6 +33,7 @@ vi.mock("react-native", () => ({
     onPress: () => void;
   }) => {
     mocks.buttons.push(props);
+
     return (
       <button
         role={props.accessibilityRole}
@@ -44,9 +47,11 @@ vi.mock("react-native", () => ({
     );
   },
 }));
+
 vi.mock("../../components/AppText", () => ({
   AppText: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
+
 vi.mock("./components/SettingsSection", () => ({
   SettingsSection: ({ title, children }: { title: string; children: ReactNode }) => (
     <section aria-label={title}>{children}</section>

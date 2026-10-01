@@ -9,6 +9,7 @@ interface RetainedScope {
 }
 
 const retainedScopes = new Map<string, RetainedScope>();
+
 const listeners = new Set<() => void>();
 
 function notify(): void {
@@ -56,21 +57,27 @@ export function observeMobileBackgroundActivitySubscription(
   observation: EnvironmentRpcSubscriptionObservation,
 ): Effect.Effect<Effect.Effect<void>> {
   const scope = scopeForSubscription(observation);
+
   if (scope === null) return Effect.succeed(Effect.void);
+
   return Effect.sync(() => {
     const environmentId = observation.environmentId as EnvironmentId;
     const key = stableScopeKey(environmentId, scope);
     const current = retainedScopes.get(key);
+
     if (current) {
       current.refCount += 1;
     } else {
       retainedScopes.set(key, { environmentId, scope, refCount: 1 });
       notify();
     }
+
     return Effect.sync(() => {
       const retained = retainedScopes.get(key);
+
       if (!retained) return;
       retained.refCount -= 1;
+
       if (retained.refCount <= 0) {
         retainedScopes.delete(key);
         notify();
@@ -81,6 +88,7 @@ export function observeMobileBackgroundActivitySubscription(
 
 export function onRetainedMobileBackgroundScopesChange(listener: () => void): () => void {
   listeners.add(listener);
+
   return () => {
     listeners.delete(listener);
   };

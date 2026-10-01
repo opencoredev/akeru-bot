@@ -36,7 +36,9 @@ export function useArchivedThreadSnapshots(environmentIds: ReadonlyArray<Environ
     () => makeArchivedThreadsEnvironmentKey(environmentIds),
     [environmentIds],
   );
+
   const result = useAtomValue(archivedSnapshotsAtom(environmentKey));
+
   const refresh = useCallback(() => {
     for (const environmentId of environmentIds) {
       appAtomRegistry.refresh(archivedSnapshotAtom(environmentId));

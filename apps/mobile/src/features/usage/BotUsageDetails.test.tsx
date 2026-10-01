@@ -57,6 +57,7 @@ describe("mobile bot usage screen", () => {
 
   it("renders every measurement, the cap and its edit path, cost, pool, and reservations", () => {
     const tree = render({ data: snapshot, error: null, isPending: false });
+
     for (const value of [
       "Scout",
       "Input",
@@ -80,6 +81,7 @@ describe("mobile bot usage screen", () => {
     ]) {
       expect(tree).toContain(value);
     }
+
     expect(tree).not.toContain("Some provider usage is unavailable.");
   });
 

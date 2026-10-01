@@ -25,6 +25,7 @@ export function ProviderIcon(props: ProviderIconProps) {
 
   if (props.provider === "grok") {
     const fill = isDarkMode ? "#F5F5F5" : "#0F0F0F";
+
     return (
       <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <Path

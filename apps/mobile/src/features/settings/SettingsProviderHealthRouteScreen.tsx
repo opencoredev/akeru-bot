@@ -60,20 +60,25 @@ function BotInboxRow({
   const [error, setError] = useState<string | null>(null);
   const action = botInboxRowAction(item);
   const copy = botInboxItemCopy(item, t);
+
   const run = async (task: () => Promise<string | null>) => {
     if (busy) return;
     setBusy(true);
     setError(null);
+
     try {
       setError(await task());
     } finally {
       setBusy(false);
     }
   };
+
   const decideMemory = (intent: MemoryApprovalIntent) =>
     run(async () => {
       const approval = item.memoryApproval;
+
       if (!approval) return null;
+
       const result = await mutateFact({
         environmentId,
         input: {
@@ -81,16 +86,21 @@ function BotInboxRow({
           mutation: memoryApprovalMutation(approval, intent),
         },
       });
+
       if (result._tag === "Failure") {
         return t(describeDurableFactFailure(squashAtomCommandFailure(result)).message);
       }
+
       // The server closes the inbox item when it records the decision.
       onDecided();
+
       return null;
     });
+
   const resolve = () =>
     run(async () => {
       const result = await resolveIncident({ environmentId, input: { id: item.id } });
+
       return result._tag === "Failure" ? t("Could not resolve this item") : null;
     });
 
@@ -183,6 +193,7 @@ function BotInbox({
   readonly onDecided: () => void;
 }) {
   const { t } = useMobileI18n();
+
   return (
     <SettingsSection title={t("Bot inbox")} card>
       {items.length === 0 ? (
@@ -218,6 +229,7 @@ function LocalExecution({ environmentId }: { readonly environmentId: Environment
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
   const mode = settings?.localExecutionMode;
+
   return (
     <SettingsSection title={t("Local execution")} card>
       <View className="gap-3 p-4">
@@ -265,6 +277,7 @@ export function SettingsProviderHealthRouteScreen({
   const { t } = useMobileI18n();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
   const query = useEnvironmentQuery(
     route.params.target !== "bot-inbox"
       ? null
@@ -273,6 +286,7 @@ export function SettingsProviderHealthRouteScreen({
           input: {},
         }),
   );
+
   const title =
     route.params.target === "bot-inbox"
       ? t("Bot inbox")
@@ -281,10 +295,12 @@ export function SettingsProviderHealthRouteScreen({
         : route.params.target === "image-generation"
           ? t("Image generation")
           : t("Local execution");
+
   const inboxView =
     route.params.target === "bot-inbox"
       ? settingsInboxView({ error: query.error, data: query.data })
       : null;
+
   const section =
     route.params.target === "local-execution" ? (
       <LocalExecution environmentId={route.params.environmentId} />

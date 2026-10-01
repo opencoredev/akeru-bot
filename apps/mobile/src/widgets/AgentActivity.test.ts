@@ -82,6 +82,7 @@ describe("AgentActivity widget layout", () => {
       },
       environment as never,
     );
+
     const banner = JSON.stringify(layout.banner);
     expect(banner).toContain("#7dd3fc"); // sky-300: running
     expect(banner).toContain("#fcd34d"); // amber-300: waiting_for_approval
@@ -101,6 +102,7 @@ describe("AgentActivity widget layout", () => {
       },
       lightEnvironment as never,
     );
+
     const banner = JSON.stringify(layout.banner);
     expect(banner).toContain("#0284c7"); // sky-600: running
     expect(banner).toContain("#d97706"); // amber-600: waiting_for_approval
@@ -125,6 +127,7 @@ describe("AgentActivity widget layout", () => {
       },
       environment as never,
     );
+
     const banner = JSON.stringify(layout.banner);
     expect(banner.indexOf("Blocked thread")).toBeGreaterThan(-1);
     expect(banner.indexOf("Blocked thread")).toBeLessThan(banner.indexOf("Working thread"));
@@ -142,6 +145,7 @@ describe("AgentActivity widget layout", () => {
       },
       environment as never,
     );
+
     const banner = JSON.stringify(layout.banner);
     expect(banner).toContain("3 active bots");
     expect(banner).toContain("1 needs attention");
@@ -159,6 +163,7 @@ describe("AgentActivity widget layout", () => {
       },
       environment as never,
     );
+
     expect(JSON.stringify(layout.compactLeading)).toContain('"assetName":"AkeruIcon"');
     expect(JSON.stringify(layout.compactTrailing)).toContain("#a5b4fc"); // indigo-300
     expect(JSON.stringify(layout.compactTrailing)).toContain("Input");
@@ -182,6 +187,7 @@ describe("AgentActivity widget layout", () => {
       },
       environment as never,
     );
+
     expect(JSON.stringify(layout.banner)).toContain('"widgetURL":"akeru://threads/env-1/thread-2"');
   });
 
@@ -212,6 +218,7 @@ describe("AgentActivity widget layout", () => {
       },
       environment as never,
     );
+
     const banner = JSON.stringify(layout.banner);
     expect(banner).toContain("Bot work completed");
     expect(banner).not.toContain("0 active");
@@ -233,6 +240,7 @@ describe("AgentActivity widget layout", () => {
       },
       environment as never,
     );
+
     const banner = JSON.stringify(layout.banner);
     expect(banner).toContain("Bot work failed");
     expect(banner).toContain("#fca5a5"); // red-300 header tint
@@ -257,6 +265,7 @@ describe("AgentActivity widget layout", () => {
       },
       environment as never,
     );
+
     const banner = JSON.stringify(layout.banner);
     expect(banner).toContain("Bot work failed");
     expect(banner).not.toContain("Bot work completed");
@@ -277,10 +286,13 @@ describe("AgentActivity widget layout", () => {
       },
       environment as never,
     );
+
     const banner = JSON.stringify(layout.banner);
+
     for (const visible of [1, 2, 3, 4, 5]) {
       expect(banner).toContain(`Thread ${visible}`);
     }
+
     expect(banner).not.toContain("Thread 6");
   });
 });

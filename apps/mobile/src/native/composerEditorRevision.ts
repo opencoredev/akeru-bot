@@ -16,6 +16,7 @@ export function acknowledgeComposerNativeEvent(
   if (!Number.isSafeInteger(incomingEventCount) || incomingEventCount < mostRecentEventCount) {
     return null;
   }
+
   return incomingEventCount;
 }
 
@@ -26,11 +27,14 @@ export function resolveComposerControlledEventCount(
   snapshots: ReadonlyArray<ComposerNativeEventSnapshot>,
 ): number {
   let newestValueEventCount: number | null = null;
+
   for (let index = snapshots.length - 1; index >= 0; index -= 1) {
     const snapshot = snapshots[index];
+
     if (snapshot?.value !== value) continue;
 
     newestValueEventCount ??= snapshot.eventCount;
+
     if (selection === null || snapshotSelectionMatches(snapshot, selection)) {
       return snapshot.eventCount;
     }
@@ -58,6 +62,7 @@ function snapshotSelectionMatches(
   selection: ComposerEditorSelection,
 ): boolean {
   if (snapshot.selection === null) return true;
+
   return snapshot.selection.start === selection.start && snapshot.selection.end === selection.end;
 }
 
@@ -69,6 +74,7 @@ export function isComposerNativeEcho(
 ): boolean {
   for (let index = snapshots.length - 1; index >= 0; index -= 1) {
     const snapshot = snapshots[index];
+
     if (
       snapshot !== undefined &&
       snapshot.eventCount === eventCount &&
@@ -81,6 +87,7 @@ export function isComposerNativeEcho(
       return true;
     }
   }
+
   return false;
 }
 
@@ -112,13 +119,16 @@ export function pruneAcknowledgedComposerNativeEvents(
   // echo instead of a parent-driven edit that would re-control the caret (and
   // reset the keyboard's autocorrect context on iOS).
   let latestAcknowledgedIndex = -1;
+
   for (let index = snapshots.length - 1; index >= 0; index -= 1) {
     const snapshot = snapshots[index];
+
     if (snapshot !== undefined && snapshot.eventCount <= acknowledgedEventCount) {
       latestAcknowledgedIndex = index;
       break;
     }
   }
+
   return snapshots.filter(
     (snapshot, index) =>
       index === latestAcknowledgedIndex || snapshot.eventCount > acknowledgedEventCount,

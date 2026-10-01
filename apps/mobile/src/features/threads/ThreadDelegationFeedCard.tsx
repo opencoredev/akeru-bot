@@ -26,9 +26,11 @@ export function ThreadDelegationFeedCard(props: {
   const { t } = useMobileI18n();
   const { environmentId } = props;
   const { delegationId } = props.delegation;
+
   const cancelDelegation = useAtomCommand(orchestrationEnvironment.cancelDelegation, {
     reportFailure: false,
   });
+
   const retryDelegation = useAtomCommand(orchestrationEnvironment.retryDelegation, {
     reportFailure: false,
   });
@@ -42,14 +44,17 @@ export function ThreadDelegationFeedCard(props: {
               environmentId,
               input: { delegationId, keep: action === "keep" },
             });
+
       if (result._tag !== "Failure") return;
       const error = squashAtomCommandFailure(result);
+
       const title =
         action === "keep"
           ? t("Could not let the work finish")
           : action === "cancel"
             ? t("Could not cancel delegation")
             : t("Could not retry the work");
+
       Alert.alert(title, error instanceof Error ? error.message : undefined);
     },
     [cancelDelegation, delegationId, environmentId, retryDelegation, t],

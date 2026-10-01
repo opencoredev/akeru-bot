@@ -22,6 +22,7 @@ export function withNativeGlassHeaderItem<T extends NativeGlassHeaderItem>(
   } = {},
 ): T {
   const sharesBackground = options.sharesBackground ?? item.sharesBackground ?? true;
+
   return {
     ...item,
     glassEffect: item.glassEffect ?? false,

@@ -15,6 +15,7 @@ export function useThreadDetail(target: ThreadDetailTarget) {
 
 export function useSelectedThreadDetailState() {
   const { selectedThread } = useThreadSelection();
+
   return useThreadDetail({
     environmentId: selectedThread?.environmentId ?? null,
     threadId: selectedThread?.id ?? null,

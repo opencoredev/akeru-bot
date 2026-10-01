@@ -19,7 +19,9 @@ import { AppText as Text } from "./AppText";
 import { SymbolView } from "./AppSymbol";
 
 const COMPOSER_TOOLBAR_GAP = 8;
+
 const COMPOSER_TOOLBAR_FADE_WIDTH = 18;
+
 const COMPOSER_TOOLBAR_SCROLL_EPSILON = 4;
 
 /**
@@ -123,6 +125,7 @@ export function ComposerToolbarScroller(props: {
 
   const scrollEdges = useMemo(() => {
     const maxOffset = Math.max(0, metrics.contentWidth - metrics.viewportWidth);
+
     return {
       showLeftFade: metrics.offsetX > COMPOSER_TOOLBAR_SCROLL_EPSILON,
       showRightFade: metrics.offsetX < maxOffset - COMPOSER_TOOLBAR_SCROLL_EPSILON,
@@ -225,12 +228,14 @@ export function ComposerToolbarButton(props: {
   const isCircle = !props.label && props.showChevron === false;
   const defaultBorderColor = useThemeColor("--color-border-subtle");
   const activeBorderColor = useThemeColor("--color-border");
+
   const filledBorderColor =
     variant === "danger"
       ? themeColorWithAlpha(String(dangerFg), 0.14)
       : props.disabled
         ? defaultBorderColor
         : themeColorWithAlpha(String(primaryFg), 0.18);
+
   const iconTintColor =
     variant === "primary"
       ? props.disabled

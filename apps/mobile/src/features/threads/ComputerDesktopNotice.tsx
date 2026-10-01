@@ -26,6 +26,7 @@ export function ComputerDesktopNotice(props: {
   const iconColor = useThemeColor("--color-icon-subtle");
   const bots = useAtomValue(environmentBotsAtom(props.environmentId));
   const bot = props.botId === null ? null : bots.find((entry) => entry.id === props.botId);
+
   const query = useEnvironmentQuery(
     bot
       ? computerEnvironment.state({
@@ -34,6 +35,7 @@ export function ComputerDesktopNotice(props: {
         })
       : null,
   );
+
   const state = query.data;
   const { refresh } = query;
   const seenActivity = useRef(props.turnActivity);
@@ -42,6 +44,7 @@ export function ComputerDesktopNotice(props: {
     seenActivity.current = props.turnActivity;
     refresh();
   }, [props.turnActivity, refresh]);
+
   if (!bot || (state?.status !== "ready" && state?.status !== "human")) return null;
 
   return (

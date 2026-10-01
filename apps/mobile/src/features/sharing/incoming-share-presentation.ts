@@ -33,10 +33,12 @@ export function transitionIncomingSharePresentation(
         shareIdToPresent: null,
       };
     }
+
     return { state, shareIdToPresent: null };
   }
 
   let nextState = state;
+
   if (state.presentedShareId !== null) {
     if (input.pendingShareId === state.presentedShareId) {
       return {
@@ -47,6 +49,7 @@ export function transitionIncomingSharePresentation(
         shareIdToPresent: null,
       };
     }
+
     nextState = { ...state, presentedShareId: null };
   }
 

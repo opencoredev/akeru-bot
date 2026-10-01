@@ -193,6 +193,7 @@ const ANDROID_ICON_BY_MATERIAL_NAME: Record<string, Icon> = {
 };
 
 export type { SFSymbol } from "expo-symbols";
+
 export type AppSymbolName = SymbolViewProps["name"];
 
 export function SymbolView(props: SymbolViewProps) {
@@ -202,6 +203,7 @@ export function SymbolView(props: SymbolViewProps) {
 
   const materialName = typeof props.name === "string" ? undefined : props.name.android;
   const sfSymbol = typeof props.name === "string" ? props.name : props.name.ios;
+
   const AndroidIcon =
     (materialName ? ANDROID_ICON_BY_MATERIAL_NAME[materialName] : undefined) ??
     (sfSymbol ? ANDROID_ICON_BY_SF_SYMBOL[sfSymbol] : undefined);

@@ -1,66 +1,29 @@
-import { SymbolView } from "../../components/AppSymbol";
-import { ControlPillMenu } from "../../components/ControlPill";
-import type { MenuAction } from "@react-native-menu/menu";
 import * as Haptics from "expo-haptics";
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ComponentProps,
-  type ReactNode,
-} from "react";
-import type {
-  ColorValue,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  StyleProp,
-  ViewStyle,
-} from "react-native";
-import { Pressable, View } from "react-native";
+import { use, useCallback, useEffect, useRef, type ComponentProps, type ReactNode } from "react";
+import type { ColorValue, StyleProp, ViewStyle } from "react-native";
+import { View } from "react-native";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
-import Animated, {
-  Extrapolation,
-  interpolate,
-  runOnJS,
-  type SharedValue,
-  useAnimatedReaction,
-  useAnimatedStyle,
-} from "react-native-reanimated";
-
-import { AppText as Text } from "../../components/AppText";
+import { runOnJS, type SharedValue, useAnimatedReaction } from "react-native-reanimated";
 import { useMobileI18n } from "../../lib/i18n";
+import {
+  ACTION_ITEM_WIDTH,
+  SwipeActionButton,
+  type ThreadSwipeAction,
+} from "./thread-swipe-action-button";
+import { SwipeableScrollGateContext } from "./swipeable-scroll-gate";
 
-// Wide enough for the longest action label ("Unarchive").
-const ACTION_ITEM_WIDTH = 58;
-const ACTION_CIRCLE_SIZE = 36;
-const ACTION_ICON_SIZE = 15;
-const COMPACT_ACTION_CIRCLE_SIZE = 28;
-const COMPACT_ACTION_ICON_SIZE = 13;
+export { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./swipeable-scroll-gate";
 
 export const THREAD_SWIPE_ACTIONS_WIDTH = ACTION_ITEM_WIDTH * 2;
+
 export const THREAD_SWIPE_SPRING = {
   damping: 26,
   mass: 0.7,
   overshootClamping: true,
   stiffness: 330,
 };
-
-interface ThreadSwipeAction {
-  readonly accessibilityLabel: string;
-  readonly icon: ComponentProps<typeof SymbolView>["name"];
-  readonly label: string;
-  readonly menu?: {
-    readonly actions: MenuAction[];
-    readonly onPressAction: NonNullable<ComponentProps<typeof ControlPillMenu>["onPressAction"]>;
-    readonly title?: string;
-  };
-  readonly onPress: () => void;
-}
 
 interface ThreadSwipeSecondaryAction extends ThreadSwipeAction {
   readonly backgroundColor: string;
@@ -79,6 +42,7 @@ function resolveSecondaryAction(input: {
   readonly threadTitle: string;
 }): ThreadSwipeSecondaryAction | null {
   if (input.secondaryAction === null) return null;
+
   if (input.secondaryAction === undefined) {
     return {
       accessibilityLabel: input.t("Delete {title}", { title: input.threadTitle }),
@@ -91,7 +55,9 @@ function resolveSecondaryAction(input: {
       },
     };
   }
+
   const action = input.secondaryAction;
+
   return {
     ...action,
     backgroundColor: "#5856d6",
@@ -108,114 +74,6 @@ function resolveSecondaryAction(input: {
     onPress: () => {
       input.close();
       action.onPress();
-    },
-  };
-}
-
-/**
- * Delivers the scroll gate to swipeables via context so that flipping it does
- * NOT re-render whole rows: putting the flag in list extraData/renderItem deps
- * re-rendered every visible row (hooks, subscriptions and all) exactly at
- * scroll start — peak frame pressure. As a context value only the
- * ThreadSwipeable consumers re-render.
- */
-const SwipeableScrollGateContext = createContext(true);
-
-export function SwipeableScrollGateProvider(props: {
-  readonly enabled: boolean;
-  readonly children: ReactNode;
-}) {
-  return (
-    <SwipeableScrollGateContext.Provider value={props.enabled}>
-      {props.children}
-    </SwipeableScrollGateContext.Provider>
-  );
-}
-
-/**
- * Gates row swipes on list scroll activity, mirroring UIKit's own swipe
- * actions (`!isDragging && !isDecelerating`). failOffsetY on the swipe pan
- * covers the first pan of a scroll, but trackpad scroll sessions spawn fresh
- * gesture sessions (momentum catch, direction changes) whose reset
- * translation can re-activate a swipe mid-scroll — so while the list has
- * moved vertically during an active drag/momentum phase, row swipes are
- * disabled entirely.
- *
- * Spread the returned handlers onto the list and pass `swipeEnabled` to rows.
- */
-export function useSwipeableScrollGate(options?: {
-  readonly onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-  readonly onScrollBeginDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-}) {
-  const [gateActive, setGateActive] = useState(false);
-  const gateActiveRef = useRef(false);
-  const draggingRef = useRef(false);
-  const dragStartYRef = useRef(0);
-  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const externalOnScroll = options?.onScroll;
-  const externalOnScrollBeginDrag = options?.onScrollBeginDrag;
-
-  const update = useCallback((next: boolean) => {
-    if (gateActiveRef.current !== next) {
-      gateActiveRef.current = next;
-      setGateActive(next);
-    }
-  }, []);
-  const clearSettle = useCallback(() => {
-    if (settleTimerRef.current !== null) {
-      clearTimeout(settleTimerRef.current);
-      settleTimerRef.current = null;
-    }
-  }, []);
-  useEffect(() => clearSettle, [clearSettle]);
-
-  const onScrollBeginDrag = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      draggingRef.current = true;
-      dragStartYRef.current = event.nativeEvent.contentOffset.y;
-      clearSettle();
-      externalOnScrollBeginDrag?.(event);
-    },
-    [clearSettle, externalOnScrollBeginDrag],
-  );
-  const onScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      // Only vertical movement during a user drag arms the gate — a purely
-      // horizontal row swipe never moves contentOffset.y, and inset-driven
-      // offset changes at mount happen outside a drag.
-      if (
-        draggingRef.current &&
-        !gateActiveRef.current &&
-        Math.abs(event.nativeEvent.contentOffset.y - dragStartYRef.current) > 4
-      ) {
-        update(true);
-      }
-      externalOnScroll?.(event);
-    },
-    [externalOnScroll, update],
-  );
-  const onScrollEndDrag = useCallback(() => {
-    draggingRef.current = false;
-    clearSettle();
-    // If momentum follows, onMomentumScrollBegin cancels this and the gate
-    // stays armed until the deceleration finishes.
-    settleTimerRef.current = setTimeout(() => update(false), 160);
-  }, [clearSettle, update]);
-  const onMomentumScrollBegin = useCallback(() => {
-    clearSettle();
-  }, [clearSettle]);
-  const onMomentumScrollEnd = useCallback(() => {
-    update(false);
-  }, [update]);
-
-  return {
-    swipeEnabled: !gateActive,
-    scrollGateHandlers: {
-      onScroll,
-      onScrollBeginDrag,
-      onScrollEndDrag,
-      onMomentumScrollBegin,
-      onMomentumScrollEnd,
     },
   };
 }
@@ -264,8 +122,10 @@ export function ThreadSwipeable(props: {
   const hasSecondaryAction = props.secondaryAction !== null;
   const actionsWidth = swipeActionsWidth(hasSecondaryAction);
   const fullSwipeThreshold = Math.max(actionsWidth + 44, props.fullSwipeWidth * 0.58);
+
   const fullSwipeAction =
     props.fullSwipeAction ?? (props.secondaryAction === undefined ? "delete" : "primary");
+
   const close = useCallback(() => swipeableRef.current?.close(), []);
   const gateEnabled = use(SwipeableScrollGateContext);
   const resetKey = props.resetKey;
@@ -273,13 +133,16 @@ export function ThreadSwipeable(props: {
     if (resetKey === undefined) {
       return;
     }
+
     fullSwipeArmedRef.current = false;
     swipeableRef.current?.reset();
   }, [resetKey]);
+
   const handleFullSwipeArmedChange = useCallback((armed: boolean) => {
     if (armed && !fullSwipeArmedRef.current) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
+
     fullSwipeArmedRef.current = armed;
   }, []);
 
@@ -300,6 +163,7 @@ export function ThreadSwipeable(props: {
       friction={1}
       onSwipeableClose={() => {
         fullSwipeArmedRef.current = false;
+
         if (swipeableRef.current) {
           props.onSwipeableClose?.(swipeableRef.current);
         }
@@ -311,14 +175,17 @@ export function ThreadSwipeable(props: {
       }}
       onSwipeableWillOpen={() => {
         const methods = swipeableRef.current;
+
         if (!methods) {
           return;
         }
 
         props.onSwipeableWillOpen?.(methods);
+
         if (fullSwipeArmedRef.current) {
           fullSwipeArmedRef.current = false;
           methods.close();
+
           if (fullSwipeAction === "primary") {
             props.primaryAction.onPress();
           } else {
@@ -357,172 +224,6 @@ export function ThreadSwipeable(props: {
     >
       {props.children(close)}
     </ReanimatedSwipeable>
-  );
-}
-
-function SwipeActionButton(props: {
-  readonly accessibilityLabel: string;
-  readonly actionsWidth: number;
-  readonly backgroundColor: string;
-  readonly compact: boolean;
-  readonly entryRange: readonly [number, number];
-  readonly fullSwipeThreshold: number;
-  readonly icon: ComponentProps<typeof SymbolView>["name"];
-  readonly label: string;
-  readonly menu?: ThreadSwipeAction["menu"];
-  readonly onPress: () => void;
-  readonly stretchesOnFullSwipe: boolean;
-  readonly translation: SharedValue<number>;
-}) {
-  const circleSize = props.compact ? COMPACT_ACTION_CIRCLE_SIZE : ACTION_CIRCLE_SIZE;
-  const iconSize = props.compact ? COMPACT_ACTION_ICON_SIZE : ACTION_ICON_SIZE;
-  const actionStyle = useAnimatedStyle(() => {
-    const reveal = Math.max(-props.translation.value, 0);
-    const entryProgress = interpolate(reveal, props.entryRange, [0, 1], Extrapolation.CLAMP);
-    const stretch = Math.max(reveal - props.actionsWidth, 0);
-    const fullSwipeProgress = interpolate(
-      reveal,
-      [props.actionsWidth, props.fullSwipeThreshold + 20],
-      [0, 1],
-      Extrapolation.CLAMP,
-    );
-
-    return {
-      opacity: props.stretchesOnFullSwipe ? entryProgress : entryProgress * (1 - fullSwipeProgress),
-      transform: [
-        {
-          translateX:
-            interpolate(entryProgress, [0, 1], [22, 0]) -
-            (props.stretchesOnFullSwipe ? 0 : stretch),
-        },
-        { scale: interpolate(entryProgress, [0, 1], [0.78, 1]) },
-      ],
-    };
-  });
-  const circleStyle = useAnimatedStyle(() => {
-    const reveal = Math.max(-props.translation.value, 0);
-    const stretch = props.stretchesOnFullSwipe ? Math.max(reveal - props.actionsWidth, 0) : 0;
-
-    return {
-      transform: [{ translateX: -stretch }],
-      width: circleSize + stretch,
-    };
-  });
-  const iconStyle = useAnimatedStyle(() => {
-    const reveal = Math.max(-props.translation.value, 0);
-    const stretch = props.stretchesOnFullSwipe ? Math.max(reveal - props.actionsWidth, 0) : 0;
-    const armedProgress = interpolate(
-      reveal,
-      [props.fullSwipeThreshold, props.fullSwipeThreshold + 20],
-      [0, 1],
-      Extrapolation.CLAMP,
-    );
-
-    return {
-      transform: [{ translateX: -stretch * (0.5 + armedProgress * 0.5) }],
-    };
-  });
-  const labelStyle = useAnimatedStyle(() => {
-    if (!props.stretchesOnFullSwipe) {
-      return { opacity: 1 };
-    }
-
-    const reveal = Math.max(-props.translation.value, 0);
-    const stretch = Math.max(reveal - props.actionsWidth, 0);
-    return {
-      opacity: interpolate(
-        reveal,
-        [props.fullSwipeThreshold - 24, props.fullSwipeThreshold],
-        [1, 0],
-        Extrapolation.CLAMP,
-      ),
-      transform: [{ translateX: -stretch * 0.5 }],
-    };
-  });
-
-  const button = (
-    <Pressable
-      accessibilityLabel={props.accessibilityLabel}
-      accessibilityRole="button"
-      onPress={props.menu === undefined ? props.onPress : undefined}
-      style={({ pressed }) => ({
-        alignItems: "center",
-        height: "100%",
-        justifyContent: "center",
-        opacity: pressed ? 0.72 : 1,
-        width: "100%",
-      })}
-    >
-      <View style={{ height: circleSize, width: circleSize }}>
-        <Animated.View
-          style={[
-            {
-              backgroundColor: props.backgroundColor,
-              borderRadius: 999,
-              height: circleSize,
-              left: 0,
-              position: "absolute",
-              top: 0,
-            },
-            circleStyle,
-          ]}
-        />
-        <Animated.View
-          style={[
-            {
-              alignItems: "center",
-              height: circleSize,
-              justifyContent: "center",
-              left: 0,
-              position: "absolute",
-              top: 0,
-              width: circleSize,
-            },
-            iconStyle,
-          ]}
-        >
-          <SymbolView name={props.icon} size={iconSize} tintColor="#ffffff" type="monochrome" />
-        </Animated.View>
-      </View>
-      <Animated.View
-        style={[
-          { height: 14, justifyContent: "center", paddingTop: props.compact ? 0 : 2 },
-          labelStyle,
-        ]}
-      >
-        <Text className="text-3xs font-t3-medium text-foreground-muted" numberOfLines={1}>
-          {props.label}
-        </Text>
-      </Animated.View>
-    </Pressable>
-  );
-
-  return (
-    <Animated.View
-      style={[
-        {
-          alignItems: "center",
-          height: "100%",
-          justifyContent: "center",
-          width: ACTION_ITEM_WIDTH,
-          zIndex: props.stretchesOnFullSwipe ? 2 : 1,
-        },
-        actionStyle,
-      ]}
-    >
-      {props.menu === undefined ? (
-        button
-      ) : (
-        <ControlPillMenu
-          actions={props.menu.actions}
-          onPressAction={props.menu.onPressAction}
-          title={props.menu.title}
-          style={{ height: "100%", width: "100%" }}
-        >
-          {button}
-        </ControlPillMenu>
-      )}
-    </Animated.View>
   );
 }
 

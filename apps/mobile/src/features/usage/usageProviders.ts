@@ -27,6 +27,7 @@ export const PROVIDER_LABEL: Record<UsageProviderKind, string> = {
  */
 export function useProviderColors(): Record<UsageProviderKind, string> {
   const { themeAppearance: scheme } = useAppearancePreferences();
+
   return {
     claude: "#d97757",
     codex: scheme === "dark" ? "#e6e6e6" : "#3c3c43",

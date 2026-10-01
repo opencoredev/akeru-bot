@@ -37,12 +37,14 @@ function aggregateCacheSummary(
   for (const row of rows) {
     recordCount += row.recordCount;
     payloadBytes += row.payloadBytes;
+
     const current = environments.get(row.environmentId) ?? {
       environmentId: row.environmentId,
       recordCount: 0,
       payloadBytes: 0,
       kinds: {},
     };
+
     environments.set(row.environmentId, {
       environmentId: row.environmentId,
       recordCount: current.recordCount + row.recordCount,

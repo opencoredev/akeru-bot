@@ -6,19 +6,28 @@ import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 type AppVariant = "development" | "production";
 
 const repoEnv = loadRepoEnv();
+
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
+
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
+
 const appleTeamId = repoEnv.AKERU_APPLE_TEAM_ID?.trim();
+
 const expoProjectId = repoEnv.AKERU_EXPO_PROJECT_ID?.trim();
+
 const expoOwner = repoEnv.AKERU_EXPO_OWNER?.trim();
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
+
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/;
+
 const EXPO_PROJECT_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 const EXPO_OWNER_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
@@ -98,6 +107,7 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 }
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
+
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
   : variant.iosBundleIdentifier;

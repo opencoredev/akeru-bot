@@ -25,6 +25,7 @@ function toExpoDigestAlgorithm(
 }
 
 const httpClientLayer = remoteHttpClientLayer(fetch);
+
 const cryptoLayer = Layer.succeed(
   Crypto.Crypto,
   Crypto.make({
@@ -33,6 +34,7 @@ const cryptoLayer = Layer.succeed(
       Effect.promise(async () => {
         const input = new Uint8Array(data.length);
         input.set(data);
+
         return new Uint8Array(await ExpoCrypto.digest(toExpoDigestAlgorithm(algorithm), input));
       }),
   }),

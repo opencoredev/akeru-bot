@@ -13,11 +13,13 @@ import { toUploadChatImageAttachments, type DraftComposerImageAttachment } from 
 
 export function deriveThreadTitleFromPrompt(value: string): string {
   const trimmed = value.trim();
+
   if (trimmed.length === 0) {
     return PLACEHOLDER_THREAD_TITLE;
   }
 
   const compact = trimmed.replace(/\s+/g, " ");
+
   return compact.length <= 72 ? compact : `${compact.slice(0, 69).trimEnd()}...`;
 }
 
@@ -49,6 +51,7 @@ export interface ProjectThreadStartTurnSpec {
 export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpec) {
   const title = deriveThreadTitleFromPrompt(spec.text);
   const isWorktree = spec.workspaceMode === "worktree";
+
   return {
     commandId: CommandId.make(spec.commandId),
     threadId: ThreadId.make(spec.threadId),

@@ -29,5 +29,6 @@ export function resolveSettingsEnvironmentId(
   ) {
     return selectedEnvironmentId;
   }
+
   return availableEnvironmentIds.length === 1 ? (availableEnvironmentIds[0] ?? null) : null;
 }

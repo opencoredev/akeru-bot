@@ -17,6 +17,7 @@ module.exports = function withAndroidGradleHeap(config) {
     });
 
     nextConfig.modResults = properties;
+
     return nextConfig;
   });
 };

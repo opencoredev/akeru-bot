@@ -49,10 +49,12 @@ export function BotUsageRouteScreen({ route }: StaticScreenProps<BotUsageParams>
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { environmentId, botId, botName } = route.params;
+
   const usageAtom = useMemo(
     () => botUsageEnvironment.summary({ environmentId, input: { botId: BotId.make(botId) } }),
     [botId, environmentId],
   );
+
   const query = useEnvironmentQuery(usageAtom);
   useRefreshOnRefocus(`${environmentId}:${botId}`, query.refresh);
   const view = botUsageView(query);

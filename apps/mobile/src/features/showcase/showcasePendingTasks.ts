@@ -38,6 +38,7 @@ export function buildShowcasePendingTasks(
 ): ReadonlyArray<QueuedThreadMessage> {
   return SHOWCASE_PENDING_TASK_DEFINITIONS.flatMap((definition) => {
     const project = projects.find((candidate) => String(candidate.id) === definition.projectId);
+
     if (!project) return [];
 
     return [

@@ -27,6 +27,7 @@ export class ExternalUrlOpenError extends Schema.TaggedErrorClass<ExternalUrlOpe
 function externalUrlMetadata(url: string): { readonly scheme: string; readonly host?: string } {
   try {
     const parsed = new URL(url);
+
     return {
       scheme: parsed.protocol.replace(/:$/, "") || "unknown",
       host: parsed.hostname || undefined,
@@ -41,6 +42,7 @@ function externalUrlMetadata(url: string): { readonly scheme: string; readonly h
 export async function tryOpenExternalUrl(url: string, target: ExternalUrlTarget): Promise<boolean> {
   try {
     await Linking.openURL(url);
+
     return true;
   } catch (cause) {
     const error = new ExternalUrlOpenError({ target, ...externalUrlMetadata(url), cause });
@@ -51,6 +53,7 @@ export async function tryOpenExternalUrl(url: string, target: ExternalUrlTarget)
       host: error.host,
       stack: error.stack,
     });
+
     return false;
   }
 }

@@ -45,6 +45,7 @@ export function buildHomeProjectScopes(input: {
   const projects = input.projects.filter(
     (project) => input.environmentId === null || project.environmentId === input.environmentId,
   );
+
   return buildProjectGroups({
     projects,
     settings: {
@@ -76,7 +77,9 @@ export function sortHomeProjectScopes(input: {
       ),
     ),
   );
+
   const latestActivityByScope = new Map<string, number>();
+
   const recordActivity = (scopeKey: string | undefined, timestamp: number) => {
     if (!scopeKey || !Number.isFinite(timestamp)) return;
     latestActivityByScope.set(
@@ -92,6 +95,7 @@ export function sortHomeProjectScopes(input: {
       getThreadSortTimestamp(thread, input.projectSortOrder),
     );
   }
+
   for (const pendingTask of input.pendingTasks) {
     recordActivity(
       scopeKeyByProjectRef.get(

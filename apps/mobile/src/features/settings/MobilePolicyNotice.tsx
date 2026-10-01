@@ -21,8 +21,10 @@ export function MobilePolicyNotice() {
   const updatePreferences = useAtomSet(updateMobilePreferencesAtom);
   const pressedOverlay = useThemeColor("--color-subtle");
   const loaded = AsyncResult.isSuccess(preferences);
+
   const appVariant =
     (Constants.expoConfig?.extra?.appVariant as string | undefined) ?? "development";
+
   const visible = shouldShowMobilePolicyNotice({
     appVariant,
     loaded,

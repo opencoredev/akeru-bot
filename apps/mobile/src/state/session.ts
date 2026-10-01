@@ -30,6 +30,7 @@ export function usePreparedConnection(environmentId: EnvironmentId | null) {
  */
 export function useEnvironmentOperateAccess(environmentId: EnvironmentId): OperateAccess {
   const result = useAtomValue(environmentSession.sessionStateAtom(environmentId));
+
   return resolveRemoteOperateAccess({
     session: Option.getOrNull(AsyncResult.value(result)),
     isPending: result.waiting,

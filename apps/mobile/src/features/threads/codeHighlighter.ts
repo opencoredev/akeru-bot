@@ -22,13 +22,18 @@ const SHIKI_THEME_NAME_BY_SCHEME = {
   light: "github-light-default",
   dark: "github-dark-default",
 } as const;
+
 // Tests always use the JavaScript regex engine; apps prefer the native one when present.
 const PREFER_NATIVE_ENGINE =
   (process.env.EXPO_PUBLIC_CODE_HIGHLIGHTER_ENGINE ??
     (process.env.NODE_ENV === "test" ? "javascript" : "native")) === "native";
+
 const HIGHLIGHT_CHUNK_LINE_THRESHOLD = 8;
+
 const HIGHLIGHT_CHUNK_SIZE = 200;
+
 const TOKENIZE_MAX_LINE_LENGTH = 1_000;
+
 const INITIAL_LANGUAGE_MODULES = [
   bashLanguage,
   javascriptLanguage,
@@ -38,6 +43,7 @@ const INITIAL_LANGUAGE_MODULES = [
   typescriptLanguage,
   yamlLanguage,
 ] satisfies Parameters<typeof createHighlighterCore>[0]["langs"];
+
 const loadedLanguages = new Set<string>([
   "text",
   "bash",
@@ -48,7 +54,9 @@ const loadedLanguages = new Set<string>([
   "typescript",
   "yaml",
 ]);
+
 const languageLoadingPromises = new Map<string, Promise<boolean>>();
+
 const languageImports: Partial<Record<string, () => Promise<unknown>>> = {
   javascript: () => import("@shikijs/langs/javascript"),
   typescript: () => import("@shikijs/langs/typescript"),
@@ -152,6 +160,7 @@ const languageAliases: Record<string, string> = {
   plaintext: "text",
   txt: "text",
 };
+
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 
 type LoadedLanguageModule = {
@@ -166,9 +175,11 @@ function waitForNextFrame(): Promise<void> {
 
 async function createHighlighter(): Promise<HighlighterCore> {
   const themes = [githubLightDefault, githubDarkDefault];
+
   if (PREFER_NATIVE_ENGINE) {
     try {
       const nativeEngineModule = await import("react-native-shiki-engine");
+
       if (nativeEngineModule.isNativeEngineAvailable()) {
         return await createHighlighterCore({
           themes,
@@ -180,6 +191,7 @@ async function createHighlighter(): Promise<HighlighterCore> {
       // Fall back to the JavaScript regex engine below.
     }
   }
+
   return createHighlighterCore({
     themes,
     langs: INITIAL_LANGUAGE_MODULES,
@@ -194,11 +206,13 @@ function getHighlighter(): Promise<HighlighterCore> {
       throw error;
     });
   }
+
   return highlighterPromise;
 }
 
 function resolveLanguageAlias(language: string): string {
   const normalized = language.toLowerCase();
+
   return languageAliases[normalized] ?? normalized;
 }
 
@@ -211,11 +225,13 @@ async function loadSingleLanguage(
   }
 
   const existingPromise = languageLoadingPromises.get(language);
+
   if (existingPromise) {
     return existingPromise;
   }
 
   const importer = languageImports[language];
+
   if (!importer) {
     return false;
   }
@@ -225,6 +241,7 @@ async function loadSingleLanguage(
       const languageModule = (await importer()) as LoadedLanguageModule;
       await highlighter.loadLanguage(languageModule.default);
       loadedLanguages.add(language);
+
       return true;
     } catch {
       return false;
@@ -234,18 +251,23 @@ async function loadSingleLanguage(
   })();
 
   languageLoadingPromises.set(language, loadingPromise);
+
   return loadingPromise;
 }
 
 async function resolveLanguage(languageHint: string): Promise<string> {
   const candidate = resolveLanguageAlias(languageHint);
+
   if (candidate === "text" || candidate === "ansi" || !(candidate in languageImports)) {
     return "text";
   }
+
   if (loadedLanguages.has(candidate)) {
     return candidate;
   }
+
   const loaded = await loadSingleLanguage(await getHighlighter(), candidate);
+
   return loaded ? candidate : "text";
 }
 
@@ -284,6 +306,7 @@ async function highlightLines(
       lang: language,
       theme,
     });
+
     highlightedLines.push(...normalizeHighlightedLines(tokenLines));
     shortLineBatch.length = 0;
   };
@@ -323,5 +346,6 @@ export async function highlightCodeSnippet(input: {
   readonly theme: CodeHighlightTheme;
 }): Promise<ReadonlyArray<ReadonlyArray<HighlightedCodeToken>>> {
   const language = await resolveLanguage(input.language?.trim() || "text");
+
   return highlightLines(input.code, language, SHIKI_THEME_NAME_BY_SCHEME[input.theme]);
 }

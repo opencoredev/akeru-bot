@@ -7,6 +7,7 @@ import { AppState } from "react-native";
 import { createNativeReplyAudioHandle, type NativeReplyAudioEvent } from "./nativeReplyAudio";
 
 export const MAX_NATIVE_REPLY_AUDIO_BYTES = 20 * 1024 * 1024;
+
 export const NATIVE_REPLY_AUDIO_START_TIMEOUT_MS = 15_000;
 
 const extensions = new Map([
@@ -26,16 +27,21 @@ export function createExpoReplyAudio(
   events: ReplyAudioEvents,
 ): ReplyAudioHandle {
   const extension = extensions.get(mimeType.split(";", 1)[0]!.trim().toLowerCase());
+
   if (!extension || bytes.byteLength === 0 || bytes.byteLength > MAX_NATIVE_REPLY_AUDIO_BYTES) {
     throw new Error("Reply audio is empty, unsupported, or exceeds the playback limit.");
   }
+
   const file = new File(Paths.cache, `reply-playback-${randomUUID()}.${extension}`);
   let ownsFile = false;
+
   const deleteFile = () => {
     if (ownsFile && file.exists) file.delete();
     ownsFile = false;
   };
+
   let player: ReturnType<typeof createAudioPlayer>;
+
   try {
     file.create();
     ownsFile = true;
@@ -61,20 +67,24 @@ export function createExpoReplyAudio(
   let finishStart: ((error?: Error) => void) | undefined;
   let statusSubscription: { remove(): void } | undefined;
   let appSubscription: { remove(): void } | undefined;
+
   const cancelStart = () => {
     generation += 1;
     requested = false;
     started = false;
     finishStart?.(new Error("Reply audio start was cancelled."));
   };
+
   const interrupt = () => {
     if (!requested || disposed) return;
     cancelStart();
     player.pause();
     listener?.("interrupted");
   };
+
   const statusChanged = (status: AudioStatus) => {
     if (disposed) return;
+
     if (status.mediaServicesDidReset) {
       interrupt();
     } else if (status.playing && !requested) {
@@ -99,23 +109,30 @@ export function createExpoReplyAudio(
     {
       play() {
         if (disposed) return Promise.reject(new Error("Reply audio has been released."));
+
         if (AppState.currentState !== "active") {
           listener?.("interrupted");
+
           return Promise.reject(new Error("Reply audio requires the foreground app."));
         }
+
         requested = true;
         started = false;
         const current = ++generation;
+
         return new Promise<void>((resolve, reject) => {
           const timer = setTimeout(() => {
             finishStart?.(new Error("Native reply audio did not start."));
           }, NATIVE_REPLY_AUDIO_START_TIMEOUT_MS);
+
           finishStart = (error) => {
             clearTimeout(timer);
             finishStart = undefined;
+
             if (error) reject(error);
             else resolve();
           };
+
           // Only playback policy is changed; microphone and recording mode stay untouched.
           void setAudioModeAsync({
             playsInSilentMode: true,
@@ -124,13 +141,17 @@ export function createExpoReplyAudio(
           })
             .then(() => {
               if (disposed || current !== generation || !requested) return;
+
               if (AppState.currentState !== "active") {
                 interrupt();
+
                 return;
               }
+
               if (player.currentStatus.error || player.currentStatus.playbackState === "failed") {
                 throw new Error("Native reply audio playback failed.");
               }
+
               player.play();
               statusChanged(player.currentStatus);
             })
@@ -149,6 +170,7 @@ export function createExpoReplyAudio(
         if (disposed) return;
         disposed = true;
         cancelStart();
+
         try {
           player.release();
         } finally {
@@ -157,6 +179,7 @@ export function createExpoReplyAudio(
       },
       subscribe(next) {
         listener = next;
+
         try {
           statusSubscription = player.addListener("playbackStatusUpdate", statusChanged);
           appSubscription = AppState.addEventListener("change", (state) => {
@@ -166,8 +189,10 @@ export function createExpoReplyAudio(
           statusSubscription?.remove();
           throw error;
         }
+
         return () => {
           listener = undefined;
+
           try {
             statusSubscription?.remove();
           } finally {

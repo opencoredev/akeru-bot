@@ -7,6 +7,7 @@ import * as MobileSecureStorage from "./mobile-secure-storage";
 import * as MobileStorage from "./mobile-storage";
 
 const baseLayer = Layer.merge(MobileDatabase.layer, MobileSecureStorage.layer);
+
 const dependentLayer = Layer.mergeAll(
   MobilePreferences.layer,
   MobileStorage.layer,

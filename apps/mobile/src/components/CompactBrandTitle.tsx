@@ -14,6 +14,7 @@ import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../native/native-glass";
 
 // Native leading items inherit different UIKit margins than title views.
 const IOS_NATIVE_LEADING_TITLE_OFFSET = -6;
+
 const IPAD_NATIVE_LEADING_TITLE_OFFSET = 7;
 
 /**
@@ -22,9 +23,11 @@ const IPAD_NATIVE_LEADING_TITLE_OFFSET = 7;
  */
 export function brandTitleOffset(nativeLeadingItem: boolean): number {
   if (Platform.OS !== "ios") return 0;
+
   if (nativeLeadingItem) {
     return Platform.isPad ? IPAD_NATIVE_LEADING_TITLE_OFFSET : IOS_NATIVE_LEADING_TITLE_OFFSET;
   }
+
   return Platform.isPad ? IPAD_HOME_TITLE_OFFSET : 0;
 }
 

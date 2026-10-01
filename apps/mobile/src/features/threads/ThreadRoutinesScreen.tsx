@@ -49,6 +49,7 @@ function ActionButton(props: {
   readonly tone?: "primary" | "plain" | "destructive";
 }) {
   const tone = props.tone ?? "plain";
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -134,6 +135,7 @@ function RoutineCard(props: {
           <Text className="text-xs font-t3-medium text-foreground-muted">{t("Latest run")}</Text>
           {history.map((run) => {
             const tone = runStatusTone(run.status);
+
             return (
               <View key={run.id} className="flex-row items-start gap-2">
                 <Text className={`text-xs font-t3-medium ${TONE_TEXT_CLASS[tone.variant]}`}>
@@ -221,8 +223,10 @@ export function ThreadRoutinesScreen() {
     if (busyRoutineId) return;
     setBusyRoutineId(routineId);
     setFailure(null);
+
     try {
       const result = await action();
+
       if (result._tag === "Failure") {
         // Server errors can be technical English, so the card shows only translated copy.
         setFailure({ routineId, message: fallback });
@@ -265,6 +269,7 @@ export function ThreadRoutinesScreen() {
       ) : (
         view.routines.map((routine) => {
           const routineId = RoutineId.make(routine.id);
+
           return (
             <RoutineCard
               key={routine.id}
@@ -280,6 +285,7 @@ export function ThreadRoutinesScreen() {
               routine={routine}
               onApprove={() => {
                 const current = snapshot?.routines?.find((item) => item.id === routine.id);
+
                 if (!current) return;
                 void perform(
                   routine.id,

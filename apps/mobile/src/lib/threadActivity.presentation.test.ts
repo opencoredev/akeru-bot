@@ -1,0 +1,369 @@
+import { describe, expect, it } from "vite-plus/test";
+import { EventId, MessageId, ProjectId, ThreadId, TurnId } from "@akeru/contracts";
+import {
+  buildThreadFeed,
+  deriveThreadFeedPresentation,
+  type ThreadFeedActivity,
+  type ThreadFeedEntry,
+} from "./threadActivity";
+import { makeActivity, makeThread } from "./threadActivity.test-support";
+
+describe("buildThreadFeed presentation", () => {
+  it("keeps the first and terminal assistant messages visible around settled work", () => {
+    const turnId = TurnId.make("turn-1");
+
+    const thread = makeThread({
+      id: ThreadId.make("thread-3"),
+      projectId: ProjectId.make("project-1"),
+      title: "Folded work",
+      latestTurn: {
+        turnId,
+        state: "completed",
+        requestedAt: "2026-04-01T00:00:00.000Z",
+        startedAt: "2026-04-01T00:00:01.000Z",
+        completedAt: "2026-04-01T00:00:18.000Z",
+        assistantMessageId: MessageId.make("assistant-final"),
+      },
+      messages: [
+        {
+          id: MessageId.make("assistant-first"),
+          role: "assistant",
+          text: "Synthetic deployment checklist\n1. Confirm the deployment is ready.",
+          turnId,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:02.000Z",
+          updatedAt: "2026-04-01T00:00:03.000Z",
+        },
+        {
+          id: MessageId.make("assistant-final"),
+          role: "assistant",
+          text: "Done.",
+          turnId,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:17.000Z",
+          updatedAt: "2026-04-01T00:00:18.000Z",
+        },
+      ],
+      activities: [
+        makeActivity({
+          id: EventId.make("tool-completed"),
+          kind: "tool.completed",
+          tone: "tool",
+          summary: "Read files",
+          createdAt: "2026-04-01T00:00:05.000Z",
+          turnId,
+          payload: {
+            title: "Read files",
+            itemType: "file_read",
+            status: "completed",
+          },
+        }),
+      ],
+    });
+
+    const feed = buildThreadFeed(thread);
+    const collapsed = deriveThreadFeedPresentation(feed, thread.latestTurn, new Set());
+    expect(collapsed.map((entry) => entry.id)).toEqual([
+      "assistant-first",
+      "turn-fold:turn-1",
+      "assistant-final",
+    ]);
+    expect(collapsed[1]).toMatchObject({
+      type: "turn-fold",
+      label: "Worked for 17s",
+      expanded: false,
+    });
+
+    const expanded = deriveThreadFeedPresentation(feed, thread.latestTurn, new Set([turnId]));
+    expect(expanded.map((entry) => entry.id)).toEqual([
+      "assistant-first",
+      "turn-fold:turn-1",
+      "tool-completed",
+      "assistant-final",
+    ]);
+  });
+
+  it("folds assistant messages between the first and terminal messages", () => {
+    const turnId = TurnId.make("turn-1");
+
+    const thread = makeThread({
+      id: ThreadId.make("thread-middle-message"),
+      projectId: ProjectId.make("project-1"),
+      title: "Bounded narration",
+      latestTurn: {
+        turnId,
+        state: "completed",
+        requestedAt: "2026-04-01T00:00:00.000Z",
+        startedAt: "2026-04-01T00:00:01.000Z",
+        completedAt: "2026-04-01T00:00:06.000Z",
+        assistantMessageId: MessageId.make("assistant-final"),
+      },
+      messages: [
+        {
+          id: MessageId.make("assistant-first"),
+          role: "assistant",
+          text: "The main result is ready.",
+          turnId,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:01.000Z",
+          updatedAt: "2026-04-01T00:00:02.000Z",
+        },
+        {
+          id: MessageId.make("assistant-middle"),
+          role: "assistant",
+          text: "I am checking one more detail.",
+          turnId,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:03.000Z",
+          updatedAt: "2026-04-01T00:00:04.000Z",
+        },
+        {
+          id: MessageId.make("assistant-final"),
+          role: "assistant",
+          text: "Verification finished.",
+          turnId,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:05.000Z",
+          updatedAt: "2026-04-01T00:00:06.000Z",
+        },
+      ],
+    });
+
+    const feed = buildThreadFeed(thread);
+    const rows = deriveThreadFeedPresentation(feed, thread.latestTurn, new Set());
+
+    expect(rows.map((entry) => entry.id)).toEqual([
+      "assistant-first",
+      "turn-fold:turn-1",
+      "assistant-final",
+    ]);
+  });
+
+  it("measures a steer-superseded turn from its user boundary through trailing work", () => {
+    const firstTurnId = TurnId.make("turn-1");
+    const secondTurnId = TurnId.make("turn-2");
+
+    const thread = makeThread({
+      id: ThreadId.make("thread-steered"),
+      projectId: ProjectId.make("project-1"),
+      title: "Steered work",
+      latestTurn: {
+        turnId: secondTurnId,
+        state: "running",
+        requestedAt: "2026-04-01T00:00:14.000Z",
+        startedAt: "2026-04-01T00:00:14.000Z",
+        completedAt: null,
+        assistantMessageId: MessageId.make("assistant-next"),
+      },
+      messages: [
+        {
+          id: MessageId.make("user-1"),
+          role: "user",
+          text: "Do it once more.",
+          turnId: null,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:00.000Z",
+          updatedAt: "2026-04-01T00:00:00.000Z",
+        },
+        {
+          id: MessageId.make("assistant-commentary"),
+          role: "assistant",
+          text: "Kicking off call 1.",
+          turnId: firstTurnId,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:09.000Z",
+          updatedAt: "2026-04-01T00:00:09.000Z",
+        },
+        {
+          id: MessageId.make("user-2"),
+          role: "user",
+          text: "Actually do 15.",
+          turnId: null,
+          streaming: false,
+          createdAt: "2026-04-01T00:00:14.000Z",
+          updatedAt: "2026-04-01T00:00:14.000Z",
+        },
+        {
+          id: MessageId.make("assistant-next"),
+          role: "assistant",
+          text: "One down - adjusting.",
+          turnId: secondTurnId,
+          streaming: true,
+          createdAt: "2026-04-01T00:00:17.000Z",
+          updatedAt: "2026-04-01T00:00:17.000Z",
+        },
+      ],
+      activities: [
+        makeActivity({
+          id: EventId.make("work-1"),
+          kind: "tool.completed",
+          tone: "tool",
+          summary: "Ran command",
+          createdAt: "2026-04-01T00:00:12.000Z",
+          turnId: firstTurnId,
+          payload: {
+            title: "Ran command",
+            itemType: "command_execution",
+            status: "completed",
+          },
+        }),
+      ],
+    });
+
+    const feed = buildThreadFeed(thread);
+    const collapsed = deriveThreadFeedPresentation(feed, thread.latestTurn, new Set());
+    expect(collapsed.find((entry) => entry.type === "turn-fold")).toMatchObject({
+      turnId: firstTurnId,
+      label: "Worked for 12s",
+    });
+  });
+
+  it("keeps an active turn expanded and classifies error-shaped tool output", () => {
+    const turnId = TurnId.make("turn-running");
+
+    const thread = makeThread({
+      id: ThreadId.make("thread-4"),
+      projectId: ProjectId.make("project-1"),
+      title: "Running work",
+      latestTurn: {
+        turnId,
+        state: "running",
+        requestedAt: "2026-04-01T00:00:00.000Z",
+        startedAt: "2026-04-01T00:00:01.000Z",
+        completedAt: null,
+        assistantMessageId: null,
+      },
+      activities: [
+        makeActivity({
+          id: EventId.make("tool-failed"),
+          kind: "tool.completed",
+          tone: "tool",
+          summary: "Run command",
+          createdAt: "2026-04-01T00:00:05.000Z",
+          turnId,
+          payload: {
+            title: "Run command",
+            itemType: "command_execution",
+            detail: "zsh: command not found: nope",
+            status: "completed",
+          },
+        }),
+      ],
+    });
+
+    const feed = buildThreadFeed(thread);
+    expect(deriveThreadFeedPresentation(feed, thread.latestTurn, new Set())).toEqual(feed);
+    expect(feed[0]).toMatchObject({
+      type: "activity-group",
+      activities: [{ status: "failure" }],
+    });
+  });
+
+  it("appends active work as a normal timeline row", () => {
+    const startedAt = "2026-04-01T00:00:01.000Z";
+    const presented = deriveThreadFeedPresentation([], null, new Set(), new Set(), startedAt);
+
+    expect(presented).toEqual([
+      {
+        type: "working",
+        id: "working-indicator-row",
+        createdAt: startedAt,
+      },
+    ]);
+    expect(deriveThreadFeedPresentation(presented, null, new Set())).toEqual([]);
+  });
+
+  it("models work-log overflow as list rows", () => {
+    const activity = (
+      id: string,
+      createdAt: string,
+      status: ThreadFeedActivity["status"] = "success",
+    ): ThreadFeedActivity => ({
+      id,
+      createdAt,
+      turnId: null,
+      summary: `Tool ${id}`,
+      detail: null,
+      canExpand: false,
+      getFullDetail: () => null,
+      getCopyText: () => id,
+      icon: "command",
+      toolLike: true,
+      status,
+    });
+
+    const feed: ThreadFeedEntry[] = [
+      {
+        type: "activity-group",
+        id: "work-group-1",
+        createdAt: "2026-04-01T00:00:01.000Z",
+        turnId: null,
+        activities: [
+          activity("activity-1", "2026-04-01T00:00:01.000Z"),
+          activity("activity-neutral", "2026-04-01T00:00:02.000Z", "neutral"),
+          activity("activity-2", "2026-04-01T00:00:03.000Z"),
+          activity("activity-3", "2026-04-01T00:00:04.000Z"),
+        ],
+      },
+    ];
+
+    const collapsed = deriveThreadFeedPresentation(feed, null, new Set());
+    expect(collapsed.map((entry) => entry.id)).toEqual(["activity-3", "work-toggle:work-group-1"]);
+    expect(collapsed[1]).toMatchObject({
+      type: "work-toggle",
+      groupId: "work-group-1",
+      hiddenCount: 2,
+      expanded: false,
+    });
+
+    const expanded = deriveThreadFeedPresentation(feed, null, new Set(), new Set(["work-group-1"]));
+    expect(expanded.map((entry) => entry.id)).toEqual([
+      "activity-1",
+      "activity-2",
+      "activity-3",
+      "work-toggle:work-group-1",
+    ]);
+    expect(expanded.at(-1)).toMatchObject({
+      type: "work-toggle",
+      expanded: true,
+    });
+  });
+});
+
+describe("quiet timeline: nested agents", () => {
+  it("keeps a nested agent's terminal row but hides its background work", () => {
+    const thread = makeThread({
+      id: ThreadId.make("thread-nested"),
+      projectId: ProjectId.make("project-1"),
+      title: "Nested agents",
+      activities: [
+        // A subagent's own shell: internal, covered by the owner's liveness.
+        makeActivity({
+          id: EventId.make("shell-done"),
+          kind: "task.completed",
+          summary: "Task completed",
+          createdAt: "2026-04-01T00:00:02.000Z",
+          payload: { taskId: "sh-1", agentId: "owner", agentKind: "background" },
+        }),
+        // A nested AGENT's completion: mobile has no Agents sheet, so this
+        // terminal row is the only signal it ever finished.
+        makeActivity({
+          id: EventId.make("nested-done"),
+          kind: "task.completed",
+          summary: "Task completed",
+          createdAt: "2026-04-01T00:00:03.000Z",
+          payload: { taskId: "n-1", agentId: "owner", agentKind: "agent" },
+        }),
+      ],
+    });
+
+    const feed = buildThreadFeed(thread);
+
+    const ids = feed.flatMap((entry) =>
+      entry.type === "activity-group" ? entry.activities.map((row) => row.id) : [],
+    );
+
+    expect(ids).toContain("nested-done");
+    expect(ids).not.toContain("shell-done");
+  });
+});

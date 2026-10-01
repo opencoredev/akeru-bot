@@ -21,11 +21,13 @@ export function buildBotStepMeters(
 ): ReadonlyMap<string, BotStepMeterData> {
   const meters = new Map<string, BotStepMeterData>();
   const cappedTurns = new Set<string>();
+
   for (const activity of activities) {
     if (activity.kind === "bot.usage-cap.hit" && activity.turnId !== null) {
       cappedTurns.add(activity.turnId);
       continue;
     }
+
     if (
       activity.kind !== "bot.step-usage.updated" ||
       activity.turnId === null ||
@@ -33,6 +35,7 @@ export function buildBotStepMeters(
     ) {
       continue;
     }
+
     meters.set(activity.turnId, {
       engine: activity.payload.engine,
       tokens: activity.payload.tokens,
@@ -43,10 +46,13 @@ export function buildBotStepMeters(
       hardStopReached: false,
     });
   }
+
   for (const turnId of cappedTurns) {
     const meter = meters.get(turnId);
+
     if (meter) meters.set(turnId, { ...meter, hardStopReached: true });
   }
+
   return meters;
 }
 
@@ -59,6 +65,7 @@ export function formatBotStepEngine(engine: BotEngine): string {
 export function parseBotUsageCapInput(input: string): number | null | undefined {
   if (input.trim().length === 0) return null;
   const limit = Number(input);
+
   return Number.isSafeInteger(limit) && limit > 0 ? limit : undefined;
 }
 
@@ -69,6 +76,7 @@ export function resolveBotUsageCapForProvider(
   if (providerDriver === "grok") {
     return { available: false, limit: null };
   }
+
   return { available: true, limit: parseBotUsageCapInput(input) };
 }
 
@@ -78,6 +86,8 @@ export function buildBotUsageCapPatch(
   providerDriver?: string,
 ): UpdateBotInput | null {
   const { limit } = resolveBotUsageCapForProvider(input, providerDriver);
+
   if (limit === undefined) return null;
+
   return { botId, usageCap: limit === null ? null : { unit: "tokens", limit } };
 }

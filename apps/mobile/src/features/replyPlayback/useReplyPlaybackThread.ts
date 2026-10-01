@@ -12,7 +12,9 @@ import { useOptionalReplyPlayback } from "./ReplyPlaybackProvider";
 import { serverEnvironment } from "../../state/server";
 
 const unavailableSynthesis = storedReplySynthesisCapability();
+
 const subscribeUnavailable = () => () => {};
+
 const getUnavailableSynthesis = () => unavailableSynthesis;
 
 export function replyPlaybackControlProps(
@@ -20,7 +22,9 @@ export function replyPlaybackControlProps(
   message: ReplyPlaybackMessage,
 ) {
   const action = session?.actionFor(message);
+
   if (!session || !action) return undefined;
+
   return {
     controller: session.controller,
     request: action.request,
@@ -36,27 +40,35 @@ export function useReplyPlaybackThread(options: {
   readonly connected?: boolean;
 }) {
   const session = useOptionalReplyPlayback();
+
   const settings = useAtomValue(
     serverEnvironment.settingsValueAtom(EnvironmentId.make(options.environmentId ?? "none")),
   );
+
   const synthesis = useMemo(
     () => storedReplySynthesisCapability((settings ?? DEFAULT_SERVER_SETTINGS).voice),
     [settings],
   );
+
   const appliedSynthesis = useSyncExternalStore(
     session?.subscribeSynthesis ?? subscribeUnavailable,
     session?.getSynthesisSnapshot ?? getUnavailableSynthesis,
   );
+
   const signature = options.messages
     .map((message) => `${message.id}:${message.updatedAt}:${message.streaming}`)
     .join("|");
+
   useFocusEffect(
     useCallback(() => {
       if (!session) return;
+
       if (!options.environmentId || !options.threadId) {
         session.setContext(null);
+
         return;
       }
+
       const environmentId = options.environmentId;
       const threadId = options.threadId;
       session.setSynthesis(synthesis, environmentId);
@@ -68,6 +80,7 @@ export function useReplyPlaybackThread(options: {
         connected: options.connected === true,
         mediaBlocked: false,
       });
+
       return () => {
         session.clearContextIf(environmentId, threadId);
       };
@@ -76,5 +89,6 @@ export function useReplyPlaybackThread(options: {
   useEffect(() => {
     session?.observe(options.messages);
   }, [session, options.messages, signature]);
+
   return appliedSynthesis;
 }

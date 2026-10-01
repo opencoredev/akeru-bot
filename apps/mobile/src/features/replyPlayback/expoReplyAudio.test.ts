@@ -19,11 +19,14 @@ const native = vi.hoisted(() => ({
   emitApp: (_state: AppStateStatus) => {},
   uuid: 0,
 }));
+
 vi.mock("expo-audio", () => ({
   createAudioPlayer: native.createPlayer,
   setAudioModeAsync: native.mode,
 }));
+
 vi.mock("expo-crypto", () => ({ randomUUID: () => String(++native.uuid) }));
+
 vi.mock("expo-file-system", () => ({
   Paths: { cache: "file:///private/cache" },
   File: class {
@@ -45,6 +48,7 @@ vi.mock("expo-file-system", () => ({
     }
   },
 }));
+
 vi.mock("react-native", () => ({
   AppState: {
     get currentState() {
@@ -52,6 +56,7 @@ vi.mock("react-native", () => ({
     },
     addEventListener: (_event: string, listener: typeof native.emitApp) => {
       native.emitApp = listener;
+
       return { remove: native.appRemove };
     },
   },
@@ -85,24 +90,31 @@ function status(update: Partial<AudioStatus> = {}): AudioStatus {
     ...update,
   };
 }
+
 function emit(update: Partial<AudioStatus>) {
   native.status = status(update);
   native.emitStatus(native.status);
 }
+
 function setup() {
   const events = { onEnded: vi.fn(), onError: vi.fn(), onInterrupted: vi.fn() };
   const handle = createExpoReplyAudio(new Uint8Array([1, 2, 3]), "audio/mpeg", events);
+
   return { handle, events };
 }
+
 function deferred() {
   let resolve!: () => void;
   let reject!: (error: Error) => void;
+
   const promise = new Promise<void>((yes, no) => {
     resolve = yes;
     reject = no;
   });
+
   return { promise, resolve, reject };
 }
+
 beforeEach(() => {
   vi.resetAllMocks();
   native.appState.currentState = "active";
@@ -117,10 +129,12 @@ beforeEach(() => {
     release: native.release,
     addListener: (_event: string, listener: typeof native.emitStatus) => {
       native.emitStatus = listener;
+
       return { remove: native.statusRemove };
     },
   }));
 });
+
 afterEach(() => {
   vi.useRealTimers();
 });

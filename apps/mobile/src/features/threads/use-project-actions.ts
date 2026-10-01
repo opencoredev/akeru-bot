@@ -51,8 +51,10 @@ export function useCreateProjectThread() {
         branch: input.branch,
         initialMessageText,
       });
+
       if (validationError !== null) {
         setPendingConnectionError(validationError.message);
+
         return AsyncResult.failure(Cause.fail(validationError));
       }
 
@@ -77,13 +79,16 @@ export function useCreateProjectThread() {
           worktreeBranchName: buildTemporaryWorktreeBranchName(randomHex),
         }),
       });
+
       if (AsyncResult.isFailure(result)) {
         const error = Cause.squash(result.cause);
         setPendingConnectionError(
           error instanceof Error ? error.message : "The chat could not be started.",
         );
+
         return AsyncResult.failure(result.cause);
       }
+
       setPendingConnectionError(null);
 
       return mapAtomCommandResult(result, () =>

@@ -13,6 +13,7 @@ function environment(
   phase: EnvironmentPresentation["connection"]["phase"],
 ): EnvironmentPresentation {
   const connectionId = `bearer:${ENVIRONMENT_ID}`;
+
   return {
     environmentId: ENVIRONMENT_ID,
     label: "Julius's MacBook Pro",
@@ -69,6 +70,7 @@ describe("mobile workspace projection", () => {
 
   it("reports offline before stale connected presentations", () => {
     const environments = [projectWorkspaceEnvironment(environment("connected"))];
+
     const state = projectWorkspaceState({
       isReady: true,
       networkStatus: "offline",
@@ -89,6 +91,7 @@ describe("mobile workspace projection", () => {
         environmentId: EnvironmentId.make("environment-2"),
       }),
     ];
+
     const state = projectWorkspaceState({
       isReady: true,
       networkStatus: "online",
@@ -104,6 +107,7 @@ describe("mobile workspace projection", () => {
 
   it("keeps retained snapshots visible while reconnecting without claiming readiness", () => {
     const environments = [projectWorkspaceEnvironment(environment("reconnecting"))];
+
     const state = projectWorkspaceState({
       isReady: true,
       networkStatus: "online",

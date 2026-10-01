@@ -56,6 +56,7 @@ function usePulseAnimation(pulse: boolean) {
         -1,
         false,
       );
+
       return;
     }
 

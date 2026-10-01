@@ -24,13 +24,16 @@ import {
 } from "./background-activity-scopes";
 
 const REPORT_INTERVAL_MS = 25_000;
+
 const LEASE_TTL_MS = 45_000;
+
 const BASELINE_SCOPES: ReadonlyArray<BackgroundScope> = [{ type: "provider-status" }];
 
 function normalizeAppState(
   state: AppStateStatus,
 ): NonNullable<ClientActivityReportInput["appState"]> {
   if (state === "active" || state === "inactive" || state === "background") return state;
+
   return "unknown";
 }
 
@@ -45,10 +48,12 @@ export const mobileBackgroundActivityReporterLayer = Layer.effectDiscard(
   Effect.gen(function* () {
     const registry = yield* EnvironmentRegistry;
     const storage = yield* MobileStorage.MobileStorage;
+
     const clientId = yield* storage.loadOrCreateAgentAwarenessDeviceId.pipe(
       Effect.map((deviceId) => `mobile-${deviceId}`),
       Effect.orElseSucceed(() => "ephemeral-mobile-client"),
     );
+
     const reportRequests = yield* Queue.sliding<void>(1);
     const requestReport = () => Queue.offerUnsafe(reportRequests, undefined);
     let appState = AppState.currentState;
@@ -87,10 +92,12 @@ export const mobileBackgroundActivityReporterLayer = Layer.effectDiscard(
     yield* Effect.acquireRelease(
       Effect.sync(() => {
         const removeScopeListener = onRetainedMobileBackgroundScopesChange(requestReport);
+
         const subscription = AppState.addEventListener("change", (nextState) => {
           appState = nextState;
           requestReport();
         });
+
         return { removeScopeListener, subscription };
       }),
       ({ removeScopeListener, subscription }) =>

@@ -5,6 +5,7 @@ vi.mock("expo-secure-store", () => ({
   getItemAsync: vi.fn(async () => null),
   setItemAsync: vi.fn(async () => {}),
 }));
+
 vi.mock("./expoReplyAudio", () => ({
   createExpoReplyAudio: vi.fn((bytes: Uint8Array, mimeType: string) => ({
     uri: `bytes:${bytes.byteLength}:${mimeType}`,
@@ -15,12 +16,6 @@ vi.mock("./expoReplyAudio", () => ({
 }));
 
 import { createMobileReplyPlaybackSession } from "./mobileReplyPlaybackSession";
-
-const events = {
-  onEnded: () => {},
-  onError: () => {},
-  onInterrupted: () => {},
-};
 
 const request = (environmentId: string) => ({
   identity: {
@@ -50,6 +45,7 @@ describe("mobile reply playback session", () => {
             }
           : { enabled: false },
     });
+
     expect(session.synthesisFor("environment")).toEqual({
       available: true,
       provider: "openai",
@@ -67,12 +63,15 @@ describe("mobile reply playback session", () => {
         mimeType: "audio/mpeg",
       },
     }));
+
     const cancel = vi.fn(async () => ({}));
+
     const session = createMobileReplyPlaybackSession({
       synthesize,
       cancel,
       voiceSettings: () => ({}),
     });
+
     // Drive prepare through the controller's start path.
     session.setContext({
       environmentId: "environment",

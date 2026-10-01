@@ -38,6 +38,7 @@ export function UsageRouteScreen() {
       },
       5 * 60 * 1000,
     );
+
     return () => clearInterval(timer);
   }, [refresh]);
 
@@ -113,6 +114,7 @@ function PlanCard(props: { readonly limits: UsageProviderPlanLimits }) {
 
 function PlanWindowRow(props: { readonly window: UsagePlanWindow; readonly first: boolean }) {
   const remaining = Math.min(100, Math.max(0, 100 - props.window.usedPercent));
+
   return (
     <View className={props.first ? "gap-2 p-4" : "gap-2 border-t border-border-subtle p-4"}>
       <View className="flex-row items-baseline justify-between gap-3">
@@ -130,9 +132,12 @@ function PlanWindowRow(props: { readonly window: UsagePlanWindow; readonly first
 function formatReset(resetsAt: string | null): string {
   if (resetsAt === null) return "Reset time unknown";
   const deltaMs = Date.parse(resetsAt) - Date.now();
+
   if (Number.isNaN(deltaMs) || deltaMs <= 0) return "Resets soon";
   const hours = Math.round(deltaMs / (60 * 60 * 1000));
+
   if (hours < 48) return `Resets in ${hours}h`;
+
   return `Resets in ${Math.round(hours / 24)}d`;
 }
 
@@ -142,9 +147,11 @@ function UsageCoverageNotice(props: {
   readonly isPartial: boolean;
 }) {
   const failed = props.environments.filter((environment) => environment.error !== null);
+
   const stale = props.environments.filter((environment) =>
     props.merged.staleEnvironments.includes(environment.environmentId),
   );
+
   if (failed.length === 0 && stale.length === 0 && !props.isPartial) {
     return null;
   }
@@ -181,6 +188,7 @@ function EnvironmentBotUsageSection(props: {
 }) {
   const navigation = useNavigation();
   const bots = useAtomValue(environmentBotsAtom(props.environmentId));
+
   if (bots.length === 0) return null;
 
   return (

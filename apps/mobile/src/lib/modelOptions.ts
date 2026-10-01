@@ -49,6 +49,7 @@ function providerDisplayLabel(provider: {
   readonly instanceId: string;
 }): string {
   if (provider.displayName) return provider.displayName;
+
   return PROVIDER_DISPLAY_NAMES[provider.driver as ProviderDriverKind] ?? provider.instanceId;
 }
 
@@ -65,10 +66,13 @@ export function resolveModelSendBlock(
   subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
 ): ProviderAvailabilityPresentation | null {
   if (!config) return null;
+
   const provider = config.providers.find(
     (candidate) => candidate.instanceId === selection.instanceId,
   );
+
   const connected = filterProvidersBySubscriptionConnection(config.providers, subscriptionStatuses);
+
   const reason =
     provider && !connected.includes(provider)
       ? "missing-login"
@@ -81,10 +85,13 @@ export function resolveModelSendBlock(
             ),
           selection.model,
         );
+
   if (reason === null || reason === "temporary-failure") return null;
+
   const modelName =
     provider?.models.find((candidate) => candidate.slug === selection.model)?.name ??
     selection.model;
+
   return presentProviderUnavailability(
     {
       reason,
@@ -105,12 +112,14 @@ function normalizeSelectionOptions(
   if (!capabilities) {
     return selection;
   }
+
   const options = buildProviderOptionSelectionsFromDescriptors(
     getProviderOptionDescriptors({
       caps: capabilities,
       selections: selection.options,
     }),
   );
+
   return options
     ? { ...selection, options }
     : {
@@ -134,10 +143,13 @@ export function resolveSelectableModelSelection(
   if (!selection || !config) {
     return selection;
   }
+
   const providers = subscriptionStatuses
     ? filterProvidersBySubscriptionConnection(config.providers, subscriptionStatuses)
     : config.providers;
+
   const found = providers.find((candidate) => candidate.instanceId === selection.instanceId);
+
   const provider =
     found &&
     withRefreshableSubscriptionLogin(
@@ -145,6 +157,7 @@ export function resolveSelectableModelSelection(
       subscriptionStatuses,
       config.settings.providerInstances,
     );
+
   return provider &&
     provider.enabled &&
     provider.installed &&
@@ -166,11 +179,14 @@ export function resolveDefaultableModelSelection(
   subscriptionStatuses?: ReadonlyArray<SubscriptionProviderStatus>,
 ): ModelSelection | null {
   const usable = resolveSelectableModelSelection(config, selection, subscriptionStatuses);
+
   if (!usable || !config) {
     return usable;
   }
+
   const provider = config.providers.find((candidate) => candidate.instanceId === usable.instanceId);
   const model = provider?.models.find((candidate) => candidate.slug === usable.model);
+
   return model?.isLegacy === true ? null : usable;
 }
 
@@ -183,9 +199,11 @@ export function buildModelOptions(
   const options = new Map<string, ModelOption>();
 
   const allProviders = config?.providers ?? [];
+
   const connected = new Set(
     filterProvidersBySubscriptionConnection(allProviders, subscriptionStatuses),
   );
+
   // Unavailable providers stay listed so the picker can say why their models
   // are off. A brief provider error does not block a pick.
   const blockReason = (
@@ -193,6 +211,7 @@ export function buildModelOptions(
     model?: string,
   ): ProviderAvailabilityReason | null => {
     if (provider && !connected.has(provider)) return "missing-login";
+
     const reason = providerAvailabilityReason(
       provider &&
         withRefreshableSubscriptionLogin(
@@ -202,8 +221,10 @@ export function buildModelOptions(
         ),
       model,
     );
+
     return reason === "temporary-failure" ? null : reason;
   };
+
   const summary = (
     reason: ProviderAvailabilityReason | null,
     providerLabel: string,
@@ -216,6 +237,7 @@ export function buildModelOptions(
   for (const provider of allProviders) {
     const providerLabel = providerDisplayLabel(provider);
     const providerReason = blockReason(provider);
+
     for (const model of provider.models) {
       const key = `${provider.instanceId}:${model.slug}`;
       options.set(key, {
@@ -245,6 +267,7 @@ export function buildModelOptions(
   if (fallbackModelSelection) {
     const key = `${fallbackModelSelection.instanceId}:${fallbackModelSelection.model}`;
     const existing = options.get(key);
+
     if (existing) {
       options.set(key, {
         ...existing,
@@ -254,12 +277,14 @@ export function buildModelOptions(
       const provider = allProviders.find(
         (candidate) => candidate.instanceId === fallbackModelSelection.instanceId,
       );
+
       const providerLabel = providerDisplayLabel(
         provider ?? {
           driver: fallbackModelSelection.instanceId,
           instanceId: fallbackModelSelection.instanceId,
         },
       );
+
       options.set(key, {
         key,
         label: fallbackModelSelection.model,
@@ -285,8 +310,10 @@ export function buildModelOptions(
 
 export function groupByProvider(options: ReadonlyArray<ModelOption>): ReadonlyArray<ProviderGroup> {
   const groups = new Map<string, { providerLabel: string; models: ModelOption[] }>();
+
   for (const option of options) {
     const existing = groups.get(option.providerKey);
+
     if (existing) {
       existing.models.push(option);
     } else {

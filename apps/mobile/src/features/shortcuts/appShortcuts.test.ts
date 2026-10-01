@@ -70,6 +70,7 @@ describe("buildShortcutActions", () => {
     const actions = buildShortcutActions([
       { environmentId: "env 1", threadId: "thread/2", title: "Spaced out" },
     ]);
+
     expect(actions[1]?.params?.href).toBe("/threads/env%201/thread%2F2");
     expect(actions[1]?.title).toBe("Spaced out");
   });
@@ -105,6 +106,7 @@ describe("shortcutHref", () => {
     ]) {
       expect(shortcutHref({ id: "x", title: "x", params: { href } })).toBe(null);
     }
+
     expect(shortcutHref({ id: "x", title: "x", params: { href: 3 } })).toBe(null);
     expect(shortcutHref({ id: "x", title: "x" })).toBe(null);
   });
@@ -115,6 +117,7 @@ describe("activeThreadRef", () => {
     const ref = activeThreadRef(
       navState({ name: "Thread", params: { environmentId: "env-1", threadId: "thread-2" } }),
     );
+
     expect(ref).toEqual({ environmentId: "env-1", threadId: "thread-2" });
   });
 
@@ -122,6 +125,7 @@ describe("activeThreadRef", () => {
     const ref = activeThreadRef(
       navState({ name: "Thread", params: { environmentId: ["env-1"], threadId: ["thread-2"] } }),
     );
+
     expect(ref).toEqual({ environmentId: "env-1", threadId: "thread-2" });
   });
 
@@ -141,6 +145,7 @@ describe("activeThreadRef", () => {
       { environmentId: { nested: true }, threadId: "thread-2" },
       { environmentId: [], threadId: [] },
     ];
+
     for (const params of malformed) {
       expect(activeThreadRef(navState({ name: "Thread", params }))).toBe(null);
     }

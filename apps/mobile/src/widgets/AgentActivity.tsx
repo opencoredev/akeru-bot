@@ -72,10 +72,12 @@ export function AgentActivity(
   // Mac notification center) renders it on a light one — so pick the web
   // palette's light (-600) or dark (-300) variant off the color scheme.
   const isLightScheme = environment.colorScheme === "light";
+
   const phaseTint = (phase: AgentActivityPhase | undefined): string => {
     if (environment.isLuminanceReduced) {
       return secondaryForeground;
     }
+
     switch (phase) {
       case "waiting_for_approval":
         return isLightScheme ? "#d97706" : "#fcd34d"; // amber-600 / amber-300
@@ -96,13 +98,18 @@ export function AgentActivity(
   // presentation, then failures, then in-flight work, then finished/stale.
   const phasePriority = (phase: AgentActivityPhase): number => {
     if (phase === "waiting_for_approval" || phase === "waiting_for_input") return 0;
+
     if (phase === "failed") return 1;
+
     if (phase === "running" || phase === "starting") return 2;
+
     return 3;
   };
+
   const ordered = [...props.activities].sort(
     (a, b) => phasePriority(a.phase) - phasePriority(b.phase),
   );
+
   const row0 = ordered[0];
   const row1 = ordered[1];
   const row2 = ordered[2];
@@ -112,10 +119,12 @@ export function AgentActivity(
   const attentionRows = props.activities.filter(
     (row) => row.phase === "waiting_for_approval" || row.phase === "waiting_for_input",
   );
+
   const attentionRow = attentionRows[0];
   const failedRow = props.activities.find((row) => row.phase === "failed");
   const heroRow = attentionRow ?? failedRow ?? row0;
   const tint = phaseTint(heroRow?.phase);
+
   // Headline count leans on the accent when a human is actually blocked.
   const headerTint = attentionRow
     ? phaseTint(attentionRow.phase)
@@ -139,16 +148,19 @@ export function AgentActivity(
   // `summary` is the short form for tight spots (expanded center, watch card).
   const agentWord = props.activeCount === 1 ? "bot" : "bots";
   const agentsLabel = allDone ? outcomeLabel : `${props.activeCount} active ${agentWord}`;
+
   const attentionSuffix =
     attentionRows.length > 0
       ? `${attentionRows.length} need${attentionRows.length === 1 ? "s" : ""} attention`
       : "";
+
   const activeLabel = allDone ? doneLabel : `${props.activeCount} active`;
   const summary = attentionSuffix || activeLabel;
 
   // Any registered scheme variant routes back to this app; taps are delivered
   // to the widget's containing app, so the prod scheme is safe for all builds.
   const deepLinkRow = attentionRow ?? row0;
+
   const deepLink =
     deepLinkRow && deepLinkRow.deepLink.startsWith("/") && !deepLinkRow.deepLink.startsWith("//")
       ? `akeru://${deepLinkRow.deepLink.slice(1)}`
@@ -157,6 +169,7 @@ export function AgentActivity(
   // A scannable status glyph per phase — reads faster than colored words and
   // ties the compact / expanded / banner / watch presentations together.
   type SFName = NonNullable<ComponentProps<typeof Image>["systemName"]>;
+
   const phaseSymbol = (phase: AgentActivityPhase): SFName => {
     switch (phase) {
       case "waiting_for_approval":

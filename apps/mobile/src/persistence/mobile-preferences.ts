@@ -17,10 +17,13 @@ import * as MobileSecureStorage from "./mobile-secure-storage";
 import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-storage";
 
 const PREFERENCES_KEY = "akeru.preferences";
+
 const PREFERENCES_FALLBACK_KEY = "akeru.preferences.fallback";
+
 // Keys written before the rebrand; reads fall back once and the next write
 // lands on the Akeru keys, draining the old entries.
 const LEGACY_PREFERENCES_KEY = "t3code.preferences";
+
 const LEGACY_PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
 
 export interface Preferences {
@@ -102,26 +105,33 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   } = {};
 
   if (typeof parsed.language === "string") preferences.language = parsed.language;
+
   if (typeof parsed.reviewedPrivacyPolicyVersion === "string") {
     preferences.reviewedPrivacyPolicyVersion = parsed.reviewedPrivacyPolicyVersion;
   }
+
   if (typeof parsed.reviewedTermsVersion === "string") {
     preferences.reviewedTermsVersion = parsed.reviewedTermsVersion;
   }
+
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
     preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;
   }
+
   // Legacy ids (`t3-code`, `t3-chat`) canonicalize through the alias table so a
   // persisted selection survives the rebrand instead of being dropped.
   if (typeof parsed.themeId === "string") {
     preferences.themeId = normalizeMobileThemeId(parsed.themeId);
   }
+
   if (typeof parsed.lightThemeId === "string") {
     preferences.lightThemeId = normalizeMobileThemeId(parsed.lightThemeId);
   }
+
   if (typeof parsed.darkThemeId === "string") {
     preferences.darkThemeId = normalizeMobileThemeId(parsed.darkThemeId);
   }
+
   if (
     parsed.themeMode === "system" ||
     parsed.themeMode === "light" ||
@@ -129,13 +139,17 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   ) {
     preferences.themeMode = parsed.themeMode;
   }
+
   if (typeof parsed.baseFontSize === "number") preferences.baseFontSize = parsed.baseFontSize;
+
   if (typeof parsed.markdownFontSize === "number") {
     preferences.markdownFontSize = parsed.markdownFontSize;
   }
+
   if (typeof parsed.projectGroupingEnabled === "boolean") {
     preferences.projectGroupingEnabled = parsed.projectGroupingEnabled;
   }
+
   if (
     parsed.projectGroupingMode === "repository" ||
     parsed.projectGroupingMode === "repository_path" ||
@@ -143,12 +157,15 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   ) {
     preferences.projectGroupingMode = parsed.projectGroupingMode;
   }
+
   if (typeof parsed.threadListV2SettledShelfExpanded === "boolean") {
     preferences.threadListV2SettledShelfExpanded = parsed.threadListV2SettledShelfExpanded;
   }
+
   if (typeof parsed.threadListV2SnoozedShelfExpanded === "boolean") {
     preferences.threadListV2SnoozedShelfExpanded = parsed.threadListV2SnoozedShelfExpanded;
   }
+
   return preferences;
 }
 
@@ -161,6 +178,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
   const parsePayload = (raw: string | null): Preferences | null => {
     if (raw === null || !raw.trim()) return null;
     let parsed: unknown;
+
     try {
       parsed = JSON.parse(raw);
     } catch (cause) {
@@ -168,8 +186,10 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
         "[mobile-storage] ignored invalid JSON",
         new MobileStorageDecodeError({ key: PREFERENCES_KEY, cause }),
       );
+
       return null;
     }
+
     return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
       ? (parsed as Preferences)
       : null;
@@ -178,6 +198,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
   const parseFallback = (raw: string | null): PreferencesFallback | null => {
     if (raw === null || !raw.trim()) return null;
     let parsed: unknown;
+
     try {
       parsed = JSON.parse(raw);
     } catch (cause) {
@@ -185,8 +206,10 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
         "[mobile-storage] ignored invalid JSON",
         new MobileStorageDecodeError({ key: PREFERENCES_FALLBACK_KEY, cause }),
       );
+
       return null;
     }
+
     if (
       typeof parsed !== "object" ||
       parsed === null ||
@@ -197,7 +220,9 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     ) {
       return null;
     }
+
     const preferences = parsePayload(parsed.payload);
+
     return preferences === null
       ? null
       : { payload: parsed.payload, updatedAt: parsed.updatedAt, preferences };
@@ -215,6 +240,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
 
   const nextUpdatedAt = Ref.modify(lastUpdatedAt, (last) => {
     const next = Math.max(Date.now(), last + 1);
+
     return [next, next] as const;
   });
 
@@ -239,23 +265,28 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     const timestamp = updatedAt ?? (yield* nextUpdatedAt);
     yield* Ref.update(lastUpdatedAt, (last) => Math.max(last, timestamp));
     const databaseResult = yield* Effect.result(database.savePreferencesJson(payload, timestamp));
+
     if (databaseResult._tag === "Failure") {
       yield* Effect.logWarning("Database unavailable; saving preferences to secure storage.").pipe(
         Effect.annotateLogs({ cause: databaseResult.failure }),
       );
       const fallback = yield* encode(PREFERENCES_FALLBACK_KEY, { payload, updatedAt: timestamp });
       yield* secureStorage.setItem(PREFERENCES_FALLBACK_KEY, fallback);
+
       return;
     }
+
     yield* clearFallbacks("Could not remove the mobile preferences fallback.");
   });
 
   const loadUnlocked = Effect.gen(function* () {
     const databaseResult = yield* Effect.result(database.loadPreferencesJson);
     const databaseAvailable = databaseResult._tag === "Success";
+
     const storedJson = databaseAvailable
       ? databaseResult.success
       : Option.none<MobileDatabase.StoredPreferencesJson>();
+
     if (databaseResult._tag === "Failure") {
       yield* Effect.logWarning("Database unavailable; loading fallback preferences.").pipe(
         Effect.annotateLogs({ cause: databaseResult.failure }),
@@ -273,7 +304,9 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
           ),
         ),
     );
+
     let fallbackJson: string | null = null;
+
     if (fallbackResult._tag === "Success") {
       fallbackJson = fallbackResult.success;
     } else if (Option.isNone(storedJson)) {
@@ -285,22 +318,27 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     }
 
     const fallback = parseFallback(fallbackJson);
+
     const storedPreferences = Option.isSome(storedJson)
       ? parsePayload(storedJson.value.payload)
       : null;
+
     const fallbackIsNewer =
       fallback !== null &&
       (storedPreferences === null ||
         (Option.isSome(storedJson) && fallback.updatedAt > storedJson.value.updatedAt));
 
     let parsed: Preferences | null = null;
+
     if (fallbackIsNewer) {
       parsed = fallback.preferences;
       yield* Ref.update(lastUpdatedAt, (last) => Math.max(last, fallback.updatedAt));
+
       if (databaseAvailable) yield* saveJson(fallback.payload, fallback.updatedAt);
     } else if (storedPreferences !== null && Option.isSome(storedJson)) {
       parsed = storedPreferences;
       yield* Ref.update(lastUpdatedAt, (last) => Math.max(last, storedJson.value.updatedAt));
+
       if (fallbackJson !== null) {
         yield* clearFallbacks("Could not remove a stale mobile preferences fallback.");
       }
@@ -314,8 +352,10 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
             value !== null ? Effect.succeed(value) : secureStorage.getItem(LEGACY_PREFERENCES_KEY),
           ),
         );
+
       const legacyPreferences = parsePayload(legacyJson);
       parsed = legacyPreferences;
+
       if (legacyJson !== null && legacyPreferences !== null && databaseAvailable) {
         yield* saveJson(legacyJson);
         yield* secureStorage
@@ -346,13 +386,16 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       .withPermits(1)(
         Effect.gen(function* () {
           const current = yield* loadUnlocked;
+
           const patch = yield* Effect.try({
             try: () => transform(current),
             catch: (cause) => new MobilePreferencesSaveError({ cause }),
           });
+
           const next: Preferences = { ...current, ...patch };
           const payload = yield* encode(PREFERENCES_KEY, next);
           yield* saveJson(payload);
+
           return next;
         }),
       )

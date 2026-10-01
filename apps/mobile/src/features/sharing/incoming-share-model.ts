@@ -54,17 +54,22 @@ export interface IncomingShareFileReader {
 function sharedText(payloads: ReadonlyArray<SharePayload>): string {
   const seen = new Set<string>();
   const values: string[] = [];
+
   for (const payload of payloads) {
     if (payload.shareType !== "text" && payload.shareType !== "url") {
       continue;
     }
+
     const value = payload.value.trim();
+
     if (!value || seen.has(value)) {
       continue;
     }
+
     seen.add(value);
     values.push(value);
   }
+
   return values.join("\n\n");
 }
 
@@ -75,24 +80,30 @@ function resolvedImageFor(
   consumedIndexes: Set<number>,
 ): ResolvedSharePayload | undefined {
   const sameIndex = resolvedPayloads[index];
+
   if (
     !consumedIndexes.has(index) &&
     sameIndex?.shareType === payload.shareType &&
     sameIndex.value === payload.value
   ) {
     consumedIndexes.add(index);
+
     return sameIndex;
   }
+
   const matchingIndex = resolvedPayloads.findIndex(
     (candidate, candidateIndex) =>
       !consumedIndexes.has(candidateIndex) &&
       candidate.shareType === payload.shareType &&
       candidate.value === payload.value,
   );
+
   if (matchingIndex < 0) {
     return undefined;
   }
+
   consumedIndexes.add(matchingIndex);
+
   return resolvedPayloads[matchingIndex];
 }
 
@@ -113,13 +124,16 @@ async function releaseOwnedFiles(
 function fallbackName(uri: string, index: number, mimeType: string): string {
   try {
     const pathName = new URL(uri).pathname.split("/").findLast((segment) => segment.length > 0);
+
     if (pathName) {
       return decodeURIComponent(pathName);
     }
   } catch {
     // Fall through to a deterministic attachment name.
   }
+
   const extension = mimeType.split("/")[1]?.replace(/[^a-z0-9.+-]/gi, "") || "png";
+
   return `shared-image-${index + 1}.${extension}`;
 }
 
@@ -139,13 +153,16 @@ export async function buildIncomingShareDraft(input: {
     if (payload.shareType !== "image") {
       continue;
     }
+
     const resolved = resolvedImageFor(
       payload,
       index,
       input.resolvedPayloads,
       consumedResolvedPayloadIndexes,
     );
+
     const uri = resolved?.contentUri ?? payload.value;
+
     if (attachments.length >= PROVIDER_SEND_TURN_MAX_ATTACHMENTS) {
       if (!warnedAttachmentLimit) {
         warnings.push(
@@ -153,16 +170,19 @@ export async function buildIncomingShareDraft(input: {
         );
         warnedAttachmentLimit = true;
       }
+
       await releaseOwnedFiles(input.fileReader, [uri, payload.value]);
       continue;
     }
 
     const mimeType = (resolved?.contentMimeType ?? payload.mimeType ?? "image/png").toLowerCase();
+
     if (!uri || !mimeType.startsWith("image/")) {
       warnings.push("One shared item was not a supported image.");
       await releaseOwnedFiles(input.fileReader, [uri, payload.value]);
       continue;
     }
+
     if (!isProviderSendTurnSupportedImageMimeType(mimeType)) {
       warnings.push(
         `'${resolved?.originalName ?? fallbackName(uri, index, mimeType)}' is not a supported image type.`,
@@ -170,6 +190,7 @@ export async function buildIncomingShareDraft(input: {
       await releaseOwnedFiles(input.fileReader, [uri, payload.value]);
       continue;
     }
+
     if (
       resolved?.contentSize !== null &&
       resolved?.contentSize !== undefined &&
@@ -185,12 +206,14 @@ export async function buildIncomingShareDraft(input: {
     try {
       const base64 = await input.fileReader.readBase64(uri);
       const sizeBytes = resolved?.contentSize ?? estimateBase64ByteSize(base64);
+
       if (sizeBytes <= 0 || sizeBytes > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
         warnings.push(
           `'${resolved?.originalName ?? fallbackName(uri, index, mimeType)}' exceeds the 10 MB attachment limit.`,
         );
         continue;
       }
+
       const dataUrl = `data:${mimeType};base64,${base64}`;
       attachments.push({
         id: `${input.id}:image:${index}`,

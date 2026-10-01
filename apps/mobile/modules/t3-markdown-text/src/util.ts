@@ -3,6 +3,7 @@ import type { NativeFontWeight } from "./T3MarkdownTextRunNativeComponent";
 
 export function flattenStyles(rootStyle: TextStyle, style: StyleProp<TextStyle>) {
   const flattenedStyle = StyleSheet.flatten([rootStyle, style]) as TextStyle;
+
   return {
     ...flattenedStyle,
     fontWeight: fontWeightToNativeProp(flattenedStyle.fontWeight ?? "normal"),

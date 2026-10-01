@@ -32,10 +32,12 @@ const ACTOOL_SCRIPT = [
 
 function stripComments(map) {
   const out = {};
+
   for (const key of Object.keys(map || {})) {
     if (key.endsWith("_comment")) continue;
     out[key] = map[key];
   }
+
   return out;
 }
 
@@ -43,6 +45,7 @@ function findByName(map, name) {
   for (const [uuid, value] of Object.entries(stripComments(map))) {
     if (value && value.name === name) return { uuid, value };
   }
+
   return null;
 }
 
@@ -53,6 +56,7 @@ function findByName(map, name) {
 function addWidgetAssetCatalog(proj, opts) {
   const objects = proj.hash.project.objects;
   const target = findByName(objects.PBXNativeTarget, opts.targetName);
+
   if (!target) {
     throw new Error(
       `addWidgetAssetCatalog: target "${opts.targetName}" not found — ` +
@@ -63,18 +67,22 @@ function addWidgetAssetCatalog(proj, opts) {
 
   const phases = target.value.buildPhases || [];
   const existing = objects.PBXShellScriptBuildPhase || {};
+
   const already = Object.entries(stripComments(existing)).some(
     ([uuid, value]) =>
       value && value.name === `"${PHASE_NAME}"` && phases.some((p) => p.value === uuid),
   );
+
   if (already) return false;
 
   const { uuid } = proj.addBuildPhase([], "PBXShellScriptBuildPhase", PHASE_NAME, target.uuid, {
     shellPath: "/bin/sh",
     shellScript: ACTOOL_SCRIPT,
   });
+
   // Always run: input-analysis is exactly what skipped the Resources phase.
   objects.PBXShellScriptBuildPhase[uuid].alwaysOutOfDate = 1;
+
   return true;
 }
 

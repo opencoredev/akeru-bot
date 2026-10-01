@@ -12,10 +12,13 @@ vi.mock("react-native", () => ({
   }) => createElement("button", { "aria-expanded": accessibilityState?.expanded }, children),
   View: "div",
 }));
+
 vi.mock("../../components/AppText", () => ({ AppText: "span" }));
+
 vi.mock("../../lib/i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
 
@@ -30,6 +33,7 @@ describe("ProviderAccessSummary", () => {
         models={["GPT-5.5"]}
       />,
     );
+
     expect(markup).toContain("Not verified yet.");
     expect(markup).toContain("Choose Check OAuth to send a health request.");
     expect(markup).toContain("Access details");
@@ -49,14 +53,17 @@ describe("ProviderAccessSummary", () => {
         }}
       />,
     );
+
     expect(failed).toContain("Check failed.");
     expect(failed).toContain("401 Unauthorized");
+
     const checking = renderToStaticMarkup(
       <ProviderAccessSummary
         provider="xai"
         status={{ connected: true, health: "detected", healthChecking: true }}
       />,
     );
+
     expect(checking).toContain("Checking access.");
     expect(checking).toContain("Wait for the health check to finish.");
   });
@@ -68,6 +75,7 @@ describe("ProviderAccessSummary", () => {
         status={{ connected: true, health: "healthy" }}
       />,
     );
+
     expect(markup).toContain("Ready.");
     expect(markup).toContain("No action needed. A provider request succeeded.");
   });

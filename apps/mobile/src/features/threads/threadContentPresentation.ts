@@ -12,17 +12,21 @@ export type ThreadContentPresentation =
 // Shared instances keep the presentation referentially stable across renders,
 // so memoized consumers such as the thread feed skip unrelated re-renders.
 const READY: ThreadContentPresentation = { kind: "ready" };
+
 const LOADING: ThreadContentPresentation = { kind: "loading" };
+
 const DELETED: ThreadContentPresentation = {
   kind: "unavailable",
   title: "Chat unavailable",
   detail: "This chat was deleted or is no longer available.",
 };
+
 const NOT_CACHED: ThreadContentPresentation = {
   kind: "unavailable",
   title: "Messages not cached",
   detail: "Reconnect this environment to load the chat.",
 };
+
 const detailErrorPresentations = new Map<string, ThreadContentPresentation>();
 
 export function projectThreadContentPresentation(input: {
@@ -34,11 +38,14 @@ export function projectThreadContentPresentation(input: {
   if (input.hasDetail) {
     return READY;
   }
+
   if (input.detailDeleted) {
     return DELETED;
   }
+
   if (input.detailError !== null) {
     let presentation = detailErrorPresentations.get(input.detailError);
+
     if (presentation === undefined) {
       presentation = {
         kind: "unavailable",
@@ -49,8 +56,10 @@ export function projectThreadContentPresentation(input: {
       detailErrorPresentations.clear();
       detailErrorPresentations.set(input.detailError, presentation);
     }
+
     return presentation;
   }
+
   if (
     input.connectionState === "connected" ||
     input.connectionState === "connecting" ||
@@ -60,5 +69,6 @@ export function projectThreadContentPresentation(input: {
     // loading; the composer's connection pill reports the connection phase.
     return LOADING;
   }
+
   return NOT_CACHED;
 }
