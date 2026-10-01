@@ -1,0 +1,127 @@
+@utility pt-safe {
+  padding-top: max(env(safe-area-inset-top), 0px);
+}
+
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+@utility pl-safe {
+  padding-left: max(env(safe-area-inset-left), 0px);
+}
+
+@utility pr-safe {
+  padding-right: max(env(safe-area-inset-right), 0px);
+}
+
+/* Grain texture for chrome surfaces that float above the body (see the
+   --surface-grain note). Layered over the element's background-color, so it
+   composes with bg-* utilities. */
+
+@utility surface-grain {
+  background-image: var(--surface-grain);
+  background-repeat: repeat;
+  background-size: var(--surface-grain-size);
+}
+
+/* Sidebar experiment (?sidebar=places): the window is the rail color and the
+   workspace floats as a card beside the sidebar panel. A details aside joins
+   that card, split by a soft inset hairline instead of a full-height border.
+   The join holds while the aside is closing, then the card corners ease back. */
+
+[data-sidebar-experiment] {
+  --workspace-controls-top: calc(0.5rem + 1px);
+  --workspace-controls-right: calc(env(safe-area-inset-right) + 1.25rem);
+  --shell-card-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 4px 12px -6px rgb(0 0 0 / 7%);
+  /* Resolved here, before the sidebar re-bases --card (to pure black in dark),
+     so the panel card and the main card share one surface. */
+  --shell-card: var(--card);
+  background-color: var(--sidebar);
+
+  @variant dark {
+    --shell-card-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  }
+}
+
+[data-sidebar-experiment] [data-slot="sidebar-container"] {
+  border-right-width: 0;
+}
+
+/* The default collapse overshoots, which would clip the rail. */
+
+[data-sidebar-experiment] :is([data-slot="sidebar-container"], [data-slot="sidebar-gap"]) {
+  transition-duration: var(--duration-slow);
+  transition-timing-function: var(--ease-smooth-out);
+}
+
+[data-sidebar-experiment] [data-workspace-header] {
+  border-bottom-color: transparent;
+}
+
+/* The rail stays visible when collapsed, so the title needs no toggle inset. */
+
+[data-sidebar-experiment] [data-workspace-header] {
+  --workspace-titlebar-content-left: calc(env(safe-area-inset-left) + 0.75rem);
+}
+
+@media (min-width: 40rem) {
+  [data-sidebar-experiment] [data-workspace-header] {
+    --workspace-titlebar-content-left: calc(env(safe-area-inset-left) + 1.25rem);
+  }
+}
+
+[data-sidebar-experiment] [data-testid="bot-prompt-composer"] {
+  background-color: var(--card);
+  border-color: color-mix(in srgb, var(--border) 85%, transparent);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 4%),
+    0 10px 28px -14px rgb(0 0 0 / 16%);
+}
+
+[data-sidebar-experiment] > [data-slot="sidebar-inset"] {
+  height: auto;
+  margin-block: 0.5rem;
+  margin-right: 0.5rem;
+  overflow: hidden;
+  background-color: var(--card);
+  border: 1px solid color-mix(in srgb, var(--sidebar-border) 70%, transparent);
+  border-radius: 1rem;
+  box-shadow: var(--shell-card-shadow);
+  transition: border-radius var(--duration-quick) var(--ease-smooth-out);
+}
+
+@media (min-width: 981px) {
+  [data-sidebar-experiment]
+    > [data-slot="sidebar-inset"]:has(
+      + aside:is(:not([aria-hidden="true"]), [data-state="closing"])
+    ) {
+    margin-right: 0;
+    border-right-width: 0;
+    border-radius: 1rem 0 0 1rem;
+  }
+  [data-sidebar-experiment]
+    > [data-slot="sidebar-inset"]
+    + aside:is(:not([aria-hidden="true"]), [data-state="closing"]) {
+    position: relative;
+    height: auto;
+    margin-block: 0.5rem;
+    margin-right: 0.5rem;
+    overflow: hidden;
+    background-color: var(--card);
+    border: 1px solid color-mix(in srgb, var(--sidebar-border) 70%, transparent);
+    border-left-width: 0;
+    border-radius: 0 1rem 1rem 0;
+    box-shadow: var(--shell-card-shadow);
+  }
+  [data-sidebar-experiment]
+    > [data-slot="sidebar-inset"]
+    + aside:is(:not([aria-hidden="true"]), [data-state="closing"])::before {
+    content: "";
+    position: absolute;
+    inset-block: 1rem;
+    left: 0;
+    width: 1px;
+    background-color: color-mix(in srgb, var(--sidebar-border) 55%, transparent);
+    pointer-events: none;
+  }
+}
