@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { ChartValue } from "./chartValue";
 
 type Row = Record<string, ChartValue>;
@@ -22,11 +21,12 @@ export function pieSlices(data: Row[], dataKey: string, nameKey: string): PieSli
   let a = TOP;
 
   return data.map((r, i) => {
-    const span = (vals[i] / total) * TAU;
+    const value = vals[i] ?? 0;
+    const span = (value / total) * TAU;
 
     const slice = {
       name: String(r[nameKey] ?? i),
-      value: vals[i],
+      value,
       start: a,
       end: a + span,
       mid: a + span / 2,
@@ -94,6 +94,8 @@ export function pointInPolygon(px: number, py: number, poly: number[]): boolean 
     const xj = poly[j * 2];
     const yj = poly[j * 2 + 1];
 
+    if (xi === undefined || yi === undefined || xj === undefined || yj === undefined) continue;
+
     if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
@@ -113,6 +115,8 @@ export function distToPolygonEdge(px: number, py: number, poly: number[]): numbe
     const yi = poly[i * 2 + 1];
     const xj = poly[j * 2];
     const yj = poly[j * 2 + 1];
+
+    if (xi === undefined || yi === undefined || xj === undefined || yj === undefined) continue;
     const dx = xj - xi;
     const dy = yj - yi;
     const len2 = dx * dx + dy * dy || 1;

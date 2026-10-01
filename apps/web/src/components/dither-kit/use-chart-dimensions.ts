@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useLayoutEffect, useRef, useState } from "react";
 
 export type Dimensions = { width: number; height: number };
