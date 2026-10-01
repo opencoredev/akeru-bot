@@ -91,7 +91,8 @@ interface ActiveBrowserCall {
   readonly peer: RTCPeerConnection | null;
   readonly microphone: MediaStream;
   readonly speaker: HTMLAudioElement;
-  readonly events: RTCDataChannel | null;
+  /** Removes this call's data channel listeners. Null for composed calls, which have no channel. */
+  readonly eventListeners: AbortController | null;
   stopListeningForDeviceLoss: () => void;
   disconnectTimer: ReturnType<typeof setTimeout> | null;
   environmentDisconnectTimer: ReturnType<typeof setTimeout> | null;
@@ -106,7 +107,8 @@ interface PendingBrowserCall {
   microphone: MediaStream | null;
   peer: RTCPeerConnection | null;
   speaker: HTMLAudioElement | null;
-  events: RTCDataChannel | null;
+  /** Removes the data channel listeners registered while the call starts. */
+  readonly eventListeners: AbortController;
   stopListeningForDeviceLoss: () => void;
 }
 
@@ -121,14 +123,7 @@ function stopBrowserCall(active: ActiveBrowserCall): void {
 
   active.stopListeningForDeviceLoss();
 
-  if (active.events) {
-    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-    active.events.onmessage = null;
-    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-    active.events.onerror = null;
-    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-    active.events.onclose = null;
-  }
+  active.eventListeners?.abort();
 
   active.microphone.getTracks().forEach((track) => track.stop());
   active.peer?.close();
@@ -141,14 +136,7 @@ function cleanPendingBrowserCall(pending: PendingBrowserCall): void {
   pending.scope?.cancel();
   pending.stopListeningForDeviceLoss();
 
-  if (pending.events) {
-    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-    pending.events.onmessage = null;
-    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-    pending.events.onerror = null;
-    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-    pending.events.onclose = null;
-  }
+  pending.eventListeners.abort();
 
   pending.microphone?.getTracks().forEach((track) => track.stop());
   pending.peer?.close();
@@ -373,7 +361,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
           microphone: null,
           peer: null,
           speaker: null,
-          events: null,
+          eventListeners: new AbortController(),
           stopListeningForDeviceLoss: () => {},
         };
 
@@ -466,7 +454,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
               peer: null,
               microphone,
               speaker,
-              events: null,
+              eventListeners: null,
               stopListeningForDeviceLoss: pending.stopListeningForDeviceLoss,
               disconnectTimer: null,
               environmentDisconnectTimer: null,
@@ -518,16 +506,22 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
 
           microphone.getTracks().forEach((track) => peer.addTrack(track, microphone));
           const events = peer.createDataChannel("oai-events");
-          pending.events = events;
-          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-          events.onerror = () => {
-            pending.failure ??= new Error("The call connection failed.");
-          };
+          const startListeners = { signal: pending.eventListeners.signal };
+          events.addEventListener(
+            "error",
+            () => {
+              pending.failure ??= new Error("The call connection failed.");
+            },
+            startListeners,
+          );
 
-          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-          events.onclose = () => {
-            pending.failure ??= new Error("The voice session closed.");
-          };
+          events.addEventListener(
+            "close",
+            () => {
+              pending.failure ??= new Error("The voice session closed.");
+            },
+            startListeners,
+          );
 
           const chatHandlers: VoiceCallChatHandlers = {
             appendTranscript: (role, text) => runtimeRef.current.appendTranscript(role, text),
@@ -565,8 +559,11 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             if (events.readyState === "open") events.send(payload);
           });
 
-          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-          events.onmessage = (channelMessage) => session.receive(String(channelMessage.data));
+          const receive = (channelMessage: MessageEvent) =>
+            session.receive(String(channelMessage.data));
+
+          events.addEventListener("message", receive, startListeners);
+
           const offer = await peer.createOffer();
 
           if (pending.failure) throw pending.failure;
@@ -609,6 +606,8 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
 
           if (pending.failure) throw pending.failure;
 
+          const eventListeners = new AbortController();
+
           const browserCall: ActiveBrowserCall = {
             call: result.value.call,
             environmentId,
@@ -616,27 +615,37 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
             peer,
             microphone,
             speaker,
-            events,
+            eventListeners,
             stopListeningForDeviceLoss: pending.stopListeningForDeviceLoss,
             disconnectTimer: null,
             environmentDisconnectTimer: null,
           };
 
           activate(browserCall);
-          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-          events.onerror = () =>
-            endBrowserCall(browserCall, {
-              type: "error",
-              title: "Call connection failed",
-              description: "Start a new call to continue.",
-            });
-          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- IDL handler slots are deliberately replaced at activation and cleared at cleanup to prevent duplicate callbacks.
-          events.onclose = () =>
-            endBrowserCall(browserCall, {
-              type: "warning",
-              title: "Call ended",
-              description: "The voice session closed.",
-            });
+          // The call's own listeners replace the start listeners, so a channel failure ends it.
+          pending.eventListeners.abort();
+          const callListeners = { signal: eventListeners.signal };
+          events.addEventListener("message", receive, callListeners);
+          events.addEventListener(
+            "error",
+            () =>
+              endBrowserCall(browserCall, {
+                type: "error",
+                title: "Call connection failed",
+                description: "Start a new call to continue.",
+              }),
+            callListeners,
+          );
+          events.addEventListener(
+            "close",
+            () =>
+              endBrowserCall(browserCall, {
+                type: "warning",
+                title: "Call ended",
+                description: "The voice session closed.",
+              }),
+            callListeners,
+          );
           peer.onconnectionstatechange = () => {
             const action = voiceConnectionStateAction(peer.connectionState);
 

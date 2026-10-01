@@ -125,6 +125,11 @@ import { VoiceCallProvider, useVoiceCall } from "./VoiceCall";
 
 type VoiceControls = ReturnType<typeof useVoiceCall>;
 
+class TestDataChannel extends EventTarget {
+  readyState: RTCDataChannelState = "open";
+  readonly send = vi.fn();
+}
+
 class TestPeer {
   /** Every peer the call constructed, newest last, so tests can drive connection events. */
   static readonly instances: TestPeer[] = [];
@@ -133,13 +138,7 @@ class TestPeer {
   localDescription: RTCSessionDescription | null = null;
   ontrack: ((event: RTCTrackEvent) => void) | null = null;
   onconnectionstatechange: (() => void) | null = null;
-  readonly events = {
-    readyState: "open" as RTCDataChannelState,
-    onmessage: null as ((event: MessageEvent) => void) | null,
-    onerror: null as (() => void) | null,
-    onclose: null as (() => void) | null,
-    send: vi.fn(),
-  };
+  readonly events = new TestDataChannel();
   constructor() {
     TestPeer.instances.push(this);
   }
@@ -286,19 +285,19 @@ describe("voice call provider", () => {
       },
       video: false,
     });
-    TestPeer.instances.at(-1)?.events.onmessage?.(
+    TestPeer.instances.at(-1)?.events.dispatchEvent(
       new MessageEvent("message", {
         data: JSON.stringify({ type: "output_audio_buffer.started" }),
       }),
     );
     expect(track.enabled).toBe(false);
-    TestPeer.instances.at(-1)?.events.onmessage?.(
+    TestPeer.instances.at(-1)?.events.dispatchEvent(
       new MessageEvent("message", {
         data: JSON.stringify({ type: "response.done", response: { status: "completed" } }),
       }),
     );
     expect(track.enabled).toBe(false);
-    TestPeer.instances.at(-1)?.events.onmessage?.(
+    TestPeer.instances.at(-1)?.events.dispatchEvent(
       new MessageEvent("message", {
         data: JSON.stringify({ type: "output_audio_buffer.stopped" }),
       }),
@@ -324,12 +323,12 @@ describe("voice call provider", () => {
       }),
     });
 
-    TestPeer.instances.at(-1)?.events.onmessage?.(event);
-    TestPeer.instances.at(-1)?.events.onmessage?.(event);
+    TestPeer.instances.at(-1)?.events.dispatchEvent(event);
+    TestPeer.instances.at(-1)?.events.dispatchEvent(event);
     await Promise.resolve();
     expect(mocks.send).toHaveBeenCalledOnce();
     controls.hangup();
-    TestPeer.instances.at(-1)?.events.onmessage?.(event);
+    TestPeer.instances.at(-1)?.events.dispatchEvent(event);
     expect(mocks.send).toHaveBeenCalledOnce();
   });
 
@@ -349,8 +348,8 @@ describe("voice call provider", () => {
       }),
     });
 
-    TestPeer.instances.at(-1)?.events.onmessage?.(replayed);
-    TestPeer.instances.at(-1)?.events.onmessage?.(replayed);
+    TestPeer.instances.at(-1)?.events.dispatchEvent(replayed);
+    TestPeer.instances.at(-1)?.events.dispatchEvent(replayed);
     expect(mocks.appendTranscript).toHaveBeenCalledOnce();
   });
 

@@ -17,7 +17,7 @@ function latestRecorder(): TestRecorder {
   return recorder;
 }
 
-class TestRecorder {
+class TestRecorder extends EventTarget {
   /** Every recorder the capture code constructed, newest last, so tests can drive its callbacks. */
   static readonly instances: TestRecorder[] = [];
   static isTypeSupported(type: string) {
@@ -27,9 +27,9 @@ class TestRecorder {
   state = "inactive";
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
-  onerror: (() => void) | null = null;
   starts = 0;
   constructor() {
+    super();
     TestRecorder.instances.push(this);
   }
   start() {
