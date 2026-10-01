@@ -8,6 +8,8 @@ export type MarkdownDiffLineKind = "add" | "remove" | "hunk" | "meta" | "context
 export interface MarkdownDiffLine {
   readonly kind: MarkdownDiffLineKind;
   readonly text: string;
+  /** One-based line in the fenced source; stable while the diff streams. */
+  readonly lineNumber: number;
 }
 
 export interface ParsedMarkdownDiff {
@@ -76,7 +78,7 @@ export function parseMarkdownDiff(code: string): ParsedMarkdownDiff {
         pendingGitPath = null;
       }
 
-      lines.push({ kind: "hunk", text });
+      lines.push({ kind: "hunk", text, lineNumber: index + 1 });
       continue;
     }
 
@@ -90,7 +92,7 @@ export function parseMarkdownDiff(code: string): ParsedMarkdownDiff {
         pendingGitPath = gitHeader[2] ?? null;
       }
 
-      lines.push({ kind: "meta", text });
+      lines.push({ kind: "meta", text, lineNumber: index + 1 });
       continue;
     }
 
@@ -98,12 +100,12 @@ export function parseMarkdownDiff(code: string): ParsedMarkdownDiff {
     // it ends the text (a header whose `+++` has not streamed in yet). Inside a
     // hunk, `---` and `+++` are an ordinary removal and addition.
     if (!inHunk && text.startsWith("--- ") && (next === undefined || next.startsWith("+++ "))) {
-      lines.push({ kind: "meta", text });
+      lines.push({ kind: "meta", text, lineNumber: index + 1 });
 
       if (next !== undefined) {
         pendingGitPath = null;
         pushFile(headerPath(next) ?? headerPath(text));
-        lines.push({ kind: "meta", text: next });
+        lines.push({ kind: "meta", text: next, lineNumber: index + 2 });
         index += 1;
       }
 
@@ -111,25 +113,25 @@ export function parseMarkdownDiff(code: string): ParsedMarkdownDiff {
     }
 
     if (!inHunk && text.startsWith("+++ ")) {
-      lines.push({ kind: "meta", text });
+      lines.push({ kind: "meta", text, lineNumber: index + 1 });
       continue;
     }
 
     if (text.startsWith("+")) {
       additions += 1;
-      lines.push({ kind: "add", text });
+      lines.push({ kind: "add", text, lineNumber: index + 1 });
       consumeHunkLine(0, 1);
       continue;
     }
 
     if (text.startsWith("-")) {
       deletions += 1;
-      lines.push({ kind: "remove", text });
+      lines.push({ kind: "remove", text, lineNumber: index + 1 });
       consumeHunkLine(1, 0);
       continue;
     }
 
-    lines.push({ kind: "context", text });
+    lines.push({ kind: "context", text, lineNumber: index + 1 });
     consumeHunkLine(1, 1);
   }
 
