@@ -142,12 +142,14 @@ function toPluginDefinition(
   });
 }
 
-export function loadDirectoryCatalog(
-  modules: CatalogManifestModules = catalogModules,
+export function loadDirectoryCatalog<T = (typeof catalogModules)[string]>(
+  modules?: CatalogManifestModules<T>,
   assets: AssetModules = catalogAssets,
 ): readonly PluginDirectoryDefinition[] {
   return Object.freeze(
-    loadManifestCatalog(modules).map((manifest) => toPluginDefinition(manifest, assets)),
+    loadManifestCatalog(modules ?? catalogModules).map((manifest) =>
+      toPluginDefinition(manifest, assets),
+    ),
   );
 }
 
@@ -155,8 +157,8 @@ export function isInstallablePlugin(plugin: PluginDirectoryDefinition): plugin i
   return isInstallableManifest(plugin) && plugin.kind !== "mcp-unavailable";
 }
 
-export function loadCatalog(
-  modules: CatalogManifestModules = catalogModules,
+export function loadCatalog<T = (typeof catalogModules)[string]>(
+  modules?: CatalogManifestModules<T>,
   assets: AssetModules = catalogAssets,
 ): readonly CatalogPluginDefinition[] {
   return loadDirectoryCatalog(modules, assets).filter(isInstallablePlugin);
