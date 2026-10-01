@@ -87,6 +87,7 @@ const remoteApiBaseUrl = (httpBaseUrl: string): string => {
   url.pathname = "/";
   url.search = "";
   url.hash = "";
+
   return url.toString();
 };
 
@@ -108,9 +109,11 @@ const failRemoteRequest = (
   if (cause instanceof RemoteEnvironmentAuthTimeoutError) {
     return Effect.fail(cause);
   }
+
   if (isEnvironmentHttpCommonError(cause)) {
     return Effect.fail(cause);
   }
+
   if (Schema.isSchemaError(cause)) {
     return Effect.fail(
       new RemoteEnvironmentAuthInvalidJsonError({
@@ -119,13 +122,16 @@ const failRemoteRequest = (
       }),
     );
   }
+
   if (HttpClientError.isHttpClientError(cause) && cause.response !== undefined) {
     const response = cause.response;
+
     if (response.status < 200 || response.status >= 300) {
       return Effect.fail(
         new RemoteEnvironmentAuthUndeclaredStatusError(requestUrl, response.status),
       );
     }
+
     return Effect.fail(
       new RemoteEnvironmentAuthInvalidJsonError({
         message: `Remote environment endpoint returned an invalid response from ${requestUrl}.`,
@@ -133,6 +139,7 @@ const failRemoteRequest = (
       }),
     );
   }
+
   return Effect.fail(
     new RemoteEnvironmentAuthFetchError({
       message: `Failed to fetch remote environment endpoint ${requestUrl} (${String(cause)}).`,

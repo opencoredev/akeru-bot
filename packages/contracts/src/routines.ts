@@ -14,15 +14,19 @@ import {
 import { McpServerId } from "./mcpServer.ts";
 
 export const RoutineId = TrimmedNonEmptyString.pipe(Schema.brand("RoutineId"));
+
 export type RoutineId = typeof RoutineId.Type;
 
 export const RoutineRunId = TrimmedNonEmptyString.pipe(Schema.brand("RoutineRunId"));
+
 export type RoutineRunId = typeof RoutineRunId.Type;
 
 export const SkillAssignmentId = TrimmedNonEmptyString.pipe(Schema.brand("SkillAssignmentId"));
+
 export type SkillAssignmentId = typeof SkillAssignmentId.Type;
 
 export const SkillId = TrimmedNonEmptyString.pipe(Schema.brand("SkillId"));
+
 export type SkillId = typeof SkillId.Type;
 
 export const RoutineWeekday = Schema.Literals([
@@ -34,11 +38,13 @@ export const RoutineWeekday = Schema.Literals([
   "saturday",
   "sunday",
 ]);
+
 export type RoutineWeekday = typeof RoutineWeekday.Type;
 
 export const RoutineLocalTime = Schema.String.check(
   Schema.isPattern(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
 );
+
 export type RoutineLocalTime = typeof RoutineLocalTime.Type;
 
 export const RoutineSchedule = Schema.Union([
@@ -50,18 +56,21 @@ export const RoutineSchedule = Schema.Union([
     time: RoutineLocalTime,
   }),
 ]);
+
 export type RoutineSchedule = typeof RoutineSchedule.Type;
 
 export const RoutineTimeZone = TrimmedNonEmptyString.check(
   Schema.makeFilter((value) => {
     try {
       new Intl.DateTimeFormat("en", { timeZone: value });
+
       return true;
     } catch {
       return "timezone must be a valid IANA time zone";
     }
   }),
 );
+
 export type RoutineTimeZone = typeof RoutineTimeZone.Type;
 
 export const RoutineSandbox = Schema.Literals([
@@ -71,6 +80,7 @@ export const RoutineSandbox = Schema.Literals([
   "vercel-sandbox",
   "upstash-box",
 ]);
+
 export type RoutineSandbox = typeof RoutineSandbox.Type;
 
 export const RoutineApprovalPolicy = Schema.Literals([
@@ -79,6 +89,7 @@ export const RoutineApprovalPolicy = Schema.Literals([
   "auto",
   "full-access",
 ]);
+
 export type RoutineApprovalPolicy = typeof RoutineApprovalPolicy.Type;
 
 export const RoutineLifecycle = Schema.Literals([
@@ -92,9 +103,11 @@ export const RoutineLifecycle = Schema.Literals([
   "completed",
   "deleted",
 ]);
+
 export type RoutineLifecycle = typeof RoutineLifecycle.Type;
 
 export const RoutineRunTrigger = Schema.Literals(["dry-run", "manual", "scheduled", "missed"]);
+
 export type RoutineRunTrigger = typeof RoutineRunTrigger.Type;
 
 export const RoutineRunStatus = Schema.Literals([
@@ -106,6 +119,7 @@ export const RoutineRunStatus = Schema.Literals([
   "completed",
   "canceled",
 ]);
+
 export type RoutineRunStatus = typeof RoutineRunStatus.Type;
 
 export const RoutineFailureKind = Schema.Literals([
@@ -117,15 +131,18 @@ export const RoutineFailureKind = Schema.Literals([
   "approval",
   "execution",
 ]);
+
 export type RoutineFailureKind = typeof RoutineFailureKind.Type;
 
 export const RoutineRunResult = Schema.Struct({ summary: TrimmedNonEmptyString });
+
 export type RoutineRunResult = typeof RoutineRunResult.Type;
 
 export const RoutineRunFailure = Schema.Struct({
   kind: RoutineFailureKind,
   message: TrimmedNonEmptyString,
 });
+
 export type RoutineRunFailure = typeof RoutineRunFailure.Type;
 
 export const RoutineSkillAssignment = Schema.Struct({
@@ -137,6 +154,7 @@ export const RoutineSkillAssignment = Schema.Struct({
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
+
 export type RoutineSkillAssignment = typeof RoutineSkillAssignment.Type;
 
 export const RoutineDefinition = Schema.Struct({
@@ -154,9 +172,11 @@ export const RoutineDefinition = Schema.Struct({
   /** When set, each run delegates the job to this bot from the target thread's owner. */
   delegateToBotId: Schema.NullOr(BotId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
 });
+
 export type RoutineDefinition = typeof RoutineDefinition.Type;
 
 export const AKERU_CREATE_ROUTINE_TOOL_NAME = "akeru_create_routine";
+
 export const AkeruCreateRoutineInput = Schema.Struct({
   name: TrimmedNonEmptyString,
   instructions: TrimmedNonEmptyString,
@@ -164,6 +184,7 @@ export const AkeruCreateRoutineInput = Schema.Struct({
   skillNames: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   connectorNames: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
 });
+
 export type AkeruCreateRoutineInput = typeof AkeruCreateRoutineInput.Type;
 
 export const Routine = Schema.Struct({
@@ -181,6 +202,7 @@ export const Routine = Schema.Struct({
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
 });
+
 export type Routine = typeof Routine.Type;
 
 /** The small piece of a deleted routine needed to keep its chat receipts readable. */
@@ -190,6 +212,7 @@ export const RoutineReceiptSource = Schema.Struct({
   job: TrimmedNonEmptyString,
   createdAt: IsoDateTime,
 });
+
 export type RoutineReceiptSource = typeof RoutineReceiptSource.Type;
 
 const RoutineRunFields = {
@@ -219,12 +242,15 @@ export const RoutineRun = Schema.Union([
     scheduledFor: IsoDateTime,
   }),
 ]);
+
 export type RoutineRun = typeof RoutineRun.Type;
 
 export const RoutineListRunsInput = Schema.Struct({ routineId: RoutineId });
+
 export type RoutineListRunsInput = typeof RoutineListRunsInput.Type;
 
 export const RoutineListRunsResult = Schema.Struct({ runs: Schema.Array(RoutineRun) });
+
 export type RoutineListRunsResult = typeof RoutineListRunsResult.Type;
 
 export const RoutineListThreadRunsInput = Schema.Struct({
@@ -236,6 +262,7 @@ export const RoutineListThreadRunsResult = Schema.Struct({
   runs: Schema.Array(RoutineRun),
   nextCursor: Schema.NullOr(RoutineRunId),
 });
+
 export type RoutineListThreadRunsResult = typeof RoutineListThreadRunsResult.Type;
 
 export class RoutineThreadReadError extends Schema.TaggedErrorClass<RoutineThreadReadError>()(
@@ -324,6 +351,7 @@ export const ClientRoutineCommand = Schema.Union([
   RoutineSkillAssignCommand,
   RoutineSkillUnassignCommand,
 ]);
+
 export type ClientRoutineCommand = typeof ClientRoutineCommand.Type;
 
 export const RoutineRunScheduledCommand = Schema.Struct({
@@ -393,6 +421,7 @@ export const InternalRoutineCommand = Schema.Union([
   RoutineRunCompleteCommand,
   RoutineRunCancelCommand,
 ]);
+
 export type InternalRoutineCommand = typeof InternalRoutineCommand.Type;
 
 export const RoutineDraftedRecord = Schema.Struct({
@@ -401,19 +430,31 @@ export const RoutineDraftedRecord = Schema.Struct({
   enabled: Schema.Literal(false),
   lifecycle: Schema.Literal("draft"),
 });
+
 export type RoutineDraftedRecord = typeof RoutineDraftedRecord.Type;
 
 export const RoutineDraftedPayload = Schema.Struct({ routine: RoutineDraftedRecord });
+
 export const RoutineApprovedPayload = Schema.Struct({ routine: Routine });
+
 export const RoutineEnabledPayload = Schema.Struct({ routine: Routine });
+
 export const RoutinePausedPayload = Schema.Struct({ routine: Routine });
+
 export const RoutineRunningPayload = Schema.Struct({ routine: Routine, run: RoutineRun });
+
 export const RoutineBlockedPayload = Schema.Struct({ routine: Routine, run: RoutineRun });
+
 export const RoutineFailedPayload = Schema.Struct({ routine: Routine, run: RoutineRun });
+
 export const RoutineCompletedPayload = Schema.Struct({ routine: Routine, run: RoutineRun });
+
 export const RoutineRunCanceledPayload = Schema.Struct({ routine: Routine, run: RoutineRun });
+
 export const RoutineDeletedPayload = Schema.Struct({ routine: Routine });
+
 export const RoutineSkillAssignedPayload = Schema.Struct({ assignment: RoutineSkillAssignment });
+
 export const RoutineSkillUnassignedPayload = Schema.Struct({
   assignmentId: SkillAssignmentId,
   botId: BotId,

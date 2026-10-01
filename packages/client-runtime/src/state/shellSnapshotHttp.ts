@@ -27,6 +27,7 @@ export const fetchEnvironmentShellSnapshot = Effect.fn(
   const requestUrl = environmentEndpointUrl(input.prepared.httpBaseUrl, "/api/orchestration/shell");
   const client = yield* makeEnvironmentHttpApiClient(input.prepared.httpBaseUrl);
   const headers = yield* buildEnvironmentAuthHeaders(input.prepared.httpAuthorization);
+
   return yield* executeEnvironmentHttpRequest(
     requestUrl,
     input.timeoutMs ?? DEFAULT_SHELL_SNAPSHOT_TIMEOUT_MS,
@@ -60,6 +61,7 @@ export const shellSnapshotLoaderLayer: Layer.Layer<
   ShellSnapshotLoader,
   Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;
+
     return ShellSnapshotLoader.of({
       load: (prepared: PreparedConnection) =>
         fetchEnvironmentShellSnapshot({ prepared }).pipe(

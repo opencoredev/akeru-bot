@@ -41,21 +41,27 @@ function assertCarriesNoSecret(error: object, secret: string): void {
   const walk = (value: unknown, path: string): void => {
     if (typeof value === "string") {
       assert.notInclude(value, secret, `${path} leaked stderr`);
+
       return;
     }
+
     if (typeof value !== "object" || value === null || seen.has(value)) {
       return;
     }
+
     seen.add(value);
 
     if (Array.isArray(value)) {
       value.forEach((entry, index) => walk(entry, `${path}[${String(index)}]`));
+
       return;
     }
+
     // `message` and `cause` are getters on Error subclasses, so they are not
     // own enumerable properties and Object.entries alone would skip them.
     walk((value as { message?: unknown }).message, `${path}.message`);
     walk((value as { cause?: unknown }).cause, `${path}.cause`);
+
     for (const [key, nested] of Object.entries(value)) {
       walk(nested, `${path}.${key}`);
     }
@@ -63,7 +69,9 @@ function assertCarriesNoSecret(error: object, secret: string): void {
 
   walk(error, "error");
 }
+
 const tailscaleStatusJson = `{"Self":{"DNSName":"desktop.tail.ts.net.","TailscaleIPs":["100.100.100.100","fd7a:115c:a1e0::1","192.168.1.20"]}}`;
+
 const tailscaleStatusWithSingleIpJson = `{"Self":{"DNSName":"desktop.tail.ts.net.","TailscaleIPs":["100.90.1.2"]}}`;
 
 function mockHandle(result: { stdout?: string; stderr?: string; code?: number }) {
@@ -111,6 +119,7 @@ function mockSpawnerLayer(
         readonly command: string;
         readonly args: ReadonlyArray<string>;
       };
+
       return Effect.succeed(mockHandle(handler(childProcess.command, childProcess.args)));
     }),
   );
@@ -172,6 +181,7 @@ describe("tailscale", () => {
     const layer = mockSpawnerLayer((command, args) => {
       assert.equal(command, "tailscale");
       assert.deepEqual(args, ["status", "--json"]);
+
       return {
         stdout: tailscaleStatusWithSingleIpJson,
       };
@@ -188,12 +198,14 @@ describe("tailscale", () => {
 
   it.effect("preserves tailscale spawn failures as causes", () => {
     const systemCause = new Error("private executable lookup detail");
+
     const cause = PlatformError.systemError({
       _tag: "NotFound",
       module: "ChildProcess",
       method: "spawn",
       cause: systemCause,
     });
+
     const layer = Layer.succeed(
       ChildProcessSpawner.ChildProcessSpawner,
       ChildProcessSpawner.make(() => Effect.fail(cause)),
@@ -218,6 +230,7 @@ describe("tailscale", () => {
     // inside an `Effect.callback` registration, so that throw arrives as a
     // defect rather than a typed error - the shape reproduced here.
     const defect = Object.assign(new Error("spawn tailscale ENOTDIR"), { code: "ENOTDIR" });
+
     const layer = Layer.succeed(
       ChildProcessSpawner.ChildProcessSpawner,
       ChildProcessSpawner.make(() =>
@@ -237,6 +250,7 @@ describe("tailscale", () => {
         Effect.flip,
         Effect.provide(layer),
       );
+
       assert.instanceOf(serveError, TailscaleCommandSpawnError);
       assert.equal(serveError.subcommand, "serve");
       assert.strictEqual(serveError.cause, defect);
@@ -247,6 +261,7 @@ describe("tailscale", () => {
         Effect.orElseSucceed(() => null),
         Effect.provide(layer),
       );
+
       assert.equal(degraded, null);
     });
   });
@@ -323,6 +338,7 @@ describe("tailscale", () => {
     const layer = mockSpawnerLayer((command, args) => {
       assert.equal(command, "tailscale");
       assert.deepEqual(args, ["serve", "--bg", "--https=8443", "http://127.0.0.1:13773"]);
+
       return {};
     });
 
@@ -362,10 +378,12 @@ describe("tailscale", () => {
       readonly command: string;
       readonly args: ReadonlyArray<string>;
     }[] = [];
+
     const layer = mockSpawnerLayer((command, args) => {
       commands.push({ command, args });
       assert.equal(command, "tailscale");
       assert.deepEqual(args, ["serve", "--https=8443", "off"]);
+
       return {};
     });
 

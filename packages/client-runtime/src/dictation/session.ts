@@ -61,16 +61,20 @@ export type DictationStatus =
   | "completed"
   | "cancelled"
   | "error";
+
 export type DictationCancelReason = "cancel" | "navigation" | "disconnect" | "disposed";
 
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
     const abort = () => reject(signal.reason);
+
     if (signal.aborted) {
       reject(signal.reason);
       void promise.catch(() => undefined);
+
       return;
     }
+
     signal.addEventListener("abort", abort, { once: true });
     void promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
   });
@@ -82,10 +86,12 @@ export function createDictationSession(
   options: Partial<DictationLimits> = {},
 ) {
   const limits = Object.freeze({ ...DEFAULT_DICTATION_LIMITS, ...options });
+
   for (const value of Object.values(limits)) {
     if (!Number.isSafeInteger(value) || value < 1 || value > 2_147_483_647)
       throw new RangeError("Invalid dictation limit");
   }
+
   let status: DictationStatus = "idle";
   let error: unknown;
   let disposed = false;
@@ -93,13 +99,16 @@ export function createDictationSession(
 
   function transition(next: DictationStatus, cause?: unknown) {
     const nextError = next === "error" ? cause : undefined;
+
     if (status === next && Object.is(error, nextError)) return;
     status = next;
     error = nextError;
     // Subscription changes apply to the next transition.
     const pendingListeners = [...listeners];
+
     for (const listener of pendingListeners) listener();
   }
+
   let active:
     | {
         original: DictationDraft;
@@ -118,6 +127,7 @@ export function createDictationSession(
   function releaseActive(reason?: unknown) {
     const run = active;
     active = undefined;
+
     if (!run) return;
     dependencies.cancelSchedule(run.timer);
     run.controller.abort(reason);
@@ -146,6 +156,7 @@ export function createDictationSession(
     /** Observe transitions synchronously; listeners must not throw. Returns an unsubscribe function. */
     subscribe(listener: () => void) {
       if (!disposed) listeners.add(listener);
+
       return () => {
         listeners.delete(listener);
       };
@@ -153,14 +164,18 @@ export function createDictationSession(
     async start(draft: DictationDraft) {
       if (disposed) throw new Error("Dictation session is disposed");
       releaseActive();
+
       const run: NonNullable<typeof active> = {
         original: { ...draft, identity: { ...draft.identity }, selection: { ...draft.selection } },
         controller: new AbortController(),
       };
+
       active = run;
       deadline(run, limits.maxRecordingMs);
       transition("starting");
+
       if (active !== run) return;
+
       try {
         const acquisition = dependencies
           .capture({
@@ -173,9 +188,12 @@ export function createDictationSession(
           .then((capture) => {
             if (active !== run) capture.dispose();
             else run.capture = capture;
+
             return capture;
           });
+
         await abortable(acquisition, run.controller.signal);
+
         if (active === run) transition("recording");
       } catch (cause) {
         if (active === run) terminate("error", cause);
@@ -184,18 +202,25 @@ export function createDictationSession(
     async finish() {
       if (status === "starting") {
         terminate("cancelled", "cancel");
+
         return;
       }
+
       const run = active;
+
       if (!run?.capture || status !== "recording") return;
       const capture = run.capture;
       deadline(run, limits.maxTranscriptionMs);
       transition("transcribing");
+
       if (active !== run) return;
+
       try {
         const audio = await abortable(capture.stop(), run.controller.signal);
         releaseCapture(run);
+
         if (active !== run) return;
+
         if (
           audio.bytes.byteLength === 0 ||
           audio.bytes.byteLength > limits.maxAudioBytes ||
@@ -206,6 +231,7 @@ export function createDictationSession(
         ) {
           throw new Error("Invalid dictation audio or audio limit exceeded");
         }
+
         const transcript = await abortable(
           dependencies.transcribe({
             audio,
@@ -214,7 +240,9 @@ export function createDictationSession(
           }),
           run.controller.signal,
         );
+
         if (active !== run) return;
+
         if (transcript.length > limits.maxTranscriptCharacters)
           throw new Error("Dictation transcript limit exceeded");
         dependencies.updateDraft((current) =>
@@ -222,6 +250,7 @@ export function createDictationSession(
             ? mergeDictationDraft(run.original, current, transcript, limits.maxDraftCharacters)
             : current,
         );
+
         if (active === run) terminate("completed");
       } catch (cause) {
         if (active === run) terminate("error", cause);

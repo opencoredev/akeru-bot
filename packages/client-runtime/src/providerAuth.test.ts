@@ -129,6 +129,7 @@ describe("filterProvidersBySubscriptionConnection", () => {
       provider("grok"),
       provider("opencode"),
     ];
+
     const statuses: SubscriptionProviderStatus[] = [
       { ...status, provider: "openai-codex", connected: false, health: "missing" },
       { ...status, provider: "anthropic", connected: false, health: "missing" },
@@ -171,6 +172,7 @@ describe("withRefreshableSubscriptionLogin", () => {
     slashCommands: [],
     skills: [],
   });
+
   const reason = (provider: ServerProvider, statuses: ReadonlyArray<SubscriptionProviderStatus>) =>
     providerAvailabilityReason(withRefreshableSubscriptionLogin(provider, statuses));
 
@@ -194,6 +196,7 @@ describe("withRefreshableSubscriptionLogin", () => {
 
   it("keeps a default instance with its own credential blocked", () => {
     const expired = [{ ...status, health: "expired" as const, authMode: "oauth" as const }];
+
     const ownKey = {
       claudeAgent: {
         driver: ProviderDriverKind.make("claudeAgent"),
@@ -202,6 +205,7 @@ describe("withRefreshableSubscriptionLogin", () => {
         ],
       },
     };
+
     expect(
       providerAvailabilityReason(
         withRefreshableSubscriptionLogin(expiredClaude(), expired, ownKey),

@@ -13,6 +13,7 @@ import {
 function makeTempHomeDir() {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
+
     return yield* fs.makeTempDirectoryScoped({ prefix: "t3-ssh-test-" });
   });
 }
@@ -132,6 +133,7 @@ describe("ssh config", () => {
         "/tmp/project",
         "/tmp/home",
       );
+
       assert.equal(pattern, "/tmp/home/.ssh/config.d/*.conf");
     }).pipe(Effect.provide(NodeServices.layer)),
   );

@@ -34,6 +34,7 @@ function boundedTechnicalDetails(error: string): string {
   const firstLine = error.split("\n", 1)[0]?.trim() ?? error.trim();
   const withoutStack = firstLine.replace(/\s+at\s+[A-Za-z_$][\s\S]*$/, "").trim();
   const withoutLocalPaths = withoutStack.replace(/file:\/\/\/[^\s)]+/g, "file://…");
+
   return withoutLocalPaths.slice(0, 600);
 }
 
@@ -66,6 +67,7 @@ export function presentThreadError(
   }
 
   const disabledProvider = error.match(/Provider instance ['"]([^'"]+)['"] is disabled/i);
+
   if (disabledProvider?.[1]) {
     return present(
       "disabled",

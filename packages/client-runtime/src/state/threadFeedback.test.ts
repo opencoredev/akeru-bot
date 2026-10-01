@@ -42,10 +42,13 @@ describe("submitCodexFeedback", () => {
 
   it("shows the command and clears the draft before the upload finishes", async () => {
     let draft: string = submission.command;
+
     let finishUpload:
       | ((result: ReturnType<typeof AsyncResult.success<{ feedbackId: string }>>) => void)
       | undefined;
+
     const states: CodexFeedbackSubmission[] = [];
+
     const upload = new Promise<ReturnType<typeof AsyncResult.success<{ feedbackId: string }>>>(
       (resolve) => {
         finishUpload = resolve;
@@ -60,6 +63,7 @@ describe("submitCodexFeedback", () => {
       onUpdate: (state) => states.push(state),
       upload: () => {
         expect(draft).toBe("");
+
         return upload;
       },
     });
@@ -125,11 +129,13 @@ describe("submitCodexFeedback", () => {
     let finishFirstUpload:
       | ((result: ReturnType<typeof AsyncResult.success<{ feedbackId: string }>>) => void)
       | undefined;
+
     const firstUpload = new Promise<ReturnType<typeof AsyncResult.success<{ feedbackId: string }>>>(
       (resolve) => {
         finishFirstUpload = resolve;
       },
     );
+
     const firstStates: CodexFeedbackSubmission[] = [];
     const secondStates: CodexFeedbackSubmission[] = [];
 
@@ -139,6 +145,7 @@ describe("submitCodexFeedback", () => {
       onUpdate: (state) => firstStates.push(state),
       upload: () => firstUpload,
     });
+
     const second = await submitCodexFeedback({
       submission: {
         ...submission,

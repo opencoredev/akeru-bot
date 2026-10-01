@@ -11,6 +11,7 @@ export const StoredConnectionCredential = Schema.Struct({
   connectionId: Schema.String,
   credential: ConnectionCredential,
 });
+
 export type StoredConnectionCredential = typeof StoredConnectionCredential.Type;
 
 export const ConnectionCatalogDocument = Schema.Struct({
@@ -19,6 +20,7 @@ export const ConnectionCatalogDocument = Schema.Struct({
   profiles: Schema.Array(ConnectionProfile),
   credentials: Schema.Array(StoredConnectionCredential),
 });
+
 export type ConnectionCatalogDocument = typeof ConnectionCatalogDocument.Type;
 
 export const EMPTY_CONNECTION_CATALOG_DOCUMENT: ConnectionCatalogDocument = Object.freeze({
@@ -34,6 +36,7 @@ export function replaceCatalogValue<A>(
   next: A,
 ): ReadonlyArray<A> {
   const nextKey = key(next);
+
   return [...values.filter((value) => key(value) !== nextKey), next];
 }
 
@@ -60,6 +63,7 @@ function removeConnectionMetadata(
   target: ConnectionTarget,
 ): ConnectionCatalogDocument {
   const connectionId = connectionIdOf(target);
+
   return {
     ...document,
     targets: removeCatalogValue(
@@ -83,10 +87,13 @@ export function registerConnectionInCatalog(
   registration: ConnectionRegistration,
 ): ConnectionCatalogDocument {
   const target = registration.target;
+
   const previous = document.targets.find(
     (candidate) => candidate.environmentId === target.environmentId,
   );
+
   const cleaned = previous === undefined ? document : removeConnectionMetadata(document, previous);
+
   const next: ConnectionCatalogDocument = {
     ...cleaned,
     targets: replaceCatalogValue(cleaned.targets, (value) => value.environmentId, target),

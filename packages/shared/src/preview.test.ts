@@ -88,6 +88,7 @@ describe("normalizePreviewUrl", () => {
 
   it("rejects unparseable input without retaining credentials or tokens", () => {
     const rawUrl = "https://user:password@example.com:bad/path?access_token=secret#fragment";
+
     try {
       normalizePreviewUrl(rawUrl);
       expect.unreachable("expected URL normalization to fail");

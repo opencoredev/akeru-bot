@@ -52,6 +52,7 @@ describe("scoreQueryMatch", () => {
       includesBase: 30,
       boundaryMarkers: ["-"],
     });
+
     const containsScore = scoreQueryMatch({
       value: "highfixci",
       query: "fix",

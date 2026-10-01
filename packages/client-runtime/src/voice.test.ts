@@ -47,6 +47,7 @@ describe("stored speech chunking", () => {
       synthesizeVoiceChunks("x".repeat(8_001), controller.signal, async (chunk) => {
         calls.push(chunk);
         controller.abort();
+
         return chunk;
       }),
     ).rejects.toThrow();
@@ -56,13 +57,18 @@ describe("stored speech chunking", () => {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
+
   const promise = new Promise<T>((accept) => {
     resolve = accept;
   });
+
   return { promise, resolve };
 }
+
 const identity = { botId: "bot-a", environmentId: "environment-a" };
+
 const audio: VoiceAudio = { audioBase64: "YQ==", mimeType: "audio/webm" };
+
 const makeHandlers = () => ({
   appendTranscript: vi.fn(),
   sendGoalMessage: vi.fn(() => Promise.resolve(true)),
@@ -85,11 +91,13 @@ describe("normalized realtime voice session", () => {
   it("deduplicates transcript event IDs and function call IDs across reconnect delivery", async () => {
     const handlers = makeHandlers();
     const session = createRealtimeVoiceSession(createVoiceCallScope(identity), handlers, vi.fn());
+
     const transcript = JSON.stringify({
       type: "conversation.item.input_audio_transcription.completed",
       event_id: "transcript-1",
       transcript: "Hello",
     });
+
     session.receive(transcript);
     session.receive(transcript);
     session.receive(toolEvent("event-1"));
@@ -103,6 +111,7 @@ describe("normalized realtime voice session", () => {
   it("remembers only recent event IDs during a long call", () => {
     const handlers = makeHandlers();
     const state = { eventIds: new Set<string>(), functionCallIds: new Set<string>() };
+
     for (let index = 0; index < 10_000; index++) {
       handleVoiceChannelMessage(
         JSON.stringify({ type: "session.updated", event_id: `event-${index}` }),
@@ -111,6 +120,7 @@ describe("normalized realtime voice session", () => {
         state,
       );
     }
+
     expect(state.eventIds.size).toBe(4_096);
     expect(state.eventIds.has("event-9999")).toBe(true);
     expect(state.eventIds.has("event-0")).toBe(false);
@@ -152,11 +162,13 @@ describe("normalized realtime voice session", () => {
 
   it("creates fresh dedup state only for a new call", () => {
     const handlers = makeHandlers();
+
     for (let index = 0; index < 2; index += 1) {
       createRealtimeVoiceSession(createVoiceCallScope(identity), handlers, vi.fn()).receive(
         toolEvent("same-event"),
       );
     }
+
     expect(handlers.sendGoalMessage).toHaveBeenCalledTimes(2);
   });
 
@@ -181,10 +193,13 @@ describe("composed voice lifecycle", () => {
     const transcribe = vi.fn(async () => "Hello");
     const sendAndWait = vi.fn(async () => "Reply");
     const synthesize = vi.fn(async () => audio);
+
     const play = vi.fn(() => {
       playbackStarted.resolve();
+
       return playing.promise;
     });
+
     const running = runComposedVoiceCall(scope, {
       capture,
       transcribe,
@@ -192,6 +207,7 @@ describe("composed voice lifecycle", () => {
       synthesize,
       play,
     });
+
     const stopped = expect(running).rejects.toMatchObject({ name: "AbortError" });
     await playbackStarted.promise;
     expect(capture).toHaveBeenCalledOnce();
@@ -207,10 +223,12 @@ describe("composed voice lifecycle", () => {
     const scope = createVoiceCallScope(identity);
     const second = deferred<VoiceAudio>();
     const firstPlayed = deferred<void>();
+
     const synthesize = vi
       .fn<(text: string) => Promise<VoiceAudio>>()
       .mockResolvedValueOnce(audio)
       .mockReturnValueOnce(second.promise);
+
     const running = runComposedVoiceCall(scope, {
       capture: async () => audio,
       transcribe: async () => "Hello",
@@ -221,6 +239,7 @@ describe("composed voice lifecycle", () => {
         scope.cancel();
       },
     });
+
     const stopped = expect(running).rejects.toMatchObject({ name: "AbortError" });
     await firstPlayed.promise;
     expect(synthesize).toHaveBeenCalledTimes(2);
@@ -233,16 +252,19 @@ describe("composed voice lifecycle", () => {
     const transcription = deferred<string>();
     const started = deferred<void>();
     const sendAndWait = vi.fn(async () => "Reply");
+
     const running = runComposedVoiceCall(scope, {
       capture: async () => audio,
       transcribe: () => {
         started.resolve();
+
         return transcription.promise;
       },
       sendAndWait,
       synthesize: async () => audio,
       play: async () => {},
     });
+
     const stopped = expect(running).rejects.toMatchObject({ name: "AbortError" });
     await started.promise;
     scope.cancel();
@@ -275,6 +297,7 @@ const latestTurn: OrchestrationLatestTurn = {
   requestMessageId: MessageId.make("request-1"),
   assistantMessageId: MessageId.make("assistant-1"),
 };
+
 const assistant: OrchestrationMessage = {
   id: MessageId.make("assistant-1"),
   role: "assistant",
@@ -295,12 +318,14 @@ describe("accepted bot turn correlation", () => {
       turnId: null,
       createdAt: latestTurn.requestedAt,
     };
+
     const newerTurn: OrchestrationLatestTurn = {
       ...latestTurn,
       turnId: TurnId.make("turn-2"),
       requestMessageId: MessageId.make("request-2"),
       requestedAt: "2026-09-07T00:00:02.000Z",
     };
+
     const unrelated = { ...assistant, turnId: newerTurn.turnId, text: "Other reply" };
     expect(
       correlatedVoiceReply(
@@ -332,12 +357,14 @@ describe("accepted bot turn correlation", () => {
       text: "Voice request",
       createdAt: "2026-09-07T00:00:00.000Z",
     };
+
     const newerTurn: OrchestrationLatestTurn = {
       ...latestTurn,
       turnId: TurnId.make("turn-2"),
       requestMessageId: MessageId.make("request-2"),
       requestedAt: "2026-09-07T00:00:02.000Z",
     };
+
     expect(correlatedVoiceReply("request-1", newerTurn, [request, assistant])).toBe("Exact reply");
     expect(() => correlatedVoiceReply("request-1", newerTurn, [request])).toThrow(
       "The bot turn did not complete",
@@ -385,27 +412,33 @@ describe("accepted bot turn correlation", () => {
   it("waits on state notifications and removes subscriptions on completion or abort", async () => {
     let value: string | null = null;
     let notify = () => {};
+
     const unsubscribe = vi.fn();
     const scope = createVoiceCallScope(identity);
+
     const waiting = waitForVoiceReply(
       scope.signal,
       () => value,
       (changed) => {
         notify = changed;
+
         return unsubscribe;
       },
     );
+
     notify();
     expect(unsubscribe).not.toHaveBeenCalled();
     value = "Exact reply";
     notify();
     await expect(waiting).resolves.toBe("Exact reply");
     expect(unsubscribe).toHaveBeenCalledOnce();
+
     const aborted = waitForVoiceReply(
       scope.signal,
       () => null,
       () => unsubscribe,
     );
+
     const stopped = expect(aborted).rejects.toMatchObject({ name: "AbortError" });
     scope.cancel();
     await stopped;

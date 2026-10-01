@@ -60,17 +60,23 @@ export function imageProviderHealthDisplay(
       ? { label: "Unavailable", variant: "error" }
       : { label: "Checking", variant: "secondary" };
   }
+
   if (!status.connected) return { label: "Not connected", variant: "secondary" };
+
   if (!enabled) return { label: "Disabled", variant: "secondary" };
   const failure = FAILURE_LABELS[status.health];
+
   if (failure) return { label: failure, variant: "error" };
+
   if (status.health === "unsupported") return { label: "Unsupported", variant: "warning" };
+
   if (
     (status.health === "healthy" || status.health === "recovered") &&
     status.healthTest?.status === "passed"
   ) {
     return { label: status.health === "recovered" ? "Recovered" : "Healthy", variant: "success" };
   }
+
   return { label: "Not tested", variant: "warning" };
 }
 
@@ -81,6 +87,7 @@ export function imageProviderAccessLabel(
 ): string {
   if (!status) return t("Checking subscription");
   const provider = IMAGE_PROVIDER_LABELS[status.provider];
+
   return status.connected
     ? t("{provider} subscription detected", { provider })
     : t("No {provider} subscription connected", { provider });
@@ -88,6 +95,7 @@ export function imageProviderAccessLabel(
 
 export function imageProviderOperationsLabel(status: ImageProviderStatus): string {
   if (!status.operations.includes("generate")) return "No supported operations reported";
+
   return status.operations.includes("edit")
     ? "Supports image generation and editing"
     : "Supports image generation";
@@ -108,8 +116,10 @@ export function imageProviderHealthTestLabel(
   formatTime: (iso: string) => string,
 ): string {
   const test = status.healthTest;
+
   if (!test || test.status === "not-run") return "Health test not run";
   const verb = test.status === "passed" ? "passed" : "failed";
+
   return test.checkedAt
     ? `Health test ${verb} ${formatTime(test.checkedAt)}`
     : `Health test ${verb}`;
@@ -119,6 +129,7 @@ export function imageProviderHealthTestLabel(
 export function effectiveFallbackOrder(settings: ImageGenerationSettings): ImageProviderId[] {
   const enabled = IMAGE_PROVIDER_IDS.filter((id) => isImageProviderEnabled(settings, id));
   const ordered = settings.fallbackOrder.filter((id) => enabled.includes(id));
+
   return [...new Set([...ordered, ...enabled])];
 }
 
@@ -129,6 +140,7 @@ export function effectiveDefaultProvider(
   if (settings.defaultProvider && isImageProviderEnabled(settings, settings.defaultProvider)) {
     return settings.defaultProvider;
   }
+
   return effectiveFallbackOrder(settings)[0] ?? null;
 }
 
@@ -138,10 +150,14 @@ export function fallbackOrderError(
   settings: ImageGenerationSettings,
 ): string | null {
   if (order.length === 0) return "Choose at least one provider.";
+
   if (order.length > IMAGE_PROVIDER_IDS.length) return "The order lists too many providers.";
+
   if (new Set(order).size !== order.length) return "Each provider can appear only once.";
   const disabled = order.find((id) => !isImageProviderEnabled(settings, id));
+
   if (disabled) return `${IMAGE_PROVIDER_LABELS[disabled]} is turned off.`;
+
   return null;
 }
 
@@ -159,8 +175,10 @@ export function imageProviderTogglePatch(
     ...settings,
     ...(provider === "chatgpt" ? { chatgptEnabled: enabled } : { grokEnabled: enabled }),
   };
+
   const order = effectiveFallbackOrder(next);
   const defaultProvider = effectiveDefaultProvider(next);
+
   return {
     ...(provider === "chatgpt" ? { chatgptEnabled: enabled } : { grokEnabled: enabled }),
     ...(defaultProvider !== settings.defaultProvider ? { defaultProvider } : {}),
@@ -173,6 +191,7 @@ export function imageProviderTogglePatch(
 /** Label for the bot editor's "use the global default" option. */
 export function globalDefaultOptionLabel(settings: ImageGenerationSettings): string {
   const provider = effectiveDefaultProvider(settings);
+
   return provider
     ? `Use global default (${IMAGE_PROVIDER_LABELS[provider]})`
     : "Use global default (none enabled)";
@@ -188,7 +207,10 @@ export function botImageProviderOptionLabel(
   status: ImageProviderStatus | undefined,
 ): string {
   const label = IMAGE_PROVIDER_LABELS[provider];
+
   if (status && !status.connected) return `${label} (not connected)`;
+
   if (!isImageProviderEnabled(settings, provider)) return `${label} (off)`;
+
   return label;
 }

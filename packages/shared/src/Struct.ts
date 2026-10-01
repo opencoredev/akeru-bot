@@ -12,6 +12,7 @@ export function deepMerge<T extends Record<string, unknown>>(current: T, patch: 
   }
 
   const next = { ...current } as Record<string, unknown>;
+
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
 

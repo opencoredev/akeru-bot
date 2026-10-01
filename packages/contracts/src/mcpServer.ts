@@ -3,9 +3,11 @@ import * as Schema from "effect/Schema";
 import { IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 export const McpServerId = TrimmedNonEmptyString.pipe(Schema.brand("McpServerId"));
+
 export type McpServerId = typeof McpServerId.Type;
 
 export const McpServerTransport = Schema.Literals(["stdio", "url"]);
+
 export type McpServerTransport = typeof McpServerTransport.Type;
 
 export const McpServerUrl = TrimmedNonEmptyString.check(
@@ -13,16 +15,20 @@ export const McpServerUrl = TrimmedNonEmptyString.check(
     if (!/^https?:\/\//i.test(value)) {
       return "MCP server URL must be an absolute HTTP or HTTPS URL.";
     }
+
     try {
       const url = new URL(value);
+
       if (url.protocol !== "http:" && url.protocol !== "https:") {
         return "MCP server URL must be an absolute HTTP or HTTPS URL.";
       }
+
       // The registry stores no credentials; a userinfo URL would smuggle one
       // into plain event payloads.
       if (url.username !== "" || url.password !== "") {
         return "MCP server URL must not contain credentials.";
       }
+
       return true;
     } catch {
       return "MCP server URL must be an absolute HTTP or HTTPS URL.";
@@ -57,6 +63,7 @@ export const McpServerConfiguration = Schema.Union([
   StdioMcpServerConfiguration,
   UrlMcpServerConfiguration,
 ]);
+
 export type McpServerConfiguration = typeof McpServerConfiguration.Type;
 
 /**
@@ -82,6 +89,7 @@ export const McpServer = Schema.Union([
     updatedAt: IsoDateTime,
   }),
 ]);
+
 export type McpServer = typeof McpServer.Type;
 
 /**
@@ -93,5 +101,6 @@ export function resolveBotMcpServers(
   disabledMcpServerIds: readonly McpServerId[],
 ): readonly McpServer[] {
   const excluded = new Set(disabledMcpServerIds);
+
   return servers.filter((server) => server.enabled && !excluded.has(server.id));
 }

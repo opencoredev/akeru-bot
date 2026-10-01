@@ -12,6 +12,7 @@ describe("decodeImageGenerationRequest", () => {
       count: 2,
       provider: "grok",
     });
+
     expect(result).toEqual({
       ok: true,
       request: {
@@ -31,6 +32,7 @@ describe("decodeImageGenerationRequest", () => {
       prompt: "A lighthouse",
       style: "vivid",
     });
+
     expect(result.ok).toBe(false);
   });
 

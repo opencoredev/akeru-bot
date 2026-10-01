@@ -138,6 +138,7 @@ export const make = Effect.gen(function* () {
   const wakeups = yield* ConnectionWakeups.ConnectionWakeups;
   const ssh = yield* ClientCapabilities.SshEnvironmentGateway;
   const persistedTargets = yield* storage.list;
+
   const initialEntries = new Map(
     yield* Effect.forEach(
       persistedTargets,
@@ -146,6 +147,7 @@ export const make = Effect.gen(function* () {
           target._tag === "BearerConnectionTarget" || target._tag === "SshConnectionTarget"
             ? yield* profiles.get(target.connectionId)
             : Option.none();
+
         return [
           target.environmentId,
           { target, profile } satisfies ConnectionCatalogEntry,
@@ -154,16 +156,22 @@ export const make = Effect.gen(function* () {
       { concurrency: "unbounded" },
     ),
   );
+
   const entries =
     yield* SubscriptionRef.make<ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>>(initialEntries);
+
   const networkStatus = yield* SubscriptionRef.make(yield* connectivity.status);
+
   const serviceScopes = yield* SubscriptionRef.make<
     ReadonlyMap<EnvironmentId, EnvironmentServiceScope>
   >(new Map());
+
   const platformEnvironmentIds = yield* Ref.make<ReadonlySet<EnvironmentId>>(new Set());
+
   const persistedTargetsByEnvironment = yield* Ref.make<
     ReadonlyMap<EnvironmentId, ConnectionTarget>
   >(new Map(persistedTargets.map((target) => [target.environmentId, target])));
+
   interface LeaseLock {
     readonly semaphore: Semaphore.Semaphore;
     readonly users: number;
@@ -182,6 +190,7 @@ export const make = Effect.gen(function* () {
         Effect.gen(function* () {
           const current = yield* Ref.get(leaseLocks);
           const existing = current.get(environmentId);
+
           if (existing !== undefined) {
             yield* Ref.set(
               leaseLocks,
@@ -190,10 +199,13 @@ export const make = Effect.gen(function* () {
                 users: existing.users + 1,
               }),
             );
+
             return existing.semaphore;
           }
+
           const semaphore = yield* Semaphore.make(1);
           yield* Ref.set(leaseLocks, new Map(current).set(environmentId, { semaphore, users: 1 }));
+
           return semaphore;
         }),
       ),
@@ -202,10 +214,13 @@ export const make = Effect.gen(function* () {
         leaseLocksGuard.withPermits(1)(
           Ref.update(leaseLocks, (current) => {
             const existing = current.get(environmentId);
+
             if (existing === undefined || existing.semaphore !== semaphore) {
               return current;
             }
+
             const next = new Map(current);
+
             if (existing.users === 1) {
               next.delete(environmentId);
             } else {
@@ -214,6 +229,7 @@ export const make = Effect.gen(function* () {
                 users: existing.users - 1,
               });
             }
+
             return next;
           }),
         ),
@@ -223,11 +239,13 @@ export const make = Effect.gen(function* () {
     environmentId: EnvironmentId,
   ) {
     const entry = (yield* SubscriptionRef.get(entries)).get(environmentId);
+
     if (entry === undefined) {
       return yield* new EnvironmentNotRegisteredError({
         environmentId,
       });
     }
+
     return entry;
   });
 
@@ -236,9 +254,11 @@ export const make = Effect.gen(function* () {
   ) {
     const current = yield* SubscriptionRef.get(serviceScopes);
     const lease = current.get(environmentId);
+
     if (lease === undefined) {
       return;
     }
+
     const next = new Map(current);
     next.delete(environmentId);
     yield* SubscriptionRef.set(serviceScopes, next);
@@ -251,6 +271,7 @@ export const make = Effect.gen(function* () {
         Effect.gen(function* () {
           const environmentId = entry.target.environmentId;
           const scope = yield* Scope.make();
+
           const supervisor = yield* EnvironmentSupervisor.make(entry, {
             initiallyDesired: false,
           }).pipe(
@@ -260,12 +281,15 @@ export const make = Effect.gen(function* () {
             Scope.provide(scope),
             Effect.onError(() => Scope.close(scope, Exit.void)),
           );
+
           yield* supervisor.connect;
           yield* SubscriptionRef.update(serviceScopes, (current) => {
             const next = new Map(current);
             next.set(environmentId, { entry, supervisor, scope });
+
             return next;
           });
+
           return supervisor;
         }),
       ),
@@ -279,12 +303,15 @@ export const make = Effect.gen(function* () {
       Effect.gen(function* () {
         const entry = yield* getEntry(environmentId);
         const existing = (yield* SubscriptionRef.get(serviceScopes)).get(environmentId);
+
         if (existing !== undefined) {
           if (Equal.equals(existing.entry, entry)) {
             return existing.supervisor;
           }
+
           yield* closeServiceScope(environmentId);
         }
+
         return yield* createServiceScope(entry);
       }),
     );
@@ -293,6 +320,7 @@ export const make = Effect.gen(function* () {
   const run: EnvironmentRegistry["Service"]["run"] = Effect.fn("EnvironmentRegistry.run")(
     function* <A, E, R>(environmentId: EnvironmentId, effect: Effect.Effect<A, E, R>) {
       const supervisor = yield* acquireSupervisor(environmentId);
+
       return yield* Effect.provideService(
         effect,
         EnvironmentSupervisor.EnvironmentSupervisor,
@@ -348,6 +376,7 @@ export const make = Effect.gen(function* () {
     if (yield* Ref.getAndSet(started, true)) {
       return;
     }
+
     yield* Effect.forEach(
       persistedTargets,
       (target) =>
@@ -368,6 +397,7 @@ export const make = Effect.gen(function* () {
     const target = entry.target;
     const previous = (yield* SubscriptionRef.get(entries)).get(target.environmentId);
     const existingScope = (yield* SubscriptionRef.get(serviceScopes)).get(target.environmentId);
+
     if (
       options?.retainEquivalentRuntime === true &&
       previous !== undefined &&
@@ -382,6 +412,7 @@ export const make = Effect.gen(function* () {
     yield* SubscriptionRef.update(entries, (current) => {
       const next = new Map(current);
       next.set(target.environmentId, entry);
+
       return next;
     });
     yield* createServiceScope(entry);
@@ -398,10 +429,12 @@ export const make = Effect.gen(function* () {
         if ((yield* Ref.get(platformEnvironmentIds)).has(environmentId)) {
           return;
         }
+
         yield* registrations.register(registration);
         yield* Ref.update(persistedTargetsByEnvironment, (current) => {
           const next = new Map(current);
           next.set(environmentId, registration.target);
+
           return next;
         });
         yield* installEntryLocked(entry);
@@ -419,6 +452,7 @@ export const make = Effect.gen(function* () {
           yield* Ref.update(platformEnvironmentIds, (current) => {
             const next = new Set(current);
             next.add(target.environmentId);
+
             return next;
           });
 
@@ -440,12 +474,14 @@ export const make = Effect.gen(function* () {
           const persistedTarget = (yield* Ref.get(persistedTargetsByEnvironment)).get(
             target.environmentId,
           );
+
           if (persistedTarget !== undefined) {
             yield* registrations.remove(persistedTarget).pipe(
               Effect.tap(() =>
                 Ref.update(persistedTargetsByEnvironment, (current) => {
                   const next = new Map(current);
                   next.delete(target.environmentId);
+
                   return next;
                 }),
               ),
@@ -480,14 +516,17 @@ export const make = Effect.gen(function* () {
           yield* Ref.update(platformEnvironmentIds, (current) => {
             const next = new Set(current);
             next.delete(environmentId);
+
             return next;
           });
           yield* closeServiceScope(environmentId);
           yield* SubscriptionRef.update(entries, (current) => {
             const next = new Map(current);
             next.delete(environmentId);
+
             return next;
           });
+
           if (entry !== undefined && entry.target._tag === "BearerConnectionTarget") {
             yield* credentials.remove(entry.target.connectionId).pipe(
               Effect.catch((error) =>
@@ -498,6 +537,7 @@ export const make = Effect.gen(function* () {
               ),
             );
           }
+
           yield* Effect.all(
             [
               cache.clear(environmentId).pipe(
@@ -532,6 +572,7 @@ export const make = Effect.gen(function* () {
     const desiredIds = new Set(
       platformRegistrations.map((registration) => registration.target.environmentId),
     );
+
     const currentPlatformIds = yield* Ref.get(platformEnvironmentIds);
     yield* Effect.forEach(
       currentPlatformIds,
@@ -551,7 +592,9 @@ export const make = Effect.gen(function* () {
             environmentId,
           });
         }
+
         const target = (yield* getEntry(environmentId)).target;
+
         const profile =
           target._tag === "BearerConnectionTarget" || target._tag === "SshConnectionTarget"
             ? yield* profiles.get(target.connectionId)
@@ -561,12 +604,14 @@ export const make = Effect.gen(function* () {
         yield* Ref.update(persistedTargetsByEnvironment, (current) => {
           const next = new Map(current);
           next.delete(environmentId);
+
           return next;
         });
         yield* closeServiceScope(environmentId);
         yield* SubscriptionRef.update(entries, (current) => {
           const next = new Map(current);
           next.delete(environmentId);
+
           return next;
         });
         yield* Effect.all(
@@ -611,10 +656,13 @@ export const make = Effect.gen(function* () {
       Effect.catchTag("EnvironmentNotRegisteredError", () => Effect.void),
       Effect.withSpan("EnvironmentRegistry.retryNow"),
     );
+
   const state = Effect.fn("EnvironmentRegistry.state")(function* (environmentId: EnvironmentId) {
     const supervisor = yield* acquireSupervisor(environmentId);
+
     return yield* SubscriptionRef.get(supervisor.state);
   });
+
   const stateChanges = (environmentId: EnvironmentId) =>
     followStream(
       environmentId,

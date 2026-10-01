@@ -54,6 +54,7 @@ describe("rankComposerThreadMentions", () => {
       ],
       { query: "", currentThreadId: "current", currentProjectId: "project-a" },
     );
+
     expect(ranked.map((entry) => entry.id)).toEqual(["visible"]);
   });
 
@@ -77,6 +78,7 @@ describe("rankComposerThreadMentions", () => {
         matchedIds: new Set(["content-hit"]),
       },
     );
+
     expect(ranked.map((entry) => entry.id)).toEqual([
       "local-new",
       "local-old",
@@ -103,11 +105,28 @@ describe("buildThreadMentionExcerpt", () => {
       role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
       text: `message ${index} ${"x".repeat(900)}`,
     }));
+
     const excerpt = buildThreadMentionExcerpt({ id: "t1", title: "Plan", messages });
     const body = excerpt.split("\n").slice(1, -1).join("\n");
     expect(body.length).toBeLessThanOrEqual(THREAD_MENTION_MAX_CHARS);
+    expect(excerpt).toContain("message 28");
     expect(excerpt).toContain("message 29");
     expect(excerpt).not.toContain("message 0 ");
+    expect(body.indexOf("message 28")).toBeLessThan(body.indexOf("message 29"));
+  });
+
+  it("uses the empty-chat fallback when no messages have visible text", () => {
+    for (const messages of [
+      [],
+      [
+        { role: "system" as const, text: "hidden" },
+        { role: "user" as const, text: "  " },
+      ],
+    ]) {
+      expect(buildThreadMentionExcerpt({ id: "t1", title: "Plan", messages })).toBe(
+        '<chat_context id="t1" title="Plan">\n(This chat has no messages yet.)\n</chat_context>',
+      );
+    }
   });
 
   it("skips system messages, labels speakers, and escapes the title", () => {
@@ -120,6 +139,7 @@ describe("buildThreadMentionExcerpt", () => {
         { role: "assistant", text: "Answer" },
       ],
     });
+
     expect(excerpt).toBe(
       '<chat_context id="t1" title="Say &quot;hi&quot;">\nUser: Question\nBot: Answer\n</chat_context>',
     );
@@ -146,6 +166,7 @@ describe("appendComposerMentionContext", () => {
       title: `Chat ${index}`,
       messages: [{ role: "user" as const, text: "hi" }],
     }));
+
     const result = appendComposerMentionContext("see", { browser: null, threads });
     expect(result.match(/<chat_context /g)).toHaveLength(THREAD_MENTION_MAX_THREADS);
   });

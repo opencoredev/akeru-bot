@@ -38,6 +38,7 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 const PROVIDER_SLUG_MAX_CHARS = 64;
+
 /**
  * Slug pattern shared by driver kinds and instance ids — letters, digits,
  * dashes, underscores. The first character must be a letter so slugs remain
@@ -47,7 +48,9 @@ const PROVIDER_SLUG_MAX_CHARS = 64;
  * fork authors retain reasonable freedom.
  */
 const PROVIDER_SLUG_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+
 const ENVIRONMENT_VARIABLE_NAME_MAX_CHARS = 128;
+
 const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 const slugSchema = TrimmedNonEmptyString.check(
@@ -68,9 +71,11 @@ const slugSchema = TrimmedNonEmptyString.check(
  * drivers gracefully (see module docs).
  */
 export const ProviderDriverKind = slugSchema.pipe(Schema.brand("ProviderDriverKind"));
+
 export type ProviderDriverKind = typeof ProviderDriverKind.Type;
 
 const isProviderDriverKindValue = Schema.is(ProviderDriverKind);
+
 export const isProviderDriverKind = (value: unknown): value is ProviderDriverKind =>
   isProviderDriverKindValue(value);
 
@@ -80,6 +85,7 @@ export const isProviderDriverKind = (value: unknown): value is ProviderDriverKin
  * type system cannot confuse the two.
  */
 export const ProviderInstanceId = slugSchema.pipe(Schema.brand("ProviderInstanceId"));
+
 export type ProviderInstanceId = typeof ProviderInstanceId.Type;
 
 /**
@@ -92,12 +98,14 @@ export const ProviderInstanceRef = Schema.Struct({
   instanceId: ProviderInstanceId,
   driver: ProviderDriverKind,
 });
+
 export type ProviderInstanceRef = typeof ProviderInstanceRef.Type;
 
 export const ProviderInstanceEnvironmentVariableName = TrimmedNonEmptyString.check(
   Schema.isMaxLength(ENVIRONMENT_VARIABLE_NAME_MAX_CHARS),
   Schema.isPattern(ENVIRONMENT_VARIABLE_NAME_PATTERN),
 );
+
 export type ProviderInstanceEnvironmentVariableName =
   typeof ProviderInstanceEnvironmentVariableName.Type;
 
@@ -107,9 +115,11 @@ export const ProviderInstanceEnvironmentVariable = Schema.Struct({
   sensitive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   valueRedacted: Schema.optionalKey(Schema.Boolean),
 });
+
 export type ProviderInstanceEnvironmentVariable = typeof ProviderInstanceEnvironmentVariable.Type;
 
 export const ProviderInstanceEnvironment = Schema.Array(ProviderInstanceEnvironmentVariable);
+
 export type ProviderInstanceEnvironment = typeof ProviderInstanceEnvironment.Type;
 
 /**
@@ -129,6 +139,7 @@ export const ProviderInstanceConfig = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   config: Schema.optionalKey(Schema.Unknown),
 });
+
 export type ProviderInstanceConfig = typeof ProviderInstanceConfig.Type;
 
 /**
@@ -136,6 +147,7 @@ export type ProviderInstanceConfig = typeof ProviderInstanceConfig.Type;
  * `ProviderInstanceId`, values are envelopes the registry feeds to drivers.
  */
 export const ProviderInstanceConfigMap = Schema.Record(ProviderInstanceId, ProviderInstanceConfig);
+
 export type ProviderInstanceConfigMap = typeof ProviderInstanceConfigMap.Type;
 
 /**

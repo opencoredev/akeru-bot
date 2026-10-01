@@ -35,11 +35,13 @@ const RETIRED_SETTINGS_DEEP_LINK_IDS: Readonly<Record<string, SettingsDeepLinkId
 export function parseSettingsDeepLinkId(href: string | undefined): SettingsDeepLinkId | null {
   if (!href) return null;
   let url: URL;
+
   try {
     url = new URL(href);
   } catch {
     return null;
   }
+
   if (
     url.protocol !== "grokbot:" ||
     url.hostname !== "app" ||
@@ -50,8 +52,11 @@ export function parseSettingsDeepLinkId(href: string | undefined): SettingsDeepL
   ) {
     return null;
   }
+
   const id = url.searchParams.get("id")?.trim() || "general";
+
   if (settingsDeepLinkIds.has(id)) return id as SettingsDeepLinkId;
+
   return RETIRED_SETTINGS_DEEP_LINK_IDS[id] ?? null;
 }
 

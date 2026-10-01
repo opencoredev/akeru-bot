@@ -22,21 +22,24 @@ import {
   PersistedBotSandbox,
   BotUsageCap,
   GroupBotMembership,
+} from "./orchestration/roster.ts";
+import {
   ModelSelection,
-  OrchestrationMessageRole,
-  OrchestrationProposedPlanId,
   ProviderInteractionMode,
   RuntimeMode,
-} from "./orchestration.ts";
+} from "./orchestration/modelSelection.ts";
+import { OrchestrationMessageRole, OrchestrationProposedPlanId } from "./orchestration/thread.ts";
 import { ImageProviderId } from "./imageGeneration.ts";
 import {
   BackgroundActivityProfile,
   BackgroundActivityProfileSelection,
   ServerSettings,
-} from "./settings.ts";
+} from "./settings/server.ts";
 
 export const AKERU_ARCHIVE_FORMAT = "akeru.archive" as const;
+
 export const AKERU_ARCHIVE_VERSION = 1 as const;
+
 export const PORTABILITY_ARCHIVE_MAX_CHARS = 20 * 1024 * 1024;
 
 const PortabilityBackgroundActivityOverrides = Schema.Struct({
@@ -74,9 +77,11 @@ export const PortabilitySafeServerSettings = Schema.Struct({
   sourceControlWritingStyle: ServerSettings.fields.sourceControlWritingStyle,
   sourceControlWriterModelSelection: ServerSettings.fields.sourceControlWriterModelSelection,
 });
+
 export type PortabilitySafeServerSettings = typeof PortabilitySafeServerSettings.Type;
 
 const ArchiveChecksum = Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/));
+
 const ArchiveRecordBase = {
   id: TrimmedNonEmptyString,
   updatedAt: IsoDateTime,
@@ -101,6 +106,7 @@ export const PortabilityBotData = Schema.Struct({
   voiceEnabled: Schema.Boolean,
   archived: Schema.Boolean,
 });
+
 export type PortabilityBotData = typeof PortabilityBotData.Type;
 
 export const PortabilityGroupData = Schema.Struct({
@@ -108,6 +114,7 @@ export const PortabilityGroupData = Schema.Struct({
   bossBotId: Schema.NullOr(BotId),
   members: Schema.Array(GroupBotMembership),
 });
+
 export type PortabilityGroupData = typeof PortabilityGroupData.Type;
 
 export const PortabilityMcpServerData = Schema.Struct({
@@ -115,6 +122,7 @@ export const PortabilityMcpServerData = Schema.Struct({
   configuration: McpServerConfiguration,
   instructions: Schema.optional(McpServerInstructions),
 });
+
 export type PortabilityMcpServerData = typeof PortabilityMcpServerData.Type;
 
 export const PortabilityProjectData = Schema.Struct({
@@ -131,6 +139,7 @@ export const PortabilityProjectData = Schema.Struct({
   defaultModelSelection: Schema.NullOr(ModelSelection),
   defaultThreadEnvMode: Schema.optional(Schema.NullOr(ThreadEnvMode)),
 });
+
 export type PortabilityProjectData = typeof PortabilityProjectData.Type;
 
 export const PortabilityThreadData = Schema.Struct({
@@ -191,6 +200,7 @@ export const PortabilityThreadData = Schema.Struct({
     }),
   ),
 });
+
 export type PortabilityThreadData = typeof PortabilityThreadData.Type;
 
 export const PortabilityArchiveRecord = Schema.Union([
@@ -226,7 +236,9 @@ export const PortabilityArchiveRecord = Schema.Union([
     data: PortabilityThreadData,
   }),
 ]);
+
 export type PortabilityArchiveRecord = typeof PortabilityArchiveRecord.Type;
+
 export type PortabilityArchiveRecordType = PortabilityArchiveRecord["type"];
 
 export const PortabilityArchive = Schema.Struct({
@@ -240,6 +252,7 @@ export const PortabilityArchive = Schema.Struct({
   records: Schema.Array(PortabilityArchiveRecord),
   checksum: ArchiveChecksum,
 });
+
 export type PortabilityArchive = typeof PortabilityArchive.Type;
 
 export const PortabilityArchiveText = Schema.String.check(
@@ -258,9 +271,11 @@ export const PortabilityImportItem = Schema.Struct({
   id: TrimmedNonEmptyString,
   title: TrimmedNonEmptyString,
 });
+
 export type PortabilityImportItem = typeof PortabilityImportItem.Type;
 
 export const PortabilityProjectFolderMap = Schema.Record(ProjectId, TrimmedNonEmptyString);
+
 export type PortabilityProjectFolderMap = typeof PortabilityProjectFolderMap.Type;
 
 export const PortabilityProjectFolder = Schema.Struct({
@@ -269,6 +284,7 @@ export const PortabilityProjectFolder = Schema.Struct({
   workspaceName: TrimmedNonEmptyString,
   destination: Schema.NullOr(TrimmedNonEmptyString),
 });
+
 export type PortabilityProjectFolder = typeof PortabilityProjectFolder.Type;
 
 export const PortabilityUnsupportedItem = Schema.Struct({
@@ -284,6 +300,7 @@ export const PortabilityUnsupportedItem = Schema.Struct({
   count: NonNegativeInt,
   reason: TrimmedNonEmptyString,
 });
+
 export type PortabilityUnsupportedItem = typeof PortabilityUnsupportedItem.Type;
 
 export const PortabilityImportPreview = Schema.Struct({
@@ -299,18 +316,21 @@ export const PortabilityImportPreview = Schema.Struct({
   ),
   unsupported: Schema.Array(PortabilityUnsupportedItem),
 });
+
 export type PortabilityImportPreview = typeof PortabilityImportPreview.Type;
 
 export const PortabilityExportResult = Schema.Struct({
   filename: TrimmedNonEmptyString,
   contents: PortabilityArchiveText,
 });
+
 export type PortabilityExportResult = typeof PortabilityExportResult.Type;
 
 export const PortabilityPreviewImportInput = Schema.Struct({
   contents: PortabilityArchiveText,
   projectFolders: Schema.optional(PortabilityProjectFolderMap),
 });
+
 export type PortabilityPreviewImportInput = typeof PortabilityPreviewImportInput.Type;
 
 export const PortabilityApplyImportInput = Schema.Struct({
@@ -319,6 +339,7 @@ export const PortabilityApplyImportInput = Schema.Struct({
   expectedSnapshotSequence: NonNegativeInt,
   expectedStateChecksum: ArchiveChecksum,
 });
+
 export type PortabilityApplyImportInput = typeof PortabilityApplyImportInput.Type;
 
 export const PortabilityApplyImportResult = Schema.Struct({
@@ -336,6 +357,7 @@ export const PortabilityApplyImportResult = Schema.Struct({
     }),
   ),
 });
+
 export type PortabilityApplyImportResult = typeof PortabilityApplyImportResult.Type;
 
 export class PortabilityArchiveError extends Schema.TaggedErrorClass<PortabilityArchiveError>()(

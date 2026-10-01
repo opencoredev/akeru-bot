@@ -82,6 +82,7 @@ describe("hourly usage formatting", () => {
 
   it("degrades an unknown resolved zone to UTC instead of crashing", () => {
     const resolved = new Intl.DateTimeFormat().resolvedOptions();
+
     const resolvedOptions = vi
       .spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions")
       .mockReturnValue({ ...resolved, timeZone: "Etc/Unknown" });

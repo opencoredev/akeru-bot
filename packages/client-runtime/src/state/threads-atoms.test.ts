@@ -14,6 +14,7 @@ describe("createEnvironmentThreadStateAtoms", () => {
       EnvironmentRegistry | EnvironmentCacheStore | ThreadSnapshotLoader,
       never
     >;
+
     const threads = createEnvironmentThreadStateAtoms(runtime);
     const environmentId = EnvironmentId.make("environment-1");
     const threadId = ThreadId.make("thread-1");

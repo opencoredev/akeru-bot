@@ -16,6 +16,7 @@ const closeServer = (server: NodeNet.Server) =>
 
 const getPort = (server: NodeNet.Server): number => {
   const address = server.address();
+
   return typeof address === "object" && address !== null ? address.port : 0;
 };
 
@@ -79,6 +80,7 @@ it.layer(NetService.layer)("NetService", (it) => {
 
         const resolved = yield* net.findAvailablePort(preferred);
         assert.ok(resolved > 0);
+
         if (isPreferredAvailable) {
           assert.equal(resolved, preferred);
         } else {

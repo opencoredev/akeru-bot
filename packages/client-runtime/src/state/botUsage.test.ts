@@ -21,6 +21,7 @@ import type { RpcSession } from "../rpc/session.ts";
 import { createBotUsageEnvironmentAtoms } from "./botUsage.ts";
 
 const environmentId = EnvironmentId.make("usage-environment");
+
 const target = new PrimaryConnectionTarget({
   environmentId,
   label: "Usage environment",
@@ -50,13 +51,16 @@ const snapshotFor = (botId: BotId) => ({
  */
 const connectedEnvironment = Effect.fn(function* () {
   const calls = { count: 0 };
+
   const client = {
     [WS_METHODS.botUsage]: (input: { readonly botId: BotId }) =>
       Effect.sync(() => {
         calls.count += 1;
+
         return snapshotFor(input.botId);
       }),
   } as unknown as WsRpcProtocolClient;
+
   const rpcSession: RpcSession = {
     client,
     initialConfig: Effect.never,
@@ -64,6 +68,7 @@ const connectedEnvironment = Effect.fn(function* () {
     probe: Effect.void,
     closed: Effect.never,
   };
+
   const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
     target,
     state: yield* SubscriptionRef.make<SupervisorConnectionState>({
@@ -81,6 +86,7 @@ const connectedEnvironment = Effect.fn(function* () {
     retryNow: Effect.void,
     retryIfDesired: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+
   const registryService = EnvironmentRegistry.EnvironmentRegistry.of({
     run: ((_id, effect) =>
       Effect.provideService(
@@ -96,6 +102,7 @@ const connectedEnvironment = Effect.fn(function* () {
       )) as EnvironmentRegistry.EnvironmentRegistry["Service"]["followStream"],
     stateChanges: () => SubscriptionRef.changes(supervisor.state),
   } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+
   return {
     calls,
     runtime: Atom.runtime(Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, registryService)),
@@ -110,14 +117,17 @@ describe("bot usage environment atoms", () => {
       Effect.gen(function* () {
         let requestedBotId: BotId | undefined;
         let resolveRequest!: () => void;
+
         const requested = new Promise<void>((resolve) => {
           resolveRequest = resolve;
         });
+
         const client = {
           [WS_METHODS.botUsage]: (input: { readonly botId: BotId }) =>
             Effect.sync(() => {
               requestedBotId = input.botId;
               resolveRequest();
+
               return {
                 botId: input.botId,
                 consumedTokens: 0,
@@ -140,6 +150,7 @@ describe("bot usage environment atoms", () => {
               };
             }),
         } as unknown as WsRpcProtocolClient;
+
         const rpcSession: RpcSession = {
           client,
           initialConfig: Effect.never,
@@ -147,6 +158,7 @@ describe("bot usage environment atoms", () => {
           probe: Effect.void,
           closed: Effect.never,
         };
+
         const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
           target,
           state: yield* SubscriptionRef.make<SupervisorConnectionState>({
@@ -164,20 +176,25 @@ describe("bot usage environment atoms", () => {
           retryNow: Effect.void,
           retryIfDesired: Effect.void,
         } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+
         const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_id, effect) =>
           Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+
         const followStream: EnvironmentRegistry.EnvironmentRegistry["Service"]["followStream"] = (
           _id,
           stream,
         ) => Stream.provideService(stream, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+
         const registryService = EnvironmentRegistry.EnvironmentRegistry.of({
           run,
           followStream,
           stateChanges: () => SubscriptionRef.changes(supervisor.state),
         } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]);
+
         const atoms = createBotUsageEnvironmentAtoms(
           Atom.runtime(Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, registryService)),
         );
+
         const botId = BotId.make("bot-usage-state");
         const atom = atoms.summary({ environmentId, input: { botId } });
         expect(atom).toBe(atoms.summary({ environmentId, input: { botId } }));
@@ -190,9 +207,11 @@ describe("bot usage environment atoms", () => {
             input: { botId },
           }),
         );
+
         const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
           Effect.sync(() => value.dispose()),
         );
+
         const unmount = registry.mount(atom);
         yield* Effect.addFinalizer(() => Effect.sync(unmount));
         yield* Effect.promise(() => requested);
@@ -206,14 +225,18 @@ describe("bot usage environment atoms", () => {
       Effect.gen(function* () {
         const { calls, runtime } = yield* connectedEnvironment();
         const atoms = createBotUsageEnvironmentAtoms(runtime);
+
         const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
           Effect.sync(() => value.dispose()),
         );
+
         vi.useFakeTimers();
+
         try {
           const unmount = registry.mount(
             atoms.summary({ environmentId, input: { botId: BotId.make("bot-no-poll") } }),
           );
+
           yield* Effect.addFinalizer(() => Effect.sync(unmount));
           yield* Effect.promise(() => vi.advanceTimersByTimeAsync(20));
           expect(calls.count).toBe(1);
@@ -232,14 +255,18 @@ describe("bot usage environment atoms", () => {
         const { calls, runtime } = yield* connectedEnvironment();
         const focusSignal = Atom.make(0);
         const atoms = createBotUsageEnvironmentAtoms(runtime, { focusSignal });
+
         const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
           Effect.sync(() => value.dispose()),
         );
+
         vi.useFakeTimers();
+
         try {
           const unmount = registry.mount(
             atoms.summary({ environmentId, input: { botId: BotId.make("bot-focus") } }),
           );
+
           yield* Effect.addFinalizer(() => Effect.sync(unmount));
           yield* Effect.promise(() => vi.advanceTimersByTimeAsync(20));
           expect(calls.count).toBe(1);

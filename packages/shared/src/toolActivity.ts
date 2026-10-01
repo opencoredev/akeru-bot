@@ -10,35 +10,46 @@ function asTrimmedString(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
+
   const trimmed = value.trim();
+
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function normalizeCommandValue(value: unknown): string | undefined {
   const direct = asTrimmedString(value);
+
   if (direct) {
     return direct;
   }
+
   if (!Array.isArray(value)) {
     return undefined;
   }
+
   const parts: string[] = [];
+
   for (const entry of value) {
     const part = asTrimmedString(entry);
+
     if (part !== undefined) {
       parts.push(part);
     }
   }
+
   return parts.length > 0 ? parts.join(" ") : undefined;
 }
 
 function stripTrailingExitCode(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
+
   if (!trimmed) {
     return undefined;
   }
+
   const match = /^(?<output>[\s\S]*?)(?:\s*<exited with exit code \d+>)\s*$/iu.exec(trimmed);
   const output = match?.groups?.output?.trim() ?? trimmed;
+
   return output.length > 0 ? output : undefined;
 }
 
@@ -46,7 +57,9 @@ function extractCommandFromTitle(title: string | undefined): string | undefined 
   if (!title) {
     return undefined;
   }
+
   const backtickMatch = /`([^`]+)`/u.exec(title);
+
   return backtickMatch?.[1]?.trim() || undefined;
 }
 
@@ -55,6 +68,7 @@ function extractToolCommand(data: Record<string, unknown> | undefined, title: st
   const itemInput = asRecord(item?.input);
   const itemResult = asRecord(item?.result);
   const rawInput = asRecord(data?.rawInput);
+
   const candidates = [
     normalizeCommandValue(item?.command),
     normalizeCommandValue(itemInput?.command),
@@ -62,18 +76,24 @@ function extractToolCommand(data: Record<string, unknown> | undefined, title: st
     normalizeCommandValue(data?.command),
     normalizeCommandValue(rawInput?.command),
   ];
+
   const direct = candidates.find((candidate) => candidate !== undefined);
+
   if (direct) {
     return direct;
   }
+
   const executable = asTrimmedString(rawInput?.executable);
   const args = normalizeCommandValue(rawInput?.args);
+
   if (executable && args) {
     return `${executable} ${args}`;
   }
+
   if (executable) {
     return executable;
   }
+
   return extractCommandFromTitle(title);
 }
 
@@ -81,6 +101,7 @@ function maybePathLike(value: string | undefined): string | undefined {
   if (!value) {
     return undefined;
   }
+
   if (
     value.includes("/") ||
     value.includes("\\") ||
@@ -89,6 +110,7 @@ function maybePathLike(value: string | undefined): string | undefined {
   ) {
     return value;
   }
+
   return undefined;
 }
 
@@ -96,35 +118,47 @@ function collectPaths(value: unknown, paths: string[], seen: Set<string>, depth:
   if (depth > 4 || paths.length >= 8) {
     return;
   }
+
   if (Array.isArray(value)) {
     for (const entry of value) {
       collectPaths(entry, paths, seen, depth + 1);
+
       if (paths.length >= 8) {
         return;
       }
     }
+
     return;
   }
+
   const record = asRecord(value);
+
   if (!record) {
     return;
   }
+
   for (const key of ["path", "filePath", "relativePath", "filename", "newPath", "oldPath"]) {
     const candidate = maybePathLike(asTrimmedString(record[key]));
+
     if (!candidate || seen.has(candidate)) {
       continue;
     }
+
     seen.add(candidate);
     paths.push(candidate);
+
     if (paths.length >= 8) {
       return;
     }
   }
+
   for (const nestedKey of ["locations", "item", "input", "result", "rawInput", "data", "changes"]) {
     if (!(nestedKey in record)) {
       continue;
     }
+
     collectPaths(record[nestedKey], paths, seen, depth + 1);
+
     if (paths.length >= 8) {
       return;
     }
@@ -134,14 +168,17 @@ function collectPaths(value: unknown, paths: string[], seen: Set<string>, depth:
 function extractPrimaryPath(data: Record<string, unknown> | undefined): string | undefined {
   const paths: string[] = [];
   collectPaths(data, paths, new Set<string>(), 0);
+
   return paths[0];
 }
 
 function normalizeEquivalentValue(value: string | undefined): string | undefined {
   const trimmed = asTrimmedString(value);
+
   if (!trimmed) {
     return undefined;
   }
+
   return trimmed
     .replace(/\s+/gu, " ")
     .replace(/\s+(?:complete|completed|started)\s*$/iu, "")
@@ -151,6 +188,7 @@ function normalizeEquivalentValue(value: string | undefined): string | undefined
 function isEquivalent(left: string | undefined, right: string | undefined): boolean {
   const normalizedLeft = normalizeEquivalentValue(left)?.toLowerCase();
   const normalizedRight = normalizeEquivalentValue(right)?.toLowerCase();
+
   return normalizedLeft !== undefined && normalizedLeft === normalizedRight;
 }
 
@@ -162,12 +200,15 @@ function classifyToolAction(input: {
   const itemType = input.itemType ?? undefined;
   const kind = asTrimmedString(input.data?.kind)?.toLowerCase();
   const title = asTrimmedString(input.title)?.toLowerCase();
+
   if (itemType === "command_execution" || kind === "execute" || title === "terminal") {
     return "command";
   }
+
   if (kind === "read" || title === "read file") {
     return "read";
   }
+
   if (
     itemType === "file_change" ||
     kind === "edit" ||
@@ -177,9 +218,11 @@ function classifyToolAction(input: {
   ) {
     return "file_change";
   }
+
   if (itemType === "web_search" || kind === "search" || title === "find" || title === "grep") {
     return "search";
   }
+
   return "other";
 }
 
@@ -205,6 +248,7 @@ export function deriveToolActivityPresentation(
   const data = asRecord(input.data);
   const command = extractToolCommand(data, title);
   const primaryPath = extractPrimaryPath(data);
+
   const action = classifyToolAction({
     itemType: input.itemType,
     title,
@@ -225,6 +269,7 @@ export function deriveToolActivityPresentation(
         detail: primaryPath,
       };
     }
+
     return {
       summary: "Read file",
     };
@@ -242,6 +287,7 @@ export function deriveToolActivityPresentation(
       asTrimmedString(asRecord(data?.rawInput)?.query) ??
       asTrimmedString(asRecord(data?.rawInput)?.pattern) ??
       asTrimmedString(asRecord(data?.rawInput)?.searchTerm);
+
     return {
       summary: "Searched files",
       ...(query ? { detail: query } : {}),

@@ -17,6 +17,7 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as AcpSchema from "./_generated/schema.gen.ts";
 import { CLIENT_METHODS } from "./_generated/meta.gen.ts";
 import * as AcpError from "./errors.ts";
+
 const isAcpError = Schema.is(AcpError.AcpError);
 
 export interface AcpProtocolLogEvent {
@@ -84,10 +85,13 @@ interface AcpPendingRequest {
 }
 
 const decodeSessionUpdate = Schema.decodeUnknownEffect(AcpSchema.SessionNotification);
+
 const decodeElicitationComplete = Schema.decodeUnknownEffect(
   AcpSchema.ElicitationCompleteNotification,
 );
+
 const parserFactory = RpcSerialization.ndJsonRpc();
+
 // Outbound JSON-RPC notification: no `id`, so peers never treat it as a request.
 const encodeJsonRpcNotification = Schema.encodeUnknownExit(
   Schema.fromJsonString(
@@ -103,11 +107,13 @@ const makeRawQueue = Effect.fn("makeRawQueue")(function* <A>(bufferSize: number 
   if (bufferSize === 0) {
     return undefined;
   }
+
   if (bufferSize !== "unbounded" && (!Number.isSafeInteger(bufferSize) || bufferSize < 0)) {
     return yield* Effect.die(
       new RangeError("Raw buffer size must be a non-negative safe integer or 'unbounded'."),
     );
   }
+
   return yield* Effect.acquireRelease(
     Queue.sliding<A, Cause.Done<void>>(
       bufferSize === "unbounded" ? Number.POSITIVE_INFINITY : bufferSize,
@@ -122,9 +128,11 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
   const parser = parserFactory.makeUnsafe();
   const serverQueue = yield* Queue.unbounded<RpcMessage.FromClientEncoded>();
   const clientQueue = yield* Queue.unbounded<RpcMessage.FromServerEncoded>();
+
   const notificationQueue = yield* makeRawQueue<AcpIncomingNotification>(
     options.rawNotificationBufferSize,
   );
+
   const disconnects = yield* Queue.unbounded<number>();
   const outgoing = yield* Queue.unbounded<string | Uint8Array, Cause.Done<void>>();
   const nextRequestId = yield* Ref.make(1);
@@ -135,9 +143,11 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     if (event.direction === "incoming" && !options.logIncoming) {
       return Effect.void;
     }
+
     if (event.direction === "outgoing" && !options.logOutgoing) {
       return Effect.void;
     }
+
     return (
       options.logger?.(event) ??
       Effect.logDebug("ACP protocol event").pipe(Effect.annotateLogs({ event }))
@@ -152,6 +162,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     if (message._tag === "Interrupt") {
       return;
     }
+
     yield* logProtocol({
       direction: "outgoing",
       stage: "decoded",
@@ -159,13 +170,16 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     });
 
     const method = message._tag === "Request" ? message.tag : undefined;
+
     const encodedRequestId =
       message._tag === "Request"
         ? message.id
         : "requestId" in message
           ? message.requestId
           : undefined;
+
     const requestId = encodedRequestId === "" ? undefined : encodedRequestId;
+
     const encoded = yield* Effect.try({
       try: () => parser.encode(message),
       catch: (cause) => AcpError.AcpProtocolParseError.fromEncodingError(method, requestId, cause),
@@ -189,22 +203,28 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     Ref.modify(extPending, (pending) => {
       const pendingKey = String(requestId);
       const pendingRequest = pending.get(pendingKey);
+
       if (!pendingRequest) {
         return [Effect.void, pending] as const;
       }
+
       const next = new Map(pending);
       next.delete(pendingKey);
+
       return [onFound(pendingRequest), next] as const;
     }).pipe(Effect.flatten);
 
   const removeExtPending = (requestId: AcpError.AcpRequestId) =>
     Ref.update(extPending, (pending) => {
       const pendingKey = String(requestId);
+
       if (!pending.has(pendingKey)) {
         return pending;
       }
+
       const next = new Map(pending);
       next.delete(pendingKey);
+
       return next;
     });
 
@@ -249,18 +269,24 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
       if (handled) {
         return [Effect.void, true] as const;
       }
+
       return [
         Effect.gen(function* () {
           yield* Queue.offer(disconnects, 0);
+
           if (notificationQueue) {
             yield* Queue.end(notificationQueue);
           }
+
           const error = yield* classify();
+
           if (!error) {
             return;
           }
+
           yield* failAllExtPending(error);
           yield* emitClientProtocolError(error);
+
           if (options.onTermination) {
             yield* options.onTermination(error);
           }
@@ -298,6 +324,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     if (!options.onExtRequest) {
       return respondWithError(message.id, AcpError.AcpRequestError.methodNotFound(message.tag));
     }
+
     return options.onExtRequest(message.tag, message.payload).pipe(
       Effect.matchEffect({
         onFailure: (error) =>
@@ -332,6 +359,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
           Effect.flatMap(dispatchNotification),
         );
       }
+
       if (message.tag === CLIENT_METHODS.session_elicitation_complete) {
         return decodeElicitationComplete(message.payload).pipe(
           Effect.map(
@@ -352,6 +380,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
           Effect.flatMap(dispatchNotification),
         );
       }
+
       return dispatchNotification({
         _tag: "ExtNotification",
         method: message.tag,
@@ -392,13 +421,17 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     Ref.get(extPending).pipe(
       Effect.flatMap((pending) => {
         const pendingRequest = pending.get(String(message.requestId));
+
         if (!pendingRequest) {
           return Queue.offer(clientQueue, message).pipe(Effect.asVoid);
         }
+
         if (message.exit._tag === "Success") {
           return completeExtPendingSuccess(message.requestId, message.exit.value);
         }
+
         const failure = message.exit.cause.find((entry) => entry._tag === "Fail");
+
         if (failure && isProtocolError(failure.error)) {
           return completeExtPendingFailure(
             message.requestId,
@@ -409,6 +442,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
             }),
           );
         }
+
         return completeExtPendingFailure(
           message.requestId,
           AcpError.AcpRequestError.fromExtensionResponseFailure(
@@ -432,6 +466,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
         return Ref.get(extPending).pipe(
           Effect.flatMap((pending) => {
             const pendingRequest = pending.get(String(message.requestId));
+
             return pendingRequest
               ? completeExtPendingFailure(
                   message.requestId,
@@ -513,6 +548,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
               operation: "read-input-stream",
               cause: error,
             });
+
         return handleTermination(() => Effect.succeed(normalized));
       },
       onSuccess: () =>
@@ -577,6 +613,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
       payload: { _tag: "Notification", tag: method, payload },
     });
     const exit = encodeJsonRpcNotification({ jsonrpc: "2.0", method, params: payload });
+
     if (Exit.isFailure(exit)) {
       return yield* AcpError.AcpProtocolParseError.fromEncodingError(
         method,
@@ -584,6 +621,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
         Cause.squash(exit.cause),
       );
     }
+
     const encoded = `${exit.value}\n`;
     yield* logProtocol({ direction: "outgoing", stage: "raw", payload: encoded });
     yield* Queue.offer(outgoing, encoded);
@@ -594,6 +632,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
       nextRequestId,
       (current) => [current, current + 1] as const,
     );
+
     const deferred = yield* Deferred.make<unknown, AcpError.AcpError>();
     yield* Ref.update(extPending, (pending) =>
       new Map(pending).set(String(requestId), { deferred, method }),
@@ -605,6 +644,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
       payload,
       headers: [],
     }).pipe(Effect.tapError(() => removeExtPending(requestId)));
+
     return yield* Deferred.await(deferred).pipe(
       Effect.onInterrupt(() => removeExtPending(requestId)),
     );

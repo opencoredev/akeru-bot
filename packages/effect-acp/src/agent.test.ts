@@ -25,19 +25,28 @@ const RequestPermissionRequest = jsonRpcRequest(
   "session/request_permission",
   AcpSchema.RequestPermissionRequest,
 );
+
 const InitializeRequest = jsonRpcRequest("initialize", AcpSchema.InitializeRequest);
+
 const InitializeResponse = jsonRpcResponse(AcpSchema.InitializeResponse);
+
 const RequestPermissionResponse = jsonRpcResponse(AcpSchema.RequestPermissionResponse);
+
 const SessionCancelNotification = jsonRpcNotification(
   "session/cancel",
   AcpSchema.CancelNotification,
 );
+
 const ExtPingNotification = jsonRpcNotification("x/ping", Schema.Struct({ count: Schema.Number }));
+
 const ExtRequest = jsonRpcRequest("x/test", Schema.Struct({ hello: Schema.String }));
+
 const ExtResponse = jsonRpcResponse(Schema.Struct({ ok: Schema.Boolean }));
+
 const decodeRequestPermissionRequest = Schema.decodeEffect(
   Schema.fromJsonString(RequestPermissionRequest),
 );
+
 const decodeInitializeResponse = Schema.decodeEffect(Schema.fromJsonString(InitializeResponse));
 
 it.effect("effect-acp agent handles core agent requests and outbound client requests", () =>
@@ -191,11 +200,13 @@ it.effect(
       yield* agent.handleCancel(() =>
         Effect.suspend(() => {
           handled++;
+
           return handled === 3
             ? Deferred.succeed(received, undefined).pipe(Effect.asVoid)
             : Effect.void;
         }),
       );
+
       for (const index of [0, 1, 2]) {
         yield* Queue.offer(
           input,
@@ -206,6 +217,7 @@ it.effect(
           }),
         );
       }
+
       yield* Deferred.await(received);
       const replay = yield* agent.raw.notifications.pipe(Stream.take(2), Stream.runCollect);
       assert.equal(handled, 3);
@@ -235,6 +247,7 @@ it.effect("effect-acp agent uses distinct ids for RPC calls and extension reques
           options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }],
         })
         .pipe(Effect.forkScoped);
+
       const extFiber = yield* agent.client
         .extRequest("x/test", { hello: "world" })
         .pipe(Effect.forkScoped);
@@ -245,7 +258,9 @@ it.effect("effect-acp agent uses distinct ids for RPC calls and extension reques
       const decodedPermission = Schema.decodeEffect(
         Schema.fromJsonString(RequestPermissionRequest),
       );
+
       const decodedExt = Schema.decodeEffect(Schema.fromJsonString(ExtRequest));
+
       const firstIsPermission = yield* decodedPermission(firstOutbound).pipe(
         Effect.match({
           onFailure: () => false,
@@ -256,6 +271,7 @@ it.effect("effect-acp agent uses distinct ids for RPC calls and extension reques
       const permissionRequest = firstIsPermission
         ? yield* decodedPermission(firstOutbound)
         : yield* decodedPermission(secondOutbound);
+
       const extRequest = firstIsPermission
         ? yield* decodedExt(secondOutbound)
         : yield* decodedExt(firstOutbound);

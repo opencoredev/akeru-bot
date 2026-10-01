@@ -22,6 +22,7 @@ export function isTransportConnectionErrorMessage(message: string | null | undef
   }
 
   const normalizedMessage = message.trim();
+
   if (normalizedMessage.length === 0) {
     return false;
   }

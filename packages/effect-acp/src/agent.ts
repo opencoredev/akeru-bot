@@ -264,20 +264,25 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
   options: AcpAgentOptions = {},
 ): Effect.fn.Return<AcpAgent["Service"], never, Scope.Scope> {
   const coreHandlers: AcpCoreAgentRequestHandlers = {};
+
   const cancelHandlers: Array<
     (notification: AcpSchema.CancelNotification) => Effect.Effect<void, AcpError.AcpError>
   > = [];
+
   const extRequestHandlers = new Map<
     string,
     (params: unknown) => Effect.Effect<unknown, AcpError.AcpError>
   >();
+
   const extNotificationHandlers = new Map<
     string,
     (params: unknown) => Effect.Effect<void, AcpError.AcpError>
   >();
+
   let unknownExtRequestHandler:
     | ((method: string, params: unknown) => Effect.Effect<unknown, AcpError.AcpError>)
     | undefined;
+
   let unknownExtNotificationHandler:
     | ((method: string, params: unknown) => Effect.Effect<void, AcpError.AcpError>)
     | undefined;
@@ -313,18 +318,22 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
       }
 
       const handler = extNotificationHandlers.get(notification.method);
+
       if (handler) {
         return handler(notification.params);
       }
+
       return unknownExtNotificationHandler
         ? unknownExtNotificationHandler(notification.method, notification.params)
         : Effect.void;
     },
     onExtRequest: (method, params) => {
       const handler = extRequestHandlers.get(method);
+
       if (handler) {
         return handler(params);
       }
+
       return unknownExtRequestHandler
         ? unknownExtRequestHandler(method, params)
         : Effect.fail(AcpError.AcpRequestError.methodNotFound(method));
@@ -371,6 +380,7 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
   );
 
   let nextRpcRequestId = 2 ** 32;
+
   const rpc = yield* RpcClient.make(AcpRpcs.ClientRpcs, {
     generateRequestId: () => RpcMessage.RequestId(nextRpcRequestId++),
   }).pipe(Effect.provideService(RpcClient.Protocol, transport.clientProtocol));
@@ -443,81 +453,97 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
     handleInitialize: (handler) =>
       Effect.suspend(() => {
         coreHandlers.initialize = handler;
+
         return Effect.void;
       }),
     handleAuthenticate: (handler) =>
       Effect.suspend(() => {
         coreHandlers.authenticate = handler;
+
         return Effect.void;
       }),
     handleLogout: (handler) =>
       Effect.suspend(() => {
         coreHandlers.logout = handler;
+
         return Effect.void;
       }),
     handleCreateSession: (handler) =>
       Effect.suspend(() => {
         coreHandlers.createSession = handler;
+
         return Effect.void;
       }),
     handleLoadSession: (handler) =>
       Effect.suspend(() => {
         coreHandlers.loadSession = handler;
+
         return Effect.void;
       }),
     handleListSessions: (handler) =>
       Effect.suspend(() => {
         coreHandlers.listSessions = handler;
+
         return Effect.void;
       }),
     handleForkSession: (handler) =>
       Effect.suspend(() => {
         coreHandlers.forkSession = handler;
+
         return Effect.void;
       }),
     handleResumeSession: (handler) =>
       Effect.suspend(() => {
         coreHandlers.resumeSession = handler;
+
         return Effect.void;
       }),
     handleCloseSession: (handler) =>
       Effect.suspend(() => {
         coreHandlers.closeSession = handler;
+
         return Effect.void;
       }),
     handleSetSessionModel: (handler) =>
       Effect.suspend(() => {
         coreHandlers.setSessionModel = handler;
+
         return Effect.void;
       }),
     handleSetSessionConfigOption: (handler) =>
       Effect.suspend(() => {
         coreHandlers.setSessionConfigOption = handler;
+
         return Effect.void;
       }),
     handlePrompt: (handler) =>
       Effect.suspend(() => {
         coreHandlers.prompt = handler;
+
         return Effect.void;
       }),
     handleCancel: (handler) =>
       Effect.suspend(() => {
         cancelHandlers.push(handler);
+
         return Effect.void;
       }),
     handleUnknownExtRequest: (handler) =>
       Effect.suspend(() => {
         unknownExtRequestHandler = handler;
+
         return Effect.void;
       }),
     handleUnknownExtNotification: (handler) =>
       Effect.suspend(() => {
         unknownExtNotificationHandler = handler;
+
         return Effect.void;
       }),
     handleExtRequest: (method, payload, handler) =>
       Effect.suspend(() => {
         extRequestHandlers.set(method, decodeExtRequestRegistration(method, payload, handler));
+
         return Effect.void;
       }),
     handleExtNotification: (method, payload, handler) =>
@@ -526,6 +552,7 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
           method,
           decodeExtNotificationRegistration(method, payload, handler),
         );
+
         return Effect.void;
       }),
   });

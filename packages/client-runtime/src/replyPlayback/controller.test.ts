@@ -13,33 +13,43 @@ const identity = {
   provider: "speech",
   voice: "voice",
 };
+
 const request: ReplyPlaybackRequest = { identity, text: "Stored reply", automatic: false };
+
 const context = { ...identity, connected: true, mediaBlocked: false };
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: Error) => void;
+
   const promise = new Promise<T>((yes, no) => {
     resolve = yes;
     reject = no;
   });
+
   return { promise, resolve, reject };
 }
+
 function setup() {
   const handle = () => ({ play: vi.fn(async () => {}), pause: vi.fn(), dispose: vi.fn() });
   const handles: ReturnType<typeof handle>[] = [];
   const events: ReplyAudioEvents[] = [];
   const signals: AbortSignal[] = [];
+
   const prepare = vi.fn(
     async (_request: ReplyPlaybackRequest, signal: AbortSignal, next: ReplyAudioEvents) => {
       signals.push(signal);
       events.push(next);
       const audio = handle();
       handles.push(audio);
+
       return audio;
     },
   );
+
   const controller = createReplyPlaybackController(prepare);
   controller.setContext(context);
+
   return { controller, handles, events, signals, prepare, handle };
 }
 
@@ -66,6 +76,7 @@ describe("reply playback ownership", () => {
     const pending = deferred<ReturnType<typeof handle>>();
     prepare.mockImplementationOnce(async (_request, signal) => {
       signals.push(signal);
+
       return pending.promise;
     });
     const first = controller.start(request);

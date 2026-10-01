@@ -59,6 +59,7 @@ describe("relay validation", () => {
       enrollmentSecret: "enroll-a",
       expectedEnrollmentSecret: "enroll-a",
     });
+
     expect(result).toEqual({ ok: false, reason: "environment-mismatch" });
     expect(JSON.stringify(result)).not.toContain("enroll-a");
   });

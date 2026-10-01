@@ -42,6 +42,7 @@ describe("ProductFeedbackToolDraft", () => {
     const decode = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
       onExcessProperty: "error",
     });
+
     expect(Exit.isSuccess(decode({ feedback: "Add a shortcut." }))).toBe(true);
     expect(
       Exit.isFailure(

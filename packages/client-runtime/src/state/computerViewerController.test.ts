@@ -35,9 +35,11 @@ interface Deferred<A> {
 
 function deferred<A>(): Deferred<A> {
   let resolve!: (value: A) => void;
+
   const promise = new Promise<A>((next) => {
     resolve = next;
   });
+
   return { promise, resolve };
 }
 
@@ -48,44 +50,54 @@ function fakePort() {
   const inputs: Array<{ sequence: number; action: ComputerAction }> = [];
   let pendingInput: Deferred<ComputerViewerOutcome<void>> | null = null;
   let server = serverState();
+
   const port: ComputerViewerPort = {
     getState: async () => {
       calls.push("getState");
+
       return ok(server);
     },
     open: async () => {
       calls.push("open");
       server = serverState();
+
       return ok(server);
     },
     acquire: async () => {
       calls.push("acquire");
       server = serverState({ status: "human" });
       const session: ComputerSession = { sessionId: "lease-1", expiresAt: 60_000, state: server };
+
       return ok(session);
     },
     input: (input) => {
       inputs.push({ sequence: input.sequence, action: input.action });
       pendingInput = deferred();
+
       return pendingInput.promise;
     },
     release: async () => {
       calls.push("release");
+
       if (server.status === "stopped") return { ok: false, code: "closed" };
       server = serverState();
+
       return ok(server);
     },
     close: async () => {
       calls.push("close");
       server = serverState();
+
       return ok(server);
     },
     stop: async () => {
       calls.push("stop");
       server = serverState({ status: "stopped" });
+
       return ok(server);
     },
   };
+
   return {
     port,
     calls,
@@ -133,10 +145,12 @@ describe("computer viewer controller", () => {
   it("stops the computer and resumes it through open", async () => {
     const fake = fakePort();
     let reopened = 0;
+
     const controller = createComputerViewerController({
       port: fake.port,
       onReopened: () => reopened++,
     });
+
     await controller.show();
     await controller.takeControl();
     await controller.stop();
@@ -225,16 +239,19 @@ describe("computer viewer controller", () => {
   it("finishes closing before a reopened viewer acquires control", async () => {
     const fake = fakePort();
     const close = deferred<void>();
+
     const controller = createComputerViewerController({
       port: {
         ...fake.port,
         close: async () => {
           fake.calls.push("close");
           await close.promise;
+
           return ok(serverState());
         },
       },
     });
+
     await controller.show();
     const hiding = controller.hide();
     const reopening = controller.show();
@@ -251,15 +268,18 @@ describe("computer viewer controller", () => {
     const fake = fakePort();
     const oldAcquire = deferred<ComputerViewerOutcome<ComputerSession>>();
     let acquireCount = 0;
+
     const controller = createComputerViewerController({
       port: {
         ...fake.port,
         acquire: () => {
           acquireCount += 1;
+
           return acquireCount === 1 ? oldAcquire.promise : fake.port.acquire();
         },
       },
     });
+
     await controller.show();
     const taking = controller.takeControl();
     await controller.hide();
@@ -293,15 +313,20 @@ describe("computer viewer controller", () => {
     controller.sendInput(click(0));
     controller.sendInput({ _tag: "scroll", direction: "down", amount: 100 });
     controller.sendInput({ _tag: "scroll", direction: "down", amount: 100 });
+
     for (let index = 0; index < COMPUTER_VIEWER_INPUT_QUEUE_LIMIT * 2; index++) {
       controller.sendInput({ _tag: "move", x: index, y: 0 });
     }
+
     let sent = 1;
+
     while (fake.inputs.length === sent) {
       await fake.settleInput();
+
       if (fake.inputs.length === sent) break;
       sent = fake.inputs.length;
     }
+
     expect(fake.inputs[1]?.action).toEqual({ _tag: "scroll", direction: "down", amount: 200 });
     expect(fake.inputs.length).toBeLessThanOrEqual(COMPUTER_VIEWER_INPUT_QUEUE_LIMIT + 1);
     expect(fake.inputs.map((input) => input.sequence)).toEqual(

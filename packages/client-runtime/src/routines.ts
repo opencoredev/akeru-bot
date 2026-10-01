@@ -15,8 +15,11 @@ import { withoutErrorStack } from "@akeru/shared/errorText";
 import { createTranslator, type MessageKey } from "./i18n/index.ts";
 
 export type RoutineAdapterFrequency = RoutineSchedule["kind"];
+
 export type RoutineAdapterApproval = RoutineApprovalPolicy;
+
 export type RoutineAdapterSandbox = RoutineSandbox;
+
 export type RoutineAdapterRunStatus = RoutineRunStatus;
 
 export interface RoutineAdapterProject {
@@ -109,6 +112,7 @@ export function toRoutineSchedule(draft: RoutineAdapterDraft): RoutineSchedule {
   if (draft.schedule.frequency !== "weekly") {
     return { kind: draft.schedule.frequency, time: draft.schedule.time };
   }
+
   return {
     kind: "weekly",
     weekdays: [WEEKDAY_IDS[draft.schedule.weekday ?? 1]!],
@@ -151,9 +155,11 @@ export function toRoutinePanelItem(
     .filter((run) => run.routineId === routine.id)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .map(toAdapterRun);
+
   const assignmentNames = new Map(
     assignments.map((assignment) => [assignment.id, assignment.name]),
   );
+
   const connectorNames = new Map(mcpServers.map((server) => [server.id, server.name]));
 
   return {
@@ -166,10 +172,12 @@ export function toRoutinePanelItem(
     approval: routine.approvalPolicy,
     skills: routine.skillAssignmentIds.flatMap((id) => {
       const name = assignmentNames.get(id);
+
       return name ? [name] : [];
     }),
     connectors: routine.connectorDependencies.flatMap((id) => {
       const name = connectorNames.get(id);
+
       return name ? [name] : [];
     }),
     delegateToBotId: routine.delegateToBotId,
@@ -209,7 +217,9 @@ export function botRoutinesView(
   botId: BotId | string,
 ): BotRoutinesView {
   if (!snapshot) return { kind: "loading" };
+
   if (snapshot.routines === undefined) return { kind: "unavailable" };
+
   return {
     kind: "ready",
     routines: snapshot.routines
@@ -240,6 +250,7 @@ export function routineScheduleLabel(
       : schedule.frequency === "weekdays"
         ? i18n.t("Weekdays")
         : i18n.t(WEEKDAY_LABELS[schedule.weekday ?? 1] ?? "Monday");
+
   return i18n.t("{frequency} at {time} ({timezone})", {
     frequency,
     time: schedule.time,
@@ -261,8 +272,11 @@ export function routineStatus(routine: RoutineAdapterItem): {
   readonly variant: "success" | "warning" | "secondary";
 } {
   if (routine.paused) return { label: "Paused", variant: "warning" };
+
   if (routine.enabled) return { label: "Active", variant: "success" };
+
   if (routine.procedureApproved) return { label: "Off", variant: "secondary" };
+
   return { label: "Draft", variant: "secondary" };
 }
 
@@ -272,8 +286,11 @@ export function routineStatus(routine: RoutineAdapterItem): {
  */
 export function routineStateNote(routine: RoutineAdapterItem): (MessageKey & string) | null {
   if (routine.pausedByAkeru) return "Paused. Fix the cause in Bot inbox, then resume it.";
+
   if (routine.paused) return "Paused until you resume it.";
+
   if (routine.enabled) return null;
+
   return routine.procedureApproved
     ? "Off until you turn it back on."
     : "Draft. Approve its procedure to schedule it.";
@@ -287,8 +304,11 @@ export function routineLifecycleAction(
   routine: RoutineAdapterItem,
 ): "resume" | "enable" | "pause" | null {
   if (routine.paused) return "resume";
+
   if (routine.enabled) return "pause";
+
   if (routine.procedureApproved) return "enable";
+
   return null;
 }
 
@@ -316,7 +336,9 @@ export function runStatusTone(status: RoutineAdapterRunStatus) {
 /** The absolute wall-clock label a relative time is paired with. */
 export function absoluteRunTime(value: string, i18n: RoutineTranslator = englishTranslator) {
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return "";
+
   return i18n.formatDate(date, {
     month: "short",
     day: "numeric",
@@ -328,6 +350,7 @@ export function absoluteRunTime(value: string, i18n: RoutineTranslator = english
 /** An absolute run time, or "Not scheduled" when there is none. */
 export function routineDateLabel(value: string | null, i18n: RoutineTranslator) {
   if (!value) return i18n.t("Not scheduled");
+
   return absoluteRunTime(value, i18n);
 }
 
@@ -341,17 +364,21 @@ export function relativeRunTime(
   i18n: RoutineTranslator = englishTranslator,
 ) {
   const target = new Date(value).getTime();
+
   if (Number.isNaN(target)) return "";
   const diffMs = target - nowMs;
   const seconds = Math.floor(Math.abs(diffMs) / 1000);
+
   if (seconds < 60) return i18n.t("now");
   const minutes = Math.floor(seconds / 60);
+
   const span =
     minutes < 60
       ? i18n.t("{count}m", { count: minutes })
       : minutes < 1440
         ? i18n.t("{count}h", { count: Math.floor(minutes / 60) })
         : i18n.t("{count}d", { count: Math.floor(minutes / 1440) });
+
   return diffMs >= 0 ? i18n.t("in {span}", { span }) : i18n.t("{span} ago", { span });
 }
 
@@ -362,6 +389,7 @@ export function runSummaryLine(
 ) {
   const detail = run.error ?? run.summary ?? "";
   const line = detail.split("\n").find((part) => part.trim().length > 0);
+
   return line?.trim() || i18n.t(runStatusTone(run.status).label);
 }
 
@@ -381,14 +409,18 @@ export function routineApprovalSummary(
   t: RoutineTranslator["t"] = englishTranslator.t,
 ): RoutineApprovalSummary {
   const record = args && typeof args === "object" ? (args as Record<string, unknown>) : null;
+
   const schedule =
     record?.schedule && typeof record.schedule === "object"
       ? (record.schedule as Record<string, unknown>)
       : null;
+
   const time = typeof schedule?.time === "string" ? schedule.time : null;
+
   const weekdays = Array.isArray(schedule?.weekdays)
     ? schedule.weekdays.filter((day): day is string => typeof day === "string")
     : [];
+
   const kind =
     schedule?.kind === "weekdays"
       ? t("Weekdays")
@@ -397,14 +429,18 @@ export function routineApprovalSummary(
           ? weekdays
               .map((day) => {
                 const index = WEEKDAY_IDS.indexOf(day as (typeof WEEKDAY_IDS)[number]);
+
                 return index === -1 ? day : t(WEEKDAY_LABELS[index]!);
               })
               .join(", ")
           : t("Weekly")
         : t("Daily");
+
   const base = time ? t("{schedule} at {time}", { schedule: kind, time }) : null;
+
   const timezone =
     typeof record?.timezone === "string" && record.timezone.trim() ? record.timezone.trim() : null;
+
   return {
     name: typeof record?.name === "string" && record.name.trim() ? record.name : t("New routine"),
     instructions:

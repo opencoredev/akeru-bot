@@ -26,6 +26,7 @@ describe("Akeru tool contracts", () => {
     ] as const) {
       expect(AKERU_TOOL_CATALOG.some((tool) => tool.id === id)).toBe(true);
     }
+
     expect(() => decodeAkeruToolInput("WebSearch", { query: "" })).toThrow();
     expect(() => decodeAkeruToolInput("WebFetch", { url: "file:///secret" })).toThrow();
     expect(() =>
@@ -133,6 +134,7 @@ describe("Akeru tool contracts", () => {
       localFullAccess: false,
       implementedTools: new Set(["Task", "CheckSubagent", "MessageSubagent", "StopSubagent"]),
     };
+
     expect(filterAkeruTools({ ...context, workerDepth: 0 }).map((tool) => tool.id)).toEqual([
       "Task",
       "CheckSubagent",
@@ -144,9 +146,11 @@ describe("Akeru tool contracts", () => {
       "MessageSubagent",
       "StopSubagent",
     ]);
+
     for (const toolId of ["Task", "CheckSubagent", "MessageSubagent", "StopSubagent"] as const) {
       expect(AKERU_TOOL_CATALOG.find((tool) => tool.id === toolId)?.approval).toBe("none");
     }
+
     expect(decodeAkeruToolInput("Task", { task: "Summarize", background: true })).toEqual({
       task: "Summarize",
       background: true,
@@ -181,6 +185,7 @@ describe("Akeru tool contracts", () => {
       task: "Compare three flights.",
       expectedResult: "A short comparison with sources.",
     };
+
     const context = "x".repeat(AKERU_DELEGATION_CONTEXT_MAX_CHARS);
     expect(decodeAkeruToolInput("SendToAgent", { ...input, context })).toMatchObject({ context });
     expect(
@@ -251,10 +256,12 @@ describe("Akeru tool contracts", () => {
     const shell = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalShell")!;
     const read = AKERU_TOOL_CATALOG.find((tool) => tool.id === "ExternalRead")!;
     const copyFromBox = AKERU_TOOL_CATALOG.find((tool) => tool.id === "CopyFromBox")!;
+
     const copyInput = {
       sourcePath: "/project/.env",
       destinationPath: "/tmp/exported-env",
     };
+
     expect(akeruToolApprovalForInput(shell, { command: "git push origin main" })).toBe(
       "production",
     );

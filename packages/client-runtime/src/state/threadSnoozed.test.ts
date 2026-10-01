@@ -14,8 +14,11 @@ import {
 } from "./threadSettled.ts";
 
 const NOW = "2026-04-10T12:00:00.000Z";
+
 const SNOOZED_AT = "2026-04-10T09:00:00.000Z";
+
 const FUTURE_WAKE = "2026-04-11T09:00:00.000Z";
+
 const PAST_WAKE = "2026-04-10T10:00:00.000Z";
 
 function localDate(year: number, month: number, day: number, hour: number, minute = 0): Date {
@@ -30,6 +33,7 @@ function makeShell(input: {
   readonly turnCompletedAt?: string | null;
 }): ThreadSnoozeShell {
   const threadId = ThreadId.make("thread-1");
+
   return {
     snoozedUntil: input.snoozedUntil ?? null,
     snoozedAt: input.snoozedAt ?? (input.snoozedUntil != null ? SNOOZED_AT : null),
@@ -294,6 +298,7 @@ describe("resolveSnoozePresets", () => {
       resolveSnoozePresets(localDate(2026, 4, 6, 10)).find((preset) => preset.id === "next-week")!
         .snoozedUntil,
     );
+
     expect(nextWeek.getDay()).toBe(1);
     expect(nextWeek.getDate()).toBe(13);
   });

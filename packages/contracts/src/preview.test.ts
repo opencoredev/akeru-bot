@@ -21,16 +21,27 @@ import {
 } from "./previewAutomation.ts";
 
 const decodePreviewEvent = Schema.decodeUnknownSync(PreviewEvent);
+
 const decodeSnapshot = Schema.decodeUnknownSync(PreviewSessionSnapshot);
+
 const decodeNavStatus = Schema.decodeUnknownSync(PreviewNavStatus);
+
 const decodeServer = Schema.decodeUnknownSync(DiscoveredLocalServer);
+
 const decodeConfiguredLocalServerUrls = Schema.decodeUnknownSync(ConfiguredLocalServerUrls);
+
 const decodeViewport = Schema.decodeUnknownSync(PreviewViewportSetting);
+
 const decodeResizeInput = Schema.decodeUnknownSync(PreviewAutomationResizeInput);
+
 const decodeOpenInput = Schema.decodeUnknownSync(PreviewAutomationOpenInput);
+
 const decodeResizeResult = Schema.decodeUnknownSync(PreviewAutomationResizeResult);
+
 const decodeAutomationHost = Schema.decodeUnknownSync(PreviewAutomationHost);
+
 const decodeAutomationError = Schema.decodeUnknownSync(PreviewAutomationError);
+
 const decodeAutomationStatus = Schema.decodeUnknownSync(PreviewAutomationStatus);
 
 describe("PreviewAutomationOpenInput", () => {
@@ -93,6 +104,7 @@ describe("PreviewSessionSnapshot", () => {
       canGoForward: false,
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
+
     expect(snapshot.tabId).toBe("preview-thread-1");
     expect(snapshot.navStatus._tag).toBe("Success");
   });
@@ -195,6 +207,7 @@ describe("PreviewAutomationError", () => {
     });
 
     expect(error._tag).toBe("PreviewAutomationTargetNotEditableError");
+
     if (error._tag === "PreviewAutomationTargetNotEditableError") {
       expect(error.selectorKind).toBe("focused-element");
       expect(error.message).toBe("Preview automation type requires an editable focused element.");
@@ -212,6 +225,7 @@ describe("PreviewAutomationStatus", () => {
       title: "Example",
       loading: false,
     };
+
     expect(decodeAutomationStatus(base)).toEqual(base);
     expect(
       decodeAutomationStatus({
@@ -241,6 +255,7 @@ describe("PreviewEvent", () => {
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
     });
+
     expect(event.type).toBe("opened");
   });
 
@@ -257,7 +272,9 @@ describe("PreviewEvent", () => {
       code: -105,
       description: "ERR_NAME_NOT_RESOLVED",
     });
+
     expect(event.type).toBe("failed");
+
     if (event.type === "failed") {
       expect(event.code).toBe(-105);
     }
@@ -281,6 +298,7 @@ describe("PreviewEvent", () => {
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
     });
+
     expect(event.type).toBe("resized");
   });
 
@@ -293,6 +311,7 @@ describe("PreviewEvent", () => {
       serverEpoch: "server-a",
       revision: 1,
     });
+
     expect(event.type).toBe("closed");
   });
 });
@@ -307,6 +326,7 @@ describe("DiscoveredLocalServer", () => {
       pid: 12345,
       terminal: null,
     });
+
     expect(server.port).toBe(5173);
     expect(server.processName).toBe("node");
   });
@@ -320,6 +340,7 @@ describe("DiscoveredLocalServer", () => {
       pid: null,
       terminal: null,
     });
+
     expect(server.processName).toBeNull();
   });
 

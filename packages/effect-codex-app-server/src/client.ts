@@ -91,6 +91,7 @@ export class CodexAppServerClient extends Context.Service<
 type ServerRequestHandler = (
   payload: unknown,
 ) => Effect.Effect<unknown, CodexError.CodexAppServerError>;
+
 type ServerNotificationHandler = (
   payload: unknown,
 ) => Effect.Effect<void, CodexError.CodexAppServerError>;
@@ -102,9 +103,11 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
 ): Effect.fn.Return<CodexAppServerClient["Service"], never, Scope.Scope> {
   const requestHandlers = new Map<string, ServerRequestHandler>();
   const notificationHandlers = new Map<string, Array<ServerNotificationHandler>>();
+
   let unknownRequestHandler:
     | ((method: string, params: unknown) => Effect.Effect<unknown, CodexError.CodexAppServerError>)
     | undefined;
+
   let unknownNotificationHandler:
     | ((method: string, params: unknown) => Effect.Effect<void, CodexError.CodexAppServerError>)
     | undefined;
@@ -157,6 +160,7 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
             notification.method as CodexRpc.ServerNotificationMethod
           ]
         : undefined;
+
     const handlers = notificationHandlers.get(notification.method) ?? [];
 
     if (schema) {
@@ -278,5 +282,6 @@ const makeChildProcessClient = Effect.fn(
   "effect-codex-app-server/CodexAppServerClient.makeChildProcessClient",
 )(function* (handle: ChildProcessSpawner.ChildProcessHandle, options: CodexAppServerClientOptions) {
   yield* Stream.runDrain(handle.stderr).pipe(Effect.ignore, Effect.forkScoped);
+
   return yield* make(makeChildStdio(handle), options, makeTerminationError(handle));
 });

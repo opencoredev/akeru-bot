@@ -2,8 +2,8 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
-import { AkeruMemoryTargetScope } from "./akeruMemory.ts";
-import { AkeruToolApprovalClass, AkeruToolId } from "./akeruTools.ts";
+import { AkeruMemoryTargetScope } from "./akeruMemory/base.ts";
+import { AkeruToolApprovalClass, AkeruToolId } from "./akeruTools/catalog.ts";
 import {
   BotId,
   IsoDateTime,
@@ -14,12 +14,15 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { McpServerId } from "./mcpServer.ts";
-import { BotSandbox, RuntimeMode } from "./orchestration.ts";
+import { BotSandbox } from "./orchestration/roster.ts";
+import { RuntimeMode } from "./orchestration/modelSelection.ts";
 
 export const AKERU_DELEGATION_MAX_DEPTH = 2;
+
 export const AKERU_DELEGATION_MAX_CONCURRENCY = 3;
 
 export const DelegationId = TrimmedNonEmptyString.pipe(Schema.brand("DelegationId"));
+
 export type DelegationId = typeof DelegationId.Type;
 
 /** @deprecated Lifecycle records use AkeruDelegationPhase. */
@@ -31,6 +34,7 @@ export const AkeruDelegationState = Schema.Literals([
   "canceled",
   "completed",
 ]);
+
 export type AkeruDelegationState = typeof AkeruDelegationState.Type;
 
 /** Whether a delegation has finished and can no longer change state. */
@@ -45,6 +49,7 @@ export const SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD = 20;
 
 /** What started a delegation: a parent bot's tool call or a scheduled routine. */
 export const AkeruDelegationTrigger = Schema.Literals(["bot", "scheduled"]);
+
 export type AkeruDelegationTrigger = typeof AkeruDelegationTrigger.Type;
 
 export const AkeruDelegationAccessGrant = Schema.Struct({
@@ -59,6 +64,7 @@ export const AkeruDelegationAccessGrant = Schema.Struct({
   disabledMcpServerIds: Schema.Array(McpServerId),
   approvalCeiling: Schema.suspend(() => AkeruToolApprovalClass),
 });
+
 export type AkeruDelegationAccessGrant = typeof AkeruDelegationAccessGrant.Type;
 
 export const AkeruDelegationFailureCode = Schema.Literals([
@@ -68,6 +74,7 @@ export const AkeruDelegationFailureCode = Schema.Literals([
   "parent_failed",
   "internal",
 ]);
+
 export type AkeruDelegationFailureCode = typeof AkeruDelegationFailureCode.Type;
 
 export const AkeruDelegationResult = Schema.Struct({
@@ -75,12 +82,14 @@ export const AkeruDelegationResult = Schema.Struct({
   childThreadId: ThreadId,
   childTurnId: Schema.NullOr(TurnId),
 });
+
 export type AkeruDelegationResult = typeof AkeruDelegationResult.Type;
 
 export const AkeruDelegationFailure = Schema.Struct({
   failureCode: AkeruDelegationFailureCode,
   message: TrimmedNonEmptyString,
 });
+
 export type AkeruDelegationFailure = typeof AkeruDelegationFailure.Type;
 
 const AkeruDelegationRecordFields = {
@@ -149,6 +158,7 @@ export const AkeruDelegationPhase = Schema.TaggedUnion({
     canceledBy: Schema.Literals(["user", "parent-bot", "parent-turn-failed"]),
   },
 });
+
 export type AkeruDelegationPhase = typeof AkeruDelegationPhase.Type;
 
 const TaggedDelegationRecord = Schema.Struct({
@@ -173,18 +183,21 @@ const LegacyDelegationRecord = Schema.Struct({
 });
 
 type LegacyDelegationRecord = typeof LegacyDelegationRecord.Type;
+
 type TaggedDelegationRecord = typeof TaggedDelegationRecord.Type;
 
 const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
   const childThreadId = legacy.childThreadId ?? legacy.result?.childThreadId ?? null;
   const startedAt = legacy.startedAt ?? legacy.createdAt;
   const completedAt = legacy.completedAt ?? legacy.updatedAt;
+
   switch (legacy.state) {
     case "queued":
       return { _tag: "Queued" };
     case "running":
     case "blocked":
       if (childThreadId === null) return { _tag: "Queued" };
+
       return legacy.state === "running"
         ? {
             _tag: "Running",
@@ -212,6 +225,7 @@ const legacyPhase = (legacy: LegacyDelegationRecord): AkeruDelegationPhase => {
           acknowledgedAt: legacy.acknowledgedAt ?? null,
         };
       }
+
       return {
         _tag: "Failed",
         childThreadId,
@@ -265,6 +279,7 @@ const LegacyToTagged = LegacyDelegationRecord.pipe(
           canceledBy: _canceledBy,
           ...base
         } = legacy;
+
         return { ...base, phase: legacyPhase(legacy) };
       },
       encode: ({ phase, ...base }) => ({
@@ -304,6 +319,7 @@ export const akeruDelegationStateOf = (phase: AkeruDelegationPhase): AkeruDelega
 };
 
 export const AkeruDelegationRecord = Schema.Union([LegacyToTagged, TaggedDelegationRecord]);
+
 export type AkeruDelegationRecord = typeof AkeruDelegationRecord.Type;
 
 export const AKERU_DELEGATION_TRANSITIONS = {

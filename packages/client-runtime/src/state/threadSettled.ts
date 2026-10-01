@@ -10,12 +10,14 @@ export function threadLastActivityAt(
     shell.latestTurn?.startedAt,
     shell.latestTurn?.completedAt,
   ];
+
   let latest: string | null = null;
   let latestTimestamp = Number.NEGATIVE_INFINITY;
 
   for (const candidate of candidates) {
     if (candidate === null || candidate === undefined) continue;
     const timestamp = Date.parse(candidate);
+
     if (timestamp > latestTimestamp) {
       latest = candidate;
       latestTimestamp = timestamp;
@@ -48,20 +50,26 @@ export function hasQueuedTurnStart(
   options: { readonly now: string },
 ): boolean {
   if (shell.latestUserMessageAt == null) return false;
+
   // A failed session start clears the queued state: the failure is already
   // visible (status edge / error).
   if (shell.session?.status === "error") return false;
   const messageAt = Date.parse(shell.latestUserMessageAt);
+
   if (Number.isNaN(messageAt)) return false;
   const nowMs = Date.parse(options.now);
+
   if (Number.isNaN(nowMs)) return false;
+
   // Bounded on both sides: message timestamps originate on whichever device
   // sent the message, so a clock ahead of this one yields a negative age
   // that would otherwise hold the queued state for the whole skew. Mirrors
   // the decider's guard.
   if (Math.abs(nowMs - messageAt) > QUEUED_TURN_START_GRACE_MS) return false;
   const turn = shell.latestTurn;
+
   if (turn === null) return true;
+
   return [turn.requestedAt, turn.startedAt, turn.completedAt].every(
     (candidate) => candidate == null || Date.parse(candidate) < messageAt,
   );
@@ -82,10 +90,13 @@ export function canSettle(
   options: { readonly now: string },
 ): boolean {
   if (shell.hasPendingApprovals || shell.hasPendingUserInput) return false;
+
   if (shell.session?.status === "starting" || shell.session?.status === "running") return false;
+
   // Queued work is as blocked-on-progress as a live session: settling it
   // (or auto-settling it on a closed PR) would hide a just-requested turn.
   if (hasQueuedTurnStart(shell, options)) return false;
+
   return true;
 }
 
@@ -116,6 +127,7 @@ export type ThreadSnoozeShell = Pick<
  */
 export function threadRaisedHandWhileSnoozed(shell: ThreadSnoozeShell): boolean {
   if (shell.hasPendingApprovals || shell.hasPendingUserInput) return true;
+
   // Only a FRESH failure raises the hand: a thread snoozed while already
   // failed stays snoozed — that snooze was the user saying "I saw it, not
   // now". session.updatedAt stamps the status edge, so an error newer than
@@ -126,6 +138,7 @@ export function threadRaisedHandWhileSnoozed(shell: ThreadSnoozeShell): boolean 
   ) {
     return true;
   }
+
   if (
     shell.snoozedAt != null &&
     shell.latestTurn?.state === "completed" &&
@@ -134,6 +147,7 @@ export function threadRaisedHandWhileSnoozed(shell: ThreadSnoozeShell): boolean 
   ) {
     return true;
   }
+
   return false;
 }
 
@@ -153,7 +167,9 @@ export function canSnooze(
   options: { readonly now: string },
 ): boolean {
   if (shell.hasPendingApprovals || shell.hasPendingUserInput) return false;
+
   if (hasQueuedTurnStart(shell, options)) return false;
+
   return true;
 }
 
@@ -170,9 +186,12 @@ export function effectiveSnoozed(
 ): boolean {
   if (shell.snoozedUntil == null) return false;
   const wakeAtMs = Date.parse(shell.snoozedUntil);
+
   // Malformed data never hides a thread.
   if (Number.isNaN(wakeAtMs)) return false;
+
   if (wakeAtMs <= Date.parse(options.now)) return false;
+
   return !threadRaisedHandWhileSnoozed(shell);
 }
 
@@ -193,7 +212,9 @@ export function threadWokeAt(
 ): string | null {
   if (shell.snoozedUntil == null) return null;
   const wakeAtMs = Date.parse(shell.snoozedUntil);
+
   if (Number.isNaN(wakeAtMs)) return null;
+
   // An early hand-raise wake stays authoritative even after the scheduled
   // wake time passes: reporting snoozedUntil then would resurface a Woke
   // indicator the user already cleared by visiting (snoozedUntil is newer
@@ -207,8 +228,10 @@ export function threadWokeAt(
     ) {
       return shell.latestTurn.completedAt;
     }
+
     return shell.session?.updatedAt ?? shell.snoozedAt ?? null;
   }
+
   // No raised hand: woke iff the timer elapsed (still-snoozed → null).
   return wakeAtMs <= Date.parse(options.now) ? shell.snoozedUntil : null;
 }
@@ -229,7 +252,9 @@ export function effectiveSettled(
 ): boolean {
   // Blocked work must remain visible even when a user explicitly settled it.
   if (shell.hasPendingApprovals || shell.hasPendingUserInput) return false;
+
   if (shell.session?.status === "starting" || shell.session?.status === "running") return false;
+
   if (hasQueuedTurnStart(shell, { now: options.now })) {
     // The queued-turn blocker alone is forgivable: it is clock-derived, and
     // list callers pass a coarser `now` than the settle action used. When
@@ -244,15 +269,21 @@ export function effectiveSettled(
       shell.settledAt !== null &&
       shell.latestUserMessageAt !== null &&
       Date.parse(shell.settledAt) >= Date.parse(shell.latestUserMessageAt);
+
     if (!serverAdjudicated) return false;
   }
+
   if (shell.settledOverride === "settled") return true;
+
   return false;
 }
 
 const HOUR_MS = 60 * 60 * 1_000;
+
 const DAY_MS = 24 * HOUR_MS;
+
 const EVENING_HOUR = 18;
+
 const MORNING_HOUR = 9;
 
 export type SnoozePresetId = "hour" | "three-hours" | "evening" | "tomorrow" | "next-week";
@@ -274,6 +305,7 @@ function snoozeTimeOfDayLabel(date: Date): string {
 function snoozeAtHour(base: Date, hour: number): Date {
   const next = new Date(base);
   next.setHours(hour, 0, 0, 0);
+
   return next;
 }
 
@@ -283,6 +315,7 @@ function snoozeAtHour(base: Date, hour: number): Date {
 function addSnoozeDays(base: Date, days: number): Date {
   const next = new Date(base);
   next.setDate(next.getDate() + days);
+
   return next;
 }
 
@@ -294,6 +327,7 @@ function addSnoozeDays(base: Date, days: number): Date {
 export function resolveSnoozePresets(now: Date): ReadonlyArray<SnoozePreset> {
   const inAnHour = new Date(now.getTime() + HOUR_MS);
   const inThreeHours = new Date(now.getTime() + 3 * HOUR_MS);
+
   const presets: SnoozePreset[] = [
     {
       id: "hour",
@@ -310,6 +344,7 @@ export function resolveSnoozePresets(now: Date): ReadonlyArray<SnoozePreset> {
   ];
 
   const evening = snoozeAtHour(now, EVENING_HOUR);
+
   if (evening.getTime() - now.getTime() > HOUR_MS) {
     presets.push({
       id: "evening",
@@ -347,10 +382,15 @@ export function resolveSnoozePresets(now: Date): ReadonlyArray<SnoozePreset> {
 export function snoozeWakeLabel(snoozedUntil: string, options: { readonly now: string }): string {
   const wakeMs = Date.parse(snoozedUntil);
   const nowMs = Date.parse(options.now);
+
   if (Number.isNaN(wakeMs) || Number.isNaN(nowMs)) return "now";
   const remainingMs = wakeMs - nowMs;
+
   if (remainingMs <= 0) return "now";
+
   if (remainingMs < HOUR_MS) return `${Math.max(1, Math.ceil(remainingMs / 60_000))}m`;
+
   if (remainingMs < DAY_MS) return `${Math.ceil(remainingMs / HOUR_MS)}h`;
+
   return `${Math.ceil(remainingMs / DAY_MS)}d`;
 }

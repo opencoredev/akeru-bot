@@ -59,6 +59,7 @@ describe("providerAccessGuide", () => {
     for (const id of ["openai-codex", "anthropic", "xai", "kimi-for-coding"] as const) {
       expect(providerAccessGuide(id, undefined)?.apiAccess, id).toMatch(/do(es)? not include/);
     }
+
     expect(providerAccessGuide("opencode-go", undefined)?.alternative).toBeNull();
   });
 
@@ -126,10 +127,12 @@ describe("providerAccessGuide", () => {
       isCustom,
       capabilities: null,
     });
+
     const providers = [
       { instanceId: "grok", driver: "grok", models: [model("Grok 4"), model("mine", true)] },
       { instanceId: "grok-work", driver: "grok", models: [model("Other")] },
     ] as unknown as Parameters<typeof providerAccessModelNames>[0];
+
     expect(providerAccessModelNames(providers, "xai")).toEqual(["Grok 4"]);
     expect(providerAccessModelNames(providers, "anthropic")).toEqual([]);
     expect(providerAccessModelNames(undefined, "xai")).toEqual([]);
@@ -137,11 +140,13 @@ describe("providerAccessGuide", () => {
 
   it("translates every guide string in zh-CN", () => {
     const { t } = createTranslator("zh-CN", zhCNCatalog);
+
     const guide = providerAccessGuide(
       "kimi-for-coding",
       { connected: true, health: "expired" },
       { t },
     );
+
     expect(guide).toMatchObject({
       stateLabel: "登录已过期",
       unlockedBy: "Kimi For Coding 会员。",

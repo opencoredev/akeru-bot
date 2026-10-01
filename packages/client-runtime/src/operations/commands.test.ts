@@ -71,9 +71,11 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
     [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command: ClientOrchestrationCommand) =>
       Effect.sync(() => {
         dispatched.push(command);
+
         return { sequence: dispatched.length };
       }),
   } as unknown as WsRpcProtocolClient;
+
   const session: RpcSession.RpcSession = {
     client,
     initialConfig: Effect.never,
@@ -81,6 +83,7 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
     probe: Effect.void,
     closed: Effect.never,
   };
+
   return EnvironmentSupervisor.EnvironmentSupervisor.of({
     target: TARGET,
     state: yield* SubscriptionRef.make(AVAILABLE_CONNECTION_STATE),

@@ -10,9 +10,13 @@ import {
 } from "./providerInstance.ts";
 
 const decodeProviderDriverKind = Schema.decodeUnknownSync(ProviderDriverKind);
+
 const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
+
 const decodeProviderInstanceRef = Schema.decodeUnknownSync(ProviderInstanceRef);
+
 const decodeProviderInstanceConfig = Schema.decodeUnknownSync(ProviderInstanceConfig);
+
 const decodeProviderInstanceConfigMap = Schema.decodeUnknownSync(ProviderInstanceConfigMap);
 
 describe("provider slug validation (shared by driver + instance ids)", () => {
@@ -62,6 +66,7 @@ describe("ProviderInstanceRef", () => {
       instanceId: "codex_work",
       driver: "codex",
     });
+
     expect(ref.instanceId).toBe("codex_work");
     expect(ref.driver).toBe("codex");
   });
@@ -71,6 +76,7 @@ describe("ProviderInstanceRef", () => {
       instanceId: "ollama_local",
       driver: "ollama",
     });
+
     expect(ref.instanceId).toBe("ollama_local");
     expect(ref.driver).toBe("ollama");
   });
@@ -96,6 +102,7 @@ describe("ProviderInstanceConfig", () => {
 
   it("preserves driver-opaque config payloads verbatim", () => {
     const opaqueConfig = { homePath: "~/.codex_personal", binaryPath: "codex" };
+
     const decoded = decodeProviderInstanceConfig({
       driver: "codex",
       displayName: "Codex (personal)",
@@ -103,6 +110,7 @@ describe("ProviderInstanceConfig", () => {
       enabled: true,
       config: opaqueConfig,
     });
+
     expect(decoded.displayName).toBe("Codex (personal)");
     expect(decoded.accentColor).toBe("#dc2626");
     expect(decoded.enabled).toBe(true);
@@ -153,12 +161,14 @@ describe("ProviderInstanceConfig", () => {
 
   it("decodes envelopes that name an unknown driver and preserves their config opaquely", () => {
     const opaqueConfig = { someUnknownKnob: 42, model: "llama3" };
+
     const decoded = decodeProviderInstanceConfig({
       driver: "ollama",
       displayName: "Ollama",
       enabled: true,
       config: opaqueConfig,
     });
+
     expect(decoded.driver).toBe("ollama");
     expect(decoded.config).toEqual(opaqueConfig);
   });
@@ -188,6 +198,7 @@ describe("ProviderInstanceConfigMap", () => {
       claudeAgent: { driver: "claudeAgent" },
       ollama_local: { driver: "ollama", config: { endpoint: "http://localhost:11434" } },
     });
+
     expect(new Set(Object.keys(decoded))).toEqual(
       new Set(["claudeAgent", "codex_personal", "codex_work", "ollama_local"]),
     );

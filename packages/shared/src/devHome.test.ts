@@ -21,6 +21,7 @@ const makeRepo = (
   Effect.acquireRelease(
     Effect.sync(() => {
       const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-devhome-"));
+
       if (kind === "worktree") {
         NodeFS.writeFileSync(NodePath.join(root, ".git"), "gitdir: /elsewhere/.git/worktrees/x\n");
       } else if (kind === "bare-repo-worktree") {
@@ -36,8 +37,10 @@ const makeRepo = (
       } else if (kind === "checkout") {
         NodeFS.mkdirSync(NodePath.join(root, ".git"));
       }
+
       const nested = NodePath.join(root, "apps", "web", "src");
       NodeFS.mkdirSync(nested, { recursive: true });
+
       return { root, nested };
     }),
     ({ root }) => Effect.sync(() => NodeFS.rmSync(root, { recursive: true, force: true })),

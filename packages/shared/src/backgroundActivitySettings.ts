@@ -72,6 +72,7 @@ export function getBackgroundActivityBaseProfile(
   if (backgroundActivity.profile === "custom") {
     return backgroundActivity.baseProfile ?? DEFAULT_BACKGROUND_ACTIVITY_PROFILE;
   }
+
   return backgroundActivity.profile;
 }
 
@@ -81,6 +82,7 @@ export function resolveBackgroundActivitySettings(
   const baseProfile = getBackgroundActivityBaseProfile(backgroundActivity);
   const preset = PRESET_SETTINGS[baseProfile];
   const overrides = backgroundActivity.profile === "custom" ? backgroundActivity.overrides : {};
+
   return {
     profile: baseProfile,
     automaticGitFetchInterval:
@@ -132,12 +134,14 @@ export function normalizeBackgroundActivitySettings(
   }
 
   const resolved = resolveBackgroundActivitySettings(backgroundActivity);
+
   const profiles: ReadonlyArray<BackgroundActivityProfile> = [
     getBackgroundActivityBaseProfile(backgroundActivity),
     "balanced",
     "performance",
     "battery-saver",
   ];
+
   for (const profile of profiles) {
     if (resolvedSettingsEqual(resolved, PRESET_SETTINGS[profile])) {
       return {
@@ -150,6 +154,7 @@ export function normalizeBackgroundActivitySettings(
 
   const baseProfile = getBackgroundActivityBaseProfile(backgroundActivity);
   const preset = PRESET_SETTINGS[baseProfile];
+
   const overrides: BackgroundActivitySettings["overrides"] = {
     ...(!durationsEqual(resolved.automaticGitFetchInterval, preset.automaticGitFetchInterval)
       ? { automaticGitFetchInterval: resolved.automaticGitFetchInterval }
@@ -202,17 +207,21 @@ export function resolveServerBackgroundActivitySettings(
     profile: DEFAULT_BACKGROUND_ACTIVITY_PROFILE,
     overrides: {},
   };
+
   const backgroundActivityIsDefault =
     settings.backgroundActivity.profile === defaultBackgroundActivity.profile &&
     settings.backgroundActivity.baseProfile === undefined &&
     Object.keys(settings.backgroundActivity.overrides).length === 0;
+
   const legacyProfile = settings.backgroundActivityProfile;
+
   const hasLegacyOverrides =
     legacyProfile !== DEFAULT_BACKGROUND_ACTIVITY_PROFILE ||
     Duration.toMillis(settings.automaticGitFetchInterval) !==
       Duration.toMillis(DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL) ||
     Duration.toMillis(settings.providerHealthRefreshInterval) !==
       Duration.toMillis(DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL);
+
   if (backgroundActivityIsDefault && hasLegacyOverrides) {
     return resolveBackgroundActivitySettings({
       schemaVersion: 1,
@@ -244,6 +253,7 @@ export function resolveServerBackgroundActivitySettings(
       },
     });
   }
+
   return resolveBackgroundActivitySettings(settings.backgroundActivity);
 }
 
@@ -251,6 +261,7 @@ export function normalizeServerBackgroundActivitySettings(
   settings: ServerSettings,
 ): BackgroundActivitySettings {
   const resolved = resolveServerBackgroundActivitySettings(settings);
+
   return normalizeBackgroundActivitySettings({
     schemaVersion: 1,
     profile: "custom",

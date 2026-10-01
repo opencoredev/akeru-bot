@@ -33,6 +33,7 @@ export class SshConnectionProfile extends Schema.TaggedClass<SshConnectionProfil
 ) {}
 
 export const ConnectionProfile = Schema.Union([BearerConnectionProfile, SshConnectionProfile]);
+
 export type ConnectionProfile = typeof ConnectionProfile.Type;
 
 export interface ConnectionCatalogEntry {
@@ -48,6 +49,7 @@ export class BearerConnectionCredential extends Schema.TaggedClass<BearerConnect
 ) {}
 
 export const ConnectionCredential = Schema.Union([BearerConnectionCredential]);
+
 export type ConnectionCredential = typeof ConnectionCredential.Type;
 
 export class PrimaryConnectionRegistration extends Schema.TaggedClass<PrimaryConnectionRegistration>()(
@@ -78,6 +80,7 @@ export const ConnectionRegistration = Schema.Union([
   BearerConnectionRegistration,
   SshConnectionRegistration,
 ]);
+
 export type ConnectionRegistration = typeof ConnectionRegistration.Type;
 
 /**
@@ -93,6 +96,7 @@ export const PlatformConnectionRegistration = Schema.Union([
   PrimaryConnectionRegistration,
   BearerConnectionRegistration,
 ]);
+
 export type PlatformConnectionRegistration = typeof PlatformConnectionRegistration.Type;
 
 export function connectionRegistrationTarget(

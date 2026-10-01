@@ -49,5 +49,6 @@ export function selectEnvironmentThreadShell(
   threadId: ThreadId,
 ): EnvironmentThreadShell | null {
   const thread = snapshot?.threads.find((candidate) => candidate.id === threadId) ?? null;
+
   return thread ? scopeThreadShell(environmentId, thread) : null;
 }

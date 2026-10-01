@@ -4,8 +4,11 @@ import { describe, expect, it } from "vite-plus/test";
 import { defaultProjectIdForBot, type ChannelProjectModel } from "./channelProject.ts";
 
 const NOW = "2026-01-01T00:00:00.000Z";
+
 const PROJECT_ID = ProjectId.make("project-1");
+
 const SECOND_PROJECT_ID = ProjectId.make("project-2");
+
 const BOT_ID = BotId.make("bot-1");
 
 const model: ChannelProjectModel = {
@@ -32,6 +35,7 @@ const thread = (input: {
 describe("defaultProjectIdForBot", () => {
   it("resolves a bot's default project from its own recent chats before global activity", () => {
     const otherBot = BotId.make("other-bot");
+
     const withThreads: ChannelProjectModel = {
       ...model,
       threads: [
@@ -53,6 +57,7 @@ describe("defaultProjectIdForBot", () => {
         }),
       ],
     };
+
     expect(defaultProjectIdForBot(withThreads, BOT_ID)).toBe(PROJECT_ID);
     expect(defaultProjectIdForBot(withThreads, otherBot)).toBe(SECOND_PROJECT_ID);
     expect(defaultProjectIdForBot(withThreads, BotId.make("fresh-bot"))).toBe(SECOND_PROJECT_ID);
@@ -68,6 +73,7 @@ describe("defaultProjectIdForBot", () => {
       ],
       threads: [],
     };
+
     expect(defaultProjectIdForBot(deletedFirst, null)).toBe(SECOND_PROJECT_ID);
   });
 });

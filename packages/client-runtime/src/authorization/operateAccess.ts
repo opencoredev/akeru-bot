@@ -33,17 +33,21 @@ function resolveSessionOperateAccess(input: {
     if (input.isPending) {
       return "pending";
     }
+
     // A failed session fetch is a transport problem, not a permission
     // decision — locking the panel read-only would misreport it. Stay
     // optimistic; the environment RPC layer still rejects unauthorized writes.
     return input.hasError ? "granted" : "denied";
   }
+
   if (!input.session.authenticated) {
     return "denied";
   }
+
   if (input.session.scopes === undefined) {
     return input.missingScopesAccess;
   }
+
   return input.session.scopes.includes(AuthOrchestrationOperateScope) ? "granted" : "denied";
 }
 
@@ -58,6 +62,7 @@ export function resolvePrimaryOperateAccess(input: {
   if (!input.isPrimary || input.hasDesktopBridge) {
     return "granted";
   }
+
   return resolveSessionOperateAccess({
     session: input.session,
     isPending: input.isPending,

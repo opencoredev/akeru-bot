@@ -50,6 +50,7 @@ describe("delegationSummaryText", () => {
       outcome: { _tag: "Completed", summary: "x".repeat(50) },
       maxDetailChars: 10,
     });
+
     expect(text).toBe(`Scout finished "Summarize": ${"x".repeat(10)}…`);
   });
 });

@@ -9,8 +9,11 @@ import {
 } from "./subscriptionAuth.ts";
 
 const decodeStartInput = Schema.decodeUnknownSync(SubscriptionAuthStartInput);
+
 const decodeStatuses = Schema.decodeUnknownSync(SubscriptionAuthStatuses);
+
 const decodeStartResult = Schema.decodeUnknownSync(SubscriptionAuthStartResult);
+
 const decodeLoginProgress = Schema.decodeUnknownSync(SubscriptionAuthLoginProgress);
 
 describe("subscription auth contracts", () => {
@@ -58,6 +61,7 @@ describe("subscription auth contracts", () => {
       lastSeenAt: "2026-09-01T00:00:00.000Z",
       occurrenceCount: 1,
     };
+
     const memoryApproval = {
       candidateId: "candidate-1",
       fact: "The project uses Bun.",
@@ -67,10 +71,12 @@ describe("subscription auth contracts", () => {
       authorBotId: "bot-1",
       affectedBotIds: ["bot-1"],
     };
+
     const decoded = decodeStatuses({
       providers: [],
       inbox: [item, { ...item, id: "item-2", memoryApproval }],
     });
+
     expect(decoded.inbox[0]?.memoryApproval).toBeUndefined();
     expect(decoded.inbox[1]?.memoryApproval).toEqual(memoryApproval);
   });
@@ -89,6 +95,7 @@ describe("subscription auth contracts", () => {
         },
       ],
     });
+
     expect(decoded.providers[0]).toMatchObject({
       authMode: "api-key",
       baseUrl: "http://localhost:8080/v1",
@@ -110,6 +117,7 @@ describe("subscription auth contracts", () => {
         },
       ],
     });
+
     expect(decoded.accounts[0]).toMatchObject({
       provider: "xai",
       instanceId: "grok_work",
@@ -121,6 +129,7 @@ describe("subscription auth contracts", () => {
     const decoded = decodeStatuses({
       providers: [{ provider: "openai-codex", connected: true, expiresAt: 123 }],
     });
+
     expect(decoded.providers[0]).toEqual({
       provider: "openai-codex",
       connected: true,
@@ -142,6 +151,7 @@ describe("subscription auth contracts", () => {
       "failed-first-request",
       "recovered",
     ] as const;
+
     for (const health of healthStates) {
       expect(
         decodeStatuses({
@@ -215,6 +225,7 @@ describe("subscription auth contracts", () => {
       status: "connected",
       access: "must-not-cross-the-wire",
     });
+
     expect(decoded).toEqual({ status: "connected" });
     expect("access" in decoded).toBe(false);
   });

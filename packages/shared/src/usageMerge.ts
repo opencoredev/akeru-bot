@@ -125,10 +125,12 @@ function claimSources(environments: readonly EnvironmentUsage[]): {
     for (const source of environment.summary.sources) {
       if (source.status === "missing") continue;
       const key = fingerprintKey(source.fingerprint);
+
       if (ownerByFingerprint.has(key)) {
         duplicates.push(`${environment.label}: ${source.fingerprint.resolvedHomePath}`);
         continue;
       }
+
       ownerByFingerprint.set(key, environment.environmentId);
     }
   }
@@ -146,14 +148,19 @@ function ownedContribution(
 } {
   const ownedProviders = new Set<UsageProviderKind>();
   const connectedUsageProviders = new Set<UsageProviderKind>();
+
   for (const provider of environment.summary.connectedProviders ?? []) {
     const usageProvider = USAGE_PROVIDER_BY_CONNECTION[provider];
+
     if (usageProvider !== undefined) connectedUsageProviders.add(usageProvider);
   }
+
   const sessionsByProvider = new Map<UsageProviderKind, number>();
+
   for (const source of environment.summary.sources) {
     if (source.status === "missing") continue;
     const key = fingerprintKey(source.fingerprint);
+
     if (ownerByFingerprint.get(key) === environment.environmentId) {
       const provider = source.fingerprint.provider;
       ownedProviders.add(provider);
@@ -165,6 +172,7 @@ function ownedContribution(
       );
     }
   }
+
   return {
     buckets: environment.summary.buckets.filter(
       (bucket) =>
@@ -234,6 +242,7 @@ export function mergeUsage(
 
   const current: EnvironmentUsage[] = [];
   const staleEnvironments: EnvironmentId[] = [];
+
   for (const environment of environments) {
     if (environment.summary.contractVersion === expectedContractVersion) {
       current.push(environment);
@@ -260,10 +269,12 @@ export function mergeUsage(
     UsageProviderKind,
     { costUsd: number; totalTokens: number; records: number; sessions: number }
   >();
+
   const modelAccumulator = new Map<
     string,
     { provider: UsageProviderKind; costUsd: number; totalTokens: number; records: number }
   >();
+
   const dailyAccumulator = new Map<
     string,
     {
@@ -272,6 +283,7 @@ export function mergeUsage(
       byProvider: Map<UsageProviderKind, { costUsd: number; totalTokens: number }>;
     }
   >();
+
   const hourlyAccumulator = new Map<
     string,
     {
@@ -282,21 +294,26 @@ export function mergeUsage(
       byProvider: Map<UsageProviderKind, { costUsd: number; totalTokens: number }>;
     }
   >();
+
   const contributingEnvironments: EnvironmentId[] = [];
 
   for (const environment of current) {
     const { buckets, sessionsByProvider } = ownedContribution(environment, ownerByFingerprint);
+
     if (buckets.length > 0) contributingEnvironments.push(environment.environmentId);
 
     for (const [providerKind, providerSessions] of sessionsByProvider) {
       sessions += providerSessions;
+
       if (providerSessions === 0) continue;
+
       const provider = providerAccumulator.get(providerKind) ?? {
         costUsd: 0,
         totalTokens: 0,
         records: 0,
         sessions: 0,
       };
+
       provider.sessions += providerSessions;
       providerAccumulator.set(providerKind, provider);
     }
@@ -313,6 +330,7 @@ export function mergeUsage(
       reasoningTokens += bucket.totals.reasoningTokens;
       records += bucket.records;
       unpricedRecords += bucket.unpricedRecords;
+
       if (bucket.costSource === "providerReported") providerReportedRecords += bucket.records;
 
       const provider = providerAccumulator.get(bucket.provider) ?? {
@@ -321,18 +339,21 @@ export function mergeUsage(
         records: 0,
         sessions: 0,
       };
+
       provider.costUsd += bucket.costUsd;
       provider.totalTokens += tokens;
       provider.records += bucket.records;
       providerAccumulator.set(bucket.provider, provider);
 
       const modelKey = `${bucket.provider} ${bucket.model}`;
+
       const model = modelAccumulator.get(modelKey) ?? {
         provider: bucket.provider,
         costUsd: 0,
         totalTokens: 0,
         records: 0,
       };
+
       model.costUsd += bucket.costUsd;
       model.totalTokens += tokens;
       model.records += bucket.records;
@@ -343,6 +364,7 @@ export function mergeUsage(
         totalTokens: 0,
         byProvider: new Map<UsageProviderKind, { costUsd: number; totalTokens: number }>(),
       };
+
       day.costUsd += bucket.costUsd;
       day.totalTokens += tokens;
       const dayProvider = day.byProvider.get(bucket.provider) ?? { costUsd: 0, totalTokens: 0 };
@@ -359,12 +381,15 @@ export function mergeUsage(
           totalTokens: 0,
           byProvider: new Map<UsageProviderKind, { costUsd: number; totalTokens: number }>(),
         };
+
         hour.costUsd += bucket.costUsd;
         hour.totalTokens += tokens;
+
         const hourProvider = hour.byProvider.get(bucket.provider) ?? {
           costUsd: 0,
           totalTokens: 0,
         };
+
         hourProvider.costUsd += bucket.costUsd;
         hourProvider.totalTokens += tokens;
         hour.byProvider.set(bucket.provider, hourProvider);
@@ -446,13 +471,16 @@ function mergePlanLimits(
   environments: readonly EnvironmentUsage[],
 ): readonly UsageProviderPlanLimits[] {
   const byProvider = new Map<SubscriptionProviderId, UsageProviderPlanLimits>();
+
   for (const environment of environments) {
     for (const limits of environment.summary.planLimits ?? []) {
       const existing = byProvider.get(limits.provider);
+
       if (existing === undefined || (existing.status !== "ok" && limits.status === "ok")) {
         byProvider.set(limits.provider, limits);
       }
     }
   }
+
   return [...byProvider.values()];
 }

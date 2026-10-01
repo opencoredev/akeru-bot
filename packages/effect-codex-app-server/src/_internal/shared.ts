@@ -26,6 +26,7 @@ export const decodeOptionalPayload = <A, I>(
     if (raw === undefined) {
       return Effect.sync(() => undefined as A);
     }
+
     return Effect.fail(
       CodexError.CodexAppServerRequestError.unexpectedPayload(method, "decode-payload", raw),
     );
@@ -47,6 +48,7 @@ export const encodeOptionalPayload = <A, I>(
     if (payload === undefined) {
       return Effect.sync(() => undefined);
     }
+
     return Effect.fail(
       CodexError.CodexAppServerRequestError.unexpectedPayload(method, "encode-payload", payload),
     );

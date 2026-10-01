@@ -150,13 +150,16 @@ export function resolvePreviewViewport(
   input: PreviewAutomationResizeInput,
 ): PreviewViewportSetting {
   if (input.mode === "fill") return { _tag: "fill" };
+
   if (input.mode === "preset" && input.preset !== undefined) {
     const preset = PREVIEW_VIEWPORT_PRESETS.find((candidate) => candidate.id === input.preset);
+
     if (!preset) throw new Error(`Unknown preview viewport preset: ${input.preset}`);
     const landscape = input.orientation === "landscape";
     const portrait = input.orientation === "portrait";
     const nativePortrait = preset.height >= preset.width;
     const shouldSwap = (landscape && nativePortrait) || (portrait && !nativePortrait);
+
     return {
       _tag: "preset",
       width: shouldSwap ? preset.height : preset.width,
@@ -164,9 +167,11 @@ export function resolvePreviewViewport(
       presetId: preset.id,
     };
   }
+
   if (input.width === undefined || input.height === undefined) {
     throw new Error("Custom preview viewport requires width and height");
   }
+
   return {
     _tag: "freeform",
     width: input.width,
@@ -182,5 +187,6 @@ export function previewViewportPresetOrientation(
   viewport: PreviewViewportSetting,
 ): "portrait" | "landscape" | null {
   if (viewport._tag === "fill" || viewport.width === viewport.height) return null;
+
   return viewport.width > viewport.height ? "landscape" : "portrait";
 }

@@ -92,6 +92,7 @@ export function connectionStatusTitle(connection: EnvironmentConnectionPresentat
   if (connection.phase === "reconnecting" && connection.error) {
     return "Failed to connect. Reconnecting...";
   }
+
   return connectionStatusText({ ...connection, error: null });
 }
 
@@ -124,6 +125,7 @@ export function connectionPhaseMessage(
   if (networkStatus === "offline" || phase === "offline") {
     return "You are offline";
   }
+
   switch (phase) {
     case "available":
       return "Available";

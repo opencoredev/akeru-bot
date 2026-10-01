@@ -14,10 +14,13 @@ export function composerBotMentionDetail(
   bots: ReadonlyArray<ComposerMentionBot & { readonly title?: string }>,
 ): string | null {
   const namesakes = bots.filter((other) => other.name === bot.name);
+
   if (namesakes.length < 2) return null;
   const title = bot.title?.trim() ?? "";
+
   const titleIsUnique =
     title.length > 0 && namesakes.filter((other) => other.title?.trim() === title).length === 1;
+
   return titleIsUnique ? title : `#${bot.id.slice(-6)}`;
 }
 
@@ -40,22 +43,29 @@ export function resolveComposerBotMention(
     readonly index: number;
     readonly byId: boolean;
   }> = [];
+
   for (const bot of bots) {
     const token = `@${bot.name}`;
     const index = prompt.lastIndexOf(token);
+
     if (index < 0) continue;
     const before = prompt[index - 1];
     const after = prompt[index + token.length];
+
     if ((before === undefined || /\s/.test(before)) && (after === undefined || /\s/.test(after))) {
       mentions.push({ bot, index, byId: false });
     }
   }
+
   for (const token of collectComposerInlineTokens(`${prompt}\n`)) {
     if (token.type !== "bot-mention") continue;
     const bot = bots.find((candidate) => candidate.id === token.value);
+
     if (bot) mentions.push({ bot, index: token.start, byId: true });
   }
+
   let latest: (typeof mentions)[number] | undefined;
+
   for (const mention of mentions) {
     if (
       !latest ||
@@ -65,9 +75,12 @@ export function resolveComposerBotMention(
       latest = mention;
     }
   }
+
   if (!latest) return { kind: "none" };
+
   if (latest.byId) return { kind: "bot", botId: latest.bot.id };
   const name = latest.bot.name;
   const namesakes = bots.filter((bot) => bot.name === name);
+
   return namesakes.length > 1 ? { kind: "ambiguous", name } : { kind: "bot", botId: latest.bot.id };
 }

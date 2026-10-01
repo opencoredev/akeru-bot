@@ -30,6 +30,7 @@ function getRawSelectionValueById(
   id: string,
 ): string | boolean | undefined {
   const selection = selections?.find((candidate) => candidate.id === id);
+
   return selection?.value;
 }
 
@@ -45,6 +46,7 @@ export function getProviderOptionStringSelectionValue(
   id: string,
 ): string | undefined {
   const value = getProviderOptionSelectionValue(selections, id);
+
   return typeof value === "string" ? value : undefined;
 }
 
@@ -53,6 +55,7 @@ export function getProviderOptionBooleanSelectionValue(
   id: string,
 ): boolean | undefined {
   const value = getProviderOptionSelectionValue(selections, id);
+
   return typeof value === "boolean" ? value : undefined;
 }
 
@@ -82,21 +85,26 @@ function resolveDescriptorChoiceValue(
   raw: string | null | undefined,
 ): string | undefined {
   const trimmed = trimOrNull(raw);
+
   if (!trimmed) {
     return descriptor.currentValue ?? descriptor.options.find((option) => option.isDefault)?.id;
   }
+
   if (descriptor.options.length === 0) {
     return trimmed;
   }
+
   if (
     descriptor.promptInjectedValues?.includes(trimmed) &&
     descriptor.options.some((option) => option.id === trimmed)
   ) {
     return descriptor.options.find((option) => option.isDefault)?.id;
   }
+
   if (descriptor.options.some((option) => option.id === trimmed)) {
     return trimmed;
   }
+
   return descriptor.currentValue ?? descriptor.options.find((option) => option.isDefault)?.id;
 }
 
@@ -127,16 +135,21 @@ function withDescriptorCurrentValue(
         currentValue: rawCurrentValue,
       };
     }
+
     return descriptor;
   }
+
   const currentValue =
     typeof rawCurrentValue === "string"
       ? resolveDescriptorChoiceValue(descriptor, rawCurrentValue)
       : resolveDescriptorChoiceValue(descriptor, descriptor.currentValue);
+
   if (!currentValue) {
     const { currentValue: _unusedCurrentValue, ...rest } = descriptor;
+
     return rest;
   }
+
   return {
     ...descriptor,
     currentValue,
@@ -164,12 +177,15 @@ export function getProviderOptionCurrentValue(
   if (!descriptor) {
     return undefined;
   }
+
   if (descriptor.type === "boolean") {
     return descriptor.currentValue;
   }
+
   if (descriptor.currentValue) {
     return descriptor.currentValue;
   }
+
   return descriptor.options.find((option) => option.isDefault)?.id;
 }
 
@@ -179,6 +195,7 @@ export function getProviderOptionCurrentLabel(
   if (!descriptor) {
     return undefined;
   }
+
   if (descriptor.type === "boolean") {
     return typeof descriptor.currentValue === "boolean"
       ? descriptor.currentValue
@@ -186,10 +203,13 @@ export function getProviderOptionCurrentLabel(
         : "Off"
       : undefined;
   }
+
   const currentValue = getProviderOptionCurrentValue(descriptor);
+
   if (typeof currentValue !== "string") {
     return undefined;
   }
+
   return descriptor.options.find((option) => option.id === currentValue)?.label;
 }
 
@@ -204,6 +224,7 @@ export function buildProviderOptionSelectionsFromDescriptors(
 
   for (const descriptor of descriptors) {
     const value = getProviderOptionCurrentValue(descriptor);
+
     if (typeof value === "string" || typeof value === "boolean") {
       nextSelections.push({ id: descriptor.id, value });
     }
@@ -219,9 +240,11 @@ export function getModelSelectionOptionDescriptors(
   if (!modelSelection) {
     return [];
   }
+
   if (!caps) {
     return [];
   }
+
   return getProviderOptionDescriptors({
     caps,
     selections: modelSelection.options,
@@ -237,14 +260,17 @@ export function normalizeModelSlug(
   provider: ProviderDriverKind = DEFAULT_PROVIDER_DRIVER_KIND,
 ): string | null {
   const trimmed = normalizeCustomModelSlug(model);
+
   if (!trimmed) {
     return null;
   }
 
   const aliases = MODEL_SLUG_ALIASES_BY_PROVIDER[provider] ?? {};
+
   const aliased = Object.prototype.hasOwnProperty.call(aliases, trimmed)
     ? aliases[trimmed]
     : undefined;
+
   return typeof aliased === "string" ? aliased : trimmed;
 }
 
@@ -267,34 +293,41 @@ export function resolveSelectableModel(
   }
 
   const trimmed = value.trim();
+
   if (!trimmed) {
     return null;
   }
 
   const direct = options.find((option) => option.slug === trimmed);
+
   if (direct) {
     return direct.slug;
   }
 
   const byName = options.find((option) => option.name.toLowerCase() === trimmed.toLowerCase());
+
   if (byName) {
     return byName.slug;
   }
 
   const normalized = normalizeModelSlug(trimmed, provider);
+
   if (!normalized) {
     return null;
   }
 
   const resolved = options.find((option) => option.slug === normalized);
+
   return resolved ? resolved.slug : null;
 }
 
 function resolveModelSlug(model: string | null | undefined, provider: ProviderDriverKind): string {
   const normalized = normalizeModelSlug(model, provider);
+
   if (!normalized) {
     return DEFAULT_MODEL_BY_PROVIDER[provider] ?? DEFAULT_MODEL;
   }
+
   return normalized;
 }
 
@@ -309,6 +342,7 @@ export function resolveModelSlugForProvider(
 export function trimOrNull<T extends string>(value: T | null | undefined): T | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim() as T;
+
   return trimmed || null;
 }
 
@@ -324,10 +358,12 @@ export function createModelSelection(
   options?: ReadonlyArray<ProviderOptionSelection> | null,
 ): ModelSelection {
   const selections = options ? cloneSelections(options) : [];
+
   const base: ModelSelection = {
     instanceId,
     model,
   };
+
   return selections.length > 0 ? { ...base, options: selections } : base;
 }
 
@@ -344,13 +380,16 @@ export function resolvePromptInjectedEffort(
   rawEffort: string | null | undefined,
 ): string | null {
   const trimmed = trimOrNull(rawEffort);
+
   if (!trimmed) return null;
   const descriptors = getProviderOptionDescriptors({ caps });
+
   for (const descriptor of descriptors) {
     if (descriptor.type === "select" && descriptor.promptInjectedValues?.includes(trimmed)) {
       return trimmed;
     }
   }
+
   return null;
 }
 
@@ -359,9 +398,11 @@ export function applyClaudePromptEffortPrefix(
   effort: string | null | undefined,
 ): string {
   const trimmed = text.trim();
+
   if (!trimmed) {
     return trimmed;
   }
+
   // Prefixing a slash command turns it into plain prose, so Claude never
   // runs it. Command names come from arbitrary file names ("/deploy.prod",
   // "/plugin:skill"), so accept any first token without a second slash;
@@ -369,8 +410,10 @@ export function applyClaudePromptEffortPrefix(
   if (effort !== "ultrathink" || /^\/[^\s/]+(?:\s|$)/u.test(trimmed)) {
     return trimmed;
   }
+
   if (trimmed.startsWith("Ultrathink:")) {
     return trimmed;
   }
+
   return `Ultrathink:\n${trimmed}`;
 }

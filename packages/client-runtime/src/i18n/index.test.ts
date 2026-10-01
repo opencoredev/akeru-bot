@@ -144,11 +144,13 @@ describe("Intl helpers", () => {
       "permission",
       "unsupported",
     ] as const;
+
     for (const code of codes) {
       const message = connectionFailureMessage(code);
       expect(Object.hasOwn(englishCatalog, message)).toBe(true);
       expect(Object.hasOwn(zhCNCatalog, message)).toBe(true);
     }
+
     const zh = createTranslator("zh-CN", zhCNCatalog);
     expect(
       translateConnectionStatus(zh.translate, { phase: "error", errorCode: "authentication" }),

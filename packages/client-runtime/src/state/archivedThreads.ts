@@ -17,6 +17,7 @@ export interface ArchivedThreadSnapshotsState {
 }
 
 const ARCHIVED_THREADS_ENVIRONMENT_KEY_SEPARATOR = "\u001f";
+
 const environmentIdOrder = Order.String as Order.Order<EnvironmentId>;
 
 export function makeArchivedThreadsEnvironmentKey(
@@ -31,6 +32,7 @@ export function parseArchivedThreadsEnvironmentKey(key: string): ReadonlyArray<E
   if (key.length === 0) {
     return [];
   }
+
   return pipe(
     key.split(ARCHIVED_THREADS_ENVIRONMENT_KEY_SEPARATOR),
     Arr.map((environmentId) => EnvironmentId.make(environmentId)),
@@ -54,6 +56,7 @@ export function createArchivedThreadSnapshotsAtomFamily<E>(options: {
         isLoading ||= result.waiting;
 
         const snapshot = Option.getOrNull(AsyncResult.value(result));
+
         if (snapshot !== null) {
           snapshots.push({ environmentId, snapshot });
         }
