@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeNet from "node:net";
@@ -21,8 +22,7 @@ async function reservePort() {
     server.close((error) => (error ? reject(error) : resolve())),
   );
 
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Node server.address can return a Unix socket string; the packaged smoke runner requires a TCP address object.
-  if (!address || typeof address === "string")
+  if (!address || Predicate.isString(address))
     throw new Error("Could not reserve a loopback port.");
 
   return address.port;

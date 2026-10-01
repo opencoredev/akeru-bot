@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -227,8 +228,7 @@ function startWatchers() {
       NodePath.join(desktopDir, directory),
       { persistent: true },
       (_eventType, filename) => {
-        // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Node fs.watch supplies string or Buffer filenames; this launcher accepts strings before matching tracked build outputs.
-        if (!(typeof filename === "string") || !files.has(filename)) {
+        if (!Predicate.isString(filename) || !files.has(filename)) {
           return;
         }
 

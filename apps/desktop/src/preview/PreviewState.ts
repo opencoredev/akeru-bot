@@ -54,8 +54,7 @@ export const createPreviewState = ({
 
   const currentMillis = Clock.currentTimeMillis;
 
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This serializer handles arbitrary JavaScript evaluation results; the encoder reports values that JSON cannot represent.
-  const encodeJson = (errorContext: PreviewOperationContext, value: unknown) =>
+  const encodeJson = <T>(errorContext: PreviewOperationContext, value: T) =>
     encodeUnknownJson(value).pipe(
       Effect.mapError((cause) => new PreviewOperationError({ ...errorContext, cause })),
     );

@@ -470,10 +470,9 @@ export const make = Effect.gen(function* () {
     );
   }).pipe(Effect.withSpan("desktop.updates.startPollers"));
 
-  const handleUpdateAvailable = Effect.fn("desktop.updates.handleUpdateAvailable")(function* (
-    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Updater event payloads are external input and are decoded before applying update state.
-    raw: unknown,
-  ) {
+  const handleUpdateAvailable = Effect.fn("desktop.updates.handleUpdateAvailable")(function* <
+    Input,
+  >(raw: Input) {
     yield* decodeUpdateInfo(raw).pipe(
       Effect.flatMap(
         Effect.fn("desktop.updates.applyUpdateAvailable")(function* (info) {
@@ -574,10 +573,9 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const handleDownloadProgress = Effect.fn("desktop.updates.handleDownloadProgress")(function* (
-    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Updater event payloads are external input and are decoded before applying update state.
-    raw: unknown,
-  ) {
+  const handleDownloadProgress = Effect.fn("desktop.updates.handleDownloadProgress")(function* <
+    Input,
+  >(raw: Input) {
     yield* decodeDownloadProgressInfo(raw).pipe(
       Effect.flatMap(
         Effect.fn("desktop.updates.applyDownloadProgress")(function* (progress) {
@@ -612,10 +610,9 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const handleUpdateDownloaded = Effect.fn("desktop.updates.handleUpdateDownloaded")(function* (
-    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Updater event payloads are external input and are decoded before applying update state.
-    raw: unknown,
-  ) {
+  const handleUpdateDownloaded = Effect.fn("desktop.updates.handleUpdateDownloaded")(function* <
+    Input,
+  >(raw: Input) {
     yield* decodeUpdateInfo(raw).pipe(
       Effect.flatMap(
         Effect.fn("desktop.updates.applyUpdateDownloaded")(function* (info) {
