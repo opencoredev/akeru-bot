@@ -6,7 +6,7 @@ import type {
 } from "@akeru/contracts";
 import type { ReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
 
-import type { BotStepMeterData } from "./botStepMeter.logic";
+import type { BotStepMeterData } from "@akeru/client-runtime/bot-step-usage";
 import type { ChannelApprovalTarget } from "./ChannelSendApproval";
 import type { Bot } from "./types";
 import type { MessageReactionHandler } from "./useMessageReactionUpdater";

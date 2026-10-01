@@ -9,7 +9,7 @@ import type {
   ToolLifecycleItemType,
   TurnId,
 } from "@akeru/contracts";
-import type { BotStepMeterData } from "../features/threads/botStepUsage";
+import type { BotStepMeterData } from "@akeru/client-runtime/bot-step-usage";
 
 export interface ThreadFeedActivity {
   readonly id: string;
@@ -124,7 +124,8 @@ export type ThreadFeedEntry =
       readonly id: string;
       readonly createdAt: string;
       readonly turnId: TurnId;
-      readonly label: string;
+      readonly elapsedMs: number | null;
+      readonly interrupted: boolean;
       readonly expanded: boolean;
     };
 

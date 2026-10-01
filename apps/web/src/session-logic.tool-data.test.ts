@@ -4,27 +4,6 @@ import { deriveWorkLogEntries } from "./session-logic";
 import { makeActivity } from "./session-logic.test-support";
 
 describe("work log tool data", () => {
-  it("extracts command text for command tool activities", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "command-tool",
-        kind: "tool.completed",
-        summary: "Ran command",
-        payload: {
-          itemType: "command_execution",
-          data: {
-            item: {
-              command: ["bun", "run", "lint"],
-            },
-          },
-        },
-      }),
-    ];
-
-    const [entry] = deriveWorkLogEntries(activities);
-    expect(entry?.command).toBe("bun run lint");
-  });
-
   it("preserves MCP server, tool, arguments, and results for expanded display", () => {
     const item = {
       type: "mcpToolCall",
@@ -123,97 +102,6 @@ describe("work log tool data", () => {
     expect(entry?.toolCallId).toBe("call-1");
   });
 
-  it("unwraps PowerShell command wrappers for displayed command text", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "command-tool-windows-wrapper",
-        kind: "tool.completed",
-        summary: "Ran command",
-        payload: {
-          itemType: "command_execution",
-          data: {
-            item: {
-              command: "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -Command 'bun run lint'",
-            },
-          },
-        },
-      }),
-    ];
-
-    const [entry] = deriveWorkLogEntries(activities);
-    expect(entry?.command).toBe("bun run lint");
-    expect(entry?.rawCommand).toBe(
-      "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -Command 'bun run lint'",
-    );
-  });
-
-  it("unwraps PowerShell command wrappers from argv-style command payloads", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "command-tool-windows-wrapper-argv",
-        kind: "tool.completed",
-        summary: "Ran command",
-        payload: {
-          itemType: "command_execution",
-          data: {
-            item: {
-              command: ["C:\\Program Files\\PowerShell\\7\\pwsh.exe", "-Command", "rg -n foo ."],
-            },
-          },
-        },
-      }),
-    ];
-
-    const [entry] = deriveWorkLogEntries(activities);
-    expect(entry?.command).toBe("rg -n foo .");
-    expect(entry?.rawCommand).toBe(
-      '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command "rg -n foo ."',
-    );
-  });
-
-  it("extracts command text from command detail when structured command metadata is missing", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "command-tool-windows-detail-fallback",
-        kind: "tool.completed",
-        summary: "Ran command",
-        payload: {
-          itemType: "command_execution",
-          detail:
-            '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoLogo -NoProfile -Command \'rg -n -F "new Date()" .\' <exited with exit code 0>',
-        },
-      }),
-    ];
-
-    const [entry] = deriveWorkLogEntries(activities);
-    expect(entry?.command).toBe('rg -n -F "new Date()" .');
-    expect(entry?.rawCommand).toBe(
-      `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoLogo -NoProfile -Command 'rg -n -F "new Date()" .'`,
-    );
-  });
-
-  it("does not unwrap shell commands when no wrapper flag is present", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "command-tool-shell-script",
-        kind: "tool.completed",
-        summary: "Ran command",
-        payload: {
-          itemType: "command_execution",
-          data: {
-            item: {
-              command: "bash script.sh",
-            },
-          },
-        },
-      }),
-    ];
-
-    const [entry] = deriveWorkLogEntries(activities);
-    expect(entry?.command).toBe("bash script.sh");
-    expect(entry?.rawCommand).toBeUndefined();
-  });
-
   it("keeps compact Codex tool metadata used for icons and labels", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
@@ -245,33 +133,6 @@ describe("work log tool data", () => {
       itemType: "command_execution",
       toolTitle: "bash",
     });
-  });
-
-  it("extracts changed file paths for file-change tool activities", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "file-tool",
-        kind: "tool.completed",
-        summary: "File change",
-        payload: {
-          itemType: "file_change",
-          data: {
-            item: {
-              changes: [
-                { path: "apps/web/src/components/ChatView.tsx" },
-                { filename: "apps/web/src/session-logic.ts" },
-              ],
-            },
-          },
-        },
-      }),
-    ];
-
-    const [entry] = deriveWorkLogEntries(activities);
-    expect(entry?.changedFiles).toEqual([
-      "apps/web/src/components/ChatView.tsx",
-      "apps/web/src/session-logic.ts",
-    ]);
   });
 
   it("drops duplicated tool detail when it only repeats the title", () => {

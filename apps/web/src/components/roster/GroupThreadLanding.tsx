@@ -55,7 +55,7 @@ import {
 import { useBotPromptMentionScope } from "./BotPromptMentions";
 import { BotTurnFailureRow } from "./BotTurnFailureRow";
 import { botEngineFailureContext, botEngineTakesDelegatedWork } from "./botEngineSelection";
-import { buildBotStepMeters } from "./botStepMeter.logic";
+import { buildBotStepMeters } from "@akeru/client-runtime/bot-step-usage";
 import { useGroupPresence } from "./botPresence";
 import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
 import { useMessageArrivals } from "./messageArrival";

@@ -1,3 +1,8 @@
+import {
+  aggregateUsage,
+  usageWindowKey,
+  type EnvironmentUsageStatus,
+} from "@akeru/client-runtime/usage";
 /**
  * Multi-environment usage state.
  *
@@ -7,42 +12,18 @@
  * @module state/usage
  */
 import { useAtomValue } from "@effect/atom-react";
-import {
-  USAGE_CONTRACT_VERSION,
-  type EnvironmentId,
-  type UsageSummary,
-  type UsageSummaryInput,
-} from "@akeru/contracts";
+import { type UsageSummaryInput } from "@akeru/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useMemo } from "react";
 
 import { makeWindow } from "@akeru/shared/usageFormat";
-import { mergeUsage, type EnvironmentUsage, type MergedUsage } from "@akeru/shared/usageMerge";
+import type { MergedUsage } from "@akeru/shared/usageMerge";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentPresentations } from "./presentation";
 import { serverEnvironment } from "./server";
 
 export const USAGE_LOOKBACK_DAYS = 30;
-
-function usageWindowKey(input: UsageSummaryInput): string {
-  return JSON.stringify({
-    sinceDay: input.sinceDay,
-    untilDay: input.untilDay,
-    timeZone: input.timeZone,
-    resolution: input.resolution,
-    sinceTime: input.sinceTime,
-    untilTime: input.untilTime,
-  });
-}
-
-export interface EnvironmentUsageStatus {
-  readonly environmentId: EnvironmentId;
-  readonly label: string;
-  readonly isPending: boolean;
-  readonly error: string | null;
-  readonly summary: UsageSummary | null;
-}
 
 /**
  * Reads every environment's summary for one window.
@@ -116,33 +97,11 @@ export function useUsage(input: UsageSummaryInput = makeWindow(USAGE_LOOKBACK_DA
     }
   }, [environments, windowKey]);
 
-  const merged = useMemo(() => {
-    const answered: EnvironmentUsage[] = environments.flatMap((environment) =>
-      environment.summary === null
-        ? []
-        : [
-            {
-              environmentId: environment.environmentId,
-              label: environment.label,
-              summary: environment.summary,
-            },
-          ],
-    );
-
-    return mergeUsage(answered, USAGE_CONTRACT_VERSION);
-  }, [environments]);
-
-  const answeredCount = environments.filter((environment) => environment.summary !== null).length;
-
-  const stillReporting = environments.filter(
-    (environment) => environment.summary === null && environment.error === null,
-  ).length;
+  const usage = useMemo(() => aggregateUsage(environments), [environments]);
 
   return {
-    merged,
+    ...usage,
     environments,
-    isPending: answeredCount === 0 && stillReporting > 0,
-    isPartial: answeredCount > 0 && stillReporting > 0,
     refresh,
   };
 }

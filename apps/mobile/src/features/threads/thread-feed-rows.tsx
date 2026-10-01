@@ -1,3 +1,4 @@
+import { ThreadTurnFoldRow } from "./thread-turn-fold-row";
 import type { ThreadSilentRun } from "@akeru/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
 import type { BotId, EnvironmentId, TurnId } from "@akeru/contracts";
@@ -8,10 +9,9 @@ import {
 import { stabilizeStreamingMarkdown } from "@akeru/client-runtime/markdown-streaming";
 import { formatElapsed } from "@akeru/shared/orchestrationTiming";
 import { formatTokens, formatUsd } from "@akeru/shared/usageFormat";
-import { SymbolView } from "../../components/AppSymbol";
 import { memo, useEffect, useState } from "react";
 import { Markdown } from "react-native-nitro-markdown";
-import { Platform, Pressable, Text as NativeText, type ColorValue, View } from "react-native";
+import { Platform, Text as NativeText, type ColorValue, View } from "react-native";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { hasWideMarkdownBlock } from "../../lib/wideMarkdownBlocks";
 import {
@@ -31,7 +31,7 @@ import { replyPlaybackControlProps } from "../replyPlayback/useReplyPlaybackThre
 import { useOptionalReplyPlayback } from "../replyPlayback/ReplyPlaybackProvider";
 import { cn } from "../../lib/cn";
 import type { ThreadFeedEntry } from "../../lib/threadActivity";
-import { formatBotStepEngine, type BotStepMeterData } from "./botStepUsage";
+import { formatBotStepEngine, type BotStepMeterData } from "@akeru/client-runtime/bot-step-usage";
 import { ThreadWorkGroupToggle, ThreadWorkLog } from "./thread-work-log";
 import { MessageAttachmentFile, MessageAttachmentImage } from "./thread-feed-images";
 import type { MarkdownStyleSet, MarkdownStyleSets } from "./thread-feed-markdown";
@@ -108,23 +108,11 @@ export function renderFeedEntry(
 
   if (entry.type === "turn-fold") {
     return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: entry.expanded }}
-        onPress={() => props.onToggleTurnFold(entry.turnId)}
-        hitSlop={4}
-        className="mb-3 min-h-11 flex-row items-center gap-2 border-b border-border-subtle px-2"
-      >
-        <Text className="font-t3-medium text-sm tabular-nums text-foreground-muted">
-          {entry.label}
-        </Text>
-        <SymbolView
-          name={entry.expanded ? "chevron.down" : "chevron.right"}
-          size={15}
-          tintColor={iconSubtleColor}
-          type="monochrome"
-        />
-      </Pressable>
+      <ThreadTurnFoldRow
+        entry={entry}
+        onToggle={props.onToggleTurnFold}
+        iconColor={iconSubtleColor}
+      />
     );
   }
 

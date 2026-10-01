@@ -46,7 +46,7 @@ import { BotTurnFailureRow } from "./BotTurnFailureRow";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { BotPromptComposer } from "./BotPromptComposer";
 import { useBotPromptMentionScope } from "./BotPromptMentions";
-import { buildBotStepMeters } from "./botStepMeter.logic";
+import { buildBotStepMeters } from "@akeru/client-runtime/bot-step-usage";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { ProviderUnavailableLine } from "../chat/ProviderUnavailableNotice";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";

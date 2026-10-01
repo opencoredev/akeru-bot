@@ -18,7 +18,7 @@ import type {
   TurnId,
 } from "@akeru/contracts";
 import * as Arr from "effect/Array";
-import { buildBotStepMeters, type BotStepMeterData } from "../features/threads/botStepUsage";
+import { buildBotStepMeters, type BotStepMeterData } from "@akeru/client-runtime/bot-step-usage";
 import type {
   CollapsedWorkLogEntry,
   DerivedWorkLogEntry,
@@ -535,7 +535,8 @@ export function threadFeedEntriesEqual(previous: ThreadFeedEntry, next: ThreadFe
       return (
         next.type === "turn-fold" &&
         previous.turnId === next.turnId &&
-        previous.label === next.label &&
+        previous.elapsedMs === next.elapsedMs &&
+        previous.interrupted === next.interrupted &&
         previous.expanded === next.expanded
       );
   }

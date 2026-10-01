@@ -70,7 +70,8 @@ describe("buildThreadFeed presentation", () => {
     ]);
     expect(collapsed[1]).toMatchObject({
       type: "turn-fold",
-      label: "Worked for 17s",
+      elapsedMs: 17_000,
+      interrupted: false,
       expanded: false,
     });
 
@@ -214,7 +215,8 @@ describe("buildThreadFeed presentation", () => {
     const collapsed = deriveThreadFeedPresentation(feed, thread.latestTurn, new Set());
     expect(collapsed.find((entry) => entry.type === "turn-fold")).toMatchObject({
       turnId: firstTurnId,
-      label: "Worked for 12s",
+      elapsedMs: 12_000,
+      interrupted: false,
     });
   });
 
