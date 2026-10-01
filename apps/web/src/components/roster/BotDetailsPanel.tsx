@@ -226,9 +226,9 @@ export function BotDetailsPanel({
       />
       {!browserExpanded || !canExpandBrowser ? (
         <>
-          <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4 min-[981px]:h-0">
+          <header className="relative flex h-(--workspace-topbar-height) shrink-0 items-center justify-center px-4 min-[981px]:h-0">
             <h2 className="text-sm font-medium min-[981px]:sr-only">{t("Bot")}</h2>
-            <div className="absolute right-3 flex items-center min-[981px]:fixed min-[981px]:right-[var(--workspace-controls-right)] min-[981px]:top-[var(--workspace-controls-top)] min-[981px]:z-40 min-[981px]:h-[var(--workspace-topbar-height)]">
+            <div className="absolute right-3 flex items-center min-[981px]:fixed min-[981px]:right-(--workspace-controls-right) min-[981px]:top-(--workspace-controls-top) min-[981px]:z-40 min-[981px]:h-(--workspace-topbar-height)">
               {closeButton}
             </div>
           </header>
@@ -301,7 +301,7 @@ export function BotDetailsPanel({
       {!desktopOpen ? (
         <div
           className={cn(
-            "fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 hidden h-[var(--workspace-topbar-height)] items-center min-[981px]:flex",
+            "fixed right-(--workspace-controls-right) top-(--workspace-controls-top) z-40 hidden h-(--workspace-topbar-height) items-center min-[981px]:flex",
             desktopPanel.toggled && "motion-fade-in",
           )}
         >
@@ -327,7 +327,7 @@ export function BotDetailsPanel({
           </Tooltip>
         </div>
       ) : null}
-      <div className="fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 flex h-[var(--workspace-topbar-height)] items-center min-[981px]:hidden">
+      <div className="fixed right-(--workspace-controls-right) top-(--workspace-controls-top) z-40 flex h-(--workspace-topbar-height) items-center min-[981px]:hidden">
         <Button
           aria-label={t("Open {name} bot sidebar", { name: bot.name })}
           size="icon-sm"

@@ -144,6 +144,7 @@ function BlobFigure({
   return (
     <>
       <mask id={maskId} maskUnits="userSpaceOnUse" x="-10" y="-10" width="120" height="120">
+        {/* oxlint-disable-next-line shadcn/no-raw-colors -- SVG mask luminance: white keeps the body visible. */}
         <rect x="-10" y="-10" width="120" height="120" fill="#fff" />
         <Eyes shape={shape} ink="#000" eyeRefs={eyeRefs} />
       </mask>

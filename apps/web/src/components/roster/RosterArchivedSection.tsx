@@ -45,7 +45,7 @@ export function RosterArchivedSection({ bots }: { bots: readonly Bot[] }) {
   return (
     <SidebarGroup
       data-testid="roster-archived"
-      className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden"
+      className="px-(--sidebar-content-inset) pb-1 pt-1 group-data-[collapsible=icon]:hidden"
     >
       <button
         type="button"

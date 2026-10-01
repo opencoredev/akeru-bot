@@ -429,7 +429,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
         className="gap-0 [overflow-anchor:none]"
         fixedHeader={
           chrome === "panel" && !searchOpen && query.length === 0 ? null : (
-            <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
+            <SidebarGroup className="px-(--sidebar-content-inset) pb-1 pt-1 group-data-[collapsible=icon]:hidden">
               <label className="flex h-9 items-center gap-2 rounded-lg bg-sidebar-row-hover px-2.5 ring-ring focus-within:ring-2">
                 <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground" />
                 <input
@@ -476,7 +476,7 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
               onSelectBot={handleSelect}
               onSelectGroup={handleSelectGroup}
             />
-            <SidebarGroup className="px-[var(--sidebar-content-inset)] pb-1 pt-1 group-data-[collapsible=icon]:hidden">
+            <SidebarGroup className="px-(--sidebar-content-inset) pb-1 pt-1 group-data-[collapsible=icon]:hidden">
               <DndContext {...dndContextProps}>
                 <RosterDragLifecycle onUnmount={cancelRosterDrag} />
                 <SortableContext items={sortableIds} strategy={sortingStrategy}>

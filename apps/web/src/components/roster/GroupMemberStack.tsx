@@ -29,7 +29,7 @@ export function GroupMemberStack({
           avatar={bot.avatar}
           name={bot.name}
           className={cn(
-            "absolute size-[68%]",
+            "absolute size-17/25",
             index === 0 ? "left-0 top-0" : "bottom-0 right-0 z-10",
           )}
         />

@@ -95,6 +95,7 @@ export function SortableRosterMarker(props: {
       ref={setNodeRef}
       data-testid={props["data-testid"]}
       className={cn("list-none", props.className)}
+      /* oxlint-disable shadcn/no-inline-styles -- dnd-kit drag geometry, updated every pointer move. */
       style={{
         transform: CSS.Translate.toString(transform),
         transition:
@@ -105,6 +106,7 @@ export function SortableRosterMarker(props: {
               : transition,
         visibility: transform?.scaleY === 0 ? "hidden" : undefined,
       }}
+      /* oxlint-enable shadcn/no-inline-styles */
       {...(props.draggable ? listeners : {})}
     >
       {props.children}

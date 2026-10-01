@@ -18,7 +18,7 @@ import {
   rosterZoneHeading,
 } from "./roster.logic";
 import { bot } from "./roster.test-support";
-import type { Bot, Group } from "./types";
+import type { Group } from "./types";
 
 describe("resolveRosterBotId", () => {
   it("does not redirect to a persisted bot that is absent from the loaded roster", () => {
