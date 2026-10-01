@@ -15,7 +15,6 @@ import { OrchestrationCommand, OrchestrationEvent } from "./orchestration.ts";
 
 const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
 const encodeDelegationRecord = Schema.encodeSync(AkeruDelegationRecord);
-const decodeDelegationPhase = Schema.decodeUnknownSync(AkeruDelegationPhase);
 const decodeOrchestrationCommand = Schema.decodeUnknownSync(OrchestrationCommand);
 const decodeOrchestrationEvent = Schema.decodeUnknownSync(OrchestrationEvent);
 const encodeOrchestrationEvent = Schema.encodeUnknownSync(OrchestrationEvent);

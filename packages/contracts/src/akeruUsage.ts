@@ -10,7 +10,7 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderDriverKind } from "./providerInstance.ts";
-import { BotEngine, BotUsageCap } from "./orchestration.ts";
+import { BotEngine, BotUsageCap } from "./orchestration/roster.ts";
 
 export const AkeruUsageCategory = Schema.Literals([
   "turn",

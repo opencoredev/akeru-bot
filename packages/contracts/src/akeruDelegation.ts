@@ -2,8 +2,8 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
-import { AkeruMemoryTargetScope } from "./akeruMemory.ts";
-import { AkeruToolApprovalClass, AkeruToolId } from "./akeruTools.ts";
+import { AkeruMemoryTargetScope } from "./akeruMemory/base.ts";
+import { AkeruToolApprovalClass, AkeruToolId } from "./akeruTools/catalog.ts";
 import {
   BotId,
   IsoDateTime,
@@ -14,7 +14,8 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { McpServerId } from "./mcpServer.ts";
-import { BotSandbox, RuntimeMode } from "./orchestration.ts";
+import { BotSandbox } from "./orchestration/roster.ts";
+import { RuntimeMode } from "./orchestration/modelSelection.ts";
 
 export const AKERU_DELEGATION_MAX_DEPTH = 2;
 export const AKERU_DELEGATION_MAX_CONCURRENCY = 3;

@@ -6,7 +6,7 @@ import {
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPES,
   PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
-} from "./orchestration.ts";
+} from "./orchestration/attachments.ts";
 
 const ASSET_PATH_MAX_LENGTH = 1024;
 

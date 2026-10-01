@@ -14,10 +14,14 @@ import {
   BotSandbox,
   BotSandboxBrowserSharing,
   BotPersonalityTone,
+} from "./orchestration/roster.ts";
+import {
   ChatAttachment,
-  ModelSelection,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
+} from "./orchestration/attachments.ts";
+import {
+  ModelSelection,
   ProviderApprovalDecision,
   ProviderApprovalPolicy,
   ProviderInteractionMode,
@@ -25,7 +29,7 @@ import {
   ProviderSandboxMode,
   ProviderUserInputAnswers,
   RuntimeMode,
-} from "./orchestration.ts";
+} from "./orchestration/modelSelection.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
 
 const ProviderSessionStatus = Schema.Literals([

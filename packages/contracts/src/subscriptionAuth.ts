@@ -8,7 +8,7 @@
  */
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { AkeruMemoryApprovalRequest } from "./akeruMemory.ts";
+import { AkeruMemoryApprovalRequest } from "./akeruMemory/base.ts";
 import { BotId, IsoDateTime, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { McpServerId } from "./mcpServer.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";

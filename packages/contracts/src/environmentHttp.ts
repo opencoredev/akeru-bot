@@ -26,14 +26,14 @@ import {
 } from "./auth.ts";
 import { AuthSessionId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
+import { ClientOrchestrationCommand } from "./orchestration/commands.ts";
+import { DispatchResult } from "./orchestration/rpc.ts";
 import {
-  ClientOrchestrationCommand,
-  DispatchResult,
   OrchestrationReadModel,
   OrchestrationShellSnapshot,
   OrchestrationThreadDetailSnapshot,
-} from "./orchestration.ts";
-import { ServerProviderUnavailability } from "./server.ts";
+} from "./orchestration/readModel.ts";
+import { ServerProviderUnavailability } from "./server/providers.ts";
 
 const OptionalBearerHeaders = Schema.Struct({
   authorization: Schema.optionalKey(Schema.String),
