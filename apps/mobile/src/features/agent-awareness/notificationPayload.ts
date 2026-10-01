@@ -1,53 +1,44 @@
-import { Predicate } from "effect";
+import { flow, Option, Predicate, Schema } from "effect";
 
-function dataFromNotificationResponse(response: unknown): Record<string, unknown> | null {
-  if (!Predicate.isObjectOrArray(response) || response === null) {
-    return null;
-  }
+const decodeNotificationResponse = Schema.decodeUnknownOption(
+  Schema.Struct({
+    notification: Schema.Struct({
+      request: Schema.Struct({
+        identifier: Schema.optional(Schema.Unknown),
+        content: Schema.optional(Schema.Unknown),
+      }),
+    }),
+  }),
+);
 
-  const notification = (response as { readonly notification?: unknown }).notification;
+const decodeNotificationContent = Schema.decodeUnknownOption(
+  Schema.Struct({
+    data: Schema.Struct({
+      deepLink: Schema.optional(Schema.Unknown),
+      environmentId: Schema.optional(Schema.Unknown),
+      threadId: Schema.optional(Schema.Unknown),
+    }),
+  }),
+);
 
-  if (!Predicate.isObjectOrArray(notification) || notification === null) {
-    return null;
-  }
+type NotificationResponse = typeof decodeNotificationResponse extends (
+  value: infer _Input,
+) => Option.Option<infer Response>
+  ? Response
+  : never;
 
-  const request = (notification as { readonly request?: unknown }).request;
+function dataFromNotificationResponse(response: NotificationResponse | null) {
+  if (response === null) return null;
 
-  if (!Predicate.isObjectOrArray(request) || request === null) {
-    return null;
-  }
+  const content = Option.getOrNull(
+    decodeNotificationContent(response.notification.request.content),
+  );
 
-  const content = (request as { readonly content?: unknown }).content;
-
-  if (!Predicate.isObjectOrArray(content) || content === null) {
-    return null;
-  }
-
-  const data = (content as { readonly data?: unknown }).data;
-
-  return Predicate.isObjectOrArray(data) && data !== null
-    ? (data as Record<string, unknown>)
-    : null;
+  return content?.data ?? null;
 }
 
-function identifierFromNotificationResponse(response: unknown): string | null {
-  if (!Predicate.isObjectOrArray(response) || response === null) {
-    return null;
-  }
-
-  const notification = (response as { readonly notification?: unknown }).notification;
-
-  if (!Predicate.isObjectOrArray(notification) || notification === null) {
-    return null;
-  }
-
-  const request = (notification as { readonly request?: unknown }).request;
-
-  if (!Predicate.isObjectOrArray(request) || request === null) {
-    return null;
-  }
-
-  const identifier = (request as { readonly identifier?: unknown }).identifier;
+function identifierFromNotificationResponse(response: NotificationResponse | null): string | null {
+  const identifier = response?.notification.request.identifier;
 
   return Predicate.isString(identifier) ? identifier : null;
 }
@@ -89,7 +80,7 @@ function normalizeThreadDeepLink(value: string): string | null {
   }
 }
 
-export function extractAgentNotificationDeepLink(response: unknown): string | null {
+function deepLinkFromResponse(response: NotificationResponse | null): string | null {
   const data = dataFromNotificationResponse(response);
   const deepLink = data?.deepLink;
 
@@ -111,12 +102,19 @@ export function extractAgentNotificationDeepLink(response: unknown): string | nu
   return null;
 }
 
+export const extractAgentNotificationDeepLink = flow(
+  decodeNotificationResponse,
+  Option.getOrNull,
+  deepLinkFromResponse,
+);
+
 export function routeAgentNotificationResponseOnce(input: {
   readonly handledResponseIds: Set<string>;
   readonly response: unknown;
   readonly navigate: (deepLink: string) => void;
 }): void {
-  const responseId = identifierFromNotificationResponse(input.response);
+  const response = Option.getOrNull(decodeNotificationResponse(input.response));
+  const responseId = identifierFromNotificationResponse(response);
 
   if (responseId && input.handledResponseIds.has(responseId)) {
     return;
@@ -126,7 +124,7 @@ export function routeAgentNotificationResponseOnce(input: {
     input.handledResponseIds.add(responseId);
   }
 
-  const deepLink = extractAgentNotificationDeepLink(input.response);
+  const deepLink = deepLinkFromResponse(response);
 
   if (deepLink) {
     input.navigate(deepLink);

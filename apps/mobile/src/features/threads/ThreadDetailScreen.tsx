@@ -12,7 +12,6 @@ import type {
   ModelSelection,
   OrchestrationBot,
   OrchestrationThreadShell,
-  ProviderApprovalDecision,
   RuntimeMode,
   ServerConfig as T3ServerConfig,
   ThreadId,
@@ -142,10 +141,9 @@ export interface ThreadDetailScreenProps {
   readonly onReconnectEnvironment: () => void;
   readonly onUpdateThreadModelSelection: (modelSelection: ModelSelection) => void;
   readonly onUpdateThreadRuntimeMode: (runtimeMode: RuntimeMode) => void;
-  readonly onRespondToApproval: (
-    requestId: ApprovalRequestId,
-    decision: ProviderApprovalDecision,
-  ) => Promise<unknown>;
+  readonly onRespondToApproval: ReturnType<
+    typeof import("../../state/use-selected-thread-requests").useSelectedThreadRequests
+  >["onRespondToApproval"];
   readonly onSelectUserInputOption: (
     requestId: ApprovalRequestId,
     question: UserInputQuestion,
@@ -156,7 +154,9 @@ export interface ThreadDetailScreenProps {
     questionId: string,
     customAnswer: string,
   ) => void;
-  readonly onSubmitUserInput: () => Promise<unknown>;
+  readonly onSubmitUserInput: ReturnType<
+    typeof import("../../state/use-selected-thread-requests").useSelectedThreadRequests
+  >["onSubmitUserInput"];
   readonly showContent?: boolean;
 }
 

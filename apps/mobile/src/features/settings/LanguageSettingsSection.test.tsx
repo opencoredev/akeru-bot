@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AsyncResult } from "effect/unstable/reactivity";
 import type { ReactNode } from "react";
+import { MobileLanguageProvider } from "../../lib/i18n";
+import { LanguageSettingsSection } from "./LanguageSettingsSection";
 
 const mocks = vi.hoisted(() => ({
-  preferences: {} as unknown,
-  result: {} as unknown,
+  preferences: {},
+  result: {},
   save: vi.fn(),
   buttons: [] as Array<{ accessibilityLabel: string; disabled: boolean; onPress: () => void }>,
 }));
@@ -57,9 +59,6 @@ vi.mock("./components/SettingsSection", () => ({
     <section aria-label={title}>{children}</section>
   ),
 }));
-
-import { MobileLanguageProvider } from "../../lib/i18n";
-import { LanguageSettingsSection } from "./LanguageSettingsSection";
 
 function renderSelector() {
   return renderToStaticMarkup(

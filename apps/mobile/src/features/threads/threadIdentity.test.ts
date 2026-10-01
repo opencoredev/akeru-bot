@@ -1,35 +1,36 @@
+import { BotId, GroupId, ThreadId } from "@akeru/contracts";
+import { makeMobileBot, makeMobileGroup } from "../../lib/mobile-fixtures.test-support";
 import type { OrchestrationBot, OrchestrationGroup } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveThreadIdentity, groupChatBots } from "./threadIdentity";
 
 function bot(overrides: Partial<OrchestrationBot> = {}): OrchestrationBot {
-  return {
-    id: "bot-1" as never,
+  return makeMobileBot({
+    id: BotId.make("bot-1"),
     name: "Mira",
-    avatar: null,
     archivedAt: null,
     ...overrides,
-  } as unknown as OrchestrationBot;
+  });
 }
 
 function group(overrides: Partial<OrchestrationGroup> = {}): OrchestrationGroup {
-  return {
-    id: "group-1" as never,
+  return makeMobileGroup({
+    id: GroupId.make("group-1"),
     name: "Mira and Ren",
     bossBotId: null,
     members: [
-      { kind: "bot", botId: "bot-1", role: "boss" },
-      { kind: "bot", botId: "bot-2", role: "specialist" },
+      { kind: "bot", botId: BotId.make("bot-1"), role: "boss" },
+      { kind: "bot", botId: BotId.make("bot-2"), role: "specialist" },
     ],
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
     ...overrides,
-  } as unknown as OrchestrationGroup;
+  });
 }
 
 const threadBase = {
-  id: "thread-1" as never,
+  id: ThreadId.make("thread-1"),
   title: "Proofread release notes",
   botId: null,
   groupId: null,
@@ -40,7 +41,7 @@ const noProviderName = () => null;
 describe("resolveThreadIdentity", () => {
   it("titles a group chat with the group name and member bots", () => {
     const g = group();
-    const bots = [bot(), bot({ id: "bot-2" as never, name: "Ren" })];
+    const bots = [bot(), bot({ id: BotId.make("bot-2"), name: "Ren" })];
 
     const identity = resolveThreadIdentity({
       thread: { ...threadBase, groupId: g.id },
@@ -56,8 +57,8 @@ describe("resolveThreadIdentity", () => {
   });
 
   it("leads the member stack with the group boss", () => {
-    const g = group({ bossBotId: "bot-2" as never });
-    const bots = [bot(), bot({ id: "bot-2" as never, name: "Ren" })];
+    const g = group({ bossBotId: BotId.make("bot-2") });
+    const bots = [bot(), bot({ id: BotId.make("bot-2"), name: "Ren" })];
 
     expect(groupChatBots(g, bots).map((b) => b.name)).toEqual(["Ren", "Mira"]);
   });

@@ -52,7 +52,16 @@ import { projectThreadContentPresentation } from "./threadContentPresentation";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
 
-type NativeHeaderItems = ReadonlyArray<Record<string, unknown>>;
+type NativeHeaderItems = ReadonlyArray<
+  | {
+      readonly type: "button";
+      readonly accessibilityLabel: string;
+      readonly icon: { readonly type: "sfSymbol"; readonly name: string };
+      readonly identifier: string;
+      readonly onPress: () => void;
+    }
+  | { readonly type: "spacing"; readonly spacing: number }
+>;
 
 function firstRouteParam(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) {

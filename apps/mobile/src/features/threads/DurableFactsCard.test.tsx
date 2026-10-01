@@ -1,8 +1,10 @@
+import { AkeruMemoryRootId, BotId, ThreadId } from "@akeru/contracts";
 import { Predicate } from "effect";
 import type { DurableMemoryFact } from "@akeru/client-runtime/durable-memory";
 import { createElement, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { DurableFactsCard } from "./DurableFactsCard";
 
 vi.mock("react-native", () => ({
   Text: "span",
@@ -18,14 +20,12 @@ vi.mock("../../lib/i18n", async () => {
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
 
-import { DurableFactsCard } from "./DurableFactsCard";
-
 const fact = {
-  rootId: "m1",
+  rootId: AkeruMemoryRootId.make("m1"),
   fact: "Prefers detailed replies.",
   scope: "bot-user",
-  sourceThreadId: "thread-1",
-  affectedBotIds: ["bot-1", "bot-2"],
+  sourceThreadId: ThreadId.make("thread-1"),
+  affectedBotIds: [BotId.make("bot-1"), BotId.make("bot-2")],
   approvalState: "pending",
   deletionState: "active",
   pinned: true,
@@ -33,7 +33,7 @@ const fact = {
   updatedAt: "2026-09-03T00:00:00.000Z",
   revision: 2,
   supersededFact: "Prefers short replies.",
-} as unknown as DurableMemoryFact;
+} satisfies DurableMemoryFact;
 
 type CardProps = Parameters<typeof DurableFactsCard>[0];
 
@@ -100,10 +100,20 @@ describe("mobile durable facts", () => {
   it("names other chats and bots without their ids", () => {
     const tree = render({
       facts: [
-        { ...fact, rootId: "m1", sourceThreadId: "thread-2", affectedBotIds: ["bot-9"] },
-        { ...fact, rootId: "m2", sourceThreadId: "thread-9", affectedBotIds: [] },
-        { ...fact, rootId: "m3", sourceThreadId: null, affectedBotIds: [] },
-      ] as unknown as DurableMemoryFact[],
+        {
+          ...fact,
+          rootId: AkeruMemoryRootId.make("m1"),
+          sourceThreadId: ThreadId.make("thread-2"),
+          affectedBotIds: [BotId.make("bot-9")],
+        },
+        {
+          ...fact,
+          rootId: AkeruMemoryRootId.make("m2"),
+          sourceThreadId: ThreadId.make("thread-9"),
+          affectedBotIds: [],
+        },
+        { ...fact, rootId: AkeruMemoryRootId.make("m3"), sourceThreadId: null, affectedBotIds: [] },
+      ] satisfies DurableMemoryFact[],
     });
 
     expect(tree).toContain("From Launch plan · Bots: another bot");
@@ -142,9 +152,18 @@ type ActionElement = { props: { label: string; disabled: boolean; onPress: () =>
 function actions(node: ReactNode): ActionElement[] {
   if (Array.isArray(node)) return node.flatMap(actions);
 
-  if (!isValidElement<{ children?: ReactNode; label?: string }>(node)) return [];
+  if (
+    !isValidElement<{
+      children?: ReactNode;
+      label?: string;
+      disabled: boolean;
+      onPress: () => void;
+    }>(node)
+  )
+    return [];
 
-  if (Predicate.isString(node.props.label)) return [node as unknown as ActionElement];
+  if (Predicate.isString(node.props.label))
+    return [{ props: { ...node.props, label: node.props.label } }];
 
   return actions(node.props.children);
 }
@@ -193,7 +212,7 @@ describe("mobile durable fact actions", () => {
 
   it("shows the edit draft and the last failure", () => {
     const tree = render({
-      editing: { rootId: "m1", draft: "Prefers bullet points." },
+      editing: { rootId: AkeruMemoryRootId.make("m1"), draft: "Prefers bullet points." },
       failure: "This fact changed somewhere else. The latest version is shown now.",
     });
 
@@ -253,7 +272,12 @@ describe("mobile durable fact actions", () => {
   });
 
   it("marks only the fact that is saving", () => {
-    const other = { ...fact, rootId: "m2", fact: "Uses metric units." } as DurableMemoryFact;
+    const other = {
+      ...fact,
+      rootId: AkeruMemoryRootId.make("m2"),
+      fact: "Uses metric units.",
+    } satisfies DurableMemoryFact;
+
     const tree = render({ facts: [fact, other], busyRootId: "m2" });
     expect(tree.match(/Saving…/g)).toHaveLength(1);
     expect(tree.indexOf("Saving…")).toBeGreaterThan(tree.indexOf("Uses metric units."));

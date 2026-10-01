@@ -201,6 +201,7 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
       close();
 
       if (action.id !== undefined) {
+        // SAFETY: Menu callbacks use only nativeEvent.event; this JS menu supplies the same action identifier.
         props.onPressAction?.({
           nativeEvent: { event: action.id },
         } as Parameters<NonNullable<MenuComponentProps["onPressAction"]>>[0]);
@@ -335,7 +336,10 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
                           />
                         ) : action.image ? (
                           <SymbolView
-                            name={action.image as AppSymbolName}
+                            name={
+                              // SAFETY: Menu images are app-owned symbol names accepted by SymbolView on this platform.
+                              action.image as AppSymbolName
+                            }
                             size={15}
                             tintColor={destructive ? dangerColor : iconColor}
                             type="monochrome"

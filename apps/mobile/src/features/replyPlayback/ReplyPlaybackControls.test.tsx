@@ -5,10 +5,13 @@ import {
   createReplyReadoutPreference,
   type ReplyPlaybackRequest,
 } from "@akeru/client-runtime/reply-playback";
+import { ReplyPlaybackControls } from "./ReplyPlaybackControls";
+import { ReplyReadoutPreference } from "./ReplyReadoutPreference";
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
-  useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
+  useSyncExternalStore: <T,>(_subscribe: (callback: () => void) => () => void, snapshot: () => T) =>
+    snapshot(),
 }));
 
 vi.mock("react-native", () => ({ View: "View", Pressable: "Pressable" }));
@@ -23,9 +26,6 @@ vi.mock("../../lib/i18n", async () => {
 
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
-
-import { ReplyPlaybackControls } from "./ReplyPlaybackControls";
-import { ReplyReadoutPreference } from "./ReplyReadoutPreference";
 
 type ElementProps = {
   children?: ReactNode;

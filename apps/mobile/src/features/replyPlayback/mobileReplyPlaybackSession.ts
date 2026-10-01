@@ -22,7 +22,7 @@ export function createMobileReplyPlaybackSession(options: {
   readonly cancel: (target: {
     environmentId: EnvironmentId;
     input: { operationId: string };
-  }) => Promise<unknown>;
+  }) => Promise<void | { readonly _tag: string }>;
   readonly voiceSettings: (environmentId: string) => VoiceSettings;
 }) {
   return createReplyPlaybackSession({

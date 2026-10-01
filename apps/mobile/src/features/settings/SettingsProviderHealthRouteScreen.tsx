@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { Match } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
@@ -31,7 +32,7 @@ import type { MobileSettingsHealthTarget } from "./settingsDeepLink";
 export type SettingsProviderHealthParams = {
   readonly environmentId: EnvironmentId;
   readonly target: MobileSettingsHealthTarget;
-} & Record<string, unknown>;
+};
 
 function Field(props: { readonly label: string; readonly value: string }) {
   return (
@@ -88,7 +89,7 @@ function BotInboxRow({
         },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         return t(describeDurableFactFailure(squashAtomCommandFailure(result)).message);
       }
 
@@ -102,7 +103,7 @@ function BotInboxRow({
     run(async () => {
       const result = await resolveIncident({ environmentId, input: { id: item.id } });
 
-      return result._tag === "Failure" ? t("Could not resolve this item") : null;
+      return Predicate.isTagged(result, "Failure") ? t("Could not resolve this item") : null;
     });
 
   return (
@@ -348,14 +349,16 @@ export function SettingsProviderHealthRouteScreen({
           )),
           Match.when("local-execution", () => section),
           Match.orElse(() =>
-            inboxView?.kind === "error" ? (
-              <Text className="py-16 text-center text-sm text-danger">{inboxView.message}</Text>
-            ) : inboxView?.kind === "loading" ? (
-              <Text className="py-16 text-center text-sm text-foreground-muted">
-                {t("Loading bot inbox…")}
-              </Text>
-            ) : (
-              section
+            Match.value(inboxView).pipe(
+              Match.when({ kind: "error" }, (view) => (
+                <Text className="py-16 text-center text-sm text-danger">{view.message}</Text>
+              )),
+              Match.when({ kind: "loading" }, () => (
+                <Text className="py-16 text-center text-sm text-foreground-muted">
+                  {t("Loading bot inbox…")}
+                </Text>
+              )),
+              Match.orElse(() => section),
             ),
           ),
         )}

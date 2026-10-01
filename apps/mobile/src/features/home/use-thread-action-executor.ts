@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { Match } from "effect";
 import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import { canSettle } from "@akeru/client-runtime/state/thread-settled";
@@ -136,7 +137,7 @@ export function useThreadActionExecutor(
                 input: { threadId: thread.id },
               });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           Alert.alert(actionFailureTitle(action, t), actionFailureMessage(action, result.cause, t));
 
           return false;

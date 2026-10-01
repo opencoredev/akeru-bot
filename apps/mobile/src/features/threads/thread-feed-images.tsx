@@ -1,4 +1,5 @@
-import { Predicate } from "effect";
+import type { AssetResource } from "@akeru/contracts";
+import { Data, Predicate } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import type { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { SymbolView } from "../../components/AppSymbol";
@@ -24,10 +25,12 @@ export function MessageAttachmentImage(props: {
   readonly className: string;
   readonly onPressImage: (uri: string, headers?: Record<string, string>) => void;
 }) {
-  const uri = useAssetUrl(props.environmentId, {
-    _tag: "attachment",
-    attachmentId: props.attachmentId,
-  });
+  const uri = useAssetUrl(
+    props.environmentId,
+    assetResource.attachment({
+      attachmentId: props.attachmentId,
+    }),
+  );
 
   if (uri === null) {
     return (
@@ -49,10 +52,12 @@ export function MessageAttachmentFile(props: {
   readonly attachmentId: string;
   readonly name: string;
 }) {
-  const uri = useAssetUrl(props.environmentId, {
-    _tag: "attachment",
-    attachmentId: props.attachmentId,
-  });
+  const uri = useAssetUrl(
+    props.environmentId,
+    assetResource.attachment({
+      attachmentId: props.attachmentId,
+    }),
+  );
 
   return (
     <Pressable
@@ -207,11 +212,13 @@ export function ThreadMarkdownImage(props: {
   readonly alt: string | null;
   readonly onPressImage: (uri: string) => void;
 }) {
-  const assetUrl = useAssetUrlState(props.environmentId, {
-    _tag: "workspace-file",
-    threadId: props.threadId,
-    path: props.path,
-  });
+  const assetUrl = useAssetUrlState(
+    props.environmentId,
+    assetResource["workspace-file"]({
+      threadId: props.threadId,
+      path: props.path,
+    }),
+  );
 
   return (
     <ThreadMarkdownImageView
@@ -235,3 +242,5 @@ export function ThreadMarkdownImageUnavailable(props: { readonly alt: string | n
     />
   );
 }
+
+const assetResource = Data.taggedEnum<AssetResource>();

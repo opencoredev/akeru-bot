@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { Match } from "effect";
 /**
  * The feed's delegation card wired to the environment: Let it finish and Cancel
@@ -46,7 +47,7 @@ export function ThreadDelegationFeedCard(props: {
               input: { delegationId, keep: action === "keep" },
             });
 
-      if (result._tag !== "Failure") return;
+      if (!Predicate.isTagged(result, "Failure")) return;
       const error = squashAtomCommandFailure(result);
 
       const title = Match.value(action).pipe(

@@ -28,7 +28,7 @@ export type BotUsageParams = {
   readonly environmentId: EnvironmentId;
   readonly botId: string;
   readonly botName: string;
-} & Record<string, unknown>;
+};
 
 /**
  * Reads again on every focus after the first. The first focus is the mount,

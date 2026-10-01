@@ -8,15 +8,16 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-
 import type { RemoteClientConnectionState } from "../../lib/connection";
+
+type ConnectionDotTone = {
+  readonly dotColor: string;
+  readonly haloColor: string;
+};
 
 export type ConnectionStatusDotState = RemoteClientConnectionState;
 
-function statusDotTone(state: ConnectionStatusDotState): {
-  readonly dotColor: string;
-  readonly haloColor: string;
-} {
+function statusDotTone(state: ConnectionStatusDotState): ConnectionDotTone {
   switch (state) {
     case "available":
       return {

@@ -66,18 +66,20 @@ export function groupMentionBots(
 ): ComposerMentionItemBot[] {
   if (!group) return [];
 
-  const memberIds = new Set(
-    group.members.filter(isGroupBotMember).map((member) => member.botId as string),
-  );
+  const memberIds = new Set(group.members.filter(isGroupBotMember).map((member) => member.botId));
 
-  return bots
-    .filter((bot) => bot.archivedAt === null && memberIds.has(bot.id))
-    .map((bot) => ({
-      id: bot.id,
-      name: bot.name,
-      title: bot.title,
-      canTakeWork: botTakesDelegatedWork(bot, providers),
-    }));
+  return bots.flatMap((bot) =>
+    bot.archivedAt === null && memberIds.has(bot.id)
+      ? [
+          {
+            id: bot.id,
+            name: bot.name,
+            title: bot.title,
+            canTakeWork: botTakesDelegatedWork(bot, providers),
+          },
+        ]
+      : [],
+  );
 }
 
 /**

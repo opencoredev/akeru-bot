@@ -19,7 +19,7 @@ export type { ExistingThreadSettingsRouteSession } from "./thread-settings-sessi
 
 /** Existing-thread model picker hosted by the root RNS form-sheet route. */
 export function ExistingThreadSettingsRouteScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<Record<string, object | undefined>>>();
+  const navigation = useNavigation<NativeStackNavigationProp<{ ThreadSettings: undefined }>>();
   const presentation = useExistingThreadSettingsRoutePresentation();
   const session = presentation.session;
 
@@ -51,7 +51,7 @@ export function ExistingThreadSettingsRouteScreen() {
  */
 export function NewTaskThreadSettingsRouteScreen() {
   const flow = useNewTaskFlow();
-  const navigation = useNavigation<NativeStackNavigationProp<Record<string, object | undefined>>>();
+  const navigation = useNavigation<NativeStackNavigationProp<{ ThreadSettings: undefined }>>();
 
   const optionDescriptors = useMemo(
     () =>

@@ -1,14 +1,19 @@
+import {
+  makeMobileServerConfig,
+  makeMobileThreadShell,
+} from "../../lib/mobile-fixtures.test-support";
 import { Predicate } from "effect";
 import {
   EnvironmentId,
   ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
-  type OrchestrationThreadShell,
   type ServerConfig,
 } from "@akeru/contracts";
-import { isValidElement, type ReactElement } from "react";
+import { isValidElement, type ReactNode, type ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import type { ComposerCommandItem } from "./ComposerCommandPopover";
+import { ThreadComposer, type ThreadComposerProps } from "./ThreadComposer";
 
 const hooks = vi.hoisted(() => ({ slots: [] as unknown[], cursor: 0 }));
 
@@ -169,12 +174,23 @@ vi.mock("../../lib/useEnvironmentComposerDictation", () => ({
   }),
 }));
 
-import type { ComposerCommandItem } from "./ComposerCommandPopover";
-import { ThreadComposer, type ThreadComposerProps } from "./ThreadComposer";
+type TestElementProps = {
+  children?: ReactNode;
+  accessibilityLabel?: string;
+  onAccessibilityTap?: () => void;
+  onChangeText?: (value: string) => void;
+  onPress?: () => void;
+  value?: string;
+  source?: { uri?: string };
+  disabled?: boolean;
+  triggerKind?: string;
+  emptyText?: string;
+  items?: ReadonlyArray<import("./ComposerCommandPopover").ComposerCommandItem>;
+};
 
-type Element = ReactElement<Record<string, unknown>>;
+type Element = ReactElement<TestElementProps>;
 
-function findElement(node: unknown, accept: (element: Element) => boolean): Element | null {
+function findElement(node: ReactNode, accept: (element: Element) => boolean): Element | null {
   if (Array.isArray(node)) {
     for (const child of node) {
       const found = findElement(child, accept);
@@ -185,11 +201,11 @@ function findElement(node: unknown, accept: (element: Element) => boolean): Elem
     return null;
   }
 
-  if (!isValidElement<Record<string, unknown>>(node)) return null;
+  if (!isValidElement<TestElementProps>(node)) return null;
 
   if (accept(node)) return node;
 
-  for (const value of Object.values(node.props)) {
+  for (const value of [node.props.children]) {
     const found = findElement(value, accept);
 
     if (found) return found;
@@ -199,7 +215,7 @@ function findElement(node: unknown, accept: (element: Element) => boolean): Elem
 }
 
 // The thread's provider, whose skills and commands feed the `$` and `/` menus.
-const serverConfig = {
+const serverConfig = makeMobileServerConfig({
   providers: [
     {
       instanceId: ProviderInstanceId.make("claudeAgent"),
@@ -207,6 +223,8 @@ const serverConfig = {
       enabled: true,
       installed: true,
       status: "ready",
+      checkedAt: "2026-01-01T00:00:00Z",
+      version: null,
       auth: { status: "authenticated" },
       models: [],
       slashCommands: [{ name: "compact", description: "Compact context" }],
@@ -217,8 +235,7 @@ const serverConfig = {
       ],
     },
   ],
-  settings: {},
-} as unknown as ServerConfig;
+});
 
 function renderMenu(draftMessage: string, config: ServerConfig | null = serverConfig) {
   hooks.slots = [];
@@ -233,13 +250,13 @@ function renderMenu(draftMessage: string, config: ServerConfig | null = serverCo
     connectionState: "connected",
     connectionError: null,
     environmentLabel: null,
-    selectedThread: {
+    selectedThread: makeMobileThreadShell({
       id: ThreadId.make("thread"),
       botId: null,
       session: null,
       runtimeMode: "full-access",
       modelSelection: { instanceId: ProviderInstanceId.make("claudeAgent"), model: "claude" },
-    } as unknown as OrchestrationThreadShell,
+    }),
     serverConfig: config,
     queueCount: 0,
     environmentId: EnvironmentId.make("environment"),
@@ -253,7 +270,7 @@ function renderMenu(draftMessage: string, config: ServerConfig | null = serverCo
     onReconnectEnvironment: vi.fn(),
   } satisfies ThreadComposerProps;
 
-  const tree = (ThreadComposer as unknown as (props: ThreadComposerProps) => unknown)(props);
+  const tree = ThreadComposer(props);
   const popover = findElement(tree, (element) => element.type === "ComposerCommandPopover");
 
   return {
@@ -291,7 +308,7 @@ describe("ThreadComposer command menus", () => {
   });
 
   it("keeps $ open with a connect line when no provider is connected", () => {
-    const noProvider = { ...serverConfig, providers: [] } as unknown as ServerConfig;
+    const noProvider = makeMobileServerConfig({ ...serverConfig, providers: [] });
     expect(renderMenu("$", noProvider)).toEqual({
       triggerKind: "skill",
       emptyText: "Connect a provider to use skills.",

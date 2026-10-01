@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { Match } from "effect";
 import {
   boundedRunHistory,
@@ -224,7 +225,7 @@ export function ThreadRoutinesScreen() {
     try {
       const result = await action();
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         // Server errors can be technical English, so the card shows only translated copy.
         setFailure({ routineId, message: fallback });
       }

@@ -445,7 +445,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
               {
                 provider,
                 status: query.data?.providers.find((entry) => entry.provider === provider.id),
-                instanceId: undefined as ProviderInstanceId | undefined,
+                instanceId: undefined,
               },
               ...(query.data?.accounts
                 .filter((entry) => entry.provider === provider.id)

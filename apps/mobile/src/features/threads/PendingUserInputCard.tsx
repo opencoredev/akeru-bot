@@ -67,7 +67,9 @@ export interface PendingUserInputCardProps {
     questionId: string,
     customAnswer: string,
   ) => void;
-  readonly onSubmit: () => Promise<unknown>;
+  readonly onSubmit: ReturnType<
+    typeof import("../../state/use-selected-thread-requests").useSelectedThreadRequests
+  >["onSubmitUserInput"];
 }
 
 /**

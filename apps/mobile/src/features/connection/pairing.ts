@@ -1,6 +1,8 @@
 import { readHostedPairingRequest } from "@akeru/shared/remote";
 import * as Schema from "effect/Schema";
 
+type PairingUrlParts = { host: string; code: string };
+
 const MOBILE_PAIRING_URL_PARAM = "pairingUrl";
 
 function isIpLiteral(host: string): boolean {
@@ -47,7 +49,7 @@ export function buildPairingUrl(host: string, code: string): string {
   }
 }
 
-export function parsePairingUrl(url: string): { host: string; code: string } {
+export function parsePairingUrl(url: string): PairingUrlParts {
   const trimmed = url.trim();
 
   if (!trimmed) return { host: "", code: "" };

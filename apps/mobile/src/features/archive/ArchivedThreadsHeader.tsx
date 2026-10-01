@@ -1,4 +1,4 @@
-import type { EnvironmentId } from "@akeru/contracts";
+import { EnvironmentId } from "@akeru/contracts";
 import type { MenuAction } from "@react-native-menu/menu";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import { SymbolView } from "../../components/AppSymbol";
@@ -90,7 +90,7 @@ export function ArchivedThreadsHeader(props: {
       if (action === "environment:all") {
         props.onEnvironmentChange(null);
       } else if (action.startsWith("environment:")) {
-        props.onEnvironmentChange(action.slice("environment:".length) as EnvironmentId);
+        props.onEnvironmentChange(EnvironmentId.make(action.slice("environment:".length)));
       } else if (action === "sort:newest") {
         props.onSortOrderChange("newest");
       } else if (action === "sort:oldest") {

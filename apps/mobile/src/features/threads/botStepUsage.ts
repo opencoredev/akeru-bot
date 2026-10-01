@@ -1,6 +1,11 @@
 import type { UpdateBotInput } from "@akeru/client-runtime/state/bots";
 import type { BotId } from "@akeru/contracts";
 
+type ProviderUsageCap = {
+  readonly available: boolean;
+  readonly limit: number | null | undefined;
+};
+
 export function parseBotUsageCapInput(input: string): number | null | undefined {
   if (input.trim().length === 0) return null;
   const limit = Number(input);
@@ -11,7 +16,7 @@ export function parseBotUsageCapInput(input: string): number | null | undefined 
 export function resolveBotUsageCapForProvider(
   input: string,
   providerDriver?: string,
-): { readonly available: boolean; readonly limit: number | null | undefined } {
+): ProviderUsageCap {
   if (providerDriver === "grok") {
     return { available: false, limit: null };
   }

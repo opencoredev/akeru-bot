@@ -1,14 +1,7 @@
 import { Match } from "effect";
 import { MenuView } from "@react-native-menu/menu";
 import * as Haptics from "expo-haptics";
-import {
-  cloneElement,
-  isValidElement,
-  type ComponentProps,
-  type ReactElement,
-  type ReactNode,
-  useRef,
-} from "react";
+import { cloneElement, isValidElement, type ComponentProps, type ReactNode, useRef } from "react";
 import { Platform, Pressable, View } from "react-native";
 import { useThemeColor } from "../lib/useThemeColor";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
@@ -130,8 +123,11 @@ export function ControlPillMenu(
     // Long-press menus keep their child interactive: the child element gets
     // an injected onLongPress (mirroring the iOS context-menu interaction)
     // so its own tap handling still works.
-    if (props.shouldOpenOnLongPress && isValidElement(props.children)) {
-      const child = props.children as ReactElement<{ onLongPress?: () => void }>;
+    if (
+      props.shouldOpenOnLongPress &&
+      isValidElement<{ onLongPress?: () => void }>(props.children)
+    ) {
+      const child = props.children;
 
       return (
         <AndroidAnchoredMenu
@@ -177,8 +173,11 @@ export function ControlPillMenu(
   // onLongPress makes Pressability swallow the release, so holds past 350ms
   // (below the ~500ms context-menu threshold) can only open the menu, never
   // tap through.
-  if (props.shouldOpenOnLongPress && isValidElement(children)) {
-    const child = children as ReactElement<{ onLongPress?: () => void; delayLongPress?: number }>;
+  if (
+    props.shouldOpenOnLongPress &&
+    isValidElement<{ onLongPress?: () => void; delayLongPress?: number }>(children)
+  ) {
+    const child = children;
     children = cloneElement(child, {
       onLongPress: child.props.onLongPress ?? (() => undefined),
       delayLongPress: child.props.delayLongPress ?? 350,

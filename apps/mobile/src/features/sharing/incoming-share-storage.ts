@@ -46,7 +46,7 @@ export async function loadIncomingShareDrafts(): Promise<ReadonlyArray<IncomingS
       }
 
       try {
-        drafts.push(decodeIncomingShareDraft(JSON.parse(await entry.text()) as unknown));
+        drafts.push(decodeIncomingShareDraft(JSON.parse(await entry.text())));
       } catch (cause) {
         console.warn(
           "[incoming-share] ignored invalid persisted share",

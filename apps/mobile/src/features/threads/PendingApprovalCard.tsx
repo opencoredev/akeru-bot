@@ -4,7 +4,6 @@ import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   type ApprovalRequestId,
-  type ProviderApprovalDecision,
   type ProviderApprovalOption,
 } from "@akeru/contracts";
 import { Pressable, View } from "react-native";
@@ -16,10 +15,9 @@ import type { PendingApproval } from "../../lib/threadActivity";
 export interface PendingApprovalCardProps {
   readonly approval: PendingApproval;
   readonly respondingApprovalId: ApprovalRequestId | null;
-  readonly onRespond: (
-    requestId: ApprovalRequestId,
-    decision: ProviderApprovalDecision,
-  ) => Promise<unknown>;
+  readonly onRespond: ReturnType<
+    typeof import("../../state/use-selected-thread-requests").useSelectedThreadRequests
+  >["onRespondToApproval"];
 }
 
 export function PendingApprovalCard(props: PendingApprovalCardProps) {

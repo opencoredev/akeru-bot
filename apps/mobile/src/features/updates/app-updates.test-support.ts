@@ -1,6 +1,12 @@
 import { vi } from "vite-plus/test";
 import type { AppUpdateClient, AppUpdateEnvironment } from "./app-updates";
 
+type UpdateEnvironmentFixture = {
+  readonly backgroundCallbacks: Array<() => void>;
+  readonly environment: AppUpdateEnvironment;
+  readonly foregroundStayCallbacks: Array<() => void>;
+};
+
 export function makeUpdateClient(overrides: Partial<AppUpdateClient> = {}): AppUpdateClient {
   return {
     isEnabled: true,
@@ -17,11 +23,9 @@ export function makeUpdateClient(overrides: Partial<AppUpdateClient> = {}): AppU
   };
 }
 
-export function makeUpdateEnvironment(overrides: Partial<AppUpdateEnvironment> = {}): {
-  readonly backgroundCallbacks: Array<() => void>;
-  readonly environment: AppUpdateEnvironment;
-  readonly foregroundStayCallbacks: Array<() => void>;
-} {
+export function makeUpdateEnvironment(
+  overrides: Partial<AppUpdateEnvironment> = {},
+): UpdateEnvironmentFixture {
   const backgroundCallbacks: Array<() => void> = [];
   const foregroundStayCallbacks: Array<() => void> = [];
 

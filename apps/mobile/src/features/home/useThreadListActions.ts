@@ -22,7 +22,7 @@ import {
 } from "./use-thread-action-executor";
 import { environmentSupportsThreadCapability } from "./environment-thread-capabilities";
 
-export function useThreadListActions(): {
+type ThreadListActions = {
   readonly archiveThread: (thread: EnvironmentThreadShell) => void;
   readonly confirmDeleteThread: (thread: EnvironmentThreadShell) => void;
   readonly settleThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
@@ -36,7 +36,14 @@ export function useThreadListActions(): {
     direction: "up" | "down",
   ) => Promise<boolean>;
   readonly regenerateThreadTitle: (thread: EnvironmentThreadShell) => Promise<boolean>;
-} {
+};
+
+type ArchivedThreadListActions = {
+  readonly unarchiveThread: (thread: EnvironmentThreadShell) => void;
+  readonly confirmDeleteThread: (thread: EnvironmentThreadShell) => void;
+};
+
+export function useThreadListActions(): ThreadListActions {
   const { t } = useMobileI18n();
   const executeAction = useThreadActionExecutor();
   const snoozeMutation = useAtomCommand(threadEnvironment.snooze, { reportFailure: false });
@@ -437,10 +444,7 @@ export function useThreadListActions(): {
 
 export function useArchivedThreadListActions(
   onCompleted: (thread: EnvironmentThreadShell) => void,
-): {
-  readonly unarchiveThread: (thread: EnvironmentThreadShell) => void;
-  readonly confirmDeleteThread: (thread: EnvironmentThreadShell) => void;
-} {
+): ArchivedThreadListActions {
   const handleCompleted = useCallback(
     (_action: ThreadListAction, thread: EnvironmentThreadShell) => {
       onCompleted(thread);

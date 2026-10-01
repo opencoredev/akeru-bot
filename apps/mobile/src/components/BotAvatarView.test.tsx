@@ -1,12 +1,13 @@
 import { Predicate } from "effect";
 import { Children, isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { BotAvatarView } from "./BotAvatarView";
 
 const hooks = vi.hoisted(() => ({ failedPath: null as string | null }));
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
-  useState: (initial: unknown) => [hooks.failedPath ?? initial, () => {}],
+  useState: (initial: string | null) => [hooks.failedPath ?? initial, () => {}],
 }));
 
 vi.mock("expo-image", () => ({ Image: "Image" }));
@@ -20,12 +21,10 @@ vi.mock("react-native-svg", () => ({
   Rect: "Rect",
 }));
 
-import { BotAvatarView } from "./BotAvatarView";
-
 type ElementProps = {
   children?: ReactNode;
   source?: { uri?: string };
-  style?: Record<string, unknown>;
+  style?: import("react-native").ViewStyle;
 };
 
 /**

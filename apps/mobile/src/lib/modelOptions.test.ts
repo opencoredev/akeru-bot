@@ -1,7 +1,14 @@
+import { Schema } from "effect";
+import { makeMobileServerConfig } from "./mobile-fixtures.test-support";
 import { describe, expect, it } from "vite-plus/test";
 
 import { catalogRegistry, createTranslator } from "@akeru/client-runtime/i18n";
-import { DEFAULT_SERVER_SETTINGS, ProviderInstanceId, type ServerConfig } from "@akeru/contracts";
+import {
+  ServerProvider,
+  ServerProviderModel,
+  ProviderInstanceId,
+  type ServerConfig,
+} from "@akeru/contracts";
 
 import {
   buildModelOptions,
@@ -11,10 +18,35 @@ import {
   resolveSelectableModelSelection,
 } from "./modelOptions";
 
-// Fixtures list only the provider fields these rules read; the rest of the
-// server config is irrelevant here, so the partial provider rows are cast once.
-function serverConfig(providers: ReadonlyArray<object>): ServerConfig {
-  return { providers, settings: DEFAULT_SERVER_SETTINGS } as ServerConfig;
+type ProviderFixture = Omit<Partial<typeof ServerProvider.Encoded>, "models"> & {
+  readonly models?: ReadonlyArray<
+    Partial<typeof ServerProviderModel.Encoded> & { readonly slug: string; readonly name: string }
+  >;
+};
+
+const decodeProviderFixture = Schema.decodeUnknownSync(ServerProvider);
+
+function serverConfig(providers: ReadonlyArray<ProviderFixture>): ServerConfig {
+  return makeMobileServerConfig({
+    providers: providers.map((provider) =>
+      decodeProviderFixture({
+        enabled: true,
+        installed: true,
+        version: null,
+        status: "ready",
+        auth: { status: "authenticated" },
+        checkedAt: "2026-01-01T00:00:00Z",
+        slashCommands: [],
+        skills: [],
+        ...provider,
+        models: (provider.models ?? []).map((model) => ({
+          isCustom: false,
+          capabilities: null,
+          ...model,
+        })),
+      }),
+    ),
+  });
 }
 
 describe("mobile model options", () => {
@@ -289,12 +321,7 @@ describe("mobile model options", () => {
 });
 
 describe("resolveModelSendBlock", () => {
-  const claude = (patch: {
-    readonly instanceId?: string;
-    readonly auth?: { readonly status: string };
-    readonly unavailability?: string;
-    readonly models?: ReadonlyArray<{ readonly slug: string; readonly name: string }>;
-  }) =>
+  const claude = (patch: ProviderFixture) =>
     serverConfig([
       {
         instanceId: "claudeAgent",

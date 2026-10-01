@@ -1,4 +1,4 @@
-import { Match } from "effect";
+import { Match, Predicate } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -54,12 +54,11 @@ export function SettingsRouteScreen({ route }: StaticScreenProps<SettingsRoutePa
   const navigation = useNavigation();
   const rawEnvironmentId = route.params?.environmentId;
 
-  const environmentId =
-    typeof rawEnvironmentId === "string"
-      ? EnvironmentId.make(rawEnvironmentId)
-      : rawEnvironmentId?.[0] === undefined
-        ? null
-        : EnvironmentId.make(rawEnvironmentId[0]);
+  const environmentId = Predicate.isString(rawEnvironmentId)
+    ? EnvironmentId.make(rawEnvironmentId)
+    : rawEnvironmentId?.[0] === undefined
+      ? null
+      : EnvironmentId.make(rawEnvironmentId[0]);
 
   return (
     <>
@@ -385,7 +384,7 @@ function AppSettingsSection() {
   const version = Constants.expoConfig?.version ?? "0.0.0";
   // Fall back to "production" to match resolveAppVariant in app.config.ts, so a
   // missing variant never mislabels a production build as development.
-  const variant = (Constants.expoConfig?.extra?.appVariant as string | undefined) ?? "production";
+  const variant = Constants.expoConfig?.extra?.appVariant ?? "production";
   const variantLabel = variant === "production" ? "" : capitalize(variant);
   const versionLabel = variantLabel ? `${version} · ${variantLabel}` : version;
   const updateCheckAvailable = isAppUpdateCheckAvailable();

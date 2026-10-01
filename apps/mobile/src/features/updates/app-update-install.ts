@@ -179,6 +179,7 @@ export function reportUpdateFailure(
   onFailure?.(error instanceof Error ? error.message : fallback);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Expo updates can throw arbitrary values; this probe recognizes only its unavailable update codes.
 function isAppUpdateUnavailableError(error: unknown): boolean {
   if (!Predicate.isObjectOrArray(error) || error === null || !("code" in error)) return false;
   const code = error.code;
