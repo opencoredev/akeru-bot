@@ -18,6 +18,8 @@ const buttonVariants = cva(
       size: {
         compact:
           "h-7 gap-1 rounded-md px-[calc(--spacing(2)-1px)] text-xs before:rounded-[calc(var(--radius-md)-1px)] [&_svg:not([class*='size-'])]:size-3.5",
+        // Wraps an avatar or avatar tile: the child sets the size.
+        avatar: "p-0",
         default: "h-9 px-[calc(--spacing(3)-1px)] sm:h-8",
         icon: "size-9 sm:size-8",
         "icon-lg": "size-10 sm:size-9",
@@ -40,14 +42,25 @@ const buttonVariants = cva(
         xs: "h-7 gap-1 px-[calc(--spacing(2)-1px)] text-sm sm:h-6 sm:text-xs [&_svg:not([class*='size-'])]:size-4 sm:[&_svg:not([class*='size-'])]:size-3.5",
       },
       variant: {
+        // A bare avatar with an edit badge; its focus ring hugs the rounded avatar.
+        "avatar-edit":
+          "inline-block rounded-2xl border-0 transition-none focus-visible:ring-offset-0 [&_svg]:mx-0",
+        // A square pickable avatar tile; aria-pressed marks the chosen one.
+        "avatar-tile":
+          "rounded-xl border-transparent transition-colors focus-visible:ring-foreground/20 focus-visible:ring-offset-0 not-aria-pressed:hover:bg-secondary/70 aria-pressed:border-border aria-pressed:bg-secondary [&_svg]:mx-0",
         default:
           "border-transparent bg-foreground text-background [:active,[data-pressed]]:bg-foreground/80 [:hover,[data-pressed]]:bg-foreground/88",
+        // Primary action that turns into a quiet muted block while disabled.
+        "default-muted-disabled":
+          "border-transparent bg-foreground text-background disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 [:active,[data-pressed]]:bg-foreground/80 [:hover,[data-pressed]]:bg-foreground/88",
         destructive:
           "border-transparent bg-destructive text-white [:active,[data-pressed]]:bg-destructive/80 [:hover,[data-pressed]]:bg-destructive/90",
         "destructive-outline":
           "border-transparent bg-secondary text-destructive-foreground [:hover,[data-pressed]]:bg-destructive/12",
         ghost:
           "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent text-foreground data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent",
+        "ghost-destructive":
+          "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent text-destructive data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent",
         "ghost-muted":
           "[--control-icon-color:var(--contrast-muted-foreground)] border-transparent text-muted-foreground data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent [:hover,[data-pressed]]:text-foreground",
         /** Quiet sheet row; the hover fill marks it without changing its color. */
@@ -64,6 +77,9 @@ const buttonVariants = cva(
         /** Rounded icon control on sidebar chrome, muted until hovered. */
         "sidebar-ghost":
           "[--control-icon-color:var(--contrast-muted-foreground)] rounded-lg border-transparent text-sidebar-muted-foreground hover:text-sidebar-foreground data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent",
+        // A round floating outline control with muted ink, such as jump to latest.
+        "outline-pill-muted":
+          "[--control-icon-color:var(--contrast-muted-foreground)] rounded-full border-transparent bg-secondary text-muted-foreground shadow-xs hover:text-foreground [:active,[data-pressed]]:bg-accent [:hover,[data-pressed]]:bg-accent/80",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground [:active,[data-pressed]]:bg-secondary/80 [:hover,[data-pressed]]:bg-secondary/90",
         // Segmented choice: an unselected option, dimmed while aria-disabled.

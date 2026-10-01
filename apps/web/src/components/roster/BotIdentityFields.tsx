@@ -3,6 +3,7 @@ import { Edit02Icon } from "@hugeicons/core-free-icons";
 import { useI18n } from "../../i18n";
 import { SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { AppIcon } from "../ui/app-icon";
+import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { BotAvatarView } from "./BotAvatarView";
@@ -26,17 +27,18 @@ export function BotIdentityFields({
         title={t("Avatar")}
         description={t("Shown in the roster, the chat header, and anywhere this bot speaks.")}
         control={
-          <button
-            type="button"
+          <Button
+            variant="avatar-edit"
+            size="avatar"
             aria-label={t("Change bot avatar")}
             onClick={onChangeAvatar}
-            className="group relative rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="group"
           >
             <BotAvatarView avatar={bot.avatar} name={draft.name || bot.name} className="size-14" />
             <span className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors group-hover:text-foreground">
               <AppIcon className="size-3" icon={Edit02Icon} />
             </span>
-          </button>
+          </Button>
         }
       />
 

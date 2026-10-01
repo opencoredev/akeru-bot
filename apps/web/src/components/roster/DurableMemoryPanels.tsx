@@ -275,8 +275,7 @@ export function DurableFactList({
                         <Button
                           key="delete"
                           size="xs"
-                          variant="ghost"
-                          className="text-destructive"
+                          variant="ghost-destructive"
                           disabled={busy}
                           onClick={() => onRequestDelete(fact)}
                         >

@@ -121,10 +121,9 @@ export function BotConversationScrollArea({
         {!isAtEnd ? (
           <Button
             type="button"
-            variant="outline"
+            variant="outline-pill-muted"
             size="icon-sm"
             aria-label={t("Scroll to latest message")}
-            className="rounded-full text-muted-foreground shadow-xs hover:text-foreground"
             onClick={scrollToEnd}
           >
             <ArrowDownIcon className="size-4" />

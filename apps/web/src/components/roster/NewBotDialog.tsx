@@ -150,24 +150,22 @@ export function NewBotDialog({
                   {BLOB_SHAPES.map((shape) => {
                     const selected = avatar.kind === "blob" && blobAvatar.shape === shape;
                     return (
-                      <button
+                      <Button
                         key={shape}
-                        type="button"
+                        variant="avatar-tile"
+                        size="avatar"
                         aria-label={blobShapeLabel(shape, t)}
                         aria-pressed={selected}
                         data-bot-hover
                         onClick={() => updateBlobAvatar({ ...blobAvatar, shape })}
-                        className={cn(
-                          "flex aspect-square cursor-pointer items-center justify-center rounded-xl border border-transparent outline-none transition-colors focus-visible:ring-2 focus-visible:ring-foreground/20",
-                          selected ? "border-border bg-secondary" : "hover:bg-secondary/70",
-                        )}
+                        className="aspect-square"
                       >
                         <BotAvatarView
                           avatar={{ ...blobAvatar, shape }}
                           name={trimmedName}
                           className="size-9"
                         />
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -192,7 +190,7 @@ export function NewBotDialog({
             <Button
               type="submit"
               aria-describedby={trimmedName.length === 0 ? "new-bot-name-help" : undefined}
-              className="disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
+              variant="default-muted-disabled"
               disabled={submitting || trimmedName.length === 0}
             >
               {submitting ? t("Creating") : t("Create bot")}
