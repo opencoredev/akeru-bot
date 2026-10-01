@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   channelBindingNeedsProject,
@@ -57,7 +58,8 @@ export function ThreadChannels(props: {
 
     setBusyKey(null);
 
-    if (result._tag === "Failure") Alert.alert(t("Could not move channel to this project"));
+    if (Predicate.isTagged(result, "Failure"))
+      Alert.alert(t("Could not move channel to this project"));
   };
 
   return (

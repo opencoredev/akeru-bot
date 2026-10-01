@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type { ComponentProps, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -236,14 +237,11 @@ export function ComposerToolbarButton(props: {
         ? defaultBorderColor
         : themeColorWithAlpha(String(primaryFg), 0.18);
 
-  const iconTintColor =
-    variant === "primary"
-      ? props.disabled
-        ? iconSubtle
-        : primaryFg
-      : variant === "danger"
-        ? dangerFg
-        : iconColor;
+  const iconTintColor = Match.value(variant).pipe(
+    Match.when("primary", () => (props.disabled ? iconSubtle : primaryFg)),
+    Match.when("danger", () => dangerFg),
+    Match.orElse(() => iconColor),
+  );
 
   return (
     <Pressable
@@ -260,15 +258,11 @@ export function ComposerToolbarButton(props: {
         // prop still wins via the inline style below.
         "h-11 max-w-[172px] flex-row items-center justify-center rounded-full active:opacity-70",
         isCircle ? "w-11" : "gap-2 px-3.5",
-        variant === "primary"
-          ? props.disabled
-            ? "bg-subtle-strong"
-            : "bg-primary"
-          : variant === "danger"
-            ? "bg-danger"
-            : props.active
-              ? "bg-subtle-strong"
-              : "bg-subtle",
+        Match.value(variant).pipe(
+          Match.when("primary", () => (props.disabled ? "bg-subtle-strong" : "bg-primary")),
+          Match.when("danger", () => "bg-danger"),
+          Match.orElse(() => (props.active ? "bg-subtle-strong" : "bg-subtle")),
+        ),
         props.className,
       )}
       style={({ pressed }) => [

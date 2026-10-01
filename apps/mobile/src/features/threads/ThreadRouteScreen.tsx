@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { threadSilentRun } from "@akeru/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
 import {
@@ -192,7 +193,7 @@ function ThreadRouteContent(
 
     return {
       loading:
-        selectedThreadDetailState.page._tag === "Some" &&
+        Predicate.isTagged(selectedThreadDetailState.page, "Some") &&
         selectedThreadDetailState.page.value.loadingOlder,
       onLoadEarlier: () => {
         requestOlderThreadTurns(selectedThread.environmentId, selectedThread.id);

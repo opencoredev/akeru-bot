@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { DurableMemoryFact } from "@akeru/client-runtime/durable-memory";
 import { createElement, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -143,7 +144,7 @@ function actions(node: ReactNode): ActionElement[] {
 
   if (!isValidElement<{ children?: ReactNode; label?: string }>(node)) return [];
 
-  if (typeof node.props.label === "string") return [node as unknown as ActionElement];
+  if (Predicate.isString(node.props.label)) return [node as unknown as ActionElement];
 
   return actions(node.props.children);
 }

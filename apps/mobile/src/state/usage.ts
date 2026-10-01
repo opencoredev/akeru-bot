@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   aggregateUsage,
   usageWindowKey,
@@ -45,7 +46,9 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
         environmentId,
         label: presentation.entry.target.label,
         isPending: result.waiting,
-        error: result._tag === "Failure" ? "This environment could not report usage." : null,
+        error: Predicate.isTagged(result, "Failure")
+          ? "This environment could not report usage."
+          : null,
         summary: Option.getOrNull(AsyncResult.value(result)),
       });
     }

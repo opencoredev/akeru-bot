@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -104,31 +105,31 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListV2SnoozedShelfExpanded?: boolean;
   } = {};
 
-  if (typeof parsed.language === "string") preferences.language = parsed.language;
+  if (Predicate.isString(parsed.language)) preferences.language = parsed.language;
 
-  if (typeof parsed.reviewedPrivacyPolicyVersion === "string") {
+  if (Predicate.isString(parsed.reviewedPrivacyPolicyVersion)) {
     preferences.reviewedPrivacyPolicyVersion = parsed.reviewedPrivacyPolicyVersion;
   }
 
-  if (typeof parsed.reviewedTermsVersion === "string") {
+  if (Predicate.isString(parsed.reviewedTermsVersion)) {
     preferences.reviewedTermsVersion = parsed.reviewedTermsVersion;
   }
 
-  if (typeof parsed.liveActivitiesEnabled === "boolean") {
+  if (Predicate.isBoolean(parsed.liveActivitiesEnabled)) {
     preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;
   }
 
   // Legacy ids (`t3-code`, `t3-chat`) canonicalize through the alias table so a
   // persisted selection survives the rebrand instead of being dropped.
-  if (typeof parsed.themeId === "string") {
+  if (Predicate.isString(parsed.themeId)) {
     preferences.themeId = normalizeMobileThemeId(parsed.themeId);
   }
 
-  if (typeof parsed.lightThemeId === "string") {
+  if (Predicate.isString(parsed.lightThemeId)) {
     preferences.lightThemeId = normalizeMobileThemeId(parsed.lightThemeId);
   }
 
-  if (typeof parsed.darkThemeId === "string") {
+  if (Predicate.isString(parsed.darkThemeId)) {
     preferences.darkThemeId = normalizeMobileThemeId(parsed.darkThemeId);
   }
 
@@ -140,13 +141,13 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     preferences.themeMode = parsed.themeMode;
   }
 
-  if (typeof parsed.baseFontSize === "number") preferences.baseFontSize = parsed.baseFontSize;
+  if (Predicate.isNumber(parsed.baseFontSize)) preferences.baseFontSize = parsed.baseFontSize;
 
-  if (typeof parsed.markdownFontSize === "number") {
+  if (Predicate.isNumber(parsed.markdownFontSize)) {
     preferences.markdownFontSize = parsed.markdownFontSize;
   }
 
-  if (typeof parsed.projectGroupingEnabled === "boolean") {
+  if (Predicate.isBoolean(parsed.projectGroupingEnabled)) {
     preferences.projectGroupingEnabled = parsed.projectGroupingEnabled;
   }
 
@@ -158,11 +159,11 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     preferences.projectGroupingMode = parsed.projectGroupingMode;
   }
 
-  if (typeof parsed.threadListV2SettledShelfExpanded === "boolean") {
+  if (Predicate.isBoolean(parsed.threadListV2SettledShelfExpanded)) {
     preferences.threadListV2SettledShelfExpanded = parsed.threadListV2SettledShelfExpanded;
   }
 
-  if (typeof parsed.threadListV2SnoozedShelfExpanded === "boolean") {
+  if (Predicate.isBoolean(parsed.threadListV2SnoozedShelfExpanded)) {
     preferences.threadListV2SnoozedShelfExpanded = parsed.threadListV2SnoozedShelfExpanded;
   }
 
@@ -190,7 +191,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       return null;
     }
 
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+    return Predicate.isObjectOrArray(parsed) && parsed !== null && !Array.isArray(parsed)
       ? (parsed as Preferences)
       : null;
   };
@@ -211,12 +212,12 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     }
 
     if (
-      typeof parsed !== "object" ||
+      !Predicate.isObjectOrArray(parsed) ||
       parsed === null ||
       !("payload" in parsed) ||
-      typeof parsed.payload !== "string" ||
+      !Predicate.isString(parsed.payload) ||
       !("updatedAt" in parsed) ||
-      typeof parsed.updatedAt !== "number"
+      !Predicate.isNumber(parsed.updatedAt)
     ) {
       return null;
     }
@@ -266,7 +267,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     yield* Ref.update(lastUpdatedAt, (last) => Math.max(last, timestamp));
     const databaseResult = yield* Effect.result(database.savePreferencesJson(payload, timestamp));
 
-    if (databaseResult._tag === "Failure") {
+    if (Predicate.isTagged(databaseResult, "Failure")) {
       yield* Effect.logWarning("Database unavailable; saving preferences to secure storage.").pipe(
         Effect.annotateLogs({ cause: databaseResult.failure }),
       );
@@ -281,13 +282,13 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
 
   const loadUnlocked = Effect.gen(function* () {
     const databaseResult = yield* Effect.result(database.loadPreferencesJson);
-    const databaseAvailable = databaseResult._tag === "Success";
+    const databaseAvailable = Predicate.isTagged(databaseResult, "Success");
 
     const storedJson = databaseAvailable
       ? databaseResult.success
       : Option.none<MobileDatabase.StoredPreferencesJson>();
 
-    if (databaseResult._tag === "Failure") {
+    if (Predicate.isTagged(databaseResult, "Failure")) {
       yield* Effect.logWarning("Database unavailable; loading fallback preferences.").pipe(
         Effect.annotateLogs({ cause: databaseResult.failure }),
       );
@@ -307,7 +308,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
 
     let fallbackJson: string | null = null;
 
-    if (fallbackResult._tag === "Success") {
+    if (Predicate.isTagged(fallbackResult, "Success")) {
       fallbackJson = fallbackResult.success;
     } else if (Option.isNone(storedJson)) {
       return yield* fallbackResult.failure;

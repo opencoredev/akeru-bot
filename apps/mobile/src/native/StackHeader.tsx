@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useNavigation, type ParamListBase } from "@react-navigation/native";
 import type {
   NativeStackHeaderItem,
@@ -115,7 +116,7 @@ function stabilizeOptionFunctions(
   wrappers: Map<string, (...args: unknown[]) => unknown>,
   seen = new WeakSet<object>(),
 ): unknown {
-  if (typeof value === "function") {
+  if (Predicate.isFunction(value)) {
     latestFunctions.set(path, value as (...args: unknown[]) => unknown);
     let wrapper = wrappers.get(path);
 
@@ -139,7 +140,7 @@ function stabilizeOptionFunctions(
     );
   }
 
-  if (value !== null && typeof value === "object") {
+  if (value !== null && Predicate.isObjectOrArray(value)) {
     if (seen.has(value) || "current" in value) return value;
     seen.add(value);
 
@@ -226,7 +227,7 @@ export function NativeStackScreenOptions(props: {
 function labelFromChildren(children: ReactNode): string {
   const parts: string[] = [];
   Children.forEach(children, (child) => {
-    if (typeof child === "string" || typeof child === "number") {
+    if (Predicate.isString(child) || Predicate.isNumber(child)) {
       parts.push(String(child));
     } else if (isValidElement<{ children?: ReactNode }>(child)) {
       parts.push(labelFromChildren(child.props.children));
@@ -245,7 +246,7 @@ type NativeStackOptionsWithToolbar = NativeStackNavigationOptions & {
 };
 
 function iconFromProp(icon: unknown): NativeStackHeaderIcon | undefined {
-  if (typeof icon !== "string") {
+  if (!Predicate.isString(icon)) {
     return undefined;
   }
 
@@ -257,7 +258,7 @@ type ToolbarElementProps = Record<string, unknown> & { readonly children?: React
 function elementTypeName(element: ReactElement): string | undefined {
   const type = element.type;
 
-  if (typeof type === "function") {
+  if (Predicate.isFunction(type)) {
     return (type as { displayName?: string; name?: string }).displayName ?? type.name;
   }
 
@@ -275,29 +276,26 @@ function convertMenuAction(
     return {
       type: "action",
       label,
-      description: typeof element.props.subtitle === "string" ? element.props.subtitle : undefined,
+      description: Predicate.isString(element.props.subtitle) ? element.props.subtitle : undefined,
       disabled: Boolean(element.props.disabled),
       icon: iconFromProp(element.props.icon),
-      onPress:
-        typeof element.props.onPress === "function"
-          ? (element.props.onPress as () => void)
-          : () => undefined,
+      onPress: Predicate.isFunction(element.props.onPress)
+        ? (element.props.onPress as () => void)
+        : () => undefined,
       state: element.props.isOn === true ? "on" : undefined,
       destructive: Boolean(element.props.destructive),
-      discoverabilityLabel:
-        typeof element.props.discoverabilityLabel === "string"
-          ? element.props.discoverabilityLabel
-          : undefined,
+      discoverabilityLabel: Predicate.isString(element.props.discoverabilityLabel)
+        ? element.props.discoverabilityLabel
+        : undefined,
     };
   }
 
   if (typeName === "NativeHeaderToolbarMenu") {
     return {
       type: "submenu",
-      label:
-        typeof element.props.title === "string"
-          ? element.props.title
-          : labelFromChildren(element.props.children),
+      label: Predicate.isString(element.props.title)
+        ? element.props.title
+        : labelFromChildren(element.props.children),
       icon: iconFromProp(element.props.icon),
       inline: Boolean(element.props.inline),
       items: collectMenuItems(element.props.children),
@@ -338,17 +336,15 @@ function convertToolbarChild(child: ReactNode): NativeStackHeaderItem | null {
   if (typeName === "NativeHeaderToolbarButton") {
     return {
       type: "button",
-      label: typeof child.props.label === "string" ? child.props.label : "",
-      accessibilityLabel:
-        typeof child.props.accessibilityLabel === "string"
-          ? child.props.accessibilityLabel
-          : undefined,
+      label: Predicate.isString(child.props.label) ? child.props.label : "",
+      accessibilityLabel: Predicate.isString(child.props.accessibilityLabel)
+        ? child.props.accessibilityLabel
+        : undefined,
       disabled: Boolean(child.props.disabled),
       icon: iconFromProp(child.props.icon),
-      onPress:
-        typeof child.props.onPress === "function"
-          ? (child.props.onPress as () => void)
-          : () => undefined,
+      onPress: Predicate.isFunction(child.props.onPress)
+        ? (child.props.onPress as () => void)
+        : () => undefined,
       sharesBackground: !child.props.separateBackground,
       tintColor: child.props.tintColor as ColorValue | undefined,
       variant: "plain",
@@ -358,15 +354,14 @@ function convertToolbarChild(child: ReactNode): NativeStackHeaderItem | null {
   if (typeName === "NativeHeaderToolbarMenu") {
     return {
       type: "menu",
-      label: typeof child.props.title === "string" ? child.props.title : "",
-      accessibilityLabel:
-        typeof child.props.accessibilityLabel === "string"
-          ? child.props.accessibilityLabel
-          : undefined,
+      label: Predicate.isString(child.props.title) ? child.props.title : "",
+      accessibilityLabel: Predicate.isString(child.props.accessibilityLabel)
+        ? child.props.accessibilityLabel
+        : undefined,
       disabled: Boolean(child.props.disabled),
       icon: iconFromProp(child.props.icon),
       menu: {
-        title: typeof child.props.title === "string" ? child.props.title : undefined,
+        title: Predicate.isString(child.props.title) ? child.props.title : undefined,
         items: collectMenuItems(child.props.children),
       },
       sharesBackground: !child.props.separateBackground,
@@ -378,7 +373,7 @@ function convertToolbarChild(child: ReactNode): NativeStackHeaderItem | null {
   if (typeName === "NativeHeaderToolbarSpacer") {
     return {
       type: "spacing",
-      spacing: typeof child.props.width === "number" ? child.props.width : 8,
+      spacing: Predicate.isNumber(child.props.width) ? child.props.width : 8,
       flexible: Boolean(child.props.flexible),
     } as NativeStackHeaderItem;
   }

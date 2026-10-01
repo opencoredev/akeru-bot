@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { ThreadId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import { buildThreadListV2Items, buildThreadListV2ListItems } from "./threadListV2";
@@ -29,13 +30,12 @@ describe("buildThreadListV2ListItems", () => {
 
     expect(
       items.map((item) =>
-        item.type === "v2-pending"
-          ? item.pendingTask.title
-          : item.type === "v2-thread"
-            ? item.item.thread.id
-            : item.type === "v2-snoozed-shelf"
-              ? "snoozed-shelf"
-              : "settled-shelf",
+        Match.value(item).pipe(
+          Match.when({ type: "v2-pending" }, (item) => item.pendingTask.title),
+          Match.when({ type: "v2-thread" }, (item) => item.item.thread.id),
+          Match.when({ type: "v2-snoozed-shelf" }, () => "snoozed-shelf"),
+          Match.orElse(() => "settled-shelf"),
+        ),
       ),
     ).toEqual(["active", "queued-1", "queued-2", "settled-shelf", "settled"]);
     // Only the leading queued row labels the section, exactly like Settled.

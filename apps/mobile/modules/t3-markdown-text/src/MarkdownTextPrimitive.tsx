@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import React from "react";
 import { Platform, StyleSheet, Text as RNText, type TextProps, type ViewStyle } from "react-native";
 import T3MarkdownTextRunNativeComponent from "./T3MarkdownTextRunNativeComponent";
@@ -56,7 +57,7 @@ function MarkdownTextPrimitiveChild({ style, children, ...rest }: MarkdownTextPr
       return child;
     }
 
-    if (typeof child !== "string" && typeof child !== "number") {
+    if (!Predicate.isString(child) && !Predicate.isNumber(child)) {
       return null;
     }
 

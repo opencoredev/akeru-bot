@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import type { EnvironmentProject, EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import type { EnvironmentThreadSearchMatch } from "@akeru/client-runtime/state/thread-search";
@@ -374,9 +375,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         now: new Date(),
       });
 
-      if (snoozeSelection._tag === "selected") {
+      if (Predicate.isTagged(snoozeSelection, "selected")) {
         handleSnooze(snoozeSelection.preset.snoozedUntil);
-      } else if (snoozeSelection._tag === "expired") {
+      } else if (Predicate.isTagged(snoozeSelection, "expired")) {
         Alert.alert(
           t("Could not snooze chat"),
           t("That snooze time has passed. Choose another time."),

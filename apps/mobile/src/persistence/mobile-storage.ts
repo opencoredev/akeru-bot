@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { EnvironmentId } from "@akeru/contracts";
 import * as Arr from "effect/Array";
 import * as Context from "effect/Context";
@@ -252,9 +253,9 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
     Effect.map((parsed) => {
       if (
         !parsed ||
-        typeof parsed !== "object" ||
-        typeof parsed.identity !== "string" ||
-        typeof parsed.signature !== "string"
+        !Predicate.isObjectOrArray(parsed) ||
+        !Predicate.isString(parsed.identity) ||
+        !Predicate.isString(parsed.signature)
       ) {
         return null;
       }
@@ -262,7 +263,7 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
       return {
         identity: parsed.identity,
         signature: parsed.signature,
-        ...(typeof parsed.pushToStartToken === "string" && parsed.pushToStartToken
+        ...(Predicate.isString(parsed.pushToStartToken) && parsed.pushToStartToken
           ? { pushToStartToken: parsed.pushToStartToken }
           : {}),
       };
@@ -279,11 +280,11 @@ export const make = Effect.fn("MobileStorage.make")(function* () {
         parsed?.threads ?? [],
         Arr.filter(
           (thread) =>
-            typeof thread?.environmentId === "string" &&
+            Predicate.isString(thread?.environmentId) &&
             thread.environmentId.length > 0 &&
-            typeof thread.threadId === "string" &&
+            Predicate.isString(thread.threadId) &&
             thread.threadId.length > 0 &&
-            typeof thread.title === "string",
+            Predicate.isString(thread.title),
         ),
       ),
     ),

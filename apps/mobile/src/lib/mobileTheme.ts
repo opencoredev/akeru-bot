@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   BUILT_IN_THEMES,
   getThemeColorsForAppearance,
@@ -41,7 +42,7 @@ const LEGACY_MOBILE_THEME_IDS: Readonly<Record<string, MobileThemeId>> = {
 };
 
 export function normalizeMobileThemeId(value: unknown): MobileThemeId {
-  if (typeof value === "string") {
+  if (Predicate.isString(value)) {
     if ((MOBILE_THEME_IDS as readonly string[]).includes(value)) {
       return value as MobileThemeId;
     }

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => {
@@ -63,11 +64,11 @@ const mocks = vi.hoisted(() => {
           return Promise.reject(new Error("database unavailable"));
         }
 
-        if (typeof payload === "string") {
+        if (Predicate.isString(payload)) {
           preferencesJson = payload;
         }
 
-        if (typeof updatedAt === "number") {
+        if (Predicate.isNumber(updatedAt)) {
           preferencesUpdatedAt = updatedAt;
         }
 

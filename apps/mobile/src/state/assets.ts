@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { createAssetEnvironmentAtoms, resolveAssetUrl } from "@akeru/client-runtime/state/assets";
 import type { AssetResource, EnvironmentId } from "@akeru/contracts";
@@ -29,11 +30,11 @@ export function useAssetUrlState(
       : assetEnvironment.createUrl({ environmentId, input: { resource } }),
   );
 
-  if (result._tag === "Failure") {
+  if (Predicate.isTagged(result, "Failure")) {
     return { _tag: "Failure" };
   }
 
-  if (preparedConnection._tag === "None" || result._tag !== "Success") {
+  if (Predicate.isTagged(preparedConnection, "None") || !Predicate.isTagged(result, "Success")) {
     return { _tag: "Loading" };
   }
 
@@ -48,5 +49,5 @@ export function useAssetUrl(
 ): string | null {
   const state = useAssetUrlState(environmentId, resource);
 
-  return state._tag === "Success" ? state.url : null;
+  return Predicate.isTagged(state, "Success") ? state.url : null;
 }

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { MOBILE_TYPOGRAPHY } from "./typography";
 
 export const DEFAULT_BASE_FONT_SIZE = MOBILE_TYPOGRAPHY.body.fontSize;
@@ -39,7 +40,7 @@ export interface NativeMarkdownTypography {
 }
 
 export function normalizeBaseFontSize(value: number | null | undefined): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+  if (!Predicate.isNumber(value) || !Number.isFinite(value)) {
     return DEFAULT_BASE_FONT_SIZE;
   }
 

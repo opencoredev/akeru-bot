@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { BotAvatar } from "@akeru/contracts";
 import { Image } from "expo-image";
 import { useState } from "react";
@@ -117,7 +118,7 @@ function isBotBlobShape(value: string): value is BotBlobShape {
 }
 
 function isBotAvatarColor(value: unknown): value is string {
-  return typeof value === "string" && /^#[\da-f]{6}$/i.test(value);
+  return Predicate.isString(value) && /^#[\da-f]{6}$/i.test(value);
 }
 
 function relativeLuminance(hexColor: string): number | null {

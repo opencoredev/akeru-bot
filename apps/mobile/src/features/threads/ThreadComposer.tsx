@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import type {
   EnvironmentId,
@@ -451,7 +452,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       if (!patch) return false;
       const result = await updateBot({ environmentId: props.environmentId, input: patch });
 
-      return result._tag === "Success";
+      return Predicate.isTagged(result, "Success");
     },
     [bot, currentModelOption?.providerDriver, props.environmentId, updateBot],
   );
@@ -464,7 +465,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       input: { botId: bot.id },
     });
 
-    if (result._tag !== "Failure") return null;
+    if (!Predicate.isTagged(result, "Failure")) return null;
     const error = squashAtomCommandFailure(result);
 
     return error instanceof Error ? error.message : t("The command failed.");

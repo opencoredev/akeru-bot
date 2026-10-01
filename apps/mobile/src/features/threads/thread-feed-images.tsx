@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import type { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { SymbolView } from "../../components/AppSymbol";
@@ -214,9 +215,9 @@ export function ThreadMarkdownImage(props: {
 
   return (
     <ThreadMarkdownImageView
-      uri={assetUrl._tag === "Success" ? assetUrl.url : null}
+      uri={Predicate.isTagged(assetUrl, "Success") ? assetUrl.url : null}
       sourceKey={props.path}
-      unavailable={assetUrl._tag === "Failure"}
+      unavailable={Predicate.isTagged(assetUrl, "Failure")}
       alt={props.alt}
       onPressImage={props.onPressImage}
     />

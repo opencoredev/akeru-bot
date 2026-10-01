@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { routineApprovalSummary } from "@akeru/client-runtime/routines";
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
@@ -85,24 +86,22 @@ export function PendingApprovalCard(props: PendingApprovalCardProps) {
         {options.map((option) => (
           <Pressable
             key={option.decision}
-            className={`items-center justify-center rounded-[14px] px-3.5 py-3 ${
-              option.decision === "accept"
-                ? "bg-blue-500"
-                : option.decision === "decline"
-                  ? "bg-rose-100 dark:bg-rose-500/18"
-                  : "bg-neutral-200 dark:bg-neutral-800"
-            }`}
+            className={`items-center justify-center rounded-[14px] px-3.5 py-3 ${Match.value(
+              option.decision,
+            ).pipe(
+              Match.when("accept", () => "bg-blue-500"),
+              Match.when("decline", () => "bg-rose-100 dark:bg-rose-500/18"),
+              Match.orElse(() => "bg-neutral-200 dark:bg-neutral-800"),
+            )}`}
             disabled={props.respondingApprovalId === props.approval.requestId}
             onPress={() => void props.onRespond(props.approval.requestId, option.decision)}
           >
             <Text
-              className={`text-sm ${
-                option.decision === "accept"
-                  ? "font-t3-extrabold text-white"
-                  : option.decision === "decline"
-                    ? "font-t3-bold text-rose-700 dark:text-rose-300"
-                    : "font-t3-bold text-neutral-950 dark:text-neutral-50"
-              }`}
+              className={`text-sm ${Match.value(option.decision).pipe(
+                Match.when("accept", () => "font-t3-extrabold text-white"),
+                Match.when("decline", () => "font-t3-bold text-rose-700 dark:text-rose-300"),
+                Match.orElse(() => "font-t3-bold text-neutral-950 dark:text-neutral-50"),
+              )}`}
             >
               {option.label}
             </Text>

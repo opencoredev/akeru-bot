@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { MenuAction, MenuComponentProps } from "@react-native-menu/menu";
 import { BlurView } from "expo-blur";
 import type { ReactNode } from "react";
@@ -210,7 +211,7 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
 
   return (
     <>
-      {typeof props.children === "function" ? (
+      {Predicate.isFunction(props.children) ? (
         <View ref={anchorRef} collapsable={false} className={props.className} style={props.style}>
           {props.children(open)}
         </View>

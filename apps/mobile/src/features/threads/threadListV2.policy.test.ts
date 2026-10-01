@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { resolveSnoozePresets } from "@akeru/client-runtime/state/thread-settled";
 import { ProviderInstanceId, ThreadId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
@@ -51,7 +52,7 @@ describe("resolveThreadListV2SnoozeMenuSelection", () => {
 
     expect(selection._tag).toBe("selected");
 
-    if (selection._tag === "selected") {
+    if (Predicate.isTagged(selection, "selected")) {
       expect(selection.preset.snoozedUntil).toBe(
         new Date(selectedAt.getTime() + 60 * 60 * 1_000).toISOString(),
       );

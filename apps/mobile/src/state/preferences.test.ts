@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -53,7 +54,7 @@ function makePreferencesState(
         service.load.pipe(
           Effect.flatMap((current) => service.savePatch(transform(current))),
           Effect.mapError((cause) =>
-            cause._tag === "MobilePreferencesSaveError"
+            Predicate.isTagged(cause, "MobilePreferencesSaveError")
               ? cause
               : new MobilePreferencesSaveError({ cause }),
           ),

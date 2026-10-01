@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { requireNativeView } from "expo";
 import { TextInputWrapper } from "expo-paste-input";
 import type { Ref } from "react";
@@ -75,17 +76,17 @@ export function ComposerEditor({
         themeJson={editorDocument.themeJson}
         placeholder={props.placeholder ?? ""}
         fontFamily={
-          typeof resolvedTextStyle.fontFamily === "string"
+          Predicate.isString(resolvedTextStyle.fontFamily)
             ? resolvedTextStyle.fontFamily
             : regularFontFamily
         }
         fontSize={
-          typeof resolvedTextStyle.fontSize === "number"
+          Predicate.isNumber(resolvedTextStyle.fontSize)
             ? resolvedTextStyle.fontSize
             : MOBILE_TYPOGRAPHY.body.fontSize
         }
         lineHeight={
-          typeof resolvedTextStyle.lineHeight === "number"
+          Predicate.isNumber(resolvedTextStyle.lineHeight)
             ? resolvedTextStyle.lineHeight
             : MOBILE_TYPOGRAPHY.body.lineHeight
         }

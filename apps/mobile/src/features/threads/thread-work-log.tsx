@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import * as Haptics from "expo-haptics";
 import { memo } from "react";
@@ -276,13 +277,17 @@ export const ThreadWorkLog = memo(function ThreadWorkLog(props: ThreadWorkLogPro
                     <View className="h-4 w-4 items-center justify-center">
                       {row.status ? (
                         <SymbolView
-                          name={
-                            row.status === "failure"
-                              ? { ios: "xmark", android: "close" }
-                              : row.status === "success"
-                                ? { ios: "checkmark", android: "check" }
-                                : { ios: "minus", android: "remove" }
-                          }
+                          name={Match.value(row.status).pipe(
+                            Match.when(
+                              "failure",
+                              () => ({ ios: "xmark", android: "close" }) as const,
+                            ),
+                            Match.when(
+                              "success",
+                              () => ({ ios: "checkmark", android: "check" }) as const,
+                            ),
+                            Match.orElse(() => ({ ios: "minus", android: "remove" }) as const),
+                          )}
                           size={11}
                           tintColor={row.status === "failure" ? "#e11d48" : props.iconSubtleColor}
                           type="monochrome"

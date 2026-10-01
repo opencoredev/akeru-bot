@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { SymbolView } from "../../components/AppSymbol";
 import { Platform, Pressable } from "react-native";
 import { useThemeColor } from "../../lib/useThemeColor";
@@ -41,7 +42,11 @@ export function ConnectionSheetButton(props: {
   const dangerFg = useThemeColor("--color-danger-foreground");
   const secondaryFg = useThemeColor("--color-secondary-foreground");
 
-  const textColor = tone === "primary" ? primaryFg : tone === "danger" ? dangerFg : secondaryFg;
+  const textColor = Match.value(tone).pipe(
+    Match.when("primary", () => primaryFg),
+    Match.when("danger", () => dangerFg),
+    Match.orElse(() => secondaryFg),
+  );
 
   const primaryShadow =
     tone === "primary"
@@ -66,11 +71,11 @@ export function ConnectionSheetButton(props: {
           ? "min-h-[42px] flex-row items-center justify-center gap-1.5 rounded-[14px] px-3.5 py-2.5"
           : "min-h-[48px] flex-row items-center justify-center gap-2 rounded-[16px] px-4 py-3",
         "disabled:opacity-50",
-        tone === "primary"
-          ? "bg-primary"
-          : tone === "danger"
-            ? "border border-danger-border bg-danger"
-            : "border border-border bg-secondary",
+        Match.value(tone).pipe(
+          Match.when("primary", () => "bg-primary"),
+          Match.when("danger", () => "border border-danger-border bg-danger"),
+          Match.orElse(() => "border border-border bg-secondary"),
+        ),
       )}
       disabled={props.disabled}
       onPress={props.onPress}
@@ -85,11 +90,11 @@ export function ConnectionSheetButton(props: {
       <Text
         className={cn(
           "text-xs font-t3-bold tracking-[0.8px] uppercase",
-          tone === "primary"
-            ? "text-primary-foreground"
-            : tone === "danger"
-              ? "text-danger-foreground"
-              : "text-secondary-foreground",
+          Match.value(tone).pipe(
+            Match.when("primary", () => "text-primary-foreground"),
+            Match.when("danger", () => "text-danger-foreground"),
+            Match.orElse(() => "text-secondary-foreground"),
+          ),
         )}
       >
         {props.label}

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ThreadSilentRun } from "@akeru/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
 import * as Haptics from "expo-haptics";
@@ -283,7 +284,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     (image) => {
       const imageSource = classifyMarkdownImageSource(image.href, props.workspaceRoot ?? null);
 
-      if (imageSource._tag === "Direct") {
+      if (Predicate.isTagged(imageSource, "Direct")) {
         return (
           <ThreadMarkdownImageView
             uri={imageSource.uri}
@@ -295,7 +296,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         );
       }
 
-      if (imageSource._tag === "Blocked") {
+      if (!Predicate.isTagged(imageSource, "WorkspaceFile")) {
         return <ThreadMarkdownImageUnavailable alt={image.alt} />;
       }
 

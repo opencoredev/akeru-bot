@@ -1,7 +1,8 @@
+import { Predicate } from "effect";
 import { availableLanguages, resolveLocale } from "@akeru/client-runtime/i18n";
 
 export function normalizeLanguagePreference(value: unknown): string {
-  return typeof value === "string" && availableLanguages.some((language) => language.id === value)
+  return Predicate.isString(value) && availableLanguages.some((language) => language.id === value)
     ? value
     : "system";
 }
@@ -24,7 +25,7 @@ export function readDeviceLocales(readPreferredLocales?: () => unknown): readonl
     if (
       Array.isArray(preferred) &&
       preferred.length > 0 &&
-      preferred.every((locale) => typeof locale === "string")
+      preferred.every((locale) => Predicate.isString(locale))
     ) {
       return preferred;
     }

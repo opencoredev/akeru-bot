@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   ModelCapabilities,
   ProviderOptionDescriptor,
@@ -58,9 +59,9 @@ export function applyProviderOptionSelection(
   }
 
   if (
-    (descriptor.type === "boolean" && typeof change.value !== "boolean") ||
+    (descriptor.type === "boolean" && !Predicate.isBoolean(change.value)) ||
     (descriptor.type === "select" &&
-      (typeof change.value !== "string" ||
+      (!Predicate.isString(change.value) ||
         !descriptor.options.some((option) => option.id === change.value)))
   ) {
     return null;

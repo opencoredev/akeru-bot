@@ -1,3 +1,4 @@
+import { Match, Predicate } from "effect";
 /**
  * One work card inside the mobile chat feed: the other bot, its task, the
  * delegation's state, and the same reverse-state actions the web card offers.
@@ -51,11 +52,16 @@ function delegationElapsed(delegation: AkeruDelegationRecord): string | null {
   const phase = delegation.phase;
 
   const startedAt = Date.parse(
-    phase._tag === "Queued" || phase.startedAt === null ? delegation.createdAt : phase.startedAt,
+    Match.value(phase).pipe(
+      Match.tag("Queued", () => delegation.createdAt),
+      Match.orElse((phase) => phase.startedAt ?? delegation.createdAt),
+    ),
   );
 
   const endedAt =
-    phase._tag === "Failed" || phase._tag === "Canceled" || phase._tag === "Completed"
+    Predicate.isTagged(phase, "Failed") ||
+    Predicate.isTagged(phase, "Canceled") ||
+    Predicate.isTagged(phase, "Completed")
       ? Date.parse(phase.completedAt)
       : Date.now();
 

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { EnvironmentId } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -82,7 +83,9 @@ interface LegacyCacheRecord {
 }
 
 function objectRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+  return Predicate.isObjectOrArray(value) && value !== null
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 export function decodeLegacyCacheRecord(
@@ -99,8 +102,8 @@ export function decodeLegacyCacheRecord(
 
   if (
     parsed === null ||
-    typeof parsed.environmentId !== "string" ||
-    typeof parsed.schemaVersion !== "number"
+    !Predicate.isString(parsed.environmentId) ||
+    !Predicate.isNumber(parsed.schemaVersion)
   ) {
     return null;
   }
@@ -116,7 +119,7 @@ export function decodeLegacyCacheRecord(
         payload,
       };
     case "connection-thread-snapshots":
-      return typeof parsed.threadId === "string"
+      return Predicate.isString(parsed.threadId)
         ? {
             environmentId: parsed.environmentId,
             kind: "thread",
@@ -134,7 +137,7 @@ export function decodeLegacyCacheRecord(
         payload,
       };
     case "connection-vcs-refs":
-      return typeof parsed.cwd === "string"
+      return Predicate.isString(parsed.cwd)
         ? {
             environmentId: parsed.environmentId,
             kind: "vcs-refs",
@@ -437,7 +440,7 @@ function makeUnavailable(error: MobileDatabaseError): MobileDatabase["Service"] 
 
 export const make = Effect.result(makeAvailable).pipe(
   Effect.map((result) =>
-    result._tag === "Success" ? result.success : makeUnavailable(result.failure),
+    Predicate.isTagged(result, "Success") ? result.success : makeUnavailable(result.failure),
   ),
 );
 

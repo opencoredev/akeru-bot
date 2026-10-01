@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { Children, isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -36,7 +37,7 @@ function nodes(node: ReactNode): Array<{ type: unknown; props: ElementProps }> {
   return Children.toArray(node).flatMap((child) => {
     if (!isValidElement<ElementProps>(child)) return [];
 
-    if (typeof child.type === "function") {
+    if (Predicate.isFunction(child.type)) {
       const render = child.type as (props: ElementProps) => ReactNode;
 
       return nodes(render(child.props));

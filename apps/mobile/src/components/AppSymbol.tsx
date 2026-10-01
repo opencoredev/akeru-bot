@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   IconAdjustmentsHorizontal,
   IconAlertCircle,
@@ -201,8 +202,8 @@ export function SymbolView(props: SymbolViewProps) {
     return <ExpoSymbolView {...props} />;
   }
 
-  const materialName = typeof props.name === "string" ? undefined : props.name.android;
-  const sfSymbol = typeof props.name === "string" ? props.name : props.name.ios;
+  const materialName = Predicate.isString(props.name) ? undefined : props.name.android;
+  const sfSymbol = Predicate.isString(props.name) ? props.name : props.name.ios;
 
   const AndroidIcon =
     (materialName ? ANDROID_ICON_BY_MATERIAL_NAME[materialName] : undefined) ??

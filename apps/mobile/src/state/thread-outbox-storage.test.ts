@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { MessageId, ProjectId } from "@akeru/contracts";
 import { AtomRegistry } from "effect/unstable/reactivity";
@@ -58,12 +59,11 @@ describe("thread outbox storage", () => {
         createdAt: "2026-06-08T10:00:02.000Z",
       });
 
-      const corruptContents =
-        failure === "read"
-          ? new Error("storage unavailable")
-          : failure === "json"
-            ? "{"
-            : JSON.stringify({ ...second, schemaVersion: 999 });
+      const corruptContents = Match.value(failure).pipe(
+        Match.when("read", () => new Error("storage unavailable")),
+        Match.when("json", () => "{"),
+        Match.orElse(() => JSON.stringify({ ...second, schemaVersion: 999 })),
+      );
 
       outboxFiles.set("message-1.json", JSON.stringify(encodeQueuedThreadMessage(first)));
       outboxFiles.set("message-2.json", corruptContents);

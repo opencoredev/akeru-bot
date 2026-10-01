@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -430,20 +431,14 @@ function AppSettingsSection() {
     }
   }, [checkForUpdate, updateCheckAvailable]);
 
-  const statusLabel =
-    updateState === "checking"
-      ? t("Checking…")
-      : updateState === "downloading"
-        ? t("Downloading…")
-        : // "ready" appears only when this check joined an in-flight background-mode
-          // check; that download installs at the next backgrounding.
-          updateState === "ready"
-          ? t("Update ready")
-          : updateState === "restarting"
-            ? t("Restarting…")
-            : updateState === "current"
-              ? t("Up to date")
-              : null;
+  const statusLabel = Match.value(updateState).pipe(
+    Match.when("checking", () => t("Checking…")),
+    Match.when("downloading", () => t("Downloading…")),
+    Match.when("ready", () => t("Update ready")),
+    Match.when("restarting", () => t("Restarting…")),
+    Match.when("current", () => t("Up to date")),
+    Match.orElse(() => null),
+  );
 
   const versionRow = (
     <View className="flex-row items-center gap-4 p-4">

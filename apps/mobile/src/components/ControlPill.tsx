@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { MenuView } from "@react-native-menu/menu";
 import * as Haptics from "expo-haptics";
 import {
@@ -58,14 +59,11 @@ export function ControlPill(props: {
   const primaryFg = useThemeColor("--color-primary-foreground");
   const dangerFg = useThemeColor("--color-danger-foreground");
 
-  const iconTintColor =
-    variant === "primary"
-      ? props.disabled
-        ? iconSubtle
-        : primaryFg
-      : variant === "danger"
-        ? dangerFg
-        : iconColor;
+  const iconTintColor = Match.value(variant).pipe(
+    Match.when("primary", () => (props.disabled ? iconSubtle : primaryFg)),
+    Match.when("danger", () => dangerFg),
+    Match.orElse(() => iconColor),
+  );
 
   const isCircle =
     variant === "circle" || variant === "danger" || (variant === "primary" && !props.label);
@@ -76,13 +74,11 @@ export function ControlPill(props: {
       : variant === "primary"
         ? "h-11 flex-row items-center justify-center gap-2 rounded-full px-5"
         : "h-11 flex-row items-center justify-center gap-2 rounded-full px-3.5",
-    variant === "primary"
-      ? props.disabled
-        ? "bg-subtle-strong"
-        : "bg-primary"
-      : variant === "danger"
-        ? "bg-danger"
-        : "bg-subtle",
+    Match.value(variant).pipe(
+      Match.when("primary", () => (props.disabled ? "bg-subtle-strong" : "bg-primary")),
+      Match.when("danger", () => "bg-danger"),
+      Match.orElse(() => "bg-subtle"),
+    ),
     props.className,
   );
 

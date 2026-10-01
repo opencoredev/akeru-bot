@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import { StackActions, useNavigation, usePreventRemove } from "@react-navigation/native";
@@ -468,7 +469,7 @@ export function NewTaskDraftScreen(props: {
 
     flow.setSubmitting(false);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         Alert.alert(

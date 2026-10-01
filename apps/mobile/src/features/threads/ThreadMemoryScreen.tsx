@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   DURABLE_FACT_DELETE_CONFIRM,
   type DurableFactIntent,
@@ -196,7 +197,7 @@ export function ThreadMemoryScreen() {
         input: { threadId, mutation: durableFactMutation(fact, intent) },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         const described = describeDurableFactFailure(squashAtomCommandFailure(result));
         setFactFailure(described);
 
@@ -233,7 +234,7 @@ export function ThreadMemoryScreen() {
 
     setBusy(false);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       Alert.alert(
         t("Could not save memory"),
         commandFailureMessage(result) ?? t("Memory request failed."),
@@ -324,7 +325,7 @@ export function ThreadMemoryScreen() {
                           (result) => {
                             setBusy(false);
 
-                            if (result._tag === "Failure") {
+                            if (Predicate.isTagged(result, "Failure")) {
                               Alert.alert(
                                 t("Could not clear memory"),
                                 commandFailureMessage(result) ?? t("Memory request failed."),

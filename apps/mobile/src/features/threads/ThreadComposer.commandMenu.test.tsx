@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   EnvironmentId,
   ProviderDriverKind,
@@ -30,10 +31,10 @@ vi.mock("react", async (importOriginal) => {
     useCallback: <T,>(callback: T) => callback,
     useEffect: () => {},
     useState: <T,>(initial: T | (() => T)) => {
-      const state = slot(() => (typeof initial === "function" ? (initial as () => T)() : initial));
+      const state = slot(() => (Predicate.isFunction(initial) ? (initial as () => T)() : initial));
 
       const set = (next: T | ((previous: T) => T)) => {
-        state.value = typeof next === "function" ? (next as (previous: T) => T)(state.value) : next;
+        state.value = Predicate.isFunction(next) ? (next as (previous: T) => T)(state.value) : next;
       };
 
       return [state.value, set];

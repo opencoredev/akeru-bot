@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { useMobileI18n } from "../../lib/i18n";
 import { useCallback, useEffect, useState } from "react";
@@ -39,7 +40,7 @@ function commandError(
   result: AtomCommandResult<unknown, unknown>,
   t: (message: string) => string,
 ): string {
-  if (result._tag !== "Failure") return t("The request failed.");
+  if (!Predicate.isTagged(result, "Failure")) return t("The request failed.");
   const error = squashAtomCommandFailure(result);
 
   return error instanceof Error ? error.message : t("The request failed.");
@@ -132,9 +133,9 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
 
       if (cancelled) return;
 
-      if (result._tag !== "Success") {
+      if (!Predicate.isTagged(result, "Success")) {
         // A dropped request must not end the login; the next check picks up the approval.
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           pollFailed = true;
           setError(commandError(result, t));
         }
@@ -207,13 +208,13 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
 
     setBusy(false);
 
-    if (result._tag === "Failure") {
+    if (Predicate.isTagged(result, "Failure")) {
       setError(commandError(result, t));
 
       return;
     }
 
-    if (result._tag !== "Success") return;
+    if (!Predicate.isTagged(result, "Success")) return;
     setCopyState("idle");
     setFlow(result.value);
 
@@ -236,10 +237,10 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
       },
     });
 
-    if (started._tag !== "Success") {
+    if (!Predicate.isTagged(started, "Success")) {
       setBusy(false);
 
-      if (started._tag === "Failure") setError(commandError(started, t));
+      if (Predicate.isTagged(started, "Failure")) setError(commandError(started, t));
 
       return;
     }
@@ -251,15 +252,15 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
 
     setBusy(false);
 
-    if (result._tag === "Success" && result.value.status === "connected") {
+    if (Predicate.isTagged(result, "Success") && result.value.status === "connected") {
       setKeyProvider(null);
       setCode("");
       setBaseUrl("");
       setActiveInstanceId(undefined);
       query.refresh();
     } else {
-      if (result._tag === "Failure") setError(commandError(result, t));
-      else if (result._tag === "Success")
+      if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
+      else if (Predicate.isTagged(result, "Success"))
         setError(
           result.value.status === "failed"
             ? result.value.error
@@ -276,8 +277,8 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     const result = await complete({ environmentId, input: { loginId: flow.loginId, code } });
     setBusy(false);
 
-    if (result._tag === "Success") settle(result.value);
-    else if (result._tag === "Failure") setError(commandError(result, t));
+    if (Predicate.isTagged(result, "Success")) settle(result.value);
+    else if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
   };
 
   const cancelLogin = async () => {
@@ -292,7 +293,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     if (login) {
       const result = await cancel({ environmentId, input: { loginId: login.loginId } });
 
-      if (result._tag === "Failure") setError(commandError(result, t));
+      if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
     }
   };
 
@@ -311,8 +312,8 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
 
     setBusy(false);
 
-    if (result._tag === "Success") query.refresh();
-    else if (result._tag === "Failure") setError(commandError(result, t));
+    if (Predicate.isTagged(result, "Success")) query.refresh();
+    else if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
   };
 
   const activeProvider = keyProvider ?? flow?.provider;

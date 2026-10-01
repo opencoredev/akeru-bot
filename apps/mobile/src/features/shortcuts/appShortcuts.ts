@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { Action } from "expo-quick-actions";
 import type { NavigationState } from "@react-navigation/native";
 import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@akeru/contracts";
@@ -86,7 +87,7 @@ function threadShortcutLabel(thread: RecentThreadShortcut): string {
 export function shortcutHref(action: Action): string | null {
   const href = action.params?.href;
 
-  if (typeof href !== "string") {
+  if (!Predicate.isString(href)) {
     return null;
   }
 

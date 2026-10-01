@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -130,10 +131,10 @@ export function useThreadComposerState() {
 
       if (openedAuthorizationActivitiesRef.current.has(activity.id)) continue;
 
-      if (!activity.payload || typeof activity.payload !== "object") continue;
+      if (!activity.payload || !Predicate.isObjectOrArray(activity.payload)) continue;
       const authorizationUrl = (activity.payload as Record<string, unknown>).authorizationUrl;
 
-      if (typeof authorizationUrl !== "string") continue;
+      if (!Predicate.isString(authorizationUrl)) continue;
 
       try {
         if (new URL(authorizationUrl).protocol !== "https:") continue;
@@ -306,7 +307,7 @@ export function useThreadComposerState() {
           }),
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         if (isAtomCommandInterrupted(result)) {
           return null;
         }

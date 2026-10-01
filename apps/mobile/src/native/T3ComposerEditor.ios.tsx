@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { requireNativeView } from "expo";
 import type { Ref } from "react";
 import type { StyleProp, ViewProps, ViewStyle } from "react-native";
@@ -73,15 +74,15 @@ export function ComposerEditor({
       themeJson={editorDocument.themeJson}
       placeholder={props.placeholder ?? ""}
       fontFamily={
-        typeof resolvedTextStyle.fontFamily === "string" ? resolvedTextStyle.fontFamily : fontFamily
+        Predicate.isString(resolvedTextStyle.fontFamily) ? resolvedTextStyle.fontFamily : fontFamily
       }
       fontSize={
-        typeof resolvedTextStyle.fontSize === "number"
+        Predicate.isNumber(resolvedTextStyle.fontSize)
           ? resolvedTextStyle.fontSize
           : bodyText.fontSize
       }
       lineHeight={
-        typeof resolvedTextStyle.lineHeight === "number"
+        Predicate.isNumber(resolvedTextStyle.lineHeight)
           ? resolvedTextStyle.lineHeight
           : bodyText.lineHeight
       }

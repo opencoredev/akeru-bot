@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
 import { canSnooze } from "@akeru/client-runtime/state/thread-settled";
 import * as Cause from "effect/Cause";
@@ -105,7 +106,7 @@ export function useThreadListActions(): {
           },
         });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           const error = Cause.squash(result.cause);
           Alert.alert(
             t("Could not snooze chat"),
@@ -154,7 +155,7 @@ export function useThreadListActions(): {
           input: { threadId: thread.id, reason: "user" },
         });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           const error = Cause.squash(result.cause);
           Alert.alert(
             t("Could not wake chat"),
@@ -215,7 +216,7 @@ export function useThreadListActions(): {
         input: { threadId: thread.id, ...(orderKey !== undefined ? { orderKey } : {}) },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         const error = Cause.squash(result.cause);
         Alert.alert(
           t("Could not pin chat"),
@@ -252,7 +253,7 @@ export function useThreadListActions(): {
         input: { threadId: thread.id },
       });
 
-      if (result._tag === "Failure") {
+      if (Predicate.isTagged(result, "Failure")) {
         const error = Cause.squash(result.cause);
         Alert.alert(
           t("Could not unpin chat"),
@@ -300,7 +301,7 @@ export function useThreadListActions(): {
           input: { threadId: thread.id, regenerateTitle: true },
         });
 
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           const error = Cause.squash(result.cause);
           Alert.alert(
             t("Could not regenerate title"),
@@ -394,7 +395,7 @@ export function useThreadListActions(): {
             input: { threadId: target.id, orderKey: assignment.orderKey },
           });
 
-          if (result._tag === "Failure") {
+          if (Predicate.isTagged(result, "Failure")) {
             const error = Cause.squash(result.cause);
             Alert.alert(
               t("Could not move chat"),

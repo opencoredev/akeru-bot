@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
@@ -31,7 +32,7 @@ export function useEnvironmentQuery<A, E>(
 
   return {
     data: Option.getOrNull(AsyncResult.value(result)),
-    error: result._tag === "Failure" ? formatError(result.cause) : null,
+    error: Predicate.isTagged(result, "Failure") ? formatError(result.cause) : null,
     isPending: atom !== null && result.waiting,
     refresh,
   };

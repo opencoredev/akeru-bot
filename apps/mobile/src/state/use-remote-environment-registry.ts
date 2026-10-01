@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import type { PreparedConnection } from "@akeru/client-runtime/connection";
 import type { EnvironmentId } from "@akeru/contracts";
@@ -62,7 +63,7 @@ function toSavedConnection(
     displayUrl,
     httpBaseUrl,
     wsBaseUrl,
-    bearerToken: authorization?._tag === "Bearer" ? authorization.token : null,
+    bearerToken: Predicate.isTagged(authorization, "Bearer") ? authorization.token : null,
   };
 }
 

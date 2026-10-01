@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useSyncExternalStore } from "react";
 import { Pressable, View } from "react-native";
 import {
@@ -32,16 +33,13 @@ export function ReplyPlaybackControls({
       ? snapshot.status
       : "idle";
 
-  const label =
-    state === "loading"
-      ? "Preparing audio"
-      : state === "playing"
-        ? "Pause readout"
-        : state === "paused"
-          ? "Resume readout"
-          : state === "error"
-            ? "Retry readout"
-            : "Read aloud";
+  const label = Match.value(state).pipe(
+    Match.when("loading", () => "Preparing audio"),
+    Match.when("playing", () => "Pause readout"),
+    Match.when("paused", () => "Resume readout"),
+    Match.when("error", () => "Retry readout"),
+    Match.orElse(() => "Read aloud"),
+  );
 
   const disabled = Boolean(unavailableReason) || state === "loading";
 

@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useMobileI18n } from "../../../../lib/i18n";
 import { memo, useId } from "react";
 import { Pressable, View } from "react-native";
@@ -234,26 +235,23 @@ function ModePreview(props: { readonly mode: MobileThemeMode; readonly themeIds:
   const currentFrame = useThemeColor("--color-drawer");
   const currentIndicator = useThemeColor("--color-foreground-muted");
 
-  const frameColor =
-    props.mode === "light"
-      ? light["--color-border"]
-      : props.mode === "dark"
-        ? dark["--color-border"]
-        : currentBorder;
+  const frameColor = Match.value(props.mode).pipe(
+    Match.when("light", () => light["--color-border"]),
+    Match.when("dark", () => dark["--color-border"]),
+    Match.orElse(() => currentBorder),
+  );
 
-  const frameBackground =
-    props.mode === "light"
-      ? light["--color-drawer"]
-      : props.mode === "dark"
-        ? dark["--color-drawer"]
-        : currentFrame;
+  const frameBackground = Match.value(props.mode).pipe(
+    Match.when("light", () => light["--color-drawer"]),
+    Match.when("dark", () => dark["--color-drawer"]),
+    Match.orElse(() => currentFrame),
+  );
 
-  const indicatorColor =
-    props.mode === "light"
-      ? light["--color-foreground-muted"]
-      : props.mode === "dark"
-        ? dark["--color-foreground-muted"]
-        : currentIndicator;
+  const indicatorColor = Match.value(props.mode).pipe(
+    Match.when("light", () => light["--color-foreground-muted"]),
+    Match.when("dark", () => dark["--color-foreground-muted"]),
+    Match.orElse(() => currentIndicator),
+  );
 
   return (
     <View

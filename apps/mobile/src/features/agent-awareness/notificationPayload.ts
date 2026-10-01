@@ -1,51 +1,55 @@
+import { Predicate } from "effect";
+
 function dataFromNotificationResponse(response: unknown): Record<string, unknown> | null {
-  if (typeof response !== "object" || response === null) {
+  if (!Predicate.isObjectOrArray(response) || response === null) {
     return null;
   }
 
   const notification = (response as { readonly notification?: unknown }).notification;
 
-  if (typeof notification !== "object" || notification === null) {
+  if (!Predicate.isObjectOrArray(notification) || notification === null) {
     return null;
   }
 
   const request = (notification as { readonly request?: unknown }).request;
 
-  if (typeof request !== "object" || request === null) {
+  if (!Predicate.isObjectOrArray(request) || request === null) {
     return null;
   }
 
   const content = (request as { readonly content?: unknown }).content;
 
-  if (typeof content !== "object" || content === null) {
+  if (!Predicate.isObjectOrArray(content) || content === null) {
     return null;
   }
 
   const data = (content as { readonly data?: unknown }).data;
 
-  return typeof data === "object" && data !== null ? (data as Record<string, unknown>) : null;
+  return Predicate.isObjectOrArray(data) && data !== null
+    ? (data as Record<string, unknown>)
+    : null;
 }
 
 function identifierFromNotificationResponse(response: unknown): string | null {
-  if (typeof response !== "object" || response === null) {
+  if (!Predicate.isObjectOrArray(response) || response === null) {
     return null;
   }
 
   const notification = (response as { readonly notification?: unknown }).notification;
 
-  if (typeof notification !== "object" || notification === null) {
+  if (!Predicate.isObjectOrArray(notification) || notification === null) {
     return null;
   }
 
   const request = (notification as { readonly request?: unknown }).request;
 
-  if (typeof request !== "object" || request === null) {
+  if (!Predicate.isObjectOrArray(request) || request === null) {
     return null;
   }
 
   const identifier = (request as { readonly identifier?: unknown }).identifier;
 
-  return typeof identifier === "string" ? identifier : null;
+  return Predicate.isString(identifier) ? identifier : null;
 }
 
 function encodeThreadDeepLink(input: {
@@ -89,7 +93,7 @@ export function extractAgentNotificationDeepLink(response: unknown): string | nu
   const data = dataFromNotificationResponse(response);
   const deepLink = data?.deepLink;
 
-  if (typeof deepLink === "string") {
+  if (Predicate.isString(deepLink)) {
     const normalizedDeepLink = normalizeThreadDeepLink(deepLink);
 
     if (normalizedDeepLink) {
@@ -100,7 +104,7 @@ export function extractAgentNotificationDeepLink(response: unknown): string | nu
   const environmentId = data?.environmentId;
   const threadId = data?.threadId;
 
-  if (typeof environmentId === "string" && typeof threadId === "string") {
+  if (Predicate.isString(environmentId) && Predicate.isString(threadId)) {
     return encodeThreadDeepLink({ environmentId, threadId });
   }
 

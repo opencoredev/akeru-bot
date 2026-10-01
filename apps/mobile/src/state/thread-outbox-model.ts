@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { isTransportConnectionErrorMessage } from "@akeru/client-runtime/errors";
 import type { EnvironmentShellStatus } from "@akeru/client-runtime/state/shell";
 import {
@@ -203,11 +204,11 @@ function errorMessage(error: unknown): string | null {
     return error.message;
   }
 
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return typeof error.message === "string" ? error.message : null;
+  if (Predicate.isObjectOrArray(error) && error !== null && "message" in error) {
+    return Predicate.isString(error.message) ? error.message : null;
   }
 
-  return typeof error === "string" ? error : null;
+  return Predicate.isString(error) ? error : null;
 }
 
 /**
@@ -221,7 +222,7 @@ function errorMessage(error: unknown): string | null {
  * pending task into a draft and it disappears from the list.
  */
 export function shouldRetryThreadOutboxDelivery(error: unknown): boolean {
-  if (typeof error === "object" && error !== null && "_tag" in error) {
+  if (Predicate.isObjectOrArray(error) && error !== null && "_tag" in error) {
     switch (error._tag) {
       case "OrchestrationDispatchCommandError":
       case "EnvironmentAuthorizationError":
