@@ -1,34 +1,9 @@
 import { Predicate } from "effect";
 import React from "react";
-import {
-  Platform,
-  StyleSheet,
-  Text as RNText,
-  type TextProps,
-  type ViewStyle,
-  type HostComponent,
-  type StyleProp,
-} from "react-native";
-import NativeTextRun from "./T3MarkdownTextRunNativeComponent";
-import NativeText from "./T3MarkdownTextNativeComponent";
+import { Platform, StyleSheet, Text as RNText, type TextProps, type ViewStyle } from "react-native";
+import T3MarkdownTextRunNativeComponent from "./T3MarkdownTextRunNativeComponent";
+import T3MarkdownTextNativeComponent from "./T3MarkdownTextNativeComponent";
 import { flattenStyles } from "./util";
-
-// The public primitive forwards TextProps. Codegen describes only the view props
-// and targeted events, so the bridge needs the inherited text callback contract.
-type InheritedTextProps<Native> = Omit<Native, keyof TextProps> &
-  Omit<TextProps, "style"> & {
-    readonly style?: StyleProp<ReturnType<typeof flattenStyles>>;
-  };
-
-// SAFETY: This is the same native host component; only its inherited TextProps are exposed.
-const T3MarkdownTextRunNativeComponent = NativeTextRun as HostComponent<
-  InheritedTextProps<React.ComponentProps<typeof NativeTextRun>>
->;
-
-// SAFETY: This is the same native host component; only its inherited TextProps are exposed.
-const T3MarkdownTextNativeComponent = NativeText as HostComponent<
-  InheritedTextProps<React.ComponentProps<typeof NativeText>>
->;
 
 const TextAncestorContext = React.createContext<[boolean, ViewStyle]>([
   false,
@@ -50,7 +25,9 @@ export type SelectionChangeEvent = {
   nativeEvent: { target: number; start: number; end: number };
 };
 
-export type MarkdownTextPrimitiveProps = TextProps & {
+// The native view reports layout lines as strings rather than React Native's measured
+// TextLayoutLine objects, so this primitive does not offer `onTextLayout`.
+export type MarkdownTextPrimitiveProps = Omit<TextProps, "onTextLayout"> & {
   uiTextView?: boolean;
   /**
    * Fired when the native text selection changes. Only fires on iOS when
@@ -61,7 +38,22 @@ export type MarkdownTextPrimitiveProps = TextProps & {
   onSelectionChange?: (event: SelectionChangeEvent) => void;
 };
 
-function MarkdownTextPrimitiveChild({ style, children, ...rest }: MarkdownTextPrimitiveProps) {
+function MarkdownTextPrimitiveChild({
+  style,
+  children,
+  numberOfLines,
+  allowFontScaling = textDefaults.allowFontScaling,
+  ellipsizeMode,
+  selectable = textDefaults.selectable,
+  onSelectionChange,
+  testID,
+  nativeID,
+  accessible,
+  accessibilityLabel,
+  accessibilityHint,
+  accessibilityRole,
+  accessibilityState,
+}: MarkdownTextPrimitiveProps) {
   const [isAncestor, rootStyle] = useTextAncestorContext();
 
   // Flatten the styles, and apply the root styles when needed
@@ -93,7 +85,6 @@ function MarkdownTextPrimitiveChild({ style, children, ...rest }: MarkdownTextPr
         key={`text-${position}-${text.length}-${text}`}
         style={flattenedStyle}
         text={text}
-        {...rest}
       />
     );
   });
@@ -102,12 +93,19 @@ function MarkdownTextPrimitiveChild({ style, children, ...rest }: MarkdownTextPr
     return (
       <TextAncestorContext.Provider value={contextValue}>
         <T3MarkdownTextNativeComponent
-          {...textDefaults}
-          {...rest}
-          // ellipsizeMode={rest.ellipsizeMode ?? rest.lineBreakMode ?? 'tail'}
+          numberOfLines={numberOfLines}
+          allowFontScaling={allowFontScaling}
+          ellipsizeMode={ellipsizeMode}
+          selectable={selectable}
+          onSelectionChange={onSelectionChange}
+          testID={testID}
+          nativeID={nativeID}
+          accessible={accessible}
+          accessibilityLabel={accessibilityLabel}
+          accessibilityHint={accessibilityHint}
+          accessibilityRole={accessibilityRole}
+          accessibilityState={accessibilityState}
           style={[flattenedStyle]}
-          onPress={undefined}
-          onLongPress={undefined}
         >
           {nativeChildren}
         </T3MarkdownTextNativeComponent>
