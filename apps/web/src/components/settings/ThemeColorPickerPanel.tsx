@@ -213,7 +213,7 @@ export function ThemeColorPickerPanel({
         >
           <span
             className={cn(
-              "pointer-events-none absolute top-(--thumb-top) left-(--thumb-left) size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/40",
+              "pointer-events-none absolute top-(--thumb-top) left-(--thumb-left) size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-on-solid ring-1 ring-shade/40",
               thumbTransition,
             )}
             style={{
@@ -240,13 +240,13 @@ export function ThemeColorPickerPanel({
         >
           <span
             aria-hidden
-            className="h-2.5 w-full rounded-full bg-hue-spectrum inset-ring inset-ring-black/12"
+            className="h-2.5 w-full rounded-full bg-hue-spectrum inset-ring inset-ring-shade/12"
           />
           {/* The ball shows the pure hue so it stays visually anchored to the
               track; the header swatch carries the full current color. */}
           <span
             className={cn(
-              "pointer-events-none absolute top-1/2 left-(--thumb-left) size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-pure-hue ring-1 ring-black/40",
+              "pointer-events-none absolute top-1/2 left-(--thumb-left) size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-on-solid bg-pure-hue ring-1 ring-shade/40",
               thumbTransition,
             )}
             style={{

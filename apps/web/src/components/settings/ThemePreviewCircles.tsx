@@ -129,8 +129,8 @@ function getThemePreviewPaint(colors: ThemeCardPreviewColors, mode: ThemeAppeara
 // carries a faint inner ring for the previewed mode (not the app's) to keep its
 // silhouette legible.
 const THEME_PREVIEW_EDGE_CLASS_NAMES: Record<ThemeAppearance, string> = {
-  dark: "inset-ring inset-ring-white/14 shadow-xs/18",
-  light: "inset-ring inset-ring-black/10 shadow-xs/8",
+  dark: "inset-ring inset-ring-on-solid/14 shadow-xs/18",
+  light: "inset-ring inset-ring-shade/10 shadow-xs/8",
 };
 
 export function ThemePreviewCircle({

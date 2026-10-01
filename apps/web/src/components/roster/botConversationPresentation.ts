@@ -14,7 +14,7 @@ export const CONVERSATION_MEASURE_CLASS_NAME = "mx-auto w-full max-w-[46rem]";
 
 /** The prompt box fill. Panels docked onto the composer reuse it so the joint reads as one surface. */
 export const BOT_COMPOSER_SURFACE_CLASS_NAME =
-  "border-white/10 bg-foreground/[0.12] dark:bg-white/[0.16]";
+  "border-on-solid/10 bg-foreground/[0.12] dark:bg-tint/[0.16]";
 
 /** The quieter card fill for the prompt box and the decision panels docked onto it. */
 export const BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME = "border-border/70 bg-card";

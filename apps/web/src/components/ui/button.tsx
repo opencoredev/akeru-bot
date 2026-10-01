@@ -22,7 +22,7 @@ const buttonPresentations = {
   "approval-always":
     "font-medium border-border bg-muted/40 text-foreground [:hover,[data-pressed]]:bg-muted/70",
   "approval-other": "font-medium text-muted-foreground [:hover,[data-pressed]]:text-foreground",
-  "image-nav": "text-white/90 hover:bg-white/10 hover:text-white",
+  "image-nav": "text-on-solid/90 hover:bg-on-solid/10 hover:text-on-solid",
   "reaction-emoji": "text-2xl sm:text-2xl font-emoji",
   "model-favorite-toggle":
     "text-muted-foreground/70 opacity-64 transition-color-opacity hover:text-foreground hover:opacity-100 group-hover:opacity-100",
@@ -54,7 +54,7 @@ const buttonPresentations = {
   "wizard-step":
     "flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring max-sm:justify-center max-sm:px-2",
   "wizard-step-current":
-    "flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring max-sm:justify-center max-sm:px-2 bg-card text-foreground shadow-xs ring-1 ring-black/5 hover:bg-card dark:shadow-none dark:ring-white/5",
+    "flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring max-sm:justify-center max-sm:px-2 bg-card text-foreground shadow-xs ring-1 ring-tint/5 hover:bg-card dark:shadow-none",
 };
 
 const buttonVariants = cva(
@@ -111,7 +111,7 @@ const buttonVariants = cva(
         "default-muted-disabled":
           "border-transparent bg-foreground text-background disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 [:active,[data-pressed]]:bg-foreground/80 [:hover,[data-pressed]]:bg-foreground/88",
         destructive:
-          "border-transparent bg-destructive text-white [:active,[data-pressed]]:bg-destructive/80 [:hover,[data-pressed]]:bg-destructive/90",
+          "border-transparent bg-destructive text-on-solid [:active,[data-pressed]]:bg-destructive/80 [:hover,[data-pressed]]:bg-destructive/90",
         "destructive-outline":
           "border-transparent bg-secondary text-destructive-foreground [:hover,[data-pressed]]:bg-destructive/12",
         ghost:

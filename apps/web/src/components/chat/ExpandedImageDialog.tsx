@@ -128,7 +128,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 app-region-no-drag"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-shade/75 px-4 py-6 app-region-no-drag"
       role="dialog"
       aria-modal="true"
       aria-label={t("Expanded image preview")}
