@@ -192,8 +192,7 @@ function ConnectedBotBrowserPreview({
         <div
           className={cn(
             "relative mx-3 mb-3 min-h-0 flex-1 overflow-hidden rounded-xl border border-border",
-            // oxlint-disable-next-line shadcn/no-raw-colors -- Dark media mat behind a live browser surface in either theme.
-            isLiveBrowserStatus(status) ? "bg-zinc-950" : "bg-muted/40",
+            isLiveBrowserStatus(status) ? "bg-media-mat" : "bg-muted/40",
           )}
         >
           {nativeSupported ? (
@@ -278,8 +277,7 @@ function BotBrowserPreviewFrame({
       <div
         className={cn(
           "group/screen relative aspect-video overflow-hidden rounded-xl border border-border transition-shadow",
-          // oxlint-disable-next-line shadcn/no-raw-colors -- Dark media mat behind a live browser surface in either theme.
-          live ? "bg-zinc-950" : "bg-muted/40",
+          live ? "bg-media-mat" : "bg-muted/40",
           canOpen && "cursor-pointer hover:shadow-sm",
         )}
         onClick={canOpen ? onExpand : undefined}
@@ -296,8 +294,7 @@ function BotBrowserPreviewFrame({
         {showFrame && frame ? <RemoteFrame botName={botName} frame={frame} /> : null}
         <ScreenStatus status={status} />
         {canOpen ? (
-          // oxlint-disable-next-line shadcn/no-raw-colors -- Scrim over a screenshot needs image-independent contrast.
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-zinc-950/0 transition-colors group-focus-within/screen:bg-zinc-950/25 group-hover/screen:bg-zinc-950/25">
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-media-mat/0 transition-colors group-focus-within/screen:bg-media-mat/25 group-hover/screen:bg-media-mat/25">
             <Button
               aria-label={t("Open {name} browser", { name: botName })}
               presentation="screen-reveal"
@@ -351,8 +348,7 @@ function ScreenStatus({ status }: { readonly status: BotBrowserPreviewStatus }) 
   if (status === "loading") {
     return (
       <div
-        // oxlint-disable-next-line shadcn/no-raw-colors -- Loading scrim over a screenshot needs image-independent contrast.
-        className="pointer-events-none absolute inset-0 flex items-center justify-center bg-zinc-950/70 px-6 text-center text-xs text-zinc-300"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center bg-media-mat/70 px-6 text-center text-xs text-media-mat-foreground"
         role="status"
       >
         {screenStatusLabel("loading", t)}

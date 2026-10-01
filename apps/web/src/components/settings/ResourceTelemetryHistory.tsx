@@ -15,11 +15,9 @@ export const HISTORY_WINDOWS = [
   { label: "1h", windowMs: 60 * 60_000, bucketMs: 2 * 60_000 },
 ] as const;
 
-// oxlint-disable-next-line shadcn/no-raw-colors -- I/O reads retain their nominal chart-series color.
-const IO_READ_COLOR = "bg-sky-500/70";
+const IO_READ_COLOR = "bg-telemetry-read/70";
 
-// oxlint-disable-next-line shadcn/no-raw-colors -- I/O writes retain their nominal chart-series color.
-const IO_WRITE_COLOR = "bg-amber-500/80";
+const IO_WRITE_COLOR = "bg-telemetry-write/80";
 
 export function HistoryWindowSelector({
   selectedWindowMs,

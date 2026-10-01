@@ -58,6 +58,17 @@
   /* Resource telemetry I/O columns: reads and writes. */
   --telemetry-read-foreground: var(--color-sky-700);
   --telemetry-write-foreground: var(--color-amber-700);
+  /* Resource telemetry chart series. Nominal data colors, the same in both modes. */
+  --telemetry-read: var(--color-sky-500);
+  --telemetry-write: var(--color-amber-500);
+  --telemetry-monitor: var(--color-amber-500);
+  --telemetry-electron: var(--color-sky-500);
+  --telemetry-server: var(--color-violet-500);
+  --telemetry-server-total: var(--color-emerald-500);
+  --telemetry-child: var(--color-emerald-500);
+  /* Dark mat and scrim behind live browser media. Same value in both modes. */
+  --media-mat: var(--color-zinc-950);
+  --media-mat-foreground: var(--color-zinc-300);
   /* Status dot for pending pairing links. Same value in both modes. */
   --pending-indicator: var(--color-amber-400);
   /* Hover fill for light radio cards; dark mode styles its own hover. */
