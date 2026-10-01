@@ -142,7 +142,7 @@ function ProviderCustomColorPanel(props: {
         }}
       >
         <span
-          className="pointer-events-none absolute top-(--thumb-top) left-(--thumb-left) size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/35"
+          className="pointer-events-none absolute top-(--thumb-top) left-(--thumb-left) size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-on-solid ring-1 ring-shade/35"
           style={{ "--thumb-left": `${hsv.s * 100}%`, "--thumb-top": `${(1 - hsv.v) * 100}%` }}
         />
       </div>
@@ -157,7 +157,7 @@ function ProviderCustomColorPanel(props: {
           }}
         >
           <span
-            className="pointer-events-none absolute top-1/2 left-(--thumb-left) size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/35 swatch-fill"
+            className="pointer-events-none absolute top-1/2 left-(--thumb-left) size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-on-solid ring-1 ring-shade/35 swatch-fill"
             style={{ "--thumb-left": `${(hsv.h / 360) * 100}%`, "--swatch": currentColor }}
           />
         </div>
@@ -194,7 +194,7 @@ function ProviderCustomColorPicker(props: {
           <button
             type="button"
             className={cn(
-              "flex size-6 cursor-pointer items-center justify-center rounded-full swatch-fill text-white transition-transform duration-200 active:scale-90",
+              "flex size-6 cursor-pointer items-center justify-center rounded-full swatch-fill text-on-solid transition-transform duration-200 active:scale-90",
               "hover:scale-105",
               // The trigger wears the user's custom accent; selected adds a ring in that color.
               props.selected && "swatch-ring",

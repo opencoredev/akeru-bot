@@ -94,7 +94,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
             aria-label={t("Go to chats")}
             className={cn(
               "flex items-center justify-center rounded-md outline-none ring-ring focus-visible:ring-2 app-region-no-drag",
-              backdropVariant ? "text-white" : "text-sidebar-foreground",
+              backdropVariant ? "text-on-solid" : "text-sidebar-foreground",
             )}
             to="/"
           >

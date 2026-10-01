@@ -34,7 +34,7 @@ const badgeVariants = cva(
           "border-warning/30 bg-warning/10 text-warning-foreground dark:text-warning-bright-foreground",
         "telemetry-danger": "border-destructive/30 bg-destructive/10 text-destructive",
         default: "bg-primary text-primary-foreground [button&,a&]:hover:bg-primary/90",
-        destructive: "bg-destructive text-white [button&,a&]:hover:bg-destructive/90",
+        destructive: "bg-destructive text-on-solid [button&,a&]:hover:bg-destructive/90",
         error: "bg-destructive/8 text-destructive-foreground dark:bg-destructive/16",
         info: "bg-info/8 text-info-foreground dark:bg-info/16",
         outline: "bg-secondary text-foreground [button&,a&]:hover:bg-accent/80",

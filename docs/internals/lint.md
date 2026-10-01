@@ -89,6 +89,41 @@ the primitive and use it by name.
 `@shadcn/lint` does not read, so real classes such as `bg-screen` come back as unknown. React
 Native also styles through `style` objects, which `no-inline-styles` would reject everywhere.
 
+### Raw palette colors
+
+`shadcn/no-raw-colors` only reads `className` attributes and `cn()` calls, so palette colors in
+string constants, status maps, variant tables, and template literals got past it. It also accepts
+`black`, `white`, and custom palette steps. `akeru/no-raw-palette-strings` closes that gap in
+`apps/web/src`. It splits every string and template chunk into classes, removes variants
+(`dark:`, `hover:`, `[&_svg]:`) and important markers, and reports any color utility (`bg`,
+`text`, `border`, `ring`, `inset-ring`, `fill`, `stroke`, `shadow`, gradient stops, and the rest)
+whose color is a Tailwind palette hue with a step, `black`, or `white`, with or without an
+opacity modifier.
+
+These all count as raw colors:
+
+- Palette hues at any step, including custom steps such as `zinc-25`. A step on a hue is a
+  palette, not a role, even when we defined it ourselves.
+- `black` and `white`, with or without opacity (`ring-black/5`, `dark:bg-white/2`). They do not
+  follow the theme and usually stand for a role that should have a name.
+
+Use a token from `apps/web/src/index.css`. When none fits, add one to
+`apps/web/src/styles/theme-tokens.css` with the same light and dark values as the classes it
+replaces, and map it in the `@theme inline` block. Tokens that exist for this purpose:
+
+| Token                | Light       | Dark        | Use                                                              |
+| -------------------- | ----------- | ----------- | ---------------------------------------------------------------- |
+| `tint`               | black       | white       | Hairlines and faint fills with an opacity, such as `ring-tint/5` |
+| `inset-surface`      | `zinc-25`   | white at 4% | Quiet inset wells, such as the add-provider wizard track         |
+| `shade`              | black       | black       | Media scrims, drop shadows, picker thumb and track outlines      |
+| `on-solid`           | white       | white       | Text, icons, and edges on solid color, imagery, and stage art    |
+| `qr-surface`         | white       | white       | The quiet zone behind a QR code                                  |
+| `disabled-indicator` | `amber-400` | `amber-400` | Status dot for a disabled provider                               |
+
+Prose, URLs, and identifiers do not match because a token must be a whole class: `white`,
+`blackWhiteTheme`, and `https://example.com/bg-white` pass. Test files are excluded because they
+pass hardcoded classes to class helpers such as `cn` and the theme inspector as inputs.
+
 ### max-lines
 
 Files may have at most 800 lines, not counting blank lines and comments. When a file passes the

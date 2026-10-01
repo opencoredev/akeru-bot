@@ -10,7 +10,7 @@ import type {
  */
 export const PROVIDER_STATUS_STYLES = {
   disabled: {
-    dot: "bg-amber-400",
+    dot: "bg-disabled-indicator",
   },
   error: {
     dot: "bg-destructive",

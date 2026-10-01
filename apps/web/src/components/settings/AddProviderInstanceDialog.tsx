@@ -276,7 +276,7 @@ export function AddProviderInstanceDialog({
 
           <div
             data-slot="dialog-panel"
-            className="space-y-4 bg-zinc-25/80 px-6 py-5 ring-1 ring-black/5 dark:bg-white/2 dark:ring-white/5"
+            className="space-y-4 bg-inset-surface/80 px-6 py-5 ring-1 ring-tint/5 dark:bg-tint/2"
           >
             <AnimatedHeight>
               <div className={cn("grid gap-2", wizardStep !== 0 && "hidden")}>
@@ -296,7 +296,7 @@ export function AddProviderInstanceDialog({
                       <RadioPrimitive.Root
                         key={option.value}
                         value={option.value}
-                        className="relative flex cursor-pointer items-center gap-3 rounded-lg bg-card px-3 py-3 text-left text-muted-foreground outline-none ring-1 ring-black/5 hover:bg-option-hover focus-visible:ring-2 focus-visible:ring-ring data-checked:bg-primary/8 data-checked:text-foreground data-checked:ring-2 data-checked:ring-primary data-checked:hover:bg-primary/8 dark:bg-white/3 dark:ring-white/5 dark:hover:bg-white/5 dark:data-checked:bg-primary/15 dark:data-checked:ring-primary dark:data-checked:hover:bg-primary/15"
+                        className="relative flex cursor-pointer items-center gap-3 rounded-lg bg-card px-3 py-3 text-left text-muted-foreground outline-none ring-1 ring-tint/5 dark:ring-tint/5 hover:bg-option-hover focus-visible:ring-2 focus-visible:ring-ring data-checked:bg-primary/8 data-checked:text-foreground data-checked:ring-2 data-checked:ring-primary data-checked:hover:bg-primary/8 dark:bg-tint/3 dark:hover:bg-tint/5 dark:data-checked:bg-primary/15 dark:data-checked:ring-primary dark:data-checked:hover:bg-primary/15"
                       >
                         <IconComponent className="size-4 shrink-0" aria-hidden />
                         <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
@@ -325,7 +325,7 @@ export function AddProviderInstanceDialog({
                         value={option.value}
                         disabled
                         className={cn(
-                          "relative flex cursor-not-allowed items-center gap-3 rounded-lg bg-card/60 px-3 py-3 text-left opacity-55 outline-none ring-1 ring-black/5 dark:bg-white/2 dark:ring-white/5",
+                          "relative flex cursor-not-allowed items-center gap-3 rounded-lg bg-card/60 px-3 py-3 text-left opacity-55 outline-none ring-1 ring-tint/5 dark:bg-tint/2",
                         )}
                       >
                         <IconComponent
@@ -399,7 +399,7 @@ export function AddProviderInstanceDialog({
                             "size-6 cursor-pointer rounded-full border swatch-fill transition",
                             selected
                               ? "scale-110 border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background"
-                              : "border-black/10 hover:scale-105 dark:border-white/20",
+                              : "border-tint/10 hover:scale-105 dark:border-tint/20",
                           )}
                           style={{ "--swatch": swatch }}
                           onClick={() => setAccentColor(swatch)}

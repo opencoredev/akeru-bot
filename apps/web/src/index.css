@@ -115,6 +115,12 @@
   --color-media-mat: var(--media-mat);
   --color-media-mat-foreground: var(--media-mat-foreground);
   --color-pending-indicator: var(--pending-indicator);
+  --color-disabled-indicator: var(--disabled-indicator);
+  --color-tint: var(--tint);
+  --color-inset-surface: var(--inset-surface);
+  --color-shade: var(--shade);
+  --color-on-solid: var(--on-solid);
+  --color-qr-surface: var(--qr-surface);
   --color-option-hover: var(--option-hover);
   --color-skill: var(--skill);
   --color-skill-foreground: var(--skill-foreground);
