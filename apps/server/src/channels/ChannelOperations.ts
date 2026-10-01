@@ -25,7 +25,7 @@ import { boundedSentMessageIds } from "./ChannelDelivery.ts";
  * operations on one key happen in the order they were requested. An interrupted caller
  * leaves the queue without blocking the callers behind it.
  */
-export const makeKeyedLock = (): KeyedLock => {
+export const keyedLock = (): KeyedLock => {
   const queues = new Map<string, Array<() => void>>();
 
   const releaseKey = (key: string) => {

@@ -30,7 +30,7 @@ import type { AkeruRuntimeToolId } from "../AkeruToolRuntime.ts";
 import { ImageGenerationRuntime } from "../../image-generation/ImageGenerationRuntime.ts";
 import {
   GROK_IMAGE_CAPABILITIES,
-  makeChatGptImageAdapter,
+  chatGptImageAdapter,
   type ImageProviderAdapter,
 } from "../../image-generation/adapters.ts";
 import { pngBytes } from "../../image-generation/testImages.ts";
@@ -576,7 +576,7 @@ describe("AgentControllerLive", () => {
         makeTestSubscriptionAuthService(NodePath.join(secretsDir, "subscription-auth.json")),
       );
 
-      const adapter = makeChatGptImageAdapter({ subscriptionAuth });
+      const adapter = chatGptImageAdapter({ subscriptionAuth });
 
       const run = adapter.run(
         {

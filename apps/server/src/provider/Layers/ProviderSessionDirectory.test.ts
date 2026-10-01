@@ -13,7 +13,7 @@ import * as Option from "effect/Option";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import {
-  makeSqlitePersistenceLive,
+  sqlitePersistenceLayer,
   SqlitePersistenceMemory,
 } from "../../persistence/Layers/Sqlite.ts";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
@@ -237,7 +237,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
     Effect.gen(function* () {
       const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-directory-"));
       const dbPath = NodePath.join(tempDir, "orchestration.sqlite");
-      const directoryLayer = makeDirectoryLayer(makeSqlitePersistenceLive(dbPath));
+      const directoryLayer = makeDirectoryLayer(sqlitePersistenceLayer(dbPath));
 
       const threadId = ThreadId.make("thread-restart");
 

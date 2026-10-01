@@ -6,10 +6,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { runMigrations } from "../persistence/Migrations.ts";
 import * as NodeSqliteClient from "../persistence/NodeSqliteClient.ts";
-import {
-  makeChannelDeliveryStore,
-  makeMemoryChannelDeliveryStore,
-} from "./ChannelDeliveryStore.ts";
+import { makeChannelDeliveryStore, memoryChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
 
 const TestLayer = Layer.mergeAll(NodeSqliteClient.layerMemory());
 
@@ -77,7 +74,7 @@ it.layer(TestLayer)("channel delivery store", (it) => {
       yield* runMigrations();
       const sqlStore = yield* makeChannelDeliveryStore;
 
-      for (const store of [sqlStore, makeMemoryChannelDeliveryStore()]) {
+      for (const store of [sqlStore, memoryChannelDeliveryStore()]) {
         const claim = {
           messageId: MessageId.make("message-store-parity"),
           botId: BotId.make("bot-1"),

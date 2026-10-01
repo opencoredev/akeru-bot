@@ -14,7 +14,7 @@ import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
-import { makeSqlitePersistenceLive } from "../../persistence/Layers/Sqlite.ts";
+import { sqlitePersistenceLayer } from "../../persistence/Layers/Sqlite.ts";
 import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
 import {
   defaultServerSettingsLayer,
@@ -36,7 +36,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       );
 
       const dbPath = NodePath.join(tempDir, "orchestration.sqlite");
-      const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+      const persistenceLayer = sqlitePersistenceLayer(dbPath);
 
       const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
         Layer.provide(persistenceLayer),
@@ -155,7 +155,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         );
 
         const dbPath = NodePath.join(tempDir, "orchestration.sqlite");
-        const persistenceLayer = makeSqlitePersistenceLive(dbPath);
+        const persistenceLayer = sqlitePersistenceLayer(dbPath);
 
         const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
           Layer.provide(persistenceLayer),

@@ -94,8 +94,12 @@ export interface AttachmentSideEffects {
   readonly prunedThreadRelativePaths: Map<string, Set<string>>;
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Persisted activity payloads enter through this request-ID decoder boundary.
-export function extractActivityRequestId(payload: unknown): ApprovalRequestId | null {
+export function extractActivityRequestId(
+  payload: Extract<
+    OrchestrationEvent,
+    { type: "thread.activity-appended" }
+  >["payload"]["activity"]["payload"],
+): ApprovalRequestId | null {
   const requestId = asRecord(payload)?.requestId;
 
   return Predicate.isString(requestId) ? ApprovalRequestId.make(requestId) : null;

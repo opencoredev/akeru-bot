@@ -20,14 +20,10 @@ import * as Statement from "effect/unstable/sql/Statement";
 
 const ATTR_DB_SYSTEM_NAME = "db.system.name";
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- The SQL driver probes raw Effect SQL parameters before adapting them to node:sqlite values.
-const sqliteInput = (value: unknown): NodeSqlite.SQLInputValue => {
-  if (
-    value === null ||
-    Predicate.isString(value) ||
-    Predicate.isNumber(value) ||
-    Predicate.isBigInt(value)
-  )
+const sqliteInput = <Value>(value: Value): NodeSqlite.SQLInputValue => {
+  if (value === null) return null;
+
+  if (Predicate.isString(value) || Predicate.isNumber(value) || Predicate.isBigInt(value))
     return value;
 
   if (ArrayBuffer.isView(value))

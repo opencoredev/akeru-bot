@@ -14,7 +14,7 @@ export interface KeyedDrainableWorkerState<K, A> {
   readonly outstanding: number;
 }
 
-export const makeKeyedDrainableWorker = <K, A, E, R>(options: {
+export const keyedDrainableWorker = <K, A, E, R>(options: {
   readonly concurrency: number;
   readonly process: (item: A) => Effect.Effect<void, E, R>;
 }): Effect.Effect<KeyedDrainableWorker<K, A>, never, Scope.Scope | R> =>

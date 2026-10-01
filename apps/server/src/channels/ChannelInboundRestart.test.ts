@@ -29,10 +29,10 @@ import * as ThreadBackgroundLiveness from "../orchestration/ThreadBackgroundLive
 import * as ThreadPlanProgress from "../orchestration/ThreadPlanProgress.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../persistence/Layers/OrchestrationEventStore.ts";
-import { makeSqlitePersistenceLive } from "../persistence/Layers/Sqlite.ts";
+import { sqlitePersistenceLayer } from "../persistence/Layers/Sqlite.ts";
 import { OrchestrationCommandReceiptRepository } from "../persistence/Services/OrchestrationCommandReceipts.ts";
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
-import { makeMemoryChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
+import { memoryChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
 import { ChannelRuntime, type ChannelRuntimeDependencies } from "./ChannelRuntime.ts";
 
 const NOW = "2026-09-04T12:00:00.000Z";
@@ -54,7 +54,7 @@ function makeLayer(dbPath: string) {
     Layer.provide(OrchestrationEventStoreLive),
     Layer.provideMerge(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
-    Layer.provide(makeSqlitePersistenceLive(dbPath)),
+    Layer.provide(sqlitePersistenceLayer(dbPath)),
     Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "akeru-inbound-restart-" })),
     Layer.provideMerge(NodeServices.layer),
   );
@@ -71,7 +71,7 @@ const makeDependencies = Effect.fn("makeDependencies")(function* (now: string) {
       snapshots.getThreadDetailById(threadId).pipe(Effect.map(Option.getOrNull)),
     nowIso: Effect.succeed(now),
     randomUuid: Effect.sync(() => NodeCrypto.randomUUID()),
-    deliveryStore: makeMemoryChannelDeliveryStore(),
+    deliveryStore: memoryChannelDeliveryStore(),
     secretStore: {
       get: () => Effect.die("Inbound dispatch must not read secrets."),
       set: () => Effect.die("Inbound dispatch must not write secrets."),

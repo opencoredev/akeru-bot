@@ -4,9 +4,9 @@ import { describe, expect } from "vite-plus/test";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 
-import { makeKeyedDrainableWorker } from "./ProviderCommandReactor.ts";
+import { keyedDrainableWorker } from "./ProviderCommandReactor.ts";
 
-describe("makeKeyedDrainableWorker", () => {
+describe("keyedDrainableWorker", () => {
   it.effect(
     "runs independent keys while preserving same-thread start, stop, and restart FIFO",
     () =>
@@ -17,7 +17,7 @@ describe("makeKeyedDrainableWorker", () => {
           const startedB1 = yield* Deferred.make<void>();
           const processed: string[] = [];
 
-          const worker = yield* makeKeyedDrainableWorker<string, string, never, never>({
+          const worker = yield* keyedDrainableWorker<string, string, never, never>({
             concurrency: 2,
             process: (item) =>
               Effect.gen(function* () {
@@ -61,7 +61,7 @@ describe("makeKeyedDrainableWorker", () => {
         const releaseB = yield* Deferred.make<void>();
         const drained = yield* Deferred.make<void>();
 
-        const worker = yield* makeKeyedDrainableWorker<string, string, never, never>({
+        const worker = yield* keyedDrainableWorker<string, string, never, never>({
           concurrency: 2,
           process: (item) =>
             Effect.gen(function* () {
@@ -104,7 +104,7 @@ describe("makeKeyedDrainableWorker", () => {
         let active = 0;
         let maxActive = 0;
 
-        const worker = yield* makeKeyedDrainableWorker<string, string, string, never>({
+        const worker = yield* keyedDrainableWorker<string, string, string, never>({
           concurrency: 2,
           process: (item) =>
             Match.value(item).pipe(

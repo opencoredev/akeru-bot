@@ -1,5 +1,4 @@
 // @effect-diagnostics nodeBuiltinImport:off
-// oxlint-disable akeru/no-manual-effect-runtime-in-tests -- This integration harness owns the runtime so it can advance TestClock and drain the ingestion worker.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

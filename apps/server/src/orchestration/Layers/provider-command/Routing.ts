@@ -7,8 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { increment, orchestrationEventsProcessedTotal } from "../../../observability/Metrics.ts";
 import { type ProviderIntentEvent, PROVIDER_COMMAND_CONCURRENCY } from "./Fields.ts";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Routing composes a scoped queue worker; this utility has no contextual service or layer.
-import { makeKeyedDrainableWorker } from "./KeyedDrainableWorker.ts";
+import { keyedDrainableWorker } from "./KeyedDrainableWorker.ts";
 import type { createDependencies } from "./Dependencies.ts";
 import type { createFailures } from "./Failures.ts";
 import type { createTitles } from "./Titles.ts";
@@ -263,7 +262,7 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
       Match.orElse((event) => event.payload.threadId),
     );
 
-  const worker = yield* makeKeyedDrainableWorker({
+  const worker = yield* keyedDrainableWorker({
     concurrency: PROVIDER_COMMAND_CONCURRENCY,
     process: processDomainEventSafely,
   });

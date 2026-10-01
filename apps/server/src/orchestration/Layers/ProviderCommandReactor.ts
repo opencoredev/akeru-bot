@@ -25,7 +25,7 @@ import { createRecovery } from "./provider-command/Recovery.ts";
 
 export {
   type KeyedDrainableWorker,
-  makeKeyedDrainableWorker,
+  keyedDrainableWorker,
 } from "./provider-command/KeyedDrainableWorker.ts";
 
 export {

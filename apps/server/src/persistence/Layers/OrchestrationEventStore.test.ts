@@ -377,8 +377,13 @@ for (const reader of ["all", "aggregate"] as const) {
         { discard: true },
       );
 
-      // oxlint-disable-next-line typescript/no-extraneous-class -- Identifies page markers for V8's heap query.
-      class ReplayPage {}
+      class ReplayPage {
+        readonly sequence: number;
+
+        constructor(sequence: number) {
+          this.sequence = sequence;
+        }
+      }
 
       let count = 0;
 
@@ -399,7 +404,7 @@ for (const reader of ["all", "aggregate"] as const) {
 
           if (count % 500 === 0) {
             // Count live page markers after full GC, without timing or heap-size thresholds.
-            Object.assign(event, { replayPage: new ReplayPage() });
+            Object.assign(event, { replayPage: new ReplayPage(event.sequence) });
             assert.isAtMost(NodeV8.queryObjects(ReplayPage, { format: "count" }), 1);
           }
 
