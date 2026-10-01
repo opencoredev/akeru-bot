@@ -18,7 +18,6 @@ function TooltipPopup({
   sideOffset = 4,
   side = "top",
   variant = "default",
-  presentation,
   anchor,
   children,
   ...props
@@ -33,9 +32,8 @@ function TooltipPopup({
     | "diagnostics-mono"
     | "diagnostics-process"
     | "keybinding-warning"
-    | "telemetry-history";
-  variant?: "default" | "glass";
-  presentation?: "connection-error";
+    | "telemetry-history"
+    | "connection-error";
   anchor?: TooltipPrimitive.Positioner.Props["anchor"];
 }) {
   return (
@@ -59,7 +57,7 @@ function TooltipPopup({
             variant === "diagnostics-process" && "font-mono text-[11px] leading-relaxed text-wrap",
             variant === "keybinding-warning" && "leading-relaxed",
             variant === "telemetry-history" && "space-y-0.5 text-left",
-            presentation === "connection-error" && "max-w-80 whitespace-pre-wrap leading-tight",
+            variant === "connection-error" && "max-w-80 whitespace-pre-wrap leading-tight",
             className,
           )}
           data-slot="tooltip-popup"

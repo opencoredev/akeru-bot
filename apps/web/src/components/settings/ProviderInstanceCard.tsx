@@ -401,7 +401,7 @@ export function ProviderInstanceCard({
                       ) : null}
                       {updateCommand ? (
                         <div className="flex min-w-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 py-0.5 pr-0.5 pl-2">
-                          <ScrollArea scrollFade presentation="provider-email">
+                          <ScrollArea scrollFade variant="provider-email">
                             <code className="flex h-full w-max items-center whitespace-nowrap pr-3 font-mono text-[11px] text-foreground">
                               {updateCommand}
                             </code>

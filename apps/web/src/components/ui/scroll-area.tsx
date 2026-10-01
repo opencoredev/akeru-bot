@@ -23,7 +23,6 @@ function getVirtualizedScrollFadeClassName({ top, bottom }: { top: boolean; bott
 
 function ScrollArea({
   className,
-  presentation,
   children,
   variant,
   scrollFade = false,
@@ -32,12 +31,11 @@ function ScrollArea({
   chainVerticalScroll = false,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
-  variant?: "diagnostics" | "diagnostics-process" | "telemetry-process";
+  variant?: "diagnostics" | "diagnostics-process" | "telemetry-process" | "provider-email";
   scrollFade?: boolean;
   scrollbarGutter?: boolean;
   hideScrollbars?: boolean;
   chainVerticalScroll?: boolean;
-  presentation?: "provider-email";
 }) {
   return (
     <ScrollAreaPrimitive.Root
@@ -46,7 +44,7 @@ function ScrollArea({
         variant === "diagnostics" && "rounded-none",
         variant === "diagnostics-process" && "rounded-none border-t border-border/60",
         variant === "telemetry-process" && "border-t border-border/60",
-        presentation === "provider-email" && "h-8 min-w-0 flex-1 rounded-none",
+        variant === "provider-email" && "h-8 min-w-0 flex-1 rounded-none",
         className,
       )}
       {...props}

@@ -178,7 +178,7 @@ export function SavedBackendListRow({
                   </Button>
                 }
               />
-              <TooltipPopup side="top" presentation="connection-error">
+              <TooltipPopup side="top" variant="connection-error">
                 The WSL backend is managed by the WSL setting above — turn it on or off there.
               </TooltipPopup>
             </Tooltip>
