@@ -1,3 +1,4 @@
+import { type PendingApproval } from "@akeru/client-runtime/pending-requests";
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import { storedField } from "./persistedSchema";
@@ -114,8 +115,10 @@ type CommandApprovalArguments = typeof CommandApprovalArguments.Type;
 
 const decodeApprovalArguments = Schema.decodeUnknownOption(CommandApprovalArguments);
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Tool arguments are decoded at this public boundary before their command metadata is read.
-export function describeCommandApproval(command: string, args: unknown): CommandApprovalDetails {
+export function describeCommandApproval(
+  command: string,
+  args: PendingApproval["args"],
+): CommandApprovalDetails {
   const record = Option.getOrNull(decodeApprovalArguments(args));
 
   const workingDirectory = readString(record, [

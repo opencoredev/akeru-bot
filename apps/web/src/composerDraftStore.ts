@@ -24,6 +24,7 @@ import {
   LEGACY_COMPOSER_DRAFT_STORAGE_KEY,
   composerDebouncedStorage,
   COMPOSER_DRAFT_STORAGE_VERSION,
+  decodeStoredComposerMigration,
   migratePersistedComposerDraftStoreState,
   partializeComposerDraftStoreState,
   normalizeCurrentPersistedComposerDraftStoreState,
@@ -96,11 +97,13 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
       name: COMPOSER_DRAFT_STORAGE_KEY,
       version: COMPOSER_DRAFT_STORAGE_VERSION,
       storage: createJSONStorage(() => composerDebouncedStorage),
-      migrate: migratePersistedComposerDraftStoreState,
+      migrate: (persistedState) =>
+        migratePersistedComposerDraftStoreState(decodeStoredComposerMigration(persistedState)),
       partialize: partializeComposerDraftStoreState,
       merge: (persistedState, currentState) => {
-        const normalizedPersisted =
-          normalizeCurrentPersistedComposerDraftStoreState(persistedState);
+        const normalizedPersisted = normalizeCurrentPersistedComposerDraftStoreState(
+          decodeStoredComposerMigration(persistedState),
+        );
 
         const draftsByThreadKey = Object.fromEntries(
           Object.entries(normalizedPersisted.draftsByThreadKey).map(([threadKey, draft]) => [

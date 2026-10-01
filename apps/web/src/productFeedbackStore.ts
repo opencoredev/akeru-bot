@@ -3,11 +3,12 @@ import {
   ProductFeedbackToolDraft,
   type ProductFeedbackElement,
 } from "@akeru/contracts";
-import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { create } from "zustand";
 
-const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
+/** Decodes untrusted tool arguments; None when they carry anything besides the bounded draft fields. */
+export const decodeProductFeedbackToolArgs = Schema.decodeUnknownOption(ProductFeedbackToolDraft, {
   onExcessProperty: "error",
 });
 
@@ -69,12 +70,9 @@ export function openProductFeedbackWithPrefill(feedback: string): void {
 }
 
 export function productFeedbackDraftFromToolArgs(
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Tool arguments are untrusted and decoded by ProductFeedbackToolDraft here.
-  args: unknown,
+  decoded: Option.Option<ProductFeedbackToolDraft>,
 ): Partial<ProductFeedbackDraft> | null {
-  const decoded = decodeProductFeedbackToolDraft(args);
-
-  if (Exit.isFailure(decoded)) return null;
+  if (Option.isNone(decoded)) return null;
 
   return { feedback: decoded.value.feedback };
 }
@@ -90,9 +88,10 @@ function appendBounded(current: string, proposed: string, maxLength: number): st
   return `${left}\n\n${right}`.slice(0, maxLength);
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Tool entry point forwards untrusted arguments to the draft decoder.
-export function openProductFeedbackFromToolArgs(args: unknown): boolean {
-  const proposed = productFeedbackDraftFromToolArgs(args);
+export function openProductFeedbackFromToolArgs(
+  decoded: Option.Option<ProductFeedbackToolDraft>,
+): boolean {
+  const proposed = productFeedbackDraftFromToolArgs(decoded);
 
   if (!proposed?.feedback) return false;
   openProductFeedbackWithPrefill(proposed.feedback);

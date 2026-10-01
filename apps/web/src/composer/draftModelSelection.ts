@@ -75,15 +75,16 @@ export function compactModelSelectionByProvider(
   return result;
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This schema guard is the boundary for legacy driver values from storage.
-export function normalizeProviderDriverKind(value: unknown): ProviderDriverKind | null {
+/** A field read from persisted composer state, before its schema guard runs. */
+type StoredFieldValue = Schema.Json | undefined;
+
+export function normalizeProviderDriverKind(value: StoredFieldValue): ProviderDriverKind | null {
   return isProviderDriverKind(value) ? value : null;
 }
 
 const isProviderInstanceId = Schema.is(ProviderInstanceId);
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This schema guard accepts untrusted instance identifiers at the storage boundary.
-export function normalizeProviderInstanceId(value: unknown): ProviderInstanceId | null {
+export function normalizeProviderInstanceId(value: StoredFieldValue): ProviderInstanceId | null {
   return isProviderInstanceId(value) ? value : null;
 }
 
@@ -156,8 +157,7 @@ const StoredProviderOptions = Schema.Struct({
 const decodeStoredProviderOptions = Schema.decodeUnknownOption(StoredProviderOptions);
 
 export function normalizeProviderModelOptions(
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- The decoder validates the legacy options object before migration reads its fields.
-  value: unknown,
+  value: StoredFieldValue | ProviderOptionSelectionsByProvider | null,
   provider?: ProviderDriverKind | null,
   legacy?: LegacyCodexFields,
 ): ProviderOptionSelectionsByProvider | null {
@@ -223,12 +223,11 @@ const StoredModelSelection = Schema.Struct({
 const decodeStoredModelSelection = Schema.decodeUnknownOption(StoredModelSelection);
 
 export function normalizeModelSelection(
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- The decoder validates persisted model fields before the legacy migration consumes them.
-  value: unknown,
+  value: StoredFieldValue | ModelSelection | null,
   legacy?: {
-    provider?: unknown;
-    model?: unknown;
-    modelOptions?: unknown;
+    provider?: StoredFieldValue;
+    model?: StoredFieldValue;
+    modelOptions?: StoredFieldValue | ProviderOptionSelectionsByProvider;
     legacyCodex?: LegacyCodexFields;
   },
 ): NormalizedModelSelection | null {

@@ -1,5 +1,4 @@
 import * as Schema from "effect/Schema";
-import * as Option from "effect/Option";
 import {
   THEME_COLOR_ROLES,
   type ThemeAppearance,
@@ -11,7 +10,6 @@ import { toCanonicalThemeColor } from "./colorMath";
 import {
   type ThemeColorOverrides,
   isRecord,
-  decodeThemeJson,
   isThemeColorRole,
   THEME_FILE_VERSION,
   isThemeLabel,
@@ -87,11 +85,7 @@ function parseThemeColorOverrides(value: Schema.Json | undefined): ThemeColorOve
   return overrides;
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This public import boundary decodes external JSON before interpreting theme fields.
-export function parseThemeFile(input: unknown): ThemeDefinition {
-  const decoded = decodeThemeJson(input);
-  const value = Option.isSome(decoded) ? decoded.value : null;
-
+export function parseThemeFile(value: Schema.Json): ThemeDefinition {
   if (!isRecord(value)) {
     throw new Error("Theme files must contain a JSON object.");
   }

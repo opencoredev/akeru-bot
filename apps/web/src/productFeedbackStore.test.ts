@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   EMPTY_PRODUCT_FEEDBACK_DRAFT,
   openProductFeedback,
+  decodeProductFeedbackToolArgs,
   openProductFeedbackFromToolArgs,
   openProductFeedbackWithPrefill,
   productFeedbackDraftFromToolArgs,
@@ -55,15 +56,19 @@ describe("product feedback store", () => {
 
   it("decodes only bounded bot-authored draft fields", () => {
     expect(
-      productFeedbackDraftFromToolArgs({
-        feedback: "The label is unclear.",
-      }),
+      productFeedbackDraftFromToolArgs(
+        decodeProductFeedbackToolArgs({
+          feedback: "The label is unclear.",
+        }),
+      ),
     ).toEqual({ feedback: "The label is unclear." });
     expect(
-      productFeedbackDraftFromToolArgs({
-        feedback: "Private payload",
-        conversation: "full thread",
-      }),
+      productFeedbackDraftFromToolArgs(
+        decodeProductFeedbackToolArgs({
+          feedback: "Private payload",
+          conversation: "full thread",
+        }),
+      ),
     ).toBeNull();
   });
 
@@ -75,9 +80,11 @@ describe("product feedback store", () => {
     });
 
     expect(
-      openProductFeedbackFromToolArgs({
-        feedback: "Agent proposal.",
-      }),
+      openProductFeedbackFromToolArgs(
+        decodeProductFeedbackToolArgs({
+          feedback: "Agent proposal.",
+        }),
+      ),
     ).toBe(true);
     expect(useProductFeedbackStore.getState().draft).toMatchObject({
       feedback: "My existing report.\n\nAgent proposal.",

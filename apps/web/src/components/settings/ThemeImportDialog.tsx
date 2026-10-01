@@ -1,6 +1,7 @@
 import { DownloadIcon, PlusIcon } from "lucide-react";
 import type { ChangeEvent, DragEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import * as Option from "effect/Option";
 import { cn } from "../../lib/utils";
 import {
   getCustomThemes,
@@ -11,6 +12,7 @@ import {
   updateCustomTheme,
   type ThemeDefinition,
 } from "../../themePalette";
+import { decodeThemeJson } from "../../theme/themeTypes";
 import {
   humanizeThemeName,
   isVsCodeThemeFile,
@@ -116,7 +118,7 @@ export function ThemeImportDialog({
           }
 
           try {
-            const value: unknown = JSON.parse(await file.text());
+            const value = Option.getOrNull(decodeThemeJson(JSON.parse(await file.text())));
             parsed.push({
               sourceName: file.name,
               theme: isVsCodeThemeFile(value) ? parseVsCodeThemeFile(value) : parseThemeFile(value),
@@ -304,7 +306,7 @@ export function ThemeImportDialog({
     }
 
     try {
-      const parsed: unknown = JSON.parse(json);
+      const parsed = Option.getOrNull(decodeThemeJson(JSON.parse(json)));
 
       // VS Code themes are converted on the way in; anything else has to be
       // one of our own files.

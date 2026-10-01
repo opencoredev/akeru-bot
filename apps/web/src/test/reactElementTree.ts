@@ -1,7 +1,19 @@
-import { isValidElement, type ReactElement } from "react";
+import { isValidElement, type AllHTMLAttributes, type ReactElement, type ReactNode } from "react";
 
-// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- React props may contain any runtime value; isValidElement narrows the node before props are visited.
-type ReactTreeProps = Record<string, unknown>;
+/** The DOM attributes tests read from a found element; other props are walked, not read. */
+type ReactTreeProps = AllHTMLAttributes<HTMLElement>;
+
+/** Anything worth descending into: rendered content, or an array that may hold elements. */
+type ReactTreeNode = ReactNode | ReadonlyArray<unknown>;
+
+function isElementList(value: ReactTreeNode): value is ReadonlyArray<unknown> {
+  return Array.isArray(value);
+}
+
+/** Props hold handlers and data too; only elements and arrays can contain more elements. */
+function isReactTreeBranch(value: unknown): value is ReactElement | ReadonlyArray<unknown> {
+  return Array.isArray(value) || isValidElement(value);
+}
 
 /**
  * Depth-first search over a React element tree produced by calling a component
@@ -10,12 +22,11 @@ type ReactTreeProps = Record<string, unknown>;
  * the visitor accepts, or null.
  */
 export function visitElements(
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This runtime tree walker probes arbitrary React prop values, including non-element objects.
-  node: unknown,
+  node: ReactTreeNode,
   visitor: (element: ReactElement<ReactTreeProps>) => boolean,
 ): ReactElement<ReactTreeProps> | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
+  if (isElementList(node)) {
+    for (const child of node.filter(isReactTreeBranch)) {
       const found = visitElements(child, visitor);
 
       if (found) return found;
@@ -28,7 +39,7 @@ export function visitElements(
 
   if (visitor(node)) return node;
 
-  for (const value of Object.values(node.props)) {
+  for (const value of Object.values(node.props).filter(isReactTreeBranch)) {
     const found = visitElements(value, visitor);
 
     if (found) return found;
