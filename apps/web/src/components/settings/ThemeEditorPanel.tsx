@@ -6,7 +6,7 @@ import {
   PlusIcon,
   XIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyThemeColorPreview,
   THEME_FILE_VERSION,
@@ -486,28 +486,30 @@ export function ThemeEditorPanel({
     }
   };
 
-  /* oxlint-disable shadcn/no-inline-styles -- dragged position and resized size are runtime geometry */
-  const panelStyle: CSSProperties = {
-    ...(position ? { left: position.x, top: position.y } : {}),
-    ...(size ? { width: size.width } : {}),
-    // A chosen height only applies expanded; minimized keeps hugging the
-    // header. The viewport stays the ceiling either way.
-    ...(size && !isMinimized ? { height: size.height, maxHeight: "calc(100dvh - 1rem)" } : {}),
-  };
-  /* oxlint-enable shadcn/no-inline-styles */
+  // A chosen height only applies expanded; minimized keeps hugging the
+  // header. The viewport stays the ceiling either way.
+  const sizedHeight = size !== null && !isMinimized;
 
   return (
     <div
       aria-label={isEditing ? "Edit theme" : "Create theme"}
       className={cn(
-        "dialog-glass fixed z-110 flex max-h-min-42rem-dvh-6rem w-min-26rem-vw-2rem flex-col overflow-hidden rounded-xl border text-popover-foreground",
-        position === null && "bottom-4 right-4",
-        isMinimized && "max-h-none",
+        "dialog-glass fixed z-110 flex flex-col overflow-hidden rounded-xl border text-popover-foreground",
+        position === null ? "bottom-4 right-4" : "top-(--panel-top) left-(--panel-left)",
+        size === null ? "w-min-26rem-vw-2rem" : "w-(--panel-width)",
+        sizedHeight
+          ? "h-(--panel-height) max-h-dvh-1rem"
+          : ["max-h-min-42rem-dvh-6rem", isMinimized && "max-h-none"],
       )}
       data-theme-editor-panel
       ref={panelRef}
       role="dialog"
-      style={panelStyle}
+      style={{
+        "--panel-left": position ? `${position.x}px` : undefined,
+        "--panel-top": position ? `${position.y}px` : undefined,
+        "--panel-width": size ? `${size.width}px` : undefined,
+        "--panel-height": size ? `${size.height}px` : undefined,
+      }}
     >
       <div
         className="flex cursor-grab touch-none select-none items-center gap-1 border-b border-border/70 px-3 py-2 active:cursor-grabbing"

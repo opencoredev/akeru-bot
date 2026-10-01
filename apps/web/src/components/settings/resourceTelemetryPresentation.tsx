@@ -96,18 +96,17 @@ export function categoryLabel(category: ResourceTelemetryProcessCategory): strin
   }
 }
 
-/* oxlint-disable shadcn/no-raw-colors -- Nominal process categories retain their distinct data colors. */
 export const RESOURCE_AGGREGATE_COLORS = {
-  server: "bg-emerald-500/80",
-  electron: "bg-sky-500/80",
-  monitor: "bg-amber-500/80",
+  server: "bg-telemetry-server-total/80",
+  electron: "bg-telemetry-electron/80",
+  monitor: "bg-telemetry-monitor/80",
 };
 
 export const RESOURCE_CATEGORY_COLORS = {
-  monitor: "bg-amber-500",
-  electron: "bg-sky-500",
-  server: "bg-violet-500",
-  child: "bg-emerald-500",
+  monitor: "bg-telemetry-monitor",
+  electron: "bg-telemetry-electron",
+  server: "bg-telemetry-server",
+  child: "bg-telemetry-child",
 };
 
 export function categoryDotClass(category: ResourceTelemetryProcessCategory): string {

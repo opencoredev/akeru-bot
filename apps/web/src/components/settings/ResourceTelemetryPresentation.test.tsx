@@ -45,10 +45,10 @@ describe("resource telemetry presentation", () => {
   });
 
   it("retains distinct nominal process category colors", () => {
-    expect(categoryDotClass("resource-monitor")).toBe("bg-amber-500");
-    expect(categoryDotClass("electron-renderer")).toBe("bg-sky-500");
-    expect(categoryDotClass("server")).toBe("bg-violet-500");
-    expect(categoryDotClass("server-child")).toBe("bg-emerald-500");
+    expect(categoryDotClass("resource-monitor")).toBe("bg-telemetry-monitor");
+    expect(categoryDotClass("electron-renderer")).toBe("bg-telemetry-electron");
+    expect(categoryDotClass("server")).toBe("bg-telemetry-server");
+    expect(categoryDotClass("server-child")).toBe("bg-telemetry-child");
   });
 
   it("only exposes signals for eligible child, provider, and terminal processes", () => {

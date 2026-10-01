@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
-import { normalizeCurrentPersistedComposerDraftStoreState } from "./draftPersistence";
+import {
+  decodeStoredComposerMigration,
+  normalizeCurrentPersistedComposerDraftStoreState,
+} from "./draftPersistence";
 
 const codexSelection = {
   instanceId: "codex",
@@ -13,14 +16,16 @@ const invalidSelections = [
 
 describe("persisted composer provider selection recovery", () => {
   it.each(invalidSelections)("retains valid draft selections beside %j", (invalidSelection) => {
-    const normalized = normalizeCurrentPersistedComposerDraftStoreState({
-      draftsByThreadKey: {
-        thread: {
-          modelSelectionByProvider: { codex: codexSelection, claudeAgent: invalidSelection },
-          activeProvider: "codex",
+    const normalized = normalizeCurrentPersistedComposerDraftStoreState(
+      decodeStoredComposerMigration({
+        draftsByThreadKey: {
+          thread: {
+            modelSelectionByProvider: { codex: codexSelection, claudeAgent: invalidSelection },
+            activeProvider: "codex",
+          },
         },
-      },
-    });
+      }),
+    );
 
     expect(normalized.draftsByThreadKey.thread?.modelSelectionByProvider).toEqual({
       codex: codexSelection,
@@ -29,10 +34,12 @@ describe("persisted composer provider selection recovery", () => {
   });
 
   it.each(invalidSelections)("retains valid sticky selections beside %j", (invalidSelection) => {
-    const normalized = normalizeCurrentPersistedComposerDraftStoreState({
-      stickyModelSelectionByProvider: { codex: codexSelection, claudeAgent: invalidSelection },
-      stickyActiveProvider: "codex",
-    });
+    const normalized = normalizeCurrentPersistedComposerDraftStoreState(
+      decodeStoredComposerMigration({
+        stickyModelSelectionByProvider: { codex: codexSelection, claudeAgent: invalidSelection },
+        stickyActiveProvider: "codex",
+      }),
+    );
 
     expect(normalized.stickyModelSelectionByProvider).toEqual({ codex: codexSelection });
     expect(normalized.stickyActiveProvider).toBe("codex");
@@ -41,13 +48,15 @@ describe("persisted composer provider selection recovery", () => {
   it("ignores invalid provider keys without discarding valid selections", () => {
     const selections = { codex: codexSelection, "invalid key": codexSelection };
 
-    const normalized = normalizeCurrentPersistedComposerDraftStoreState({
-      draftsByThreadKey: {
-        thread: { modelSelectionByProvider: selections, activeProvider: "codex" },
-      },
-      stickyModelSelectionByProvider: selections,
-      stickyActiveProvider: "codex",
-    });
+    const normalized = normalizeCurrentPersistedComposerDraftStoreState(
+      decodeStoredComposerMigration({
+        draftsByThreadKey: {
+          thread: { modelSelectionByProvider: selections, activeProvider: "codex" },
+        },
+        stickyModelSelectionByProvider: selections,
+        stickyActiveProvider: "codex",
+      }),
+    );
 
     expect(normalized.draftsByThreadKey.thread?.modelSelectionByProvider).toEqual({
       codex: codexSelection,

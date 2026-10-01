@@ -23,13 +23,13 @@ export function findTaskListMarkerOffset(markdown: string, listItemStart: number
  * `list-style-position: outside` paints it wider than that gutter and clips
  * the leading character against the item's own overflow. Rather than widening
  * the gutter for every list, only lists whose widest marker is 3+ characters
- * get a wider `--list-gutter`. The width includes a negative marker's minus
- * sign.
+ * get a wider `--list-gutter`, returned here as a CSS length. The width
+ * includes a negative marker's minus sign.
  */
-export function orderedListGutterStyle(
+export function orderedListGutter(
   itemCount: number,
   start: number | string | null | undefined,
-): { "--list-gutter": string } | undefined {
+): string | undefined {
   const parsedStart = Number.parseInt(String(start ?? 1), 10);
   const firstNumber = Number.isNaN(parsedStart) ? 1 : parsedStart;
   const lastNumber = firstNumber + Math.max(itemCount - 1, 0);
@@ -37,7 +37,7 @@ export function orderedListGutterStyle(
 
   if (markerWidth <= 2) return undefined;
 
-  return { "--list-gutter": `${markerWidth + 1}ch` };
+  return `${markerWidth + 1}ch`;
 }
 
 function isTaskListItem(node: MarkdownHtmlAstNode): boolean {

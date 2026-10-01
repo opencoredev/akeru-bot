@@ -126,11 +126,11 @@ const PersistedUiInput = Schema.Struct({
   threadChangedFilesExpandedById: persistedUiField,
 });
 
-const decodePersistedUi = Schema.decodeUnknownOption(PersistedUiInput);
+const decodePersistedUi = Schema.decodeOption(Schema.fromJsonString(PersistedUiInput));
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This persistence boundary decodes stored UI fields before migrating legacy preferences.
-export function parsePersistedState(input: unknown): UiState {
-  const decoded = decodePersistedUi(input);
+/** Parses the stored UI state JSON, migrating legacy preferences; unreadable input yields the initial state. */
+export function parsePersistedState(raw: string): UiState {
+  const decoded = decodePersistedUi(raw);
 
   if (Option.isNone(decoded)) return initialState;
   const parsed = decoded.value;
@@ -197,13 +197,13 @@ function readPersistedState(): UiState {
           continue;
         }
 
-        return parsePersistedState(JSON.parse(legacyRaw));
+        return parsePersistedState(legacyRaw);
       }
 
       return initialState;
     }
 
-    return parsePersistedState(JSON.parse(raw));
+    return parsePersistedState(raw);
   } catch {
     return initialState;
   }

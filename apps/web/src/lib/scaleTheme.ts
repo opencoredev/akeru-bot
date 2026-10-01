@@ -44,6 +44,7 @@ export const scaleTheme = {
     "86vh",
     "92vh",
     "92vw",
+    "dvh-1rem",
     "dvh-2rem",
     "full-plus-1rem",
     "min-full-30rem",

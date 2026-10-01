@@ -129,18 +129,20 @@ const StoredThreadPanel = Schema.Struct({
   surfaces: storedField(Schema.Array(storedField(Schema.NullOr(StoredSurface), null)), []),
 });
 
-const decodeStoredPanel = Schema.decodeUnknownOption(
-  Schema.Struct({
-    byThreadKey: storedField(
-      Schema.Record(Schema.String, storedField(Schema.NullOr(StoredThreadPanel), null)),
-      {},
-    ),
-  }),
-);
+const StoredPanel = Schema.Struct({
+  byThreadKey: storedField(
+    Schema.Record(Schema.String, storedField(Schema.NullOr(StoredThreadPanel), null)),
+    {},
+  ),
+});
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Persisted panel versions are untrusted and decoded by the migration schema here.
-export function migratePersistedRightPanelState(persistedState: unknown) {
-  const decoded = Option.getOrNull(decodeStoredPanel(persistedState));
+/** Decodes any persisted panel version at its storage boundary; None when it is unreadable. */
+export const decodeStoredPanel = Schema.decodeUnknownOption(StoredPanel);
+
+export function migratePersistedRightPanelState(
+  storedPanel: Option.Option<typeof StoredPanel.Type>,
+) {
+  const decoded = Option.getOrNull(storedPanel);
 
   const byThreadKey = Object.fromEntries(
     Object.entries(decoded?.byThreadKey ?? {})
@@ -371,7 +373,8 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
           ),
         ),
       }),
-      migrate: migratePersistedRightPanelState,
+      migrate: (persistedState) =>
+        migratePersistedRightPanelState(decodeStoredPanel(persistedState)),
     },
   ),
 );

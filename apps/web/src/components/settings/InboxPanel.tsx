@@ -1,4 +1,4 @@
-import { Match, Predicate } from "effect";
+import { Predicate } from "effect";
 import { BookmarkIcon, CircleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -7,6 +7,7 @@ import {
   botInboxRowAction,
   selectOpenBotInboxItems,
   type BotInboxItem,
+  type BotInboxRowAction,
 } from "@akeru/client-runtime/bot-inbox";
 import {
   describeDurableFactFailure,
@@ -183,45 +184,73 @@ export function InboxIncidentRow({
       }
       description={copy.detail}
       status={resolveError ?? copy.nextAction}
-      control={Match.value(action).pipe(
-        // oxlint-disable-next-line react/no-unstable-nested-components -- Match calls this value factory immediately; React never mounts it as a component.
-        Match.when("memory-approval", () => (
-          <span className="flex items-center gap-1.5">
-            <Button
-              size="xs"
-              variant="ghost-muted"
-              disabled={isResolving || onDecideMemory === null}
-              onClick={() => void handleDecideMemory({ action: "reject" })}
-            >
-              {t("Reject")}
-            </Button>
-            <Button
-              size="xs"
-              disabled={isResolving || onDecideMemory === null}
-              onClick={() => void handleDecideMemory({ action: "approve" })}
-            >
-              {t("Approve")}
-            </Button>
-          </span>
-        )),
-        // oxlint-disable-next-line react/no-unstable-nested-components -- Match calls this value factory immediately; React never mounts it as a component.
-        Match.when("resolve", () => (
-          <Button
-            size="xs"
-            variant="outline"
-            disabled={isResolving || onResolve === null}
-            onClick={() => void handleResolve()}
-          >
-            {isResolving ? t("Resolving…") : t("Resolve")}
-          </Button>
-        )),
-        // oxlint-disable-next-line react/no-unstable-nested-components -- Match calls this value factory immediately; React never mounts it as a component.
-        Match.orElse(() => (
-          <Button size="xs" variant="outline" onClick={openRepair}>
-            {action === "plugins" ? t("Open Plugins") : t("Open Providers")}
-          </Button>
-        )),
-      )}
+      control={
+        <InboxRowControl
+          action={action}
+          isResolving={isResolving}
+          canResolve={onResolve !== null}
+          canDecideMemory={onDecideMemory !== null}
+          onResolve={() => void handleResolve()}
+          onDecideMemory={(intent) => void handleDecideMemory(intent)}
+          onOpenRepair={openRepair}
+        />
+      }
     />
+  );
+}
+
+function InboxRowControl({
+  action,
+  isResolving,
+  canResolve,
+  canDecideMemory,
+  onResolve,
+  onDecideMemory,
+  onOpenRepair,
+}: {
+  readonly action: BotInboxRowAction;
+  readonly isResolving: boolean;
+  readonly canResolve: boolean;
+  readonly canDecideMemory: boolean;
+  readonly onResolve: () => void;
+  readonly onDecideMemory: (intent: MemoryApprovalIntent) => void;
+  readonly onOpenRepair: () => void;
+}) {
+  const { t } = useI18n();
+
+  if (action === "memory-approval") {
+    return (
+      <span className="flex items-center gap-1.5">
+        <Button
+          size="xs"
+          variant="ghost-muted"
+          disabled={isResolving || !canDecideMemory}
+          onClick={() => onDecideMemory({ action: "reject" })}
+        >
+          {t("Reject")}
+        </Button>
+        <Button
+          size="xs"
+          disabled={isResolving || !canDecideMemory}
+          onClick={() => onDecideMemory({ action: "approve" })}
+        >
+          {t("Approve")}
+        </Button>
+      </span>
+    );
+  }
+
+  if (action === "resolve") {
+    return (
+      <Button size="xs" variant="outline" disabled={isResolving || !canResolve} onClick={onResolve}>
+        {isResolving ? t("Resolving…") : t("Resolve")}
+      </Button>
+    );
+  }
+
+  return (
+    <Button size="xs" variant="outline" onClick={onOpenRepair}>
+      {action === "plugins" ? t("Open Plugins") : t("Open Providers")}
+    </Button>
   );
 }

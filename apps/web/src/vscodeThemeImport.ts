@@ -1,6 +1,5 @@
 import * as Schema from "effect/Schema";
-import * as Option from "effect/Option";
-import { isRecord, decodeThemeJson } from "./theme/themeTypes";
+import { isRecord } from "./theme/themeTypes";
 import * as Predicate from "effect/Predicate";
 import {
   createVividThemeColors,
@@ -167,11 +166,7 @@ function hexToRgb(value: string): VsCodeRgb {
  * A VS Code theme is recognised by its workbench colors: the keys are dotted
  * paths (`editor.background`), which our own files never use.
  */
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- File detection decodes arbitrary imported JSON before reading VS Code metadata.
-export function isVsCodeThemeFile(input: unknown): boolean {
-  const decoded = decodeThemeJson(input);
-  const value = Option.isSome(decoded) ? decoded.value : null;
-
+export function isVsCodeThemeFile(value: Schema.Json): boolean {
   if (!isRecord(value)) return false;
 
   if (value.version === THEME_FILE_VERSION) return false;
@@ -219,11 +214,7 @@ function resolveName(value: Schema.JsonObject): string {
   return "VS Code theme";
 }
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This public import boundary decodes external JSON before converting VS Code color roles.
-export function parseVsCodeThemeFile(input: unknown): ThemeDefinition {
-  const decoded = decodeThemeJson(input);
-  const value = Option.isSome(decoded) ? decoded.value : null;
-
+export function parseVsCodeThemeFile(value: Schema.Json): ThemeDefinition {
   if (!isRecord(value)) throw new Error("Theme files must contain a JSON object.");
   const colors = isRecord(value.colors) ? value.colors : {};
 

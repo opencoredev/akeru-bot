@@ -12,6 +12,9 @@ const buttonPresentations = {
   "toolbar-sticky": "bg-background/95",
   "composer-control":
     "gap-1.5 rounded-(--control-radius) px-2.5 text-secondary-label transition-none hover:text-foreground",
+  // A composer picker trigger placed in a settings row, in near-full foreground ink.
+  "composer-control-settings-row":
+    "gap-1.5 rounded-(--control-radius) px-2.5 text-foreground/90 transition-none hover:text-foreground",
   "stash-badge": "gap-1 px-1.5",
   "stash-badge-active": "gap-1 px-1.5 [--control-icon-color:currentColor] text-foreground",
   "approval-accept":

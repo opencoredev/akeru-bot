@@ -49,6 +49,7 @@
   --spacing-86vh: 86vh;
   --spacing-92vh: 92vh;
   --spacing-92vw: 92vw;
+  --spacing-dvh-1rem: calc(100dvh - 1rem);
   --spacing-dvh-2rem: calc(100dvh - 2rem);
   --spacing-full-plus-1rem: calc(100% + 1rem);
   --spacing-min-full-30rem: min(100%, 30rem);

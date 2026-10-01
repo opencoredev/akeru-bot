@@ -38,7 +38,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   disabled?: boolean;
   open?: boolean;
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
-  triggerClassName?: string;
+  /** Sizes the trigger for a settings row, or caps its width outside the composer. */
+  triggerFit?: "settings-row" | "capped";
   triggerAriaLabel?: string;
   onOpenChange?: (open: boolean) => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
@@ -179,12 +180,15 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           <ComposerControl
             aria-label={props.triggerAriaLabel}
             variant={props.triggerVariant ?? "ghost"}
+            presentation={
+              props.triggerFit === "settings-row" ? "composer-control-settings-row" : undefined
+            }
             data-chat-provider-model-picker="true"
             className={cn(
               "min-w-0 justify-between whitespace-nowrap",
               props.compact ? "max-w-42 shrink-0" : "max-w-48 shrink sm:max-w-56",
-              // oxlint-disable-next-line shadcn/require-static-classes -- caller-supplied trigger class passthrough
-              props.triggerClassName,
+              props.triggerFit === "settings-row" && "min-w-0 max-w-none shrink-0",
+              props.triggerFit === "capped" && "max-w-52",
             )}
             disabled={props.disabled}
           />

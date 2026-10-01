@@ -56,14 +56,14 @@ export function captureVoiceUtterance(
     let lastSpeech: number | null = null;
     let settled = false;
     let timer: ReturnType<typeof setInterval> | undefined;
+    const recorderListeners = new AbortController();
 
     const cleanup = () => {
       clearInterval(timer);
       signal.removeEventListener("abort", abort);
       recorder.ondataavailable = null;
       recorder.onstop = null;
-      // oxlint-disable-next-line unicorn/prefer-add-event-listener -- capture owns this recorder and clears its IDL error slot before stopping it during cleanup.
-      recorder.onerror = null;
+      recorderListeners.abort();
 
       if (recorder.state !== "inactive") recorder.stop();
       microphone.getAudioTracks().forEach((track) => {
@@ -82,8 +82,9 @@ export function captureVoiceUtterance(
 
     const abort = () => fail(signal.reason);
     signal.addEventListener("abort", abort, { once: true });
-    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- capture owns this recorder and clears its IDL error slot before stopping it during cleanup.
-    recorder.onerror = () => fail(new Error("The microphone recording failed."));
+    recorder.addEventListener("error", () => fail(new Error("The microphone recording failed.")), {
+      signal: recorderListeners.signal,
+    });
     recorder.ondataavailable = (event) => {
       chunks.push(event.data);
       size += event.data.size;

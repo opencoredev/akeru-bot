@@ -1,5 +1,5 @@
 import { CopyIcon, MoonIcon, PenLineIcon, SunIcon, Trash2Icon, UploadIcon } from "lucide-react";
-import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { cn } from "../../lib/utils";
 import { getThemeModes, type ThemeAppearance, type ThemeDefinition } from "../../themePalette";
 import { Button } from "../ui/button";
@@ -142,13 +142,9 @@ function ThemeVariantRadial({ variantNavigation }: { variantNavigation: ThemeVar
 
                   // Options fan out from the root ball along a shallow arc and
                   // stagger in; closed, they collapse back behind it.
-                  /* oxlint-disable shadcn/no-inline-styles -- fan-out arc geometry and stagger are computed per option */
-                  const optionStyle: CSSProperties = {
-                    transform: `translate(calc(-50% + ${isOpen ? childOffsetX : rootOffsetX}px), ${isOpen ? childOffsetY : 28}px) scale(${isOpen ? 1 : 0.55})`,
-                    transitionDelay: isOpen ? `${optionIndex * 35}ms` : "0ms",
-                  };
+                  const optionTransform = `translate(calc(-50% + ${isOpen ? childOffsetX : rootOffsetX}px), ${isOpen ? childOffsetY : 28}px) scale(${isOpen ? 1 : 0.55})`;
+                  const optionDelay = isOpen ? `${optionIndex * 35}ms` : "0ms";
 
-                  /* oxlint-enable shadcn/no-inline-styles */
                   return (
                     <ThemeVariantTooltip
                       key={option.label}
@@ -158,11 +154,14 @@ function ThemeVariantRadial({ variantNavigation }: { variantNavigation: ThemeVar
                         aria-label={`Use ${option.label} for ${mode} mode${optionIsActive ? ", currently active" : ""}`}
                         aria-pressed={optionIsActive}
                         className={cn(
-                          "absolute left-1/2 top-1 z-30 flex size-7 items-center justify-center rounded-full bg-card shadow-sm outline-none transition-transform-opacity duration-200 ease-out motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
+                          "absolute left-1/2 top-1 z-30 flex size-7 transform-(--option-transform) items-center justify-center rounded-full bg-card shadow-sm outline-none transition-transform-opacity delay-(--option-delay) duration-200 ease-out motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
                           optionIsActive ? "ring-2 ring-ring" : "ring-1 ring-border/70",
                           isOpen ? "opacity-100" : "pointer-events-none opacity-0",
                         )}
-                        style={optionStyle}
+                        style={{
+                          "--option-transform": optionTransform,
+                          "--option-delay": optionDelay,
+                        }}
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();

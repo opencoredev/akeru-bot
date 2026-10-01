@@ -57,14 +57,12 @@ export const composerDebouncedStorage = createDebouncedStorage(
   COMPOSER_PERSIST_DEBOUNCE_MS,
 );
 
-const decodeStoredComposerMigration = Schema.decodeUnknownOption(StoredComposerMigration);
+/** Decodes the persisted draft store at its storage boundary; None when it is unreadable. */
+export const decodeStoredComposerMigration = Schema.decodeUnknownOption(StoredComposerMigration);
 
 export function migratePersistedComposerDraftStoreState(
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This storage migration decodes the legacy draft schema before reading persisted fields.
-  persistedState: unknown,
+  decoded: Option.Option<StoredComposerMigration>,
 ): PersistedComposerDraftStoreState {
-  const decoded = decodeStoredComposerMigration(persistedState);
-
   if (Option.isNone(decoded)) {
     return EMPTY_PERSISTED_DRAFT_STORE_STATE;
   }
@@ -271,11 +269,8 @@ export function partializeComposerDraftStoreState(
 }
 
 export function normalizeCurrentPersistedComposerDraftStoreState(
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This storage migration decodes the legacy draft schema before reading persisted fields.
-  persistedState: unknown,
+  decoded: Option.Option<StoredComposerMigration>,
 ): PersistedComposerDraftStoreState {
-  const decoded = decodeStoredComposerMigration(persistedState);
-
   if (Option.isNone(decoded)) {
     return EMPTY_PERSISTED_DRAFT_STORE_STATE;
   }

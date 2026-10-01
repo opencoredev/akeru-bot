@@ -15,11 +15,9 @@ export const HISTORY_WINDOWS = [
   { label: "1h", windowMs: 60 * 60_000, bucketMs: 2 * 60_000 },
 ] as const;
 
-// oxlint-disable-next-line shadcn/no-raw-colors -- I/O reads retain their nominal chart-series color.
-const IO_READ_COLOR = "bg-sky-500/70";
+const IO_READ_COLOR = "bg-telemetry-read/70";
 
-// oxlint-disable-next-line shadcn/no-raw-colors -- I/O writes retain their nominal chart-series color.
-const IO_WRITE_COLOR = "bg-amber-500/80";
+const IO_WRITE_COLOR = "bg-telemetry-write/80";
 
 export function HistoryWindowSelector({
   selectedWindowMs,
@@ -94,25 +92,16 @@ export function ResourceHistoryChart({
                 render={
                   <div className="grid h-full min-w-1 flex-1 grid-cols-3 items-end gap-px">
                     <span
-                      className="block rounded-t-sm bg-foreground/65"
-                      style={
-                        // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
-                        { height: `${cpuHeight}%` }
-                      }
+                      className="block h-(--bar-height) rounded-t-sm bg-foreground/65"
+                      style={{ "--bar-height": `${cpuHeight}%` }}
                     />
                     <span
-                      className={cn("block rounded-t-sm", IO_READ_COLOR)}
-                      style={
-                        // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
-                        { height: `${readHeight}%` }
-                      }
+                      className={cn("block h-(--bar-height) rounded-t-sm", IO_READ_COLOR)}
+                      style={{ "--bar-height": `${readHeight}%` }}
                     />
                     <span
-                      className={cn("block rounded-t-sm", IO_WRITE_COLOR)}
-                      style={
-                        // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
-                        { height: `${writeHeight}%` }
-                      }
+                      className={cn("block h-(--bar-height) rounded-t-sm", IO_WRITE_COLOR)}
+                      style={{ "--bar-height": `${writeHeight}%` }}
                     />
                   </div>
                 }

@@ -128,8 +128,6 @@ export class GhosttyTerminalSurface {
     fontFamily: string,
     options: GhosttyTerminalSurfaceOptions,
   ) {
-    // oxlint-disable-next-line typescript/no-this-alias -- Adapter getters need the live surface owner because getter this is the adapter itself.
-    const surface = this;
     this.mount = mount;
     this.canvas = canvas;
     this.input = input;
@@ -146,7 +144,18 @@ export class GhosttyTerminalSurface {
     this.requestedFontFamily = options.font?.family;
     this.fontSize = terminalFontSize(options.font?.size);
     this.resizeObserver = new ResizeObserver(() => this.fit());
-    this.pointer = new SurfacePointerController({
+    this.pointer = GhosttyTerminalSurface.createPointer(this);
+    this.keyboard = GhosttyTerminalSurface.createKeyboard(this);
+    this.installEvents();
+    this.watchDevicePixelRatio();
+    this.reducedMotionMedia?.addEventListener("change", this.onReducedMotionChange);
+    document.fonts.addEventListener("loadingdone", this.onFontsLoaded);
+    this.resizeObserver.observe(mount);
+  }
+
+  // Controller hosts read the surface live through getters, whose own `this` is the host object.
+  private static createPointer(surface: GhosttyTerminalSurface): SurfacePointerController {
+    return new SurfacePointerController({
       get canvas() {
         return surface.canvas;
       },
@@ -180,13 +189,16 @@ export class GhosttyTerminalSurface {
       set forceFullRender(value) {
         surface.forceFullRender = value;
       },
-      clearPrimedCopy: () => this.keyboard.clearPrimedCopy(),
-      focus: () => this.focus(),
-      hasSelection: () => this.hasSelection(),
-      requestRender: () => this.requestRender(),
-      scrollViewport: (deltaRows) => this.scrollViewport(deltaRows),
+      clearPrimedCopy: () => surface.keyboard.clearPrimedCopy(),
+      focus: () => surface.focus(),
+      hasSelection: () => surface.hasSelection(),
+      requestRender: () => surface.requestRender(),
+      scrollViewport: (deltaRows) => surface.scrollViewport(deltaRows),
     });
-    this.keyboard = new SurfaceKeyboardController({
+  }
+
+  private static createKeyboard(surface: GhosttyTerminalSurface): SurfaceKeyboardController {
+    return new SurfaceKeyboardController({
       get input() {
         return surface.input;
       },
@@ -202,16 +214,11 @@ export class GhosttyTerminalSurface {
       get latencyCallbacks() {
         return surface.latencyCallbacks;
       },
-      hasSelection: () => this.hasSelection(),
-      getSelection: () => this.getSelection(),
-      clearSelection: () => this.clearSelection(),
-      updateLinkModifier: (event) => this.pointer.updateLinkModifier(event),
+      hasSelection: () => surface.hasSelection(),
+      getSelection: () => surface.getSelection(),
+      clearSelection: () => surface.clearSelection(),
+      updateLinkModifier: (event) => surface.pointer.updateLinkModifier(event),
     });
-    this.installEvents();
-    this.watchDevicePixelRatio();
-    this.reducedMotionMedia?.addEventListener("change", this.onReducedMotionChange);
-    document.fonts.addEventListener("loadingdone", this.onFontsLoaded);
-    this.resizeObserver.observe(mount);
   }
 
   static async create(

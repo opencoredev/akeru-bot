@@ -1,5 +1,4 @@
 import { MoonIcon, SunIcon } from "lucide-react";
-import type { CSSProperties } from "react";
 import {
   STANDARD_THEME_PREVIEW_COLORS as SHARED_STANDARD_THEME_PREVIEW_COLORS,
   THEME_PREVIEW_RENDER_SPECS,
@@ -104,10 +103,7 @@ export function getThemeCardDefinition(theme: ThemeDefinition): ThemeCardDefinit
 // Interpolating in oklab keeps the glow falloff perceptually even (no gray
 // mid-tones or banding rings), and premultiplied alpha keeps the fade to
 // transparent clean.
-function getThemePreviewStyle(
-  colors: ThemeCardPreviewColors,
-  mode: ThemeAppearance,
-): CSSProperties {
+function getThemePreviewPaint(colors: ThemeCardPreviewColors, mode: ThemeAppearance) {
   const spec = THEME_PREVIEW_RENDER_SPECS[mode];
   // The canvas carries the ball's light/dark identity, so it stays dominant:
   // a near-true base with a contained accent glow, instead of an accent wash
@@ -117,10 +113,10 @@ function getThemePreviewStyle(
   const actionPosition = `${spec.action.center[0] * 100}% ${spec.action.center[1] * 100}%`;
 
   return {
-    filter: `blur(${spec.blurAt56Px}px)`,
-    transform: `scale(${spec.scale})`,
-    backgroundColor: modeBase,
-    backgroundImage: [
+    blur: `${spec.blurAt56Px}px`,
+    scale: String(spec.scale),
+    base: modeBase,
+    glow: [
       `radial-gradient(circle at ${accentPosition} in oklab, ${colors.accent} 0%, color-mix(in oklab, ${colors.accent} ${spec.accent.middleOpacity * 100}%, transparent) ${spec.accent.middleOffset * 100}%, transparent ${spec.accent.endOffset * 100}%)`,
       // The action color is a soft tint from the opposite corner, not a second
       // light source — two bright hotspots read as headlights.
@@ -144,6 +140,8 @@ export function ThemePreviewCircle({
   colors: ThemeCardPreviewColors;
   mode: ThemeAppearance;
 }) {
+  const paint = getThemePreviewPaint(colors, mode);
+
   return (
     <span
       aria-hidden
@@ -153,9 +151,13 @@ export function ThemePreviewCircle({
       )}
     >
       <span
-        className="absolute inset-0 rounded-full"
-        // oxlint-disable-next-line shadcn/no-inline-styles -- paints the previewed theme's own colors
-        style={getThemePreviewStyle(colors, mode)}
+        className="absolute inset-0 rounded-full theme-preview-ball"
+        style={{
+          "--preview-blur": paint.blur,
+          "--preview-scale": paint.scale,
+          "--preview-base": paint.base,
+          "--preview-glow": paint.glow,
+        }}
       />
     </span>
   );

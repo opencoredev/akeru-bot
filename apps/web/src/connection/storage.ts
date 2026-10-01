@@ -36,8 +36,7 @@ import {
   threadCacheKey,
 } from "./indexedDbStorage";
 import { migrateLegacyConnectionDatabase } from "./legacyDatabaseMigration";
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- This persistence composition root creates catalog stores and provides their layers.
-import { makeCatalogBackend, makeCatalogStore } from "./catalogStorage";
+import { catalogBackendForDatabase, cachedCatalogStore } from "./catalogStorage";
 
 const SHELL_SNAPSHOT_CACHE_SCHEMA_VERSION = 1;
 
@@ -118,7 +117,7 @@ export const connectionStorageLayer = Layer.effectContext(
         }),
       ),
     );
-    const catalog = yield* makeCatalogStore(makeCatalogBackend(database));
+    const catalog = yield* cachedCatalogStore(catalogBackendForDatabase(database));
 
     const targetStore = ConnectionTargetStore.of({
       list: catalog.read.pipe(
@@ -346,4 +345,8 @@ export const connectionStorageLayer = Layer.effectContext(
 
 export { migrateLegacyConnectionDatabase } from "./legacyDatabaseMigration";
 
-export { type CatalogBackend, makeCatalogBackend, makeCatalogStore } from "./catalogStorage";
+export {
+  type CatalogBackend,
+  catalogBackendForDatabase,
+  cachedCatalogStore,
+} from "./catalogStorage";

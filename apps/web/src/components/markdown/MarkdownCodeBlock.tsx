@@ -424,10 +424,12 @@ export function MarkdownDiffBlock({
     >
       <pre className="chat-markdown-diff">
         <code>
-          {diff.lines.map((line, index) => (
-            // Lines never reorder, so the index is a stable key while streaming.
-            // oxlint-disable-next-line react/no-array-index-key
-            <span key={index} className="chat-markdown-diff-line" data-diff-line={line.kind}>
+          {diff.lines.map((line) => (
+            <span
+              key={line.lineNumber}
+              className="chat-markdown-diff-line"
+              data-diff-line={line.kind}
+            >
               {line.text}
             </span>
           ))}

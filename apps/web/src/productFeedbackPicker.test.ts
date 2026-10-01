@@ -61,45 +61,41 @@ class TestElement {
   }
 
   closest(selector: string): TestElement | null {
-    // oxlint-disable-next-line typescript/no-this-alias -- DOM closest searches this element and its ancestors; starting at the parent would omit the target.
-    let current: TestElement | null = this;
+    if (this.matchesSelector(selector)) return this;
 
-    while (current) {
-      if (selector === "[data-component]" && current.dataset.component) return current;
+    return this.parentElement?.closest(selector) ?? null;
+  }
 
-      if (
-        selector === "[data-akeru-feedback-ui]" &&
-        current.dataset.akeruFeedbackUi !== undefined
-      ) {
-        return current;
-      }
+  private matchesSelector(selector: string): boolean {
+    if (selector === "[data-component]" && this.dataset.component) return true;
 
-      if (
-        selector === "button, a, [role], [data-feedback-target], [data-component]" &&
-        (current.tagName === "BUTTON" ||
-          current.tagName === "A" ||
-          current.attributes.has("role") ||
-          current.dataset.feedbackTarget !== undefined ||
-          current.dataset.component !== undefined)
-      ) {
-        return current;
-      }
-
-      if (
-        selector.includes(",") &&
-        (["INPUT", "TEXTAREA", "SELECT", "OPTION"].includes(current.tagName) ||
-          current.attributes.has("contenteditable") ||
-          current.dataset.akeruFeedbackUi !== undefined ||
-          current.dataset.feedbackPrivate !== undefined ||
-          current.dataset.sensitive !== undefined)
-      ) {
-        return current;
-      }
-
-      current = current.parentElement;
+    if (selector === "[data-akeru-feedback-ui]" && this.dataset.akeruFeedbackUi !== undefined) {
+      return true;
     }
 
-    return null;
+    if (
+      selector === "button, a, [role], [data-feedback-target], [data-component]" &&
+      (this.tagName === "BUTTON" ||
+        this.tagName === "A" ||
+        this.attributes.has("role") ||
+        this.dataset.feedbackTarget !== undefined ||
+        this.dataset.component !== undefined)
+    ) {
+      return true;
+    }
+
+    if (
+      selector.includes(",") &&
+      (["INPUT", "TEXTAREA", "SELECT", "OPTION"].includes(this.tagName) ||
+        this.attributes.has("contenteditable") ||
+        this.dataset.akeruFeedbackUi !== undefined ||
+        this.dataset.feedbackPrivate !== undefined ||
+        this.dataset.sensitive !== undefined)
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   getBoundingClientRect() {

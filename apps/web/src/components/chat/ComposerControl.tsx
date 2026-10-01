@@ -12,11 +12,12 @@ export function ComposerControl({
   className,
   size = "sm",
   variant = "ghost",
+  presentation = "composer-control",
   ...props
 }: ComponentProps<typeof Button>) {
   return (
     <Button
-      presentation="composer-control"
+      presentation={presentation}
       className={cn(composerControlClassName, className)}
       size={size}
       variant={variant}

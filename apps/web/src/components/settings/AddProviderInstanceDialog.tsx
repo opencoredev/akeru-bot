@@ -396,13 +396,12 @@ export function AddProviderInstanceDialog({
                           key={swatch}
                           type="button"
                           className={cn(
-                            "size-6 cursor-pointer rounded-full border transition",
+                            "size-6 cursor-pointer rounded-full border swatch-fill transition",
                             selected
                               ? "scale-110 border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background"
                               : "border-black/10 hover:scale-105 dark:border-white/20",
                           )}
-                          // oxlint-disable-next-line shadcn/no-inline-styles -- Preview uses the user-selected provider accent color.
-                          style={{ backgroundColor: swatch }}
+                          style={{ "--swatch": swatch }}
                           onClick={() => setAccentColor(swatch)}
                           aria-label={`Use ${swatch} accent`}
                         />

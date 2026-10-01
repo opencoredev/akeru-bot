@@ -43,11 +43,8 @@ export function ProcessNameCell({
 
   return (
     <div
-      className="grid min-w-0 grid-cols-legend-row items-center gap-2"
-      style={
-        // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
-        { paddingLeft: `${Math.min(process.depth, 6) * 10}px` }
-      }
+      className="grid min-w-0 grid-cols-legend-row items-center gap-2 pl-(--row-indent)"
+      style={{ "--row-indent": `${Math.min(process.depth, 6) * 10}px` }}
     >
       {hasChildren ? (
         <Button

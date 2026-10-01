@@ -146,7 +146,7 @@ export function BotComposerModelControl({
       disabled={disabled}
       open={pickerOpen}
       triggerAriaLabel={t("Change model")}
-      triggerClassName="max-w-52"
+      triggerFit="capped"
       onOpenChange={setPickerOpen}
       onInstanceModelChange={(instanceId, model) => {
         void changeModel(instanceId, model);

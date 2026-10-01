@@ -5,13 +5,21 @@ let level = 0;
 
 let failAnalyserSetup = false;
 
-let latestRecorder: TestRecorder;
-
 const closeContext = vi.fn(async () => {});
 
 const disconnectSource = vi.fn();
 
-class TestRecorder {
+function latestRecorder(): TestRecorder {
+  const recorder = TestRecorder.instances.at(-1);
+
+  if (!recorder) throw new Error("No recorder was constructed.");
+
+  return recorder;
+}
+
+class TestRecorder extends EventTarget {
+  /** Every recorder the capture code constructed, newest last, so tests can drive its callbacks. */
+  static readonly instances: TestRecorder[] = [];
   static isTypeSupported(type: string) {
     return type.startsWith("audio/webm");
   }
@@ -19,11 +27,10 @@ class TestRecorder {
   state = "inactive";
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
-  onerror: (() => void) | null = null;
   starts = 0;
   constructor() {
-    // oxlint-disable-next-line typescript/no-this-alias -- the recorder test double registers its instance so tests can drive recording callbacks.
-    latestRecorder = this;
+    super();
+    TestRecorder.instances.push(this);
   }
   start() {
     this.state = "recording";
@@ -46,6 +53,7 @@ beforeEach(() => {
   failAnalyserSetup = false;
   track.enabled = false;
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "performance"] });
+  TestRecorder.instances.length = 0;
   vi.stubGlobal("MediaRecorder", TestRecorder);
   vi.stubGlobal(
     "AudioContext",
@@ -94,7 +102,7 @@ describe("bounded browser voice capture", () => {
     const capture = captureVoiceUtterance(microphone, new AbortController().signal);
     vi.advanceTimersByTime(20_000);
     await expect(capture).resolves.toMatchObject({ mimeType: "audio/webm" });
-    expect(latestRecorder.state).toBe("inactive");
+    expect(latestRecorder().state).toBe("inactive");
   });
 
   it("discards bounded silence rather than sending empty recordings and cleans up on cancellation", async () => {
@@ -102,10 +110,10 @@ describe("bounded browser voice capture", () => {
     const capture = captureVoiceUtterance(microphone, controller.signal);
     const stopped = expect(capture).rejects.toMatchObject({ name: "AbortError" });
     vi.advanceTimersByTime(40_000);
-    expect(latestRecorder.starts).toBe(3);
+    expect(latestRecorder().starts).toBe(3);
     controller.abort();
     await stopped;
-    expect(latestRecorder.state).toBe("inactive");
+    expect(latestRecorder().state).toBe("inactive");
     expect(track.enabled).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
   });

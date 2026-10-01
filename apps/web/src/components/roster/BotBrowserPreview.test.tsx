@@ -82,7 +82,7 @@ describe("BotBrowserPreview", () => {
       />,
     );
 
-    expect(markup).toContain("bg-zinc-950");
+    expect(markup).toContain("bg-media-mat");
     expect(markup).toContain('data-testid="bot-browser-preview"');
     expect(markup).toContain('aria-label="Expand Akeru browser"');
     expect(markup).toContain('aria-label="Open Akeru browser"');

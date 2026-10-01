@@ -22,7 +22,7 @@ export const TraitsPicker = memo(function TraitsPicker({
   modelOptions,
   allowPromptInjectedEffort = true,
   triggerVariant,
-  triggerClassName,
+  triggerFit,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
   const { t } = useI18n();
@@ -85,12 +85,14 @@ export const TraitsPicker = memo(function TraitsPicker({
         render={
           <ComposerControl
             variant={triggerVariant ?? "ghost"}
+            presentation={
+              triggerFit === "settings-row" ? "composer-control-settings-row" : undefined
+            }
             className={cn(
               isCodexStyle
                 ? "min-w-0 max-w-40 shrink justify-start overflow-hidden whitespace-nowrap sm:max-w-48"
                 : "shrink-0 whitespace-nowrap",
-              // oxlint-disable-next-line shadcn/require-static-classes -- caller-supplied trigger class passthrough
-              triggerClassName,
+              triggerFit === "settings-row" && "min-w-0 max-w-none shrink-0",
             )}
           />
         }

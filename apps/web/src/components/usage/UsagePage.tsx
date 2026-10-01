@@ -312,12 +312,10 @@ export function UsagePage() {
                             <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
                               <span
                                 aria-hidden
-                                className="size-2 shrink-0 rounded-full"
-                                /* oxlint-disable shadcn/no-inline-styles -- Provider identity color from usage presentation data. */
+                                className="size-2 shrink-0 rounded-full bg-(--provider-color)"
                                 style={{
-                                  backgroundColor: PROVIDER_PRESENTATION[provider].color,
+                                  "--provider-color": PROVIDER_PRESENTATION[provider].color,
                                 }}
-                                /* oxlint-enable shadcn/no-inline-styles */
                               />
                               <ProviderMark provider={provider} className="size-4" />
                               <span className="flex min-w-0 items-baseline gap-1.5">
@@ -488,13 +486,20 @@ export function UsagePage() {
                         <colgroup>
                           <col className="w-2/5" />
                           {activeProviders.map((provider) => (
-                            // oxlint-disable-next-line shadcn/no-inline-styles -- Column width depends on how many providers are shown.
-                            <col key={provider} style={{ width: timeValueColumnWidth }} />
+                            <col
+                              key={provider}
+                              className="w-(--col-width)"
+                              style={{ "--col-width": timeValueColumnWidth }}
+                            />
                           ))}
-                          {/* oxlint-disable-next-line shadcn/no-inline-styles -- Column width depends on how many providers are shown. */}
-                          <col style={{ width: timeValueColumnWidth }} />
-                          {/* oxlint-disable-next-line shadcn/no-inline-styles -- Column width depends on how many providers are shown. */}
-                          <col style={{ width: timeValueColumnWidth }} />
+                          <col
+                            className="w-(--col-width)"
+                            style={{ "--col-width": timeValueColumnWidth }}
+                          />
+                          <col
+                            className="w-(--col-width)"
+                            style={{ "--col-width": timeValueColumnWidth }}
+                          />
                         </colgroup>
                         <thead>
                           <tr className="border-b border-border text-left text-xs text-muted-foreground">

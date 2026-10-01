@@ -105,6 +105,15 @@
   --color-telemetry-warning-foreground: var(--telemetry-warning-foreground);
   --color-telemetry-read-foreground: var(--telemetry-read-foreground);
   --color-telemetry-write-foreground: var(--telemetry-write-foreground);
+  --color-telemetry-read: var(--telemetry-read);
+  --color-telemetry-write: var(--telemetry-write);
+  --color-telemetry-monitor: var(--telemetry-monitor);
+  --color-telemetry-electron: var(--telemetry-electron);
+  --color-telemetry-server: var(--telemetry-server);
+  --color-telemetry-server-total: var(--telemetry-server-total);
+  --color-telemetry-child: var(--telemetry-child);
+  --color-media-mat: var(--media-mat);
+  --color-media-mat-foreground: var(--media-mat-foreground);
   --color-pending-indicator: var(--pending-indicator);
   --color-option-hover: var(--option-hover);
   --color-skill: var(--skill);
@@ -231,6 +240,8 @@
 @import "./styles/chrome-utilities.css";
 
 @import "./styles/stage-art.css";
+
+@import "./styles/theme-wireframe.css";
 
 @import "./styles/settings-highlight.css";
 

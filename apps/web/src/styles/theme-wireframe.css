@@ -1,0 +1,113 @@
+/* Theme wireframe: a miniature of the app positioned in percentages of its
+   frame. Each pane paints the previewed theme from --wf-* colors set on it. */
+@utility wireframe-pane {
+  --wf-line: rgb(127 127 127 / 0.25);
+}
+
+/* Split previews show each theme on one half, with a 2px seam between them. */
+@utility wireframe-clip-left {
+  clip-path: polygon(0 0, calc(50% - 1px) 0, calc(50% - 1px) 100%, 0 100%);
+}
+
+@utility wireframe-clip-right {
+  clip-path: polygon(calc(50% + 1px) 0, 100% 0, 100% 100%, calc(50% + 1px) 100%);
+}
+
+@utility wireframe-sidebar {
+  width: 22%;
+  box-shadow: inset -1px 0 0 var(--wf-line);
+}
+
+@utility wireframe-search {
+  top: 8%;
+  left: 3%;
+  width: 16%;
+  height: 8%;
+  box-shadow: inset 0 0 0 1px var(--wf-line);
+}
+
+@utility wireframe-thread {
+  left: 3%;
+  width: 16%;
+  height: 7%;
+}
+
+@utility wireframe-thread-first {
+  top: 22%;
+}
+
+@utility wireframe-thread-second {
+  top: 32%;
+}
+
+@utility wireframe-thread-third {
+  top: 42%;
+}
+
+@utility wireframe-user-message {
+  top: 11%;
+  right: 28%;
+  width: 24%;
+  height: 9%;
+}
+
+@utility wireframe-reply-line {
+  left: 27%;
+}
+
+@utility wireframe-reply-line-first {
+  top: 28%;
+  width: 34%;
+}
+
+@utility wireframe-reply-line-second {
+  top: 38%;
+  width: 26%;
+}
+
+@utility wireframe-composer {
+  right: 6%;
+  bottom: 8%;
+  left: 26%;
+  padding-inline: 2.5%;
+  box-shadow: inset 0 0 0 1px var(--wf-line);
+}
+
+@utility wireframe-composer-input {
+  width: 34%;
+  height: 26%;
+}
+
+@utility wireframe-composer-send {
+  height: 58%;
+}
+
+@utility wireframe-island {
+  top: 8%;
+  height: 46%;
+  box-shadow:
+    inset 0 0 0 1px var(--wf-line),
+    0 2px 5px rgb(0 0 0 / 0.14);
+}
+
+@utility wireframe-agent-row {
+  right: 11%;
+  left: 11%;
+  gap: 5%;
+}
+
+@utility wireframe-agent-dot {
+  height: 26%;
+}
+
+@utility wireframe-agent-dot-running {
+  background-color: #34d399;
+}
+
+@utility wireframe-agent-dot-waiting {
+  background-color: #fbbf24;
+}
+
+@utility wireframe-agent-label {
+  width: 52%;
+}

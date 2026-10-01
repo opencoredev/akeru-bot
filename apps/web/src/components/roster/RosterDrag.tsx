@@ -94,23 +94,29 @@ export function SortableRosterMarker(props: {
     animateLayoutChanges: animateRosterLayoutChanges,
   });
 
+  const sortableTransition =
+    !Predicate.isString(props.marker) && props.marker.kind === "section-placeholder"
+      ? "none"
+      : props.marker === "unassigned-placeholder"
+        ? "none"
+        : transition;
+
+  // dnd-kit drag geometry changes every pointer move, so it rides custom properties.
   return (
     <li
       ref={setNodeRef}
       data-testid={props["data-testid"]}
-      className={cn("list-none", props.className)}
-      /* oxlint-disable shadcn/no-inline-styles -- dnd-kit drag geometry, updated every pointer move. */
+      className={cn(
+        "list-none",
+        props.className,
+        transform && "transform-(--sortable-transform)",
+        sortableTransition !== undefined && "transition-sortable",
+        transform?.scaleY === 0 && "invisible",
+      )}
       style={{
-        transform: CSS.Translate.toString(transform),
-        transition:
-          !Predicate.isString(props.marker) && props.marker.kind === "section-placeholder"
-            ? "none"
-            : props.marker === "unassigned-placeholder"
-              ? "none"
-              : transition,
-        visibility: transform?.scaleY === 0 ? "hidden" : undefined,
+        "--sortable-transform": CSS.Translate.toString(transform),
+        "--sortable-transition": sortableTransition,
       }}
-      /* oxlint-enable shadcn/no-inline-styles */
       {...(props.draggable ? listeners : {})}
     >
       {props.children}

@@ -139,6 +139,60 @@
     0 0 0 2px var(--swatch);
 }
 
+/* Color picker hue track: the full hue spectrum, left to right. */
+@utility bg-hue-spectrum {
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+
+/* Color picker fill at full saturation and brightness for the hue angle in
+   --hue. */
+@utility bg-pure-hue {
+  background-color: hsl(var(--hue) 100% 50%);
+}
+
+/* Color picker saturation and brightness field, layered over a background
+   color set to the pure hue. */
+@utility bg-saturation-value-plane {
+  background-image:
+    linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
+}
+
+/* Rainbow wheel that marks a custom color picker trigger. */
+@utility bg-color-wheel {
+  background: conic-gradient(
+    from 90deg,
+    #ff3b30,
+    #ffcc00,
+    #34c759,
+    #00c7be,
+    #0a84ff,
+    #bf5af2,
+    #ff375f,
+    #ff3b30
+  );
+}
+
+/* Color picker thumbs ease to keyboard steps and click-to-jump targets. */
+@utility transition-picker-thumb {
+  transition:
+    left 80ms linear,
+    top 80ms linear,
+    background-color 80ms linear;
+}
+
+/* Theme card ball painted from the previewed theme's colors. */
+@utility theme-preview-ball {
+  filter: blur(var(--preview-blur));
+  transform: scale(var(--preview-scale));
+  background-color: var(--preview-base);
+  background-image: var(--preview-glow);
+}
+
+/* Sortable list item transition from dnd-kit, read from --sortable-transition. */
+@utility transition-sortable {
+  transition: var(--sortable-transition);
+}
+
 /* Chart marks that fade in once the entrance has drawn. */
 @utility transition-entrance-fade {
   transition: opacity 300ms ease;

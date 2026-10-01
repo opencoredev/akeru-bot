@@ -39,11 +39,8 @@ export function ResourceHistoryProcessNameCell({
 
   return (
     <div
-      className="grid min-w-0 grid-cols-legend-row items-center gap-2"
-      style={
-        // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
-        { paddingLeft: `${Math.min(visualDepth, 6) * 10}px` }
-      }
+      className="grid min-w-0 grid-cols-legend-row items-center gap-2 pl-(--row-indent)"
+      style={{ "--row-indent": `${Math.min(visualDepth, 6) * 10}px` }}
       aria-label={`${process.isServerRoot ? "Root" : "Child"} process ${name}`}
     >
       <span className="size-5 shrink-0" aria-hidden="true" />
@@ -97,18 +94,12 @@ export function ProcessResourceHistoryChart({
                       aria-label={`Average CPU ${bucket.avgCpuPercent.toFixed(1)}%, peak CPU ${bucket.maxCpuPercent.toFixed(1)}%`}
                     >
                       <div
-                        className="absolute inset-x-0 bottom-0 rounded-t-sm bg-foreground/15 transition-colors"
-                        style={
-                          // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
-                          { height: `${peakHeight}%` }
-                        }
+                        className="absolute inset-x-0 bottom-0 h-(--bar-height) rounded-t-sm bg-foreground/15 transition-colors"
+                        style={{ "--bar-height": `${peakHeight}%` }}
                       />
                       <div
-                        className="absolute inset-x-0 bottom-0 rounded-t-sm bg-foreground/60 transition-colors"
-                        style={
-                          // oxlint-disable-next-line shadcn/no-inline-styles -- Geometry is computed from the sampled value or process tree depth.
-                          { height: `${averageHeight}%` }
-                        }
+                        className="absolute inset-x-0 bottom-0 h-(--bar-height) rounded-t-sm bg-foreground/60 transition-colors"
+                        style={{ "--bar-height": `${averageHeight}%` }}
                       />
                     </div>
                   </div>
