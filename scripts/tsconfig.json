@@ -6,5 +6,12 @@
     "types": ["node"],
     "lib": ["ESNext", "esnext.disposable"]
   },
-  "include": ["**/*.ts", "../plugins/categories.ts", "../plugins/schema.ts"]
+  "include": [
+    "**/*.ts",
+    "../plugins/categories.ts",
+    "../plugins/schema.ts",
+    "../plugins/manifestTypes.ts",
+    "../plugins/decodeManifest.ts",
+    "../plugins/validateManifest.ts"
+  ]
 }
