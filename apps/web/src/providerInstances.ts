@@ -1,41 +1,14 @@
-/**
- * Instance-aware view over the wire `ServerProvider[]`.
- *
- * The wire carries one `ServerProvider` per *configured instance* — the
- * default built-in codex instance, a user-authored `codex_personal`, an
- * unavailable shadow for a fork driver, etc. Legacy UI code collapsed these
- * into a single bucket per built-in driver via `.find((p) => p.driver === kind)`,
- * which silently dropped every custom instance after the first. This module
- * replaces that pattern with `ProviderInstanceEntry[]`, keyed on
- * `ProviderInstanceId`, so the model picker, settings list, and composer
- * can treat built-in and custom instances uniformly.
- *
- * @module providerInstances
- */
 import {
   DEFAULT_MODEL_BY_PROVIDER,
-  defaultInstanceIdForDriver,
-  PROVIDER_DISPLAY_NAMES,
-  resolveProviderInstanceEnabled,
   type ModelSelection,
   type ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
   type ServerProviderModel,
-  type ServerSettings,
-  type ServerProviderState,
 } from "@akeru/contracts";
-
-import {
-  joinProviderUnavailability,
-  presentProviderUnavailability,
-  providerAvailabilityReason,
-  type ProviderAvailabilityPresentation,
-  type ProviderAvailabilityReason,
-  type ProviderAvailabilityTranslate,
-} from "@akeru/client-runtime/provider-availability";
-
-import { formatProviderDriverKindLabel } from "./providerModels";
+import { type ProviderInstanceEntry } from "./providers/instanceTypes";
+import { isProviderInstancePickerReady } from "./providers/instanceAvailability";
+import { deriveProviderInstanceEntries } from "./providers/instanceCatalog";
 
 /**
  * Local-only placeholder used while a draft has no provider it can safely
@@ -46,374 +19,6 @@ export const NO_PROVIDER_MODEL_SELECTION: ModelSelection = {
   instanceId: ProviderInstanceId.make("akeru_no_provider"),
   model: "",
 };
-
-/**
- * UI-facing projection of one configured provider instance. Carries the
- * snapshot verbatim for callers that need server-side fields we don't
- * hoist here, plus the precomputed `instanceId` / `driverKind` /
- * `displayName` used by every picker and settings view.
- */
-export interface ProviderInstanceEntry {
-  readonly instanceId: ProviderInstanceId;
-  readonly driverKind: ProviderDriverKind;
-  readonly displayName: string;
-  readonly accentColor?: string | undefined;
-  readonly continuationGroupKey?: string | undefined;
-  readonly enabled: boolean;
-  readonly installed: boolean;
-  readonly status: ServerProviderState;
-  /**
-   * True when this entry is the default instance for its driver kind —
-   * i.e. its instance id equals `defaultInstanceIdForDriver(driverKind)`.
-   * The settings panel and picker sort defaults before customs.
-   */
-  readonly isDefault: boolean;
-  /** True when `availability === "unavailable"` is absent or "available". */
-  readonly isAvailable: boolean;
-  readonly snapshot: ServerProvider;
-  readonly models: ReadonlyArray<ServerProviderModel>;
-}
-
-/**
- * Whether an instance can currently contribute models to an interactive picker.
- *
- * Disabling an instance updates `enabled` independently, while its previous
- * `ready` probe status can remain in the streamed snapshot until reconciliation.
- */
-export function isProviderInstancePickerReady(entry: ProviderInstanceEntry): boolean {
-  return entry.enabled && entry.isAvailable && entry.status === "ready";
-}
-
-/**
- * Whether an instance can expose its known models in the picker.
- *
- * A warning or error probe does not erase the server's model inventory. The
- * user can still pick one of those models and retry the provider, matching the
- * mobile client. Missing installs, login failures, and limits remain
- * unavailable.
- */
-export function isProviderInstancePickerSelectable(entry: ProviderInstanceEntry): boolean {
-  return (
-    entry.enabled &&
-    entry.isAvailable &&
-    entry.installed &&
-    entry.status !== "disabled" &&
-    providerInstancePickerBlockReason(entry) === null
-  );
-}
-
-/**
- * Keep a turned-off instance visible when it still has known models, so a
- * saved choice can show why its rows are disabled.
- */
-export function isProviderInstancePickerVisible(entry: ProviderInstanceEntry): boolean {
-  return entry.enabled || entry.models.length > 0;
-}
-
-/**
- * Why an instance (and optionally one of its models) cannot run a turn. A
- * missing entry means the saved instance no longer exists. Settings can turn
- * an instance off before the server snapshot catches up, so the entry's
- * `enabled` wins over the snapshot's.
- */
-export function providerInstanceAvailabilityReason(
-  entry: ProviderInstanceEntry | undefined,
-  model?: string | null,
-): ProviderAvailabilityReason | null {
-  if (entry && !entry.enabled) return "disabled";
-
-  return providerAvailabilityReason(entry?.snapshot, model);
-}
-
-/**
- * The inline message for an instance that cannot run a turn: title, one next
- * step, and which settings page fixes it. Null when the instance can run.
- */
-export function providerInstanceUnavailability(
-  entry: ProviderInstanceEntry | undefined,
-  options: {
-    readonly model?: string | null;
-    readonly modelName?: string | null;
-    readonly providerName?: string;
-    readonly t?: ProviderAvailabilityTranslate | undefined;
-  } = {},
-): (ProviderAvailabilityPresentation & { readonly reason: ProviderAvailabilityReason }) | null {
-  const reason = providerInstanceAvailabilityReason(entry, options.model);
-
-  if (!reason) return null;
-
-  return {
-    reason,
-    ...presentProviderUnavailability(
-      {
-        reason,
-        providerName: entry?.displayName ?? options.providerName,
-        modelName: options.modelName ?? options.model,
-        detail: entry?.snapshot.unavailabilityDetail ?? entry?.snapshot.message,
-      },
-      options.t,
-    ),
-  };
-}
-
-/** `providerInstanceUnavailability` as one sentence for a disabled row or button. */
-export function providerInstanceUnavailableReason(
-  entry: ProviderInstanceEntry | undefined,
-  options: {
-    readonly model?: string | null;
-    readonly modelName?: string | null;
-    readonly providerName?: string;
-    readonly t?: ProviderAvailabilityTranslate | undefined;
-  } = {},
-): string | null {
-  const presentation = providerInstanceUnavailability(entry, options);
-
-  return presentation ? joinProviderUnavailability(presentation, options.t) : null;
-}
-
-/**
- * Whether a picker row for this instance accepts a click. A temporary failure
- * stays pickable because the next attempt may succeed; every other reason
- * needs the user to fix something first.
- */
-export function providerInstancePickerBlockReason(
-  entry: ProviderInstanceEntry,
-  t?: ProviderAvailabilityTranslate,
-): string | null {
-  const reason = providerInstanceAvailabilityReason(entry);
-
-  if (!reason || reason === "temporary-failure") return null;
-
-  return providerInstanceUnavailableReason(entry, { t });
-}
-
-/**
- * Turn an instance id slug into a human-readable label. Splits on `_` / `-`
- * and camelCase boundaries and title-cases each token, so `codex_personal`
- * becomes "Codex Personal" and `myCustomInstance` becomes "My Custom
- * Instance".
- *
- * This is a fallback used only when the wire snapshot's `displayName`
- * doesn't disambiguate a non-default instance from the default one of the
- * same driver (today every built-in driver hard-codes a single presentation
- * label per kind, so two instances of the same kind arrive with identical
- * display names). When a server/driver later plumbs the user's configured
- * `ProviderInstanceConfig.displayName` through to the snapshot, that value
- * will take precedence over this fallback.
- */
-function humanizeInstanceId(instanceId: ProviderInstanceId): string {
-  const words: string[] = [];
-
-  for (const token of instanceId
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .split(" ")) {
-    if (token.length === 0) continue;
-    words.push(token.charAt(0).toUpperCase() + token.slice(1));
-  }
-
-  return words.join(" ");
-}
-
-function driverKindLabel(driverKind: ProviderDriverKind): string {
-  return PROVIDER_DISPLAY_NAMES[driverKind] ?? formatProviderDriverKindLabel(driverKind);
-}
-
-/**
- * Whether an instance's icon carries the account badge: accent color set, or
- * several instances sharing a driver so the brand glyph alone is ambiguous.
- * Shared by the composer trigger, the picker rail, and sidebar rows.
- */
-export function shouldShowInstanceBadge(
-  entry: ProviderInstanceEntry,
-  entries: Iterable<ProviderInstanceEntry>,
-): boolean {
-  if (entry.accentColor) return true;
-  let sharedDriverCount = 0;
-
-  for (const candidate of entries) {
-    if (candidate.driverKind === entry.driverKind && ++sharedDriverCount > 1) return true;
-  }
-
-  return false;
-}
-
-export function normalizeProviderAccentColor(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-
-  if (!trimmed) return undefined;
-
-  return /^#[0-9a-fA-F]{6}$/u.test(trimmed) ? trimmed : undefined;
-}
-
-/**
- * Resolve an entry's displayName with a tiered priority:
- *
- *   1. A snapshot `displayName` that differs from the driver-kind label —
- *      the server has explicitly named this instance, trust it.
- *   2. For non-default instances, a humanized `instanceId` — the server
- *      fell back to the driver-level presentation constant (which is the
- *      same for every instance of that kind), so we differentiate at the
- *      UI layer by slug. This is what keeps "Codex" + "Codex Personal"
- *      distinguishable in tooltips and list labels today.
- *   3. The snapshot's `displayName` (if any) — default instance, trust
- *      whatever label the driver stamped.
- *   4. `driverKindLabel(driverKind)` — nothing else on hand, so use the
- *      canonical brand label from contracts (falling back to a generic
- *      title-case of the kind slug).
- */
-function resolveInstanceDisplayName(
-  snapshot: ServerProvider,
-  instanceId: ProviderInstanceId,
-  driverKind: ProviderDriverKind,
-  isDefault: boolean,
-): string {
-  const trimmedSnapshotName = snapshot.displayName?.trim();
-  const kindLabel = driverKindLabel(driverKind);
-
-  if (trimmedSnapshotName && trimmedSnapshotName !== kindLabel) {
-    return trimmedSnapshotName;
-  }
-
-  if (!isDefault) {
-    const humanized = humanizeInstanceId(instanceId);
-
-    if (humanized.length > 0) return humanized;
-  }
-
-  return trimmedSnapshotName || kindLabel;
-}
-
-/**
- * Project the wire `ServerProvider[]` into instance entries, one per
- * configured instance. Preserves the server's ordering (which sources
- * from `deriveProviderInstanceConfigMap` — explicit `providerInstances.*`
- * first, synthesized defaults after) so callers that want "default first"
- * should sort with `sortProviderInstanceEntries` below.
- */
-export function deriveProviderInstanceEntries(
-  providers: ReadonlyArray<ServerProvider>,
-): ReadonlyArray<ProviderInstanceEntry> {
-  return providers.map((snapshot) => {
-    const instanceId = snapshot.instanceId;
-    const driverKind = snapshot.driver;
-    const defaultId = defaultInstanceIdForDriver(driverKind);
-    const isDefault = instanceId === defaultId;
-    const displayName = resolveInstanceDisplayName(snapshot, instanceId, driverKind, isDefault);
-
-    return {
-      instanceId,
-      driverKind,
-      displayName,
-      accentColor: normalizeProviderAccentColor(snapshot.accentColor),
-      continuationGroupKey: snapshot.continuation?.groupKey,
-      enabled: snapshot.enabled,
-      installed: snapshot.installed,
-      status: snapshot.status,
-      isDefault,
-      isAvailable: snapshot.availability !== "unavailable",
-      snapshot,
-      models: snapshot.models,
-    } satisfies ProviderInstanceEntry;
-  });
-}
-
-/**
- * Project several environments' `ServerProvider[]` into a nested
- * `environmentId → instanceId → entry` lookup.
- *
- * Instance ids are per-environment routing keys, and `defaultInstanceIdForDriver`
- * makes the default id literally the driver slug, so every environment running
- * the same driver reports the same id. Flattening across environments would
- * clobber entries and mis-resolve accent colors; lookups must stay scoped to
- * the thread's own environment.
- */
-export function deriveProviderEntriesByEnvironment(
-  providersByEnvironment: Iterable<readonly [string, ReadonlyArray<ServerProvider>]>,
-): ReadonlyMap<string, ReadonlyMap<string, ProviderInstanceEntry>> {
-  const byEnvironment = new Map<string, ReadonlyMap<string, ProviderInstanceEntry>>();
-
-  for (const [environmentId, providers] of providersByEnvironment) {
-    byEnvironment.set(
-      environmentId,
-      new Map(
-        deriveProviderInstanceEntries(providers).map(
-          (entry) => [entry.instanceId as string, entry] as const,
-        ),
-      ),
-    );
-  }
-
-  return byEnvironment;
-}
-
-/**
- * Overlay the current settings configuration onto streamed provider snapshots.
- * Provider probes can briefly retain their previous `enabled` value after a
- * settings write, so picker visibility must follow settings rather than waiting
- * for probe reconciliation.
- *
- * Non-default instances only exist through `providerInstances`; if one is
- * absent there, its streamed snapshot is stale (for example immediately after
- * deletion) and is treated as disabled.
- */
-export function applyProviderInstanceSettings(
-  entries: ReadonlyArray<ProviderInstanceEntry>,
-  settings: Pick<ServerSettings, "providerInstances" | "providers">,
-): ReadonlyArray<ProviderInstanceEntry> {
-  const legacyProviders = settings.providers as Readonly<
-    Record<string, { readonly enabled?: boolean } | undefined>
-  >;
-
-  return entries.map((entry) => {
-    const explicitInstance = settings.providerInstances?.[entry.instanceId];
-
-    const enabled = explicitInstance
-      ? resolveProviderInstanceEnabled(explicitInstance)
-      : entry.isDefault
-        ? (legacyProviders[entry.driverKind]?.enabled ?? entry.enabled)
-        : false;
-
-    return enabled === entry.enabled ? entry : { ...entry, enabled };
-  });
-}
-
-/**
- * Sort instance entries so the default instance of each driver kind appears
- * before any custom instances of the same kind. Within a kind, custom
- * instances keep their settings-author order (which is how the server
- * emits them). Stable across kinds: entries retain the server's
- * cross-driver ordering.
- */
-export function sortProviderInstanceEntries(
-  entries: ReadonlyArray<ProviderInstanceEntry>,
-): ReadonlyArray<ProviderInstanceEntry> {
-  // Group by driver kind preserving first-appearance order, then emit
-  // default-first within each kind. Using a Map keeps the "first-seen"
-  // semantics for kinds whose default instance is absent (unusual but
-  // possible during the migration).
-  const byKind = new Map<ProviderDriverKind, ProviderInstanceEntry[]>();
-
-  for (const entry of entries) {
-    const bucket = byKind.get(entry.driverKind);
-
-    if (bucket) {
-      bucket.push(entry);
-    } else {
-      byKind.set(entry.driverKind, [entry]);
-    }
-  }
-
-  const sorted: ProviderInstanceEntry[] = [];
-
-  for (const bucket of byKind.values()) {
-    const defaults = bucket.filter((entry) => entry.isDefault);
-    const customs = bucket.filter((entry) => !entry.isDefault);
-    sorted.push(...defaults, ...customs);
-  }
-
-  return sorted;
-}
 
 /**
  * Look up a single instance entry by exact `instanceId`. Missing snapshots
@@ -542,3 +147,23 @@ export function resolveProviderDriverKindForInstanceSelection(
 
   return undefined;
 }
+export { type ProviderInstanceEntry } from "./providers/instanceTypes";
+
+export {
+  isProviderInstancePickerReady,
+  isProviderInstancePickerSelectable,
+  isProviderInstancePickerVisible,
+  providerInstanceAvailabilityReason,
+  providerInstanceUnavailability,
+  providerInstanceUnavailableReason,
+  providerInstancePickerBlockReason,
+} from "./providers/instanceAvailability";
+
+export {
+  shouldShowInstanceBadge,
+  normalizeProviderAccentColor,
+  deriveProviderInstanceEntries,
+  deriveProviderEntriesByEnvironment,
+  applyProviderInstanceSettings,
+  sortProviderInstanceEntries,
+} from "./providers/instanceCatalog";
