@@ -1,3 +1,5 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off - Tests inspect repository policy files.
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -15,8 +17,8 @@ function text(path: string): string {
   return NodeFS.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-function yaml(path: string): Record<string, unknown> {
-  return parse(text(path)) as Record<string, unknown>;
+function yaml(path: string): Record<string, Schema.Json | undefined> {
+  return parse(text(path)) as Record<string, Schema.Json | undefined>;
 }
 
 function labelsForPath(config: PathLabelConfig, path: string): string[] {
@@ -25,7 +27,7 @@ function labelsForPath(config: PathLabelConfig, path: string): string[] {
       rule["changed-files"].some((condition) => {
         const patterns = condition["any-glob-to-any-file"];
 
-        return (typeof patterns === "string" ? [patterns] : patterns).some((pattern) =>
+        return (Predicate.isString(patterns) ? [patterns] : patterns).some((pattern) =>
           NodePath.matchesGlob(path, pattern),
         );
       }),
@@ -111,7 +113,7 @@ describe("plugin contribution policy", () => {
     const pathLabels = yaml(".github/path-labels.yml") as PathLabelConfig;
 
     const issueLabelWorkflow = yaml(".github/workflows/issue-labels.yml") as {
-      jobs: Record<string, unknown>;
+      jobs: Record<string, Schema.Json | undefined>;
     };
 
     const issueLabels = text(".github/workflows/issue-labels.yml");

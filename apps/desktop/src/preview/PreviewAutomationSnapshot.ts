@@ -1,4 +1,13 @@
-import type { PreviewAutomationSnapshot } from "@akeru/contracts";
+import { PreviewAutomationElement } from "@akeru/contracts";
+import { decodeEvaluationValue } from "./PreviewEvaluation.ts";
+import * as Schema from "effect/Schema";
+
+interface PreviewSelectorDiagnostics {
+  readonly selectorKind: PreviewAutomationSelectorKind;
+  readonly selectorLength?: number;
+}
+
+import * as Predicate from "effect/Predicate";
 
 import { type BrowserWindow, desktopCapturer, nativeImage } from "electron";
 
@@ -24,6 +33,16 @@ import {
   type BrowserDiagnostics,
   type SendCommand,
 } from "./PreviewModel.ts";
+
+const decodePage = Schema.decodeUnknownEffect(
+  Schema.Struct({
+    url: Schema.String,
+    title: Schema.String,
+    loading: Schema.Boolean,
+    visibleText: Schema.String,
+    interactiveElements: Schema.Array(PreviewAutomationElement),
+  }),
+);
 
 export const createPreviewAutomationSnapshot = ({
   evaluateWithDebugger,
@@ -73,10 +92,7 @@ export const createPreviewAutomationSnapshot = ({
   const automationSelectorDiagnostics = (input: {
     readonly selector?: string | undefined;
     readonly locator?: string | undefined;
-  }): {
-    readonly selectorKind: PreviewAutomationSelectorKind;
-    readonly selectorLength?: number;
-  } => {
+  }): PreviewSelectorDiagnostics => {
     if (input.locator !== undefined) {
       return { selectorKind: "locator", selectorLength: input.locator.length };
     }
@@ -100,13 +116,7 @@ export const createPreviewAutomationSnapshot = ({
         discard: true,
       });
 
-      const page = yield* evaluateWithDebugger<{
-        url: string;
-        title: string;
-        loading: boolean;
-        visibleText: string;
-        interactiveElements: PreviewAutomationSnapshot["interactiveElements"];
-      }>(
+      const page = yield* evaluateWithDebugger(
         tabId,
         send,
         `(() => {
@@ -161,7 +171,7 @@ export const createPreviewAutomationSnapshot = ({
           };
         })()`,
         true,
-      );
+      ).pipe(Effect.flatMap(decodeEvaluationValue(tabId, decodePage)));
 
       const [accessibility, initialScreenshotResult, diagnostics, timelines] = yield* Effect.all([
         send("Accessibility.getFullAXTree"),
@@ -329,7 +339,7 @@ export const createPreviewAutomationSnapshot = ({
             Effect.orElseSucceed(() => null),
           );
 
-          if (typeof tabCapture === "string" && tabCapture.length > 0) {
+          if (Predicate.isString(tabCapture) && tabCapture.length > 0) {
             const tabData = Buffer.from(tabCapture, "base64");
             const tabImage = nativeImage.createFromBuffer(tabData);
 
@@ -385,20 +395,20 @@ export const createPreviewAutomationSnapshot = ({
       });
 
       const refreshedScreenshotData =
-        typeof refreshedScreenshotResult === "object" &&
+        Predicate.isObjectOrArray(refreshedScreenshotResult) &&
         refreshedScreenshotResult !== null &&
         "data" in refreshedScreenshotResult &&
-        typeof refreshedScreenshotResult.data === "string"
+        Predicate.isString(refreshedScreenshotResult.data)
           ? Buffer.from(refreshedScreenshotResult.data, "base64")
           : null;
 
       const hostScreenshotData = hostScreenshot?.toPNG() ?? null;
 
       const initialScreenshotData =
-        typeof initialScreenshotResult === "object" &&
+        Predicate.isObjectOrArray(initialScreenshotResult) &&
         initialScreenshotResult !== null &&
         "data" in initialScreenshotResult &&
-        typeof initialScreenshotResult.data === "string"
+        Predicate.isString(initialScreenshotResult.data)
           ? Buffer.from(initialScreenshotResult.data, "base64")
           : null;
 
@@ -419,9 +429,9 @@ export const createPreviewAutomationSnapshot = ({
             const onScreencastMessage = (
               _event: Electron.Event,
               method: string,
-              params: Record<string, unknown>,
+              params: Record<string, Schema.Json | undefined>,
             ) => {
-              if (method !== "Page.screencastFrame" || typeof params["data"] !== "string") return;
+              if (method !== "Page.screencastFrame" || !Predicate.isString(params["data"])) return;
               const data = Buffer.from(params["data"], "base64");
 
               if (!containsVisiblePngPixel(data)) return;
@@ -471,10 +481,10 @@ export const createPreviewAutomationSnapshot = ({
       const screenshot = yield* Effect.try({
         try: () => {
           if (
-            typeof screenshotResult !== "object" ||
+            !Predicate.isObjectOrArray(screenshotResult) ||
             screenshotResult === null ||
             !("data" in screenshotResult) ||
-            typeof screenshotResult.data !== "string" ||
+            !Predicate.isString(screenshotResult.data) ||
             screenshotResult.data.length === 0
           ) {
             throw new TypeError("Page.captureScreenshot returned no PNG data");

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import * as Match from "effect/Match";
+import { desktopArtifactFlags } from "./lib/desktop-build/cliFlags.ts";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 
 import { resolveSpawnCommand } from "@akeru/shared/shell";
@@ -34,21 +36,13 @@ import * as Logger from "effect/Logger";
 
 import * as Path from "effect/Path";
 
-import * as Schema from "effect/Schema";
-
-import { Command, Flag } from "effect/unstable/cli";
+import { Command } from "effect/unstable/cli";
 
 import { ChildProcess } from "effect/unstable/process";
 
 import { type ResolvedBuildOptions, resolveBuildOptions } from "./lib/desktop-build/options.ts";
 
-import {
-  RepoRoot,
-  DESKTOP_PACKAGE_NAME,
-  encodeJsonString,
-  BuildPlatform,
-  BuildArch,
-} from "./lib/desktop-build/model.ts";
+import { RepoRoot, DESKTOP_PACKAGE_NAME, encodeJsonString } from "./lib/desktop-build/model.ts";
 
 import {
   readWorkspaceConfig,
@@ -505,25 +499,26 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // the server.asar sidecar (see stageWindowsServerSidecar). macOS adds only
   // server packages that remain external to its merged app.asar. Linux retains
   // its existing full dependency tree.
-  const stageDependencies =
-    options.platform === "win"
-      ? { ...resolvedDesktopRuntimeDependencies }
-      : options.platform === "mac"
-        ? resolveMacStageDependencies({
-            serverDependencies: resolvedServerDependencies,
-            desktopDependencies: resolvedDesktopRuntimeDependencies,
-            arch: options.arch,
-            fffNodeVersion: serverPackageJson.dependencies["@ff-labs/fff-node"],
-          })
-        : {
-            ...resolvedServerDependencies,
-            ...resolvedDesktopRuntimeDependencies,
-            ...resolveFffNativeDependencies(
-              options.platform,
-              options.arch,
-              serverPackageJson.dependencies["@ff-labs/fff-node"],
-            ),
-          };
+  const stageDependencies = Match.value(options.platform).pipe(
+    Match.when("win", () => ({ ...resolvedDesktopRuntimeDependencies })),
+    Match.when("mac", () =>
+      resolveMacStageDependencies({
+        serverDependencies: resolvedServerDependencies,
+        desktopDependencies: resolvedDesktopRuntimeDependencies,
+        arch: options.arch,
+        fffNodeVersion: serverPackageJson.dependencies["@ff-labs/fff-node"],
+      }),
+    ),
+    Match.orElse(() => ({
+      ...resolvedServerDependencies,
+      ...resolvedDesktopRuntimeDependencies,
+      ...resolveFffNativeDependencies(
+        options.platform,
+        options.arch,
+        serverPackageJson.dependencies["@ff-labs/fff-node"],
+      ),
+    })),
+  );
 
   const stagePatchedDependencies = createStagePatchedDependencies(
     workspacePatchedDependencies,
@@ -753,65 +748,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   );
 });
 
-const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
-  platform: Flag.choice("platform", BuildPlatform.literals).pipe(
-    Flag.withDescription("Build platform (env: T3CODE_DESKTOP_PLATFORM)."),
-    Flag.optional,
-  ),
-  target: Flag.string("target").pipe(
-    Flag.withDescription(
-      "Artifact target, for example dmg/AppImage/nsis (env: T3CODE_DESKTOP_TARGET).",
-    ),
-    Flag.optional,
-  ),
-  arch: Flag.choice("arch", BuildArch.literals).pipe(
-    Flag.withDescription("Build arch, for example arm64/x64/universal (env: T3CODE_DESKTOP_ARCH)."),
-    Flag.optional,
-  ),
-  buildVersion: Flag.string("build-version").pipe(
-    Flag.withDescription("Artifact version metadata (env: T3CODE_DESKTOP_VERSION)."),
-    Flag.optional,
-  ),
-  outputDir: Flag.string("output-dir").pipe(
-    Flag.withDescription("Output directory for artifacts (env: T3CODE_DESKTOP_OUTPUT_DIR)."),
-    Flag.optional,
-  ),
-  skipBuild: Flag.boolean("skip-build").pipe(
-    Flag.withDescription(
-      "Skip `vp run build:desktop` and use existing dist artifacts (env: T3CODE_DESKTOP_SKIP_BUILD).",
-    ),
-    Flag.optional,
-  ),
-  keepStage: Flag.boolean("keep-stage").pipe(
-    Flag.withDescription("Keep temporary staging files (env: T3CODE_DESKTOP_KEEP_STAGE)."),
-    Flag.optional,
-  ),
-  signed: Flag.boolean("signed").pipe(
-    Flag.withDescription(
-      "Enable signing/notarization discovery; Windows uses Azure Trusted Signing (env: T3CODE_DESKTOP_SIGNED).",
-    ),
-    Flag.optional,
-  ),
-  verbose: Flag.boolean("verbose").pipe(
-    Flag.withDescription("Stream subprocess stdout (env: T3CODE_DESKTOP_VERBOSE)."),
-    Flag.optional,
-  ),
-  mockUpdates: Flag.boolean("mock-updates").pipe(
-    Flag.withDescription("Enable mock updates (env: T3CODE_DESKTOP_MOCK_UPDATES)."),
-    Flag.optional,
-  ),
-  mockUpdateServerPort: Flag.integer("mock-update-server-port").pipe(
-    Flag.withSchema(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }))),
-    Flag.withDescription("Mock update server port (env: T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT)."),
-    Flag.optional,
-  ),
-  wslPrebuild: Flag.string("wsl-prebuild").pipe(
-    Flag.withDescription(
-      "Path to a prebuilt Linux node-pty (pty.node) for the target arch, staged for the WSL backend (env: T3CODE_DESKTOP_WSL_PREBUILD).",
-    ),
-    Flag.optional,
-  ),
-}).pipe(
+const buildDesktopArtifactCli = Command.make("build-desktop-artifact", desktopArtifactFlags).pipe(
   Command.withDescription("Build a desktop artifact for Akeru Bot."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );

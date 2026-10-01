@@ -1,3 +1,4 @@
+import { standardCommand } from "./test-support/standard-command.ts";
 import { assert, it } from "@effect/vitest";
 
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -323,15 +324,15 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       readonly command: string;
       readonly args: ReadonlyArray<string>;
       readonly options: {
-        readonly cwd?: string;
-        readonly env?: Readonly<Record<string, string | undefined>>;
+        readonly cwd?: string | undefined;
+        readonly env?: Readonly<Record<string, string | undefined>> | undefined;
       };
     }> = [];
 
     const spawnerLayer = Layer.succeed(
       ChildProcessSpawner.ChildProcessSpawner,
       ChildProcessSpawner.make((command) => {
-        commands.push(command as unknown as (typeof commands)[number]);
+        commands.push(standardCommand(command));
 
         return Effect.succeed(mockProcess(0));
       }),
@@ -388,14 +389,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     const commands: Array<{
       readonly command: string;
       readonly options: {
-        readonly env?: Readonly<Record<string, string | undefined>>;
+        readonly env?: Readonly<Record<string, string | undefined>> | undefined;
       };
     }> = [];
 
     const spawnerLayer = Layer.succeed(
       ChildProcessSpawner.ChildProcessSpawner,
       ChildProcessSpawner.make((command) => {
-        commands.push(command as unknown as (typeof commands)[number]);
+        commands.push(standardCommand(command));
 
         return Effect.succeed(mockProcess(0));
       }),
@@ -607,7 +608,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
 
-      const win = config.win as Record<string, unknown>;
+      const win = config.win;
+      assert.ok(win);
       assert.equal(win.icon, "icon.ico");
       assert.equal(win.signAndEditExecutable, true);
       assert.notProperty(win, "azureSignOptions");

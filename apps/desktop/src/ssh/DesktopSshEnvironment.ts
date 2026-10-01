@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import type {
   DesktopDiscoveredSshHost,
   DesktopSshEnvironmentBootstrap,
@@ -82,38 +83,34 @@ export function isDesktopSshPasswordPromptCancellation(
   );
 }
 
-function unexpectedPasswordPromptError(error: never): never {
-  throw new Error(`Unhandled desktop SSH password prompt error: ${String(error)}`);
-}
-
 export function toSshPasswordPromptError(
   cause: DesktopSshPasswordPrompts.DesktopSshPasswordPromptRequestError,
 ): SshPasswordPromptError {
-  let message: string;
-
-  switch (cause._tag) {
-    case "DesktopSshPromptRequestIdGenerationError":
-      message = "Secure randomness is unavailable.";
-      break;
-    case "DesktopSshPromptWindowUnavailableError":
-    case "DesktopSshPromptPresentationError":
-      message = "Akeru Bot window is not available for SSH authentication.";
-      break;
-    case "DesktopSshPromptTimedOutError":
-      message = `SSH authentication timed out for ${cause.destination}.`;
-      break;
-    case "DesktopSshPromptCancelledError":
-      message = `SSH authentication cancelled for ${cause.destination}.`;
-      break;
-    case "DesktopSshPromptWindowClosedError":
-      message = "SSH authentication was cancelled because the app window closed.";
-      break;
-    case "DesktopSshPromptServiceStoppedError":
-      message = "SSH password prompt service stopped.";
-      break;
-    default:
-      return unexpectedPasswordPromptError(cause);
-  }
+  const message = Match.value(cause).pipe(
+    Match.tag(
+      "DesktopSshPromptRequestIdGenerationError",
+      () => "Secure randomness is unavailable.",
+    ),
+    Match.tag(
+      "DesktopSshPromptWindowUnavailableError",
+      "DesktopSshPromptPresentationError",
+      () => "Akeru Bot window is not available for SSH authentication.",
+    ),
+    Match.tag(
+      "DesktopSshPromptTimedOutError",
+      (error) => `SSH authentication timed out for ${error.destination}.`,
+    ),
+    Match.tag(
+      "DesktopSshPromptCancelledError",
+      (error) => `SSH authentication cancelled for ${error.destination}.`,
+    ),
+    Match.tag(
+      "DesktopSshPromptWindowClosedError",
+      () => "SSH authentication was cancelled because the app window closed.",
+    ),
+    Match.tag("DesktopSshPromptServiceStoppedError", () => "SSH password prompt service stopped."),
+    Match.exhaustive,
+  );
 
   return new SshPasswordPromptError({ message, cause });
 }

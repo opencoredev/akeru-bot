@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off - Tests inspect repository policy files.
 import * as NodeFS from "node:fs";
 
@@ -20,7 +21,7 @@ type Job = {
 };
 
 type Workflow = {
-  readonly on: Record<string, unknown>;
+  readonly on: Record<string, Schema.Json | undefined>;
   readonly permissions?: Readonly<Record<string, string>>;
   readonly concurrency?: {
     readonly group?: string;

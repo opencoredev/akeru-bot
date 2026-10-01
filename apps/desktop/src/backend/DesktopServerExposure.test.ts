@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -177,7 +178,7 @@ describe("DesktopServerExposure", () => {
         yield* serverExposure.configureFromSettings({ port: 4173 });
 
         const error = yield* serverExposure.setMode("network-accessible").pipe(Effect.flip);
-        assert.ok(error._tag === "DesktopServerExposureNoNetworkAddressError");
+        assert.ok(Predicate.isTagged(error, "DesktopServerExposureNoNetworkAddressError"));
         assert.equal(error.port, 4173);
       }),
     ),

@@ -1,3 +1,4 @@
+import type { ESTree } from "@oxlint/plugins";
 import { defineRule } from "@oxlint/plugins";
 import * as Option from "effect/Option";
 
@@ -53,7 +54,7 @@ const baselineFor = (filename: string): number => {
   return 0;
 };
 
-const manualRunnerName = (callee: unknown): Option.Option<string> => {
+const manualRunnerName = (callee: ESTree.Node | null | undefined): Option.Option<string> => {
   const expression = unwrapExpression(callee);
 
   if (Option.isNone(expression) || expression.value.type !== "MemberExpression") {

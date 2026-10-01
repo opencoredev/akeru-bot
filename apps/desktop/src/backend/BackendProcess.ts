@@ -46,7 +46,7 @@ const DEFAULT_BACKEND_OUTPUT_DRAIN_TIMEOUT = Duration.seconds(5);
 const BACKEND_READINESS_PATH = "/.well-known/t3/environment";
 
 const { logWarning: logBackendProcessWarning } =
-  DesktopObservability.makeComponentLogger("desktop-backend-process");
+  DesktopObservability.componentLogger("desktop-backend-process");
 
 type BackendProcessLayerServices = ChildProcessSpawner.ChildProcessSpawner | HttpClient.HttpClient;
 

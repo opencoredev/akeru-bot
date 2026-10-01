@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off - This host-side fixture creates an isolated local T3 environment.
 import * as NodeSqlite from "node:sqlite";
 
@@ -123,6 +124,12 @@ export const SEEDED_PROJECTION_TABLES = [
 
 export const SEEDED_THREAD_COLUMNS = ["snoozed_until", "snoozed_at"] as const;
 
+const decodeTableCount = Schema.decodeUnknownSync(Schema.Struct({ count: Schema.Number }));
+
+const decodeThreadColumns = Schema.decodeUnknownSync(
+  Schema.Array(Schema.Struct({ name: Schema.String })),
+);
+
 export function hasSeedableSchema(dbPath: string): boolean {
   let database: NodeSqlite.DatabaseSync;
 
@@ -133,17 +140,19 @@ export function hasSeedableSchema(dbPath: string): boolean {
   }
 
   try {
-    const tableCount = database
-      .prepare(
-        `SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name IN (${SEEDED_PROJECTION_TABLES.map(() => "?").join(", ")})`,
-      )
-      .get(...SEEDED_PROJECTION_TABLES) as { count: number };
+    const tableCount = decodeTableCount(
+      database
+        .prepare(
+          `SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name IN (${SEEDED_PROJECTION_TABLES.map(() => "?").join(", ")})`,
+        )
+        .get(...SEEDED_PROJECTION_TABLES),
+    );
 
     if (tableCount.count !== SEEDED_PROJECTION_TABLES.length) return false;
 
-    const threadColumns = database.prepare("PRAGMA table_info(projection_threads)").all() as Array<{
-      name: string;
-    }>;
+    const threadColumns = decodeThreadColumns(
+      database.prepare("PRAGMA table_info(projection_threads)").all(),
+    );
 
     const threadColumnNames = new Set(threadColumns.map((column) => column.name));
 
@@ -199,9 +208,9 @@ export function seedDatabase(
       if (!workspaceRoot) throw new Error(`Missing workspace root for ${project.id}.`);
 
       const latestThreadMinutes = Math.min(
-        ...threads
-          .filter((thread) => thread.projectId === project.id)
-          .map((thread) => thread.minutesAgo),
+        ...threads.flatMap((thread) =>
+          thread.projectId === project.id ? [thread.minutesAgo] : [],
+        ),
       );
 
       insertProject.run(

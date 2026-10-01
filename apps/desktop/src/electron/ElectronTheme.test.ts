@@ -8,7 +8,7 @@ const { onMock, removeListenerMock, themeState } = vi.hoisted(() => ({
   themeState: {
     shouldUseDarkColors: true,
     themeSource: "system",
-    setSourceError: null as unknown,
+    setSourceError: null as Error | null,
   },
 }));
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
 export const PreviewAutomationSelectorKind = Schema.Literals([
@@ -17,28 +18,28 @@ export const PreviewAutomationEvaluationDetailKind = Schema.Literals([
 export type PreviewAutomationEvaluationDetailKind =
   typeof PreviewAutomationEvaluationDetailKind.Type;
 
-export const previewAutomationEvaluationDetail = (exceptionDetails: unknown) => {
-  if (typeof exceptionDetails !== "object" || exceptionDetails === null) {
+export const previewAutomationEvaluationDetail = (cause: unknown) => {
+  if (!Predicate.isObjectOrArray(cause)) {
     return { detailKind: "unknown" as const };
   }
 
-  const details = exceptionDetails as Record<string, unknown>;
-  const exception = details["exception"];
+  const details = cause;
+  const exception = "exception" in details ? details.exception : undefined;
 
   const description =
-    typeof exception === "object" &&
-    exception !== null &&
-    typeof (exception as Record<string, unknown>)["description"] === "string"
-      ? (exception as Record<string, unknown>)["description"]
+    Predicate.isObjectOrArray(exception) &&
+    "description" in exception &&
+    Predicate.isString(exception.description)
+      ? exception.description
       : undefined;
 
-  if (typeof description === "string" && description.length > 0) {
+  if (Predicate.isString(description) && description.length > 0) {
     return { detailKind: "exception-description" as const, detail: description };
   }
 
-  const text = details["text"];
+  const text = "text" in details ? details.text : undefined;
 
-  if (typeof text === "string" && text.length > 0) {
+  if (Predicate.isString(text) && text.length > 0) {
     return { detailKind: "exception-text" as const, detail: text };
   }
 
@@ -238,16 +239,13 @@ export class PreviewAutomationInvalidSelectorError extends Schema.TaggedErrorCla
   },
 ) {
   static toTimelineMessage(error: PreviewAutomationInvalidSelectorError): string {
-    if (typeof error.cause !== "object" || error.cause === null) return error.message;
-    const reason = (error.cause as Record<string, unknown>)["message"];
+    if (!Predicate.isObjectOrArray(error.cause)) return error.message;
+    const reason = "message" in error.cause ? error.cause.message : undefined;
 
-    return typeof reason === "string" && reason.length > 0 ? reason : error.message;
+    return Predicate.isString(reason) && reason.length > 0 ? reason : error.message;
   }
 
-  get detail(): {
-    readonly selectorKind: PreviewAutomationSelectorKind;
-    readonly selectorLength?: number;
-  } {
+  get detail() {
     return {
       selectorKind: this.selectorKind,
       ...(this.selectorLength === undefined ? {} : { selectorLength: this.selectorLength }),
@@ -269,7 +267,7 @@ export class PreviewAutomationResultTooLargeError extends Schema.TaggedErrorClas
     maximumBytes: Schema.Number,
   },
 ) {
-  get detail(): { readonly maximumBytes: number } {
+  get detail() {
     return { maximumBytes: this.maximumBytes };
   }
 

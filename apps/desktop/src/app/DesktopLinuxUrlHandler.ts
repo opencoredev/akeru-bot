@@ -9,7 +9,7 @@ import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawne
 
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
-import { makeComponentLogger } from "./DesktopObservability.ts";
+import { componentLogger } from "./DesktopObservability.ts";
 
 // Linux ships as an AppImage, so the .desktop entry users end up with is
 // created by whatever integration tool they use (AppImageLauncher names it
@@ -39,7 +39,7 @@ export function removeRetiredSchemeAssociations(mimeappsContent: string): string
     if (match === null) return [line];
     const [, scheme, handlers] = match;
 
-    if (!(RETIRED_URL_HANDLER_SCHEMES as readonly string[]).includes(scheme!)) {
+    if (!RETIRED_URL_HANDLER_SCHEMES.some((retired) => retired === scheme)) {
       return [line];
     }
 
@@ -58,7 +58,7 @@ export function removeRetiredSchemeAssociations(mimeappsContent: string): string
   return changed ? retained.join("\n") : null;
 }
 
-const { logInfo, logWarning } = makeComponentLogger("desktop-linux-url-handler");
+const { logInfo, logWarning } = componentLogger("desktop-linux-url-handler");
 
 export class DesktopLinuxUrlHandlerRegistrationError extends Schema.TaggedErrorClass<DesktopLinuxUrlHandlerRegistrationError>()(
   "DesktopLinuxUrlHandlerRegistrationError",

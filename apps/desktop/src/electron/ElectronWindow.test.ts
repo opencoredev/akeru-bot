@@ -1,3 +1,5 @@
+import { testWindow } from "./testWindow.ts";
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Cause from "effect/Cause";
@@ -32,10 +34,10 @@ const TestLayer = ElectronWindow.layer.pipe(
 );
 
 function makeBrowserWindow(input: { readonly id: number; readonly destroyed: boolean }) {
-  return {
+  return testWindow({
     id: input.id,
     isDestroyed: vi.fn(() => input.destroyed),
-  } as unknown as Electron.BrowserWindow;
+  });
 }
 
 describe("ElectronWindow", () => {
@@ -142,7 +144,7 @@ describe("ElectronWindow", () => {
 
       assert.equal(exit._tag, "Failure");
 
-      if (exit._tag === "Failure") {
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronWindow.ElectronWindowOperationError);
         assert.equal(error.operation, "list-windows");
@@ -159,21 +161,21 @@ describe("ElectronWindow", () => {
     Effect.gen(function* () {
       const cause = new Error("window restore failed");
 
-      const window = {
+      const window = testWindow({
         id: 41,
         isDestroyed: vi.fn(() => false),
         isMinimized: vi.fn(() => true),
         restore: vi.fn(() => {
           throw cause;
         }),
-      } as unknown as Electron.BrowserWindow;
+      });
 
       const electronWindow = yield* ElectronWindow.ElectronWindow;
       const exit = yield* Effect.exit(electronWindow.reveal(window));
 
       assert.equal(exit._tag, "Failure");
 
-      if (exit._tag === "Failure") {
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronWindow.ElectronWindowOperationError);
         assert.equal(error.operation, "reveal-window");
@@ -188,7 +190,7 @@ describe("ElectronWindow", () => {
     Effect.gen(function* () {
       const cause = new Error("renderer send failed");
 
-      const window = {
+      const window = testWindow({
         id: 42,
         isDestroyed: vi.fn(() => false),
         webContents: {
@@ -196,7 +198,7 @@ describe("ElectronWindow", () => {
             throw cause;
           }),
         },
-      } as unknown as Electron.BrowserWindow;
+      });
 
       getAllWindowsMock.mockReturnValueOnce([window]);
 
@@ -205,7 +207,7 @@ describe("ElectronWindow", () => {
 
       assert.equal(exit._tag, "Failure");
 
-      if (exit._tag === "Failure") {
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronWindow.ElectronWindowOperationError);
         assert.equal(error.operation, "send-window-message");
@@ -220,17 +222,17 @@ describe("ElectronWindow", () => {
     Effect.gen(function* () {
       const cause = new Error("window destroy failed");
 
-      const window = {
+      const window = testWindow({
         id: 43,
         destroy: vi.fn(() => {
           throw cause;
         }),
-      } as unknown as Electron.BrowserWindow;
+      });
 
-      const laterWindow = {
+      const laterWindow = testWindow({
         id: 44,
         destroy: vi.fn(),
-      } as unknown as Electron.BrowserWindow;
+      });
 
       getAllWindowsMock.mockReturnValueOnce([window, laterWindow]);
 
@@ -239,7 +241,7 @@ describe("ElectronWindow", () => {
 
       assert.equal(exit._tag, "Failure");
 
-      if (exit._tag === "Failure") {
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronWindow.ElectronWindowOperationError);
         assert.equal(error.operation, "destroy-window");

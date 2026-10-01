@@ -1,3 +1,4 @@
+import { standardCommand } from "./standard-command.ts";
 import * as FileSystem from "effect/FileSystem";
 
 import * as Effect from "effect/Effect";
@@ -39,10 +40,7 @@ export function iconResizeSpawnerLayer(
   return Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) => {
-      const childProcess = command as unknown as {
-        readonly command: string;
-        readonly args: ReadonlyArray<string>;
-      };
+      const childProcess = standardCommand(command);
 
       commands.push({
         command: childProcess.command,

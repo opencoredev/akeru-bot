@@ -184,10 +184,7 @@ export type DevRunnerError = typeof DevRunnerError.Type;
 
 export const isDevRunnerError = Schema.is(DevRunnerError);
 
-function portPairForOffset(offset: number): {
-  readonly serverPort: number;
-  readonly webPort: number;
-} {
+function portPairForOffset(offset: number) {
   return {
     serverPort: BASE_SERVER_PORT + offset,
     webPort: BASE_WEB_PORT + offset,
@@ -228,7 +225,7 @@ export function checkPortAvailabilityOnHosts<R>(
 export function devPortProbeHosts(configuredHost: string | undefined): ReadonlyArray<string> {
   const host = configuredHost?.trim();
 
-  if (!host || DEV_PORT_PROBE_HOSTS.includes(host as (typeof DEV_PORT_PROBE_HOSTS)[number])) {
+  if (!host || DEV_PORT_PROBE_HOSTS.some((probeHost) => probeHost === host)) {
     return DEV_PORT_PROBE_HOSTS;
   }
 
@@ -256,15 +253,27 @@ interface FindFirstAvailableOffsetInput<R = NetService.NetService> {
   readonly checkPortAvailability?: PortAvailabilityCheck<R>;
 }
 
-export function findFirstAvailableOffset<R = NetService.NetService>({
+export function findFirstAvailableOffset<R>(
+  input: FindFirstAvailableOffsetInput<R> & {
+    readonly checkPortAvailability: PortAvailabilityCheck<R>;
+  },
+): Effect.Effect<number, DevRunnerPortExhaustedError, R>;
+export function findFirstAvailableOffset(
+  input: FindFirstAvailableOffsetInput,
+): Effect.Effect<number, DevRunnerPortExhaustedError, NetService.NetService>;
+export function findFirstAvailableOffset<R>({
   startOffset,
   requireServerPort,
   requireWebPort,
   checkPortAvailability,
-}: FindFirstAvailableOffsetInput<R>): Effect.Effect<number, DevRunnerPortExhaustedError, R> {
+}: FindFirstAvailableOffsetInput<R>): Effect.Effect<
+  number,
+  DevRunnerPortExhaustedError,
+  R | NetService.NetService
+> {
   return Effect.gen(function* () {
-    const checkPort = (checkPortAvailability ??
-      defaultCheckPortAvailability) as PortAvailabilityCheck<R>;
+    const checkPort: PortAvailabilityCheck<R | NetService.NetService> =
+      checkPortAvailability ?? defaultCheckPortAvailability;
 
     for (let candidate = startOffset; ; candidate += 1) {
       const { serverPort, webPort } = portPairForOffset(candidate);
@@ -283,7 +292,7 @@ export function findFirstAvailableOffset<R = NetService.NetService>({
         continue;
       }
 
-      const checks: Array<Effect.Effect<boolean, never, R>> = [];
+      const checks: Array<Effect.Effect<boolean, never, R | NetService.NetService>> = [];
 
       if (requireServerPort) {
         checks.push(checkPort(serverPort, "server"));
@@ -323,7 +332,17 @@ interface ResolveModePortOffsetsInput<R = NetService.NetService> {
   readonly checkPortAvailability?: PortAvailabilityCheck<R>;
 }
 
-export function resolveModePortOffsets<R = NetService.NetService>({
+type ModePortOffsets = { readonly serverOffset: number; readonly webOffset: number };
+
+export function resolveModePortOffsets<R>(
+  input: ResolveModePortOffsetsInput<R> & {
+    readonly checkPortAvailability: PortAvailabilityCheck<R>;
+  },
+): Effect.Effect<ModePortOffsets, DevRunnerPortExhaustedError, R>;
+export function resolveModePortOffsets(
+  input: ResolveModePortOffsetsInput,
+): Effect.Effect<ModePortOffsets, DevRunnerPortExhaustedError, NetService.NetService>;
+export function resolveModePortOffsets<R>({
   mode,
   startOffset,
   hasExplicitServerPort,
@@ -332,11 +351,11 @@ export function resolveModePortOffsets<R = NetService.NetService>({
 }: ResolveModePortOffsetsInput<R>): Effect.Effect<
   { readonly serverOffset: number; readonly webOffset: number },
   DevRunnerPortExhaustedError,
-  R
+  R | NetService.NetService
 > {
   return Effect.gen(function* () {
-    const checkPort = (checkPortAvailability ??
-      defaultCheckPortAvailability) as PortAvailabilityCheck<R>;
+    const checkPort: PortAvailabilityCheck<R | NetService.NetService> =
+      checkPortAvailability ?? defaultCheckPortAvailability;
 
     if (mode === "dev:web") {
       if (hasExplicitDevUrl) {

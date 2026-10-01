@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -76,7 +77,7 @@ it.effect("preserves webhook request context and the full client cause chain", (
       Effect.flip,
     );
 
-    if (error._tag !== "DiscordReleaseWebhookRequestError") {
+    if (!Predicate.isTagged(error, "DiscordReleaseWebhookRequestError")) {
       assert.fail(`Unexpected error: ${error._tag}`);
     }
 
@@ -116,7 +117,7 @@ it.effect("preserves a non-success response error with structured status context
       Effect.flip,
     );
 
-    if (error._tag !== "DiscordReleaseWebhookResponseError") {
+    if (!Predicate.isTagged(error, "DiscordReleaseWebhookResponseError")) {
       assert.fail(`Unexpected error: ${error._tag}`);
     }
 

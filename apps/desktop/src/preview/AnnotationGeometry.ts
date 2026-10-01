@@ -56,7 +56,7 @@ export function unionRects(
   };
 }
 
-export function isAnnotationNode(element: Element): boolean {
+export function isAnnotationNode(element: EventTarget | null): boolean {
   return element instanceof Element && element.closest(`[${OVERLAY_ATTRIBUTE}]`) !== null;
 }
 
@@ -79,7 +79,7 @@ function describeRawElement(element: Element): string {
   const id = element.id ? `#${element.id}` : "";
 
   const classes =
-    element instanceof HTMLElement && typeof element.className === "string"
+    element instanceof HTMLElement
       ? element.className
           .trim()
           .split(/\s+/)

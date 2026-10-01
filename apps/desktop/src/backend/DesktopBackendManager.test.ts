@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 
 import * as Deferred from "effect/Deferred";
@@ -58,7 +59,7 @@ describe("DesktopBackendManager", () => {
             Effect.gen(function* () {
               spawnedCommand = command;
 
-              if (command._tag === "StandardCommand") {
+              if (Predicate.isTagged(command, "StandardCommand")) {
                 const fd3 = command.options.additionalFds?.fd3;
 
                 if (fd3?.type === "input" && fd3.stream) {
@@ -102,7 +103,7 @@ describe("DesktopBackendManager", () => {
         assert.equal(readyCount, 1);
         assert.isDefined(spawnedCommand);
 
-        if (spawnedCommand._tag !== "StandardCommand") {
+        if (!Predicate.isTagged(spawnedCommand, "StandardCommand")) {
           throw new Error("Expected backend to spawn a standard command.");
         }
 
@@ -192,7 +193,7 @@ describe("DesktopBackendManager", () => {
         Effect.provide(Layer.merge(spawnerLayer, healthyHttpClientLayer)),
       );
 
-      if (error._tag !== "BackendProcessBootstrapEncodeError") {
+      if (!Predicate.isTagged(error, "BackendProcessBootstrapEncodeError")) {
         return assert.fail(`Expected bootstrap encode error, received ${error._tag}`);
       }
 
@@ -233,7 +234,7 @@ describe("DesktopBackendManager", () => {
         Effect.provide(Layer.merge(spawnerLayer, healthyHttpClientLayer)),
       );
 
-      if (error._tag !== "BackendProcessSpawnError") {
+      if (!Predicate.isTagged(error, "BackendProcessSpawnError")) {
         return assert.fail(`Expected backend spawn error, received ${error._tag}`);
       }
 
@@ -280,7 +281,7 @@ describe("DesktopBackendManager", () => {
         Effect.provide(Layer.merge(spawnerLayer, healthyHttpClientLayer)),
       );
 
-      if (error._tag !== "BackendProcessExitStatusError") {
+      if (!Predicate.isTagged(error, "BackendProcessExitStatusError")) {
         return assert.fail(`Expected backend exit-status error, received ${error._tag}`);
       }
 
@@ -329,7 +330,7 @@ describe("DesktopBackendManager", () => {
 
       assert.equal(exit.code.pipe(Option.getOrUndefined), 0);
 
-      if (error._tag !== "BackendProcessOutputReadError") {
+      if (!Predicate.isTagged(error, "BackendProcessOutputReadError")) {
         return assert.fail(`Expected output read error, received ${error._tag}`);
       }
 
@@ -383,7 +384,7 @@ describe("DesktopBackendManager", () => {
 
       assert.equal(exit.code.pipe(Option.getOrUndefined), 0);
 
-      if (error._tag !== "BackendProcessOutputHandlingError") {
+      if (!Predicate.isTagged(error, "BackendProcessOutputHandlingError")) {
         return assert.fail(`Expected output handling error, received ${error._tag}`);
       }
 

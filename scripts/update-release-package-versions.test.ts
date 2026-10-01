@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Config from "effect/Config";
@@ -72,8 +73,8 @@ const captureLogs = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const result = yield* effect;
 
-    const logs = (yield* TestConsole.logLines).filter(
-      (line): line is string => typeof line === "string",
+    const logs = (yield* TestConsole.logLines).filter((line): line is string =>
+      Predicate.isString(line),
     );
 
     return { result, logs };
@@ -306,10 +307,11 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
 
-      const optionError =
-        error._tag === "ShowHelp" ? (error.errors[0] as CliError.CliError | undefined) : error;
+      const optionError = Predicate.isTagged(error, "ShowHelp")
+        ? (error.errors[0] as CliError.CliError | undefined)
+        : error;
 
-      if (!optionError || optionError._tag !== "UnrecognizedOption") {
+      if (!optionError || !Predicate.isTagged(optionError, "UnrecognizedOption")) {
         assert.fail(`Expected UnrecognizedOption, got ${String(optionError?._tag)}`);
       }
 
@@ -325,10 +327,11 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
 
-      const versionError =
-        error._tag === "ShowHelp" ? (error.errors[0] as CliError.CliError | undefined) : error;
+      const versionError = Predicate.isTagged(error, "ShowHelp")
+        ? (error.errors[0] as CliError.CliError | undefined)
+        : error;
 
-      if (!versionError || versionError._tag !== "MissingArgument") {
+      if (!versionError || !Predicate.isTagged(versionError, "MissingArgument")) {
         assert.fail(`Expected MissingArgument, got ${String(versionError?._tag)}`);
       }
 

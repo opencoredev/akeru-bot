@@ -1,3 +1,6 @@
+import * as Result from "effect/Result";
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 import * as NodeOS from "node:os";
 
 import * as Effect from "effect/Effect";
@@ -85,6 +88,8 @@ export interface WslPreflightFailure {
   readonly retryLimit?: number;
 }
 
+const WslPreflight = Data.taggedEnum<WslPreflightSuccess | WslPreflightFailure>();
+
 export const WSL_TRANSIENT_PREFLIGHT_RETRY_LIMIT = 12;
 
 export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPreflight")(
@@ -104,27 +109,19 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
     const wslAvailable = yield* wslEnv.isAvailable;
 
     if (!wslAvailable) {
-      return {
-        _tag: "Failed",
-        reason: "WSL is not available on this system",
-        fatal: false,
-      } as const;
+      return WslPreflight.Failed({ reason: "WSL is not available on this system", fatal: false });
     }
 
-    const distroProbe = yield* wslEnv.probeDistros.pipe(
-      Effect.map((distros) => ({ _tag: "Success", distros }) as const),
-      Effect.catch((error) => Effect.succeed({ _tag: "Failure", error } as const)),
-    );
+    const distroProbe = yield* wslEnv.probeDistros.pipe(Effect.result);
 
-    if (distroProbe._tag === "Failure") {
-      return {
-        _tag: "Failed",
-        reason: `Unable to list WSL distributions: ${distroProbe.error.message}`,
+    if (Result.isFailure(distroProbe)) {
+      return WslPreflight.Failed({
+        reason: `Unable to list WSL distributions: ${distroProbe.failure.message}`,
         fatal: false,
-      } as const;
+      });
     }
 
-    const installedDistros = distroProbe.distros;
+    const installedDistros = distroProbe.success;
 
     const runningDistro = input.distro
       ? (installedDistros.find(
@@ -133,15 +130,14 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
       : (installedDistros.find((installed) => installed.isDefault)?.name ?? null);
 
     if (runningDistro === null) {
-      return {
-        _tag: "Failed",
+      return WslPreflight.Failed({
         reason: input.distro
           ? `WSL distro is not installed: ${input.distro}`
           : installedDistros.length === 0
             ? "WSL has no installed distributions"
             : "WSL has no default distribution",
         fatal: true,
-      } as const;
+      });
     }
 
     const entryExists = yield* fileSystem
@@ -149,21 +145,19 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
       .pipe(Effect.orElseSucceed(() => false));
 
     if (!entryExists) {
-      return {
-        _tag: "Failed",
+      return WslPreflight.Failed({
         reason: `missing server entry at ${input.windowsEntryPath}`,
         fatal: true,
-      } as const;
+      });
     }
 
     const linuxEntry = yield* wslEnv.windowsToWslPath(runningDistro, input.windowsEntryPath);
 
     if (Option.isNone(linuxEntry)) {
-      return {
-        _tag: "Failed",
+      return WslPreflight.Failed({
         reason: `wslpath conversion failed for ${input.windowsEntryPath}`,
         fatal: false,
-      } as const;
+      });
     }
 
     const nodePtyResult = yield* wslEnv.ensureNodePty(runningDistro, input.windowsRepoRoot, {
@@ -172,21 +166,19 @@ export const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPrefli
     });
 
     if (!nodePtyResult.ok) {
-      return {
-        _tag: "Failed",
+      return WslPreflight.Failed({
         reason: `WSL node-pty unavailable: ${nodePtyResult.reason}`,
         fatal: nodePtyResult.fatal,
         ...(nodePtyResult.retryLimit === undefined ? {} : { retryLimit: nodePtyResult.retryLimit }),
-      } as const;
+      });
     }
 
-    return {
-      _tag: "Ready",
+    return WslPreflight.Ready({
       runningDistro,
       linuxEntryPath: linuxEntry.value,
       nodePath: nodePtyResult.nodePath,
       resolvedPath: nodePtyResult.resolvedPath,
-    } as const;
+    });
   },
 );
 
@@ -292,12 +284,12 @@ export const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.res
           // arch/distro), rather than silently dropping into a fragile runtime build.
           allowBuild: !environment.isPackaged,
         })
-      : ({ _tag: "Failed", reason: serverTree.reason, fatal: serverTree.fatal } as const);
+      : WslPreflight.Failed({ reason: serverTree.reason, fatal: serverTree.fatal });
 
     // Every operation after preflight uses the same concrete distro. In
     // default-tracking mode this closes the race where the system default
     // changes between probing and spawning the backend.
-    const runningDistro = preflight._tag === "Ready" ? preflight.runningDistro : null;
+    const runningDistro = Predicate.isTagged(preflight, "Ready") ? preflight.runningDistro : null;
     const distroForConfig = runningDistro ?? input.distro;
 
     // Resolve the selected distro's IPv4 address. In mirrored mode the distro
@@ -369,11 +361,11 @@ export const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.res
     // slashes get translated unpredictably depending on flags), and the
     // packaged build leaves devServerUrl as None anyway.
     const devUrlArgs = Option.match(environment.devServerUrl, {
-      onNone: () => [] as ReadonlyArray<string>,
+      onNone: (): string[] => [],
       onSome: (url) => ["--dev-url", url.href],
     });
 
-    if (preflight._tag === "Failed") {
+    if (Predicate.isTagged(preflight, "Failed")) {
       const retryLimit =
         preflight.retryLimit ?? (preflight.fatal ? undefined : WSL_TRANSIENT_PREFLIGHT_RETRY_LIMIT);
 

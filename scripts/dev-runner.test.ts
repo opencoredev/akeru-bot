@@ -1,3 +1,5 @@
+import { standardCommand } from "./test-support/standard-command.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off - builds real worktree layouts on disk.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
@@ -133,8 +135,8 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           checkPortAvailability: () => Effect.succeed(true),
         }).pipe(Effect.flip);
 
-        if (error._tag !== "DevRunnerPortExhaustedError") {
-          assert.fail(`Unexpected error: ${error._tag}`);
+        if (!Predicate.isTagged(error, "DevRunnerPortExhaustedError")) {
+          assert.fail(`Unexpected error: ${String(error)}`);
         }
 
         assert.equal(error.startOffset, 51_763);
@@ -163,8 +165,8 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           Effect.flip,
         );
 
-        if (error._tag !== "DevRunnerConfigurationError") {
-          assert.fail(`Unexpected error: ${error._tag}`);
+        if (!Predicate.isTagged(error, "DevRunnerConfigurationError")) {
+          assert.fail(`Unexpected error: ${String(error)}`);
         }
 
         assert.deepStrictEqual(error.configKeys, ["T3CODE_PORT_OFFSET", "T3CODE_DEV_INSTANCE"]);
@@ -193,8 +195,8 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           Effect.flip,
         );
 
-        if (error._tag !== "DevRunnerProcessError") {
-          assert.fail(`Unexpected error: ${error._tag}`);
+        if (!Predicate.isTagged(error, "DevRunnerProcessError")) {
+          assert.fail(`Unexpected error: ${String(error)}`);
         }
 
         assert.equal(error.operation, "spawn");
@@ -286,8 +288,8 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           Effect.flip,
         );
 
-        if (error._tag !== "DevRunnerHostNotProxiableError") {
-          assert.fail(`Unexpected error: ${error._tag}`);
+        if (!Predicate.isTagged(error, "DevRunnerHostNotProxiableError")) {
+          assert.fail(`Unexpected error: ${String(error)}`);
         }
 
         assert.equal(error.mode, "dev");
@@ -366,11 +368,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           const spawnerLayer = Layer.succeed(
             ChildProcessSpawner.ChildProcessSpawner,
             ChildProcessSpawner.make((command) => {
-              const spawned = command as unknown as {
-                readonly command: string;
-                readonly args: ReadonlyArray<string>;
-                readonly options?: { readonly env?: Record<string, string | undefined> };
-              };
+              const spawned = standardCommand(command);
 
               if (spawned.command === "vp") {
                 captured = spawned.options?.env;
@@ -510,8 +508,8 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           Effect.flip,
         );
 
-        if (error._tag !== "DevRunnerProcessExitError") {
-          assert.fail(`Unexpected error: ${error._tag}`);
+        if (!Predicate.isTagged(error, "DevRunnerProcessExitError")) {
+          assert.fail(`Unexpected error: ${String(error)}`);
         }
 
         assert.equal(error.mode, "dev:server");
@@ -545,8 +543,8 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           Effect.flip,
         );
 
-        if (error._tag !== "DevRunnerProcessError") {
-          assert.fail(`Unexpected error: ${error._tag}`);
+        if (!Predicate.isTagged(error, "DevRunnerProcessError")) {
+          assert.fail(`Unexpected error: ${String(error)}`);
         }
 
         assert.equal(error.operation, "wait-for-exit");

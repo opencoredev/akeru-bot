@@ -12,6 +12,7 @@
     "../plugins/schema.ts",
     "../plugins/manifestTypes.ts",
     "../plugins/decodeManifest.ts",
+    "../plugins/json.ts",
     "../plugins/validateManifest.ts"
   ]
 }

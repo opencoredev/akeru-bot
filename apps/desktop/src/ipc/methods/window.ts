@@ -165,7 +165,7 @@ function extractWslDistroFromEnvironmentId(envId: string): string | null {
   return suffix === "default" || suffix.length === 0 ? null : suffix;
 }
 
-export const getLocalEnvironmentBearerToken = DesktopIpc.makeIpcMethod({
+export const getLocalEnvironmentBearerToken = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.GET_LOCAL_ENVIRONMENT_BEARER_TOKEN_CHANNEL,
   payload: Schema.Void,
   result: Schema.String,
@@ -176,7 +176,7 @@ export const getLocalEnvironmentBearerToken = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const pickFolder = DesktopIpc.makeIpcMethod({
+export const pickFolder = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PICK_FOLDER_CHANNEL,
   payload: Schema.UndefinedOr(PickFolderOptionsSchema),
   result: Schema.NullOr(Schema.String),
@@ -252,7 +252,7 @@ export const pickFolder = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const setTheme = DesktopIpc.makeIpcMethod({
+export const setTheme = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.SET_THEME_CHANNEL,
   payload: DesktopThemeSchema,
   result: Schema.Void,
@@ -262,7 +262,7 @@ export const setTheme = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const showContextMenu = DesktopIpc.makeIpcMethod({
+export const showContextMenu = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.CONTEXT_MENU_CHANNEL,
   payload: ContextMenuInput,
   result: Schema.NullOr(Schema.String),
@@ -285,7 +285,7 @@ export const showContextMenu = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const openExternal = DesktopIpc.makeIpcMethod({
+export const openExternal = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.OPEN_EXTERNAL_CHANNEL,
   payload: Schema.String,
   result: Schema.Boolean,
@@ -300,7 +300,7 @@ export const openExternal = DesktopIpc.makeIpcMethod({
  *  renderer reject it by size without the contents ever crossing the bridge. */
 const PICKED_THEME_FILE_MAX_BYTES = 256 * 1024;
 
-export const pickThemeFiles = DesktopIpc.makeIpcMethod({
+export const pickThemeFiles = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.PICK_THEME_FILES_CHANNEL,
   payload: Schema.Undefined,
   result: Schema.NullOr(Schema.Array(PickedThemeFileSchema)),

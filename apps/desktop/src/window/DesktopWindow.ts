@@ -1,3 +1,5 @@
+import { bindWindowBrowsing } from "./WindowBrowsing.ts";
+import * as Predicate from "effect/Predicate";
 import * as Clock from "effect/Clock";
 
 import * as Context from "effect/Context";
@@ -20,7 +22,7 @@ import * as DesktopAssets from "../app/DesktopAssets.ts";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 
-import { makeComponentLogger } from "../app/DesktopObservability.ts";
+import { componentLogger } from "../app/DesktopObservability.ts";
 
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
 
@@ -46,7 +48,7 @@ import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
 
-import { makeQuitShortcutHandler } from "./QuitHold.ts";
+import { createQuitShortcutHandler } from "./QuitHold.ts";
 
 import {
   getIconOption,
@@ -64,8 +66,8 @@ import {
 } from "./WindowPresentation.ts";
 
 export {
-  resolveInitialMainWindowBounds,
   isSameOriginRendererNavigation,
+  resolveInitialMainWindowBounds,
   isRetryableDevelopmentRendererLoadFailure,
   concealPendingQuitWindow,
 } from "./WindowPresentation.ts";
@@ -137,8 +139,7 @@ export class DesktopWindow extends Context.Service<
   }
 >()("@akeru/desktop/window/DesktopWindow") {}
 
-const { logInfo: logWindowInfo, logWarning: logWindowWarning } =
-  makeComponentLogger("desktop-window");
+const { logInfo: logWindowInfo, logWarning: logWindowWarning } = componentLogger("desktop-window");
 
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -173,13 +174,8 @@ export const make = Effect.gen(function* () {
     }
   });
 
-  // currentMainOrFirst / focusedMainOrFirst fall back to "any first window",
-  // which during WSL-only boot is the connecting splash. The splash is never
-  // registered via setMain, so it must be treated as "no real main window" --
-  // otherwise ensureMain/activate/dispatchMenuAction latch onto it and never
-  // open (or retry) the real main. That is the failure the pool's swallowed
-  // post-readiness window-open error would otherwise strand the user in:
-  // splash up, backend ready, no main, and activation only re-reveals splash.
+  // These lookups also return the connecting splash. Exclude it so activation
+  // can retry a failed main-window load after the backend becomes ready.
   const withoutSplash = (window: Option.Option<Electron.BrowserWindow>) =>
     Ref.get(splashWindowRef).pipe(
       Effect.map((splash) =>
@@ -215,12 +211,11 @@ export const make = Effect.gen(function* () {
       }
     });
 
-    const displayBounds =
-      displayBoundsResult._tag === "Success"
-        ? displayBoundsResult.bounds
-        : yield* logWindowWarning("failed to read connected displays; using defaults", {
-            cause: displayBoundsResult.cause,
-          }).pipe(Effect.as<readonly Electron.Rectangle[]>([]));
+    const displayBounds = Predicate.isTagged(displayBoundsResult, "Success")
+      ? displayBoundsResult.bounds
+      : yield* logWindowWarning("failed to read connected displays; using defaults", {
+          cause: displayBoundsResult.cause,
+        }).pipe(Effect.as<readonly Electron.Rectangle[]>([]));
 
     const initialBounds = resolveInitialMainWindowBounds(persistedBounds, displayBounds);
     const restoredPersistedBounds = persistedBounds !== null && initialBounds === persistedBounds;
@@ -368,7 +363,7 @@ export const make = Effect.gen(function* () {
     yield* previewManager.setMainWindow(window);
     window.webContents.on("will-attach-webview", (event, webPreferences, params) => {
       if (
-        typeof params.partition !== "string" ||
+        !Predicate.isString(params.partition) ||
         !previewManager.isBrowserPartition(params.partition)
       ) {
         event.preventDefault();
@@ -382,111 +377,7 @@ export const make = Effect.gen(function* () {
       webPreferences.contextIsolation = false;
     });
 
-    const contextMenuContents = new WeakSet<Electron.WebContents>();
-
-    const installContextMenu = (
-      ownerWindow: Electron.BrowserWindow,
-      contents: Electron.WebContents,
-    ): void => {
-      if (contextMenuContents.has(contents)) return;
-      contextMenuContents.add(contents);
-      contents.on("context-menu", (event, params) => {
-        event.preventDefault();
-
-        if (contents.isDestroyed() || ownerWindow.isDestroyed()) return;
-        // Native editing roles act on the focused contents, which may still be
-        // the host renderer when the user right-clicks inside a browser guest.
-        contents.focus();
-
-        const menuTemplate: Electron.MenuItemConstructorOptions[] = [];
-
-        if (params.misspelledWord) {
-          for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
-            menuTemplate.push({
-              label: suggestion,
-              click: () => {
-                if (!contents.isDestroyed()) contents.replaceMisspelling(suggestion);
-              },
-            });
-          }
-
-          if (params.dictionarySuggestions.length === 0) {
-            menuTemplate.push({ label: "No suggestions", enabled: false });
-          }
-
-          menuTemplate.push({ type: "separator" });
-        }
-
-        if (Option.isSome(ElectronShell.parseSafeExternalUrl(params.linkURL))) {
-          menuTemplate.push(
-            {
-              label: "Copy Link",
-              click: () => {
-                void runPromise(electronShell.copyText(params.linkURL));
-              },
-            },
-            { type: "separator" },
-          );
-        }
-
-        if (params.mediaType === "image") {
-          menuTemplate.push({
-            label: "Copy Image",
-            click: () => {
-              if (!contents.isDestroyed()) contents.copyImageAt(params.x, params.y);
-            },
-          });
-          menuTemplate.push({ type: "separator" });
-        }
-
-        menuTemplate.push(
-          { role: "cut", enabled: params.editFlags.canCut },
-          { role: "copy", enabled: params.editFlags.canCopy },
-          { role: "paste", enabled: params.editFlags.canPaste },
-          { role: "selectAll", enabled: params.editFlags.canSelectAll },
-        );
-
-        void runPromise(
-          electronMenu.popupTemplate({
-            window: ownerWindow,
-            template: menuTemplate,
-            ...(params.frame ? { frame: params.frame } : {}),
-          }),
-        );
-      });
-      contents.on("did-create-window", (popup) => {
-        installContextMenu(popup, popup.webContents);
-      });
-    };
-
-    installContextMenu(window, window.webContents);
-    window.webContents.on("did-attach-webview", (_event, contents) => {
-      installContextMenu(window, contents);
-    });
-
-    window.webContents.setWindowOpenHandler(({ url }) => {
-      if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
-        void runPromise(electronShell.openExternal(url));
-      }
-
-      return { action: "deny" };
-    });
-    window.webContents.on("will-navigate", (event, url) => {
-      if (
-        isSameOriginRendererNavigation({
-          applicationUrl,
-          navigationUrl: url,
-        })
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-
-      if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
-        void runPromise(electronShell.openExternal(url));
-      }
-    });
+    bindWindowBrowsing({ window, applicationUrl, electronShell, electronMenu, runPromise });
 
     // Electron's windowMenu close role owns CmdOrCtrl+W. Holding the
     // close-terminal shortcut can outlive the terminal that handled its first
@@ -494,7 +385,7 @@ export const make = Effect.gen(function* () {
     // Deliberate presses still flow through the renderer or native menu.
     // Intercept the quit accelerator before the native menu sees it and apply
     // the configured direct, hold, or double-press behavior.
-    const quitShortcutHandler = makeQuitShortcutHandler({
+    const quitShortcutHandler = createQuitShortcutHandler({
       platform: environment.platform,
       getMode: () =>
         runPromise(

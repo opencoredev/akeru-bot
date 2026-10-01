@@ -64,6 +64,7 @@ const currentVersion = () => {
       NodeFS.readFileSync(NodePath.join(baseDir, "runtime", "service-state.json"), "utf8"),
     );
 
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- The installed remote helper checks the persisted active-version string and ships without application dependencies.
     return state.protocol === 2 && typeof state.activeVersion === "string"
       ? state.activeVersion
       : version;

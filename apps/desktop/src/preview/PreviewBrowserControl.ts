@@ -1,3 +1,7 @@
+import { decodeEvaluationValue } from "./PreviewEvaluation.ts";
+import { evaluateWithDebugger } from "./PreviewEvaluation.ts";
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import type {
   DesktopPreviewColorScheme,
   DesktopPreviewRecordingFrame,
@@ -23,7 +27,6 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 import { type playwrightInjectedRuntimeInstallExpression } from "./PlaywrightInjectedRuntime.ts";
 
 import {
-  previewAutomationEvaluationDetail,
   PreviewOperationError,
   isPreviewOperationError,
   PreviewAutomationDevToolsOpenError,
@@ -40,7 +43,6 @@ import type { createPreviewState } from "./PreviewState.ts";
 import {
   type PreviewTabState,
   DIAGNOSTIC_BUFFER_LIMIT,
-  type CdpEvaluationResult,
   type RecordingFrameListener,
   type PreviewInputSignal,
   type FrameCaptureSession,
@@ -50,6 +52,12 @@ import {
   inputSignalsMatch,
   type SendCommand,
 } from "./PreviewModel.ts";
+
+const decodeDebuggerParams = Schema.decodeUnknownOption(
+  Schema.Record(Schema.String, Schema.Union([Schema.Json, Schema.Undefined])),
+);
+
+const decodeInjected = Schema.decodeUnknownEffect(Schema.Boolean);
 
 export const createPreviewBrowserControl = ({
   currentIso,
@@ -113,14 +121,14 @@ export const createPreviewBrowserControl = ({
   const captureDiagnosticMessage = Effect.fnUntraced(function* (
     webContentsId: number,
     method: string,
-    params: Record<string, unknown>,
+    params: Record<string, Schema.Json | undefined>,
   ) {
     const timestamp = yield* currentIso;
     yield* Ref.update(diagnosticsRef, (allDiagnostics) => {
       const current = allDiagnostics.get(webContentsId);
 
       if (!current) return allDiagnostics;
-      const requestId = typeof params["requestId"] === "string" ? params["requestId"] : null;
+      const requestId = Predicate.isString(params["requestId"]) ? params["requestId"] : null;
 
       const next = (() => {
         if (method === "Runtime.consoleAPICalled") {
@@ -128,8 +136,8 @@ export const createPreviewBrowserControl = ({
 
           const text = args
             .map((arg) => {
-              if (typeof arg !== "object" || arg === null) return String(arg);
-              const value = arg as Record<string, unknown>;
+              if (!Predicate.isObject(arg)) return String(arg);
+              const value = arg;
 
               return String(value["value"] ?? value["description"] ?? "");
             })
@@ -138,7 +146,7 @@ export const createPreviewBrowserControl = ({
           return {
             ...current,
             consoleEntries: pushBounded(current.consoleEntries, {
-              level: typeof params["type"] === "string" ? params["type"] : "log",
+              level: Predicate.isString(params["type"]) ? params["type"] : "log",
               text,
               timestamp,
               source: "console",
@@ -147,10 +155,9 @@ export const createPreviewBrowserControl = ({
         }
 
         if (method === "Runtime.exceptionThrown") {
-          const details =
-            typeof params["exceptionDetails"] === "object" && params["exceptionDetails"] !== null
-              ? (params["exceptionDetails"] as Record<string, unknown>)
-              : {};
+          const details = Predicate.isObject(params["exceptionDetails"])
+            ? params["exceptionDetails"]
+            : {};
 
           return {
             ...current,
@@ -164,27 +171,21 @@ export const createPreviewBrowserControl = ({
         }
 
         if (method === "Log.entryAdded") {
-          const entry =
-            typeof params["entry"] === "object" && params["entry"] !== null
-              ? (params["entry"] as Record<string, unknown>)
-              : {};
+          const entry = Predicate.isObject(params["entry"]) ? params["entry"] : {};
 
           return {
             ...current,
             consoleEntries: pushBounded(current.consoleEntries, {
-              level: typeof entry["level"] === "string" ? entry["level"] : "info",
+              level: Predicate.isString(entry["level"]) ? entry["level"] : "info",
               text: String(entry["text"] ?? ""),
               timestamp,
-              source: typeof entry["source"] === "string" ? entry["source"] : "log",
+              source: Predicate.isString(entry["source"]) ? entry["source"] : "log",
             }),
           };
         }
 
         if (method === "Network.requestWillBeSent" && requestId) {
-          const request =
-            typeof params["request"] === "object" && params["request"] !== null
-              ? (params["request"] as Record<string, unknown>)
-              : {};
+          const request = Predicate.isObject(params["request"]) ? params["request"] : {};
 
           return {
             ...current,
@@ -200,12 +201,9 @@ export const createPreviewBrowserControl = ({
         if (method === "Network.responseReceived" && requestId) {
           const request = current.requests.get(requestId);
 
-          const response =
-            typeof params["response"] === "object" && params["response"] !== null
-              ? (params["response"] as Record<string, unknown>)
-              : {};
+          const response = Predicate.isObject(params["response"]) ? params["response"] : {};
 
-          const status = typeof response["status"] === "number" ? response["status"] : null;
+          const status = Predicate.isNumber(response["status"]) ? response["status"] : null;
 
           return request && status !== null && status >= 400
             ? {
@@ -319,12 +317,12 @@ export const createPreviewBrowserControl = ({
 
           const handleDebuggerMessage = Effect.fnUntraced(function* (
             method: string,
-            params: Record<string, unknown>,
+            params: Record<string, Schema.Json | undefined>,
           ) {
             if (method === "Page.screencastFrame") {
               const sessionId = params["sessionId"];
 
-              if (typeof sessionId === "number") {
+              if (Predicate.isNumber(sessionId)) {
                 yield* attemptPromise(
                   {
                     operation: "ackScreencastFrame",
@@ -336,12 +334,9 @@ export const createPreviewBrowserControl = ({
 
               const tabId = yield* tabIdForWebContents(wc.id);
 
-              const metadata =
-                typeof params["metadata"] === "object" && params["metadata"] !== null
-                  ? (params["metadata"] as Record<string, unknown>)
-                  : {};
+              const metadata = Predicate.isObject(params["metadata"]) ? params["metadata"] : {};
 
-              if (tabId && typeof params["data"] === "string") {
+              if (tabId && Predicate.isString(params["data"])) {
                 const captureSession = (yield* SynchronizedRef.get(frameCaptureSessionsRef)).get(
                   tabId,
                 );
@@ -353,10 +348,12 @@ export const createPreviewBrowserControl = ({
                   const frame: DesktopPreviewRecordingFrame = {
                     tabId,
                     data: params["data"],
-                    width:
-                      typeof metadata["deviceWidth"] === "number" ? metadata["deviceWidth"] : 0,
-                    height:
-                      typeof metadata["deviceHeight"] === "number" ? metadata["deviceHeight"] : 0,
+                    width: Predicate.isNumber(metadata["deviceWidth"])
+                      ? metadata["deviceWidth"]
+                      : 0,
+                    height: Predicate.isNumber(metadata["deviceHeight"])
+                      ? metadata["deviceHeight"]
+                      : 0,
                     receivedAt,
                   };
 
@@ -374,7 +371,9 @@ export const createPreviewBrowserControl = ({
           });
 
           const onMessage: BrowserControlSession["onMessage"] = (_event, method, params) => {
-            runFork(handleDebuggerMessage(method, params));
+            const parsed = decodeDebuggerParams(params);
+
+            if (Option.isSome(parsed)) runFork(handleDebuggerMessage(method, parsed.value));
           };
 
           yield* Scope.addFinalizer(
@@ -560,7 +559,7 @@ export const createPreviewBrowserControl = ({
     ) {
       const completedAt = yield* currentIso;
 
-      if (exit._tag === "Success") {
+      if (Predicate.isTagged(exit, "Success")) {
         yield* replaceAction(tabId, {
           ...actionEvent,
           status: "succeeded",
@@ -596,49 +595,16 @@ export const createPreviewBrowserControl = ({
     return yield* control.semaphore.withPermit(execute().pipe(Effect.onExit(finalize)));
   });
 
-  const evaluateWithDebugger = <A = unknown>(
-    tabId: string,
-    send: SendCommand,
-    expression: string,
-    returnByValue: boolean,
-    awaitPromise = true,
-  ): Effect.Effect<A, PreviewManagerError> =>
-    send("Runtime.evaluate", {
-      expression,
-      awaitPromise,
-      returnByValue,
-      userGesture: true,
-    }).pipe(
-      Effect.flatMap((rawResponse) => {
-        const response = rawResponse as CdpEvaluationResult;
-
-        if (!response.exceptionDetails) {
-          return Effect.succeed(response.result?.value as A);
-        }
-
-        const detail = previewAutomationEvaluationDetail(response.exceptionDetails);
-
-        return Effect.fail(
-          new PreviewAutomationEvaluationError({
-            tabId,
-            detailKind: detail.detailKind,
-            detailLength: detail.detail?.length ?? 0,
-            cause: response.exceptionDetails,
-          }),
-        );
-      }),
-    );
-
   const ensurePlaywrightInjected = Effect.fn("PreviewManager.ensurePlaywrightInjected")(function* (
     tabId: string,
     send: SendCommand,
   ) {
-    const installed = yield* evaluateWithDebugger<boolean>(
+    const installed = yield* evaluateWithDebugger(
       tabId,
       send,
       "Boolean(globalThis.__t3PlaywrightInjected)",
       true,
-    );
+    ).pipe(Effect.flatMap(decodeEvaluationValue(tabId, decodeInjected)));
 
     if (installed) return;
 

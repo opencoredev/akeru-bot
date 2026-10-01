@@ -1,3 +1,7 @@
+import { flow } from "effect/Function";
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+
 export type LinuxPasswordStorePreference =
   | "auto"
   | "gnome-libsecret"
@@ -32,16 +36,12 @@ const KDE_NAME_PREFIXES = ["kde", "plasma"];
 
 const NEGATIVE_FLAG_VALUES = new Set(["0", "false", "no", "off"]);
 
-export function normalizeLinuxPasswordStorePreference(
-  value: unknown,
-): LinuxPasswordStorePreference {
-  return value === "gnome-libsecret" ||
-    value === "kwallet" ||
-    value === "kwallet5" ||
-    value === "kwallet6"
-    ? value
-    : DEFAULT_LINUX_PASSWORD_STORE;
-}
+export const normalizeLinuxPasswordStorePreference = flow(
+  Schema.decodeUnknownOption(
+    Schema.Literals(["gnome-libsecret", "kwallet", "kwallet5", "kwallet6"]),
+  ),
+  Option.getOrElse((): LinuxPasswordStorePreference => DEFAULT_LINUX_PASSWORD_STORE),
+);
 
 // Auto mode asks one question: will Electron select a real keyring on its own? If so, stay out of
 // the way, which is how canonical KDE sessions keep the KWallet generation Chromium picks for them.

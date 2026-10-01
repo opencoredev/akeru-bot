@@ -16,7 +16,7 @@ const SetTailscaleServeEnabledInput = Schema.Struct({
   port: Schema.optionalKey(Schema.Number),
 });
 
-export const getServerExposureState = DesktopIpc.makeIpcMethod({
+export const getServerExposureState = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.GET_SERVER_EXPOSURE_STATE_CHANNEL,
   payload: Schema.Void,
   result: DesktopServerExposureStateSchema,
@@ -27,7 +27,7 @@ export const getServerExposureState = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const setServerExposureMode = DesktopIpc.makeIpcMethod({
+export const setServerExposureMode = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.SET_SERVER_EXPOSURE_MODE_CHANNEL,
   payload: DesktopServerExposureModeSchema,
   result: DesktopServerExposureStateSchema,
@@ -44,7 +44,7 @@ export const setServerExposureMode = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const setTailscaleServeEnabled = DesktopIpc.makeIpcMethod({
+export const setTailscaleServeEnabled = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.SET_TAILSCALE_SERVE_ENABLED_CHANNEL,
   payload: SetTailscaleServeEnabledInput,
   result: DesktopServerExposureStateSchema,
@@ -63,7 +63,7 @@ export const setTailscaleServeEnabled = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const getAdvertisedEndpoints = DesktopIpc.makeIpcMethod({
+export const getAdvertisedEndpoints = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.GET_ADVERTISED_ENDPOINTS_CHANNEL,
   payload: Schema.Void,
   result: Schema.Array(AdvertisedEndpoint),

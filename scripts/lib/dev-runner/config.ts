@@ -44,7 +44,9 @@ export const MODE_ARGS = {
 
 export type DevMode = keyof typeof MODE_ARGS;
 
-export const DEV_RUNNER_MODES = Object.keys(MODE_ARGS) as Array<DevMode>;
+export const DEV_RUNNER_MODES = Object.keys(MODE_ARGS).filter((mode): mode is DevMode =>
+  Object.hasOwn(MODE_ARGS, mode),
+);
 
 export function getDevRunnerModeArgs(mode: DevMode): ReadonlyArray<string> {
   return MODE_ARGS[mode];

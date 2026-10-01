@@ -1,10 +1,12 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off
 import { describe, expect, it } from "@effect/vitest";
 
 import { PRODUCT_FEEDBACK_BODY_MAX_BYTES, type ProductFeedbackSubmission } from "@akeru/contracts";
 import {
   coarseIpAddress,
-  makeProductFeedbackEndpoint,
+  productFeedbackEndpoint,
   type ProductFeedbackRepository,
   type StoredProductFeedback,
 } from "./endpoint.ts";
@@ -89,7 +91,7 @@ function makeRepository() {
   };
 }
 
-function request(payload: unknown, headers?: HeadersInit): Request {
+function request(payload: Schema.Json, headers?: HeadersInit): Request {
   return new Request("https://feedback.akeru.test/v1/feedback", {
     method: "POST",
     headers: {
@@ -97,7 +99,7 @@ function request(payload: unknown, headers?: HeadersInit): Request {
       "cf-connecting-ip": "203.0.113.42",
       ...headers,
     },
-    body: typeof payload === "string" ? payload : JSON.stringify(payload),
+    body: Predicate.isString(payload) ? payload : JSON.stringify(payload),
   });
 }
 
@@ -110,7 +112,7 @@ describe("product feedback endpoint", () => {
     const memory = makeRepository();
     const accepted: StoredProductFeedback[] = [];
 
-    const endpoint = makeProductFeedbackEndpoint({
+    const endpoint = productFeedbackEndpoint({
       repository: memory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
       randomId: () => "feedback-1",
@@ -150,7 +152,7 @@ describe("product feedback endpoint", () => {
   it("keeps the durable receipt successful when background delivery cannot be scheduled", async () => {
     const memory = makeRepository();
 
-    const endpoint = makeProductFeedbackEndpoint({
+    const endpoint = productFeedbackEndpoint({
       repository: memory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
       onAccepted: () => {
@@ -167,7 +169,7 @@ describe("product feedback endpoint", () => {
   it("rejects malformed JSON, excess fields, oversized bodies, and honeypots", async () => {
     const memory = makeRepository();
 
-    const endpoint = makeProductFeedbackEndpoint({
+    const endpoint = productFeedbackEndpoint({
       repository: memory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
     });
@@ -189,7 +191,7 @@ describe("product feedback endpoint", () => {
     const memory = makeRepository();
     let now = new Date("2026-08-30T12:00:00.000Z");
 
-    const endpoint = makeProductFeedbackEndpoint({
+    const endpoint = productFeedbackEndpoint({
       repository: memory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
       now: () => now,
@@ -208,7 +210,7 @@ describe("product feedback endpoint", () => {
     const memory = makeRepository();
     let now = new Date("2026-08-30T12:00:00.000Z");
 
-    const endpoint = makeProductFeedbackEndpoint({
+    const endpoint = productFeedbackEndpoint({
       repository: memory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
       now: () => now,
@@ -245,7 +247,7 @@ describe("product feedback endpoint", () => {
     const memory = makeRepository();
     memory.setIpCount(5);
 
-    const challenged = makeProductFeedbackEndpoint({
+    const challenged = productFeedbackEndpoint({
       repository: memory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
       turnstile: { siteKey: "site-key", verify: async (token) => token === "valid" },
@@ -266,7 +268,7 @@ describe("product feedback endpoint", () => {
     const limitedMemory = makeRepository();
     limitedMemory.setIpCount(20);
 
-    const limited = makeProductFeedbackEndpoint({
+    const limited = productFeedbackEndpoint({
       repository: limitedMemory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
     });
@@ -277,7 +279,7 @@ describe("product feedback endpoint", () => {
     const noChallengeMemory = makeRepository();
     noChallengeMemory.setIpCount(4);
 
-    const noChallenge = makeProductFeedbackEndpoint({
+    const noChallenge = productFeedbackEndpoint({
       repository: noChallengeMemory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
     });
@@ -293,7 +295,7 @@ describe("product feedback endpoint", () => {
   it("turns repository failures into a bounded honest response", async () => {
     const memory = makeRepository();
 
-    const endpoint = makeProductFeedbackEndpoint({
+    const endpoint = productFeedbackEndpoint({
       repository: {
         ...memory.repository,
         countByCoarseIpHashSince: async () => {
@@ -313,7 +315,7 @@ describe("product feedback endpoint", () => {
   it("accepts only one of two concurrent matching submissions", async () => {
     const memory = makeRepository();
 
-    const endpoint = makeProductFeedbackEndpoint({
+    const endpoint = productFeedbackEndpoint({
       repository: memory.repository,
       hmacSecret: "test-secret-that-is-long-enough",
       now: () => new Date("2026-08-30T12:00:00.000Z"),

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { FAVICON_DATA_URL_MAX_LENGTH } from "@akeru/contracts";
 import { MAX_FAVICON_RESPONSE_BYTES } from "./FaviconSource.ts";
 import {
@@ -79,7 +80,7 @@ export async function normalizeFaviconBuffer(
 
   if (rasterized.kind === "timed-out") return rasterized;
 
-  return typeof rasterized.value === "string" &&
+  return Predicate.isString(rasterized.value) &&
     rasterized.value.startsWith("data:image/png;base64,") &&
     rasterized.value.length <= FAVICON_DATA_URL_MAX_LENGTH
     ? { kind: "captured", dataUrl: rasterized.value }

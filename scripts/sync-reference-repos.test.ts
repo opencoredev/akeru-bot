@@ -1,3 +1,5 @@
+import { standardCommand } from "./test-support/standard-command.ts";
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -48,10 +50,7 @@ function mockSpawnerLayer(
   return Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) => {
-      const childProcess = command as unknown as {
-        readonly command: string;
-        readonly args: ReadonlyArray<string>;
-      };
+      const childProcess = standardCommand(command);
 
       commands.push({
         command: childProcess.command,
@@ -110,7 +109,7 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
 
       const error = yield* resolveReferenceRepoRef(effectSmol, rootDir, false).pipe(Effect.flip);
 
-      if (error._tag !== "ReferenceRepoVersionSourceError") {
+      if (!Predicate.isTagged(error, "ReferenceRepoVersionSourceError")) {
         assert.fail(`Unexpected error: ${error._tag}`);
       }
 
@@ -137,7 +136,7 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
 
       const error = yield* resolveReferenceRepoRef(effectSmol, rootDir, false).pipe(Effect.flip);
 
-      if (error._tag !== "ReferenceRepoVersionSourceError") {
+      if (!Predicate.isTagged(error, "ReferenceRepoVersionSourceError")) {
         assert.fail(`Unexpected error: ${error._tag}`);
       }
 
@@ -222,7 +221,7 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
         dryRun: true,
       }).pipe(Effect.flip);
 
-      if (error._tag !== "ReferenceRepoSelectionError") {
+      if (!Predicate.isTagged(error, "ReferenceRepoSelectionError")) {
         assert.fail(`Unexpected error: ${error._tag}`);
       }
 
@@ -258,7 +257,7 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
         Effect.flip,
       );
 
-      if (error._tag !== "ReferenceRepoGitSubtreeError") {
+      if (!Predicate.isTagged(error, "ReferenceRepoGitSubtreeError")) {
         assert.fail(`Unexpected error: ${error._tag}`);
       }
 

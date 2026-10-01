@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -127,7 +128,10 @@ describe("DesktopShellEnvironment", () => {
       });
 
       assert.equal(commands.length, 1);
-      assert.equal(commands[0]?._tag === "StandardCommand" ? commands[0].command : "", "/bin/zsh");
+      assert.equal(
+        Predicate.isTagged(commands[0], "StandardCommand") ? commands[0].command : "",
+        "/bin/zsh",
+      );
       assert.equal(env.PATH, "/opt/homebrew/bin:/usr/bin:/Users/test/.local/bin");
       assert.equal(env.SSH_AUTH_SOCK, "/tmp/secretive.sock");
       assert.equal(env.HOMEBREW_PREFIX, "/opt/homebrew");
@@ -294,7 +298,7 @@ describe("DesktopShellEnvironment", () => {
         env,
         platform: "darwin",
         handler: (command) => {
-          if (command._tag !== "StandardCommand") return "";
+          if (!Predicate.isTagged(command, "StandardCommand")) return "";
           commands.push(command.command);
 
           return command.command === "/bin/launchctl" ? "/opt/homebrew/bin:/usr/bin" : "";
@@ -319,7 +323,7 @@ describe("DesktopShellEnvironment", () => {
         env,
         platform: "win32",
         handler: (command) => {
-          if (command._tag !== "StandardCommand") return "";
+          if (!Predicate.isTagged(command, "StandardCommand")) return "";
           const loadProfile = !command.args.includes("-NoProfile");
 
           return loadProfile

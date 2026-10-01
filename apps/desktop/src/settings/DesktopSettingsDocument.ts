@@ -1,3 +1,4 @@
+import { flow } from "effect/Function";
 import {
   DesktopServerExposureModeSchema,
   DesktopUpdateChannelSchema,
@@ -138,19 +139,19 @@ export function resolveDefaultDesktopSettings(appVersion: string): DesktopSettin
   };
 }
 
-export function normalizeTailscaleServePort(value: unknown): number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 65_535
-    ? value
-    : DEFAULT_TAILSCALE_SERVE_PORT;
-}
+export const normalizeTailscaleServePort = flow(
+  Schema.decodeUnknownOption(Schema.Number),
+  Option.filter((value) => Number.isInteger(value) && value >= 1 && value <= 65_535),
+  Option.getOrElse(() => DEFAULT_TAILSCALE_SERVE_PORT),
+);
 
-export function normalizeWslDistro(value: unknown): string | null {
-  return typeof value === "string" && isValidDistroName(value) ? value : null;
-}
+export const normalizeWslDistro = flow(
+  Schema.decodeUnknownOption(Schema.String),
+  Option.filter(isValidDistroName),
+  Option.getOrNull,
+);
 
-export function normalizeMainWindowBounds(value: unknown): DesktopWindowBounds | null {
-  return Option.getOrNull(decodeDesktopWindowBounds(value));
-}
+export const normalizeMainWindowBounds = flow(decodeDesktopWindowBounds, Option.getOrNull);
 
 export function normalizeDesktopSettingsDocument(
   parsed: DesktopSettingsDocument,

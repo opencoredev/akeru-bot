@@ -5,9 +5,54 @@ import worker, { makeGitHubIssueOutbox } from "./worker.ts";
 
 const ENDPOINT = "https://akeru-feedback.leoisadev.workers.dev/v1/feedback";
 
+function unexpectedDatabaseOperation(): never {
+  throw new Error("Unexpected database fixture operation");
+}
+
+function databaseFixture(input: Pick<D1Database, "prepare">) {
+  return {
+    ...input,
+    batch: unexpectedDatabaseOperation,
+    exec: unexpectedDatabaseOperation,
+    withSession: unexpectedDatabaseOperation,
+    dump: unexpectedDatabaseOperation,
+  } satisfies D1Database;
+}
+
+function databaseResult(changes: number) {
+  return {
+    success: true,
+    results: [],
+    meta: {
+      changes,
+      duration: 0,
+      size_after: 0,
+      rows_read: 0,
+      rows_written: changes,
+      last_row_id: 0,
+      changed_db: changes > 0,
+    },
+  } satisfies D1Result<never>;
+}
+
+function statementFixture(
+  run: D1PreparedStatement["run"],
+  first: D1PreparedStatement["first"] = unexpectedDatabaseOperation,
+) {
+  const statement = {
+    bind: vi.fn((): D1PreparedStatement => statement),
+    first,
+    run,
+    all: unexpectedDatabaseOperation,
+    raw: unexpectedDatabaseOperation,
+  } satisfies D1PreparedStatement;
+
+  return statement;
+}
+
 function env(overrides: Partial<FeedbackWorkerEnv> = {}): FeedbackWorkerEnv {
   return {
-    DB: { prepare: vi.fn() } as unknown as D1Database,
+    DB: databaseFixture({ prepare: unexpectedDatabaseOperation }),
     HMAC_SECRET: "test-secret-that-is-at-least-32-bytes",
     TURNSTILE_SITE_KEY: "",
     TURNSTILE_SECRET_KEY: "",
@@ -29,13 +74,12 @@ function context(waitUntil = vi.fn()): ExecutionContext {
 
 // A D1 stub for one empty inbox: every lookup finds nothing and the insert lands.
 function emptyInboxDatabase(): D1Database {
-  const statement = {
-    bind: () => statement,
-    first: async () => null,
-    run: async () => ({ meta: { changes: 1 } }),
-  };
+  const statement = statementFixture(
+    async () => databaseResult(1),
+    async () => null,
+  );
 
-  return { prepare: () => statement } as unknown as D1Database;
+  return databaseFixture({ prepare: () => statement });
 }
 
 function submission(): Request {
@@ -105,13 +149,14 @@ describe("feedback worker", () => {
   });
 
   it("deletes expired rows during the daily scheduled run", async () => {
-    const run = vi.fn(async () => undefined);
-    const bind = vi.fn(() => ({ run }));
-    const prepare = vi.fn((_sql: string) => ({ bind }));
+    const run = vi.fn(async () => databaseResult(0));
+    const statement = statementFixture(run);
+    const { bind } = statement;
+    const prepare = vi.fn((_sql: string) => statement);
 
     await worker.scheduled(
       {} as ScheduledController,
-      env({ DB: { prepare } as unknown as D1Database }),
+      env({ DB: databaseFixture({ prepare }) }),
       {} as ExecutionContext,
     );
 
@@ -121,10 +166,11 @@ describe("feedback worker", () => {
   });
 
   it("claims only unexpired feedback submitted with public delivery enabled", async () => {
-    const run = vi.fn(async () => ({ meta: { changes: 0 } }));
-    const bind = vi.fn(() => ({ run }));
-    const prepare = vi.fn((_sql: string) => ({ bind }));
-    const outbox = makeGitHubIssueOutbox({ prepare } as unknown as D1Database);
+    const run = vi.fn(async () => databaseResult(0));
+    const statement = statementFixture(run);
+    const { bind } = statement;
+    const prepare = vi.fn((_sql: string) => statement);
+    const outbox = makeGitHubIssueOutbox(databaseFixture({ prepare }));
 
     await outbox.claim(
       "fb_example",
@@ -146,10 +192,11 @@ describe("feedback worker", () => {
   });
 
   it("updates a delivery only for the invocation that owns the claim", async () => {
-    const run = vi.fn(async () => ({ meta: { changes: 1 } }));
-    const bind = vi.fn(() => ({ run }));
-    const prepare = vi.fn((_sql: string) => ({ bind }));
-    const outbox = makeGitHubIssueOutbox({ prepare } as unknown as D1Database);
+    const run = vi.fn(async () => databaseResult(1));
+    const statement = statementFixture(run);
+    const { bind } = statement;
+    const prepare = vi.fn((_sql: string) => statement);
+    const outbox = makeGitHubIssueOutbox(databaseFixture({ prepare }));
 
     await outbox.markDelivered("fb_example", "claim-example", 42, "https://example.com/42");
 

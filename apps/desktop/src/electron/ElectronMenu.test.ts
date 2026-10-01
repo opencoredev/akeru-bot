@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Cause from "effect/Cause";
@@ -35,7 +36,7 @@ const makeWindow = (zoomFactor = 1): Electron.BrowserWindow =>
   ({
     id: 7,
     webContents: { getZoomFactor: () => zoomFactor },
-  }) as unknown as Electron.BrowserWindow;
+  }) as Electron.BrowserWindow;
 
 describe("ElectronMenu", () => {
   beforeEach(() => {
@@ -193,7 +194,7 @@ describe("ElectronMenu", () => {
 
       assert.equal(exit._tag, "Failure");
 
-      if (exit._tag === "Failure") {
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronMenu.ElectronMenuOperationError);
         assert.equal(error.operation, "set-application-menu");
@@ -226,7 +227,7 @@ describe("ElectronMenu", () => {
 
       assert.equal(exit._tag, "Failure");
 
-      if (exit._tag === "Failure") {
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronMenu.ElectronMenuOperationError);
         assert.equal(error.operation, "popup-template");
@@ -256,7 +257,7 @@ describe("ElectronMenu", () => {
 
       assert.equal(exit._tag, "Failure");
 
-      if (exit._tag === "Failure") {
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronMenu.ElectronMenuOperationError);
         assert.equal(error.operation, "show-context-menu");

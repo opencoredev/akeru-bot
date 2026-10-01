@@ -1,3 +1,6 @@
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import type { DesktopUpdateReleaseNote } from "@akeru/contracts";
 
 interface ElectronReleaseNoteInfo {
@@ -6,12 +9,16 @@ interface ElectronReleaseNoteInfo {
 }
 
 function isElectronReleaseNoteInfo(value: unknown): value is ElectronReleaseNoteInfo {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as { readonly version?: unknown; readonly note?: unknown };
+  if (!Predicate.isObjectOrArray(value)) return false;
+  const candidate = value;
 
   return (
-    typeof candidate.version === "string" &&
-    (typeof candidate.note === "string" || candidate.note === null || candidate.note === undefined)
+    "version" in candidate &&
+    Predicate.isString(candidate.version) &&
+    (!("note" in candidate) ||
+      Predicate.isString(candidate.note) ||
+      candidate.note === null ||
+      candidate.note === undefined)
   );
 }
 
@@ -21,14 +28,16 @@ const MAX_RELEASE_NOTE_ITEMS_PER_GROUP = 8;
 
 const MAX_RELEASE_NOTE_ITEM_LENGTH = 220;
 
-const HTML_ENTITY_REPLACEMENTS: Readonly<Record<string, string>> = {
-  amp: "&",
-  apos: "'",
-  gt: ">",
-  lt: "<",
-  nbsp: " ",
-  quot: '"',
-};
+const HTML_ENTITY_REPLACEMENTS = new Map<string, string>(
+  Object.entries({
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    nbsp: " ",
+    quot: '"',
+  }),
+);
 
 function decodeCodePoint(codePoint: number, entity: string): string {
   // String.fromCodePoint throws RangeError outside the valid Unicode range, and
@@ -41,7 +50,7 @@ function decodeCodePoint(codePoint: number, entity: string): string {
 }
 
 function decodeHtmlEntity(entity: string): string {
-  const named = HTML_ENTITY_REPLACEMENTS[entity];
+  const named = HTML_ENTITY_REPLACEMENTS.get(entity);
 
   if (named) return named;
 
@@ -118,16 +127,23 @@ function extractReleaseNoteItems(note: string | null | undefined): ReadonlyArray
   return items;
 }
 
+const decodeReleaseNotes = Schema.decodeUnknownOption(
+  Schema.Union([Schema.String, Schema.Array(Schema.Unknown)]),
+);
+
 export function normalizeDesktopUpdateReleaseNotes(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Release notes come from external updater metadata and are decoded before normalization.
   releaseNotes: unknown,
   fallbackVersion: string,
 ): ReadonlyArray<DesktopUpdateReleaseNote> {
-  const rawNotes =
-    typeof releaseNotes === "string"
-      ? [{ version: fallbackVersion, note: releaseNotes }]
-      : Array.isArray(releaseNotes)
-        ? releaseNotes.filter(isElectronReleaseNoteInfo)
-        : [];
+  const parsed = decodeReleaseNotes(releaseNotes);
+  const input = Option.getOrUndefined(parsed);
+
+  const rawNotes = Predicate.isString(input)
+    ? [{ version: fallbackVersion, note: input }]
+    : Array.isArray(input)
+      ? input.filter(isElectronReleaseNoteInfo)
+      : [];
 
   return rawNotes
     .map((entry) => ({

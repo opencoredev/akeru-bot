@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -30,7 +31,7 @@ describe("tailscale endpoint provider", () => {
       assert.equal(dnsName, "desktop.tail.ts.net");
       assert.equal(yield* parseTailscaleMagicDnsName("{}"), null);
       const malformed = yield* Effect.result(parseTailscaleMagicDnsName("not-json"));
-      assert.isTrue(malformed._tag === "Failure");
+      assert.isTrue(Predicate.isTagged(malformed, "Failure"));
     }),
   );
 

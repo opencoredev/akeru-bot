@@ -63,7 +63,7 @@ export class DesktopWslBackend extends Context.Service<
 >()("@akeru/desktop/wsl/DesktopWslBackend") {}
 
 const { logInfo: logWslBackendInfo, logWarning: logWslBackendWarning } =
-  DesktopObservability.makeComponentLogger("desktop-wsl-backend");
+  DesktopObservability.componentLogger("desktop-wsl-backend");
 
 const resolveTargetInstanceId = (distro: string | null): DesktopBackendPool.BackendInstanceId =>
   DesktopBackendPool.BackendInstanceId(

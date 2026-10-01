@@ -1,3 +1,4 @@
+import type * as Electron from "electron";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -10,10 +11,7 @@ export interface DesktopIpcSyncEvent {
   returnValue: unknown;
 }
 
-export type DesktopIpcHandleListener = (
-  event: DesktopIpcInvokeEvent,
-  raw: unknown,
-) => unknown | Promise<unknown>;
+export type DesktopIpcHandleListener = Parameters<Electron.IpcMain["handle"]>[1];
 
 export type DesktopIpcSyncListener = (event: DesktopIpcSyncEvent) => void;
 
@@ -61,7 +59,10 @@ export const isDesktopIpcError = Schema.is(DesktopIpcError);
 
 export interface DesktopIpcMethod<E, R> {
   readonly channel: string;
-  readonly handler: (raw: unknown) => Effect.Effect<unknown, E, R>;
+  readonly handler: (
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Electron IPC delivers arbitrary renderer payloads; each registered handler decodes its request.
+    raw: unknown,
+  ) => Effect.Effect<unknown, E, R>;
 }
 
 export interface DesktopSyncIpcMethod<E, R> {
@@ -189,7 +190,7 @@ export interface DesktopIpcMethodRegistration<
   readonly handler: (input: Payload) => Effect.Effect<Result, E, R>;
 }
 
-export const makeIpcMethod = <
+export const defineIpcMethod = <
   Payload,
   EncodedPayload,
   Result,

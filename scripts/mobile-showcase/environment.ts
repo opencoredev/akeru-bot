@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off - Host-side simulator and emulator automation uses Node subprocess and timing APIs directly.
 import * as NodeChildProcess from "node:child_process";
 
@@ -130,11 +131,14 @@ export function parsePairingCredentialOutput(output: string): string {
     throw new Error("Pairing credential command did not return JSON.");
   }
 
-  const parsed = JSON.parse(output.slice(jsonStart, jsonEnd + 1)) as {
-    readonly credential?: unknown;
-  };
+  const parsed = JSON.parse(output.slice(jsonStart, jsonEnd + 1));
 
-  if (typeof parsed.credential !== "string" || parsed.credential.length === 0) {
+  if (
+    !Predicate.isObjectOrArray(parsed) ||
+    !("credential" in parsed) ||
+    !Predicate.isString(parsed.credential) ||
+    parsed.credential.length === 0
+  ) {
     throw new Error("Pairing credential command returned no credential.");
   }
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 
 import * as Option from "effect/Option";
@@ -180,7 +181,7 @@ export function syncWindowAppearance(
     window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors));
     const { titleBarOverlay } = getWindowTitleBarOptions(shouldUseDarkColors, platform);
 
-    if (typeof titleBarOverlay === "object") {
+    if (Predicate.isObject(titleBarOverlay)) {
       window.setTitleBarOverlay(titleBarOverlay);
     }
   });

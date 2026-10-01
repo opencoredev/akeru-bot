@@ -1,3 +1,5 @@
+import type { ESTree } from "@oxlint/plugins";
+import * as Predicate from "effect/Predicate";
 import { defineRule } from "@oxlint/plugins";
 import * as Option from "effect/Option";
 
@@ -24,7 +26,7 @@ const toRepoPath = (filename: string, cwd: string) => {
 const isHostProcessReferenceFile = (filename: string, cwd: string) =>
   toRepoPath(filename, cwd) === HOST_PROCESS_REFERENCE_FILE;
 
-const isGlobalProcessObject = (node: unknown): boolean => {
+const isGlobalProcessObject = (node: ESTree.Node | null | undefined): boolean => {
   const expression = unwrapExpression(node);
 
   if (isIdentifier(expression, "process")) return true;
@@ -42,12 +44,12 @@ const isGlobalProcessObject = (node: unknown): boolean => {
 const message = (property: string) =>
   `Use HostProcess${property === "arch" ? "Architecture" : "Platform"} instead of process.${property}; inject the runtime reference in Effect code and provide it explicitly in tests.`;
 
-const getLiteralStringValue = (node: unknown): Option.Option<string> => {
-  if (typeof node !== "object" || node === null) return Option.none();
+const getLiteralStringValue = (node: ESTree.Node | null | undefined): Option.Option<string> => {
+  if (node == null) return Option.none();
 
-  if (!("type" in node) || node.type !== "Literal") return Option.none();
+  if (node.type !== "Literal") return Option.none();
 
-  if (!("value" in node) || typeof node.value !== "string") return Option.none();
+  if (!Predicate.isString(node.value)) return Option.none();
 
   return Option.some(node.value);
 };
@@ -69,22 +71,14 @@ export default defineRule({
       nodeOsRuntimeImports.clear();
     };
 
-    const trackImportDeclaration = (node: unknown) => {
-      if (typeof node !== "object" || node === null) return;
-
-      if (!("source" in node)) return;
+    const trackImportDeclaration = (node: ESTree.Node | null | undefined) => {
+      if (node?.type !== "ImportDeclaration") return;
 
       const source = getLiteralStringValue(node.source);
 
       if (Option.isNone(source) || !NODE_OS_MODULES.has(source.value)) return;
 
-      if (!("specifiers" in node) || !Array.isArray(node.specifiers)) return;
-
       for (const specifier of node.specifiers) {
-        if (typeof specifier !== "object" || specifier === null) continue;
-
-        if (!("local" in specifier)) continue;
-
         const local = unwrapExpression(specifier.local);
 
         if (Option.isNone(local) || local.value.type !== "Identifier") continue;
@@ -108,7 +102,9 @@ export default defineRule({
       }
     };
 
-    const getNodeOsRuntimeCall = (callee: unknown): Option.Option<string> => {
+    const getNodeOsRuntimeCall = (
+      callee: ESTree.Node | null | undefined,
+    ): Option.Option<string> => {
       const expression = unwrapExpression(callee);
 
       if (Option.isNone(expression)) return Option.none();

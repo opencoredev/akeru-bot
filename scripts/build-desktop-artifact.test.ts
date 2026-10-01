@@ -30,6 +30,12 @@ import {
 
 import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 
+const decodeMacSignConfig = Schema.decodeUnknownEffect(
+  Schema.Struct({
+    mac: Schema.Struct({ sign: Schema.String }),
+  }),
+);
+
 it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("resolves packaged signing resources from the checkout root", () =>
     Effect.gen(function* () {
@@ -46,11 +52,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
 
-      const parsed = yield* Schema.decodeUnknownEffect(
-        Schema.Struct({
-          mac: Schema.Struct({ sign: Schema.String }),
-        }),
-      )(config);
+      const parsed = yield* decodeMacSignConfig(config);
 
       assert.equal(parsed.mac.sign, path.join(repoRoot, "scripts/sign-macos.ts"));
     }),

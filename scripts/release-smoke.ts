@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
@@ -35,6 +36,8 @@ const ciWorkflow = read(".github/workflows/ci.yml");
 
 const desktopArtifactBuilder = read("scripts/build-desktop-artifact.ts");
 
+const desktopArtifactConfig = read("scripts/lib/desktop-build/config.ts");
+
 const serverCli = read("apps/server/scripts/cli.ts");
 
 const depotWorkflowDirectory = NodePath.join(repoRoot, ".depot/workflows");
@@ -50,13 +53,13 @@ if (NodeFS.existsSync(depotWorkflowDirectory)) {
 }
 
 assertContains(
-  desktopArtifactBuilder,
+  desktopArtifactConfig,
   '"Akeru-Bot-${version}-${arch}.${ext}"',
   "Desktop artifacts do not use the Akeru Bot release name.",
 );
 
 assertContains(
-  desktopArtifactBuilder,
+  desktopArtifactConfig,
   '"Akeru-Bot-${version}-x64.${ext}"',
   "Linux desktop artifacts do not use the advertised x64 release name.",
 );
@@ -192,18 +195,39 @@ assertOmits(desktopJobHeader, "secrets.", "Desktop signing secrets are scoped at
 
 assertOmits(releaseWorkflow, "macOS x64", "unadvertised macOS x64 build");
 
-const parsedReleaseWorkflow = parse(releaseWorkflow) as {
-  readonly jobs?: {
-    readonly desktop?: {
-      readonly steps?: ReadonlyArray<{
-        readonly name?: string;
-        readonly if?: string;
-        readonly env?: Readonly<Record<string, string>>;
-        readonly with?: Readonly<Record<string, string>>;
-      }>;
-    };
-  };
-};
+const decodeReleaseWorkflow = Schema.decodeUnknownSync(
+  Schema.Struct({
+    jobs: Schema.optionalKey(
+      Schema.Struct({
+        desktop: Schema.optionalKey(
+          Schema.Struct({
+            steps: Schema.optionalKey(
+              Schema.Array(
+                Schema.Struct({
+                  name: Schema.optionalKey(Schema.String),
+                  if: Schema.optionalKey(Schema.String),
+                  env: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+                  with: Schema.optionalKey(
+                    Schema.Record(
+                      Schema.String,
+                      Schema.Union([Schema.String, Schema.Number, Schema.Boolean]),
+                    ),
+                  ),
+                }),
+              ),
+            ),
+          }),
+        ),
+      }),
+    ),
+  }),
+);
+
+const parsedReleaseWorkflow = decodeReleaseWorkflow(parse(releaseWorkflow));
+
+const decodeManifestVersion = Schema.decodeUnknownSync(
+  Schema.Struct({ version: Schema.optionalKey(Schema.String) }),
+);
 
 const macOSConditions = new Set([
   "matrix.platform == 'mac'",
@@ -247,19 +271,19 @@ assertOmits(releaseSmokeWorkflow, "depot-", "Depot runners");
 assertOmits(releaseWorkflow, "depot-", "Depot runners");
 
 assertOmits(
-  desktopArtifactBuilder,
+  desktopArtifactConfig,
   'const DESKTOP_APP_ID = "com.t3tools.t3code"',
   "legacy T3 desktop bundle identifier",
 );
 
 assertContains(
-  desktopArtifactBuilder,
+  desktopArtifactConfig,
   'const DESKTOP_APP_ID = "dev.leodoes.akeru"',
   "Akeru desktop bundle identifier is missing.",
 );
 
 assertContains(
-  desktopArtifactBuilder,
+  desktopArtifactConfig,
   'identity: "-"',
   "Unsigned macOS builds do not opt into a sealed ad-hoc signature.",
 );
@@ -322,7 +346,7 @@ try {
     "apps/web/package.json",
     "packages/contracts/package.json",
   ] as const) {
-    const manifest = JSON.parse(readFromTemp(relativePath)) as { readonly version?: unknown };
+    const manifest = decodeManifestVersion(JSON.parse(readFromTemp(relativePath)));
 
     if (manifest.version !== "9.9.9-smoke.0") {
       throw new Error(`Release version did not update ${relativePath}.`);

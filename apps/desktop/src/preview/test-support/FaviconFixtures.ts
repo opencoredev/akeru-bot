@@ -1,3 +1,5 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { expect, vi } from "vite-plus/test";
 
 import { captureFavicon } from "../FaviconCapture.ts";
@@ -69,7 +71,7 @@ export function sourceJpeg(
     width & 0xff,
   ]);
 
-  const app1Segments = (typeof orientations === "number" ? [orientations] : orientations).map(
+  const app1Segments = (Predicate.isNumber(orientations) ? [orientations] : orientations).map(
     (orientation) => sourceJpegExifSegment([orientation]),
   );
 
@@ -314,7 +316,7 @@ export function makeUnsafeDib(): Buffer {
 
 export function makeWebContents(options?: {
   readonly fetch?: (url: string, init?: RequestInit) => Promise<Response>;
-  readonly rasterize?: (code: string) => Promise<unknown>;
+  readonly rasterize?: (code: string) => Promise<Schema.Json | undefined>;
 }) {
   const fetch = vi.fn(
     options?.fetch ??

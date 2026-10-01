@@ -11,7 +11,7 @@ import * as DesktopUpdates from "../../updates/DesktopUpdates.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 
-export const getUpdateState = DesktopIpc.makeIpcMethod({
+export const getUpdateState = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.UPDATE_GET_STATE_CHANNEL,
   payload: Schema.Void,
   result: DesktopUpdateStateSchema,
@@ -22,7 +22,7 @@ export const getUpdateState = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const setUpdateChannel = DesktopIpc.makeIpcMethod({
+export const setUpdateChannel = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.UPDATE_SET_CHANNEL_CHANNEL,
   payload: DesktopUpdateChannelSchema,
   result: DesktopUpdateStateSchema,
@@ -33,7 +33,7 @@ export const setUpdateChannel = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const downloadUpdate = DesktopIpc.makeIpcMethod({
+export const downloadUpdate = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.UPDATE_DOWNLOAD_CHANNEL,
   payload: Schema.Void,
   result: DesktopUpdateActionResultSchema,
@@ -44,7 +44,7 @@ export const downloadUpdate = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const installUpdate = DesktopIpc.makeIpcMethod({
+export const installUpdate = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.UPDATE_INSTALL_CHANNEL,
   payload: Schema.Void,
   result: DesktopUpdateActionResultSchema,
@@ -55,7 +55,7 @@ export const installUpdate = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const checkForUpdate = DesktopIpc.makeIpcMethod({
+export const checkForUpdate = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.UPDATE_CHECK_CHANNEL,
   payload: Schema.Void,
   result: DesktopUpdateCheckResultSchema,

@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 // Pool registry for multiple backend processes. This file is the entry
 // point for the concurrent-Windows+WSL-backend feature; see the design
 // notes below before extending it.
@@ -102,7 +104,7 @@ import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 
 const { logWarning: logBackendPoolWarning } =
-  DesktopObservability.makeComponentLogger("desktop-backend-pool");
+  DesktopObservability.componentLogger("desktop-backend-pool");
 
 export type BackendInstanceId = DesktopBackendManager.BackendInstanceId;
 
@@ -209,6 +211,12 @@ type UnregisterAction =
   | { readonly _tag: "Wait"; readonly done: Deferred.Deferred<void> }
   | { readonly _tag: "Close"; readonly entry: ActiveRegisteredInstance };
 
+const RegisteredInstance = Data.taggedEnum<RegisteredInstance>();
+
+const RegisterAction = Data.taggedEnum<RegisterAction>();
+
+const UnregisterAction = Data.taggedEnum<UnregisterAction>();
+
 export const layer = Layer.effect(
   DesktopBackendPool,
   Effect.gen(function* () {
@@ -314,7 +322,7 @@ export const layer = Layer.effect(
       new Map([
         [
           DesktopBackendManager.PRIMARY_INSTANCE_ID,
-          { _tag: "Active", instance: primary, scope: Option.none() },
+          RegisteredInstance.Active({ instance: primary, scope: Option.none() }),
         ],
       ]),
     );
@@ -331,15 +339,15 @@ export const layer = Layer.effect(
           > => {
             const existing = current.get(spec.id);
 
-            if (existing?._tag === "Active") {
+            if (Predicate.isTagged(existing, "Active")) {
               return Effect.fail(
                 new DesktopBackendPoolInstanceAlreadyRegisteredError({ id: spec.id }),
               );
             }
 
-            if (existing?._tag === "Closing") {
+            if (Predicate.isTagged(existing, "Closing")) {
               return Effect.succeed([
-                { _tag: "Wait", done: existing.done } as const,
+                UnregisterAction.Wait({ done: existing.done }),
                 current,
               ] as const);
             }
@@ -355,21 +363,17 @@ export const layer = Layer.effect(
               );
 
               const next = new Map(current);
-              next.set(spec.id, {
-                _tag: "Active",
-                instance,
-                scope: Option.some(instanceScope),
-              });
+              next.set(
+                spec.id,
+                RegisteredInstance.Active({ instance, scope: Option.some(instanceScope) }),
+              );
 
-              return [
-                { _tag: "Registered", instance } as const,
-                next as ReadonlyMap<BackendInstanceId, RegisteredInstance>,
-              ] as const;
+              return [RegisterAction.Registered({ instance }), next] as const;
             });
           },
         ).pipe(
           Effect.flatMap((result) =>
-            result._tag === "Registered"
+            Predicate.isTagged(result, "Registered")
               ? Effect.succeed(result.instance)
               : Deferred.await(result.done).pipe(Effect.andThen(register(spec))),
           ),
@@ -394,29 +398,26 @@ export const layer = Layer.effect(
             const entry = current.get(id);
 
             if (entry === undefined) {
-              return Effect.succeed([{ _tag: "Absent" } as const, current] as const);
+              return Effect.succeed([UnregisterAction.Absent(), current] as const);
             }
 
-            if (entry._tag === "Closing") {
+            if (Predicate.isTagged(entry, "Closing")) {
               return Effect.succeed([
-                { _tag: "Wait", done: entry.done } as const,
+                UnregisterAction.Wait({ done: entry.done }),
                 current,
               ] as const);
             }
 
             const next = new Map(current);
-            next.set(id, { _tag: "Closing", done });
+            next.set(id, RegisteredInstance.Closing({ done }));
 
-            return Effect.succeed([
-              { _tag: "Close", entry } as const,
-              next as ReadonlyMap<BackendInstanceId, RegisteredInstance>,
-            ] as const);
+            return Effect.succeed([UnregisterAction.Close({ entry }), next] as const);
           },
         );
 
-        if (action._tag === "Absent") return;
+        if (UnregisterAction.$is("Absent")(action)) return;
 
-        if (action._tag === "Wait") {
+        if (UnregisterAction.$is("Wait")(action)) {
           yield* Deferred.await(action.done);
 
           return;
@@ -425,17 +426,14 @@ export const layer = Layer.effect(
         const finish = SynchronizedRef.modifyEffect(instancesRef, (current) => {
           const closing = current.get(id);
 
-          if (closing?._tag !== "Closing" || closing.done !== done) {
+          if (!Predicate.isTagged(closing, "Closing") || closing.done !== done) {
             return Effect.succeed([undefined, current] as const);
           }
 
           const next = new Map(current);
           next.delete(id);
 
-          return Effect.succeed([
-            undefined,
-            next as ReadonlyMap<BackendInstanceId, RegisteredInstance>,
-          ] as const);
+          return Effect.succeed([undefined, next] as const);
         }).pipe(Effect.andThen(Deferred.succeed(done, undefined)), Effect.asVoid);
 
         yield* Option.match(action.entry.scope, {
@@ -450,13 +448,15 @@ export const layer = Layer.effect(
           Effect.map((instances) => {
             const entry = instances.get(id);
 
-            return entry?._tag === "Active" ? Option.some(entry.instance) : Option.none();
+            return Predicate.isTagged(entry, "Active")
+              ? Option.some(entry.instance)
+              : Option.none();
           }),
         ),
       list: SynchronizedRef.get(instancesRef).pipe(
         Effect.map((instances) =>
           Array.from(instances.values()).flatMap((entry) =>
-            entry._tag === "Active" ? [entry.instance] : [],
+            Predicate.isTagged(entry, "Active") ? [entry.instance] : [],
           ),
         ),
       ),

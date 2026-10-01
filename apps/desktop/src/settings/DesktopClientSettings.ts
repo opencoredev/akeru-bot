@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { ClientSettingsSchema, type ClientSettings } from "@akeru/contracts";
 import { fromLenientJson } from "@akeru/shared/schemaJson";
 import * as Context from "effect/Context";
@@ -75,7 +76,7 @@ const readClientSettings = (
     Effect.map(Option.some),
     Effect.catchTags({
       PlatformError: (cause) =>
-        cause.reason._tag === "NotFound"
+        Predicate.isTagged(cause.reason, "NotFound")
           ? Effect.succeed(Option.none<string>())
           : Effect.logWarning("Could not read desktop client settings.", cause).pipe(
               Effect.annotateLogs({ settingsPath }),

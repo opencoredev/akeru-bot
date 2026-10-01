@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off - This test inspects installed package artifacts on disk.
 import * as NodeFS from "node:fs";
 import * as NodeModule from "node:module";
@@ -85,7 +86,7 @@ function oauthFixture(options: {
     onRedirectToAuthorization,
   });
 
-  const registrations: Record<string, unknown>[] = [];
+  const registrations: Record<string, Schema.Json | undefined>[] = [];
 
   const fetchFn: typeof fetch = async (input, init) => {
     const url = String(input);
@@ -115,7 +116,7 @@ function oauthFixture(options: {
     }
 
     if (url === `${issuer}/register`) {
-      const metadata = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const metadata = JSON.parse(String(init?.body)) as Record<string, Schema.Json | undefined>;
       registrations.push(metadata);
 
       return Response.json(

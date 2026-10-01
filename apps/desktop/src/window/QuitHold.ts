@@ -40,7 +40,7 @@ export interface QuitShortcutOptions {
   readonly quit: () => void;
 }
 
-export function makeQuitShortcutHandler(
+export function createQuitShortcutHandler(
   options: QuitShortcutOptions,
 ): (event: { preventDefault: () => void }, input: QuitHoldKeyInput) => void {
   const modifierKey = options.platform === "darwin" ? "meta" : "control";

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
 import { assert, describe, it } from "@effect/vitest";
@@ -430,7 +431,7 @@ describe("DesktopBackendConfiguration", () => {
 
       // oxlint-disable-next-line akeru/no-manual-effect-runtime-in-tests -- Same reason: this is the synchronous resolution the IPC handler performs.
       const label = Effect.runSync(configuration.resolvePrimaryLabel);
-      assert.equal(typeof label, "string");
+      assert.equal(Predicate.isString(label), true);
     } finally {
       await runtime.dispose();
     }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -11,13 +12,15 @@ const DEPENDENCY_SECTIONS = [
   "peerDependencies",
 ] as const;
 
-interface PackageManifest {
-  readonly name?: string;
-  readonly dependencies?: Readonly<Record<string, string>>;
-  readonly devDependencies?: Readonly<Record<string, string>>;
-  readonly optionalDependencies?: Readonly<Record<string, string>>;
-  readonly peerDependencies?: Readonly<Record<string, string>>;
-}
+const decodePackageManifest = Schema.decodeUnknownSync(
+  Schema.Struct({
+    name: Schema.optionalKey(Schema.String),
+    dependencies: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+    devDependencies: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+    optionalDependencies: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+    peerDependencies: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  }),
+);
 
 export interface PublicDependencyProblem {
   readonly dependency: string;
@@ -71,7 +74,7 @@ export function findExternalLocalDependencies(
   const problems: PublicDependencyProblem[] = [];
 
   for (const manifestPath of manifestPaths) {
-    const manifest = JSON.parse(NodeFS.readFileSync(manifestPath, "utf8")) as PackageManifest;
+    const manifest = decodePackageManifest(JSON.parse(NodeFS.readFileSync(manifestPath, "utf8")));
 
     for (const section of DEPENDENCY_SECTIONS) {
       for (const [dependency, specifier] of Object.entries(manifest[section] ?? {})) {

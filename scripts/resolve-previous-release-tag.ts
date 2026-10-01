@@ -178,10 +178,11 @@ export const resolvePreviousReleaseTag = (
     }
 
     const candidates = tags
-      .map((tag) => ({ tag, parsed: parseStableTag(tag) }))
-      .filter(
-        (entry): entry is { tag: string; parsed: StableVersion } => entry.parsed !== undefined,
-      )
+      .flatMap((tag) => {
+        const parsed = parseStableTag(tag);
+
+        return parsed === undefined ? [] : [{ tag, parsed }];
+      })
       .filter((entry) => compareStableVersions(entry.parsed, current) < 0)
       .toSorted((left, right) => compareStableVersions(right.parsed, left.parsed));
 

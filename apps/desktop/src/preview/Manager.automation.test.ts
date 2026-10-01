@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 import { it as effectIt } from "@effect/vitest";
 
 import * as Cause from "effect/Cause";
@@ -33,9 +34,9 @@ const {
 } = vi.hoisted(() => ({
   browserWindowConstructor: vi.fn(),
   createFromBuffer: vi.fn(),
-  createFromPath: vi.fn((): { readonly isEmpty: () => boolean } => ({ isEmpty: () => false })),
-  fromId: vi.fn((_id?: number) => null),
-  getFocusedWebContents: vi.fn(() => null),
+  createFromPath: vi.fn((): Pick<Electron.NativeImage, "isEmpty"> => ({ isEmpty: () => false })),
+  fromId: vi.fn((_id?: number): Electron.WebContents | null => null),
+  getFocusedWebContents: vi.fn((): Electron.WebContents | null => null),
   mkdir: vi.fn((_path: string) => undefined),
   showItemInFolder: vi.fn(),
   webviewSend: vi.fn(),
@@ -95,25 +96,33 @@ describe("PreviewManager", () => {
   effectIt.effect("emits the resolved pointer target before dispatching an automation click", () =>
     withManager((manager) =>
       Effect.gen(function* () {
-        let humanInput: ((_event: unknown, signal: unknown) => void) | undefined;
+        let humanInput:
+          | ((
+              _event: Record<string, never>,
+              signal: Record<string, Schema.Json | undefined>,
+            ) => void)
+          | undefined;
+
         const activity: string[] = [];
 
-        const sendCommand = vi.fn(async (method: string, params?: Record<string, unknown>) => {
-          if (method === "Runtime.evaluate") {
-            return {
-              result: {
-                value: { width: 800, height: 600 },
-              },
-            };
-          }
+        const sendCommand = vi.fn(
+          async (method: string, params?: Record<string, Schema.Json | undefined>) => {
+            if (method === "Runtime.evaluate") {
+              return {
+                result: {
+                  value: { width: 800, height: 600 },
+                },
+              };
+            }
 
-          if (method === "Input.dispatchMouseEvent" && params?.type === "mousePressed") {
-            activity.push("mousePressed");
-            humanInput?.({}, { kind: "pointer", x: params.x, y: params.y, button: 0 });
-          }
+            if (method === "Input.dispatchMouseEvent" && params?.type === "mousePressed") {
+              activity.push("mousePressed");
+              humanInput?.({}, { kind: "pointer", x: params.x, y: params.y, button: 0 });
+            }
 
-          return undefined;
-        });
+            return undefined;
+          },
+        );
 
         fromId.mockReturnValue({
           id: 42,
@@ -315,7 +324,7 @@ describe("PreviewManager", () => {
         });
 
         fromId.mockReturnValue({
-          ...(makeTestPreviewWebContents(vi.fn(), 42, sendCommand) as unknown as object),
+          ...makeTestPreviewWebContents(vi.fn(), 42, sendCommand),
           hostWebContents,
         } as never);
 

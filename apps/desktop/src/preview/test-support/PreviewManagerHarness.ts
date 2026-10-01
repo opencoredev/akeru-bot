@@ -30,16 +30,16 @@ export interface TestCapturedPreviewImage {
 export type TestDebuggerMessageListener = (
   event: Electron.Event,
   method: string,
-  params: Record<string, unknown>,
+  params: Record<string, Schema.Json | undefined>,
 ) => void;
 
 export function makePreviewManagerMocks() {
   return {
     browserWindowConstructor: vi.fn(),
     createFromBuffer: vi.fn(),
-    createFromPath: vi.fn((): { readonly isEmpty: () => boolean } => ({ isEmpty: () => false })),
-    fromId: vi.fn((_id?: number) => null),
-    getFocusedWebContents: vi.fn(() => null),
+    createFromPath: vi.fn((): Pick<Electron.NativeImage, "isEmpty"> => ({ isEmpty: () => false })),
+    fromId: vi.fn((_id?: number): Electron.WebContents | null => null),
+    getFocusedWebContents: vi.fn((): Electron.WebContents | null => null),
     mkdir: vi.fn((_path: string) => undefined),
     showItemInFolder: vi.fn(),
     webviewSend: vi.fn(),
@@ -127,10 +127,10 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
     id = 42,
     sendCommand: (
       method: string,
-      commandParams?: Record<string, unknown>,
-    ) => Promise<unknown> = async () => undefined,
+      commandParams?: Record<string, Schema.Json | undefined>,
+    ) => Promise<Schema.Json | undefined> = async () => undefined,
     debuggerMessageListeners?: Set<TestDebuggerMessageListener>,
-  ) =>
+  ): Electron.WebContents =>
     ({
       id,
       isDestroyed: () => false,
@@ -178,7 +178,7 @@ export function createPreviewManagerHarness(mocks: ReturnType<typeof makePreview
   const makeFaviconWebContents = (options?: {
     readonly fetch?: (url: string, init?: RequestInit) => Promise<Response>;
     readonly id?: number;
-    readonly rasterize?: (code: string) => Promise<unknown>;
+    readonly rasterize?: (code: string) => Promise<Schema.Json | undefined>;
     readonly url?: string;
   }) => {
     const sourcePng = makeSourcePng();

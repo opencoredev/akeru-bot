@@ -1,3 +1,4 @@
+import type * as NodeEvents from "node:events";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -165,20 +166,15 @@ export const make = ElectronUpdater.of({
       });
     }),
   on: (eventName, listener) => {
-    const eventTarget = autoUpdater as unknown as {
-      on: (eventName: string, listener: (...args: Array<unknown>) => void) => void;
-      removeListener: (eventName: string, listener: (...args: Array<unknown>) => void) => void;
-    };
-
-    const untypedListener = listener as unknown as (...args: Array<unknown>) => void;
+    const eventTarget: NodeEvents.EventEmitter = autoUpdater;
 
     return Effect.acquireRelease(
       Effect.sync(() => {
-        eventTarget.on(eventName, untypedListener);
+        eventTarget.on(eventName, listener);
       }),
       () =>
         Effect.sync(() => {
-          eventTarget.removeListener(eventName, untypedListener);
+          eventTarget.removeListener(eventName, listener);
         }),
     ).pipe(Effect.asVoid);
   },

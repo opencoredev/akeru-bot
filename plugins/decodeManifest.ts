@@ -1,3 +1,10 @@
+import {
+  isJsonObject,
+  isJsonString,
+  isJsonNumber,
+  type JsonValue,
+  type JsonObject,
+} from "./json.ts";
 import { PLUGIN_APPROVAL_CLASSES, PLUGIN_CATEGORIES } from "./categories.ts";
 import {
   PLUGIN_SCHEMA_VERSION,
@@ -38,16 +45,15 @@ const CATALOG_STATUSES: readonly PluginCatalogStatus[] = [
   "deprecated",
 ];
 
-function object(value: unknown, path: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+function object(value: JsonValue, path: string): JsonObject {
+  if (!isJsonObject(value)) {
     throw new TypeError(`${path} must be an object.`);
   }
 
-  // SAFETY: The guard rejects null, arrays, and primitives; property values remain unknown.
-  return value as Record<string, unknown>;
+  return value;
 }
 
-function exactKeys(value: Record<string, unknown>, keys: readonly string[], path: string): void {
+function exactKeys(value: JsonObject, keys: readonly string[], path: string): void {
   const unexpected = Object.keys(value).filter((key) => !keys.includes(key));
 
   if (unexpected.length > 0) {
@@ -55,15 +61,15 @@ function exactKeys(value: Record<string, unknown>, keys: readonly string[], path
   }
 }
 
-function nonEmptyString(value: unknown, path: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
+function nonEmptyString(value: JsonValue, path: string): string {
+  if (!isJsonString(value) || value.trim().length === 0) {
     throw new TypeError(`${path} must be a non-empty string.`);
   }
 
   return value;
 }
 
-function pluginId(value: unknown, path: string): string {
+function pluginId(value: JsonValue, path: string): string {
   const id = nonEmptyString(value, path);
 
   if (!PLUGIN_ID.test(id)) throw new TypeError(`${path} must use stable kebab-case.`);
@@ -71,7 +77,7 @@ function pluginId(value: unknown, path: string): string {
   return id;
 }
 
-function literal<const T extends string>(value: unknown, allowed: readonly T[], path: string): T {
+function literal<const T extends string>(value: JsonValue, allowed: readonly T[], path: string): T {
   const matched = allowed.find((candidate) => candidate === value);
 
   if (matched === undefined) {
@@ -81,7 +87,7 @@ function literal<const T extends string>(value: unknown, allowed: readonly T[], 
   return matched;
 }
 
-function strings(value: unknown, path: string, ids = false): readonly string[] {
+function strings(value: JsonValue, path: string, ids = false): readonly string[] {
   if (!Array.isArray(value)) throw new TypeError(`${path} must be an array.`);
 
   return value.map((item, index) =>
@@ -89,7 +95,7 @@ function strings(value: unknown, path: string, ids = false): readonly string[] {
   );
 }
 
-function secureUrl(value: unknown, path: string): string {
+function secureUrl(value: JsonValue, path: string): string {
   const input = nonEmptyString(value, path);
   let url: URL;
 
@@ -106,7 +112,7 @@ function secureUrl(value: unknown, path: string): string {
   return input;
 }
 
-function endpointUrl(value: unknown, path: string): string {
+function endpointUrl(value: JsonValue, path: string): string {
   const input = nonEmptyString(value, path);
   let url: URL;
 
@@ -127,7 +133,7 @@ function endpointUrl(value: unknown, path: string): string {
   return input;
 }
 
-function party(value: unknown, path: string): Party {
+function party(value: JsonValue, path: string): Party {
   const input = object(value, path);
   exactKeys(input, ["name", "url"], path);
 
@@ -137,7 +143,7 @@ function party(value: unknown, path: string): Party {
   };
 }
 
-function logo(value: unknown, path: string): PluginLogoManifest {
+function logo(value: JsonValue, path: string): PluginLogoManifest {
   const input = object(value, path);
   exactKeys(input, ["provenance", "url"], path);
   const provenance = object(input.provenance, `${path}.provenance`);
@@ -152,7 +158,7 @@ function logo(value: unknown, path: string): PluginLogoManifest {
   };
 }
 
-function transport(value: unknown, path: string): PluginTransport {
+function transport(value: JsonValue, path: string): PluginTransport {
   const input = object(value, path);
 
   if (input.type === "url") {
@@ -181,7 +187,7 @@ function transport(value: unknown, path: string): PluginTransport {
   throw new TypeError(`${path}.type must be url, stdio, or unavailable.`);
 }
 
-function connection(value: unknown, path: string): PluginConnection {
+function connection(value: JsonValue, path: string): PluginConnection {
   const input = object(value, path);
 
   if (input.type === "brokered") {
@@ -212,7 +218,7 @@ function connection(value: unknown, path: string): PluginConnection {
   };
 }
 
-function permissions(value: unknown, path: string): readonly PluginPermission[] {
+function permissions(value: JsonValue, path: string): readonly PluginPermission[] {
   if (!Array.isArray(value)) throw new TypeError(`${path} must be an array.`);
 
   return value.map((item, index) => {
@@ -231,7 +237,7 @@ function permissions(value: unknown, path: string): readonly PluginPermission[] 
   });
 }
 
-function skills(value: unknown, path: string): readonly PluginSkill[] {
+function skills(value: JsonValue, path: string): readonly PluginSkill[] {
   if (!Array.isArray(value)) throw new TypeError(`${path} must be an array.`);
 
   return value.map((item, index) => {
@@ -246,7 +252,7 @@ function skills(value: unknown, path: string): readonly PluginSkill[] {
   });
 }
 
-export function decodePluginManifest(value: unknown): PluginManifest {
+export function decodePluginManifest(value: JsonValue): PluginManifest {
   const input = object(value, "plugin manifest");
   exactKeys(
     input,
@@ -287,7 +293,7 @@ export function decodePluginManifest(value: unknown): PluginManifest {
 
   if (
     featuredRank !== undefined &&
-    (!Number.isInteger(featuredRank) || typeof featuredRank !== "number" || featuredRank < 1)
+    (!Number.isInteger(featuredRank) || !isJsonNumber(featuredRank) || featuredRank < 1)
   ) {
     throw new TypeError("plugin manifest.featuredRank must be a positive integer.");
   }

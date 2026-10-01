@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off - Host-side simulator and emulator automation uses Node subprocess and timing APIs directly.
 import * as NodeFSP from "node:fs/promises";
 
@@ -55,19 +56,25 @@ export async function buildIos(): Promise<string> {
   return IOS_APP_PATH;
 }
 
-interface SimctlDevice {
-  readonly name: string;
-  readonly udid: string;
-  readonly state: "Booted" | "Shutdown" | string;
-  readonly isAvailable: boolean;
-}
+const SimctlDevice = Schema.Struct({
+  name: Schema.String,
+  udid: Schema.String,
+  state: Schema.String,
+  isAvailable: Schema.Boolean,
+});
+
+type SimctlDevice = typeof SimctlDevice.Type;
+
+const decodeSimctlDevices = Schema.decodeUnknownSync(
+  Schema.Struct({
+    devices: Schema.Record(Schema.String, Schema.Array(SimctlDevice)),
+  }),
+);
 
 async function findIosSimulator(name: string): Promise<SimctlDevice | null> {
-  const parsed = JSON.parse(
-    await commandOutput("xcrun", ["simctl", "list", "devices", "available", "-j"]),
-  ) as {
-    readonly devices: Readonly<Record<string, ReadonlyArray<SimctlDevice>>>;
-  };
+  const parsed = decodeSimctlDevices(
+    JSON.parse(await commandOutput("xcrun", ["simctl", "list", "devices", "available", "-j"])),
+  );
 
   const candidates = Object.entries(parsed.devices)
     .filter(([runtime]) => runtime.includes("iOS"))

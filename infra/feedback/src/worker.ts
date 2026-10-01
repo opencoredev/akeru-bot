@@ -5,7 +5,7 @@ import * as Schema from "effect/Schema";
 
 import type { FeedbackWorkerEnv } from "../alchemy.run.ts";
 import {
-  makeProductFeedbackEndpoint,
+  productFeedbackEndpoint,
   productFeedbackOptionsResponse,
   type ProductFeedbackRepository,
 } from "./endpoint.ts";
@@ -359,7 +359,7 @@ export default {
     const destination = githubDestination(env);
     const outbox = destination ? makeGitHubIssueOutbox(env.DB) : null;
 
-    return makeProductFeedbackEndpoint({
+    return productFeedbackEndpoint({
       repository: makeRepository(env.DB),
       hmacSecret: env.HMAC_SECRET,
       ...(turnstile ? { turnstile } : {}),

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
-  makeQuitShortcutHandler,
+  createQuitShortcutHandler,
   QUIT_DOUBLE_PRESS_MS,
   QUIT_HOLD_DURATION_MS,
   QUIT_HOLD_RELEASE_GRACE_MS,
@@ -37,7 +37,7 @@ function makeHarness(options?: {
   const concealWindow = vi.fn();
   const quit = vi.fn();
 
-  const handler = makeQuitShortcutHandler({
+  const handler = createQuitShortcutHandler({
     platform: options?.platform ?? "darwin",
     getMode: options?.getMode ?? (() => Promise.resolve(options?.mode ?? "hold")),
     notify: (event) => notifications.push(event),
@@ -69,7 +69,7 @@ function makeHarness(options?: {
   return { notifications, concealWindow, quit, preventDefault, send, holdFor };
 }
 
-describe("makeQuitShortcutHandler", () => {
+describe("createQuitShortcutHandler", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });

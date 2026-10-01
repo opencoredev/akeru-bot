@@ -1,3 +1,5 @@
+import { flow } from "effect/Function";
+import * as Schema from "effect/Schema";
 import { REMOTE_CAPABLE_EDITOR_IDS, remoteSchemeForEditor } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -56,26 +58,27 @@ const isRemoteEditorUrl = (url: URL) =>
       url.pathname.startsWith("/ssh-remote+") &&
       url.pathname.length > "/ssh-remote+".length);
 
-export function parseSafeExternalUrl(rawUrl: unknown): Option.Option<string> {
-  if (typeof rawUrl !== "string") {
-    return Option.none();
-  }
+export const parseSafeExternalUrl = flow(
+  Schema.decodeUnknownOption(Schema.String),
+  Option.flatMap((rawUrl) => {
+    try {
+      const url = new URL(rawUrl);
 
-  try {
-    const url = new URL(rawUrl);
-
-    return SAFE_WEB_PROTOCOLS.has(url.protocol) || isRemoteEditorUrl(url)
-      ? Option.some(url.href)
-      : Option.none();
-  } catch {
-    return Option.none();
-  }
-}
+      return SAFE_WEB_PROTOCOLS.has(url.protocol) || isRemoteEditorUrl(url)
+        ? Option.some(url.href)
+        : Option.none();
+    } catch {
+      return Option.none();
+    }
+  }),
+);
 
 export class ElectronShell extends Context.Service<
   ElectronShell,
   {
-    readonly openExternal: (rawUrl: unknown) => Effect.Effect<boolean>;
+    readonly openExternal: (
+      rawUrl: Parameters<typeof parseSafeExternalUrl>[0],
+    ) => Effect.Effect<boolean>;
     readonly copyText: (text: string) => Effect.Effect<void>;
   }
 >()("@akeru/desktop/electron/ElectronShell") {}

@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import {
   createPackageWithOptions,
   getRawHeader,
@@ -130,7 +131,11 @@ const stageWslNodePtyPrebuild = Effect.fn("stageWslNodePtyPrebuild")(function* (
   }
 
   // WSL runs the same CPU arch as the Windows host; universal is mac-only.
-  const linuxArch = input.arch === "x64" ? "x64" : input.arch === "arm64" ? "arm64" : undefined;
+  const linuxArch = Match.value(input.arch).pipe(
+    Match.when("x64", () => "x64"),
+    Match.when("arm64", () => "arm64"),
+    Match.orElse(() => undefined),
+  );
 
   if (linuxArch === undefined) {
     yield* Effect.logWarning(

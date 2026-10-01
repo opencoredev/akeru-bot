@@ -92,7 +92,7 @@ import { RELEASES_URL } from "../lib/releases";
         versionLabel.textContent = `Latest (${release.tag_name})`;
       }
 
-      const changelogLink = document.getElementById("changelog-link") as HTMLAnchorElement | null;
+      const changelogLink = document.querySelector<HTMLAnchorElement>("#changelog-link");
 
       if (changelogLink && release.html_url) {
         changelogLink.href = release.html_url;

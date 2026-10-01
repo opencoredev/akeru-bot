@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Duration from "effect/Duration";
 
 import * as Option from "effect/Option";
@@ -140,8 +141,11 @@ export const mergePaths = (
 };
 
 export const listLoginShellCandidates = (config: ShellEnvironmentConfig): ReadonlyArray<string> => {
-  const fallback =
-    config.platform === "darwin" ? "/bin/zsh" : config.platform === "linux" ? "/bin/bash" : "";
+  const fallback = Match.value(config.platform).pipe(
+    Match.when("darwin", () => "/bin/zsh"),
+    Match.when("linux", () => "/bin/bash"),
+    Match.orElse(() => ""),
+  );
 
   const seen = new Set<string>();
   const candidates: string[] = [];
@@ -211,10 +215,7 @@ export const captureWindowsEnvironmentCommand = (names: ReadonlyArray<string>) =
     }),
   ].join("; ");
 
-export const extractEnvironment = (
-  output: string,
-  names: ReadonlyArray<string>,
-): EnvironmentPatch => {
+export const extractEnvironment = (output: string, names: ReadonlyArray<string>) => {
   const environment: EnvironmentPatch = {};
 
   for (const name of names) {

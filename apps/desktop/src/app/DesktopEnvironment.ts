@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Schema from "effect/Schema";
 import type {
   DesktopAppBranding,
   DesktopAppStageLabel,
@@ -26,6 +28,10 @@ export interface MakeDesktopEnvironmentInput {
   readonly resourcesPath: string;
   readonly runningUnderArm64Translation: boolean;
 }
+
+const decodeFolderOptions = Schema.decodeUnknownOption(
+  Schema.Struct({ initialPath: Schema.String }),
+);
 
 export class DesktopEnvironment extends Context.Service<
   DesktopEnvironment,
@@ -79,7 +85,10 @@ export class DesktopEnvironment extends Context.Service<
     readonly legacyUserDataDirName: string;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
     readonly runtimeInfo: DesktopRuntimeInfo;
-    readonly resolvePickFolderDefaultPath: (rawOptions: unknown) => Option.Option<string>;
+    readonly resolvePickFolderDefaultPath: (
+      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Folder picker options arrive from Electron IPC and are decoded before resolving a path.
+      rawOptions: unknown,
+    ) => Option.Option<string>;
     readonly resolveResourcePathCandidates: (fileName: string) => readonly string[];
   }
 >()("@akeru/desktop/app/DesktopEnvironment") {}
@@ -153,14 +162,17 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const devServerUrl = config.devServerUrl;
   const isDevelopment = Option.isSome(devServerUrl);
 
-  const appDataDirectory =
-    input.platform === "win32"
-      ? Option.getOrElse(config.appDataDirectory, () =>
-          path.join(homeDirectory, "AppData", "Roaming"),
-        )
-      : input.platform === "darwin"
-        ? path.join(homeDirectory, "Library", "Application Support")
-        : Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config"));
+  const appDataDirectory = Match.value(input.platform).pipe(
+    Match.when("win32", () =>
+      Option.getOrElse(config.appDataDirectory, () =>
+        path.join(homeDirectory, "AppData", "Roaming"),
+      ),
+    ),
+    Match.when("darwin", () => path.join(homeDirectory, "Library", "Application Support")),
+    Match.orElse(() =>
+      Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config")),
+    ),
+  );
 
   const baseDir = resolveDesktopBaseDir({
     homeDirectory,
@@ -254,15 +266,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
       runningUnderArm64Translation: input.runningUnderArm64Translation,
     }),
     resolvePickFolderDefaultPath: (rawOptions) => {
-      if (typeof rawOptions !== "object" || rawOptions === null) {
-        return Option.none();
-      }
+      const parsed = decodeFolderOptions(rawOptions);
 
-      const { initialPath } = rawOptions as { initialPath?: unknown };
-
-      if (typeof initialPath !== "string") {
-        return Option.none();
-      }
+      if (Option.isNone(parsed)) return Option.none();
+      const { initialPath } = parsed.value;
 
       const trimmedPath = initialPath.trim();
 

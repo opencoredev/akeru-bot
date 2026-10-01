@@ -124,6 +124,7 @@ export function makeDevelopmentLauncherScript({
     ["T3CODE_OTLP_TRACES_URL", environment.T3CODE_OTLP_TRACES_URL],
     ["T3CODE_OTLP_EXPORT_INTERVAL_MS", environment.T3CODE_OTLP_EXPORT_INTERVAL_MS],
     ["T3CODE_DESKTOP_APP_USER_MODEL_ID", APP_BUNDLE_ID],
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- The standalone launcher filters undefined inherited environment values before passing strings to its child process.
   ].filter((entry) => typeof entry[1] === "string" && entry[1].trim().length > 0);
 
   return [

@@ -165,20 +165,17 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       });
       // Linux must register the renderer schemes so the generated .desktop
       // entry advertises MimeType=x-scheme-handler/akeru; for OAuth deep links.
-      assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
+      assert.deepStrictEqual(linux.linux?.protocols, [
         {
           name: "Akeru Bot",
           schemes: ["akeru", "akeru-dev"],
         },
       ]);
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
-      assert.equal((mac.mac as Record<string, unknown>).identity, "-");
-      assert.equal((mac.mac as Record<string, unknown>).notarize, false);
-      assert.equal(
-        (mac.mac as Record<string, unknown>).entitlements,
-        "/tmp/entitlements.mac.plist",
-      );
-      assert.match(String((mac.mac as Record<string, unknown>).sign), /\/scripts\/sign-macos\.ts$/);
+      assert.equal(mac.mac?.identity, "-");
+      assert.equal(mac.mac?.notarize, false);
+      assert.equal(mac.mac?.entitlements, "/tmp/entitlements.mac.plist");
+      assert.match(String(mac.mac?.sign), /\/scripts\/sign-macos\.ts$/);
 
       for (const config of [linux, win]) {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
@@ -298,7 +295,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         entitlementsPath: "/tmp/entitlements.mac.plist",
       });
 
-      const mac = config.mac as Record<string, unknown>;
+      const mac = config.mac;
+
+      if (mac === undefined) assert.fail("Expected macOS build configuration");
       assert.equal(config.appId, "dev.leodoes.akeru");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.notarize, true);
@@ -319,7 +318,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         entitlementsPath: "/tmp/entitlements.mac.plist",
       });
 
-      const mac = config.mac as Record<string, unknown>;
+      const mac = config.mac;
+
+      if (mac === undefined) assert.fail("Expected macOS build configuration");
       assert.equal(config.appId, "dev.leodoes.akeru");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.notProperty(mac, "provisioningProfile");
